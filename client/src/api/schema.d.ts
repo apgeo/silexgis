@@ -14224,6 +14224,177 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{tripLogId}/tracking/shares/{shareId}/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a follow link in one act: the old address stops answering and a fresh one is returned, once.
+         * @description For whoever may publish the trip: trip write access plus the right to share the trip's cave, and a cave whose position is protected is refused as it is at publishing. The fresh link runs out when the old one would have, and nobody is told, because nothing new is published. The watch need not be running, so a finished trip's link can be replaced. A link that was already taken back cannot: 409 tracking.share_revoked.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    shareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripTrackingShareCreatedDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/published-trips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every published trip link of the installation, with what each does for its holder right now.
+         * @description For full administrators. One row per link, revoked ones included; a link whose trip or watch is gone is not listed, and opens nothing. status narrows to one status, spelled as the answers spell it; sort is one of createdAt (the default, newest first), expiresAt, tripDate, tripTitle, status; descending reverses a named order. Every status is decided at the one instant the answer names, by the rules the published pages are served by. No token is carried: a link is named by a short prefix of its stored hash, the same handle the request log writes.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    status?: string;
+                    sort?: string;
+                    descending?: boolean;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublishedLinksDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/published-trips/{tripLogId}/revoke-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take back every link of one trip in one act. Cannot be undone.
+         * @description For full administrators. Every link of the trip that nobody had taken back is taken back; the answer says how many. The trip's published page stops answering, and a finished trip leaves its cave's public history — it is published again only by starting its watch again. Asked twice, the second answer is zero.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublishedLinksWithdrawnDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/published-trips/revoke-everything": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take back every link of the installation in one act. Cannot be undone.
+         * @description For full administrators. The body must carry confirm: "revoke-everything". Every link nobody had taken back is taken back; the answer says how many, over how many trips. Every published page stops answering and every cave's public history of past trips empties; each trip is published again only by starting its watch again.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RevokeEverythingRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublishedLinksWithdrawnDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-logs/{tripLogId}/checklist": {
         parameters: {
             query?: never;
@@ -23653,6 +23824,65 @@ export interface components {
             teams: components["schemas"]["PublicTripTeamDto"][];
             participants: components["schemas"]["PublicTripParticipantDto"][];
         };
+        PublishedLinkCaveDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+        };
+        PublishedLinkDto: {
+            /** Format: uuid */
+            id: string;
+            handle: string;
+            /** Format: uuid */
+            tripLogId: string;
+            tripTitle: string;
+            /** Format: date */
+            tripDate: string;
+            /** Format: date */
+            tripDateEnd: null | string;
+            cave: null | components["schemas"]["PublishedLinkCaveDto"];
+            watchState: components["schemas"]["TripTrackingState"];
+            /** Format: date-time */
+            watchClosedAt: null | string;
+            /** Format: uuid */
+            createdBy: string;
+            createdByLabel: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            revokedAt: null | string;
+            status: components["schemas"]["PublishedLinkStatus"];
+            protectedCaveWithinSurveyBounds: boolean;
+        };
+        PublishedLinksDto: {
+            items: components["schemas"]["PublishedLinkDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+            /** Format: date-time */
+            asOf: string;
+            counts: components["schemas"]["PublishedLinkStatusCountDto"][];
+            publishesRealNames: boolean;
+            archiveEnabled: boolean;
+        };
+        /** @enum {unknown} */
+        PublishedLinkStatus: "followable" | "inGrace" | "inArchive" | "withheld" | "lapsed" | "revoked";
+        PublishedLinkStatusCountDto: {
+            status: components["schemas"]["PublishedLinkStatus"];
+            /** Format: int32 */
+            count: number;
+        };
+        PublishedLinksWithdrawnDto: {
+            /** Format: int32 */
+            revokedLinks: number;
+            /** Format: int32 */
+            trips: number;
+        };
         /** @enum {unknown} */
         RasterStatus: "uploaded" | "processing" | "ready" | "failed";
         ReanchorReportDto: {
@@ -23925,6 +24155,9 @@ export interface components {
             relationTypeId: null | number;
             /** Format: uuid */
             mainMemberId: null | string;
+        };
+        RevokeEverythingRequest: {
+            confirm: null | string;
         };
         RipleyDto: {
             /** Format: int32 */
@@ -25164,6 +25397,9 @@ export interface components {
             dateOrder: null | components["schemas"]["TripCsvDateOrder"];
             wentInWords: null | string[];
             cameOutWords: null | string[];
+            timeZone?: null | string;
+            /** Format: date */
+            day?: null | string;
         };
         TrackingCsvImportRequest: {
             text: null | string;
@@ -25187,6 +25423,9 @@ export interface components {
             rows: components["schemas"]["TrackingCsvPreviewRowDto"][];
             fileDiagnostics: components["schemas"]["TrackingCsvDiagnosticDto"][];
             refused: components["schemas"]["TrackingCsvDiagnosticDto"][];
+            timeZone: null | string;
+            /** Format: date */
+            day: null | string;
         };
         TrackingCsvPreviewRowDto: {
             /** Format: int32 */
@@ -26026,6 +26265,7 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             expiresAt: string;
+            protectedCaveWithinSurveyBounds: boolean;
         };
         TripTrackingShareDto: {
             /** Format: uuid */

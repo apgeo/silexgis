@@ -139,4 +139,17 @@ public class TripPublicationWindowTests
                 new DateTimeOffset(2026, 9, 12, 8, 0, 0, TimeSpan.Zero),
                 new DateOnly(2026, 9, 12), new DateOnly(2026, 9, 1), Lifetime)
             .ShouldBe(new DateTimeOffset(2026, 9, 13, 0, 0, 0, TimeSpan.Zero) + Lifetime);
+
+    [Fact]
+    public void A_standing_link_may_be_replaced_whatever_its_window_says_and_a_withdrawn_one_may_not()
+    {
+        // Standing means only that nobody took it back. One that has run out is still what keeps
+        // a finished trip in its cave's history, so its address is as worth changing as any.
+        TripPublicationWindow.MayBeReplaced(revokedAt: null).ShouldBeTrue();
+
+        // Taken back, a moment ago or long ago: handing out a working address for it would be a
+        // new publication, which replacing must never be.
+        TripPublicationWindow.MayBeReplaced(Now.AddSeconds(-1)).ShouldBeFalse();
+        TripPublicationWindow.MayBeReplaced(Now.AddYears(-1)).ShouldBeFalse();
+    }
 }

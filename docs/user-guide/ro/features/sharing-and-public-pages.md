@@ -122,7 +122,10 @@ vizualizare pe care o pot comanda legăturile din articol. Este singura suprafa�
 **numește oameni** — implicit cu numele reale, dacă instalarea nu oprește asta sau o etichetă nu
 înlocuiește numele cuiva — și singura care se actualizează singură cât timp o echipă este în
 peșteră. O peșteră cu coordonate protejate nu poate fi publicată deloc. Totul despre ea se află
-în [Urmărirea în direct și turele publicate](live-tracking.md).
+în [Urmărirea în direct și turele publicate](live-tracking.md) — inclusiv pagina pe care un
+administrator deplin vede [toate linkurile date de
+instalare](live-tracking.md#tot-ce-este-publicat-pentru-administratorii-deplini), înlocuiește
+unul sau le retrage.
 
 ---
 

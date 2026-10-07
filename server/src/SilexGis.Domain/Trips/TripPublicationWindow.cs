@@ -207,4 +207,34 @@ public static class TripPublicationWindow
         TimeSpan graceAfterClose) =>
         latestUnrevokedExpiry is { } expiry
         && IsOpen(now, revokedAt: null, expiry, state, closedAt, graceAfterClose);
+
+    /// <summary>
+    /// Whether a link may be exchanged for a fresh one: only while nobody has taken it back.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A replacement changes the secret and nothing else.</b> It exists for one situation — an
+    /// address that has ended up somewhere it should not be — and its whole effect is that the old
+    /// address stops answering while whatever it was doing goes on under a new one. The fresh link
+    /// therefore carries the old link's expiry unchanged, where <see cref="ExpiresAtFor"/> would
+    /// count a new lifetime from now: a link that could be renewed by replacing it would never
+    /// lapse, and the expiry is the one end of a publication that needs nobody to remember it.
+    /// </para>
+    /// <para>
+    /// <b>Why a link that was taken back is refused.</b> Taking a link back is a decision that the
+    /// address should open nothing, and where it was a trip's last link, that the trip is no longer
+    /// published. Replacing it afterwards would hand out a working address for something somebody
+    /// deliberately withdrew — a new publication, which is asked for as one, with everything that
+    /// asks of a watch and tells the people named.
+    /// </para>
+    /// <para>
+    /// <b>Why nothing else is asked.</b> Not that the watch is running, and not that the link has
+    /// not run out. A finished trip stays in its cave's history for exactly as long as a link of it
+    /// that nobody took back exists, whether or not that link has lapsed, and a lapsed address still
+    /// opens that history. So the address of a finished trip is as worth replacing as that of a
+    /// running one, and a rule that asked for a running watch would leave taking the trip out of the
+    /// history as the only cure for a leaked address.
+    /// </para>
+    /// </remarks>
+    public static bool MayBeReplaced(DateTimeOffset? revokedAt) => revokedAt is null;
 }

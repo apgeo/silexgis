@@ -1,15 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { CopyOutlined, GlobalOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Card, Flex, Input, Popconfirm, Tag, Typography } from 'antd';
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Flex,
+  Input,
+  Popconfirm,
+  Segmented,
+  Tag,
+  Typography,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   useMintTripTrackingShare,
+  useReplaceTripTrackingShare,
   useRevokeTripTrackingShare,
   useTripTrackingShares,
 } from '../../api/hooks.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
-import { buildEmbedSnippet, publicTripPath } from '../../pages/public/publicTripEmbed.ts';
+import {
+  buildEmbedSnippet,
+  PUBLIC_TRIP_LANGUAGES,
+  type PublicTripLanguage,
+  publicTripPath,
+} from '../../pages/public/publicTripEmbed.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
 
 interface Props {
@@ -73,12 +90,14 @@ export default function TrackingSharePanel({
 }: Props) {
   const { t, i18n } = useTranslation();
   const { message } = App.useApp();
+  const languageLabelId = useId();
   // Every control here is pressed, and how big a thing has to be to be pressed depends on what is
   // pressing it — not on how much room there is across.
   const coarse = useCoarsePointer();
   const shares = useTripTrackingShares(tripLogId, canEdit);
   const mint = useMintTripTrackingShare();
   const revoke = useRevokeTripTrackingShare();
+  const replace = useReplaceTripTrackingShare();
   /**
    * The link this browser just minted: its token, and which share it belongs to.
    *
@@ -93,7 +112,26 @@ export default function TrackingSharePanel({
     token: string;
     /** When this address stops working, which is part of what was just handed out. */
     expiresAt: string;
+    /**
+     * Whether this address took the place of one that has just stopped answering. It changes
+     * what the notice has to say: there is an old address out there that is now dead, and
+     * whoever is reading is the one person who knows where it was pasted.
+     */
+    replaced: boolean;
+    /**
+     * The server's warning that a protected cave stands inside the area the survey covers. Its
+     * answer and nothing worked out here: this browser has no positions to work it out from.
+     */
+    protectedCaveWithinSurveyBounds: boolean;
   } | null>(null);
+  /**
+   * The language the address and the block are written to open in, or none.
+   *
+   * <b>Not part of the link.</b> One token answers in either language; this only decides whether
+   * the two strings on screen say `lang=`. So changing it mints nothing and takes nothing back —
+   * somebody can copy the Romanian address for one article and the English one for another.
+   */
+  const [language, setLanguage] = useState<PublicTripLanguage | null>(null);
 
   if (!canEdit) {
     return null;
@@ -107,7 +145,9 @@ export default function TrackingSharePanel({
 
   const when = (value: string) => new Date(value).toLocaleString(i18n.language);
   const followUrl =
-    minted === null ? '' : `${window.location.origin}${publicTripPath(minted.token)}`;
+    minted === null
+      ? ''
+      : `${window.location.origin}${publicTripPath(minted.token, language ?? undefined)}`;
   const snippet =
     minted === null
       ? ''
@@ -115,6 +155,7 @@ export default function TrackingSharePanel({
           origin: window.location.origin,
           token: minted.token,
           title: tripTitle,
+          language: language ?? undefined,
         });
 
   /**
@@ -137,7 +178,37 @@ export default function TrackingSharePanel({
   const onMint = async () => {
     try {
       const created = await mint.mutateAsync({ tripLogId });
-      setMinted({ id: created.id, token: created.token, expiresAt: created.expiresAt });
+      setMinted({
+        id: created.id,
+        token: created.token,
+        expiresAt: created.expiresAt,
+        replaced: false,
+        protectedCaveWithinSurveyBounds: created.protectedCaveWithinSurveyBounds === true,
+      });
+    } catch (error) {
+      message.error(trackingProblemMessage(error, t));
+    }
+  };
+
+  /**
+   * Exchanges a link for a fresh one in one act.
+   *
+   * The two-step rotation this panel used to invite — hand out a second link, then take the first
+   * back — had an order to get wrong and a middle to be interrupted in, and for a finished trip a
+   * third step nobody guessed. The fresh address replaces whatever is on screen: the link it
+   * stands in for answers nothing any more, and if that was the one being shown, leaving it up
+   * would invite somebody to paste a dead address.
+   */
+  const onReplace = async (shareId: string) => {
+    try {
+      const fresh = await replace.mutateAsync({ tripLogId, shareId });
+      setMinted({
+        id: fresh.id,
+        token: fresh.token,
+        expiresAt: fresh.expiresAt,
+        replaced: true,
+        protectedCaveWithinSurveyBounds: fresh.protectedCaveWithinSurveyBounds === true,
+      });
     } catch (error) {
       message.error(trackingProblemMessage(error, t));
     }
@@ -157,14 +228,21 @@ export default function TrackingSharePanel({
     }
   };
 
-  // A link that was taken back, or one that has run out, is no longer a link at all and is not
-  // listed. Lapsing is decided from the same instant for every row, so the list cannot disagree
-  // with itself halfway down.
+  // A link that was taken back is no longer a link at all and is not listed.
+  //
+  // <b>One that has run out is listed, and that is the point of listing it.</b> Running out ends
+  // the following and nothing else: a link nobody took back is exactly what keeps a finished trip
+  // among its cave's past trips, and its address goes on opening that history for as long as the
+  // installation keeps one. Every finished trip's link is in this state a fortnight after the
+  // trip. Left off the list, such a trip read "not published" here while its address still
+  // answered, and the two things somebody would want to do about an address found pasted where it
+  // should not be — replace it, or take it back — had no row to be pressed on.
+  //
+  // Running out is decided from the same instant for every row, so the list cannot disagree with
+  // itself halfway down.
   const asOf = Date.now();
-  const lapsed = (share: { expiresAt: string }) => Date.parse(share.expiresAt) <= asOf;
-  const standing = (shares.data ?? []).filter(
-    (share) => share.revokedAt === null && !lapsed(share),
-  );
+  const ranOut = (share: { expiresAt: string }) => Date.parse(share.expiresAt) <= asOf;
+  const standing = (shares.data ?? []).filter((share) => share.revokedAt === null);
 
   // <b>Whether a standing link actually opens the page is the server's answer, and this is the one
   // account an administrator has of what is published.</b> A row that read "Live" after the watch
@@ -247,10 +325,30 @@ export default function TrackingSharePanel({
         <Alert
           type="success"
           showIcon
-          title={t('trips.tracking.publish.mintedTitle')}
+          title={
+            minted.replaced
+              ? t('trips.tracking.publish.replacedTitle')
+              : t('trips.tracking.publish.mintedTitle')
+          }
           description={
             <Flex vertical gap={8} style={{ marginTop: 4 }}>
-              <Typography.Text strong>{t('trips.tracking.publish.tokenOnce')}</Typography.Text>
+              <Typography.Text strong data-testid="trip-tracking-publish-minted-once">
+                {minted.replaced
+                  ? t('trips.tracking.publish.replacedOnce')
+                  : t('trips.tracking.publish.tokenOnce')}
+              </Typography.Text>
+              {/* A warning to look, shown only when the server sent it and worded as what it is:
+                  a check by position that cannot see inside the file. Nothing was refused — the
+                  link exists — so it sits beside the address rather than in place of it, where
+                  whoever is about to paste the address reads it first. */}
+              {minted.protectedCaveWithinSurveyBounds && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  title={t('trips.tracking.publish.boundsWarning')}
+                  data-testid="trip-tracking-publish-bounds-warning"
+                />
+              )}
               {/* Said again beside the address itself. The paragraph above is read before anybody
                   decides; this is what is on screen at the moment there is something to paste. */}
               <Typography.Text data-testid="trip-tracking-publish-minted-names">
@@ -264,8 +362,37 @@ export default function TrackingSharePanel({
                   that answer exists. Worded as an outer bound rather than a promise — closing the
                   watch ends the page sooner, which is the ordinary way a publication ends. */}
               <Typography.Text data-testid="trip-tracking-publish-minted-expires">
-                {t('trips.tracking.publish.mintedExpires', { when: when(minted.expiresAt) })}
+                {t('trips.tracking.publish.mintedExpires', {
+                  when: when(minted.expiresAt),
+                })}
               </Typography.Text>
+
+              <div>
+                <Typography.Text type="secondary" id={languageLabelId}>
+                  {t('trips.tracking.publish.languageLabel')}
+                </Typography.Text>
+                <div style={{ marginTop: 4 }}>
+                  <Segmented<PublicTripLanguage | 'none'>
+                    size={controlSize}
+                    aria-labelledby={languageLabelId}
+                    value={language ?? 'none'}
+                    onChange={(value) => setLanguage(value === 'none' ? null : value)}
+                    options={[
+                      { value: 'none', label: t('trips.tracking.publish.languageDefault') },
+                      // Each language under its own name for itself, whichever one this panel
+                      // is being read in.
+                      ...PUBLIC_TRIP_LANGUAGES.map((code) => ({
+                        value: code,
+                        label: t('publicTrip.language.name', { lng: code }),
+                      })),
+                    ]}
+                    data-testid="trip-tracking-publish-language"
+                  />
+                </div>
+                <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0' }}>
+                  {t('trips.tracking.publish.languageHelp')}
+                </Typography.Paragraph>
+              </div>
 
               <div>
                 <Typography.Text type="secondary">
@@ -331,26 +458,30 @@ export default function TrackingSharePanel({
           <Typography.Text type="secondary">{t('trips.tracking.publish.none')}</Typography.Text>
         ) : (
           <Flex vertical gap={8}>
-            {standing.map((share) => (
-              <Flex
-                key={share.id}
-                gap={8}
-                wrap
-                align="center"
-                justify="space-between"
-                data-testid={`trip-tracking-publish-share-${share.id}`}
-              >
-                <Flex gap={8} align="center" wrap style={{ minWidth: 0 }}>
-                  <Tag
-                    color={published ? 'blue' : 'default'}
-                    data-testid={`trip-tracking-publish-status-${share.id}`}
-                  >
-                    {status}
-                  </Tag>
-                  <Typography.Text type="secondary">
-                    {t('trips.tracking.publish.createdAt', { when: when(share.createdAt) })}
-                  </Typography.Text>
-                  {/* When it ends, on the row rather than only on the mint: the address itself is
+            {standing.map((share) => {
+              const over = ranOut(share);
+              return (
+                <Flex
+                  key={share.id}
+                  gap={8}
+                  wrap
+                  align="center"
+                  justify="space-between"
+                  data-testid={`trip-tracking-publish-share-${share.id}`}
+                >
+                  <Flex gap={8} align="center" wrap style={{ minWidth: 0 }}>
+                    <Tag
+                      color={published && !over ? 'blue' : 'default'}
+                      data-testid={`trip-tracking-publish-status-${share.id}`}
+                    >
+                      {over ? t('trips.tracking.publish.statusRanOut') : status}
+                    </Tag>
+                    <Typography.Text type="secondary">
+                      {t('trips.tracking.publish.createdAt', {
+                        when: when(share.createdAt),
+                      })}
+                    </Typography.Text>
+                    {/* When it ends, on the row rather than only on the mint: the address itself is
                       shown once and never again, so this list is the only place an administrator
                       can come back to and find out how long the trip stays published.
 
@@ -358,32 +489,72 @@ export default function TrackingSharePanel({
                       until the 28th" is false the moment the watch closes, and it is false in the
                       direction that matters — somebody reading it believes a page is answering. The
                       date is still worth printing, because it is when this link stops being one
-                      that could start working again. */}
-                  <Typography.Text
-                    type="secondary"
-                    data-testid={`trip-tracking-publish-expires-${share.id}`}
-                  >
-                    {published
-                      ? t('trips.tracking.publish.expiresAt', { when: when(share.expiresAt) })
-                      : t('trips.tracking.publish.dormantUntil', { when: when(share.expiresAt) })}
-                  </Typography.Text>
+                      that could start working again.
+
+                      A link that has run out says a third thing, and it is asked before the other
+                      two because nothing about the trip can change it: it follows nobody, and it
+                      is still the reason the trip shows among its cave's past trips. Worded as
+                      "can still", since whether the installation keeps such a history at all is a
+                      setting this panel is not sent. */}
+                    <Typography.Text
+                      type="secondary"
+                      data-testid={`trip-tracking-publish-expires-${share.id}`}
+                    >
+                      {over
+                        ? t('trips.tracking.publish.ranOutAt', {
+                            when: when(share.expiresAt),
+                          })
+                        : published
+                          ? t('trips.tracking.publish.expiresAt', {
+                              when: when(share.expiresAt),
+                            })
+                          : t('trips.tracking.publish.dormantUntil', {
+                              when: when(share.expiresAt),
+                            })}
+                    </Typography.Text>
+                  </Flex>
+                  <Flex gap={8} wrap>
+                    <Popconfirm
+                      title={t('trips.tracking.publish.replaceConfirm')}
+                      onConfirm={() => void onReplace(share.id)}
+                      okText={t('trips.tracking.publish.replace')}
+                      cancelText={t('common.cancel')}
+                      // The sentence is long, and a confirmation as wide as its sentence runs off
+                      // a phone's screen.
+                      styles={{ root: { maxWidth: 'min(420px, 92vw)' } }}
+                      {...confirmSizes}
+                    >
+                      <Button
+                        size={controlSize}
+                        loading={replace.isPending}
+                        data-testid={`trip-tracking-publish-replace-${share.id}`}
+                      >
+                        {t('trips.tracking.publish.replace')}
+                      </Button>
+                    </Popconfirm>
+                    <Popconfirm
+                      title={
+                        over
+                          ? t('trips.tracking.publish.revokeRanOutConfirm')
+                          : t('trips.tracking.publish.revokeConfirm')
+                      }
+                      onConfirm={() => void onRevoke(share.id)}
+                      styles={{ root: { maxWidth: 'min(420px, 92vw)' } }}
+                      {...confirmSizes}
+                    >
+                      <Button
+                        size={controlSize}
+                        danger
+                        loading={revoke.isPending}
+                        data-testid={`trip-tracking-publish-revoke-${share.id}`}
+                      >
+                        {t('trips.tracking.publish.revoke')}
+                      </Button>
+                    </Popconfirm>
+                  </Flex>
                 </Flex>
-                <Popconfirm
-                  title={t('trips.tracking.publish.revokeConfirm')}
-                  onConfirm={() => void onRevoke(share.id)}
-                  {...confirmSizes}
-                >
-                  <Button
-                    size={controlSize}
-                    danger
-                    loading={revoke.isPending}
-                    data-testid={`trip-tracking-publish-revoke-${share.id}`}
-                  >
-                    {t('trips.tracking.publish.revoke')}
-                  </Button>
-                </Popconfirm>
-              </Flex>
-            ))}
+              );
+            })}
           </Flex>
         )}
       </div>

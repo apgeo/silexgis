@@ -113,6 +113,11 @@ beforeEach(() => {
     CaveViewUI: FakeUi,
     CAMERA_PERSPECTIVE: 1,
     CAMERA_ORTHOGRAPHIC: 2,
+    SHADING_HEIGHT: 21,
+    SHADING_LENGTH: 22,
+    SHADING_INCLINATION: 23,
+    SHADING_SINGLE: 25,
+    SHADING_SURVEY: 26,
     SHADING_DEPTH: 9,
     SHADING_DEPTH_CURSOR: 11,
     VIEW_PLAN: 1,
@@ -284,9 +289,10 @@ describe('MoviePreviewHost', () => {
     act(() => viewer.emit('newCave'));
     await waitFor(() => expect(screen.getByTestId('movie-preview')).toHaveAttribute('data-status', 'ready'));
 
-    rerender(host({ view: { ...DEFAULT_MOVIE_SETTINGS.view, shadingMode: 1 } }));
-    await waitFor(() => expect(viewer.shadingMode).toBe(1));
-    rerender(host({ view: { ...DEFAULT_MOVIE_SETTINGS.view, shadingMode: null } }));
+    // The movie's shading is a name; the viewer is handed its own number for it.
+    rerender(host({ view: { ...DEFAULT_MOVIE_SETTINGS.view, shading: 'length' } }));
+    await waitFor(() => expect(viewer.shadingMode).toBe(22));
+    rerender(host({ view: { ...DEFAULT_MOVIE_SETTINGS.view, shading: null } }));
     await waitFor(() => expect(viewer.shadingMode).toBe(3));
   });
 

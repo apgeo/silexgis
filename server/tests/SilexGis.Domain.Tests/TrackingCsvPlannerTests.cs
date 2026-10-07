@@ -348,4 +348,101 @@ public class TrackingCsvPlannerTests
         plan.Reports.ShouldBeEmpty();
         plan.Refused.ShouldContain(d => d.Problem == TrackingCsvProblem.MomentWithoutTime);
     }
+
+    [Fact]
+    public void On_a_named_day_a_time_earlier_than_one_further_up_the_sheet_is_imported_and_told()
+    {
+        // A sheet that ran past midnight: 23:50, then 00:30 and 01:10 written on the same page.
+        // Nothing is moved to the next day — that would be right here and wrong for a sheet typed
+        // out of order — and every row after the midnight is told, not only the first.
+        var parsed = TrackingCsvParser.Parse(
+            "Ora,Speologi,Stare\r\n"
+            + "22:00,\"Ion Popescu; Maria Pop\",intrare\r\n"
+            + "23:50,Ion Popescu,iesire\r\n"
+            + "00:30,Ion Popescu,intrare\r\n"
+            + "01:10,Ion Popescu,iesire\r\n"
+            + "23:55,Maria Pop,iesire\r\n",
+            TrackingCsvOptions.Default with { Day = new DateOnly(2026, 9, 12) });
+        parsed.Readable.ShouldBeTrue();
+
+        var plan = TrackingCsvPlanner.Plan(parsed.Rows, Subject());
+
+        plan.Refused.ShouldBeEmpty();
+        plan.Reports.Count.ShouldBe(6);
+        var told = plan.Reports
+            .Where(r => r.Diagnostics.Any(d => d.Problem == TrackingCsvProblem.ClockRunsBackwards))
+            .ToList();
+        told.Select(r => (r.CaverId, r.Line)).ShouldBe([(Ion, 4), (Ion, 5)]);
+        // Each names the line it falls before, and stays on the day that was named.
+        told.SelectMany(r => r.Diagnostics)
+            .Where(d => d.Problem == TrackingCsvProblem.ClockRunsBackwards)
+            .ShouldAllBe(d => d.Severity == TrackingCsvSeverity.Warning && d.Detail == "3");
+        told[0].At.ShouldBe(new DateTimeOffset(2026, 9, 12, 0, 30, 0, TimeSpan.Zero));
+        // A row that is later than everything above it is not told, whoever it is about.
+        plan.Reports.Single(r => r.CaverId == Maria && r.Line == 6).Diagnostics.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void On_a_named_day_the_first_row_about_somebody_is_measured_against_the_rows_above_it_too()
+    {
+        // A second party goes in after midnight. Maria has no earlier row of her own, and her row
+        // is still twenty-three hours before the one above it: the midnight is the sheet's, not
+        // one person's, so it is told — and so is everybody on a row, not only the first name.
+        var parsed = TrackingCsvParser.Parse(
+            "Ora,Speologi,Stare\r\n"
+            + "22:00,Ion Popescu,intrare\r\n"
+            + "23:50,Ion Popescu,iesire\r\n"
+            + "00:30,Maria Pop,intrare\r\n"
+            + "01:10,\"Maria Pop; Ion Popescu\",iesire\r\n",
+            TrackingCsvOptions.Default with { Day = new DateOnly(2026, 9, 12) });
+        parsed.Readable.ShouldBeTrue();
+
+        var plan = TrackingCsvPlanner.Plan(parsed.Rows, Subject());
+
+        plan.Refused.ShouldBeEmpty();
+        plan.Reports.Count.ShouldBe(5);
+        plan.Reports
+            .Where(r => r.Diagnostics.Any(d =>
+                d.Problem == TrackingCsvProblem.ClockRunsBackwards
+                && d.Severity == TrackingCsvSeverity.Warning && d.Detail == "3"))
+            .Select(r => (r.CaverId, r.Line))
+            .ShouldBe([(Maria, 4), (Maria, 5), (Ion, 5)]);
+        // Still on the day that was named: told, not moved.
+        plan.Reports.Single(r => r.Line == 4).At
+            .ShouldBe(new DateTimeOffset(2026, 9, 12, 0, 30, 0, TimeSpan.Zero));
+        // The twin: the rows before the midnight carry nothing.
+        plan.Reports.Where(r => r.Line is 2 or 3).SelectMany(r => r.Diagnostics).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void On_a_named_day_a_row_that_was_refused_as_being_in_the_future_is_not_the_clock_the_rest_is_measured_against()
+    {
+        // One mistyped late time must not make every true row below it look like yesterday's.
+        var now = new DateTimeOffset(2026, 9, 12, 12, 0, 0, TimeSpan.Zero);
+        var parsed = TrackingCsvParser.Parse(
+            "Ora,Speologi,Stare\r\n"
+            + "09:00,Ion Popescu,intrare\r\n"
+            + "23:00,Ion Popescu,iesire\r\n"
+            + "10:00,Maria Pop,intrare\r\n",
+            TrackingCsvOptions.Default with { Day = new DateOnly(2026, 9, 12) });
+
+        var plan = TrackingCsvPlanner.Plan(parsed.Rows, Subject() with { Now = now });
+
+        plan.Refused.ShouldContain(d => d.Problem == TrackingCsvProblem.MomentInFuture && d.Line == 3);
+        plan.Reports.Select(r => r.Line).ShouldBe([2, 4]);
+        plan.Reports.SelectMany(r => r.Diagnostics).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_sheet_that_writes_its_own_dates_is_never_told_its_clock_runs_backwards()
+    {
+        // Out of order, but every row says its day: there is no unmarked midnight to suspect.
+        var plan = PlanOf(
+            "12.09.2026 23:50,,,,Ion Popescu,,,iesire\r\n"
+            + "12.09.2026 00:30,,,,Ion Popescu,,,intrare");
+
+        plan.Reports.Count.ShouldBe(2);
+        plan.Reports.SelectMany(r => r.Diagnostics)
+            .ShouldNotContain(d => d.Problem == TrackingCsvProblem.ClockRunsBackwards);
+    }
 }

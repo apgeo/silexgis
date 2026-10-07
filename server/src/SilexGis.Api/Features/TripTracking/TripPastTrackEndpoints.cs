@@ -426,10 +426,11 @@ public static class TripPastTrackEndpoints
     /// <para>
     /// <b>The second of the token's two windows, and the only place it is asked.</b> The live route
     /// asks <see cref="TripPublicationWindow.IsOpen"/> and nothing else; this asks
-    /// <see cref="TripPastTrackWindow.OpensThePast"/>, which is open while <em>either</em> the
-    /// link's own trip is still being followed or that trip has itself become readable history.
-    /// The split is deliberate: an archive that closed whenever no party was underground would be
-    /// unreachable almost always, which is not the thing that was asked for.
+    /// <see cref="TripPublicationStatus.WindowsOf"/> for both windows and is open while
+    /// <em>either</em> is — the link's own trip is still being followed, or that trip has itself
+    /// become readable history, which is the gate <see cref="TripPastTrackWindow.OpensThePast"/>
+    /// describes. The split is deliberate: an archive that closed whenever no party was underground
+    /// would be unreachable almost always, which is not the thing that was asked for.
     /// </para>
     /// <para>
     /// <b>Every way out of here is the same way out.</b> The archive switched off, an empty or
@@ -490,25 +491,20 @@ public static class TripPastTrackEndpoints
         var (share, trip, tracking, latestUnrevokedExpiry) =
             (found.Share, found.Trip, found.Tracking, found.LatestUnrevokedExpiry);
 
-        // A revoked link opens nothing at all, and it is asked first because only one of the two
-        // windows below takes a revocation as an argument: the archive's rule is about the trip's
-        // remaining links rather than about this one.
-        if (share.RevokedAt is not null) return refused;
-
-        // The two windows, kept apart rather than folded together, because the routes that share
-        // this gate do not apply the same feature switch to them. Following a party underground is
-        // the core of this surface; reading a club's history is a thing an installation may switch
-        // off, and switching it off must not stop anybody following tonight's party.
-        var liveOpen = TripPublicationWindow.IsOpen(
+        // The two windows, read where the administrator's list of published links reads them, so
+        // that what that list says a link is doing and what this gate does with it cannot drift
+        // apart. A revoked link has neither: only one of the two rules takes a revocation as an
+        // argument — the archive's is about the trip's remaining links rather than about this one —
+        // so the revocation is asked there first, ahead of both.
+        //
+        // Kept apart rather than folded together, because the routes that share this gate do not
+        // apply the same feature switch to them. Following a party underground is the core of this
+        // surface; reading a club's history is a thing an installation may switch off, and
+        // switching it off must not stop anybody following tonight's party.
+        var windows = TripPublicationStatus.WindowsOf(
             now,
             share.RevokedAt,
             share.ExpiresAt,
-            tracking.State,
-            tracking.ClosedAt,
-            live.ShareGraceAfterClose);
-
-        var pastReadable = TripPastTrackWindow.IsReadableAsPast(
-            now,
             tracking.State,
             tracking.ClosedAt,
             latestUnrevokedExpiry,
@@ -516,8 +512,9 @@ public static class TripPastTrackEndpoints
             trip.TripDateEnd,
             live.ShareGraceAfterClose,
             past.Retention);
+        if (windows.Neither) return refused;
 
-        if (!liveOpen && !pastReadable) return refused;
+        var (liveOpen, pastReadable) = (windows.Live, windows.Past);
 
         // The publication refusal, taken again and cached nowhere — the same call the live page
         // makes, about the same cave, on every single read.

@@ -117,6 +117,15 @@ export function instantOf(value: string | null | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * How long ago an instant already in hand was — a moment the page measured itself, such as when
+ * its last read arrived, rather than one a report carried as text. The same rounding as every
+ * other gap here, by calling it.
+ */
+export function ageInWords(instant: number, now: number, language: string): string {
+  return gapInWords(instant, now, language);
+}
+
 /** The gap between an instant and now, in the reader's language — the one rounding rule. */
 function gapInWords(instant: number, now: number, language: string): string {
   const seconds = Math.round((instant - now) / 1000);
@@ -202,4 +211,130 @@ export function tripDateRange(
   return tripDateEnd === null || tripDateEnd === tripDate
     ? formatTripDate(tripDate, language)
     : `${formatTripDate(tripDate, language)} – ${formatTripDate(tripDateEnd, language)}`;
+}
+
+/**
+ * The hour of a moment, and its date too when that is not today.
+ *
+ * <b>Today is the reader's own day, not the server's.</b> A page read at home is read on a phone's
+ * clock, and "08:40" with no date is a claim about that phone's today. Yesterday's 23:50 read at
+ * ten past midnight therefore carries its date, because without one it would be read as an hour
+ * that has not come yet.
+ */
+export function clockInWords(instant: number, now: number, language: string): string {
+  return new Intl.DateTimeFormat(
+    language,
+    sameLocalDay(instant, now) ? { timeStyle: 'short' } : { dateStyle: 'medium', timeStyle: 'short' },
+  ).format(new Date(instant));
+}
+
+/** Whether two instants fall on one calendar day where the reader is. */
+function sameLocalDay(one: number, other: number): boolean {
+  const a = new Date(one);
+  const b = new Date(other);
+  return (
+    a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * A reported moment as a reader should be given it: how long ago while that goes on being true,
+ * and the hour itself once it would not.
+ *
+ * <b>A gap is a promise that the page is keeping up.</b> "Twenty minutes ago" is worth having
+ * while a trip is being followed and the page is redrawn as time passes. Once the watch is closed,
+ * or the link has stopped answering, nothing on the page will change again — and a gap printed
+ * then is true for a minute and wrong for the rest of the night, or grows without end under a
+ * party who came out hours ago and makes a finished trip read as a lengthening silence. So a
+ * settled page says when, in the hour and the date, which stays true however long it is left open.
+ *
+ * Null for a moment that is not one, by the one rule every moment on these pages is read by — see
+ * {@link instantOf}.
+ */
+export function momentOrAge(
+  value: string | null | undefined,
+  now: number,
+  language: string,
+  settled: boolean,
+): string | null {
+  const at = instantOf(value);
+  if (at === null) {
+    return null;
+  }
+  return settled ? clockInWords(at, now, language) : gapInWords(at, now, language);
+}
+
+/**
+ * A length of time in the reader's language — "3 hr 10 min" — or null where there is none to say.
+ *
+ * Rounded down to the minute, the direction every gap on these pages is rounded in. Written by the
+ * browser's own unit formatting rather than from translated words, because a count of hours needs
+ * a different word at one, at two and at twenty in Romanian and this application keeps no plural
+ * forms.
+ *
+ * Null when the end is before the start: a watch re-started after the moment in hand, or a clock
+ * that disagrees with the server's, describes no length of time, and "-4 min" under a trip's title
+ * would be read as something being wrong with the trip.
+ */
+export function durationInWords(from: number, to: number, language: string): string | null {
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) {
+    return null;
+  }
+  const minutes = Math.floor((to - from) / 60_000);
+  const unit = (value: number, name: 'day' | 'hour' | 'minute') =>
+    new Intl.NumberFormat(language, { style: 'unit', unit: name, unitDisplay: 'short' }).format(value);
+  if (minutes < 60) {
+    return unit(minutes, 'minute');
+  }
+  if (minutes < 24 * 60) {
+    const rest = minutes % 60;
+    const hours = unit(Math.floor(minutes / 60), 'hour');
+    return rest === 0 ? hours : `${hours} ${unit(rest, 'minute')}`;
+  }
+  const hours = Math.floor(minutes / 60) % 24;
+  const days = unit(Math.floor(minutes / (24 * 60)), 'day');
+  return hours === 0 ? days : `${days} ${unit(hours, 'hour')}`;
+}
+
+/**
+ * The moment a trip began to be followed, or null where the trip says none.
+ *
+ * <b>It is when the watch was started and nothing else.</b> Not when anybody went underground: a
+ * watch is started by a person, often in the car park, sometimes an hour after the party went in,
+ * and starting it again replaces the moment. Every line worded from this has to be true of that —
+ * "followed since", never "underground since" — on the one page that must not say more than it
+ * was told.
+ *
+ * The one place the instant is chosen, so a trip that one day carries a better one changes here
+ * and nowhere else.
+ */
+export function watchStartedAt(trip: { armedAt: string | null | undefined }): number | null {
+  return instantOf(trip.armedAt);
+}
+
+/**
+ * From when to when a finished trip was followed, as one range — "8:40 AM – 2:10 PM", with the
+ * date where it is not today — or null where the trip does not say both ends.
+ *
+ * The browser words the range, because only it knows which halves two moments share in the
+ * reader's language: one date said once for a trip within a day, both for one across midnight.
+ */
+export function followedSpanInWords(
+  trip: { armedAt: string | null | undefined; closedAt: string | null | undefined },
+  now: number,
+  language: string,
+): string | null {
+  const from = watchStartedAt(trip);
+  const to = instantOf(trip.closedAt);
+  if (from === null || to === null || to < from) {
+    return null;
+  }
+  return new Intl.DateTimeFormat(
+    language,
+    sameLocalDay(from, now) && sameLocalDay(to, now)
+      ? { timeStyle: 'short' }
+      : { dateStyle: 'medium', timeStyle: 'short' },
+  ).formatRange(new Date(from), new Date(to));
 }

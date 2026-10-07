@@ -51,6 +51,7 @@ detail those walkthroughs link into.
 | [Camps](camps.md) | Multi-trip expeditions, their roster, their leads board |
 | [Checklists and the callout](checklists-and-callout.md) | What a party settles before it sets off, and the overdue alarm |
 | [Live tracking and published trips](live-tracking.md) | Where the party is while it is underground, correcting the log, importing a sheet, what a cave's depths mean, publishing a trip |
+| [A movie of a tracked trip](tracking-movie.md) | A GIF or a video of the party moving through the survey: choosing trips, formats, what the file carries and its name, how long an export takes, cancelling |
 
 ## People and yourself
 

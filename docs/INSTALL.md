@@ -1363,7 +1363,10 @@ destination of the code that proves it.
    provided systemd unit (`deploy/systemd/silexgis-api.service`) — it documents the service
    user, data directories, and an `EnvironmentFile` for secrets. On Windows, run it as a
    Windows Service (e.g. with `sc.exe create`) or under IIS with the ASP.NET Core Module,
-   pointing at `SilexGis.Api.dll`.
+   pointing at `SilexGis.Api.dll`. A Linux host needs the system's time-zone database (the
+   `tzdata` package on Debian and Ubuntu; a minimal or container base may lack it): importing a
+   tracking sheet on a named zone's clocks and a member's quiet hours both look zones up in it.
+   The optional `tzdata-legacy` package is not needed.
 3. **Client.** Build the SPA and serve `client/dist/` with your web server:
    ```bash
    cd client && npm ci && npm run build

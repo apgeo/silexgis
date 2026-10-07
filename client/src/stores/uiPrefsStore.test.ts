@@ -11,6 +11,7 @@ afterEach(() => {
     appearance: DEFAULT_APPEARANCE,
     karstLinkTreatment: undefined,
     movieSettings: undefined,
+    movieGifCalibration: undefined,
     centerlineDetailZoom: undefined,
     centerlineMaxPaths: undefined,
     meshesInViewMinZoom: undefined,
@@ -185,6 +186,28 @@ describe('uiPrefsStore appearance', () => {
     expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([2]);
     expect(useUiPrefsStore.getState().karstLinkTreatment).toBe('omit');
     expect(useUiPrefsStore.getState().movieSettings).toBeUndefined();
+  });
+
+  it('keeps what the GIFs made here came to, and has nothing to say before one was made', () => {
+    // The figure is an optional field of the current shape: a blob written before it existed is
+    // read as it is, with nothing learnt yet, and one written since comes back whole.
+    localStorage.setItem('silexgis.uiPrefs', JSON.stringify({ version: 7, state: { pinnedTypeIds: [4] } }));
+    useUiPrefsStore.persist.rehydrate();
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([4]);
+    expect(useUiPrefsStore.getState().movieGifCalibration).toBeUndefined();
+
+    useUiPrefsStore.getState().setMovieGifCalibration({ turning: 0.03 });
+    const stored = JSON.parse(localStorage.getItem('silexgis.uiPrefs')!) as {
+      version: number;
+      state: { movieGifCalibration?: unknown };
+    };
+    expect(stored.version).toBe(7);
+    expect(stored.state.movieGifCalibration).toEqual({ turning: 0.03 });
+
+    useUiPrefsStore.setState({ movieGifCalibration: undefined });
+    localStorage.setItem('silexgis.uiPrefs', JSON.stringify(stored));
+    useUiPrefsStore.persist.rehydrate();
+    expect(useUiPrefsStore.getState().movieGifCalibration).toEqual({ turning: 0.03 });
   });
 
   it('keeps the centerline budgets when the limits for the walls in view arrive beside them', () => {

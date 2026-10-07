@@ -149,7 +149,27 @@ odată cu ea — și apoi paginile.
 | Follow link | Link de urmărire |
 | Caption (on the public page) | Etichetă |
 | Past trips in this cave | Ture trecute în această peșteră |
+| Survey (the drawing a party is placed on) | Ridicare |
+| Party / Team | Echipă |
+| Underground (where somebody stands) | În peșteră |
+| Last heard | Ultima veste |
+| Replay the trip / Play | Reia tura / Redă |
+| A replay | Reluare |
+| Language the page opens in | Limba în care se deschide pagina |
 | Being followed now | Urmărite acum |
+| Published trips (the administration page) | Ture publicate |
+| Replace link | Înlocuiește linkul |
+| Take it back / Taken back (a follow link) | Retrage-l / Retras |
+| Unpublish this trip / Unpublish everything | Retrage publicarea turei / Retrage tot ce este publicat |
+| Followed now / Just closed / In the archive (a link's status) | Urmărire în curs / Abia încheiată / În arhivă |
+| Withheld / Opens nothing (a link's status) | Reținut / Nu deschide nimic |
+| Protected cave nearby? | Peșteră protejată în apropiere? |
+| Log code | Cod în jurnal |
+| Make a movie | Fă un film |
+| Export GIF / Cancel export | Exportă GIF / Anulează exportul |
+| Caver labels | Etichetele speologilor |
+| Captions (of a movie) | Texte |
+| Stop and close / Keep going | Oprește și închide / Continuă exportul |
 
 ## Alte
 

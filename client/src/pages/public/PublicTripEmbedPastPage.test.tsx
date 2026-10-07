@@ -58,7 +58,13 @@ vi.mock('../../api/hooks.ts', () => ({
       : trackAnswer;
   },
 }));
-vi.mock('react-router-dom', () => ({ useParams: () => ({ token: 'follow-token' }) }));
+// The frame's address, which is where an article says what language it is written in.
+let address = new URLSearchParams();
+const setAddress = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useParams: () => ({ token: 'follow-token' }),
+  useSearchParams: () => [address, setAddress],
+}));
 // Whether a finger is driving the frame. False by default — the desk this suite is read on.
 let coarse = false;
 vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: () => coarse }));
@@ -234,6 +240,7 @@ beforeEach(() => {
   given = undefined;
   sheetPane = undefined;
   coarse = false;
+  address = new URLSearchParams();
 });
 
 afterEach(cleanup);
@@ -455,6 +462,51 @@ describe('the frame’s buttons under a finger', () => {
   });
 });
 
+describe('a frame whose own address names a moment of a past trip', () => {
+  const clockShows = (iso: string) =>
+    expect(screen.getByTestId('public-past-scrub').querySelector('[role="slider"]')).toHaveAttribute(
+      'aria-valuenow',
+      String(Date.parse(iso)),
+    );
+
+  it('opens that trip at that moment and sets it playing, as the full page does', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T09:30:00Z&play=1`);
+    render(<PublicTripEmbedPage />);
+
+    expect(trackReads).toContain(TRIP_2019);
+    expect(screen.getByTestId('public-past-banner-what')).toHaveTextContent('the 2019 push');
+    clockShows('2019-07-06T09:30:00Z');
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Pause');
+  });
+
+  it('opens it standing still when the address does not say play', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T09:30:00Z`);
+    render(<PublicTripEmbedPage />);
+
+    clockShows('2019-07-06T09:30:00Z');
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+  });
+
+  it('is not sent back to it because the frame’s language changed in the same address', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T09:30:00Z&play=1`);
+    const { rerender } = render(<PublicTripEmbedPage />);
+    fireEvent.click(screen.getByTestId('public-past-back'));
+    expect(screen.queryByTestId('public-past-banner-what')).toBeNull();
+
+    address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T09:30:00Z&play=1&lang=en`);
+    rerender(<PublicTripEmbedPage />);
+
+    expect(screen.queryByTestId('public-past-banner-what')).toBeNull();
+  });
+
+  it('reads no track for an address that names no past trip', () => {
+    address = new URLSearchParams('lang=en&at=2019-07-06T09:30:00Z&play=1');
+    render(<PublicTripEmbedPage />);
+
+    expect(trackReads.filter((read) => read !== undefined)).toEqual([]);
+  });
+});
+
 describe('an article driving the cave’s past through the frame', () => {
   it('opens the past trip a link named', () => {
     const { parent, sent } = fakeParent();
@@ -659,6 +711,105 @@ describe('an article driving the cave’s past through the frame', () => {
     // Half past nine, as asked: the first report made and the second not yet.
     const drawn = (given?.trackedCavers ?? []) as { name: string; position: { kind: string } }[];
     expect(drawn.map((caver) => caver.position.kind)).toEqual(['station', 'unreported']);
+  });
+
+  it('opens a trip at a moment and sets it playing, when the link says play', () => {
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:30:00Z', { trip: TRIP_2019, play: true }),
+    );
+
+    expect(focused(sent).at(-1)).toMatchObject({ target: { kind: 'moment' }, found: true });
+    // The button offers the opposite of what the clock is doing.
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Pause');
+  });
+
+  it('opens the same link standing still without the word, as every block already pasted sends it', () => {
+    // The twin of the case above, and the promise to older blocks: a message with no `play`, and
+    // one carrying something that only looks like it, open the trip exactly as before.
+    const { parent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:30:00Z', { trip: TRIP_2019 }),
+    );
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:40:00Z', { trip: TRIP_2019, play: 'yes' }),
+    );
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+  });
+
+  it('starts the trip already playing from a moment named with play, and a second press leaves it playing', () => {
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:30:00Z', { play: true }),
+    );
+
+    expect(focused(sent).at(-1)).toMatchObject({ target: { kind: 'moment' }, found: true });
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Pause');
+
+    // Pressed again, the link must not behave as the button does: that would pause it.
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:30:00Z', { play: true }),
+    );
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Pause');
+  });
+
+  it('holds a request to play made while the trip is still being read, and honours it when it lands', () => {
+    trackAnswer = { data: undefined, isPending: true, isError: false };
+    const { parent } = fakeParent();
+    const { rerender } = render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:30:00Z', { play: true }),
+    );
+    expect(screen.queryByTestId('public-past-play')).toBeNull();
+
+    trackAnswer = { data: pastTrack(), isPending: false, isError: false };
+    rerender(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Pause');
+  });
+
+  it('leaves the word alone over the trip being followed now, where there is no clock to start', () => {
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2026-09-14T09:00:00Z', { play: true }),
+    );
+
+    // Refused for the moment, exactly as it is without the word — and no replay was opened by it.
+    expect(focused(sent).at(-1)).toMatchObject({ target: { kind: 'moment' }, found: false });
+    expect(screen.queryByTestId('public-past-bar')).toBeNull();
   });
 
   it('moves the clock to a caver named beside the trip already open, as it does without the trip', () => {

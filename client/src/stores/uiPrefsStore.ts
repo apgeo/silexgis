@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { MovieGifCalibration } from '../caveview/movie/movieOutput.ts';
 import type { MovieSettings } from '../caveview/movie/movieSettings.ts';
 import type { SelectorPrefs } from '../filters/selectorPrefs.ts';
 import type { DensityPref, PanelLayout, PanelPrefs, PanelScope } from './panelPrefs.ts';
@@ -101,6 +102,15 @@ interface UiPrefsState {
   movieSettings?: MovieSettings;
   setMovieSettings: (settings: MovieSettings | undefined) => void;
   /**
+   * What the GIF movies made in this browser really came to, per pixel and frame, so the size the
+   * movie dialog estimates for the next one follows this person's own caves instead of one built-in
+   * guess. Undefined until a GIF has been made. Two numbers and nothing about any movie: not which
+   * trips, which cave or when. Read back only through the estimate's own repair, which believes no
+   * figure outside its bounds.
+   */
+  movieGifCalibration?: MovieGifCalibration;
+  setMovieGifCalibration: (calibration: MovieGifCalibration | undefined) => void;
+  /**
    * How each selection panel is arranged, keyed by which panel it is. Every mount keeps its own,
    * so a pop-out somebody set up to show one thing is not rearranged by the main window.
    */
@@ -165,6 +175,8 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       setKarstLinkTreatment: (treatment) => set({ karstLinkTreatment: treatment }),
       movieSettings: undefined,
       setMovieSettings: (settings) => set({ movieSettings: settings }),
+      movieGifCalibration: undefined,
+      setMovieGifCalibration: (calibration) => set({ movieGifCalibration: calibration }),
       selectors: {},
       setSelectorPrefs: (key, patch) =>
         set((state) => ({

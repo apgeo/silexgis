@@ -8,8 +8,9 @@ namespace SilexGis.Domain.Tests;
 /// <summary>Reading the instant a tracking report was made off a spreadsheet cell.</summary>
 public class TrackingCsvMomentsTests
 {
-    private static TrackingCsvMoment Read(string? text, TripCsvDateOrder order = TripCsvDateOrder.DayFirst) =>
-        TrackingCsvMoments.Read(text, order);
+    private static TrackingCsvMoment Read(
+        string? text, TripCsvDateOrder order = TripCsvDateOrder.DayFirst, TimeZoneInfo? zone = null) =>
+        TrackingCsvMoments.Read(text, order, zone);
 
     [Fact]
     public void A_date_and_a_time_beside_it_are_read_as_one_instant()
@@ -33,6 +34,32 @@ public class TrackingCsvMomentsTests
         // is converted rather than relabelled.
         Read("2026-09-12T14:30:00+03:00").At
             .ShouldBe(new DateTimeOffset(2026, 9, 12, 11, 30, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void A_cell_at_the_edge_of_the_calendar_whose_instant_falls_off_it_is_unreadable_and_not_a_failure()
+    {
+        // A mistyped year is one bad cell. Read in a zone, or with an offset of its own, its
+        // instant can fall before the first date there is or after the last — and that has to be
+        // a finding on its row, not an exception that takes the whole sheet's reading with it.
+        var bucharest = TimeZoneInfo.FindSystemTimeZoneById("Europe/Bucharest");
+        var newYork = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+
+        Read("01.01.0001 00:30", zone: bucharest).Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+        Read("31.12.9999 23:30", zone: newYork).Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+        Read("0001-01-01T00:30+02:00").Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+        Read("9999-12-31T23:30-05:00").Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+        // The cell's own offset decides, whatever zone the sheet is in.
+        Read("0001-01-01T00:30+02:00", zone: newYork).Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+
+        // The twins: the same cells are moments where nothing carries them off the calendar — as
+        // written, in a zone on the other side of Greenwich, and at an offset pointing inward.
+        Read("01.01.0001 00:30").At.ShouldBe(new DateTimeOffset(1, 1, 1, 0, 30, 0, TimeSpan.Zero));
+        Read("31.12.9999 23:30").At.ShouldBe(new DateTimeOffset(9999, 12, 31, 23, 30, 0, TimeSpan.Zero));
+        Read("01.01.0001 00:30", zone: newYork).Kind.ShouldBe(TrackingCsvMomentKind.Read);
+        Read("31.12.9999 23:30", zone: bucharest).Kind.ShouldBe(TrackingCsvMomentKind.Read);
+        Read("0001-01-01T00:30-05:00").Kind.ShouldBe(TrackingCsvMomentKind.Read);
+        Read("9999-12-31T23:30+02:00").Kind.ShouldBe(TrackingCsvMomentKind.Read);
     }
 
     [Fact]
@@ -87,6 +114,92 @@ public class TrackingCsvMomentsTests
         // The twin: a cell that does state a zone is converted rather than relabelled.
         Read("2026-09-12T14:30:00Z").At.ShouldBe(new DateTimeOffset(2026, 9, 12, 14, 30, 0, TimeSpan.Zero));
         Read("2026-09-12T14:30:00+03:00").At.ShouldBe(new DateTimeOffset(2026, 9, 12, 11, 30, 0, TimeSpan.Zero));
+    }
+
+    private static readonly TimeZoneInfo Bucharest = ZoneOf("Europe/Bucharest");
+
+    private static TimeZoneInfo ZoneOf(string name)
+    {
+        TrackingCsvZones.TryFind(name, out var zone).ShouldBeTrue(name);
+        return zone!;
+    }
+
+    [Fact]
+    public void A_cell_with_no_offset_is_read_on_the_clocks_of_the_zone_the_sheet_was_kept_in()
+    {
+        // The same cell, three hours apart in summer and two in winter: the offset is the one the
+        // zone kept on the cell's own date, not one figure applied to the whole sheet.
+        Read("12.07.2026 14:05", zone: Bucharest).At
+            .ShouldBe(new DateTimeOffset(2026, 7, 12, 11, 5, 0, TimeSpan.Zero));
+        Read("12.01.2026 14:05", zone: Bucharest).At
+            .ShouldBe(new DateTimeOffset(2026, 1, 12, 12, 5, 0, TimeSpan.Zero));
+
+        // The twin, on the same cell: with no zone named it stands as written.
+        Read("12.07.2026 14:05").At.ShouldBe(new DateTimeOffset(2026, 7, 12, 14, 5, 0, TimeSpan.Zero));
+
+        // Every spelling of a moment goes through the same reading, the ISO one and the one
+        // written time-first without a colon included.
+        Read("2026-07-12T14:05:00", zone: Bucharest).At
+            .ShouldBe(new DateTimeOffset(2026, 7, 12, 11, 5, 0, TimeSpan.Zero));
+        Read("1405 12.07.2026", zone: Bucharest).At
+            .ShouldBe(new DateTimeOffset(2026, 7, 12, 11, 5, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void A_cell_that_states_its_own_offset_is_never_moved_by_the_sheets_zone()
+    {
+        // An export says what it means, and the zone chosen for the hand-typed rows beside it has
+        // no say. A Z is an offset stated — of nothing — and not an offset left out.
+        var written = new DateTimeOffset(2026, 7, 12, 14, 5, 0, TimeSpan.Zero);
+        Read("2026-07-12T14:05:00Z", zone: Bucharest).At.ShouldBe(written);
+        Read("2026-07-12T14:05:00+00:00", zone: Bucharest).At.ShouldBe(written);
+        Read("2026-07-12 14:05 +05:30", zone: Bucharest).At
+            .ShouldBe(new DateTimeOffset(2026, 7, 12, 8, 35, 0, TimeSpan.Zero));
+        Read("2026-07-12T14:05:00Z", zone: Bucharest).ShouldBe(Read("2026-07-12T14:05:00Z"));
+    }
+
+    [Fact]
+    public void A_time_the_zones_clocks_skipped_is_said_to_be_one_rather_than_given_an_instant()
+    {
+        // 03:30 on the night Bucharest's clocks go forward was never on any clock there.
+        var skipped = Read("29.03.2026 03:30", zone: Bucharest);
+        skipped.Kind.ShouldBe(TrackingCsvMomentKind.SkippedByClockChange);
+        skipped.RepeatedByClockChange.ShouldBeFalse();
+
+        // The same cell is an ordinary moment where no zone, or a zone without that change, reads
+        // it — and where the cell says which offset it means.
+        Read("29.03.2026 03:30").Kind.ShouldBe(TrackingCsvMomentKind.Read);
+        Read("29.03.2026 03:30", zone: ZoneOf("Asia/Kolkata")).Kind.ShouldBe(TrackingCsvMomentKind.Read);
+        Read("29.03.2026 03:30 +02:00", zone: Bucharest).At
+            .ShouldBe(new DateTimeOffset(2026, 3, 29, 1, 30, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void A_time_the_zones_clocks_showed_twice_is_read_as_the_first_and_marked()
+    {
+        // 03:30 on the night Bucharest's clocks go back happened at 00:30 and again at 01:30 UTC.
+        var repeated = Read("25.10.2026 03:30", zone: Bucharest);
+        repeated.Kind.ShouldBe(TrackingCsvMomentKind.Read);
+        repeated.RepeatedByClockChange.ShouldBeTrue();
+        repeated.At.ShouldBe(new DateTimeOffset(2026, 10, 25, 0, 30, 0, TimeSpan.Zero));
+
+        // Writing the offset settles which of the two it was, and nothing is left to mark.
+        var second = Read("25.10.2026 03:30 +02:00", zone: Bucharest);
+        second.RepeatedByClockChange.ShouldBeFalse();
+        second.At.ShouldBe(new DateTimeOffset(2026, 10, 25, 1, 30, 0, TimeSpan.Zero));
+
+        // An ordinary time is not marked, and neither is that hour read with no zone.
+        Read("25.10.2026 14:05", zone: Bucharest).RepeatedByClockChange.ShouldBeFalse();
+        Read("25.10.2026 03:30").RepeatedByClockChange.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_zone_changes_only_the_instant_and_not_what_counts_as_a_moment()
+    {
+        Read("12.07.2026", zone: Bucharest).Kind.ShouldBe(TrackingCsvMomentKind.DateWithoutTime);
+        Read("", zone: Bucharest).Kind.ShouldBe(TrackingCsvMomentKind.Empty);
+        Read("la prânz", zone: Bucharest).Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+        Read("12.07.2026 14:05 +99:00", zone: Bucharest).Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
     }
 
     [Fact]
@@ -167,5 +280,80 @@ public class TrackingCsvMomentsTests
         Read("la prânz").Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
         Read("12.09.2026 seara").Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
         Read("99.99.2026 14:30").Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+    }
+
+    [Fact]
+    public void A_time_with_no_date_is_said_to_be_that_until_a_day_is_named_for_it()
+    {
+        // Not unreadable: it is a perfectly good time, and what is missing is a date.
+        Read("08:15").Kind.ShouldBe(TrackingCsvMomentKind.TimeWithoutDate);
+        Read("08:15 +03:00").Kind.ShouldBe(TrackingCsvMomentKind.TimeWithoutDate);
+        // Only where it is a time, though: a colon alone does not make one.
+        Read("ora: seara").Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+        Read("25:99").Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+
+        var day = new DateOnly(2026, 9, 12);
+        var read = TrackingCsvMoments.Read("08:15", TripCsvDateOrder.DayFirst, zone: null, day);
+        read.Kind.ShouldBe(TrackingCsvMomentKind.Read);
+        read.At.ShouldBe(new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero));
+        read.OnNamedDay.ShouldBeTrue();
+
+        // The cell's own offset still decides the instant; the day only supplies the date.
+        TrackingCsvMoments.Read("08:15 +03:00", TripCsvDateOrder.DayFirst, zone: null, day)
+            .At.ShouldBe(new DateTimeOffset(2026, 9, 12, 5, 15, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void Four_bare_digits_are_a_time_only_where_a_day_was_named_and_a_year_everywhere_else()
+    {
+        // In a moment column "2026" is a year, and a date with no time.
+        Read("2026").Kind.ShouldBe(TrackingCsvMomentKind.DateWithoutTime);
+
+        var read = TrackingCsvMoments.Read(
+            "0815", TripCsvDateOrder.DayFirst, zone: null, new DateOnly(2026, 9, 12));
+        read.At.ShouldBe(new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero));
+        read.OnNamedDay.ShouldBeTrue();
+
+        // And digits that are no time of day are no moment, named day or not.
+        TrackingCsvMoments.Read("2575", TripCsvDateOrder.DayFirst, zone: null, new DateOnly(2026, 9, 12))
+            .Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+    }
+
+    [Fact]
+    public void A_cell_that_writes_its_own_date_is_on_that_date_whatever_day_was_named()
+    {
+        var read = TrackingCsvMoments.Read(
+            "12.09.2026 08:15", TripCsvDateOrder.DayFirst, zone: null, new DateOnly(2020, 1, 1));
+
+        read.At.ShouldBe(new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero));
+        read.OnNamedDay.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_named_days_time_meets_the_zones_two_edge_hours_like_any_other()
+    {
+        // The clocks in Bucharest went forward at 03:00 on 29 March 2026 and back at 04:00 on
+        // 25 October 2026: 03:30 never happened on the first and happened twice on the second.
+        TrackingCsvMoments.Read("03:30", TripCsvDateOrder.DayFirst, Bucharest, new DateOnly(2026, 3, 29))
+            .Kind.ShouldBe(TrackingCsvMomentKind.SkippedByClockChange);
+
+        var twice = TrackingCsvMoments.Read(
+            "03:30", TripCsvDateOrder.DayFirst, Bucharest, new DateOnly(2026, 10, 25));
+        twice.Kind.ShouldBe(TrackingCsvMomentKind.Read);
+        twice.RepeatedByClockChange.ShouldBeTrue();
+        twice.OnNamedDay.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Whether_a_time_cell_needs_a_day_is_asked_of_the_cell_and_not_of_its_column()
+    {
+        TrackingCsvMoments.IsTimeAlone("08:15").ShouldBeTrue();
+        TrackingCsvMoments.IsTimeAlone("0815").ShouldBeTrue();
+        TrackingCsvMoments.IsTimeAlone(" 8:15:30 ").ShouldBeTrue();
+
+        TrackingCsvMoments.IsTimeAlone("12.09.2026 08:15").ShouldBeFalse();
+        TrackingCsvMoments.IsTimeAlone("12.09.2026").ShouldBeFalse();
+        TrackingCsvMoments.IsTimeAlone("").ShouldBeFalse();
+        TrackingCsvMoments.IsTimeAlone(null).ShouldBeFalse();
     }
 }

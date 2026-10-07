@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   keepPreviousData,
   queryOptions,
@@ -296,6 +296,11 @@ export const queryKeys = {
   // last segment is a word rather than a narrowing, which no narrowing can collide with.
   tripTrackingEventLog: (id: string) => ['trip-logs', 'tracking-events', id, 'log'] as const,
   tripTrackingShares: (id: string) => ['trip-logs', 'tracking-shares', id] as const,
+  // Every published link of the installation, for its administrators. Under the trips' prefix on
+  // purpose: a status is read off a trip's watch and its links, so anything that writes a trip or
+  // its tracking has to reach this list as well, and one prefix is how it does.
+  publishedLinks: (params: PublishedLinksParams) =>
+    ['trip-logs', 'published-links', params] as const,
   // The places the watch's cave has declared. Held under the trip rather than under the cave
   // because that is the identity the surface asking has: the page showing this list knows which
   // watch it is drawn on and deliberately does not know which cave the watch is anchored to.
@@ -8441,6 +8446,23 @@ export function useTripTrackingEventLogs(tripLogIds: readonly string[]) {
 }
 
 /**
+ * Reads one trip's whole log again, now, and answers with it — whatever is already held.
+ *
+ * The whole log is not kept fresh by itself, and for a replay of a finished trip it has no need to
+ * be. A surface that is about to commit to what the log says of a trip still under way — a file made
+ * from it, which outlives the screen — asks through this first, and learns from the refusal when the
+ * log could not be read to its end. The answer also replaces what is held, so everything else
+ * drawn from the log follows. A read already on its way is waited for rather than started again.
+ */
+export function useRereadTripTrackingEventLog() {
+  const queryClient = useQueryClient();
+  return useCallback(
+    (tripLogId: string) => queryClient.fetchQuery({ ...tripTrackingEventLogQuery(tripLogId), staleTime: 0 }),
+    [queryClient],
+  );
+}
+
+/**
  * The trips tracked on one survey model that this reader may read: those whose watch points at it
  * now, and those with reports recorded against it — a watch re-pointed at a newer survey keeps its
  * earlier reports on the older one. Latest activity first.
@@ -9117,10 +9139,17 @@ export function useTripTrackingShares(tripLogId: string | undefined, enabled = t
   });
 }
 
+/** The prefix every page of the administrators' list of published links is held under. */
+const publishedLinksPrefix = ['trip-logs', 'published-links'] as const;
+
 function useInvalidateTripTrackingShares() {
   const queryClient = useQueryClient();
-  return (tripLogId: string) =>
+  return (tripLogId: string) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.tripTrackingShares(tripLogId) });
+    // The installation's own list is made of these same links, so a link handed out, taken back
+    // or exchanged on a trip is a change to it too.
+    void queryClient.invalidateQueries({ queryKey: publishedLinksPrefix });
+  };
 }
 
 /**
@@ -9156,6 +9185,109 @@ export function useRevokeTripTrackingShare() {
         }),
       ),
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * Exchanges one link for a fresh one in a single act: the old address stops answering and a new
+ * one is handed back.
+ *
+ * <b>As with publishing, the answer is the only copy of the new token there will ever be</b>, so
+ * whatever calls this shows the address at once. The fresh link runs out when the old one would
+ * have, and nobody on the trip is told, because nothing more is published than was a moment ago.
+ */
+export function useReplaceTripTrackingShare() {
+  const invalidate = useInvalidateTripTrackingShares();
+  return useMutation({
+    mutationFn: ({ tripLogId, shareId }: { tripLogId: string; shareId: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/tracking/shares/{shareId}/replace', {
+          params: { path: { tripLogId, shareId } },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+// ---- everything this installation has published, for its administrators ----
+
+export type PublishedLink = components['schemas']['PublishedLinkDto'];
+export type PublishedLinks = components['schemas']['PublishedLinksDto'];
+export type PublishedLinkStatus = components['schemas']['PublishedLinkStatus'];
+export type PublishedLinksWithdrawn = components['schemas']['PublishedLinksWithdrawnDto'];
+
+/** What the list of published links may be ordered by, spelled as the server reads it. */
+export type PublishedLinkSort = 'createdAt' | 'expiresAt' | 'tripDate' | 'tripTitle' | 'status';
+
+export interface PublishedLinksParams {
+  status?: PublishedLinkStatus;
+  sort?: PublishedLinkSort;
+  descending?: boolean;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * The word the server asks for before it takes back every link of the installation.
+ *
+ * Not a secret and not what a person types — the page asks for a word in the reader's own
+ * language and sends this one. Its whole purpose is that a request built for something else
+ * cannot perform this act by accident.
+ */
+const REVOKE_EVERYTHING_WORD = 'revoke-everything';
+
+/**
+ * Every published link of the installation, with what each does for its holder at one instant.
+ *
+ * For full administrators; anybody else is refused, and the refusal is a settled answer rather
+ * than something a second attempt changes, so it is not retried.
+ */
+export function usePublishedLinks(params: PublishedLinksParams) {
+  return useQuery({
+    queryKey: queryKeys.publishedLinks(params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/admin/published-trips', { params: { query: { ...params } } })),
+    // The page before stays on screen while the next is read, so paging and re-ordering do not
+    // blank a list somebody is in the middle of acting on.
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+/**
+ * What a withdrawal reaches in this browser's cache: every trip's own list of links, and with it
+ * every read of a trip's watch, since "is this trip published" is part of that answer.
+ */
+function useInvalidateAfterWithdrawal() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+}
+
+/** Takes back every link of one trip in one act. Cannot be undone. */
+export function useRevokeTripPublishedLinks() {
+  const invalidate = useInvalidateAfterWithdrawal();
+  return useMutation({
+    mutationFn: ({ tripLogId }: { tripLogId: string }) =>
+      unwrap(
+        api.POST('/api/v1/admin/published-trips/{tripLogId}/revoke-all', {
+          params: { path: { tripLogId } },
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/** Takes back every link of the installation in one act. Cannot be undone. */
+export function useRevokeEveryPublishedLink() {
+  const invalidate = useInvalidateAfterWithdrawal();
+  return useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.POST('/api/v1/admin/published-trips/revoke-everything', {
+          body: { confirm: REVOKE_EVERYTHING_WORD },
+        }),
+      ),
+    onSuccess: invalidate,
   });
 }
 

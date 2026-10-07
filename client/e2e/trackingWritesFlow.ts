@@ -6,8 +6,9 @@ import { apiJson, bearerToken } from './rastermapApi.ts';
 
 /**
  * The three ways a coordinator writes a tracking log other than reporting live: correcting a report
- * in place — on a running watch and again once it is closed — importing a spreadsheet of reports, and
- * declaring what the cave's depths mean so that a report can be made by the name of a place.
+ * in place — on a running watch and again once it is closed — importing a spreadsheet of reports,
+ * from a file and from rows pasted in, and declaring what the cave's depths mean so that a report
+ * can be made by the name of a place.
  *
  * <b>Why this is a browser flow and not only a component suite.</b> Each of these has a component
  * suite, and each suite stubs every write — which is how a sentence looked up with its arguments
@@ -29,6 +30,40 @@ const PLACE = { label: 'Meandru', depthM: 96 };
 const ION = 'Ion Popescu';
 const MARIA = 'Maria Pop';
 
+/**
+ * A sheet the way a phone's spreadsheet hands it over: the date and the time in two columns, and
+ * the time read off a clock somewhere else. Its one row is somebody going in, because a row has to
+ * say a place or a standing to be a report at all.
+ *
+ * <b>The zone is one nobody running this is in, and one whose clocks never change.</b> A row read
+ * on the reader's own clock and a row read in the reader's own zone are the same row, so a zone the
+ * machine happens to keep would let the reading pass without ever being applied; and a zone with
+ * summer time would make the instant below depend on the date chosen. 14:05 in Tokyo is 05:05 UTC
+ * on every day of every year.
+ */
+const ZONED = {
+  zone: 'Asia/Tokyo',
+  note: 'E2E sheet kept on Tokyo clocks',
+  rows: (person: string, note: string) =>
+    ['Data,Ora,Speologi,Stare,Nota', `15.09.2026,14:05,${person},intrare,${note}`].join('\n'),
+  /** The sheet's own wording of the moment, in the language this walk runs in. */
+  shown: /9\/15\/2026, 2:05:00\sPM/,
+  instant: Date.parse('2026-09-15T05:05:00Z'),
+};
+
+/**
+ * A sheet that writes a time and no date, which cannot be placed until somebody says its day.
+ *
+ * The time is the first minute of the day on purpose: the day the dialog offers is the trip's own,
+ * the trip is dated today, and midnight is the one time of today that is never still to come — a
+ * report in the future would be refused, and for a reason that has nothing to do with this walk.
+ */
+const TIMES_ONLY = {
+  note: 'E2E sheet of times with no dates',
+  rows: (person: string, note: string) =>
+    ['Ora,Speologi,Stare,Nota', `00:00,${person},intrare,${note}`].join('\n'),
+};
+
 interface Report {
   id: string;
   caverId: string;
@@ -36,6 +71,7 @@ interface Report {
   stationName: string | null;
   depthEnteredM: number | null;
   note: string | null;
+  recordedAt: string;
 }
 
 export async function correctImportAndReportByPlace(page: Page) {
@@ -82,10 +118,11 @@ export async function correctImportAndReportByPlace(page: Page) {
   const participant = (name: string) => ({
     caverId: null, newCaverName: name, roleId: null, entryTime: null, exitTime: null, note: null,
   });
+  const tripDate = new Date().toISOString().slice(0, 10);
   const trip = (await apiJson(page, token, 'POST', '/api/v1/trip-logs', {
     title: `E2E tracking writes ${stamp}`,
     tripTypeId: null,
-    tripDate: new Date().toISOString().slice(0, 10),
+    tripDate,
     tripDateEnd: null, entryTime: null, exitTime: null,
     description: null, results: null, weatherConditions: null, locationText: null,
     organizingCavingGroupId: null, geom: null,
@@ -240,6 +277,75 @@ export async function correctImportAndReportByPlace(page: Page) {
   ).toBe(DECLARED_STATION);
   // …and the unticked line did not land for either of them.
   expect(afterImport.filter((row) => row.kind === 'exited')).toEqual([]);
+
+  // ---- Pasted rows, the date and the time in two columns, read on another zone's clocks ----
+  await page.getByTestId('trip-tracking-csv-open').click();
+  await expect(importing).toBeVisible();
+  await importing.getByTestId('trip-tracking-csv-source').getByText('Pasted rows').click();
+  await importing.getByTestId('trip-tracking-csv-paste').fill(ZONED.rows(ION, ZONED.note));
+  await expect(importing.getByTestId('trip-tracking-csv-pasted-as')).toContainText('Comma');
+
+  // Whose clock the times are on is a file setting, behind its fold. Found by searching, the way
+  // somebody finds one zone among hundreds, and matched by the end of its name so that the walk
+  // reads the same on a machine that keeps this very zone and is offered it as its own.
+  await importing.getByRole('button', { name: 'File settings' }).click();
+  const zone = importing.getByRole('combobox', { name: "Sheet's time zone" });
+  await zone.click();
+  await zone.fill('Tokyo');
+  await page.locator(`.ant-select-item-option[title$="${ZONED.zone}"]`).click();
+
+  await importing.getByTestId('trip-tracking-csv-preview').click();
+  await expect(rows).toBeVisible({ timeout: 15_000 });
+  // The dialog names the zone the server says it applied…
+  await expect(importing.getByTestId('trip-tracking-csv-moments-rule')).toContainText(
+    `read on the clocks of ${ZONED.zone}`,
+  );
+  // …and the row is shown as the sheet wrote it — the day from one column and the hour from the
+  // other, on that zone's clocks — so the preview can be checked against the paper line by line
+  // whatever zone the reviewer's own machine keeps.
+  await expect(rows).toContainText(ZONED.shown);
+
+  await importing.getByTestId('trip-tracking-csv-commit').click();
+  await expect(importing).toBeHidden({ timeout: 15_000 });
+  await expect(log).toContainText(ZONED.note, { timeout: 15_000 });
+  // What was stored is the instant those clocks showed that time at, not the time as written.
+  const zoned = (await logOf()).find((row) => row.note === ZONED.note && row.caverId === ion);
+  expect(zoned).toBeTruthy();
+  expect(Date.parse(zoned!.recordedAt)).toBe(ZONED.instant);
+
+  // ---- A sheet of times with no dates: the dialog asks for its day and offers the trip's ----
+  await page.getByTestId('trip-tracking-csv-open').click();
+  await expect(importing).toBeVisible();
+  await importing.getByTestId('trip-tracking-csv-source').getByText('Pasted rows').click();
+  await importing
+    .getByTestId('trip-tracking-csv-paste')
+    .fill(TIMES_ONLY.rows(ION, TIMES_ONLY.note));
+  const askedForDay = importing.getByTestId('trip-tracking-csv-day-ask');
+  // Not asked before the sheet has been read: a sheet that writes its dates is never asked.
+  await expect(askedForDay).toBeHidden();
+  await importing.getByTestId('trip-tracking-csv-preview').click();
+  // The first reading is refused, and the question it raises is on the screen with the trip's own
+  // date already in the field — read from the real trip, in the form a date field takes.
+  await expect(askedForDay).toBeVisible({ timeout: 15_000 });
+  await expect(askedForDay).toContainText('This sheet writes times with no dates');
+  await expect(importing.getByTestId('trip-tracking-csv-day')).toHaveValue(tripDate);
+  await expect(importing.getByTestId('trip-tracking-csv-moments-day')).toBeHidden();
+
+  // Read again with the day that was offered: the row is placed, and the dialog says on which day.
+  await importing.getByTestId('trip-tracking-csv-preview').click();
+  await expect(importing.getByTestId('trip-tracking-csv-moments-day')).toContainText(
+    'Times with no date were put on',
+    { timeout: 15_000 },
+  );
+  await expect(importing.getByTestId('trip-tracking-csv-creates')).toContainText('1');
+
+  await importing.getByTestId('trip-tracking-csv-commit').click();
+  await expect(importing).toBeHidden({ timeout: 15_000 });
+  await expect(log).toContainText(TIMES_ONLY.note, { timeout: 15_000 });
+  // What was stored is that day at that time, exactly as written: no zone was named for this sheet.
+  const timed = (await logOf()).find((row) => row.note === TIMES_ONLY.note && row.caverId === ion);
+  expect(timed).toBeTruthy();
+  expect(Date.parse(timed!.recordedAt)).toBe(Date.parse(`${tripDate}T00:00:00Z`));
 
   // ---- Correcting a report once the watch is closed ----
   // A trip is written up after everybody is out, so a closed log takes a correction exactly as a

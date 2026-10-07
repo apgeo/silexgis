@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CaretRightOutlined,
   LeftOutlined,
+  LinkOutlined,
   PauseOutlined,
+  PlayCircleOutlined,
   RightOutlined,
 } from '@ant-design/icons';
 import {
@@ -11,6 +13,7 @@ import {
   Button,
   ConfigProvider,
   Flex,
+  Input,
   Segmented,
   Select,
   Slider,
@@ -58,7 +61,22 @@ export interface PublicPastBarProps {
   cavers: readonly TrackedCaver[];
   /** The frame inside somebody's article, where every line costs a share of a small box. */
   compact?: boolean;
+  /**
+   * The address of the moment on the clock — and, asked for playing, of that moment set going.
+   *
+   * <b>Supplied by the page that has an address of its own to give, and by nothing else.</b> With
+   * it the strip offers two buttons that copy such a link; without it, none. The frame inside an
+   * article supplies none: it has no room for them, a framed page is refused the clipboard unless
+   * the framing site said otherwise, and the address a reader would want from there is the
+   * article's, which this page does not know.
+   */
+  momentAddress?: (playing: boolean) => string;
 }
+
+/** What the last press of a copy button came to, for the line that says so. */
+type Copied =
+  | { outcome: 'copied'; playing: boolean; when: string }
+  | { outcome: 'refused'; address: string };
 
 /**
  * The strip that says a reader is looking at the past, and the controls that move them through it.
@@ -81,8 +99,10 @@ export default function PublicPastBar({
   liveState,
   cavers,
   compact = false,
+  momentAddress,
 }: PublicPastBarProps) {
   const { t, i18n } = useTranslation();
+  const [copied, setCopied] = useState<Copied | null>(null);
   const coarse = useCoarsePointer();
   const narrow = useIsMobile();
   // The clock belongs to the playback, not to this strip: the drawing beside it reads whether it
@@ -363,6 +383,33 @@ export default function PublicPastBar({
     const previous = momentBefore(moments, at);
     const next = momentAfter(moments, at);
 
+    /**
+     * Copies the address of the moment on the clock, and says what was copied.
+     *
+     * <b>The moment is taken at the press, with the words that name it.</b> The link carries an
+     * instant in UTC and the strip prints local time, so the confirmation repeats the time the
+     * reader was looking at when they pressed: on a replay that is playing, "copied" alone would
+     * leave them guessing which of the last few seconds went into the link.
+     *
+     * <b>A refusal still hands the link over.</b> A browser may decline the clipboard — an old
+     * one, a page opened over plain HTTP, a permission somebody denied — and the reader pressed
+     * because they want the address. So it is put in front of them, selected on focus, to copy by
+     * hand.
+     */
+    const copy = async (playing: boolean) => {
+      if (momentAddress === undefined) {
+        return;
+      }
+      const address = momentAddress(playing);
+      const when = clock(at);
+      try {
+        await navigator.clipboard.writeText(address);
+        setCopied({ outcome: 'copied', playing, when });
+      } catch {
+        setCopied({ outcome: 'refused', address });
+      }
+    };
+
     return (
       <>
         <Flex gap="small" align="center" wrap>
@@ -442,6 +489,58 @@ export default function PublicPastBar({
             />
           </ConfigProvider>
         </div>
+
+        {momentAddress !== undefined && !compact && (
+          <div className="public-past-links" data-testid="public-past-links">
+            <Flex gap="small" align="center" wrap>
+              {/* Buttons, and worded ones: what each copies is the difference between them, and
+                  an icon cannot say "and starts playing". Their text is their accessible name —
+                  the whole of it, which is why the pictures beside it are hidden from one: the
+                  icon set names each picture, and "link Copy link to this moment" is what a
+                  screen reader would otherwise say. */}
+              <Button
+                size={controlSize}
+                icon={<LinkOutlined aria-hidden />}
+                onClick={() => void copy(false)}
+                data-testid="public-past-copy-moment"
+              >
+                {t('publicTrip.past.copyMoment')}
+              </Button>
+              <Button
+                size={controlSize}
+                icon={<PlayCircleOutlined aria-hidden />}
+                onClick={() => void copy(true)}
+                data-testid="public-past-copy-playing"
+              >
+                {t('publicTrip.past.copyPlaying')}
+              </Button>
+              {/* Always in the page, empty until a press: a status that appears together with its
+                  first words is one a screen reader has not been listening to yet. */}
+              <Typography.Text type="secondary" role="status" data-testid="public-past-copied">
+                {copied === null
+                  ? ''
+                  : copied.outcome === 'refused'
+                    ? t('publicTrip.past.copyRefused')
+                    : t(
+                        copied.playing
+                          ? 'publicTrip.past.copiedPlaying'
+                          : 'publicTrip.past.copiedMoment',
+                        { when: copied.when },
+                      )}
+              </Typography.Text>
+            </Flex>
+            {copied?.outcome === 'refused' && (
+              <Input
+                readOnly
+                size={controlSize}
+                value={copied.address}
+                onFocus={(event) => event.target.select()}
+                aria-label={t('publicTrip.past.copyByHand')}
+                data-testid="public-past-copy-by-hand"
+              />
+            )}
+          </div>
+        )}
       </>
     );
   };

@@ -14,6 +14,8 @@ let answer: {
   isPending: boolean;
   error: unknown;
   refetch?: () => unknown;
+  /** When the last read that succeeded arrived, as the query reports it. */
+  dataUpdatedAt?: number;
 } = {
   data: undefined,
   isPending: true,
@@ -190,6 +192,35 @@ describe('a trip followed by somebody with no account', () => {
 
     expect(container.querySelectorAll('a')).toHaveLength(0);
     expect(screen.queryByRole('button', { name: /sign in/i })).toBeNull();
+  });
+
+  it('offers the other language as a button, in that language, wherever the page ends up', () => {
+    // The suite reads English, so the way out leads to Romanian — and is written in Romanian,
+    // because whoever needs it is not reading the page around it.
+    ready();
+    const { container, unmount } = render(<PublicTripPage />);
+
+    const button = screen.getByRole('button', { name: 'Afișează pagina în română' });
+    expect(button).toHaveTextContent('Română');
+    expect(button).toHaveAttribute('lang', 'ro');
+    expect(container.querySelector('footer')).toContainElement(button);
+    expect(container.querySelectorAll('a')).toHaveLength(0);
+    unmount();
+
+    // A link that opens nothing says so in one sentence, and that sentence is the page.
+    answer = { data: undefined, isPending: false, error: new ApiError(404) };
+    render(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-not-found')).toContainElement(
+      screen.getByTestId('public-trip-language'),
+    );
+    cleanup();
+
+    // And so does a server that could not be reached.
+    answer = { data: undefined, isPending: false, error: new ApiError(503) };
+    render(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-unreachable')).toContainElement(
+      screen.getByTestId('public-trip-language'),
+    );
   });
 
   it('groups the party by team and keeps the teams in the order the envelope sent them', () => {
@@ -536,6 +567,257 @@ describe('how old a followed position is', () => {
     expect(screen.getByTestId('public-trip-position-withheld')).toBeInTheDocument();
     // The twin: an age is still drawn where a place was.
     expect(screen.getByTestId('public-trip-position-age-1')).toBeInTheDocument();
+  });
+});
+
+/**
+ * <b>The page goes on being right while nobody touches it.</b>
+ *
+ * These run on a clock the test moves, because the defect they close is one of time passing: a
+ * figure worded at a render and never again. Every case advances the clock with no read landing
+ * and no press — the page's own ticker is the only thing that can have redrawn it.
+ */
+describe('a followed page left open', () => {
+  /** Noon where the reader is, so "today" does not depend on the machine's time zone. */
+  const NOON = new Date(2026, 8, 14, 12, 0).getTime();
+  const at = (minutesBeforeNoon: number) => new Date(NOON - minutesBeforeNoon * 60_000).toISOString();
+  const pass = (minutes: number) =>
+    act(() => {
+      vi.advanceTimersByTime(minutes * 60_000);
+    });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOON);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  /** Ana, placed three hours before noon and heard from five minutes before it. */
+  const ana = () =>
+    participant({
+      ordinal: 1,
+      label: 'Ana',
+      teamId: TEAM_A,
+      stationName: 'p.g.7',
+      in: true,
+      lastRecordedAt: at(5),
+      positionRecordedAt: at(180),
+    });
+
+  const followed = (overrides: Partial<PublicTripEnvelope> = {}) => {
+    answer = {
+      data: envelope({ armedAt: at(190), participants: [ana()], ...overrides }),
+      isPending: false,
+      error: null,
+      dataUpdatedAt: NOON - 40_000,
+    };
+  };
+
+  it('moves every gap on with no read landing', () => {
+    followed();
+    render(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-last-heard-1')).toHaveTextContent('5 minutes ago');
+    expect(screen.getByTestId('public-trip-position-age-1')).toHaveTextContent('Reported 3 hours ago');
+
+    pass(60);
+
+    expect(screen.getByTestId('public-trip-last-heard-1')).toHaveTextContent('1 hour ago');
+    expect(screen.getByTestId('public-trip-position-age-1')).toHaveTextContent('Reported 4 hours ago');
+  });
+
+  it('says when it last heard from the server, and that figure moves too', () => {
+    followed();
+    render(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-updated')).toHaveTextContent('Page updated 40 seconds ago');
+
+    pass(2);
+
+    expect(screen.getByTestId('public-trip-updated')).toHaveTextContent('Page updated 2 minutes ago');
+  });
+
+  it('measures from the read that last succeeded once a later one fails, and says how stale it is', () => {
+    followed();
+    const view = render(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-stale')).toBeNull();
+
+    // The connection drops: the envelope and the moment it arrived both stand.
+    answer = { ...answer, error: new Error('Failed to fetch') };
+    view.rerender(<PublicTripPage />);
+    pass(5 * 60);
+
+    const stale = screen.getByTestId('public-trip-stale');
+    expect(stale).toHaveTextContent('This page has stopped refreshing');
+    expect(stale).toHaveTextContent('5 hours ago');
+    // Stale is a statement about the page. The party is still there, and nothing says the trip
+    // or the link is gone.
+    expect(screen.getByTestId('public-trip-caver-1')).toHaveTextContent('p.g.7');
+    expect(screen.queryByTestId('public-trip-not-found')).toBeNull();
+    expect(screen.queryByTestId('public-trip-unreachable')).toBeNull();
+    expect(screen.queryByTestId('public-trip-ended')).toBeNull();
+
+    // And it clears by itself when a read lands.
+    answer = { ...answer, error: null, dataUpdatedAt: Date.now() };
+    view.rerender(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-stale')).toBeNull();
+    expect(screen.getByTestId('public-trip-updated')).toHaveTextContent('Page updated now');
+  });
+
+  it('says a gap while the trip is followed and the hour once it is over', () => {
+    followed();
+    const view = render(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-last-heard-1')).toHaveTextContent('5 minutes ago');
+
+    answer = {
+      ...answer,
+      data: envelope({ state: 'closed', armedAt: at(190), closedAt: at(1), participants: [ana()] }),
+    };
+    view.rerender(<PublicTripPage />);
+
+    const heard = screen.getByTestId('public-trip-last-heard-1').textContent ?? '';
+    const placed = screen.getByTestId('public-trip-position-age-1').textContent ?? '';
+    expect(heard).toMatch(/11:55/);
+    expect(placed).toMatch(/Reported at .*9:00/);
+    expect(`${heard} ${placed}`).not.toMatch(/ago/);
+    expect(screen.getByTestId('public-trip-updated')).toHaveTextContent(/Last read at .*11:59/);
+
+    // Six hours on, word for word what it said: nothing on a finished trip grows.
+    pass(6 * 60);
+    expect(screen.getByTestId('public-trip-last-heard-1').textContent).toBe(heard);
+    expect(screen.getByTestId('public-trip-position-age-1').textContent).toBe(placed);
+    expect(screen.getByTestId('public-trip-updated')).toHaveTextContent(/Last read at .*11:59/);
+  });
+
+  it('says the hour too once the link has stopped answering, and when the page was last given anything', () => {
+    followed();
+    const view = render(<PublicTripPage />);
+
+    answer = { ...answer, error: new ApiError(404) };
+    view.rerender(<PublicTripPage />);
+    pass(3 * 60);
+
+    expect(screen.getByTestId('public-trip-last-heard-1').textContent).toMatch(/11:55/);
+    expect(screen.getByTestId('public-trip-last-heard-1')).not.toHaveTextContent('ago');
+    expect(screen.getByTestId('public-trip-ended')).toHaveTextContent(/at .*11:59/);
+    expect(screen.getByTestId('public-trip-ended')).not.toHaveTextContent('by itself');
+  });
+
+  it('gives a day-old moment its date on a finished trip, so last night is not read as tonight', () => {
+    answer = {
+      data: envelope({
+        state: 'closed',
+        armedAt: at(30 * 60),
+        closedAt: at(20 * 60),
+        participants: [participant({ ordinal: 1, out: true, lastRecordedAt: at(20 * 60) })],
+      }),
+      isPending: false,
+      error: null,
+      dataUpdatedAt: NOON,
+    };
+    render(<PublicTripPage />);
+
+    expect(screen.getByTestId('public-trip-last-heard-1').textContent).toMatch(/Sep 13.*4:00/);
+  });
+
+  it('says since when the trip has been followed, and for how long, and that grows', () => {
+    followed();
+    render(<PublicTripPage />);
+    const since = screen.getByTestId('public-trip-since');
+    expect(since.textContent).toMatch(/^Followed since .*8:50.* · 3 hr 10 min$/);
+    // What the moment is: when the watch was started. Never when anybody went underground.
+    expect(since).not.toHaveTextContent(/underground/i);
+
+    pass(50);
+
+    expect(screen.getByTestId('public-trip-since').textContent).toMatch(/ · 4 hr$/);
+  });
+
+  it('says a finished trip’s span instead, and it stands still', () => {
+    followed({ state: 'closed', closedAt: at(10) });
+    render(<PublicTripPage />);
+    const said = screen.getByTestId('public-trip-since').textContent ?? '';
+    expect(said).toMatch(/^Followed .*8:50.*11:50/);
+    expect(said).not.toMatch(/since| hr| min/);
+
+    pass(4 * 60);
+
+    expect(screen.getByTestId('public-trip-since').textContent).toBe(said);
+  });
+
+  it('says nothing about since when where the trip carries no such moment', () => {
+    followed({ armedAt: null });
+    const view = render(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-since')).toBeNull();
+
+    answer = { ...answer, data: envelope({ armedAt: 'not a moment' }) };
+    view.rerender(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-since')).toBeNull();
+
+    // The twin: the line is there for a trip that does say.
+    answer = { ...answer, data: envelope({ armedAt: at(190) }) };
+    view.rerender(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-since')).toBeInTheDocument();
+  });
+
+  it('claims no age for itself where it was never told when it was read', () => {
+    answer = { data: envelope(), isPending: false, error: new Error('Failed to fetch') };
+    render(<PublicTripPage />);
+
+    expect(screen.queryByTestId('public-trip-updated')).toBeNull();
+    expect(screen.getByTestId('public-trip-stale')).toHaveTextContent('This page has stopped refreshing');
+  });
+
+  it('leaves no timer behind when the page goes', () => {
+    followed();
+    const view = render(<PublicTripPage />);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    view.unmount();
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('what a place on a followed page is', () => {
+  it('says standing that a place is a report and not a live position', () => {
+    ready();
+    render(<PublicTripPage />);
+
+    const about = screen.getByTestId('public-trip-about');
+    expect(about).toHaveTextContent('where somebody was last reported');
+    expect(about).toHaveTextContent('It is not a live position');
+  });
+
+  it('keeps the fuller explanation one press away, and opens it in place', () => {
+    ready();
+    const { container } = render(<PublicTripPage />);
+    const more = screen.getByTestId('public-trip-about-more');
+    const body = screen.getByTestId('public-trip-about-body');
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(body).not.toBeVisible();
+
+    fireEvent.click(more);
+
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(body).toBeVisible();
+    expect(body).toHaveTextContent('Long gaps are normal');
+    expect(body).toHaveTextContent('It does not mean anything has happened');
+    expect(more.getAttribute('aria-controls')).toBe(body.id);
+    // Opened in place: still a page with no door in it.
+    expect(container.querySelectorAll('a')).toHaveLength(0);
+  });
+
+  it('announces the party’s standing when it changes, and not the page’s age', () => {
+    answer = { data: envelope(), isPending: false, error: null, dataUpdatedAt: Date.now() };
+    render(<PublicTripPage />);
+
+    expect(screen.getByTestId('public-trip-counts')).toHaveAttribute('aria-live', 'polite');
+    // A figure that changes twice a minute would be read out twice a minute.
+    expect(screen.getByTestId('public-trip-updated')).not.toHaveAttribute('aria-live');
+    expect(screen.getByTestId('public-trip-updated')).not.toHaveAttribute('role');
   });
 });
 

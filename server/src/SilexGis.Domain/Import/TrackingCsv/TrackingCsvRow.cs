@@ -42,6 +42,13 @@ public sealed record TrackingCsvRow
     /// <summary>The instant the report is about, where one could be read.</summary>
     public DateTimeOffset? At { get; init; }
 
+    /// <summary>
+    /// Whether the date of <see cref="At"/> is the day the importer named for the sheet rather
+    /// than one the row wrote. Only such rows can be on the wrong side of a midnight the sheet
+    /// never marked, so only they are checked for a clock that runs backwards.
+    /// </summary>
+    public bool OnNamedDay { get; init; }
+
     /// <summary>The people the row is about, as written. One row can be about several.</summary>
     public IReadOnlyList<string> Cavers { get; init; } = [];
 
@@ -119,6 +126,12 @@ public sealed record TrackingCsvParseResult
     public TripCsv.TripCsvDateOrder DateOrder { get; init; }
 
     public TripCsv.TripCsvDateOrderSource DateOrderSource { get; init; }
+
+    /// <summary>
+    /// The day the importer named, where at least one row was put on it; null where every row that
+    /// was read wrote its own date, so that what is echoed to a reviewer is what was actually used.
+    /// </summary>
+    public DateOnly? NamedDay { get; init; }
 
     /// <summary>Whether the file itself could be read at all.</summary>
     public bool Readable =>

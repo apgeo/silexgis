@@ -297,6 +297,28 @@ export default function TripTrackingTab({
   const standings = trackingStandings(data.participants);
 
   /**
+   * Whether a row of this log can be corrected or removed, and whether a photograph can be hung on
+   * its moment — asked of the watch, because the server answers all three from the watch and never
+   * from the row.
+   *
+   * <b>A log can hold rows nobody may change one at a time.</b> A recording imported onto a trip
+   * that already existed puts positions on it and deliberately leaves its watch alone: starting a
+   * watch is a statement about somebody's trip that an import has no business making, and an undo
+   * could not take it back. Such a trip's watch is still off, and a correction or a removal there
+   * is refused whatever the row says. Drawing the pencil and the bin anyway offered two controls
+   * whose every use ended in a refusal, on rows whose real way back — undoing the import, which
+   * takes all of them — the page never mentioned.
+   *
+   * <b>The photograph follows a different fact, the same one its card below follows.</b> A moment
+   * exists only on a trip that was watched at some point; a watch an import wrote already closed
+   * was never started either, and a picture offered on its rows is refused the same way.
+   */
+  const rowsWritable = canEdit && trackingLogWritable(data.state);
+  const rowsTakePictures = canEdit && data.armedAt !== null;
+  const rowsHaveControls = rowsWritable || rowsTakePictures;
+  const logReadOnly = canEdit && !rowsWritable && (events.data?.items.length ?? 0) > 0;
+
+  /**
    * The latest moment anybody was reported at, off the page of reports this tab is holding.
    *
    * The largest rather than the first: reports are listed by the moment they were <em>said</em>,
@@ -1269,9 +1291,23 @@ export default function TripTrackingTab({
             </Button>
           )}
         </Flex>
-        <Typography.Paragraph type="secondary" style={{ marginTop: 4 }}>
-          {t('trips.tracking.eventsCorrection')}
-        </Typography.Paragraph>
+        {/* How a row is put right — and, on a log whose rows cannot be, why not and what does
+            take them back. One or the other, never both: the paragraph describes two controls,
+            and under a notice saying they are not there it would be describing nothing. */}
+        {logReadOnly ? (
+          <Alert
+            type="info"
+            showIcon
+            title={t('trips.tracking.logReadOnlyTitle')}
+            description={t('trips.tracking.logReadOnlyBody')}
+            style={{ marginTop: 4, marginBottom: 8 }}
+            data-testid="trip-tracking-log-readonly"
+          />
+        ) : (
+          <Typography.Paragraph type="secondary" style={{ marginTop: 4 }}>
+            {t('trips.tracking.eventsCorrection')}
+          </Typography.Paragraph>
+        )}
         {/* A log that could not be read is not an empty log. Left to the table's own empty text,
             a refused or dropped request would say "nothing has been reported yet" under a
             participants table showing cavers at stations — a failure to learn something drawn as
@@ -1316,9 +1352,9 @@ export default function TripTrackingTab({
                               column was the last of six, so on a phone it began 457px past the
                               right edge of a scroller 364px wide — the only way to take a wrong
                               report off a log nothing can edit, three screens sideways. */}
-                          {canEdit && attachControl(row)}
-                          {canEdit && correctControl(row)}
-                          {canEdit && deleteControl(row)}
+                          {rowsTakePictures && attachControl(row)}
+                          {rowsWritable && correctControl(row)}
+                          {rowsWritable && deleteControl(row)}
                         </div>
                         <div className="tracking-stacked-facts">
                           {fact(t('trips.tracking.columnCaver'), named(row.caverId))}
@@ -1361,16 +1397,18 @@ export default function TripTrackingTab({
                     dataIndex: 'note',
                     render: (note: string | null) => note ?? '—',
                   },
-                  ...(canEdit
+                  // No column at all where no control applies, rather than an empty one: a
+                  // blank last column reads as controls that failed to load.
+                  ...(rowsHaveControls
                     ? [
                         {
                           title: '',
                           key: 'actions',
                           render: (_value: unknown, row: TrackingEvent) => (
                             <Flex gap={4} align="center">
-                              {attachControl(row)}
-                              {correctControl(row)}
-                              {deleteControl(row)}
+                              {rowsTakePictures && attachControl(row)}
+                              {rowsWritable && correctControl(row)}
+                              {rowsWritable && deleteControl(row)}
                             </Flex>
                           ),
                         },
@@ -1421,6 +1459,7 @@ export default function TripTrackingTab({
         <TrackingCsvImportDialog
           open
           tripLogId={trip.id}
+          tripDay={trip.tripDate}
           onClose={() => setImporting(false)}
         />
       )}

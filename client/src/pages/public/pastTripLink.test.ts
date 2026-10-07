@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { readPastLink, writePastLink } from './pastTripLink.ts';
+import { momentLink, readPastLink, writePastLink } from './pastTripLink.ts';
 
 const params = (query: string) => new URLSearchParams(query);
 
@@ -10,6 +10,7 @@ describe('a past trip named in the page’s own address', () => {
       tripLogId: 'trip-1',
       follow: { kind: 'team', id: 'team-a' },
       at: '2019-07-06T13:40:00Z',
+      play: false,
     });
   });
 
@@ -54,7 +55,108 @@ describe('a past trip named in the page’s own address', () => {
   });
 
   it('leaves no trace of the past behind when the reader leaves it', () => {
-    const written = writePastLink(params('past=trip-1&caver=2&at=X&lang=ro'), null, null);
+    const written = writePastLink(params('past=trip-1&caver=2&at=X&play=1&lang=ro'), null, null);
     expect(written.toString()).toBe('lang=ro');
+  });
+});
+
+describe('a link that names a moment and may press play', () => {
+  it('reads play in every way somebody would write yes, the bare word included', () => {
+    for (const query of ['play', 'play=', 'play=1', 'play=true', 'play=yes', 'play=PLAY']) {
+      expect(readPastLink(params(`past=trip-1&${query}`))?.play, query).toBe(true);
+    }
+  });
+
+  it('reads the short list of ways to write no as no, and an absent play as no', () => {
+    // The positive twin is the test above: the same reader answers yes to everything else.
+    for (const query of ['play=0', 'play=no', 'play=false', 'play=off', 'play=OFF', 'play=False']) {
+      expect(readPastLink(params(`past=trip-1&${query}`))?.play, query).toBe(false);
+    }
+    expect(readPastLink(params('past=trip-1&at=2019-07-06T13:40:00Z'))?.play).toBe(false);
+  });
+
+  it('asks for nothing when play is there and no trip is', () => {
+    expect(readPastLink(params('play=1&at=2019-07-06T13:40:00Z'))).toBeNull();
+  });
+
+  it('reads play without a moment as the trip, set playing from wherever it opens', () => {
+    expect(readPastLink(params('past=trip-1&play=1'))).toEqual({
+      tripLogId: 'trip-1',
+      follow: null,
+      at: null,
+      play: true,
+    });
+  });
+
+  it('hands a moment it cannot read on as written, without losing the rest of the link', () => {
+    // Parsed where it is used, so a mistyped instant is one absence — the trip, whom it follows
+    // and whether it plays are still what the link said.
+    expect(readPastLink(params('past=trip-1&caver=2&at=half-past-one&play=1'))).toEqual({
+      tripLogId: 'trip-1',
+      follow: { kind: 'caver', id: '2' },
+      at: 'half-past-one',
+      play: true,
+    });
+  });
+
+  it('ignores names it does not answer to, and keeps them when it writes', () => {
+    const address = params('past=trip-1&utm_source=newsletter&speed=300');
+    expect(readPastLink(address)).toEqual({
+      tripLogId: 'trip-1',
+      follow: null,
+      at: null,
+      play: false,
+    });
+    const written = momentLink(address, 'trip-1', null, Date.parse('2019-07-06T13:40:00Z'), true);
+    expect(written.get('utm_source')).toBe('newsletter');
+    expect(written.get('speed')).toBe('300');
+  });
+
+  it('writes a moment to the second in UTC, and reads the same link back', () => {
+    const follow = { kind: 'team', id: 'team-a' } as const;
+    const written = momentLink(
+      params('lang=en'),
+      'trip-1',
+      follow,
+      Date.parse('2019-07-06T13:40:27.650Z'),
+      true,
+    );
+    expect(written.toString()).toBe(
+      'lang=en&past=trip-1&team=team-a&at=2019-07-06T13%3A40%3A27Z&play=1',
+    );
+    expect(readPastLink(written)).toEqual({
+      tripLogId: 'trip-1',
+      follow,
+      at: '2019-07-06T13:40:27Z',
+      play: true,
+    });
+  });
+
+  it('writes no play into a link that only names the moment', () => {
+    const written = momentLink(params(''), 'trip-1', null, Date.parse('2019-07-06T13:40:00Z'), false);
+    expect(written.has('play')).toBe(false);
+    expect(readPastLink(written)).toEqual({
+      tripLogId: 'trip-1',
+      follow: null,
+      at: '2019-07-06T13:40:00Z',
+      play: false,
+    });
+  });
+
+  it('replaces a moment and a play the address already carried, rather than adding to them', () => {
+    const written = momentLink(
+      params('past=trip-0&caver=2&at=2001-01-01T00:00:00Z&play=1'),
+      'trip-1',
+      { kind: 'team', id: null },
+      Date.parse('2019-07-06T13:40:00Z'),
+      false,
+    );
+    expect(written.toString()).toBe('past=trip-1&team=&at=2019-07-06T13%3A40%3A00Z');
+  });
+
+  it('writes the trip alone when the replay has no moment to name yet', () => {
+    // A track still in flight, or a trip with nothing to play: there is no clock to read.
+    expect(momentLink(params(''), 'trip-1', null, null, true).toString()).toBe('past=trip-1&play=1');
+    expect(momentLink(params(''), 'trip-1', null, Number.NaN, false).toString()).toBe('past=trip-1');
   });
 });

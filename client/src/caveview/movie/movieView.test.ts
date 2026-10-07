@@ -3,9 +3,22 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_MOVIE_SETTINGS, MOVIE_LABEL_SIZE_RANGE } from './movieSettings.ts';
 import { applyMovieView, movieLabelDevicePixels, movieViewMode, turnToMovieView, type MovieViewViewer } from './movieView.ts';
 
-const CONSTANTS = { CAMERA_PERSPECTIVE: 1, CAMERA_ORTHOGRAPHIC: 2, SHADING_DEPTH: 9, SHADING_DEPTH_CURSOR: 11 };
-const HEIGHT = 0;
-const LENGTH = 1;
+// A viewer's own numbers for the shadings, deliberately not the ones any real viewer uses: the
+// settings name a shading, and what is written to the viewer has to be this viewer's number for it.
+const HEIGHT = 40;
+const LENGTH = 41;
+const DEPTH = 49;
+const CONSTANTS = {
+  CAMERA_PERSPECTIVE: 1,
+  CAMERA_ORTHOGRAPHIC: 2,
+  SHADING_HEIGHT: HEIGHT,
+  SHADING_LENGTH: LENGTH,
+  SHADING_INCLINATION: 42,
+  SHADING_SINGLE: 44,
+  SHADING_SURVEY: 45,
+  SHADING_DEPTH: DEPTH,
+  SHADING_DEPTH_CURSOR: 51,
+};
 
 function viewer(shadingMode = HEIGHT): MovieViewViewer {
   return {
@@ -22,23 +35,46 @@ function viewer(shadingMode = HEIGHT): MovieViewViewer {
 describe('applyMovieView', () => {
   it('puts the viewer’s own shading back when a chosen one is left to the viewer again', () => {
     const shown = viewer(HEIGHT);
-    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shadingMode: LENGTH }, CONSTANTS, HEIGHT);
+    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shading: 'length' }, CONSTANTS, HEIGHT);
     expect(shown.shadingMode).toBe(LENGTH);
 
-    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shadingMode: null }, CONSTANTS, HEIGHT);
+    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shading: null }, CONSTANTS, HEIGHT);
+    expect(shown.shadingMode).toBe(HEIGHT);
+  });
+
+  it('writes a named shading as the loaded viewer’s own number for it, whatever that number is', () => {
+    const shown = viewer(HEIGHT);
+    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shading: 'survey' }, CONSTANTS, HEIGHT);
+    expect(shown.shadingMode).toBe(45);
+    // The same name on a viewer that numbers its shadings differently.
+    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shading: 'survey' }, { ...CONSTANTS, SHADING_SURVEY: 7 }, HEIGHT);
+    expect(shown.shadingMode).toBe(7);
+  });
+
+  it('leaves a shading the loaded viewer has no constant for to the viewer', () => {
+    const shown = viewer(LENGTH);
+    const older = { ...CONSTANTS, SHADING_SURVEY: undefined } as unknown as typeof CONSTANTS;
+    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shading: 'survey' }, older, HEIGHT);
     expect(shown.shadingMode).toBe(HEIGHT);
   });
 
   it('leaves the shading as it stands when it is not told what the viewer’s own was', () => {
     const shown = viewer(LENGTH);
-    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shadingMode: null }, CONSTANTS);
+    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shading: null }, CONSTANTS);
     expect(shown.shadingMode).toBe(LENGTH);
   });
 
   it('never sets a depth shading on a model without terrain, even as the viewer’s own', () => {
     const shown = viewer(HEIGHT);
-    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shadingMode: 9 }, CONSTANTS, HEIGHT);
+    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shading: 'depth' }, CONSTANTS, HEIGHT);
     expect(shown.shadingMode).toBe(HEIGHT);
+    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shading: null }, CONSTANTS, DEPTH);
+    expect(shown.shadingMode).toBe(HEIGHT);
+
+    // The same choice on a model that does stand on terrain is drawn.
+    const onTerrain = { ...viewer(HEIGHT), hasRealTerrain: true } as MovieViewViewer;
+    applyMovieView(onTerrain, { ...DEFAULT_MOVIE_SETTINGS.view, shading: 'depth' }, CONSTANTS, HEIGHT);
+    expect(onTerrain.shadingMode).toBe(DEPTH);
   });
 });
 

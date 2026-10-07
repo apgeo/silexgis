@@ -34,6 +34,16 @@ vi.mock('../../api/hooks.ts', async () => {
 let narrow = false;
 vi.mock('../../hooks/useIsMobile.ts', () => ({ useIsMobile: () => narrow }));
 
+// The zone this browser keeps its own clock in, pinned: the machine these cases run on may be in
+// any zone or in none, and "my own zone" has to be a name the cases can ask for. The list of every
+// other zone, and how a moment is shown in one, are the real ones.
+vi.mock('./trackingCsvZones.ts', async () => {
+  const actual = await vi.importActual<typeof import('./trackingCsvZones.ts')>(
+    './trackingCsvZones.ts',
+  );
+  return { ...actual, ownSheetZone: () => 'Europe/Bucharest' };
+});
+
 const { default: TrackingCsvImportDialog } = await import('./TrackingCsvImportDialog.tsx');
 type Preview = import('../../api/hooks.ts').TrackingCsvPreview;
 
@@ -81,6 +91,8 @@ const PREVIEW: Preview = {
   ],
   fileDiagnostics: [],
   refused: [],
+  timeZone: null,
+  day: null,
 };
 
 /**
@@ -123,12 +135,37 @@ afterEach(() => {
   expect(deprecations).toEqual([]);
 });
 
-function open() {
+function open(tripDay: string | null = '2026-09-12') {
   render(
     <App>
-      <TrackingCsvImportDialog tripLogId="trip-1" open onClose={() => {}} />
+      <TrackingCsvImportDialog tripLogId="trip-1" tripDay={tripDay} open onClose={() => {}} />
     </App>,
   );
+}
+
+/** Reading the sheet, and waiting for the answer to be on screen. */
+async function readIt(times = 1) {
+  fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
+  await waitFor(() => expect(look).toHaveBeenCalledTimes(times));
+  await waitFor(() =>
+    expect(screen.getByTestId('trip-tracking-csv-moments-rule')).toBeInTheDocument(),
+  );
+}
+
+/** Choosing an option of the zone chooser, which sits behind the file settings' fold. */
+async function chooseZone(label: string, search?: string) {
+  if (!screen.queryByTestId('trip-tracking-csv-zone')) {
+    fireEvent.click(screen.getByText('File settings'));
+  }
+  const box = within(await screen.findByTestId('trip-tracking-csv-zone')).getByRole('combobox');
+  fireEvent.mouseDown(box);
+  if (search) {
+    fireEvent.change(box, { target: { value: search } });
+  }
+  await waitFor(() =>
+    expect(document.querySelector(`.ant-select-item-option[title="${label}"]`)).not.toBeNull(),
+  );
+  fireEvent.click(document.querySelector(`.ant-select-item-option[title="${label}"]`)!);
 }
 
 /**
@@ -526,7 +563,14 @@ describe('TrackingCsvImportDialog', () => {
     fireEvent.click(screen.getByText('File settings'));
     fireEvent.click(screen.getByText('Column settings'));
 
-    for (const name of ['Characters', 'Column separator', 'Day and month', 'When', 'People']) {
+    for (const name of [
+      'Characters',
+      'Column separator',
+      'Day and month',
+      "Sheet's time zone",
+      'When',
+      'People',
+    ]) {
       expect(await screen.findByRole('combobox', { name })).toBeInTheDocument();
     }
     for (const name of ['Words for going in', 'Words for coming out']) {
@@ -720,6 +764,296 @@ describe('TrackingCsvImportDialog', () => {
     } finally {
       await i18n.changeLanguage('en');
     }
+  });
+
+  /**
+   * Whose clock a sheet's times are on.
+   *
+   * <b>The defect these answer.</b> A sheet's 14:05 with no offset was filed as 14:05 UTC and
+   * nothing else could be asked for, so a party reported at 14:05 by the hut's clock stood in the
+   * log — and on every page drawn from it — three hours away from where it happened. The zone is
+   * now a choice. What these hold is that it stays a choice: nothing is sent until somebody makes
+   * it, and the reading on screen is always the one that was actually made.
+   */
+  describe('the zone the times are read in', () => {
+    it('opens on "exactly as written" and sends no zone until one is chosen', async () => {
+      open();
+      await drop('x');
+      await readIt();
+
+      expect(look.mock.calls[0][0].options.timeZone).toBeNull();
+      fireEvent.click(screen.getByText('File settings'));
+      expect(await screen.findByTestId('trip-tracking-csv-zone')).toHaveTextContent(
+        'Exactly as written (UTC)',
+      );
+      // And the import that follows an untouched chooser names none either.
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-commit'));
+      await waitFor(() => expect(send).toHaveBeenCalledOnce());
+      expect(send.mock.calls[0][0].options.timeZone).toBeNull();
+    });
+
+    it("offers the importer's own zone by name, and disarms Import when the zone changes after the read", async () => {
+      open();
+      await drop('x');
+      await readIt();
+      expect(screen.getByTestId('trip-tracking-csv-commit')).toBeEnabled();
+
+      await chooseZone('My time zone — Europe/Bucharest');
+
+      // The table described a reading in another zone; it goes, and Import with it.
+      expect(screen.queryByTestId('trip-tracking-csv-rows')).not.toBeInTheDocument();
+      expect(screen.getByTestId('trip-tracking-csv-commit')).toBeDisabled();
+
+      await readIt(2);
+      expect(look.mock.calls[1][0].options.timeZone).toBe('Europe/Bucharest');
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-commit'));
+      await waitFor(() => expect(send).toHaveBeenCalledOnce());
+      expect(send.mock.calls[0][0].options.timeZone).toBe('Europe/Bucharest');
+    });
+
+    it('finds any other zone by typing part of its name', async () => {
+      open();
+      await drop('x');
+
+      await chooseZone('Asia/Tokyo', 'toky');
+      await readIt();
+
+      expect(look.mock.calls[0][0].options.timeZone).toBe('Asia/Tokyo');
+    });
+
+    it('says which zone the server read the times in, and shows each row on that clock', async () => {
+      // Tokyo, because it is nobody's zone who runs these cases: a row shown on the reader's own
+      // clock could not pass for one shown on the sheet's.
+      look.mockResolvedValue({ ...PREVIEW, timeZone: 'Asia/Tokyo' });
+      open();
+      await drop('x');
+      await readIt();
+
+      const rule = screen.getByTestId('trip-tracking-csv-moments-rule');
+      expect(rule).toHaveTextContent('read on the clocks of Asia/Tokyo');
+      expect(rule).not.toHaveTextContent('read as UTC');
+      const inTokyo = new Date('2026-09-12T09:00:00Z').toLocaleString('en', {
+        timeZone: 'Asia/Tokyo',
+      });
+      expect(inTokyo).not.toBe(new Date('2026-09-12T09:00:00Z').toLocaleString('en'));
+      expect(screen.getByText(inTokyo)).toBeInTheDocument();
+    });
+
+    it('words the refusal of a zone the server does not carry', async () => {
+      look.mockRejectedValue(new ApiError(400, 'tracking_csv.zone_unknown'));
+      open();
+      await drop('x');
+
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
+
+      expect(await screen.findByText(/does not know that time zone/)).toBeInTheDocument();
+      expect(screen.queryByTestId('trip-tracking-csv-rows')).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * A sheet that writes times of day and no dates.
+   *
+   * The day is the reviewer's to name, and the question is the sheet's to ask: the field is not
+   * there until a read says the times have no dates, it arrives holding the trip's own date, and
+   * that date is not sent until the reviewer has seen it and read the sheet again.
+   */
+  describe('the day of a sheet of bare times', () => {
+    const NEEDS_A_DAY: Preview = {
+      ...PREVIEW,
+      resolvedColumns: { Time: 'Ora', Cavers: 'Speologi' },
+      rowsRead: 0,
+      creates: 0,
+      replaces: 0,
+      rows: [],
+      fileDiagnostics: [
+        { severity: 'Error', problem: 'TimeColumnNeedsADay', line: 1, column: 'Ora', detail: null },
+      ],
+    };
+
+    it('asks nothing of a sheet that writes its dates, and sends no day for it', async () => {
+      open();
+      await drop('x');
+      await readIt();
+
+      expect(screen.queryByTestId('trip-tracking-csv-day-ask')).not.toBeInTheDocument();
+      expect(look.mock.calls[0][0].options.day).toBeNull();
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-commit'));
+      await waitFor(() => expect(send).toHaveBeenCalledOnce());
+      expect(send.mock.calls[0][0].options.day).toBeNull();
+    });
+
+    it("asks once the sheet says so, offers the trip's date, and sends it on the next read", async () => {
+      look.mockResolvedValueOnce(NEEDS_A_DAY);
+      look.mockResolvedValue({ ...PREVIEW, day: '2026-09-12' });
+      open();
+      await drop('x');
+      await readIt();
+
+      // The first read named no day: nobody had been shown one.
+      expect(look.mock.calls[0][0].options.day).toBeNull();
+      const field = screen.getByLabelText('The day the sheet was kept on');
+      expect(field).toHaveAttribute('type', 'date');
+      expect(field).toHaveValue('2026-09-12');
+      expect(screen.getByTestId('trip-tracking-csv-day-ask')).toHaveTextContent(
+        'This sheet writes times with no dates',
+      );
+      expect(screen.getByTestId('trip-tracking-csv-commit')).toBeDisabled();
+
+      await readIt(2);
+      expect(look.mock.calls[1][0].options.day).toBe('2026-09-12');
+      expect(screen.getByTestId('trip-tracking-csv-moments-day')).toHaveTextContent(
+        `Times with no date were put on ${new Date('2026-09-12T00:00:00Z').toLocaleDateString('en', { timeZone: 'UTC' })}.`,
+      );
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-commit'));
+      await waitFor(() => expect(send).toHaveBeenCalledOnce());
+      expect(send.mock.calls[0][0].options.day).toBe('2026-09-12');
+    });
+
+    it('disarms Import when the day is changed after the read, and keeps the question on screen', async () => {
+      look.mockResolvedValueOnce(NEEDS_A_DAY);
+      look.mockResolvedValue({ ...PREVIEW, day: '2026-09-12' });
+      open();
+      await drop('x');
+      await readIt();
+      await readIt(2);
+      expect(screen.getByTestId('trip-tracking-csv-commit')).toBeEnabled();
+
+      fireEvent.change(screen.getByTestId('trip-tracking-csv-day'), {
+        target: { value: '2026-09-13' },
+      });
+
+      expect(screen.queryByTestId('trip-tracking-csv-rows')).not.toBeInTheDocument();
+      expect(screen.getByTestId('trip-tracking-csv-commit')).toBeDisabled();
+      expect(screen.getByTestId('trip-tracking-csv-day')).toHaveValue('2026-09-13');
+
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
+      await waitFor(() => expect(look).toHaveBeenCalledTimes(3));
+      expect(look.mock.calls[2][0].options.day).toBe('2026-09-13');
+    });
+
+    it('forgets the question when another file is chosen', async () => {
+      look.mockResolvedValueOnce(NEEDS_A_DAY);
+      open();
+      await drop('x');
+      await readIt();
+      expect(screen.getByTestId('trip-tracking-csv-day-ask')).toBeInTheDocument();
+
+      await drop('y');
+      expect(screen.queryByTestId('trip-tracking-csv-day-ask')).not.toBeInTheDocument();
+      await readIt(2);
+      // Another sheet has not asked, so it is not answered.
+      expect(look.mock.calls[1][0].options.day).toBeNull();
+    });
+  });
+
+  /**
+   * Rows pasted in, in place of a file.
+   *
+   * For a sheet kept on the phone it is being imported from: copying the rows is two gestures
+   * where producing a file is an export, a save and a search. What a spreadsheet copies is the
+   * rows separated by tabs, and it goes through the same read and the same import.
+   */
+  describe('pasting the rows instead of choosing a file', () => {
+    // Line feeds alone, because that is what a text box holds: it folds every kind of line break
+    // into one, so this is the text the server is sent whatever the spreadsheet copied.
+    const PASTED = 'Data si ora\tSpeologi\n12.09.2026 08:15\tIon\n';
+
+    async function paste(text: string) {
+      fireEvent.click(screen.getByRole('radio', { name: 'Pasted rows' }));
+      fireEvent.change(
+        await screen.findByRole('textbox', { name: "The sheet's rows, header row first" }),
+        { target: { value: text } },
+      );
+    }
+
+    it('reads and imports pasted rows as it does a file, with the separator a spreadsheet copies', async () => {
+      open();
+      expect(screen.getByTestId('trip-tracking-csv-preview')).toBeDisabled();
+      await paste(PASTED);
+
+      expect(screen.getByTestId('trip-tracking-csv-pasted-as')).toHaveTextContent(
+        'columns separated by Tab',
+      );
+      expect(screen.getByTestId('trip-tracking-csv-preview')).toBeEnabled();
+      await readIt();
+      expect(look.mock.calls[0][0].text).toBe(PASTED);
+      expect(look.mock.calls[0][0].options.delimiter).toBe('\t');
+
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-commit'));
+      await waitFor(() => expect(send).toHaveBeenCalledOnce());
+      expect(send.mock.calls[0][0].text).toBe(PASTED);
+      expect(send.mock.calls[0][0].options.delimiter).toBe('\t');
+    });
+
+    it('disarms Import and forgets a tick to overwrite when the pasted rows are edited', async () => {
+      open();
+      await paste(PASTED);
+      await readIt();
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-replace'));
+
+      fireEvent.change(screen.getByTestId('trip-tracking-csv-paste'), {
+        target: { value: `${PASTED}12.09.2026 09:00\tMaria Pop\n` },
+      });
+
+      expect(screen.queryByTestId('trip-tracking-csv-rows')).not.toBeInTheDocument();
+      expect(screen.getByTestId('trip-tracking-csv-commit')).toBeDisabled();
+      await readIt(2);
+      expect(screen.getByTestId('trip-tracking-csv-replace')).not.toBeChecked();
+    });
+
+    it('sends only the way in that is chosen, and reads nothing across a switch', async () => {
+      open();
+      await drop('Data si ora,Speologi\r\n12.09.2026 09:00,Ion\r\n');
+      await readIt();
+
+      // Switching the way in is another sheet: what was read goes, and with nothing pasted yet
+      // there is nothing to read.
+      fireEvent.click(screen.getByRole('radio', { name: 'Pasted rows' }));
+      expect(screen.queryByTestId('trip-tracking-csv-rows')).not.toBeInTheDocument();
+      expect(screen.getByTestId('trip-tracking-csv-commit')).toBeDisabled();
+      expect(screen.getByTestId('trip-tracking-csv-preview')).toBeDisabled();
+
+      // And back: the file chosen before is still the file.
+      fireEvent.click(screen.getByRole('radio', { name: 'A file' }));
+      await readIt(2);
+      expect(look.mock.calls[1][0].text).toContain('Data si ora,Speologi');
+    });
+
+    it('offers no choice of characters for pasted rows, which have no bytes to decode', async () => {
+      open();
+      fireEvent.click(screen.getByText('File settings'));
+      expect(await screen.findByTestId('trip-tracking-csv-encoding')).toBeInTheDocument();
+
+      await paste(PASTED);
+
+      expect(screen.queryByTestId('trip-tracking-csv-encoding')).not.toBeInTheDocument();
+      expect(screen.getByTestId('trip-tracking-csv-delimiter')).toBeInTheDocument();
+    });
+
+    it('offers the clipboard only where the browser can read it, and says so when it will not', async () => {
+      open();
+      fireEvent.click(screen.getByRole('radio', { name: 'Pasted rows' }));
+      // This browser has no clipboard to read: no button that could only fail.
+      expect(screen.queryByTestId('trip-tracking-csv-paste-clipboard')).not.toBeInTheDocument();
+      cleanup();
+
+      const readText = vi.fn().mockResolvedValueOnce(PASTED).mockRejectedValue(new Error('denied'));
+      Object.defineProperty(navigator, 'clipboard', { value: { readText }, configurable: true });
+      try {
+        open();
+        fireEvent.click(screen.getByRole('radio', { name: 'Pasted rows' }));
+        fireEvent.click(await screen.findByTestId('trip-tracking-csv-paste-clipboard'));
+        await waitFor(() => expect(screen.getByTestId('trip-tracking-csv-paste')).toHaveValue(PASTED));
+
+        fireEvent.click(screen.getByTestId('trip-tracking-csv-paste-clipboard'));
+        expect(await screen.findByText(/would not hand over the clipboard/)).toBeInTheDocument();
+        // What was there is still there.
+        expect(screen.getByTestId('trip-tracking-csv-paste')).toHaveValue(PASTED);
+      } finally {
+        Reflect.deleteProperty(navigator, 'clipboard');
+      }
+    });
   });
 
   /**

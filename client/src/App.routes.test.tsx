@@ -56,6 +56,12 @@ describe('the addresses this application hands out', () => {
     expect(matchRoutes(routes, '/admin/notification-health')).toBeTruthy();
   });
 
+  // The sidebar is the only way in to this one too, and only for full administrators — so a
+  // missing route would be seen by the handful of people who are also the only ones who can use it.
+  it('include the page of everything published that the sidebar offers', () => {
+    expect(matchRoutes(routes, '/admin/published-trips')).toBeTruthy();
+  });
+
   // The camp-roster vocabulary's page: offered by key from the configuration group and from the
   // camps list, and the one of the three activity vocabularies that had routes and no page.
   it('include the camp roles page the sidebar and the camps list offer', () => {

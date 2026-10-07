@@ -7,6 +7,7 @@ import {
   type MovieViewDirection,
   type MovieViewLayer,
 } from './movieSettings.ts';
+import { movieShadingNumber, type MovieShadingConstant } from './movieShadings.ts';
 
 /**
  * Putting a movie's view settings on a viewer, and taking them off again.
@@ -36,10 +37,7 @@ export type MovieViewViewer = Pick<
 >;
 
 /** The namespace's constants the view settings are spelled in. */
-export type MovieViewConstants = Pick<
-  Cv2Namespace,
-  'CAMERA_PERSPECTIVE' | 'CAMERA_ORTHOGRAPHIC' | 'SHADING_DEPTH' | 'SHADING_DEPTH_CURSOR'
->;
+export type MovieViewConstants = Pick<Cv2Namespace, 'CAMERA_PERSPECTIVE' | 'CAMERA_ORTHOGRAPHIC' | MovieShadingConstant>;
 
 /** The viewer as far as how its markers' labels are drawn goes. */
 export type MovieMarkerLabelViewer = Pick<
@@ -55,6 +53,10 @@ type Writable = Record<string, unknown>;
  * nothing to show on it — as is a depth shading on a model without real terrain, which the viewer
  * cannot draw. A shading the reader left to the viewer is `viewerShading`, the one the viewer drew
  * the model in before anything was set; with none given it is left as it stands.
+ *
+ * The settings name a shading; the viewer takes a number. The name is turned into this viewer's own
+ * number here, where it is written, and one this viewer has no constant for is treated as left to
+ * the viewer.
  */
 function wantedView(
   viewer: MovieViewViewer,
@@ -68,7 +70,7 @@ function wantedView(
       wanted.push([key, view[key]]);
     }
   }
-  const shading = view.shadingMode ?? viewerShading;
+  const shading = (view.shading === null ? null : movieShadingNumber(view.shading, constants)) ?? viewerShading;
   const depthShading = shading === constants.SHADING_DEPTH || shading === constants.SHADING_DEPTH_CURSOR;
   if (shading !== null && (!depthShading || viewer.hasRealTerrain === true)) {
     wanted.push(['shadingMode', shading]);

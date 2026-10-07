@@ -34,23 +34,31 @@ import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTra
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import { useNow } from '../../hooks/useNow.ts';
 import { usePublishedSheets } from '../../rastermap/publishedSheets.ts';
 import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import { followedStation, type PastFollow } from './pastTrackReplay.ts';
 import { usePinnedModelUrl } from './pinnedModelUrl.ts';
 import PublicPastBar from './PublicPastBar.tsx';
+import PublicLanguageButton from './PublicLanguageButton.tsx';
+import PublicTripAbout from './PublicTripAbout.tsx';
 import PublicLiveTripList from './PublicLiveTripList.tsx';
 import PublicPastTripList from './PublicPastTripList.tsx';
 import {
+  ageInWords,
+  clockInWords,
+  durationInWords,
+  followedSpanInWords,
+  momentOrAge,
   partyByTeam,
   partyStandings,
-  positionAgeInWords,
-  sinceInWords,
   standingOf,
   tripDateRange,
+  watchStartedAt,
 } from './publicTripParty.ts';
 import { usePastTripPlayback } from './usePastTripPlayback.ts';
-import { readPastLink, writePastLink } from './pastTripLink.ts';
+import { usePublicLanguage } from './usePublicLanguage.ts';
+import { momentLink, PAST_LINK_PARAMS, readPastLink, writePastLink } from './pastTripLink.ts';
 import './PublicTripPage.css';
 
 /**
@@ -90,7 +98,10 @@ export default function PublicTripPage() {
   const { token } = useParams<{ token: string }>();
   const narrow = useIsMobile();
   const { token: antdToken } = theme.useToken();
-  const { data, isPending, error, refetch } = usePublicTrip(token);
+  const { data, isPending, error, refetch, dataUpdatedAt } = usePublicTrip(token);
+  // The one clock of this page: every gap below is measured from it, and it is what redraws them
+  // as time passes on a page that nothing else is redrawing.
+  const present = useNow();
 
   /**
    * The cave's past, and which of it this reader has asked to see.
@@ -100,6 +111,9 @@ export default function PublicTripPage() {
    */
   const past = usePastTripPlayback(token);
   const [search, setSearch] = useSearchParams();
+  // The language an address names, and the button that changes it. Read before every early
+  // return below, so a page that has nothing to show still says so in the language asked for.
+  const language = usePublicLanguage();
 
   /**
    * What the page is actually showing: the party now, or a past trip wound back to a moment.
@@ -116,16 +130,34 @@ export default function PublicTripPage() {
   const view = past.engaged ? (past.envelope ?? undefined) : data;
 
   // A link in somebody's prose, opened in a fresh tab: the address carries which past trip to play
-  // and, where it says so, whom to keep the camera on and where to start. Applied when the address
-  // changes and never afterwards, so a reader who presses "back to now" is not sent straight back
-  // into the past by their own URL.
+  // and, where it says so, whom to keep the camera on, where to start and whether to start
+  // playing. Applied when the address changes and never afterwards, so a reader who presses "back
+  // to now" is not sent straight back into the past by their own URL.
+  //
+  // "Changes" is what the address says about the past, and nothing else on it. The same address
+  // carries the page's language, which the language button rewrites; a link naming a moment and
+  // asking to play would otherwise be honoured a second time by that press — the replay wound
+  // back to the link's moment and set going again because the reader asked for English.
+  //
+  // An address that comes to name no past trip is the other half of the same reading, and it is
+  // what the browser's Back button produces: picking a trip is a step in the reader's history, so
+  // stepping back over it arrives at the address of the party being followed now — and a page still
+  // playing the replay under that address would be showing one thing and naming another. Leaving
+  // the past where nothing of it is on screen changes nothing, so the first reading of an address
+  // that never named a trip is harmless.
   const openPast = past.open;
+  const leaveThePast = past.backToNow;
+  const askedOfThePast = PAST_LINK_PARAMS.map((name) => search.get(name) ?? '\u0000').join('\u0001');
+  const searchRef = useRef(search);
+  searchRef.current = search;
   useEffect(() => {
-    const asked = readPastLink(search);
+    const asked = readPastLink(searchRef.current);
     if (asked !== null) {
-      openPast(asked.tripLogId, { at: asked.at, follow: asked.follow });
+      openPast(asked.tripLogId, { at: asked.at, follow: asked.follow, play: asked.play });
+    } else {
+      leaveThePast();
     }
-  }, [search, openPast]);
+  }, [askedOfThePast, openPast, leaveThePast]);
 
   // The address the viewer is given: held still while it is the same survey, replaced when the
   // survey itself changes. Both halves matter and the reasoning for each lives with the rule,
@@ -303,10 +335,30 @@ export default function PublicTripPage() {
     pastBarRef.current?.scrollIntoView?.({ block: 'start' });
   }, [picked, pastSettled, past.tripLogId]);
 
-  /** Choosing a trip: play it, and write it into the address so the view can be sent to somebody. */
+  /**
+   * Choosing a trip: play it, and write it into the address so the view can be sent to somebody.
+   *
+   * <b>A new entry in the reader's history, where everything else this page writes replaces the
+   * one it is on.</b> Somebody who pressed a row and finds themselves in a trip of years ago
+   * reaches for the browser's Back button to undo it, and with the address merely replaced that
+   * press took them off the page altogether — out of the party they came to follow. Pressing the
+   * row of the trip the address already names is the exception: there is no step to add, and a
+   * second identical entry would be a Back press that appears to do nothing.
+   *
+   * <b>Written into the page at once, not when the router gets round to it.</b> The router hands
+   * a new address to the page as a change that may wait — and it does wait, for as long as the
+   * browser is busy parsing the survey this very press asked for. The way back above is read from
+   * the address *changing* to one that names no trip; a reader who pressed Back inside that wait
+   * went from an address the page had not yet been told about to the one it was already on, which
+   * is no change at all, and stayed in the replay under the live trip's address. So the pick is
+   * committed before the press returns, and there is no such wait to press Back in.
+   */
   const play = (tripLogId: string) => {
     past.open(tripLogId, { follow: null });
-    setSearch(writePastLink(search, tripLogId, null), { replace: true });
+    setSearch(writePastLink(search, tripLogId, null), {
+      replace: search.get('past') === tripLogId,
+      flushSync: true,
+    });
     scrollOwedFor.current = tripLogId;
     setPicked((count) => count + 1);
   };
@@ -318,12 +370,13 @@ export default function PublicTripPage() {
    * back and then copies what is in the bar would otherwise be sending somebody a link into a past
    * trip while believing they were sending the live page — the address would still name a trip the
    * page had stopped showing. `replace` rather than a new entry: leaving a replay is not a place in
-   * the reader's history to go back to.
+   * the reader's history to go back to. And at once, for the reason a pick is: whether the next
+   * pick is a new step in the reader's history is decided against the address this leaves behind.
    */
   const leavePast = () => {
     scrollOwedFor.current = null;
     past.backToNow();
-    setSearch(writePastLink(search, null, null), { replace: true });
+    setSearch(writePastLink(search, null, null), { replace: true, flushSync: true });
   };
 
   /**
@@ -344,6 +397,22 @@ export default function PublicTripPage() {
     if (past.tripLogId !== null) {
       setSearch(writePastLink(search, past.tripLogId, follow), { replace: true });
     }
+  };
+
+  /**
+   * The address of the moment on the replay's clock, for the two copy buttons on its strip.
+   *
+   * Built from where the reader is — this page's own address, with the trip, whom the replay
+   * follows and the moment written onto it — so whatever else the address carries, the page's
+   * language above all, travels with the link. Read when a button is pressed, never while the clock
+   * runs: the address bar itself is still never given a moment.
+   */
+  const momentAddress = (playing: boolean): string => {
+    const query =
+      past.tripLogId === null
+        ? search
+        : momentLink(search, past.tripLogId, past.follow, past.at, playing);
+    return `${window.location.origin}${window.location.pathname}?${query.toString()}`;
   };
 
   /**
@@ -419,9 +488,16 @@ export default function PublicTripPage() {
             title={t('publicTrip.unreachableTitle')}
             subTitle={t('publicTrip.unreachableBody')}
             extra={
-              <Button type="primary" onClick={() => void refetch()} data-testid="public-trip-retry">
-                {t('publicTrip.retry')}
-              </Button>
+              <Flex vertical align="center" gap={8}>
+                <Button
+                  type="primary"
+                  onClick={() => void refetch()}
+                  data-testid="public-trip-retry"
+                >
+                  {t('publicTrip.retry')}
+                </Button>
+                <PublicLanguageButton control={language} />
+              </Flex>
             }
             data-testid="public-trip-unreachable"
           />
@@ -438,6 +514,8 @@ export default function PublicTripPage() {
             status="warning"
             title={t('publicTrip.notFoundTitle')}
             subTitle={t('publicTrip.notFoundBody')}
+            // The one sentence on this page is the one a reader most needs to be able to read.
+            extra={<PublicLanguageButton control={language} />}
             data-testid="public-trip-not-found"
           />
         </Card>
@@ -456,7 +534,28 @@ export default function PublicTripPage() {
    * "6 years ago" of every position on a trip from 2019, which is true, useless, and identical for
    * the first report and the last.
    */
-  const now = past.engaged ? (past.at ?? Date.now()) : Date.now();
+  const now = past.engaged ? (past.at ?? present) : present;
+
+  /**
+   * Whether what is on screen has stopped changing for good: the watch is closed, or the link has
+   * given its final answer.
+   *
+   * From then on a moment is said as its hour rather than as a gap. A gap is right while the page
+   * keeps up with it; on a page nothing will change again it either stands still and is wrong
+   * within the minute, or grows all night under a party who came out in the afternoon. A read
+   * that merely failed is not this — it may clear, the gaps are still true of the clock, and the
+   * notice above them says since when they have not been refreshed. Nor is a replay, which
+   * measures from the moment on its own scrubber.
+   */
+  const settled = !past.engaged && (data.state !== 'armed' || linkEnded);
+
+  /**
+   * When this page last heard from the server, or null where it cannot say.
+   *
+   * The moment the last read that succeeded arrived — a read that fails leaves it standing, which
+   * is exactly what makes it the answer to "how old is what I am looking at".
+   */
+  const readAt = Number.isFinite(dataUpdatedAt) && dataUpdatedAt > 0 ? dataUpdatedAt : null;
 
   const when = (value: string | null) =>
     value === null ? '—' : new Date(value).toLocaleString(i18n.language);
@@ -560,18 +659,20 @@ export default function PublicTripPage() {
    */
   const positionFact = (participant: PublicTripParticipant): ReactNode => {
     const { shown, placedAt } = positionOf(participant);
-    const since = positionAgeInWords(placedAt, now, i18n.language);
+    const placed = momentOrAge(placedAt, now, i18n.language, settled);
     return (
       <>
         {shown}
-        {since !== null && (
+        {placed !== null && (
           <Typography.Text
             type="secondary"
             className="public-trip-position-age"
             title={when(placedAt)}
             data-testid={`public-trip-position-age-${participant.ordinal}`}
           >
-            {t('publicTrip.positionSince', { since })}
+            {settled
+              ? t('publicTrip.positionAt', { clock: placed })
+              : t('publicTrip.positionSince', { since: placed })}
           </Typography.Text>
         )}
       </>
@@ -617,6 +718,38 @@ export default function PublicTripPage() {
   const dates =
     head === null ? null : tripDateRange(head.tripDate, head.tripDateEnd, i18n.language);
 
+  /**
+   * Since when — or from when to when — the trip in the header was followed.
+   *
+   * <b>Of whatever trip the header names, and worded as what it is.</b> The moment is when the
+   * watch was started, so the line says "followed" and never "underground": a watch is often
+   * started in the car park, or an hour after the party went in. While the watch runs it is the
+   * hour and how long that has been, which is the figure somebody at home is counting; once it is
+   * closed, and on every replay, it is the span, measured against today's real date however far
+   * back the scrubber stands — the hour a trip of last year started is not "today" because the
+   * replay is at that hour. Nothing at all where the trip carries no such moment.
+   */
+  const followedLine = ((): string | null => {
+    if (head === null) {
+      return null;
+    }
+    const startedAt = watchStartedAt(head);
+    if (startedAt === null) {
+      return null;
+    }
+    if (head.state === 'armed') {
+      const duration = durationInWords(startedAt, present, i18n.language);
+      const clock = clockInWords(startedAt, present, i18n.language);
+      return duration === null
+        ? t('publicTrip.since.started', { clock })
+        : t('publicTrip.since.running', { clock, duration });
+    }
+    const span = followedSpanInWords(head, present, i18n.language);
+    return span === null
+      ? t('publicTrip.since.started', { clock: clockInWords(startedAt, present, i18n.language) })
+      : t('publicTrip.since.span', { span });
+  })();
+
   return (
     <div className="public-trip" style={palette} data-testid="public-trip">
       {/* The title and the dates are of whatever is on screen — a past trip has its own, and a
@@ -637,6 +770,15 @@ export default function PublicTripPage() {
             >
               {t(`publicTrip.state.${head.state}`)}
             </Tag>
+            {followedLine !== null && (
+              <Typography.Text
+                type="secondary"
+                className="public-trip-since"
+                data-testid="public-trip-since"
+              >
+                {followedLine}
+              </Typography.Text>
+            )}
           </div>
         )}
       </header>
@@ -650,12 +792,21 @@ export default function PublicTripPage() {
               playback={{ ...past, backToNow: leavePast, setFollow: followPast }}
               liveState={data.state}
               cavers={cavers}
+              momentAddress={momentAddress}
             />
           </div>
         )}
 
         {view !== undefined && (
-          <div className="public-trip-standing" data-testid="public-trip-counts">
+          <div
+            className="public-trip-standing"
+            data-testid="public-trip-counts"
+            // Announced when it changes — somebody coming out is the one event this page is kept
+            // open for — but only for the live party: a replay changes these counts as it plays,
+            // and a reader moving a scrubber is not waiting to be told.
+            role={past.engaged ? undefined : 'status'}
+            aria-live={past.engaged ? undefined : 'polite'}
+          >
             {(['underground', 'out', 'unheard'] as const).map((standing) => (
               <div className="public-trip-standing-cell" key={standing}>
                 <span className="public-trip-standing-count" data-testid={`public-trip-count-${standing}`}>
@@ -667,6 +818,26 @@ export default function PublicTripPage() {
               </div>
             ))}
           </div>
+        )}
+
+        {/* How old what is on screen is, said standing and not only when something goes wrong: a
+            reader should not have to wonder whether a quiet page is a quiet cave or a page that
+            stopped asking. A gap while the page is keeping up, the hour once it never will again.
+            About the live read, so not said over a replay. Not a live region — a figure that
+            changes twice a minute would be read out twice a minute. */}
+        {readAt !== null && !past.engaged && (
+          <Typography.Text
+            type="secondary"
+            className="public-trip-updated"
+            title={new Date(readAt).toLocaleString(i18n.language)}
+            data-testid="public-trip-updated"
+          >
+            {settled
+              ? t('publicTrip.updated.settled', { clock: clockInWords(readAt, present, i18n.language) })
+              : t('publicTrip.updated.running', {
+                  since: ageInWords(readAt, present, i18n.language),
+                })}
+          </Typography.Text>
         )}
 
         {/* A poll that failed is a fact about the live read, so it is said while the live read is
@@ -682,7 +853,13 @@ export default function PublicTripPage() {
               type="warning"
               showIcon
               title={t('publicTrip.endedTitle')}
-              description={t('publicTrip.endedBody')}
+              description={
+                readAt === null
+                  ? t('publicTrip.endedBody')
+                  : t('publicTrip.endedBodyAt', {
+                      clock: clockInWords(readAt, present, i18n.language),
+                    })
+              }
               data-testid="public-trip-ended"
             />
           ) : (
@@ -690,7 +867,15 @@ export default function PublicTripPage() {
               type="warning"
               showIcon
               title={t('publicTrip.staleTitle')}
-              description={t('publicTrip.staleBody')}
+              // How stale, and not only that it is: "stopped refreshing" reads the same at one
+              // minute and at five hours, and they are different things to somebody waiting.
+              description={
+                readAt === null
+                  ? t('publicTrip.staleBody')
+                  : t('publicTrip.staleBodySince', {
+                      since: ageInWords(readAt, present, i18n.language),
+                    })
+              }
               data-testid="public-trip-stale"
             />
           )
@@ -832,6 +1017,9 @@ export default function PublicTripPage() {
           </div>
         )}
 
+        {/* Directly over the names it explains, on the live page and on a replay alike. */}
+        {view !== undefined && <PublicTripAbout />}
+
         {view !== undefined && (
         <section data-testid="public-trip-party">
           {groups.map((group) => (
@@ -863,8 +1051,12 @@ export default function PublicTripPage() {
                         participant.lastRecordedAt === null ? (
                           '—'
                         ) : (
-                          <Typography.Text title={when(participant.lastRecordedAt)}>
-                            {sinceInWords(participant.lastRecordedAt, now, i18n.language)}
+                          <Typography.Text
+                            title={when(participant.lastRecordedAt)}
+                            data-testid={`public-trip-last-heard-${participant.ordinal}`}
+                          >
+                            {momentOrAge(participant.lastRecordedAt, now, i18n.language, settled)
+                              ?? '—'}
                           </Typography.Text>
                         ),
                       )}
@@ -928,6 +1120,7 @@ export default function PublicTripPage() {
 
       <footer className="public-trip-foot">
         <Typography.Text type="secondary">{t('app.name')}</Typography.Text>
+        <PublicLanguageButton control={language} />
       </footer>
     </div>
   );

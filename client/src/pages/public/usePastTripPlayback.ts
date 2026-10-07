@@ -55,8 +55,18 @@ export interface PastTripPlayback {
   envelope: PublicTripEnvelope | null;
   follow: PastFollow | null;
   setFollow(follow: PastFollow | null): void;
-  /** Opens a past trip, optionally at a moment and following somebody. */
-  open(tripLogId: string, options?: { at?: string | null; follow?: PastFollow | null }): void;
+  /**
+   * Opens a past trip, optionally at a moment, following somebody, and set playing.
+   *
+   * `play` is held until there is a clock to start, exactly as the moment is held until there is
+   * a stretch to place it in. Asked of the trip already on screen with nothing else, it starts
+   * that trip's clock where it stands. Only `true` does anything: a caller that does not ask for
+   * play is not asking for a pause.
+   */
+  open(
+    tripLogId: string,
+    options?: { at?: string | null; follow?: PastFollow | null; play?: boolean },
+  ): void;
   /** Puts the live party back, and forgets everything about the past that was on screen. */
   backToNow(): void;
   /**
@@ -77,6 +87,22 @@ export interface PastTripPlayback {
   markerMoveMs: number | undefined;
 }
 
+/**
+ * Whether this reader has asked for less movement — of their system, or of this application.
+ *
+ * Read at the moment a link's request to play is about to be honoured and nowhere else: a replay
+ * somebody starts by pressing the button is movement they asked for, and is never refused.
+ */
+function motionReduced(): boolean {
+  if (document.documentElement.dataset.reduceMotion === 'true') {
+    return true;
+  }
+  return (
+    typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
 export function usePastTripPlayback(token: string | undefined): PastTripPlayback {
   const [tripLogId, setTripLogId] = useState<string | null>(null);
   const [follow, setFollowState] = useState<PastFollow | null>(null);
@@ -90,6 +116,14 @@ export function usePastTripPlayback(token: string | undefined): PastTripPlayback
    * until the track lands.
    */
   const [pendingAt, setPendingAt] = useState<number | null>(null);
+  /**
+   * A request to start the clock, asked before there was a clock to start.
+   *
+   * Held for the reason the moment above is: a link that says "from here, playing" is pressed long
+   * before the track it plays has been read. Spent once, when the replay has a stretch and a moment
+   * on it, and forgotten wherever the moment is forgotten.
+   */
+  const [pendingPlay, setPendingPlay] = useState(false);
   // The trip on screen as of the last call, for `open` to decide against without reading state
   // from inside an updater: an updater runs twice under strict rendering, and a decision made
   // there is made twice with side effects each time.
@@ -107,11 +141,13 @@ export function usePastTripPlayback(token: string | undefined): PastTripPlayback
    * instant held for the first trip must not be waiting for the second: clamped into a trip years
    * away it lands at the far end of the rail, with everybody out, which reads as a replay that
    * has nothing to show. `open` already forgets it on a change of trip; this forgets it the moment
-   * the trip it was asked for has answered that it cannot be played.
+   * the trip it was asked for has answered that it cannot be played. A request to play goes with
+   * it: the next trip the reader picks from the list was not the one the link meant to start.
    */
   useEffect(() => {
     if (failed) {
       setPendingAt(null);
+      setPendingPlay(false);
     }
   }, [failed]);
 
@@ -188,11 +224,20 @@ export function usePastTripPlayback(token: string | undefined): PastTripPlayback
   }, [tripLogId, setFollow]);
 
   const open = useCallback(
-    (chosen: string, options?: { at?: string | null; follow?: PastFollow | null }) => {
+    (
+      chosen: string,
+      options?: { at?: string | null; follow?: PastFollow | null; play?: boolean },
+    ) => {
       const changed = tripRef.current !== chosen;
       tripRef.current = chosen;
       setTripLogId(chosen);
       const asked = instantOf(options?.at);
+      if (options?.play === true) {
+        setPendingPlay(true);
+      } else if (changed) {
+        // A request to play belongs to the trip it was made of, as a moment does.
+        setPendingPlay(false);
+      }
       if (changed) {
         // A different trip starts from its own opening rule, and any moment still held for the
         // trip before it is dropped with that trip: an instant asked for one trip is not an
@@ -231,6 +276,7 @@ export function usePastTripPlayback(token: string | undefined): PastTripPlayback
     setFollowState(null);
     setAt(null);
     setPendingAt(null);
+    setPendingPlay(false);
   }, []);
 
   const envelope = useMemo(
@@ -240,6 +286,31 @@ export function usePastTripPlayback(token: string | undefined): PastTripPlayback
 
   const engaged = tripLogId !== null;
   const transport = useReplayClock({ span, at, onAtChange: setAt, engaged });
+
+  /**
+   * Starting the clock a link asked to have started.
+   *
+   * <b>After the moment has been settled, never before.</b> The opening rule above places the
+   * clock in one render and this starts it in the next, so a replay asked to play from half past
+   * one plays from half past one and not from wherever the handle stood for a frame.
+   *
+   * <b>Spent whether or not it is honoured.</b> A reader who has asked for less movement gets the
+   * replay opened at the moment named and standing still, with the button one press away — and the
+   * request is gone, so nothing starts moving later because a setting changed. A trip with nothing
+   * to play never reaches here and keeps the request until the reader leaves it, which starts
+   * nothing either.
+   */
+  const startClock = useRef(transport.play);
+  startClock.current = transport.play;
+  useEffect(() => {
+    if (!pendingPlay || span === null || at === null) {
+      return;
+    }
+    setPendingPlay(false);
+    if (!motionReduced()) {
+      startClock.current();
+    }
+  }, [pendingPlay, span, at]);
 
   return {
     tripLogId,

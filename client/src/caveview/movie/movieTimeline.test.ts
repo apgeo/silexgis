@@ -5,6 +5,9 @@ import {
   buildMovieTimeline,
   movieFrameCount,
   movieFrames,
+  movieNewReports,
+  movieSpansAt,
+  movieTripIsLive,
   movieTripSpan,
   type MovieTripSpan,
 } from './movieTimeline.ts';
@@ -87,7 +90,8 @@ describe('buildMovieTimeline — together', () => {
     expect(timeline.instants(30 * MIN)).toEqual([T0 + 30 * MIN, dayTwo + 30 * MIN]);
     // The shorter trip's instant runs on past its own end, keeping the shared clock.
     expect(timeline.instants(2 * HOUR)).toEqual([T0 + 2 * HOUR, dayTwo + 2 * HOUR]);
-    expect(timeline.clock(45 * MIN)).toEqual({ kind: 'elapsed', ms: 45 * MIN });
+    // The clock also says how far it will run: the longest trip's length.
+    expect(timeline.clock(45 * MIN)).toEqual({ kind: 'elapsed', ms: 45 * MIN, totalMs: 2 * HOUR });
   });
 
   it('shortens quiet stretches on the elapsed axis, counting every trip’s reports', () => {
@@ -101,7 +105,10 @@ describe('buildMovieTimeline — together', () => {
     )!;
     // Anchors at 0, 10 min, 2 h and 3 h of elapsed time: 10 + 30 + 30 minutes.
     expect(timeline.length).toBe(70 * MIN);
-    expect(timeline.clock(70 * MIN)).toEqual({ kind: 'elapsed', ms: 3 * HOUR });
+    // How far the clock runs is the real time under way, not the shortened length it is played in:
+    // a clock that reaches three hours is written in hours however quickly it gets there.
+    expect(timeline.clock(70 * MIN)).toEqual({ kind: 'elapsed', ms: 3 * HOUR, totalMs: 3 * HOUR });
+    expect(timeline.clock(0)).toEqual({ kind: 'elapsed', ms: 0, totalMs: 3 * HOUR });
   });
 });
 
@@ -195,6 +202,38 @@ describe('movieTripSpan', () => {
   it('ends a trip still under way where the movie was opened', () => {
     const result = movieTripSpan('trip-a', { armedAt: at(T0), closedAt: null }, [], T0 + 2 * HOUR, 'model-1');
     expect(result?.window).toEqual({ from: T0, to: T0 + 2 * HOUR });
+  });
+
+  it('moves only the trips still under way when the spans are asked for again later', () => {
+    const live = { tripLogId: 'live', tracking: { armedAt: at(T0), closedAt: null }, events: [report(T0 + HOUR, 'model-1')] };
+    const done = {
+      tripLogId: 'done',
+      tracking: { armedAt: at(T0), closedAt: at(T0 + 2 * HOUR) },
+      events: [report(T0 + HOUR, 'model-1')],
+    };
+    expect(movieTripIsLive(live.tracking)).toBe(true);
+    expect(movieTripIsLive(done.tracking)).toBe(false);
+    expect(movieTripIsLive({ armedAt: null, closedAt: null })).toBe(false);
+
+    const opened = movieSpansAt([live, done], T0 + 3 * HOUR, 'model-1');
+    const exported = movieSpansAt([live, done], T0 + 5 * HOUR, 'model-1');
+    expect(opened?.map((entry) => entry.window.to)).toEqual([T0 + 3 * HOUR, T0 + 2 * HOUR]);
+    expect(exported?.map((entry) => entry.window.to)).toEqual([T0 + 5 * HOUR, T0 + 2 * HOUR]);
+    expect(exported?.map((entry) => entry.tripLogId)).toEqual(['live', 'done']);
+
+    // A trip with nothing to replay is not left out of the list, which would put every later
+    // trip's span against the wrong trip: there is no list.
+    const never = { tripLogId: 'never', tracking: { armedAt: null, closedAt: null }, events: [] };
+    expect(movieSpansAt([live, never, done], T0 + 5 * HOUR, 'model-1')).toBeNull();
+  });
+
+  it('counts the reports that have arrived by which they are, not by the time they carry', () => {
+    const known = new Set(['r1', 'r2']);
+    expect(movieNewReports([{ id: 'r1' }, { id: 'r2' }], known)).toBe(0);
+    // One entered since, about a moment before the two already known: still one new report.
+    expect(movieNewReports([{ id: 'r3' }, { id: 'r1' }, { id: 'r2' }], known)).toBe(1);
+    // One of the known ones taken back, another added.
+    expect(movieNewReports([{ id: 'r2' }, { id: 'r4' }], known)).toBe(1);
   });
 });
 

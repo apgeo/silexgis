@@ -8,7 +8,7 @@ const ARMED = '2026-09-12T08:00:00Z';
 const CLOSED = '2026-09-12T12:00:00Z';
 const OPENED = Date.parse('2026-09-13T08:00:00Z');
 
-type Answer = { data: unknown; isPending: boolean; error: unknown };
+type Answer = { data: unknown; isPending: boolean; error: unknown; isFetching: boolean; dataUpdatedAt: number };
 const answers = vi.hoisted(() => ({
   trackings: new Map<string, unknown>(),
   logs: new Map<string, unknown>(),
@@ -22,11 +22,15 @@ const answer = (held: Map<string, unknown>, failed: Set<string> = new Set()) => 
     data: held.get(id),
     isPending: !held.has(id) && !failed.has(id),
     error: failed.has(id) ? new Error('the tracking log has more pages than one read follows') : null,
+    isFetching: false,
+    dataUpdatedAt: 0,
   }));
 vi.mock('../../../api/hooks.ts', () => ({
   useTripTrackings: (ids: readonly string[]) => answer(answers.trackings, answers.failedTrackings)(ids),
   useTripTrackingEventLogs: (ids: readonly string[]) => answer(answers.logs, answers.failedLogs)(ids),
   useTripLogsById: (ids: readonly string[]) => answer(answers.rosters)(ids),
+  // These tests are of finished trips, whose logs are never read again.
+  useRereadTripTrackingEventLog: () => () => Promise.reject(new Error('no log is read again here')),
 }));
 
 const { useMovieTrips } = await import('./useMovieTrips.ts');

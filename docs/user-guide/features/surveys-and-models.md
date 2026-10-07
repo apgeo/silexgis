@@ -262,4 +262,5 @@ All of that is on [Measurements and statistics](measurements-and-statistics.md).
 ---
 
 Related: [3D view](3d-view.md) · [Caves and entrances](caves-and-entrances.md) ·
-[Measurements and statistics](measurements-and-statistics.md)
+[Measurements and statistics](measurements-and-statistics.md) ·
+[A movie of a tracked trip](tracking-movie.md) — the camera button on a survey's row

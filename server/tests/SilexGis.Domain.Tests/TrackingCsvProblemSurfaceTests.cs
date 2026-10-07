@@ -40,9 +40,12 @@ public class TrackingCsvProblemSurfaceTests
         nameof(TrackingCsvProblem.UnmappedColumn),
         nameof(TrackingCsvProblem.MomentColumnMissing),
         nameof(TrackingCsvProblem.CaverColumnMissing),
-        nameof(TrackingCsvProblem.MomentSplitAcrossColumns),
+        nameof(TrackingCsvProblem.TimeColumnNeedsADay),
         nameof(TrackingCsvProblem.MomentUnreadable),
         nameof(TrackingCsvProblem.MomentWithoutTime),
+        nameof(TrackingCsvProblem.MomentWithoutDate),
+        nameof(TrackingCsvProblem.MomentSkippedByClockChange),
+        nameof(TrackingCsvProblem.MomentRepeatedByClockChange),
         nameof(TrackingCsvProblem.NoCavers),
         nameof(TrackingCsvProblem.NoPlaceAndNoState),
         nameof(TrackingCsvProblem.DepthUnreadable),
@@ -64,6 +67,7 @@ public class TrackingCsvProblemSurfaceTests
         nameof(TrackingCsvProblem.ModelMissing),
         nameof(TrackingCsvProblem.DuplicateInFile),
         nameof(TrackingCsvProblem.MomentInFuture),
+        nameof(TrackingCsvProblem.ClockRunsBackwards),
         nameof(TrackingCsvProblem.AlreadyRecorded),
         nameof(TrackingCsvProblem.AlreadyRecordedSeveralTimes),
     ];
@@ -95,6 +99,7 @@ public class TrackingCsvProblemSurfaceTests
             new[]
             {
                 nameof(TrackingCsvField.Cavers),
+                nameof(TrackingCsvField.Date),
                 nameof(TrackingCsvField.Depth),
                 nameof(TrackingCsvField.Details),
                 nameof(TrackingCsvField.Note),
@@ -103,6 +108,7 @@ public class TrackingCsvProblemSurfaceTests
                 nameof(TrackingCsvField.State),
                 nameof(TrackingCsvField.Station),
                 nameof(TrackingCsvField.Team),
+                nameof(TrackingCsvField.Time),
             }.OrderBy(n => n, StringComparer.Ordinal),
             customMessage:
                 "A column role was added or removed. Name it in "

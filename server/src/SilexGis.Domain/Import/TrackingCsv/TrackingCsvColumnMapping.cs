@@ -42,11 +42,10 @@ public sealed record TrackingCsvColumnMapping
     /// Header spellings that promise a date and say nothing about the time of day.
     /// </summary>
     /// <remarks>
-    /// Tried after the combined spellings and before the time-only ones, so that a sheet keeping
-    /// its date and its time in two columns has the moment read from the date column: every row
-    /// then says its time is missing, which is true, rather than that "08:15" is not a time, which
-    /// is not. The parser recognises that layout as a whole and refuses the file once, naming both
-    /// columns, since nothing on a mapping screen can join two columns into one.
+    /// A role of their own rather than further spellings of the moment, so that a sheet keeping its
+    /// date and its time in two columns has both columns claimed and the parser can join them. A
+    /// sheet whose one moment column happens to be headed "Data" loses nothing by it: a date column
+    /// with no time column beside it is read whole, as the moment, exactly as before.
     /// </remarks>
     public static IReadOnlyList<string> DateOnlyHeaders { get; } = ["data", "date"];
 
@@ -63,7 +62,9 @@ public sealed record TrackingCsvColumnMapping
     /// </remarks>
     public static IReadOnlyList<string> CandidatesFor(TrackingCsvField field) => field switch
     {
-        TrackingCsvField.RecordedAt => [.. DateAndTimeHeaders, .. DateOnlyHeaders, .. TimeOnlyHeaders],
+        TrackingCsvField.RecordedAt => DateAndTimeHeaders,
+        TrackingCsvField.Date => DateOnlyHeaders,
+        TrackingCsvField.Time => TimeOnlyHeaders,
         TrackingCsvField.Depth => ["adancime", "adancimea", "cota", "depth", "elevation", "m"],
         TrackingCsvField.Station => ["statie", "statia", "punct", "punctul", "station", "point"],
         TrackingCsvField.Place =>

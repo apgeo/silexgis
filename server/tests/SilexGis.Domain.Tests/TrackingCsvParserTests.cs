@@ -145,6 +145,74 @@ public class TrackingCsvParserTests
     }
 
     [Fact]
+    public void A_sheet_kept_on_a_zones_clocks_is_read_at_the_offset_that_zone_kept_on_each_rows_date()
+    {
+        // One sheet running from summer into winter has two offsets in it, and a row that wrote
+        // its own offset keeps it. Nothing is reported: reading in a zone is not a finding.
+        var parsed = TrackingCsvParser.Parse(
+            "Data si ora,Adancime,Speologi\r\n"
+            + "12.07.2026 14:05,96,Ion\r\n"
+            + "12.01.2026 14:05,96,Ion\r\n"
+            + "2026-07-12T14:05:00+01:00,96,Ion\r\n",
+            InBucharest);
+
+        parsed.Rows.Select(r => r.At).ShouldBe(
+        [
+            new DateTimeOffset(2026, 7, 12, 11, 5, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 1, 12, 12, 5, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 7, 12, 13, 5, 0, TimeSpan.Zero),
+        ]);
+        parsed.Rows.ShouldAllBe(r => r.Diagnostics.Count == 0);
+        parsed.FileDiagnostics.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_row_at_a_time_the_clocks_skipped_is_refused_and_one_at_a_time_they_repeated_is_imported_with_a_warning()
+    {
+        var parsed = TrackingCsvParser.Parse(
+            "Data si ora,Adancime,Speologi\r\n"
+            + "29.03.2026 03:30,96,Ion\r\n"
+            + "25.10.2026 03:30,96,Ion\r\n"
+            + "25.10.2026 14:05,96,Ion\r\n",
+            InBucharest);
+
+        // Never on any clock in the zone: no instant, and the row is sent back naming its cell.
+        var skipped = parsed.Rows[0];
+        skipped.At.ShouldBeNull();
+        skipped.Importable.ShouldBeFalse();
+        var refusal = skipped.Diagnostics.ShouldHaveSingleItem();
+        refusal.Problem.ShouldBe(TrackingCsvProblem.MomentSkippedByClockChange);
+        refusal.Severity.ShouldBe(TrackingCsvSeverity.Error);
+        refusal.Column.ShouldBe("Data si ora");
+        refusal.Detail.ShouldBe("29.03.2026 03:30");
+
+        // Twice on the clocks: imported as the first, and said so on the row.
+        var repeated = parsed.Rows[1];
+        repeated.At.ShouldBe(new DateTimeOffset(2026, 10, 25, 0, 30, 0, TimeSpan.Zero));
+        repeated.Importable.ShouldBeTrue();
+        var warning = repeated.Diagnostics.ShouldHaveSingleItem();
+        warning.Problem.ShouldBe(TrackingCsvProblem.MomentRepeatedByClockChange);
+        warning.Severity.ShouldBe(TrackingCsvSeverity.Warning);
+        warning.Detail.ShouldBe("25.10.2026 03:30");
+
+        // The ordinary row beside them says nothing, and the same sheet read with no zone says
+        // nothing about any of the three.
+        parsed.Rows[2].Diagnostics.ShouldBeEmpty();
+        TrackingCsvParser.Parse(
+                "Data si ora,Adancime,Speologi\r\n29.03.2026 03:30,96,Ion\r\n25.10.2026 03:30,96,Ion\r\n")
+            .Rows.ShouldAllBe(r => r.Importable && r.Diagnostics.Count == 0);
+    }
+
+    private static TrackingCsvOptions InBucharest
+    {
+        get
+        {
+            TrackingCsvZones.TryFind("Europe/Bucharest", out var zone).ShouldBeTrue();
+            return new TrackingCsvOptions { Zone = zone };
+        }
+    }
+
+    [Fact]
     public void A_cell_that_states_its_own_offset_is_honoured()
     {
         var rows = Parse("2026-09-12T14:30:00+03:00,96,Ion").Rows;
@@ -277,36 +345,186 @@ public class TrackingCsvParserTests
     }
 
     [Fact]
-    public void A_date_column_beside_a_time_column_is_refused_once_for_the_file_naming_both()
+    public void A_date_column_beside_a_time_column_is_joined_into_one_moment()
     {
-        // The layout a hand-kept sheet often has. Read as it stood, the time column was claimed
-        // as the moment and every row refused with "08:15 is not a time" — pointing at rows when
-        // the fault is the layout, which nothing on the mapping screen can repair.
+        // The layout a hand-kept sheet often has, on whichever side of the sheet the two stand.
         var result = TrackingCsvParser.Parse(
-            "Data,Ora,Adancime,Speologi\r\n12.09.2026,08:15,96,Ion\r\n12.09.2026,09:40,120,Ion\r\n");
+            "Data,Ora,Adancime,Speologi\r\n12.09.2026,08:15,96,Ion\r\n13.09.2026,0940,120,Ion\r\n");
 
-        result.ResolvedColumns[TrackingCsvField.RecordedAt].ShouldBe("Data");
-        result.Readable.ShouldBeFalse();
-        result.Rows.ShouldBeEmpty();
-        var split = result.FileDiagnostics.Single(d => d.Problem == TrackingCsvProblem.MomentSplitAcrossColumns);
-        split.Severity.ShouldBe(TrackingCsvSeverity.Error);
-        split.Column.ShouldBe("Data");
-        split.Detail.ShouldBe("Data + Ora");
-        result.FileDiagnostics.ShouldNotContain(d => d.Problem == TrackingCsvProblem.MomentUnreadable);
+        result.Readable.ShouldBeTrue();
+        result.ResolvedColumns[TrackingCsvField.Date].ShouldBe("Data");
+        result.ResolvedColumns[TrackingCsvField.Time].ShouldBe("Ora");
+        result.ResolvedColumns.ShouldNotContainKey(TrackingCsvField.RecordedAt);
+        result.UnmappedColumns.ShouldBeEmpty();
+        result.Rows.Select(r => r.At).ShouldBe(
+        [
+            new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 9, 13, 9, 40, 0, TimeSpan.Zero),
+        ]);
+        result.Rows.ShouldAllBe(r => r.Importable && !r.OnNamedDay);
+        result.NamedDay.ShouldBeNull();
+
+        TrackingCsvParser.Parse("Ora,Data,Speologi,Stare\r\n08:15,12.09.2026,Ion,intrare\r\n")
+            .Rows.Single().At.ShouldBe(new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero));
     }
 
     [Fact]
-    public void A_date_only_header_outranks_a_time_only_one_and_a_lone_date_column_is_still_refused_row_by_row()
+    public void A_joined_moment_is_read_under_the_same_order_offset_and_zone_rules_as_a_single_cell()
     {
-        // Whichever side of the sheet the two stand on, the date is the moment column.
-        TrackingCsvParser.Parse("Ora,Data,Speologi\r\n08:15,12.09.2026,Ion\r\n")
-            .ResolvedColumns[TrackingCsvField.RecordedAt].ShouldBe("Data");
+        // One reader behind both layouts. The day order is settled over the date column, an offset
+        // written beside the time is the cell's own, and a time that writes none is on the sheet's
+        // zone.
+        var bucharest = TrackingCsvZones.TryFind("Europe/Bucharest", out var zone) ? zone : null;
+        bucharest.ShouldNotBeNull();
 
-        // A sheet with a date and no time column at all is not the split layout: it is refused
-        // row by row, as before, with the true reason on each row.
+        var result = TrackingCsvParser.Parse(
+            "Date,Time,Depth,Cavers\r\n"
+            + "09/13/2026,14:05,96,Ion\r\n"
+            + "09/05/2026,14:05 +01:00,96,Ion\r\n",
+            TrackingCsvOptions.Default with { Zone = bucharest });
+
+        result.DateOrder.ShouldBe(TripCsvDateOrder.MonthFirst);
+        result.DateOrderSource.ShouldBe(TripCsvDateOrderSource.File);
+        result.Rows[0].At.ShouldBe(new DateTimeOffset(2026, 9, 13, 11, 5, 0, TimeSpan.Zero));
+        result.Rows[1].At.ShouldBe(new DateTimeOffset(2026, 9, 5, 13, 5, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void In_a_two_column_sheet_a_missing_half_is_refused_on_its_row_and_no_day_is_carried_down()
+    {
+        // A day named for the sheet is not allowed to fill the gap either: this sheet writes its
+        // own dates, and a blank among them is a question for whoever kept it.
+        var result = TrackingCsvParser.Parse(
+            "Data,Ora,Adancime,Speologi\r\n"
+            + "12.09.2026,08:15,96,Ion\r\n"
+            + ",09:40,120,Ion\r\n"
+            + "12.09.2026,,150,Ion\r\n"
+            + ",,150,Ion\r\n",
+            TrackingCsvOptions.Default with { Day = new DateOnly(2026, 9, 12) });
+
+        result.Readable.ShouldBeTrue();
+        result.NamedDay.ShouldBeNull();
+        result.Rows[0].Importable.ShouldBeTrue();
+        var withoutDate = result.Rows[1].Diagnostics.Single(d => d.Severity == TrackingCsvSeverity.Error);
+        withoutDate.Problem.ShouldBe(TrackingCsvProblem.MomentWithoutDate);
+        withoutDate.Column.ShouldBe("Data + Ora");
+        withoutDate.Detail.ShouldBe("09:40");
+        result.Rows[2].Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.MomentWithoutTime);
+        result.Rows[3].Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.MomentMissing);
+    }
+
+    [Fact]
+    public void A_column_carrying_both_is_the_moment_and_a_date_or_time_column_beside_it_is_left_unread()
+    {
+        // Two readings of one row's moment that disagree have no winner, so only one is taken —
+        // and the other is named as unread rather than dropped in silence.
+        var result = TrackingCsvParser.Parse(
+            "Data si ora,Data,Ora,Speologi,Stare\r\n12.09.2026 08:15,01.01.2020,23:59,Ion,intrare\r\n");
+
+        result.ResolvedColumns[TrackingCsvField.RecordedAt].ShouldBe("Data si ora");
+        result.ResolvedColumns.ShouldNotContainKey(TrackingCsvField.Date);
+        result.ResolvedColumns.ShouldNotContainKey(TrackingCsvField.Time);
+        result.UnmappedColumns.ShouldBe(["Data", "Ora"]);
+        result.Rows.Single().At.ShouldBe(new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void Pointing_at_the_date_and_time_columns_by_hand_outranks_a_combined_column_that_was_only_detected()
+    {
+        var mapping = TrackingCsvColumnMapping.Auto
+            .With(TrackingCsvField.Date, "Ziua")
+            .With(TrackingCsvField.Time, "Ceas");
+
+        var result = TrackingCsvParser.Parse(
+            "Timestamp,Ziua,Ceas,Speologi,Stare\r\n2020-01-01 23:59,12.09.2026,08:15,Ion,intrare\r\n",
+            mapping: mapping);
+
+        result.ResolvedColumns.ShouldNotContainKey(TrackingCsvField.RecordedAt);
+        result.UnmappedColumns.ShouldBe(["Timestamp"]);
+        result.Rows.Single().At.ShouldBe(new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void A_lone_date_column_is_read_whole_as_the_moment_and_refused_row_by_row_when_it_has_no_time()
+    {
+        // A sheet whose one moment column happens to be headed "Data" reads as it always did.
+        var whole = TrackingCsvParser.Parse("Data,Adancime,Speologi\r\n12.09.2026 09:00,96,Ion\r\n");
+        whole.ResolvedColumns[TrackingCsvField.Date].ShouldBe("Data");
+        whole.Rows.Single().At.ShouldBe(new DateTimeOffset(2026, 9, 12, 9, 0, 0, TimeSpan.Zero));
+
+        // And one with a date and no time anywhere is told so on each row, with the true reason.
         var dateOnly = TrackingCsvParser.Parse("Data,Adancime,Speologi\r\n12.09.2026,96,Ion\r\n");
-        dateOnly.FileDiagnostics.ShouldNotContain(d => d.Problem == TrackingCsvProblem.MomentSplitAcrossColumns);
+        dateOnly.Readable.ShouldBeTrue();
         dateOnly.Rows.Single().Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.MomentWithoutTime);
+    }
+
+    [Fact]
+    public void A_sheet_of_times_with_no_dates_is_refused_once_for_the_file_until_its_day_is_named()
+    {
+        const string sheet = "Ora,Adancime,Speologi\r\n08:15,96,Ion\r\n0940,120,Ion\r\n";
+
+        var refused = TrackingCsvParser.Parse(sheet);
+
+        refused.Readable.ShouldBeFalse();
+        refused.Rows.ShouldBeEmpty();
+        var needsADay = refused.FileDiagnostics.Single(d => d.Severity == TrackingCsvSeverity.Error);
+        needsADay.Problem.ShouldBe(TrackingCsvProblem.TimeColumnNeedsADay);
+        needsADay.Column.ShouldBe("Ora");
+        // Still answered, so a mapping screen can show which column was taken for the times.
+        refused.ResolvedColumns[TrackingCsvField.Time].ShouldBe("Ora");
+
+        var day = new DateOnly(2026, 9, 12);
+        var read = TrackingCsvParser.Parse(sheet, TrackingCsvOptions.Default with { Day = day });
+
+        read.Readable.ShouldBeTrue();
+        read.NamedDay.ShouldBe(day);
+        read.Rows.Select(r => r.At).ShouldBe(
+        [
+            new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 9, 12, 9, 40, 0, TimeSpan.Zero),
+        ]);
+        read.Rows.ShouldAllBe(r => r.OnNamedDay);
+    }
+
+    [Fact]
+    public void A_named_day_is_read_in_the_sheets_zone_like_any_other()
+    {
+        TrackingCsvZones.TryFind("Europe/Bucharest", out var zone).ShouldBeTrue();
+
+        var read = TrackingCsvParser.Parse(
+            "Ora,Adancime,Speologi\r\n00:30,96,Ion\r\n",
+            TrackingCsvOptions.Default with { Day = new DateOnly(2026, 9, 12), Zone = zone });
+
+        // Half past midnight on the 12th in Bucharest is still the 11th in UTC.
+        read.Rows.Single().At.ShouldBe(new DateTimeOffset(2026, 9, 11, 21, 30, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void A_time_column_whose_cells_write_their_own_dates_needs_no_day_and_ignores_one()
+    {
+        // A moment column under a modest header: it was read before a day could be named, and it
+        // still is. A day named beside it changes nothing about a cell that says its own.
+        const string sheet = "Ora,Adancime,Speologi\r\n12.09.2026 08:15,96,Ion\r\n";
+
+        var read = TrackingCsvParser.Parse(sheet);
+        read.Readable.ShouldBeTrue();
+        read.Rows.Single().At.ShouldBe(new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero));
+
+        var withADay = TrackingCsvParser.Parse(
+            sheet, TrackingCsvOptions.Default with { Day = new DateOnly(2020, 1, 1) });
+        withADay.Rows.Single().At.ShouldBe(new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero));
+        withADay.Rows.Single().OnNamedDay.ShouldBeFalse();
+        withADay.NamedDay.ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_sheet_with_no_column_for_the_moment_in_any_layout_is_refused_as_missing_it()
+    {
+        var result = TrackingCsvParser.Parse("Adancime,Speologi\r\n96,Ion\r\n");
+
+        result.Readable.ShouldBeFalse();
+        result.FileDiagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.MomentColumnMissing);
+        result.FileDiagnostics.ShouldNotContain(d => d.Problem == TrackingCsvProblem.TimeColumnNeedsADay);
     }
 
     [Fact]
@@ -379,6 +597,29 @@ public class TrackingCsvParserTests
         // spelling is no longer a standing here and is reported as a word nobody knows.
         rows[1].State.ShouldBeNull();
         rows[1].Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.StateWordUnknown);
+    }
+
+    [Fact]
+    public void Rows_copied_out_of_a_spreadsheet_are_read_as_a_sheet()
+    {
+        // What a spreadsheet puts on the clipboard, after a text box has held it: a tab between
+        // cells and a bare line feed between rows — no commas, no carriage returns. Pasting rows
+        // in place of choosing a file rests on this being a sheet like any other, so it is held
+        // here rather than assumed from the two halves separately.
+        var read = TrackingCsvParser.Parse(
+            "Data si ora\tAdancime\tSpeologi\tObservatii\n"
+            + "12.09.2026 09:00\t96\tIon\tapa mare, la sifon\n"
+            + "12.09.2026 10:30\t120\tMaria Pop\t\n",
+            TrackingCsvOptions.Default with { Delimiter = '\t' });
+
+        read.Readable.ShouldBeTrue();
+        read.Rows.Count.ShouldBe(2);
+        read.Rows[0].At.ShouldBe(new DateTimeOffset(2026, 9, 12, 9, 0, 0, TimeSpan.Zero));
+        read.Rows[0].DepthM.ShouldBe(96);
+        // A comma inside a cell is the cell's own: nothing but the tab divides a pasted row.
+        read.Rows[0].Note.ShouldBe("apa mare, la sifon");
+        read.Rows[1].At.ShouldBe(new DateTimeOffset(2026, 9, 12, 10, 30, 0, TimeSpan.Zero));
+        read.Rows[1].Cavers.ShouldBe(["Maria Pop"]);
     }
 
     /// <summary>A three-column sheet: moment, depth, caver. Header supplied, rows given.</summary>

@@ -97,8 +97,11 @@ public static class TripLiveSiblingEndpoints
         // outright; a link whose trip is over opens it only while the archive is switched on, which
         // is what gives an operator a single lever over "an old article keeps naming today's
         // parties". Switching the archive off therefore stops old links and not current ones — the
-        // distinction the shared gate keeps its two answers apart for.
-        if (!opened.LiveWindowOpen && !(past.Value.Enabled && opened.PastReadable))
+        // distinction the shared gate keeps its two answers apart for. The reading of the two
+        // windows under that switch is the Domain's, shared with the administrator's list of
+        // published links, so that list cannot call a link open that this route refuses.
+        var windows = new PublishedLinkWindows(opened.LiveWindowOpen, opened.PastReadable);
+        if (!windows.OpensAnything(past.Value.Enabled))
         {
             return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
         }

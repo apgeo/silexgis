@@ -44,7 +44,7 @@ import {
   MOVIE_QUALITIES,
   MOVIE_SHADINGS,
   type MovieSettingsGroup,
-  type MovieShadingConstant,
+  type MovieShadingId,
 } from './movieChoices.ts';
 
 /**
@@ -73,8 +73,6 @@ export interface MovieSettingsFormProps {
   videoEncoding: boolean;
   /** The layers the loaded model has; null until it has loaded. */
   layers: ReadonlySet<MovieViewLayer> | null;
-  /** The loaded viewer's namespace, whose constants the shadings are; null until it has loaded. */
-  constants: Record<MovieShadingConstant, number> | null;
   /** Whether the loaded model stands on real terrain. */
   terrain: boolean;
   /** The title the movie takes when the reader writes none. */
@@ -181,7 +179,6 @@ export default function MovieSettingsForm({
   formats,
   videoEncoding,
   layers,
-  constants,
   terrain,
   autoTitle,
   trips,
@@ -215,10 +212,8 @@ export default function MovieSettingsForm({
       : t('caveview.movie.formatNoVideoEncoder');
   };
 
-  const shadingId =
-    settings.view.shadingMode === null || constants === null
-      ? 'default'
-      : (MOVIE_SHADINGS.find((shading) => constants[shading.constant] === settings.view.shadingMode)?.id ?? 'default');
+  // What the model has is known once it has loaded, and so is whether it stands on terrain.
+  const modelLoaded = layers !== null;
 
   const output = (
     <Flex vertical gap="middle">
@@ -609,23 +604,16 @@ export default function MovieSettingsForm({
       {view.HUD && <Alert type="warning" showIcon title={t('caveview.movie.hudWarning')} />}
       <Row
         label={t('caveview.movie.shading')}
-        help={constants !== null && !terrain ? t('caveview.movie.shadingTerrainHelp') : undefined}
+        help={modelLoaded && !terrain ? t('caveview.movie.shadingTerrainHelp') : undefined}
       >
         <Select
-          value={shadingId}
+          value={view.shading ?? 'default'}
           style={{ minWidth: 200 }}
           // The options say why a depth shading cannot be chosen; a list only as wide as the box
           // would cut that off.
           popupMatchSelectWidth={false}
-          disabled={disabled || constants === null}
-          onChange={(id: string) =>
-            patch('view', {
-              shadingMode:
-                id === 'default' || constants === null
-                  ? null
-                  : constants[MOVIE_SHADINGS.find((shading) => shading.id === id)!.constant],
-            })
-          }
+          disabled={disabled || !modelLoaded}
+          onChange={(id: MovieShadingId | 'default') => patch('view', { shading: id === 'default' ? null : id })}
           data-testid="movie-shading"
           aria-label={t('caveview.movie.shading')}
           options={[

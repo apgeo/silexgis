@@ -51,7 +51,8 @@
     "registryCorrelation": "Correlations",
     "tripImport": "Import trips",
     "speleolocImport": "Import a recording",
-    "registryRegions": "Regions"
+    "registryRegions": "Regions",
+    "publishedTrips": "Published trips"
   },
   "terrain": {
     "title": "Terrain",
@@ -1680,6 +1681,8 @@
       },
       "events": "Reports",
       "eventsCorrection": "A report written down wrongly is corrected in place — it keeps its place on the log and everything pinned to it. One that should not be there at all is deleted. Either way the log stays what somebody said at a moment.",
+      "logReadOnlyTitle": "These positions came from an import and cannot be corrected one by one",
+      "logReadOnlyBody": "Tracking was never started for this trip, so a report on its log can be neither corrected nor deleted here. The positions were put on the trip by importing a recording, and they are taken back, all together, by undoing that import under Geodata → Imports.",
       "eventsNone": "Nothing has been reported yet.",
       "eventsUnavailable": "The reports could not be read. What is shown here may be out of date, and reports may be missing from it.",
       "eventDelete": "Delete this report",
@@ -1697,6 +1700,7 @@
       "problems": {
         "notWritable": "Tracking has never been started for this trip, so its log cannot be written to. Start it first; a trip whose tracking has been closed can still be corrected.",
         "notConfigured": "This trip has no watch to import reports onto. Choose a survey and save the tracking setup first; the sheet can be read again straight after.",
+        "csvZoneUnknown": "This server does not know that time zone, so the sheet was not read. Choose another name for the same clock under File settings — a nearby city in the same country usually is one.",
         "stateInvalid": "Tracking cannot move that way. Read the page again and see where it stands.",
         "modelMissing": "Tracking needs a survey to place people in. Choose one first.",
         "modelUnavailable": "That survey cannot be used here — it no longer exists, or its cave is one whose exact position you may not be told.",
@@ -1715,7 +1719,8 @@
         "shareNotFound": "That follow link is no longer there — somebody may have taken it back already.",
         "publicationRefusedCave": "Publishing this trip hands over its cave's survey drawing, and that takes the right to share the cave. Ask whoever looks after it.",
         "publicationRefusedProtected": "This trip's cave has protected coordinates, so the trip cannot be published at all. A published page says where the party is inside the cave, and there is no version of that which withholds the position.",
-        "publicationNotArmed": "A follow link opens a page only while the watch is running. Arm the watch, then publish the trip."
+        "publicationNotArmed": "A follow link opens a page only while the watch is running. Arm the watch, then publish the trip.",
+        "shareRevoked": "That link has already been taken back, so there is nothing to replace. Publish the trip again instead."
       },
       "publish": {
         "title": "Publish this trip",
@@ -1747,7 +1752,18 @@
         "expiresAt": "Works until {{when}}",
         "ends": "A follow link ends on its own. It stops working when the watch is closed, and in any case on the date below — so an address left in an old article does not go on showing the party for ever. Taking it back ends it at once.",
         "mintedExpires": "This address stops working on {{when}}, or sooner when you close the watch.",
-        "tellsParty": "Everybody on this trip who has an account is told that it has been published."
+        "tellsParty": "Everybody on this trip who has an account is told that it has been published.",
+        "languageLabel": "Language the page opens in",
+        "languageDefault": "None named",
+        "languageHelp": "An address that names no language opens in Romanian, or in whatever its reader chose on this site before. Naming one here rewrites the address and the website block below — nothing new is created, the same link answers either way, and the reader can still change the language on the page.",
+        "replace": "Replace link",
+        "replaceConfirm": "Replace this follow link? The old address stops answering at once, wherever it has been pasted. A fresh one is shown here, once; it runs out when the old one would have, and nobody on the trip is told.",
+        "replacedTitle": "The new address is ready",
+        "replacedOnce": "Copy it now — this is the only time it is shown. The old address no longer answers.",
+        "boundsWarning": "A protected cave, or one of its entrances, stands inside the area this trip's survey covers. This is a check by position only and cannot see inside the survey file — the survey may not enter that cave at all. Nothing was refused: look at the survey, and take the link back if it shows what should not be published.",
+        "statusRanOut": "Run out",
+        "ranOutAt": "Ran out {{when}}. It follows nobody any more — but while nobody takes it back, it can still keep this trip among its cave’s past trips, and its address still opens them.",
+        "revokeRanOutConfirm": "Take this follow link back? It already follows nobody. Taking it back also removes this trip from its cave’s past trips, unless another link of the trip still stands."
       },
       "published": {
         "title": "This trip is published",
@@ -1786,8 +1802,16 @@
       "csvImport": {
         "open": "Import a sheet",
         "title": "Import reports from a spreadsheet",
-        "help": "A coordinator's sheet — a line per phone call, with a time, who it was about and how deep they were — read onto this trip's log. Reading it writes nothing: what you get back is exactly what importing would do. Each report is filed under the person and the moment, so a corrected sheet imported again changes the rows it corrected rather than doubling them. A time written without a zone is filed as UTC, exactly as written: a sheet's 14:30 becomes 14:30 UTC, which this page then shows in your own zone. Where the hour has to sit beside reports typed live, write the offset in the cell (2026-09-12T14:30+03:00).",
+        "help": "A coordinator's sheet — a line per phone call, with a time, who it was about and how deep they were — read onto this trip's log. Reading it writes nothing: what you get back is exactly what importing would do. Each report is filed under the person and the moment, so a corrected sheet imported again changes the rows it corrected rather than doubling them. A time written without a zone is filed as UTC, exactly as written: a sheet's 14:30 becomes 14:30 UTC, which this page then shows in your own zone. To have it read on the clock it was written by instead, name the sheet's time zone under File settings, or write the offset in the cell (2026-09-12T14:30+03:00).",
         "choose": "Choose a CSV file, or drop one here",
+        "source": "Where the sheet comes from",
+        "sourceFile": "A file",
+        "sourcePaste": "Pasted rows",
+        "pasteLabel": "The sheet's rows, header row first",
+        "pastePlaceholder": "Select the rows in your spreadsheet — the header row included — copy them, and paste them here.",
+        "pasteFromClipboard": "Paste from the clipboard",
+        "pasteUnavailable": "The browser would not hand over the clipboard. Paste into the box by hand instead.",
+        "pastedAs": "columns separated by {{delimiter}}",
         "template": "Download a sample sheet",
         "look": "Read it",
         "commit": "Import",
@@ -1815,8 +1839,17 @@
         "dateOrderAuto": "From the file's own dates",
         "dateOrderDayFirst": "Day first (12.09.2026)",
         "dateOrderMonthFirst": "Month first (09/12/2026)",
+        "zone": "Sheet's time zone",
+        "zoneAsWritten": "Exactly as written (UTC)",
+        "zoneMine": "My time zone — {{zone}}",
+        "zoneHelp": "Whose clock the sheet's times were read off. A time that writes its own offset is read as it says, whatever is chosen here.",
+        "sheetDayTitle": "This sheet writes times with no dates",
+        "sheetDay": "The day the sheet was kept on",
+        "sheetDayHelp": "Every time that has no date of its own is put on this day. Check it, then read the sheet again.",
         "fields": {
           "RecordedAt": "When",
+          "Date": "Date only",
+          "Time": "Time only",
           "Depth": "Depth",
           "Station": "Station",
           "Place": "Place",
@@ -1842,6 +1875,8 @@
         "outcome": "Outcome",
         "findings": "Findings",
         "momentsRule": "Times written without a zone were read as UTC. Dates were read {{order}}.",
+        "momentsRuleZone": "Times written without a zone were read on the clocks of {{zone}}, and are shown below as those clocks showed them. Dates were read {{order}}.",
+        "momentsOnDay": "Times with no date were put on {{day}}.",
         "datesDayFirst": "day first (12.09.2026)",
         "datesMonthFirst": "month first (09/12/2026)",
         "datesByFile": "The file's own dates settle it.",
@@ -1867,9 +1902,12 @@
           "UnmappedColumn": "Nothing claimed this column. A misspelled header is otherwise silent.",
           "MomentColumnMissing": "No column carries the time, without which no row can be placed.",
           "CaverColumnMissing": "No column carries the people, so no row is about anybody.",
-          "MomentSplitAcrossColumns": "The date and the time are in two columns. This importer reads the moment from one column carrying both — join the two in the sheet, into a column headed \"Data si ora\", and read it again.",
+          "TimeColumnNeedsADay": "The sheet writes its times with no dates, so they cannot be placed until the day the sheet was kept on is named.",
           "MomentUnreadable": "Something is written where the time should be, and it is not a time.",
           "MomentWithoutTime": "A date with no time cannot place a report; filed at midnight, a whole day's reports would collapse onto one moment.",
+          "MomentSkippedByClockChange": "This time never existed in the sheet's time zone — the clocks went forward over it. Correct the cell, or write its offset beside the time (for example +02:00).",
+          "MomentRepeatedByClockChange": "This time happened twice in the sheet's time zone — the clocks went back over it. It was read as the first of the two; if the second was meant, write its offset beside the time (for example +02:00).",
+          "MomentWithoutDate": "A time with no date. The date is not carried down from the row above — write it on this row.",
           "MomentMissing": "The time cell is empty.",
           "RaggedRow": "The row is not as wide as the header; it was lined up with it and read anyway.",
           "NoCavers": "The row names nobody.",
@@ -1890,6 +1928,7 @@
           "ModelMissing": "This watch has no survey, so no row claiming a place can be placed.",
           "DuplicateInFile": "Another row of this file is the same report — same person, same moment.",
           "MomentInFuture": "A report cannot be about the future.",
+          "ClockRunsBackwards": "This time is earlier than one further up the sheet (the line shown), and both were read on the one day named for the sheet. If the sheet ran past midnight this row belongs to the next day: leave it out, or give the sheet a date column.",
           "AlreadyRecorded": "The log already holds this report, and overwriting was not allowed.",
           "AlreadyRecordedSeveralTimes": "The log holds more than one report for this person at this moment, so which one the row corrects cannot be decided. Settle it on the tracking tab first.",
           "DateOrderConflict": "The file's dates argue both ways about which number is the day; the reading shown was chosen for the whole file."
@@ -2752,6 +2791,8 @@
     "movie": {
       "legendTripTeam": "{{trip}} · {{team}}",
       "legendMore": "+ {{count}} more",
+      "legendTripColoursRepeat": "Trip colours repeat",
+      "legendTeamColoursRepeat": "Team colours repeat",
       "noteBy": "{{name}}: {{note}}",
       "clockElapsed": "Elapsed {{time}}",
       "previewLoading": "Loading the model for the preview…",
@@ -2770,6 +2811,7 @@
       },
       "tripsHint": "Tick the trips the movie shows. Each keeps its colour in the order you tick them.",
       "tripReports": "Reports: {{reports}}",
+      "tripLive": "Still under way · new reports since opening: {{count}}",
       "noTrackedTrips": "No trip has been tracked on this model yet.",
       "trackedLoadError": "The trips tracked on this model could not be read.",
       "tripsLoadError": "A chosen trip's tracking could not be read.",
@@ -2811,6 +2853,7 @@
       "qualityHelpGif": "Colours in the palette: 64, 128 or 256.",
       "qualityHelpVideo": "Bits spent per frame: higher is sharper and larger.",
       "summary": "{{frames}} frames · about {{size}}",
+      "summaryCalibrated": "{{frames}} frames · about {{size}}, going by the last GIF made here",
       "gifTooLarge": "At about {{size}} this GIF is larger than most messaging apps take. Make it shorter, smaller or slower, lower its quality, stop the turn, or make a video instead.",
       "rotation": "Turn the model",
       "rotationMode": "How far",
@@ -2939,6 +2982,13 @@
       "progressElapsed": "{{elapsed}} elapsed",
       "progressTimes": "{{elapsed}} elapsed · about {{remaining}} left",
       "saved": "Saved {{name}}",
+      "fileNamed": "The file will be saved as {{name}}",
+      "closeWhileExporting": {
+        "title": "Stop making the movie?",
+        "body": "The export is still running. If you close now, the frames drawn so far are thrown away and no file is saved.",
+        "stop": "Stop and close",
+        "keep": "Keep going"
+      },
       "exportFailed": "The movie could not be made.",
       "videoTooLong": "This video renders every one of its frames, in software on a computer without a graphics card, and may take a long time to export. A shorter length, a lower frame rate or a smaller size is quicker.",
       "layersMissing": "Greyed layers: this model has none of them.",
@@ -3680,6 +3730,7 @@
     },
     "columnPosition": "Last reported at",
     "positionSince": "Reported {{since}}",
+    "positionAt": "Reported at {{clock}}",
     "columnLastHeard": "Last heard",
     "positionMaybeWithheld": "Not shown, or not reported",
     "positionUnreported": "No position reported",
@@ -3695,11 +3746,33 @@
     "withheldBody": "At least one position on this trip was reported against a cave that is not published. Those people are listed, but not placed.",
     "staleTitle": "This page has stopped refreshing",
     "staleBody": "The trip could not be read just now — the connection may have dropped. What is below is the last word this page was given, and it starts refreshing again by itself as soon as it can.",
+    "staleBodySince": "The trip could not be read just now — the connection may have dropped. What is below is the last word this page was given, {{since}}, and it starts refreshing again by itself as soon as it can.",
+    "staleLine": "Not refreshing — last read {{since}}",
     "unreachableTitle": "The trip could not be read just now",
     "unreachableBody": "This phone or computer could not reach the server — check the connection and try again. Nothing here says anything about the link itself.",
     "retry": "Try again",
     "endedTitle": "This link has stopped answering",
     "endedBody": "It may have been taken back, or the trip's publication may have ended. What is below is the last word this page was given, and it will not be refreshed again.",
+    "endedBodyAt": "It may have been taken back, or the trip's publication may have ended. What is below is the last word this page was given, at {{clock}}, and it will not be refreshed again.",
+    "since": {
+      "running": "Followed since {{clock}} · {{duration}}",
+      "started": "Following started {{clock}}",
+      "span": "Followed {{span}}"
+    },
+    "updated": {
+      "running": "Page updated {{since}}",
+      "settled": "Last read at {{clock}}"
+    },
+    "about": {
+      "line": "Each place below is where somebody was last reported, at the time beside it — word is passed out of the cave and typed in by a person. It is not a live position.",
+      "title": "How this page works",
+      "body": "Nobody is tracked by a device underground. A place appears here when a party passes word to the surface and somebody types it in, so it says where a person was at that time, not where they are this minute. Long gaps are normal: there is no signal in a cave, and word gets out only from a telephone point or from the entrance. A gap means nobody has passed word yet. It does not mean anything has happened."
+    },
+    "language": {
+      "name": "English",
+      "short": "EN",
+      "switchTo": "Show this page in English"
+    },
     "embedNoModel": "There is no survey drawing to show for this trip.",
     "past": {
       "sectionTitle": "Past trips in this cave",
@@ -3737,7 +3810,13 @@
       "speed": "{{value}}×",
       "scrub": "Moment of the trip",
       "reportPrevious": "Previous report",
-      "reportNext": "Next report"
+      "reportNext": "Next report",
+      "copyMoment": "Copy link to this moment",
+      "copyPlaying": "Copy link that plays from here",
+      "copiedMoment": "Link copied. It opens this trip at {{when}}.",
+      "copiedPlaying": "Link copied. It opens this trip at {{when}} and starts playing.",
+      "copyRefused": "This browser did not allow copying. The link is below: select it and copy it by hand.",
+      "copyByHand": "Link to this moment"
     },
     "live": {
       "heading": "Being followed now",
@@ -5933,5 +6012,90 @@
     "replacePin": "Re-place",
     "pinSaved": "Point saved for {{station}}.",
     "pinDeleted": "Point deleted."
+  },
+  "publishedTrips": {
+    "title": "Published trips",
+    "intro": "Every follow link this installation has handed out, and what each one opens for whoever holds it. A link stays listed after it has been taken back, for as long as its trip exists.",
+    "asOf": "Statuses as of {{when}}.",
+    "refresh": "Refresh",
+    "namesShown": "The published pages of this installation show the party's real names.",
+    "namesHidden": "The published pages of this installation show places in the party, not people's names.",
+    "archiveOff": "Past trips are switched off here, so no link is in the archive: once a trip's own page has closed, its link opens nothing.",
+    "anyStatus": "Any status",
+    "empty": "Nothing has been published on this installation.",
+    "emptyFiltered": "No link has this status.",
+    "unavailable": "The list of published links could not be read.",
+    "failed": "That could not be completed. Refresh the list to see which links still stand.",
+    "irreversible": "This cannot be undone.",
+    "noCave": "No cave",
+    "unnamedCave": "Unnamed cave",
+    "unknownPublisher": "Account no longer shown",
+    "revokedAt": "Taken back {{when}}",
+    "statuses": {
+      "followable": "Followed now",
+      "inGrace": "Just closed",
+      "inArchive": "In the archive",
+      "withheld": "Withheld",
+      "lapsed": "Opens nothing",
+      "revoked": "Taken back"
+    },
+    "statusHelp": {
+      "followable": "The watch is running and the link shows the party as it is reported.",
+      "inGrace": "The watch has been closed. For a short while the link still opens the page, which says everybody is out.",
+      "inArchive": "The trip is over. The link opens it, and the other finished trips of its cave, as history.",
+      "withheld": "The link would open something were it not for its cave: the watch has lost its cave, or the cave's position is now protected. It answers like an unknown link for as long as that holds, and no longer.",
+      "lapsed": "Nobody took the link back, and it opens nothing: it ran out, its watch was stood down, or the archive no longer covers its trip.",
+      "revoked": "Somebody took the link back. It opens nothing and never will again."
+    },
+    "columns": {
+      "status": "Status",
+      "trip": "Trip",
+      "tripDate": "Trip date",
+      "cave": "Cave",
+      "publishedBy": "Published by",
+      "createdAt": "Published",
+      "expiresAt": "Runs out",
+      "handle": "Log code",
+      "handleHelp": "The short code the request log writes in place of a link's address, so a line in the log can be matched with a row here. It opens nothing."
+    },
+    "refused": {
+      "title": "For full administrators only",
+      "text": "This page lists every published trip of the installation, across every trip's own access rules, and can take all of them back. It is open to full administrators and to nobody else."
+    },
+    "bounds": {
+      "tag": "Protected cave nearby?",
+      "title": "A protected cave stands inside the area of a published survey",
+      "explain": "The position of a protected cave other than the trip's own, or of one of its entrances, lies inside the rectangle spanned by the stations of the survey this link hands out. This is a check by position only and cannot see inside the survey file: the survey may not enter that cave at all, and a survey that does can pass unmarked. Nothing was refused — open the survey and judge whether the link should stay."
+    },
+    "actions": {
+      "replace": "Replace link",
+      "unpublishTrip": "Unpublish this trip",
+      "unpublishEverything": "Unpublish everything"
+    },
+    "replace": {
+      "title": "Replace this link?",
+      "stops": "The old address stops answering at once. Wherever it has been pasted — a message, an article, a website block — it opens nothing from now on.",
+      "keeps": "A fresh address is shown here, once. It runs out when the old one would have, the trip stays in its cave's list of past trips, and nobody on the trip is told."
+    },
+    "replaced": {
+      "title": "The new address is ready",
+      "once": "Copy it now — this is the only time it is shown. The old address no longer answers.",
+      "expires": "It runs out on {{when}}, as the old one would have.",
+      "done": "I have copied it"
+    },
+    "trip": {
+      "title": "Unpublish this trip?",
+      "stops": "Every follow link of this trip is taken back at once. Anybody holding one stops being able to open the page.",
+      "leavesHistory": "The trip also leaves its cave's public list of past trips. A finished trip is published again only by starting its watch again.",
+      "done": "Links taken back: {{links}}"
+    },
+    "everything": {
+      "title": "Unpublish everything?",
+      "stops": "Every follow link of this installation is taken back at once — every trip, every cave. Links still standing: {{links}}. Every published page stops answering, on this installation and on any website showing one.",
+      "leavesHistory": "Every cave's public list of past trips empties. A finished trip is published again only by starting its watch again, one trip at a time.",
+      "typeWord": "To go on, type {{word}} below.",
+      "word": "UNPUBLISH",
+      "done": "Links taken back: {{links}} · Trips: {{trips}}"
+    }
   }
 }

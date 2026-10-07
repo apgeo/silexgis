@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Globalization;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Surveys;
 using SilexGis.Domain.Trips;
@@ -175,6 +176,20 @@ public static class TrackingCsvPlanner
         // other as already recorded by a row the log never held. Both rows are told about it.
         var claimed = new Dictionary<(Guid, DateTimeOffset), TrackingCsvPlannedReport>();
 
+        // The latest instant so far among the rows whose day the importer named, and the line it
+        // is on. A row further down that falls before it is, in a sheet kept in order, a row
+        // written after midnight and filed on the day before. Measured against the latest instant
+        // rather than against the row just above, so that every row after the midnight is told,
+        // not only the first: 23:50, 00:30, 01:10 is two rows on the wrong day.
+        //
+        // One clock for the sheet and not one per person, because the midnight is the sheet's: a
+        // second party that goes in at 00:30 has no earlier row of its own to be measured against,
+        // and its first row is exactly as much on the wrong day as anybody else's. The price is a
+        // sheet typed person by person, each from the morning again, where rows are told that
+        // crossed no midnight; that is a warning to read past, against a report filed a day early
+        // with nothing said.
+        (DateTimeOffset At, int Line)? latestOnNamedDay = null;
+
         foreach (var row in rows)
         {
             if (!row.Importable)
@@ -195,6 +210,23 @@ public static class TrackingCsvPlanner
             }
 
             var rowNotes = row.Diagnostics.Where(d => d.Severity == TrackingCsvSeverity.Warning).ToList();
+
+            if (row.OnNamedDay)
+            {
+                if (latestOnNamedDay is { } latest && row.At.Value < latest.At)
+                {
+                    // Imported where the importer said the sheet was, and told: moving the row to
+                    // the next day would be right for a sheet that crossed midnight and wrong for
+                    // one typed out of order, and the two cannot be told apart here.
+                    rowNotes.Add(new TrackingCsvDiagnostic(
+                        TrackingCsvSeverity.Warning, TrackingCsvProblem.ClockRunsBackwards,
+                        row.Line, Detail: latest.Line.ToString(CultureInfo.InvariantCulture)));
+                }
+                else
+                {
+                    latestOnNamedDay = (row.At.Value, row.Line);
+                }
+            }
 
             var (teamId, teamProblem) = MatchTeam(row.Team, subject.Teams);
             if (teamProblem is { } teamTrouble)

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Buffers.Text;
+using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
@@ -90,6 +92,14 @@ public static class TripTrackingPublicationEndpoints
             .WithSummary("The trip's follow links — metadata only, never tokens (trip write access).");
         shares.MapDelete("/{shareId:guid}", RevokeAsync)
             .WithSummary("Revoke a follow link (trip write access); idempotent.");
+        shares.MapPost("/{shareId:guid}/replace", ReplaceAsync)
+            .WithSummary("Replace a follow link in one act: the old address stops answering and a fresh one is returned, once.")
+            .WithDescription(
+                "For whoever may publish the trip: trip write access plus the right to share the trip's "
+                + "cave, and a cave whose position is protected is refused as it is at publishing. The "
+                + "fresh link runs out when the old one would have, and nobody is told, because nothing "
+                + "new is published. The watch need not be running, so a finished trip's link can be "
+                + "replaced. A link that was already taken back cannot: 409 tracking.share_revoked.");
 
         // The token IS the credential, so this route sits on the anonymous allow-list. What it
         // answers is a self-contained envelope built here and nowhere else, and the publication
@@ -128,6 +138,16 @@ public static class TripTrackingPublicationEndpoints
     /// </remarks>
     private const string CaveRefusedCode = "tracking.publication_refused_cave";
 
+    /// <summary>
+    /// The link somebody asked to replace has been taken back, so there is nothing to exchange.
+    /// </summary>
+    /// <remarks>
+    /// Answered on the management route only, to somebody who may already list this trip's links
+    /// and read which of them were taken back — it says nothing the list does not. The published
+    /// routes never answer it: there a link taken back is an unknown one.
+    /// </remarks>
+    internal const string ShareRevokedCode = "tracking.share_revoked";
+
     // ---- management ----------------------------------------------------------------------
 
     private static async Task<Results<Created<TripTrackingShareCreatedDto>, ProblemHttpResult>> MintAsync(
@@ -157,6 +177,11 @@ public static class TripTrackingPublicationEndpoints
                 "A follow link opens a page only while the watch is running, so arm it before publishing.");
         }
 
+        // Asked before anything is written, so that a link is never left standing whose only
+        // answer — the one carrying its token — was lost to a fault in a warning.
+        var reachesProtectedCave = await PublishedSurveyBounds.ReachesProtectedCaveAsync(
+            db, protection, ctx!, tracking.SurveyModelId, tracking.CaveFeatureId, ct);
+
         // 32 random bytes, base64url-encoded, become the URL token; only its SHA-256 is stored,
         // so a database leak cannot resurrect live links and the token cannot be shown again.
         var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
@@ -181,7 +206,8 @@ public static class TripTrackingPublicationEndpoints
 
         return TypedResults.Created(
             $"/api/v1/trip-logs/{tripLogId}/tracking/shares/{share.Id}",
-            new TripTrackingShareCreatedDto(share.Id, token, share.CreatedAt, share.ExpiresAt));
+            new TripTrackingShareCreatedDto(
+                share.Id, token, share.CreatedAt, share.ExpiresAt, reachesProtectedCave));
     }
 
     private static async Task<Results<Ok<List<TripTrackingShareDto>>, ProblemHttpResult>> ListAsync(
@@ -227,6 +253,136 @@ public static class TripTrackingPublicationEndpoints
         }
 
         return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// Exchanges one link for a fresh one: the old address stops answering in the same act that
+    /// the new one starts.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>What it is for.</b> An address that has ended up somewhere it should not be. Until now
+    /// the cure took two acts in the right order — hand out a second link, then take the first
+    /// back — and for a finished trip it took a third, because a link is only handed out while the
+    /// watch is running: restart the watch, publish, close it again. Done in the other order, or
+    /// abandoned halfway, the trip dropped out of its cave's history. What may be replaced, and why
+    /// the fresh link keeps the old one's expiry, is argued where the rule lives:
+    /// <see cref="TripPublicationWindow.MayBeReplaced"/>.
+    /// </para>
+    /// <para>
+    /// <b>Who may.</b> Whoever may publish this trip now, asked exactly as publishing asks it — the
+    /// trip's write access, the right to share its cave, and a cave under no protection. The new
+    /// address hands over the same drawing the old one did, so somebody who could not hand it out
+    /// today may not hand it out under another name either; they can still take the link back,
+    /// which needs only the trip. A full administrator passes every one of those questions, which
+    /// is what lets the installation's own list offer this same act for any trip.
+    /// </para>
+    /// <para>
+    /// <b>Not asked: that the watch is running.</b> Publishing asks it because a link minted for a
+    /// watch that is over is an address that has never worked. A replacement stands in for an
+    /// address that does work, or did, and inherits its window to the second.
+    /// </para>
+    /// <para>
+    /// <b>Nobody is told.</b> The people on the trip were told when it was published, and it is no
+    /// more published now than it was a moment ago.
+    /// </para>
+    /// <para>
+    /// <b>Two people replacing the same link at once get one address between them.</b> The link is
+    /// read and written inside one transaction at repeatable read, so of two requests that both
+    /// read it as standing, the second to write is refused by the database instead of quietly
+    /// succeeding — and is answered as it would have been had it arrived a moment later: the link
+    /// has been taken back. Without that, each would mint an address and one trip would be left
+    /// with two, one of them known to nobody who thinks they hold the only one.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Created<TripTrackingShareCreatedDto>, ProblemHttpResult>> ReplaceAsync(
+        Guid tripLogId, Guid shareId, SilexGisDbContext db, IAccessService access, FeatureProtection protection,
+        IAccessContextAccessor accessAccessor, TimeProvider clock, CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
+        var refusal = ctx is null
+            ? ApiProblems.NotFound("trip_log.not_found")
+            : await TripTrackingEndpoints.WriteGuardAsync(access, ctx, trip, ct);
+        if (refusal is not null) return refusal;
+
+        if (await PublicationRefusalAsync(db, access, protection, ctx!, tripLogId, ct) is { } refused) return refused;
+
+        // The fresh address hands out the same survey the old one did, so it carries the same
+        // warning the old one was handed out with — asked again, because what lies near the
+        // survey may have been protected since. Before the transaction: it writes nothing.
+        var watch = await db.TripTrackings.AsNoTracking()
+            .Where(t => t.TripLogId == tripLogId)
+            .Select(t => new { t.SurveyModelId, t.CaveFeatureId })
+            .FirstOrDefaultAsync(ct);
+        var reachesProtectedCave = await PublishedSurveyBounds.ReachesProtectedCaveAsync(
+            db, protection, ctx!, watch?.SurveyModelId, watch?.CaveFeatureId, ct);
+
+        var alreadyTakenBack = ApiProblems.Conflict(ShareRevokedCode,
+            "This link has already been taken back, so there is nothing to replace. Publish the trip again instead.");
+
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+
+        var old = await db.TripTrackingShares
+            .FirstOrDefaultAsync(s => s.Id == shareId && s.TripLogId == tripLogId, ct);
+        if (old is null) return ApiProblems.NotFound(NotFoundCode);
+        if (!TripPublicationWindow.MayBeReplaced(old.RevokedAt)) return alreadyTakenBack;
+
+        var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
+        var fresh = new TripTrackingShare
+        {
+            TripLogId = tripLogId,
+            TokenHash = HashToken(token),
+            CreatedBy = ctx!.UserId,
+            // The old link's, to the tick: a replacement extends nothing.
+            ExpiresAt = old.ExpiresAt,
+        };
+        old.RevokedAt = clock.GetUtcNow();
+        db.TripTrackingShares.Add(fresh);
+
+        try
+        {
+            // Both rows in one save, and through the tracked entities rather than a set-based
+            // update, so each leaves the same trail a link handed out or taken back on its own
+            // leaves.
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch (Exception e) when (IsConcurrentUpdate(e))
+        {
+            // Somebody else's replacement or revocation of this same link committed after this
+            // request read it. Nothing of this one was written.
+            return alreadyTakenBack;
+        }
+
+        return TypedResults.Created(
+            $"/api/v1/trip-logs/{tripLogId}/tracking/shares/{fresh.Id}",
+            new TripTrackingShareCreatedDto(
+                fresh.Id, token, fresh.CreatedAt, fresh.ExpiresAt, reachesProtectedCave));
+    }
+
+    /// <summary>
+    /// Whether a save failed because a row it meant to change was changed by a transaction that
+    /// committed after this one took its snapshot — what the database answers at repeatable read
+    /// in place of letting the later write win.
+    /// </summary>
+    /// <remarks>
+    /// Looked for through the whole chain of causes rather than at a fixed depth. How many layers
+    /// sit between the database's answer and the caller is the persistence library's business and
+    /// no contract: looked for only on the exception itself and its immediate cause, it was not
+    /// found, and the losing request of two was answered with a server fault.
+    /// </remarks>
+    internal static bool IsConcurrentUpdate(Exception e)
+    {
+        for (var each = e; each is not null; each = each.InnerException)
+        {
+            if (each is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // ---- the published read ----------------------------------------------------------------

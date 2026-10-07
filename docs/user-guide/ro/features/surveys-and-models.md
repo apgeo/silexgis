@@ -276,4 +276,5 @@ Toate acestea sunt pe pagina
 ---
 
 Înrudite: [Vizualizarea 3D](3d-view.md) · [Peșteri și intrări](caves-and-entrances.md) ·
-[Măsurători și statistici](measurements-and-statistics.md)
+[Măsurători și statistici](measurements-and-statistics.md) ·
+[Un film al unei ture urmărite](tracking-movie.md) — butonul cu cameră de pe rândul unei ridicări

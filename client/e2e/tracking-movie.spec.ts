@@ -21,7 +21,12 @@ import { settledPicture } from './settled.ts';
  * pass whatever that code got wrong.
  *
  * <b>Tiny on purpose.</b> This browser draws WebGL in software, so every frame is a real render
- * that takes real time; two seconds at the smallest size is enough to prove the path end to end.
+ * that takes real time; four seconds at the smallest size is enough to prove the path end to end.
+ * The one long export here is started only to be asked about and called off.
+ *
+ * <b>The pointer is left on the preview and the form is worked from the keyboard.</b> The viewer
+ * takes keys from the whole document while the pointer rests on it, which is exactly where a
+ * reader's pointer is while they look at what they are about to export.
  */
 
 /** Stations of the committed survey fixture the parties are reported at. */
@@ -85,12 +90,33 @@ function numberBox(dialog: Locator, testId: string): Locator {
   return dialog.locator(`input[data-testid="${testId}"], [data-testid="${testId}"] input`).first();
 }
 
-async function setNumber(dialog: Locator, testId: string, value: number) {
+/**
+ * Types a number into one of the form's boxes, key by key and without touching the mouse — so the
+ * pointer stays wherever the test left it, and the digits are real key presses that anything
+ * listening on the page gets its chance to take.
+ */
+async function typeNumber(page: Page, dialog: Locator, testId: string, value: number) {
   const box = numberBox(dialog, testId);
-  await box.fill(String(value));
-  await box.press('Tab');
+  await box.focus();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.type(String(value));
+  await page.keyboard.press('Tab');
+  await expect(box).not.toBeFocused();
   // Read as a number: a box stepping by halves shows 0 as "0.0".
   await expect(box).toHaveAttribute('aria-valuenow', String(value));
+}
+
+/** Opens one of the settings form's folded groups by its heading. */
+async function openGroup(dialog: Locator, heading: string) {
+  const header = dialog.locator('.ant-collapse-header').filter({ hasText: heading });
+  await header.click();
+  await expect(header).toHaveAttribute('aria-expanded', 'true');
+}
+
+/** The file name the dialog says the movie will be saved under. */
+async function shownFileName(dialog: Locator): Promise<string> {
+  const line = (await dialog.getByTestId('movie-file-name').textContent()) ?? '';
+  return /silexgis-[^\s]+\.(gif|webm|mp4)/.exec(line)?.[0] ?? '';
 }
 
 /**
@@ -272,6 +298,11 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   }));
   expect(drawnIn.surface).toEqual(drawnIn.box);
 
+  // Every file the page hands over from here on is counted: an export that was called off must
+  // not have saved anything.
+  let downloads = 0;
+  page.on('download', () => downloads++);
+
   const firstRow = dialog.getByTestId(`movie-trip-${first.id}`);
   const secondRow = dialog.getByTestId(`movie-trip-${second.id}`);
   await expect(firstRow.getByRole('checkbox')).toBeChecked({ timeout: 30_000 });
@@ -279,17 +310,110 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   await secondRow.getByRole('checkbox').check();
   await expect(secondRow.getByRole('checkbox')).toBeChecked();
 
-  // ---- A tiny GIF: the smallest frame, ten frames a second, two seconds, no hold ----
+  // ---- A tiny GIF: the smallest frame, ten frames a second, four seconds, no hold ----
   await expect(dialog.getByTestId('movie-format-gif')).toBeEnabled();
   await choose(page, dialog, 'movie-size', '320 × 180');
   await choose(page, dialog, 'movie-fps', '10');
-  await setNumber(dialog, 'movie-duration', 2);
-  await setNumber(dialog, 'movie-hold', 0);
-  await expect(dialog.getByTestId('movie-summary')).toContainText('20 frames');
+  await openGroup(dialog, 'Captions');
+  // ---- Keys pressed on the dialog's controls are the dialog's, wherever the pointer rests ----
+  // The viewer listens for keys on the whole document for as long as the pointer is over it, and
+  // has a shortcut on most letters and every digit. So the pointer is left resting on the preview
+  // from here on, and everything below is typed: a digit that changed the preview's shading
+  // instead of the number in the box, or a Tab that left the focus where it was, fails here.
+  await dialog.getByTestId('movie-preview').hover();
+  await typeNumber(page, dialog, 'movie-hold', 0);
+
+  // ---- Escape while the frames are being drawn asks; it does not throw the export away ----
+  // Asked of an export far too long to end while the question is up: three hundred frames, of
+  // which only the first few are ever drawn. One short enough to be worth finishing could be over
+  // before the second key, and then Escape would rightly close a dialog that had nothing running.
+  await typeNumber(page, dialog, 'movie-duration', 30);
+  await expect(dialog.getByTestId('movie-summary')).toContainText('300 frames');
+  await expect(dialog.getByTestId('movie-export')).toBeEnabled({ timeout: 60_000 });
+  await dialog.getByTestId('movie-export').click();
+  await page.keyboard.press('Escape');
+  const question = page.locator('.ant-modal-confirm').filter({ hasText: 'Stop making the movie?' });
+  await expect(question).toBeVisible();
+  // It opens on the answer that loses nothing.
+  await expect(question.getByRole('button', { name: 'Keep going' })).toBeFocused();
+  // Escape again answers the question, and only the question: the dialog under it stays, and the
+  // export goes on being made — its bar moves on past where it stood.
+  await page.keyboard.press('Escape');
+  await expect(question).toBeHidden();
+  await expect(dialog).toBeVisible();
+  const bar = dialog.getByTestId('movie-progress').getByRole('progressbar');
+  const reached = Number(await bar.getAttribute('aria-valuenow'));
+  await expect
+    .poll(async () => Number(await bar.getAttribute('aria-valuenow')), {
+      message: 'the export did not go on after the question was answered',
+      timeout: 60_000,
+    })
+    .toBeGreaterThan(reached);
+  // The button that says what it does stops the export at once and asks nothing: no question, no
+  // failure, no file.
+  await dialog.getByTestId('movie-cancel').click();
+  await expect(dialog.getByTestId('movie-progress')).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator('.ant-modal-confirm')).toHaveCount(0);
+  await expect(dialog.getByTestId('movie-export-failed')).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+  expect(downloads).toBe(0);
+
+  await dialog.getByTestId('movie-preview').hover();
+  await typeNumber(page, dialog, 'movie-duration', 4);
+  await expect(dialog.getByTestId('movie-summary')).toContainText('40 frames');
+  // Tab from a button, which the viewer does not leave alone by itself as it does a text box: the
+  // focus moves on to the next control, the slider's handle, and back again with Shift.
+  const play = dialog.getByTestId('movie-play');
+  await expect(play).toBeEnabled();
+  await play.focus();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByTestId('movie-position').getByRole('slider')).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(play).toBeFocused();
+  // The X in the corner is drawn outside the dialog's body and is the dialog's all the same: with
+  // the pointer still on the preview, Tab leaves it and Shift+Tab comes back to it. Left to the
+  // viewer, both keys were cancelled there and the focus could not be moved off the X at all.
+  const corner = dialog.locator('.ant-modal-close');
+  await corner.focus();
+  await expect(corner).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(corner).not.toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(corner).toBeFocused();
+  // And Space presses the focused button rather than turning the model under it. The focus goes
+  // back to the play button first: Space on the X would press that, and close the dialog.
+  await play.focus();
+  await expect(play).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(play).toHaveAttribute('aria-label', 'Stop the preview');
+  await page.keyboard.press('Space');
+  await expect(play).toHaveAttribute('aria-label', 'Play the preview');
+
+  // ---- The name the file will be saved under is on screen before anything is made ----
+  const fileName = dialog.getByTestId('movie-file-name');
+  // The title caption starts on, and the title of a movie of two trips is the cave's name.
+  await expect(fileName).toContainText(new RegExp(`silexgis-e2e-movie-cave-${stamp}-\\d{4}-\\d{2}-\\d{2}\\.gif`));
+  // A title the reader writes names the file as it titles the picture. Typed with the pointer
+  // still on the preview: letters, a space and digits all have to arrive.
+  const titleText = dialog.getByTestId('movie-title-text');
+  await titleText.focus();
+  await page.keyboard.type('E2E Dig 42');
+  await expect(titleText).toHaveValue('E2E Dig 42');
+  await expect(fileName).toContainText(/silexgis-e2e-dig-42-\d{4}-\d{2}-\d{2}\.gif/);
+  // With the title caption off nothing in the picture names the cave or the trip, and neither does
+  // the file. The switch is a button, pressed from the keyboard like the rest.
+  const titleSwitch = dialog.getByTestId('movie-caption-title');
+  await titleSwitch.focus();
+  await page.keyboard.press('Space');
+  await expect(titleSwitch).toHaveAttribute('aria-checked', 'false');
+  await expect(fileName).toContainText(/silexgis-movie-\d{4}-\d{2}-\d{2}\.gif/);
+  const gifNamed = await shownFileName(dialog);
   await expect(dialog.getByTestId('movie-export')).toBeEnabled({ timeout: 60_000 });
 
   const gif = await exportMovie(page, dialog);
-  expect(gif.name).toMatch(/^silexgis-[a-z0-9-]+-\d{4}-\d{2}-\d{2}\.gif$/);
+  // Saved under the name the dialog showed, which names neither the cave nor a trip.
+  expect(gif.name).toMatch(/^silexgis-movie-\d{4}-\d{2}-\d{2}\.gif$/);
+  expect(gif.name).toBe(gifNamed);
   expect(gif.bytes.subarray(0, 6).toString('latin1')).toBe('GIF89a');
   const decoded = await page.evaluate(async (base64: string) => {
     const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
@@ -311,7 +435,7 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   }, gif.bytes.toString('base64'));
   // Every frame differs from the one before — the camera turns and the progress bar grows — so
   // none is merged into its neighbour and the browser counts exactly the frames the dialog said.
-  expect(decoded).toEqual({ frames: 20, width: 320, height: 180 });
+  expect(decoded).toEqual({ frames: 40, width: 320, height: 180 });
 
   // ---- A tiny WebM, which a <video> element has to find a length in ----
   await expect(dialog.getByTestId('movie-format-webm')).toBeEnabled({ timeout: 30_000 });
@@ -320,9 +444,15 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   await dialog.locator('label').filter({ has: page.getByTestId('movie-format-webm') }).click();
   await expect(dialog.getByTestId('movie-format-webm')).toBeChecked();
   await expect(dialog.getByTestId('movie-size')).toContainText('320 × 180');
+  // The title caption back on: the title written earlier is in the picture again, and in the name.
+  await titleSwitch.click();
+  await expect(titleSwitch).toHaveAttribute('aria-checked', 'true');
+  await expect(fileName).toContainText(/silexgis-e2e-dig-42-\d{4}-\d{2}-\d{2}\.webm/);
+  const webmNamed = await shownFileName(dialog);
   await expect(dialog.getByTestId('movie-export')).toBeEnabled({ timeout: 30_000 });
   const webm = await exportMovie(page, dialog);
-  expect(webm.name).toMatch(/^silexgis-[a-z0-9-]+-\d{4}-\d{2}-\d{2}\.webm$/);
+  expect(webm.name).toMatch(/^silexgis-e2e-dig-42-\d{4}-\d{2}-\d{2}\.webm$/);
+  expect(webm.name).toBe(webmNamed);
   // The EBML header's magic.
   expect(webm.bytes.subarray(0, 4).toString('hex')).toBe('1a45dfa3');
   const played = await page.evaluate(async (base64: string) => {
@@ -344,13 +474,19 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
     }
   }, webm.bytes.toString('base64'));
   expect(Number.isFinite(played.duration)).toBe(true);
-  expect(played.duration).toBeGreaterThan(1.5);
-  expect(played.duration).toBeLessThan(2.5);
+  expect(played.duration).toBeGreaterThan(3.5);
+  expect(played.duration).toBeLessThan(4.5);
   expect({ width: played.width, height: played.height }).toEqual({ width: 320, height: 180 });
 
+  expect(downloads).toBe(2);
+
   // ---- Closing the dialog leaves the panel's own viewer as it was ----
-  await dialog.locator('.movie-dialog-footer').getByRole('button', { name: 'Close', exact: true }).click();
+  // Closed by Escape with the pointer back on the preview — where the viewer has every key first —
+  // and with nothing being exported, so there is nothing to ask about.
+  await dialog.getByTestId('movie-preview').hover();
+  await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
+  await expect(page.locator('.ant-modal-confirm')).toHaveCount(0);
   // The panel redraws from under the dialog some frames after it has gone, so its picture is taken
   // until it is the one from before — which it never becomes if making the movie moved this
   // viewer's camera or its markers.
@@ -374,4 +510,11 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   await expect(fromCave.getByTestId('movie-export')).toBeDisabled();
   // The settings chosen for the last movie were remembered by this browser.
   await expect(fromCave.getByTestId('movie-format-webm')).toBeChecked();
+  // Closed from the keyboard on the X, with the pointer resting on a preview that has its survey —
+  // which is when the viewer takes every key it is left, Enter among them.
+  await expect(fromCave.getByTestId('movie-preview')).toHaveAttribute('data-status', 'ready', { timeout: 90_000 });
+  await fromCave.getByTestId('movie-preview').hover();
+  await fromCave.locator('.ant-modal-close').focus();
+  await page.keyboard.press('Enter');
+  await expect(fromCave).toBeHidden();
 });

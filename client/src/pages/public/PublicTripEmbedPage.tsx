@@ -12,7 +12,7 @@ import {
 import { HistoryOutlined } from '@ant-design/icons';
 import { Alert, Button, Drawer, Flex, Skeleton, Spin, Tabs, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { isSettledRefusal } from '../../api/client.ts';
 import { usePublicLiveTrips, usePublicPastTrips, usePublicTrip } from '../../api/hooks.ts';
 import CaveViewPanel, {
@@ -21,11 +21,13 @@ import CaveViewPanel, {
 import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
+import { useNow } from '../../hooks/useNow.ts';
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import { usePublishedSheets } from '../../rastermap/publishedSheets.ts';
 import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import { followedStation, type PastFollow } from './pastTrackReplay.ts';
+import { PAST_LINK_PARAMS, readPastLink } from './pastTripLink.ts';
 import { usePinnedModelUrl } from './pinnedModelUrl.ts';
 import PublicPastBar from './PublicPastBar.tsx';
 import PublicLiveTripList from './PublicLiveTripList.tsx';
@@ -39,8 +41,10 @@ import {
   type EmbedOutboundMessage,
   type EmbedReadyMessage,
 } from './publicTripEmbed.ts';
-import { instantOf } from './publicTripParty.ts';
+import { ageInWords, clockInWords, instantOf } from './publicTripParty.ts';
 import { usePastTripPlayback } from './usePastTripPlayback.ts';
+import PublicLanguageButton from './PublicLanguageButton.tsx';
+import { usePublicLanguage } from './usePublicLanguage.ts';
 import './PublicTripPage.css';
 
 /**
@@ -72,16 +76,23 @@ const TAB_3D = '3d';
  * link in an article can stay correct while the party moves.
  */
 export default function PublicTripEmbedPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const { token: antdToken } = theme.useToken();
   // The refusal is read for two decisions and nothing else. With nothing in hand it decides
   // whether the box says the link opens nothing or that the server could not be reached — the
   // first is an answer, the second is a phone with no signal, and a frame asserting the first on
   // the evidence of the second would be somebody's website calling its own embed dead. With an
-  // envelope in hand a later fault leaves the drawing alone, and only a refusal that is final is
-  // said at all, in one line, because from then on this frame is a picture of the past.
-  const { data, isPending, error, refetch } = usePublicTrip(token);
+  // envelope in hand a later fault leaves the drawing alone, and what is said about it is one
+  // line: that the frame has stopped being refreshed and since when, or — for a refusal that is
+  // final — that the link has stopped answering, because from then on this frame is a picture of
+  // the past.
+  const { data, isPending, error, refetch, dataUpdatedAt } = usePublicTrip(token);
+  // The one clock of this frame: what redraws its age as time passes with no read landing.
+  const present = useNow();
+  // The language the frame's own address names — which is how the article it sits in says what
+  // language it is written in — and the button that changes it for the reader in front of it.
+  const language = usePublicLanguage();
   const [focusRequest, setFocusRequest] = useState<CaveViewFocusRequest | undefined>();
   /**
    * How big the frame's own buttons are drawn: for a finger where a finger drives them, whatever
@@ -194,6 +205,31 @@ export default function PublicTripEmbedPage() {
     tripLogId: pastTripLogId,
     loading: pastLoading,
   } = past;
+
+  /**
+   * What the frame's own address says about the past, in the words the full page's address uses.
+   *
+   * <b>One vocabulary for both, so a link copied on the page means the same thing here.</b> An
+   * editor who wants the frame to open on a moment of an old trip — the article is about that
+   * day — writes `past`, `at` and `play` after the frame's address, exactly as the page's copy
+   * buttons write them, and does not have to learn that the frame only listens to its article.
+   *
+   * Read when what the address says about the past changes and at no other time: the language
+   * button rewrites the same address, and must not wind a replay back to the link's moment. The
+   * frame never writes these itself — its reader's picks and its article's links are not places
+   * in anybody's history — so there is no other half to this reading, and an address naming no
+   * past trip leaves whatever the article has since asked for alone.
+   */
+  const [search] = useSearchParams();
+  const askedOfThePast = PAST_LINK_PARAMS.map((name) => search.get(name) ?? '\u0000').join('\u0001');
+  const searchRef = useRef(search);
+  searchRef.current = search;
+  useEffect(() => {
+    const asked = readPastLink(searchRef.current);
+    if (asked !== null) {
+      openPast(asked.tripLogId, { at: asked.at, follow: asked.follow, play: asked.play });
+    }
+  }, [askedOfThePast, openPast]);
 
   const followStation = followedStation(cavers, past.follow);
   useEffect(() => {
@@ -553,7 +589,7 @@ export default function PublicTripEmbedPage() {
             : kind === 'caver'
               ? { kind: 'caver', id: ref }
               : null;
-        openPast(tripRef, { at: askedAt, follow });
+        openPast(tripRef, { at: askedAt, follow, play: inbound.play });
         // A *place* named alongside one is the other half of the same sentence, and it is held
         // rather than dropped: the trip's survey is not on screen yet, so the move is made when it
         // is, and the answer sent then is the drawing's own.
@@ -566,6 +602,14 @@ export default function PublicTripEmbedPage() {
         // the next `ready`, which names the trip on screen and the party in it.
         settled(true);
         return;
+      }
+      if (inbound.play && pastTripLogId !== null) {
+        // A link that also says to play, over the replay already on screen: its clock is started
+        // where it stands, or — the request being held as a moment is — where the rest of this
+        // press puts it, once there is a track to play. Over the trip being followed now there is
+        // no clock to start, and the word is left alone rather than answered with a refusal: the
+        // rest of the link still means what it meant.
+        openPast(pastTripLogId, { play: true });
       }
       if (pastEngaged && (kind === 'team' || kind === 'caver')) {
         // Within the trip already on screen. Over a replay, "show me Ana" means keep up with Ana as
@@ -678,10 +722,16 @@ export default function PublicTripEmbedPage() {
     ? 'public-trip-embed public-trip-embed-past'
     : 'public-trip-embed';
 
+  // The one sentence in a frame with nothing to show is the one its reader most needs to be able
+  // to read, and it is all there is: the way into the other language is drawn under it, where the
+  // strip that carries it on a working frame does not exist.
   const failure = (message: string) => (
     <div className="public-trip-embed" style={palette} data-testid="public-trip-embed-failure">
       <div className="public-trip-embed-failure">
-        <Typography.Text type="secondary">{message}</Typography.Text>
+        <Flex vertical align="center" gap="small">
+          <Typography.Text type="secondary">{message}</Typography.Text>
+          <PublicLanguageButton control={language} compact size={controlSize} />
+        </Flex>
       </div>
     </div>
   );
@@ -712,6 +762,7 @@ export default function PublicTripEmbedPage() {
             >
               {t('publicTrip.retry')}
             </Button>
+            <PublicLanguageButton control={language} compact size={controlSize} />
           </Flex>
         </div>
       </div>
@@ -739,6 +790,39 @@ export default function PublicTripEmbedPage() {
         title={t('publicTrip.endedTitle')}
         className="public-trip-embed-ended"
         data-testid="public-trip-ended"
+      />
+    ) : null;
+
+  /**
+   * When this frame last heard from the server, or null where it cannot say. A read that fails
+   * leaves the moment standing, which is what makes it the age of what is drawn.
+   */
+  const readAt = Number.isFinite(dataUpdatedAt) && dataUpdatedAt > 0 ? dataUpdatedAt : null;
+
+  /**
+   * A read that failed and may yet succeed, said in one line with how old the drawing now is.
+   *
+   * <b>A frame that goes on looking live while it is not being refreshed is the worse fault.</b>
+   * It used to say nothing here, on the reasoning that a fault which may clear is not news inside
+   * an article. But the reader of an article has nothing else to go by: the page next door has a
+   * party list with times on it, and this is a drawing with markers, which reads as now for as
+   * long as nothing says otherwise. So it says so — one line, in the place the link's end is
+   * said, gone by itself the moment a read lands, and worded as the frame's own condition rather
+   * than as anything about the trip. Not over a replay: the past is not being refreshed at all.
+   */
+  const stale =
+    error != null && !linkEnded && !past.engaged ? (
+      <Alert
+        type="warning"
+        banner
+        showIcon
+        title={
+          readAt === null
+            ? t('publicTrip.staleTitle')
+            : t('publicTrip.staleLine', { since: ageInWords(readAt, present, i18n.language) })
+        }
+        className="public-trip-embed-ended"
+        data-testid="public-trip-stale"
       />
     ) : null;
 
@@ -815,6 +899,30 @@ export default function PublicTripEmbedPage() {
       >
         {t('publicTrip.past.sectionTitle')}
       </Button>
+      {/* The frame's age, standing: a gap while the trip is being followed and reads are landing,
+          the hour once the watch is closed or the link has ended and nothing will change again.
+          While a read is failing the line above says it, with the same figure. */}
+      <span className="public-trip-embed-strip-end">
+        {readAt !== null && stale === null && (
+          <Typography.Text
+            type="secondary"
+            className="public-trip-embed-updated"
+            data-testid="public-trip-updated"
+          >
+            {data.state !== 'armed' || linkEnded
+              ? t('publicTrip.updated.settled', {
+                  clock: clockInWords(readAt, present, i18n.language),
+                })
+              : t('publicTrip.updated.running', {
+                  since: ageInWords(readAt, present, i18n.language),
+                })}
+          </Typography.Text>
+        )}
+        {/* Two letters, in the strip that is this frame's only chrome. Not drawn while a past trip
+            is playing: that strip is the replay's own controls and has no room left at the
+            narrowest width a frame is given. */}
+        <PublicLanguageButton control={language} compact size={controlSize} />
+      </span>
     </div>
   );
 
@@ -833,6 +941,7 @@ export default function PublicTripEmbedPage() {
       <div className={frameClass} style={palette} data-testid="public-trip-embed">
         <div className="public-trip-embed-pending" data-testid="public-trip-embed-pending" />
         {ended}
+        {stale}
         {strip}
         {archive}
       </div>
@@ -854,6 +963,7 @@ export default function PublicTripEmbedPage() {
           <Typography.Text type="secondary">{t('publicTrip.embedNoModel')}</Typography.Text>
         </div>
         {ended}
+        {stale}
         {strip}
         {archive}
       </div>
@@ -928,6 +1038,7 @@ export default function PublicTripEmbedPage() {
         ]}
       />
       {ended}
+      {stale}
       {strip}
       {archive}
     </div>

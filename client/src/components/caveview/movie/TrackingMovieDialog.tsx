@@ -5,12 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { saveBlob } from '../../../api/download.ts';
 import { useCave, useSurveyModel, useSurveyModelTrackedTrips, type TrackedTrip } from '../../../api/hooks.ts';
-import type {
-  CaveViewer,
-  CaveViewLabelText,
-  CaveViewLiveMarker,
-  Cv2Namespace,
-} from '../../../caveview/loadCaveView.ts';
+import type { CaveViewer, CaveViewLabelText, CaveViewLiveMarker } from '../../../caveview/loadCaveView.ts';
 import { syncLiveMarkers, type DrawnMarker } from '../../../caveview/liveMarkerSync.ts';
 import {
   MOVIE_EXTENSION,
@@ -27,25 +22,36 @@ import {
 import {
   localIsoDate,
   MOVIE_GIF_SIZE_BUDGET,
-  movieFileName,
+  movieEstimateIsCalibrated,
+  movieExportName,
   movieFileSizeEstimate,
+  movieGifCalibrationFrom,
+  normaliseMovieGifCalibration,
 } from '../../../caveview/movie/movieOutput.ts';
 import { movieParty, type MovieParty } from '../../../caveview/movie/movieParty.ts';
 import { isMovieAbort, recordMovie, type MovieProgress } from '../../../caveview/movie/movieRecorder.ts';
 import {
   DEFAULT_MOVIE_SETTINGS,
+  movieSettingsNeedRewriting,
   movieSize,
   normaliseMovieSettings,
   type MovieSettings,
   type MovieViewLayer,
 } from '../../../caveview/movie/movieSettings.ts';
-import { buildMovieTimeline, movieFrameCount, movieFrames } from '../../../caveview/movie/movieTimeline.ts';
+import {
+  buildMovieTimeline,
+  movieFrameCount,
+  movieFrames,
+  movieSpansAt,
+  movieTripIsLive,
+  type MovieTimeline,
+  type MovieTripSpan,
+} from '../../../caveview/movie/movieTimeline.ts';
 import { movieLayersAvailable, settleCamera } from '../../../caveview/movie/movieView.ts';
 import { useUiPrefsStore } from '../../../stores/uiPrefsStore.ts';
 import { formatTripDates } from '../../trips/tripDates.ts';
 import { movieTripDays } from './movieDays.ts';
 import MoviePreviewHost, { type MoviePreviewHandle } from './MoviePreviewHost.tsx';
-import { MOVIE_SHADINGS, type MovieShadingConstant } from './movieChoices.ts';
 import MovieSettingsForm from './MovieSettingsForm.tsx';
 import { useMovieTrips } from './useMovieTrips.ts';
 import './TrackingMovieDialog.css';
@@ -70,7 +76,14 @@ const SettingsForm = memo(MovieSettingsForm);
  *
  * <b>An export can take minutes and can be called off.</b> Every frame is rendered on demand, in
  * software on some machines, so the dialog says how far it has got and how long it has left, and
- * Cancel — or closing the dialog — stops it with nothing reported: calling it off is not a failure.
+ * Cancel stops it with nothing reported: calling it off is not a failure.
+ *
+ * <b>Closing the dialog is not how an export is called off, so it asks first.</b> Cancel export is
+ * a button that says what it does. Escape and the X in the corner say only "close", are pressed by
+ * habit, and during an export would throw away minutes of rendering without a word; so while one
+ * runs they ask whether to stop it, and the answers that need no thought — Escape again, or
+ * Enter on the button the question opens on — keep it going. A click beside the dialog does
+ * nothing at all.
  *
  * <b>A copy of what the reader could see.</b> Everything in the movie was sent to this reader under
  * their own rights; the file outlives that check, so the dialog says so, and the settings start
@@ -87,7 +100,63 @@ export interface TrackingMovieDialogProps {
 
 export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onClose }: TrackingMovieDialogProps) {
   const { t } = useTranslation();
+  const { modal } = App.useApp();
   const model = useSurveyModel(surveyModelId ?? undefined);
+
+  // What stops the export under way, handed up by the body for as long as one runs; null otherwise.
+  // A ref, not state: it is read when a key is pressed, and an export starting or ending must not
+  // draw the dialog's frame again.
+  const stopExportRef = useRef<(() => void) | null>(null);
+  const questionRef = useRef<{ destroy: () => void } | null>(null);
+  const onExportRunning = useCallback((stop: (() => void) | null) => {
+    stopExportRef.current = stop;
+    if (stop === null) {
+      // The export ended — finished, failed, cancelled or unmounted — while the question was still
+      // up. There is nothing left to stop, so the question goes; the dialog stays as it is.
+      questionRef.current?.destroy();
+      questionRef.current = null;
+    }
+  }, []);
+  // Escape and the X arrive here; the mask does not, and the footer's own buttons are the body's.
+  const requestClose = () => {
+    if (stopExportRef.current === null) {
+      onClose();
+      return;
+    }
+    if (questionRef.current !== null) {
+      return;
+    }
+    questionRef.current = modal.confirm({
+      title: t('caveview.movie.closeWhileExporting.title'),
+      content: t('caveview.movie.closeWhileExporting.body'),
+      okText: t('caveview.movie.closeWhileExporting.stop'),
+      okButtonProps: { danger: true },
+      cancelText: t('caveview.movie.closeWhileExporting.keep'),
+      // The question opens on "keep going": Enter pressed by habit after Escape must not be what
+      // throws the export away.
+      focusable: { autoFocusButton: 'cancel' },
+      onOk: () => {
+        questionRef.current = null;
+        // Stopped here rather than left to the body going away with the dialog: the body is only
+        // taken down once the dialog has finished closing, and frames would go on being rendered
+        // for a movie nobody wants until then.
+        stopExportRef.current?.();
+        onClose();
+      },
+      onCancel: () => {
+        questionRef.current = null;
+      },
+    });
+  };
+  // A question still up when the dialog itself goes has nothing left to ask about.
+  useEffect(
+    () => () => {
+      questionRef.current?.destroy();
+      questionRef.current = null;
+    },
+    [],
+  );
+
   return (
     <Modal
       title={
@@ -99,7 +168,7 @@ export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onC
         </Flex>
       }
       open={surveyModelId !== null}
-      onCancel={onClose}
+      onCancel={requestClose}
       footer={null}
       width="min(1320px, 96vw)"
       // Near the top of the window: the dialog is tall, and its export button is at the bottom.
@@ -107,8 +176,13 @@ export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onC
       // A second WebGL context is held for as long as the preview exists, so the whole body goes
       // with the dialog — and with it any export still running, which unmounting cancels.
       destroyOnHidden
-      // A stray click beside the dialog would throw away the settings and any export under way.
+      // A stray click beside the dialog would throw away the settings and any export under way; it
+      // is not asked about either, since nobody meant anything by it.
       mask={{ closable: false }}
+      // Round the whole dialog, not only what is drawn in its body: the X in the corner and the
+      // dialog's own frame — which is where the focus is put on opening — take keys too, and the
+      // viewer behind the preview would cancel a Tab or an Enter pressed on either.
+      wrapProps={{ onKeyDown: keepKeysFromViewer }}
       data-testid="movie-dialog"
     >
       {surveyModelId !== null && (
@@ -119,6 +193,7 @@ export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onC
           surveyModelId={surveyModelId}
           initialTripIds={initialTripIds ?? []}
           onClose={onClose}
+          onExportRunning={onExportRunning}
         />
       )}
     </Modal>
@@ -126,6 +201,8 @@ export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onC
 }
 
 interface ExportRun {
+  /** The name the file is saved under, fixed when the export starts. */
+  name: string;
   startedAt: number;
   progress: MovieProgress | null;
   now: number;
@@ -145,14 +222,16 @@ interface PreviewFacts {
   generation: number;
   layers: ReadonlySet<MovieViewLayer>;
   terrain: boolean;
-  shadings: Record<MovieShadingConstant, number>;
 }
 
-function shadingConstants(cv2: Cv2Namespace): Record<MovieShadingConstant, number> {
-  return Object.fromEntries(MOVIE_SHADINGS.map(({ constant }) => [constant, cv2[constant]])) as Record<
-    MovieShadingConstant,
-    number
-  >;
+/** The movie's clock over these trips' spans, as the reader set it; null when there is no trip. */
+function timelineOf(spans: readonly MovieTripSpan[], timeline: MovieSettings['timeline']): MovieTimeline | null {
+  return spans.length === 0
+    ? null
+    : buildMovieTimeline(spans, {
+        mode: timeline.mode,
+        quietGapMs: timeline.shortenQuiet ? timeline.quietGapMin * 60_000 : null,
+      });
 }
 
 /** The settings without a written title, which belongs to one movie and is never remembered. */
@@ -163,16 +242,24 @@ function withoutTitleText(settings: MovieSettings): MovieSettings {
 }
 
 /**
- * Keeps a key pressed on one of the dialog's controls from the viewer's own shortcuts.
+ * Keeps a key pressed anywhere on the dialog from the viewer's own shortcuts.
  *
  * The viewer listens for keys on the whole document and, whenever the pointer is resting over it,
  * takes every key for itself and cancels it — so a title typed with the pointer left over the
  * preview wrote nothing, and the shortcuts turned the preview under a reader whose keys were meant
- * for a text box. A key pressed on the dialog is the dialog's. Only the two the modal answers on
- * its own frame, outside this body, go on past it: Escape to close, and Tab to keep the focus in.
+ * for a text box. A key pressed on the dialog is the dialog's — on its settings, on its buttons, on
+ * the X in its corner and on its frame, which holds the focus until the first Tab.
+ *
+ * <b>Only Escape goes on past it.</b> The modal closes on Escape from a listener on the window,
+ * which a key stopped here never reaches; the viewer cancels it on the way and has no use for it.
+ * Tab is stopped with the rest. The modal keeps the focus inside the dialog by watching where the
+ * focus goes, and sees the key on its way down before it ever gets here — so nothing of the
+ * modal's is lost — while a Tab left to travel on was cancelled by the viewer whenever the pointer
+ * rested on the preview and the focus was on a button, a switch or the slider: the focus stayed
+ * where it was, with no sign of why.
  */
 function keepKeysFromViewer(event: { key: string; stopPropagation(): void }): void {
-  if (event.key !== 'Escape' && event.key !== 'Tab') {
+  if (event.key !== 'Escape') {
     event.stopPropagation();
   }
 }
@@ -181,10 +268,16 @@ function MovieDialogBody({
   surveyModelId,
   initialTripIds,
   onClose,
+  onExportRunning,
 }: {
   surveyModelId: string;
   initialTripIds: readonly string[];
   onClose: () => void;
+  /**
+   * Told how to stop the export for as long as one runs, and null when none does — so whatever
+   * closes the dialog from outside this body knows there is an export to ask about, and can stop it.
+   */
+  onExportRunning: (stop: (() => void) | null) => void;
 }) {
   const { t, i18n } = useTranslation();
   const { message } = App.useApp();
@@ -200,6 +293,13 @@ function MovieDialogBody({
   const [settings, setSettings] = useState<MovieSettings>(() =>
     withoutTitleText(remembered === undefined ? DEFAULT_MOVIE_SETTINGS : normaliseMovieSettings(remembered)),
   );
+  // Settings remembered in a shape no longer written are written back once, repaired, so the old
+  // shape does not outlive the first opening after an update — even for a reader who changes nothing.
+  useEffect(() => {
+    if (remembered !== undefined && movieSettingsNeedRewriting(remembered)) {
+      remember(withoutTitleText(normaliseMovieSettings(remembered)));
+    }
+  }, [remembered, remember]);
   // Playing the preview holds the camera: each of its frames puts the angles back from where play
   // began. A turn to another starting view made under it would be undone on the next frame, so play
   // stops first. Reached through refs because play is set up further down.
@@ -219,9 +319,16 @@ function MovieDialogBody({
     [remember],
   );
   const [tripIds, setTripIds] = useState<readonly string[]>(initialTripIds);
+  // What the GIFs made in this browser came to, which the size estimated for the next one goes by.
+  const storedGifCalibration = useUiPrefsStore((state) => state.movieGifCalibration);
+  const rememberGifCalibration = useUiPrefsStore((state) => state.setMovieGifCalibration);
+  const gifCalibration = useMemo(() => normaliseMovieGifCalibration(storedGifCalibration), [storedGifCalibration]);
 
   // ---- what the movie is made of ----
-  const [openedAt] = useState(() => Date.now());
+  // Where a trip still under way ends in the movie. Fixed while the reader looks, so the slider
+  // does not creep under the hand that drags it; moved once, to the moment an export starts, so the
+  // file runs up to when it was made however long the dialog stood open before.
+  const [windowEnd, setWindowEnd] = useState(() => Date.now());
   const tracked = useSurveyModelTrackedTrips(surveyModelId);
   // Only trips the list offers are in the movie. The trip a dialog was opened for is ticked before
   // the list has arrived, so its reads start at once; if the list then leaves it out — its watch was
@@ -232,17 +339,24 @@ function MovieDialogBody({
     () => (listed === undefined ? tripIds : tripIds.filter((id) => listed.some((trip) => trip.tripLogId === id))),
     [listed, tripIds],
   );
-  const movie = useMovieTrips(surveyModelId, chosenIds, openedAt);
-  const timeline = useMemo(
-    () =>
-      movie.spans.length === 0
-        ? null
-        : buildMovieTimeline(movie.spans, {
-            mode: settings.timeline.mode,
-            quietGapMs: settings.timeline.shortenQuiet ? settings.timeline.quietGapMin * 60_000 : null,
-          }),
-    [movie.spans, settings.timeline],
-  );
+  const [run, setRun] = useState<ExportRun | null>(null);
+  const recording = run !== null;
+  // The logs of trips still under way are read again as their watch answers, except under an
+  // export: the frames being recorded, and the captions drawn over the preview meanwhile, are of
+  // the movie as it was when the export began.
+  const movie = useMovieTrips(surveyModelId, chosenIds, windowEnd, recording);
+  const timeline = useMemo(() => timelineOf(movie.spans, settings.timeline), [movie.spans, settings.timeline]);
+  // Each trip still under way says on its row how many reports have come in since the dialog
+  // opened: the party goes on while it stands open, and the reader should see that the movie they
+  // are about to make is of more than the one they opened.
+  const newReports = movie.newReports;
+  // An export of a trip under way reads its log again first; when that read cannot reach the log's
+  // end the export is held back, in the words every unreadable log is refused in.
+  const [liveLogFailed, setLiveLogFailed] = useState(false);
+  const chooseTrips = useCallback((ids: readonly string[]) => {
+    setLiveLogFailed(false);
+    setTripIds(ids);
+  }, []);
   const frames = useMemo(() => (timeline === null ? null : movieFrames(timeline, settings)), [timeline, settings]);
   const frameCount = movieFrameCount(settings).count;
   const frameSize = movieSize(settings);
@@ -307,7 +421,6 @@ function MovieDialogBody({
             generation: (before?.generation ?? 0) + 1,
             layers: movieLayersAvailable(next.viewer),
             terrain: next.viewer.hasRealTerrain === true,
-            shadings: shadingConstants(next.cv2),
           },
     );
   }, []);
@@ -321,8 +434,6 @@ function MovieDialogBody({
   }, []);
   const [position, setPosition] = useState(0);
   const index = frames === null ? 0 : Math.min(position, frames.count - 1);
-  const [run, setRun] = useState<ExportRun | null>(null);
-  const recording = run !== null;
   const [failure, setFailure] = useState<string | null>(null);
 
   const partyRef = useRef<MovieParty | null>(null);
@@ -516,9 +627,30 @@ function MovieDialogBody({
     );
   }, [recording, recordedFrame, timeline, frames, movie.trips, surveyModelId, settings, words, title]);
 
+  // ---- what the file will be called ----
+  // Its name is shown before the export, not only said afterwards: with the title caption on it
+  // carries the trip's or the cave's name to whoever the file is sent on to, and the reader should
+  // see that while it can still be changed.
+  const fileName = movieExportName(
+    settings.captions,
+    movie.trips.map((trip) => trip.title),
+    place,
+    localIsoDate(),
+    MOVIE_EXTENSION[settings.format],
+  );
+
   // ---- exporting ----
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => () => abortRef.current?.abort(), []);
+  // Whatever closes the dialog from outside is told there is an export, and how to stop it, for
+  // exactly as long as one runs — and that there is none again when this body goes.
+  useEffect(() => {
+    if (!recording) {
+      return;
+    }
+    onExportRunning(() => abortRef.current?.abort());
+    return () => onExportRunning(null);
+  }, [recording, onExportRunning]);
   // The elapsed time moves on between frames too: one frame can take seconds in software.
   useEffect(() => {
     if (!recording) {
@@ -538,14 +670,44 @@ function MovieDialogBody({
     abortRef.current = controller;
     const startedAt = performance.now();
     setFailure(null);
-    setRun({ startedAt, progress: null, now: startedAt });
+    setLiveLogFailed(false);
+    // The name the dialog was showing when the export was started, so the file is called what the
+    // reader was told it would be — even when the export runs past midnight.
+    const name = fileName;
+    setRun({ name, startedAt, progress: null, now: startedAt });
+    let trips = movie.trips;
+    let recorded = timeline;
     try {
+      if (trips.some((trip) => movieTripIsLive(trip.tracking))) {
+        // A trip still under way ends, in the file, at this moment rather than where the dialog
+        // fixed it on opening — so its log is read again first. The stretch added at the end must
+        // be drawn from the reports recorded during it, by whoever recorded them and wherever:
+        // drawn from the log held since opening, it would show everybody standing where they were
+        // an hour ago under a clock that says now.
+        try {
+          trips = await movie.rereadLive();
+        } catch {
+          if (!controller.signal.aborted) {
+            setLiveLogFailed(true);
+          }
+          return;
+        }
+        if (controller.signal.aborted) {
+          return;
+        }
+        // The preview is moved to the same end, so the frame it shows while the export runs, and
+        // whatever is previewed afterwards, is the movie that was made.
+        const now = Date.now();
+        const spans = movieSpansAt(trips, now, surveyModelId);
+        recorded = (spans === null ? null : timelineOf(spans, settings.timeline)) ?? timeline;
+        setWindowEnd((before) => Math.max(before, now));
+      }
       const file = await recordMovie({
         viewer: handle.viewer,
         constants: handle.cv2,
         settings,
-        trips: movie.trips,
-        timeline,
+        trips,
+        timeline: recorded,
         surveyModelId,
         title,
         words,
@@ -553,24 +715,18 @@ function MovieDialogBody({
         signal: controller.signal,
         onProgress: (progress) => setRun((before) => before && { ...before, progress, now: performance.now() }),
       });
-      // Named for what the movie shows: the title written over it when there is one, and otherwise
-      // what it is of — the trip, or the cave. A title written but not drawn does not name it. The
-      // days an automatic title of several trips ends in are left off: the name already ends in the
-      // day the file was made, and a second date beside it, in the reader's own order (9-29-2026,
-      // 29-09-2026), reads as neither.
-      const written = settings.captions.title ? settings.captions.titleText.trim() : '';
-      const name = movieFileName(
-        written ||
-          movieAutoTitle(
-            movie.trips.map((trip) => trip.title),
-            place,
-            null,
-          ),
-        localIsoDate(),
-        MOVIE_EXTENSION[settings.format],
-      );
       saveBlob(file, name);
       message.success(t('caveview.movie.saved', { name }));
+      if (settings.format === 'gif') {
+        // What this GIF came to corrects the size estimated for the next one. Read from the store
+        // as it is now, not as it was when the export began: another window may have made one since.
+        const held = normaliseMovieGifCalibration(useUiPrefsStore.getState().movieGifCalibration);
+        const learnt = movieGifCalibrationFrom(file.size, settings, frameCount, held);
+        // A file that said nothing hands back what was held, and nothing is written for it.
+        if (learnt !== held) {
+          rememberGifCalibration(learnt);
+        }
+      }
     } catch (error) {
       if (!isMovieAbort(error)) {
         setFailure(error instanceof Error ? error.message : String(error));
@@ -585,7 +741,8 @@ function MovieDialogBody({
   const cancelExport = () => abortRef.current?.abort();
 
   // ---- what the file will be ----
-  const estimate = movieFileSizeEstimate(settings, frameCount);
+  const estimate = movieFileSizeEstimate(settings, frameCount, gifCalibration);
+  const calibrated = movieEstimateIsCalibrated(settings, gifCalibration);
   const tooLarge = settings.format === 'gif' && estimate > MOVIE_GIF_SIZE_BUDGET;
   // Every frame is rendered, in software where there is no graphics card; a video's length, rate
   // and size can add up to thousands of large frames, and an export of an hour or more.
@@ -594,7 +751,7 @@ function MovieDialogBody({
   const summary = useMemo(() => (
     <Flex vertical gap="small">
       <Typography.Text strong data-testid="movie-summary">
-        {t('caveview.movie.summary', {
+        {t(calibrated ? 'caveview.movie.summaryCalibrated' : 'caveview.movie.summary', {
           frames: frameCount,
           size: fileSizeText(estimate, i18n.language),
         })}
@@ -613,7 +770,7 @@ function MovieDialogBody({
         <Alert type="warning" showIcon title={t('caveview.movie.videoTooLong')} data-testid="movie-too-long" />
       )}
     </Flex>
-  ), [t, i18n.language, frameCount, estimate, tooLarge, tooLong]);
+  ), [t, i18n.language, frameCount, estimate, calibrated, tooLarge, tooLong]);
 
   const tripPicker = useMemo(
     () => (
@@ -625,11 +782,23 @@ function MovieDialogBody({
         empty={movie.empty}
         tripsFailed={movie.failed}
         logFailed={movie.logFailed}
+        newReports={newReports}
         disabled={recording}
-        onChange={setTripIds}
+        onChange={chooseTrips}
       />
     ),
-    [tracked.data, tracked.isPending, tracked.error, chosenIds, movie.empty, movie.failed, movie.logFailed, recording],
+    [
+      tracked.data,
+      tracked.isPending,
+      tracked.error,
+      chosenIds,
+      movie.empty,
+      movie.failed,
+      movie.logFailed,
+      newReports,
+      recording,
+      chooseTrips,
+    ],
   );
 
   const nothingChosen = chosenIds.length === 0;
@@ -671,7 +840,7 @@ function MovieDialogBody({
       : movieClockText(timeline.clock(frames.frame(at).position), t, i18n.language);
 
   return (
-    <div className="movie-dialog" onKeyDown={keepKeysFromViewer}>
+    <div className="movie-dialog">
       <div className="movie-dialog-body">
         <Flex vertical gap="small" className="movie-dialog-preview">
           <MoviePreviewHost
@@ -736,7 +905,6 @@ function MovieDialogBody({
             formats={formats}
             videoEncoding={typeof VideoEncoder !== 'undefined'}
             layers={preview?.layers ?? null}
-            constants={preview?.shadings ?? null}
             terrain={preview?.terrain === true}
             autoTitle={autoTitle}
             summary={summary}
@@ -747,7 +915,7 @@ function MovieDialogBody({
       </div>
 
       <Flex vertical gap="small" className="movie-dialog-footer">
-        {movie.logFailed.length > 0 ? (
+        {movie.logFailed.length > 0 || liveLogFailed ? (
           // The trip's own replay refuses a partial log in these words; the movie refuses it for the
           // same reason and says the same thing.
           <Alert
@@ -774,7 +942,12 @@ function MovieDialogBody({
         )}
         {run !== null && <ExportProgress run={run} />}
         <Alert type="info" showIcon title={t('caveview.movie.privacy')} data-testid="movie-privacy" />
-        <Flex justify="flex-end" gap="small">
+        <Flex justify="flex-end" align="center" gap="small" wrap>
+          {movie.trips.length > 0 && (
+            <Typography.Text type="secondary" className="movie-dialog-file-name" data-testid="movie-file-name">
+              {t('caveview.movie.fileNamed', { name: run?.name ?? fileName })}
+            </Typography.Text>
+          )}
           {recording ? (
             <Button onClick={cancelExport} data-testid="movie-cancel">
               {t('caveview.movie.cancelExport')}
@@ -851,7 +1024,8 @@ function ExportProgress({ run }: { run: ExportRun }) {
 /**
  * The trips tracked on the model, to tick into the movie. A trip whose watch was never armed, or
  * whose reports cover no stretch of time, is listed and cannot be ticked, saying why; a ticked trip
- * that could not be read says so under its name, and can be unticked.
+ * that could not be read says so under its name, and can be unticked. A ticked trip still under way
+ * says so, with how many reports have come in since the dialog first read it.
  */
 function MovieTripPicker({
   tracked,
@@ -861,6 +1035,7 @@ function MovieTripPicker({
   empty,
   tripsFailed,
   logFailed,
+  newReports,
   disabled,
   onChange,
 }: {
@@ -871,6 +1046,8 @@ function MovieTripPicker({
   empty: readonly string[];
   tripsFailed: readonly string[];
   logFailed: readonly string[];
+  /** Each trip of the movie that is still under way, with the reports arrived since it was first read. */
+  newReports: ReadonlyMap<string, number>;
   disabled: boolean;
   onChange: (ids: readonly string[]) => void;
 }) {
@@ -921,6 +1098,15 @@ function MovieTripPicker({
                 >
                   {help}
                 </Typography.Text>
+                {checked && newReports.has(trip.tripLogId) && (
+                  <Typography.Text
+                    type="secondary"
+                    className="movie-setting-help"
+                    data-testid={`movie-trip-live-${trip.tripLogId}`}
+                  >
+                    {t('caveview.movie.tripLive', { count: newReports.get(trip.tripLogId) })}
+                  </Typography.Text>
+                )}
               </Flex>
             </Checkbox>
           </div>

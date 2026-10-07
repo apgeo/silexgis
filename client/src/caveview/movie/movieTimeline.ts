@@ -30,7 +30,8 @@ export interface MovieTripSpan {
  * survey model, which the replay does not draw on this one — so a stretch in which the party was
  * reporting on another survey reads as quiet here, which on this model it is.
  *
- * @param openedAt when the movie was opened, which is where a trip still under way ends.
+ * @param openedAt where a trip still under way is taken to end: when the movie's dialog was opened
+ *   while it is previewed, and when the export began in the file (see {@link movieSpansAt}).
  */
 export function movieTripSpan(
   tripLogId: string,
@@ -51,6 +52,58 @@ export function movieTripSpan(
   return { tripLogId, window, moments };
 }
 
+/** Whether a trip's watch is still running: started and not ended, so its replay has no end of its own. */
+export function movieTripIsLive(tracking: Pick<TrackingState, 'armedAt' | 'closedAt'>): boolean {
+  return tracking.armedAt !== null && tracking.closedAt === null;
+}
+
+/**
+ * Every trip's part in a movie whose trips still under way end at `endAt`, in the order given;
+ * null when some trip has nothing to replay, which a trip already in a movie never has.
+ *
+ * <b>A movie of a trip still under way ends when it is exported, not when its dialog was opened.</b>
+ * The dialog fixes that end once, so the slider does not creep under the reader's hand; but a
+ * dialog can stand open for an hour while the party goes on, and a movie exported then would stop
+ * an hour short of the moment it was made, with nobody told. So the export asks for the spans
+ * again as of its own start. A finished trip's span is the same whenever it is asked for.
+ */
+export function movieSpansAt(
+  trips: readonly {
+    tripLogId: string;
+    tracking: Pick<TrackingState, 'armedAt' | 'closedAt'>;
+    events: readonly Pick<TrackingEvent, 'recordedAt' | 'surveyModelId'>[];
+  }[],
+  endAt: number,
+  surveyModelId: string,
+): MovieTripSpan[] | null {
+  const spans: MovieTripSpan[] = [];
+  for (const trip of trips) {
+    const span = movieTripSpan(trip.tripLogId, trip.tracking, trip.events, endAt, surveyModelId);
+    if (span === null) {
+      return null;
+    }
+    spans.push(span);
+  }
+  return spans;
+}
+
+/**
+ * How many of a trip's reports are not among the ones `known`.
+ *
+ * Counted by which reports they are, never by the time they carry: a report's time is when the
+ * thing happened, written by whoever recorded it, and a report entered now about an hour ago would
+ * not count as new by its time although it has only just arrived.
+ */
+export function movieNewReports(events: readonly Pick<TrackingEvent, 'id'>[], known: ReadonlySet<string>): number {
+  let count = 0;
+  for (const event of events) {
+    if (!known.has(event.id)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export interface MovieTimeline {
   mode: MovieTimelineMode;
   /** Length of the (possibly shortened) timeline, in its own milliseconds. */
@@ -58,8 +111,16 @@ export interface MovieTimeline {
   /** The instant each trip is replayed at, in the order the trips were given, at a position on the timeline (0..length). */
   instants(position: number): number[];
   /** What the clock caption says at a position. */
-  clock(position: number): { kind: 'calendar'; at: number } | { kind: 'elapsed'; ms: number };
+  clock(position: number): MovieClock;
 }
+
+/**
+ * What a movie's clock shows at one of its moments: the instant being replayed, or — trips played
+ * side by side — how long they have been under way. An elapsed clock also says how far it will run
+ * in all, `totalMs`, which is the longest trip's real length whatever was shortened on the way:
+ * that decides the unit the whole movie's clock is written in, so it does not change mid-movie.
+ */
+export type MovieClock = { kind: 'calendar'; at: number } | { kind: 'elapsed'; ms: number; totalMs: number };
 
 /**
  * One piece of the map from the timeline to the axis being replayed: `[start, start + span)` of the
@@ -176,7 +237,7 @@ export function buildMovieTimeline(
       // instants outside its own window, so neither mode clamps.
       return trips.map((trip) => trip.window.from + elapsed);
     },
-    clock: (position) => ({ kind: 'elapsed', ms: axisAt(pieces, position) }),
+    clock: (position) => ({ kind: 'elapsed', ms: axisAt(pieces, position), totalMs: longest }),
   };
 }
 

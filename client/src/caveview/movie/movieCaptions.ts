@@ -3,7 +3,7 @@ import type { TFunction } from 'i18next';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
 import { MOVIE_MARKER_PALETTE, type MovieLegendEntry, type MovieParty } from './movieParty.ts';
 import type { MovieSettings } from './movieSettings.ts';
-import type { MovieTimeline } from './movieTimeline.ts';
+import type { MovieClock } from './movieTimeline.ts';
 
 /**
  * The words and marks an exported movie carries over the model: a title, the replay clock, the
@@ -242,16 +242,21 @@ export function drawMovieCaptions(
   ctx.restore();
 }
 
+/** An hour, past which an elapsed clock counts hours and minutes rather than minutes and seconds. */
+const HOUR_MS = 3_600_000;
+
 /**
  * What the clock caption says at a point of the timeline: the moment being replayed, in the
  * reader's language and time zone, or — trips played side by side — how long they have been under
  * way.
+ *
+ * Time under way is written hours:minutes when the movie's clock runs to an hour or more, and
+ * minutes:seconds when all of it is under an hour: a forty-minute trip counted in whole minutes
+ * showed forty values over the whole movie and stood still between them, as if the replay had
+ * stopped. The unit is chosen by how far the clock will run, not by where it is, so one movie's
+ * clock never changes unit on the way.
  */
-export function movieClockText(
-  clock: ReturnType<MovieTimeline['clock']>,
-  t: TFunction,
-  language: string,
-): string {
+export function movieClockText(clock: MovieClock, t: TFunction, language: string): string {
   if (clock.kind === 'calendar') {
     return new Date(clock.at).toLocaleString(language, {
       year: 'numeric',
@@ -261,8 +266,10 @@ export function movieClockText(
       minute: '2-digit',
     });
   }
-  const minutes = Math.max(0, Math.floor(clock.ms / 60_000));
-  const time = `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+  // Counted in the smaller unit of the pair — seconds under an hour, minutes otherwise — and
+  // written as that count over sixty, and what is left of it.
+  const small = Math.max(0, Math.floor(clock.ms / (clock.totalMs < HOUR_MS ? 1000 : 60_000)));
+  const time = `${Math.floor(small / 60)}:${String(small % 60).padStart(2, '0')}`;
   return t('caveview.movie.clockElapsed', { time });
 }
 
@@ -309,7 +316,7 @@ export function movieCaptionsAt(
   settings: MovieSettings,
   title: string | null,
   party: Pick<MovieParty, 'legend' | 'note'>,
-  clock: ReturnType<MovieTimeline['clock']>,
+  clock: MovieClock,
   progress: number,
   words: { t: TFunction; language: string },
 ): MovieCaptions {
