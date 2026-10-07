@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
+import { PUBLIC_ARCHIVE_FRESH_MS } from '../../api/hooks.ts';
 import type { PublicLiveTrip, PublicTripEnvelope } from '../../api/hooks.ts';
 import { ApiError } from '../../api/client.ts';
 import {
+  linkListsPastOnly,
+  PAST_ONLY_EVIDENCE_MS,
   liveTripAsEnvelope,
   publicTripView,
   shownReadEnded,
@@ -204,5 +207,89 @@ describe('whether the read feeding the screen has been refused for good', () => 
     expect(shownReadEnded('watched', null, new ApiError(429))).toBe(false);
     expect(shownReadEnded('own', unreachable, null)).toBe(false);
     expect(shownReadEnded('own', undefined, undefined)).toBe(false);
+  });
+});
+
+describe('whether a link has stopped listing today’s parties while its past trips still answer', () => {
+  const refused = new ApiError(404, 'tracking.share_not_found');
+  const pastList = { trips: [], more: false };
+  /** The moment the list of parties was refused for good. */
+  const REFUSED_AT = 1_800_000_000_000;
+  /** A past list read a moment before that refusal. */
+  const past = (over: Partial<{ list: unknown; error: unknown; readAt: number }> = {}) => ({
+    list: pastList,
+    error: null,
+    readAt: REFUSED_AT - 1_000,
+    ...over,
+  });
+  /** A list of parties that never answered through this link and was refused for good. */
+  const live = (over: Partial<{ error: unknown; readAt: number; refusedAt: number }> = {}) => ({
+    error: refused,
+    readAt: 0,
+    refusedAt: REFUSED_AT,
+    ...over,
+  });
+
+  it('says so of a past list read at about the moment the list of parties was refused for good', () => {
+    expect(linkListsPastOnly(past(), live())).toBe(true);
+    // Read after the refusal — the strongest form of it.
+    expect(linkListsPastOnly(past({ readAt: REFUSED_AT + 60_000 }), live())).toBe(true);
+    // A re-read of the past list that merely did not land leaves the list in hand as it was.
+    expect(linkListsPastOnly(past({ error: new ApiError(503) }), live())).toBe(true);
+    // And the positive case beside the negatives below: both lists answering is not it.
+    expect(
+      linkListsPastOnly(past(), live({ error: null, readAt: REFUSED_AT, refusedAt: 0 })),
+    ).toBe(false);
+  });
+
+  it('does not say so of a list of parties that failed on the network, was busy or was told to wait', () => {
+    expect(linkListsPastOnly(past(), live({ error: new TypeError('Failed to fetch') }))).toBe(false);
+    expect(linkListsPastOnly(past(), live({ error: new ApiError(503) }))).toBe(false);
+    expect(linkListsPastOnly(past(), live({ error: new ApiError(429) }))).toBe(false);
+    expect(
+      linkListsPastOnly(
+        past(),
+        live({ error: new ApiError(503, undefined, undefined, undefined, 30_000) }),
+      ),
+    ).toBe(false);
+    expect(linkListsPastOnly(past(), live({ error: undefined }))).toBe(false);
+  });
+
+  it('does not say so when the past list is refused as well, even with an earlier list in hand', () => {
+    expect(linkListsPastOnly(past({ list: undefined, error: refused }), live())).toBe(false);
+    expect(linkListsPastOnly(past({ error: refused }), live())).toBe(false);
+  });
+
+  it('does not say so of a past list nobody has read, since nothing is read to find out', () => {
+    expect(linkListsPastOnly(past({ list: undefined, readAt: 0 }), live())).toBe(false);
+    expect(linkListsPastOnly(past({ list: undefined, error: undefined, readAt: 0 }), live())).toBe(
+      false,
+    );
+    // A list with no moment of arrival was not read.
+    expect(linkListsPastOnly(past({ readAt: 0 }), live({ refusedAt: 0 }))).toBe(false);
+  });
+
+  it('does not say so when the list of parties answered after the past list was read: a link taken back since leaves the same pair behind', () => {
+    // Archive opened, then the parties followed for a while, then the link unpublished.
+    const taken = live({ readAt: REFUSED_AT - 60_000, refusedAt: REFUSED_AT });
+    expect(linkListsPastOnly(past({ readAt: REFUSED_AT - 120_000 }), taken)).toBe(false);
+    // The twins: the past list read again and answered — at the parties' last answer, between
+    // it and the refusal, or after the refusal.
+    expect(linkListsPastOnly(past({ readAt: REFUSED_AT - 60_000 }), taken)).toBe(true);
+    expect(linkListsPastOnly(past({ readAt: REFUSED_AT - 30_000 }), taken)).toBe(true);
+    expect(linkListsPastOnly(past({ readAt: REFUSED_AT + 1 }), taken)).toBe(true);
+  });
+
+  it('does not say so of a past list read longer before the refusal than it is believed for', () => {
+    expect(linkListsPastOnly(past({ readAt: REFUSED_AT - PAST_ONLY_EVIDENCE_MS }), live())).toBe(
+      true,
+    );
+    expect(
+      linkListsPastOnly(past({ readAt: REFUSED_AT - PAST_ONLY_EVIDENCE_MS - 1 }), live()),
+    ).toBe(false);
+  });
+
+  it('believes a past list for exactly as long as a returning reader is shown it without a re-read', () => {
+    expect(PAST_ONLY_EVIDENCE_MS).toBe(PUBLIC_ARCHIVE_FRESH_MS);
   });
 });

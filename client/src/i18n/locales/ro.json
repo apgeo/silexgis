@@ -4036,6 +4036,10 @@
       "failedBody": "Acest link deschide tura de mai sus, iar acum nu a putut citi și cine mai este urmărit în peșteră. Încearcă să deschizi lista din nou.",
       "linkEndedTitle": "Turele urmărite nu mai pot fi citite prin acest link",
       "linkEndedBody": "Acest link nu mai răspunde, iar lista celor care mai sunt urmăriți în peșteră este refuzată odată cu el. O nouă încercare nu schimbă asta.",
+      "pastOnlyTitle": "Acest link nu mai arată cine este astăzi în peșteră",
+      "pastOnlyBody": "Acest link a încetat să mai arate echipele urmărite acum în peșteră, iar redeschiderea listei nu schimbă asta. Turele trecute ale peșterii sunt în continuare aici, pot fi citite și redate.",
+      "pastOnlyWatchBody": "Mai jos este ultima veste primită de pagină despre această echipă și nu va mai fi împrospătată. Turele trecute ale peșterii sunt în continuare aici.",
+      "pastOnlyWatchBodyAt": "Mai jos este ultima veste primită de pagină despre această echipă, la {{clock}}, și nu va mai fi împrospătată. Turele trecute ale peșterii sunt în continuare aici.",
       "more": "Sunt urmărite mai multe echipe decât acestea.",
       "sectionTitle": "Tot în această peșteră, acum",
       "standingCount": "{{standing}}: {{number}}",
@@ -6334,11 +6338,13 @@
     },
     "everything": {
       "title": "Retragi tot ce este publicat?",
-      "stops": "Toate linkurile de urmărire ale acestei instalări sunt retrase pe loc — toate turele, toate peșterile. Linkuri încă active: {{links}}. Toate paginile publicate încetează să răspundă, pe această instalare și pe orice site care arată una.",
+      "stops": "Toate linkurile de urmărire ale acestei instalări sunt retrase pe loc — toate turele, toate peșterile. Linkuri încă active în această listă: {{links}}. Toate paginile publicate încetează să răspundă, pe această instalare și pe orice site care arată una.",
+      "deletedToo": "Sunt retrase și linkurile turelor șterse. O tură ștearsă poate fi restaurată, iar linkurile ei ar răspunde din nou odată cu ea, așa că sunt retrase acum; această listă nu le arată. De aceea numărul de linkuri retrase poate fi mai mare decât cel de mai sus.",
       "leavesHistory": "Lista publică de ture trecute a fiecărei peșteri se golește. O tură încheiată se publică din nou doar pornindu-i iar urmărirea, tură cu tură.",
       "typeWord": "Ca să continui, scrie {{word}} mai jos.",
       "word": "RETRAGE",
-      "done": "Linkuri retrase: {{links}} · Ture: {{trips}}"
+      "done": "Linkuri retrase: {{links}} · Ture: {{trips}}",
+      "doneMoreThanListed": "Linkuri retrase: {{links}} · Ture: {{trips}} · Linkuri arătate de această listă: {{listed}}. Sunt retrase și linkurile turelor șterse, pe care lista nu le arată."
     }
   }
 }

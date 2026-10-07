@@ -47,7 +47,12 @@ import PublicTripAbout from './PublicTripAbout.tsx';
 import PublicLiveTripList from './PublicLiveTripList.tsx';
 import PublicPastTripList from './PublicPastTripList.tsx';
 import PublicWatchBar from './PublicWatchBar.tsx';
-import { publicTripView, shownReadEnded, watchedParty } from './publicLiveWatch.ts';
+import {
+  linkListsPastOnly,
+  publicTripView,
+  shownReadEnded,
+  watchedParty,
+} from './publicLiveWatch.ts';
 import { readNotLanding } from './publicReadFreshness.ts';
 import {
   ageInWords,
@@ -433,6 +438,20 @@ export default function PublicTripPage() {
    */
   const liveFailed =
     liveTrips.isError && (liveTrips.data === undefined || isSettledRefusal(liveTrips.error));
+  /**
+   * Whether this link has stopped listing today's parties while its past trips still answer —
+   * known only where a reader has had the past trips read at about the moment the list of
+   * parties was refused, and never read to find out. A past list merely still in hand from
+   * earlier is not that: a link taken back since leaves the same list behind.
+   */
+  const pastOnly = linkListsPastOnly(
+    { list: pastTrips.data, error: pastTrips.error, readAt: pastTrips.dataUpdatedAt ?? 0 },
+    {
+      error: liveTrips.error,
+      readAt: liveTrips.dataUpdatedAt ?? 0,
+      refusedAt: liveTrips.errorUpdatedAt ?? 0,
+    },
+  );
 
   /**
    * Bringing the statement that this is the past to where the reader is looking.
@@ -1177,19 +1196,40 @@ export default function PublicTripPage() {
             // publication has run out. Said in those words, and without the promise that the
             // page will refresh — the poll has stopped for good, and a reader told "it starts
             // refreshing again by itself" would be waiting for something that cannot happen.
-            <Alert
-              type="warning"
-              showIcon
-              title={t('publicTrip.endedTitle')}
-              description={
-                readAt === null
-                  ? t('publicTrip.endedBody')
-                  : t('publicTrip.endedBodyAt', {
-                      clock: clockInWords(readAt, present, i18n.language),
-                    })
-              }
-              data-testid="public-trip-ended"
-            />
+            //
+            // Over another party of the cave, where the past trips are known to answer still,
+            // the final answer is narrower and is said as what it is: the link has stopped
+            // listing today's parties. "May have been taken back" would be a guess the past
+            // trips in hand speak against.
+            mode === 'watched' && pastOnly ? (
+              <Alert
+                type="info"
+                showIcon
+                title={t('publicTrip.live.pastOnlyTitle')}
+                description={
+                  readAt === null
+                    ? t('publicTrip.live.pastOnlyWatchBody')
+                    : t('publicTrip.live.pastOnlyWatchBodyAt', {
+                        clock: clockInWords(readAt, present, i18n.language),
+                      })
+                }
+                data-testid="public-trip-past-only"
+              />
+            ) : (
+              <Alert
+                type="warning"
+                showIcon
+                title={t('publicTrip.endedTitle')}
+                description={
+                  readAt === null
+                    ? t('publicTrip.endedBody')
+                    : t('publicTrip.endedBodyAt', {
+                        clock: clockInWords(readAt, present, i18n.language),
+                      })
+                }
+                data-testid="public-trip-ended"
+              />
+            )
           ) : (
             <Alert
               type="warning"
@@ -1444,6 +1484,7 @@ export default function PublicTripPage() {
                     // from: the notice above has just said this link stopped answering, and the
                     // list must not invite another try beneath it.
                     linkEnded={linkEnded || shownEnded}
+                    pastOnly={pastOnly}
                     ownTripLogId={data.tripLogId}
                     onWatch={watchParty}
                     watchingId={mode === 'watched' ? watchId : null}

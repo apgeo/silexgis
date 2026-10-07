@@ -4036,6 +4036,10 @@
       "failedBody": "This link opens the trip above, and just now it could not also read who else is being followed in the cave. Try opening this list again.",
       "linkEndedTitle": "The parties being followed cannot be read through this link any more",
       "linkEndedBody": "This link has stopped answering, and the list of who else is being followed in the cave is refused along with it. Trying again will not change that.",
+      "pastOnlyTitle": "This link no longer lists who is in the cave today",
+      "pastOnlyBody": "This link has stopped reporting the parties being followed in the cave now, and opening this list again will not change that. The cave's past trips are still here to read and play.",
+      "pastOnlyWatchBody": "What is below is the last word this page was given about this party, and it will not be refreshed again. The cave's past trips are still here.",
+      "pastOnlyWatchBodyAt": "What is below is the last word this page was given about this party, at {{clock}}, and it will not be refreshed again. The cave's past trips are still here.",
       "more": "There are more parties being followed than these.",
       "sectionTitle": "Also in this cave now",
       "standingCount": "{{standing}}: {{number}}",
@@ -6334,11 +6338,13 @@
     },
     "everything": {
       "title": "Unpublish everything?",
-      "stops": "Every follow link of this installation is taken back at once — every trip, every cave. Links still standing: {{links}}. Every published page stops answering, on this installation and on any website showing one.",
+      "stops": "Every follow link of this installation is taken back at once — every trip, every cave. Links still standing in this list: {{links}}. Every published page stops answering, on this installation and on any website showing one.",
+      "deletedToo": "The links of deleted trips are taken back as well. A deleted trip can be restored, and its links would answer again with it, so they are withdrawn now; this list does not show them. The number of links taken back can therefore be larger than the number above.",
       "leavesHistory": "Every cave's public list of past trips empties. A finished trip is published again only by starting its watch again, one trip at a time.",
       "typeWord": "To go on, type {{word}} below.",
       "word": "UNPUBLISH",
-      "done": "Links taken back: {{links}} · Trips: {{trips}}"
+      "done": "Links taken back: {{links}} · Trips: {{trips}}",
+      "doneMoreThanListed": "Links taken back: {{links}} · Trips: {{trips}} · Links this list showed: {{listed}}. The links of deleted trips, which the list leaves out, are taken back too."
     }
   }
 }

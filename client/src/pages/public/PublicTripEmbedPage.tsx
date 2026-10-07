@@ -34,7 +34,12 @@ import { useRoomyFrame } from './publicEmbedRoom.ts';
 import PublicPastBar from './PublicPastBar.tsx';
 import PublicLiveTripList from './PublicLiveTripList.tsx';
 import PublicPastTripList from './PublicPastTripList.tsx';
-import { publicTripView, shownReadEnded, watchedParty } from './publicLiveWatch.ts';
+import {
+  linkListsPastOnly,
+  publicTripView,
+  shownReadEnded,
+  watchedParty,
+} from './publicLiveWatch.ts';
 import { readNotLanding } from './publicReadFreshness.ts';
 import {
   EMBED_CHANNEL,
@@ -221,6 +226,20 @@ export default function PublicTripEmbedPage() {
    */
   const liveFailed =
     liveTrips.isError && (liveTrips.data === undefined || isSettledRefusal(liveTrips.error));
+  /**
+   * Whether this link has stopped listing today's parties while its past trips still answer —
+   * known only where a reader has had the past trips read at about the moment the list of
+   * parties was refused, and never read to find out. A past list merely still in hand from
+   * earlier is not that: a link taken back since leaves the same list behind.
+   */
+  const pastOnly = linkListsPastOnly(
+    { list: pastTrips.data, error: pastTrips.error, readAt: pastTrips.dataUpdatedAt ?? 0 },
+    {
+      error: liveTrips.error,
+      readAt: liveTrips.dataUpdatedAt ?? 0,
+      refusedAt: liveTrips.errorUpdatedAt ?? 0,
+    },
+  );
 
   /**
    * What this frame is showing: the link's own party now, another party of the cave being followed
@@ -1033,17 +1052,29 @@ export default function PublicTripEmbedPage() {
    * that never tells its reader the trip's publication has ended. One banner line, above the
    * strip, only for that final answer: a fault that may clear says nothing, as before.
    */
-  const ended =
-    shownEnded ? (
-      <Alert
-        type="warning"
-        banner
-        showIcon
-        title={t('publicTrip.endedTitle')}
-        className="public-trip-embed-ended"
-        data-testid="public-trip-ended"
-      />
-    ) : null;
+  //
+  // Over another party of the cave, where the past trips are known to answer still, the final
+  // answer is narrower and is said as what it is: the link has stopped listing today's parties.
+  // "Stopped answering" would be false of a link whose past trips are in hand.
+  const ended = !shownEnded ? null : mode === 'watched' && pastOnly ? (
+    <Alert
+      type="info"
+      banner
+      showIcon
+      title={t('publicTrip.live.pastOnlyTitle')}
+      className="public-trip-embed-ended"
+      data-testid="public-trip-past-only"
+    />
+  ) : (
+    <Alert
+      type="warning"
+      banner
+      showIcon
+      title={t('publicTrip.endedTitle')}
+      className="public-trip-embed-ended"
+      data-testid="public-trip-ended"
+    />
+  );
 
   /**
    * When this frame last heard from the server, or null where it cannot say. A read that fails
@@ -1233,6 +1264,7 @@ export default function PublicTripEmbedPage() {
             // line above has just said this link stopped answering, and the list must not invite
             // another try beneath it.
             linkEnded={linkEnded || shownEnded}
+            pastOnly={pastOnly}
             ownTripLogId={data.tripLogId}
             onWatch={watchParty}
             watchingId={mode === 'watched' ? watchId : null}

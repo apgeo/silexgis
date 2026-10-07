@@ -19,6 +19,12 @@ export interface PublicLiveTripListProps {
    * opens the trip above and inviting another try that will be refused the same way.
    */
   linkEnded?: boolean;
+  /**
+   * True when this list has been refused for good while the link's past trips are in hand: the
+   * link has stopped listing today's parties and still opens the cave's history. Said quietly and
+   * as a fact about the link — it is nothing that failed, and nothing a second try would change.
+   */
+  pastOnly?: boolean;
   /** This link's own trip, so its row is named as the one this link was published for. */
   ownTripLogId: string | null | undefined;
   /**
@@ -66,6 +72,7 @@ export default function PublicLiveTripList({
   failed,
   refused = false,
   linkEnded = false,
+  pastOnly = false,
   ownTripLogId,
   onWatch,
   watchingId = null,
@@ -86,6 +93,21 @@ export default function PublicLiveTripList({
   };
 
   const body = () => {
+    // Before the link being over: past trips that answered at about the moment this list was
+    // refused are evidence the link still works, which a refusal of the link's own read — given
+    // as soon as its trip stops being followed — is not evidence against. The caller claims it
+    // only on answers of one moment; a past list merely left in hand from earlier is not that.
+    if (failed && refused && pastOnly) {
+      return (
+        <Alert
+          type="info"
+          showIcon
+          title={t('publicTrip.live.pastOnlyTitle')}
+          description={t('publicTrip.live.pastOnlyBody')}
+          data-testid="public-live-past-only"
+        />
+      );
+    }
     if (failed && refused && linkEnded) {
       return (
         <Alert
