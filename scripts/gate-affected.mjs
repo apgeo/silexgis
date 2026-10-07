@@ -31,6 +31,10 @@ import path from 'node:path';
 import process from 'node:process';
 
 const TEST_DIR = 'server/tests/SilexGis.Api.Tests/';
+// Through fileURLToPath, not the URL's own pathname: on Windows that begins with a slash before
+// the drive letter, and the path built from it names nothing.
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_MAP = path.join(HERE, 'gate-affected.map.mjs');
 const TEST_NAMESPACE = 'SilexGis.Api.Tests';
 
 /**
@@ -166,6 +170,17 @@ export function filterExpression(classes) {
   return classes.map((c) => `FullyQualifiedName~${TEST_NAMESPACE}.${c}.`).join('|');
 }
 
+/**
+ * What the working tree's changes against `base` select, for a caller that wants to run it
+ * rather than read it: `{ base, changed, mode, classes, reasons }`, mode being this script's
+ * `targeted`, `full` or `none`.
+ */
+export async function selectionFor(base = 'master', mapFile = DEFAULT_MAP) {
+  const map = await import(pathToFileURL(mapFile).href);
+  const files = changedFiles(base);
+  return { base, changed: files.length, ...classify(files, map) };
+}
+
 function changedFiles(base) {
   const opts = { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 };
   const diff = execFileSync('git', ['diff', '--name-only', base, '--'], opts);
@@ -190,10 +205,8 @@ async function main() {
   };
 
   const base = take('--base') ?? 'master';
-  // Through fileURLToPath, not the URL's own pathname: on Windows that begins with a slash before
-  // the drive letter, and the path built from it names nothing.
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const mapFile = take('--map') ?? path.join(here, 'gate-affected.map.mjs');
+  const here = HERE;
+  const mapFile = take('--map') ?? DEFAULT_MAP;
   const rederive = has('--rederive');
   const asJson = has('--json');
   const asList = has('--list');
@@ -238,6 +251,11 @@ async function main() {
       for (const c of result.classes) console.log(`  ${c}`);
       console.log(
         `\nrun them with:\n  dotnet test tests/SilexGis.Api.Tests --no-build --filter "${filter}"`,
+      );
+      // One process builds applications on about two cores whatever its thread count, so a
+      // long list is quicker dealt into several.
+      console.log(
+        `or, in several test processes, from the repository root:\n  node scripts/gate-sharded.mjs --affected ${base}`,
       );
     } else if (result.mode === 'full') {
       console.log('\nrun the full suite:\n  dotnet test tests/SilexGis.Api.Tests --no-build');

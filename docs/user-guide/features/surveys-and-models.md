@@ -79,6 +79,46 @@ If the coordinates in a file were too large for the numbers it stores them in, t
 arrives coarser than it was surveyed. The application detects this and says so:
 *"The file lost precision before it arrived."* Re-exporting about a local origin recovers it.
 
+### Comparing two surveys
+
+A cave that was surveyed twice keeps both line plots, and the survey viewer can show them
+together. Open one of them — **View in 3D**, beside the map, or in a window of its own — and,
+when the cave has another `.lox` or `.3d`, **Compare with…** appears above the model. Choose the
+other survey and how the two are shown. You can change between the two ways while comparing, and
+**Stop comparing** returns to the one survey you opened.
+
+- **Overlaid** draws both surveys in one view, each in a colour of its own — blue for the survey
+  you opened, orange for the one it is compared with — under a key that names which is which. A
+  passage that was resurveyed lies on its earlier self, so what was added or moved is what stands
+  out in one colour alone. Where the two coincide exactly only one colour can show, and it is the
+  orange of the survey being compared with, which is drawn over the one you opened: hide that part
+  of it to see the blue beneath.
+- **Side by side** gives each survey a view of its own, under its name — one above the other
+  where there is no room across. **Link views**, on to begin with, makes turning, tilting, zooming
+  or moving one model do the same to the other; turn it off to look at each on its own.
+
+**Showing and hiding parts.** Under the models is a list for each survey of the named surveys it
+is made of, with a tick box each and **Show all**. With **Sync** on, ticking or unticking a part
+does the same to the part of the same name in the other survey; a part only one of them has is
+shown or hidden on its own. With it off, each list acts on its own survey only. It works the same
+overlaid and side by side, and what you hid stays hidden when you change between them. The list is
+the first level of a survey's structure that offers a choice — a survey exported as a single piece
+is listed as that one piece.
+
+**Two surveys in different coordinates can only be compared side by side.** The viewer draws every
+file where its own numbers put it. Two surveys measured from the same fixed point, or exported in
+the same grid, land on one another. If one is in metres from a point of its own and the other in a
+national grid — or each from a different point — they are drawn hundreds of kilometres apart, and a
+picture of that is not a comparison of anything. So before laying one over the other the
+application checks that the two lie in the same place; if they do not, it says so and offers them
+side by side, where each survey is framed on its own and nothing has to line up. The check cannot
+see a small misplacement: two surveys measured from points a few metres apart are overlaid, and are
+off by those few metres. For an overlay you can trust, export both from the same fixed point or in
+the same coordinate system.
+
+Comparing is a way of looking. Nothing about it is saved, and it does not change which model is
+current.
+
 ---
 
 ## Cave walls (`.stl`)

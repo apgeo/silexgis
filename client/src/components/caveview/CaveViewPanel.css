@@ -190,3 +190,195 @@
      not happen. */
   z-index: 11;
 }
+
+/* ---- Looking at two surveys together ----
+
+   <b>The controls are in the flow above the model, not drawn over it.</b> Every corner of the
+   model is already taken by the viewer's own furniture — its tabs down the left edge, its row of
+   controls along the top, its compass and scale at the bottom — and these controls change the
+   whole arrangement of the panel, which nothing drawn inside one viewer should appear to do. So a
+   panel that has something to compare its survey with becomes a grid: a row of controls, and the
+   model in what is left. A panel that has not stays the single positioned box it always was, with
+   no rule in this block reaching it.
+
+   The surfaces keep the inline `width: 100%; height: 100%` every surface here has, and for the
+   same reason — the viewer's own stylesheet arrives later and would win a tie. In a grid a
+   percentage is of the cell, so the model fills exactly the row the controls leave it.
+
+   The viewers are never put in a container that is its own containing block: the picture viewer
+   opened from a station is a sheet fixed to the screen and drawn from inside this panel, and a
+   surface refused fullscreen covers the page by being fixed too. That is why how many columns
+   there are is decided by measuring the panel rather than by a query on it. */
+.caveview-panel-compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'bar'
+    'primary';
+}
+
+.caveview-panel-compare > .caveview-panel-surface {
+  grid-area: primary;
+  min-width: 0;
+  min-height: 0;
+}
+
+.caveview-compare-bar {
+  grid-area: bar;
+  /* Positioned, so that it is drawn over the panel's loading mark, which covers the whole panel
+     and would otherwise take every press meant for these controls while a model is read. */
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+  padding-bottom: 6px;
+}
+
+.caveview-compare-stop {
+  margin-inline-start: auto;
+}
+
+.caveview-compare-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+/* Both surveys in one viewer, which takes the whole of the model's place. This panel's own
+   surface stays in that place under it, out of sight but at its size: see the panel for why it is
+   hidden rather than taken out of the layout. The viewer drawing the two comes later in the page,
+   so it is the one on top. */
+.caveview-panel-overlaid {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'bar'
+    'overlay'
+    'lists';
+}
+
+.caveview-panel-overlaid > .caveview-panel-surface {
+  grid-area: overlay;
+}
+
+/* Each survey in a viewer of its own, named above it. */
+.caveview-panel-side-by-side {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'bar bar'
+    'name-primary name-other'
+    'primary other'
+    'lists lists';
+  column-gap: 8px;
+}
+
+/* One above the other where the panel is too narrow for two: half of a narrow pane is narrower
+   than the viewer's own row of controls, and a model that small is not one to compare anything by. */
+.caveview-panel-side-by-side.caveview-panel-stacked {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'bar'
+    'name-primary'
+    'primary'
+    'name-other'
+    'other'
+    'lists';
+}
+
+.caveview-compare-name {
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.caveview-compare-name-primary {
+  grid-area: name-primary;
+}
+
+.caveview-compare-name-other {
+  grid-area: name-other;
+}
+
+.caveview-compare-cell {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.caveview-compare-cell-other {
+  grid-area: other;
+}
+
+.caveview-compare-cell-overlay {
+  grid-area: overlay;
+}
+
+.caveview-compare-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Which colour is which survey. A short line rather than a square: the surveys are drawn as
+   lines, and the key shows the mark it stands for. */
+.caveview-compare-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-width: 0;
+}
+
+.caveview-compare-legend-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 260px;
+}
+
+.caveview-compare-swatch {
+  flex: none;
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+/* The parts of each survey. Under the models rather than beside them, so that the models keep
+   the panel's whole width, and no taller than a few rows: past that it scrolls, because a survey
+   of forty parts must not leave the models a strip to be drawn in. */
+.caveview-compare-lists {
+  grid-area: lists;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 168px;
+  overflow-y: auto;
+  padding-top: 6px;
+}
+
+.caveview-compare-list-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 8px;
+}
+
+.caveview-compare-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.caveview-compare-list-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}

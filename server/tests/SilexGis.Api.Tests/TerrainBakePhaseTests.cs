@@ -385,7 +385,11 @@ public sealed class TerrainBakePhaseTests : IAsyncLifetime, IDisposable, IClassF
             }
 
             services.AddSingleton<ITerrainRasterPreparer, DirectoryPreparer>();
-        });
+        },
+        // An application of this test's own in either test mode: one test here compares a path the
+        // application recorded with the directory this test named, and an application shared by the
+        // class knows that directory under the class's name for it.
+        ownHost: true);
     }
 
     private string TilesOf(Guid buildId) =>

@@ -735,7 +735,11 @@ public sealed class TerrainBuildExtendTests : IAsyncLifetime, IDisposable, IClas
             }
 
             services.AddSingleton<ITerrainRasterPreparer, DirectoryPreparer>();
-        });
+        },
+        // An application of this test's own in either test mode: one test here compares a path the
+        // application recorded with the directory this test named, and an application shared by the
+        // class knows that directory under the class's name for it.
+        ownHost: true);
     }
 
     /// <summary>Stands in for the step that obtains rasters. Nothing here needs one.</summary>

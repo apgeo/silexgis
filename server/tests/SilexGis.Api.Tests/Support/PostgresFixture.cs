@@ -129,6 +129,10 @@ public sealed class PostgresFixture : IAsyncLifetime
             return;
         }
 
+        // In fast mode the class's tests took turns on applications that are still running; they
+        // go before the database they are connected to does.
+        await SharedHosts.StopAllOnAsync(ConnectionString);
+
         // This pool and no other. ClearAllPools is process-wide, and with the classes running in
         // parallel it would throw away the pooled connections of every class still mid-test —
         // once per class, a hundred times over a run.
@@ -180,8 +184,10 @@ public sealed class PostgresFixture : IAsyncLifetime
             // class starts from the same administrator-less installation and a class that wants one
             // makes it. Under the shared database a class could instead find whichever
             // administrator a neighbour had happened to create first.
+            // Its own application in either mode, and really stopped when this block ends: a
+            // template that something is still connected to cannot be copied.
             await using (var factory =
-                new SilexGisApiFactory(WithDatabase(maintenance, TemplateDatabase)))
+                new SilexGisApiFactory(WithDatabase(maintenance, TemplateDatabase), ownHost: true))
             {
                 _ = factory.CreateClient();
             }

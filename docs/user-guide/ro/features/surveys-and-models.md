@@ -82,6 +82,50 @@ topografia ajunge mai grosieră decât a fost ridicată. Aplicația detectează 
 Fișierul a pierdut precizie înainte să ajungă."* Reexportarea în jurul unei origini locale o
 recuperează.
 
+### Compararea a două topografii
+
+O peșteră topografiată de două ori păstrează ambele poligonații, iar vizualizatorul topografic le
+poate arăta împreună. Deschideți una dintre ele — **Vezi în 3D**, lângă hartă sau într-o fereastră
+proprie — și, dacă peștera mai are un `.lox` sau `.3d`, deasupra modelului apare **Compară cu…**.
+Alegeți cealaltă topografie și felul în care sunt arătate cele două. Puteți trece de la un fel la
+celălalt în timp ce comparați, iar **Oprește compararea** vă întoarce la topografia pe care ați
+deschis-o.
+
+- **Suprapuse** desenează ambele topografii într-o singură vedere, fiecare în culoarea ei —
+  albastru pentru topografia deschisă, portocaliu pentru cea cu care este comparată — sub o
+  legendă care spune care este care. O galerie retopografiată stă peste ea însăși, cea de dinainte,
+  așa că iese în evidență, într-o singură culoare, ce s-a adăugat sau s-a mutat. Acolo unde cele
+  două coincid exact se poate vedea o singură culoare, și anume portocaliul topografiei cu care
+  comparați, desenată peste cea deschisă: ascundeți acea parte a ei ca să vedeți albastrul de
+  dedesubt.
+- **Alăturate** dă fiecărei topografii o vedere proprie, sub numele ei — una deasupra celeilalte
+  acolo unde nu este loc pe lățime. **Leagă vederile**, pornit de la început, face ca rotirea,
+  înclinarea, apropierea sau mutarea unui model să facă același lucru cu celălalt; opriți-l ca să
+  le priviți pe fiecare separat.
+
+**Arătarea și ascunderea părților.** Sub modele este, pentru fiecare topografie, o listă a
+ridicărilor denumite din care este alcătuită, cu câte o bifă și cu **Arată tot**. Cu
+**Sincronizare** pornită, bifarea sau debifarea unei părți face același lucru cu partea cu același
+nume din cealaltă topografie; o parte pe care o are doar una dintre ele este arătată sau ascunsă
+singură. Cu ea oprită, fiecare listă lucrează doar asupra topografiei ei. Merge la fel suprapuse
+și alăturate, iar ce ați ascuns rămâne ascuns când treceți de la un fel la celălalt. Lista este
+primul nivel din structura topografiei care oferă o alegere — o topografie exportată dintr-o
+singură bucată apare ca acea singură bucată.
+
+**Două topografii în coordonate diferite pot fi comparate doar alăturate.** Vizualizatorul
+desenează fiecare fișier acolo unde îl pun propriile lui numere. Două topografii măsurate față de
+același punct fix, sau exportate în aceeași proiecție, cad una peste alta. Dacă una este în metri
+față de un punct propriu, iar cealaltă într-o proiecție națională — sau fiecare față de alt punct —
+sunt desenate la sute de kilometri una de alta, iar o asemenea imagine nu compară nimic. De aceea,
+înainte să le suprapună, aplicația verifică dacă cele două se află în același loc; dacă nu, o
+spune și le oferă alăturate, unde fiecare topografie este încadrată separat și nimic nu trebuie să
+se potrivească. Verificarea nu poate vedea o deplasare mică: două topografii măsurate față de
+puncte aflate la câțiva metri unul de altul sunt suprapuse și sunt decalate cu acei câțiva metri.
+Pentru o suprapunere în care să aveți încredere, exportați-le pe amândouă față de același punct fix
+sau în același sistem de coordonate.
+
+Compararea este un fel de a privi. Nimic din ea nu se salvează și nu schimbă modelul curent.
+
 ---
 
 ## Pereții peșterii (`.stl`)

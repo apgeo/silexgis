@@ -3,21 +3,17 @@ import { Button, Card, Flex, InputNumber, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useMapConfig } from '../../api/hooks.ts';
 import {
+  CENTERLINE_MIN_PATHS,
+  CENTERLINE_PATHS_STEP,
+  CENTERLINE_ZOOM_RANGE,
+} from '../../map/centerlineLimits.ts';
+import {
   MESHES_IN_VIEW_MIN_BYTES,
   MESHES_IN_VIEW_ZOOM_RANGE,
 } from '../../scene3d/surveyMeshesInView3d.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
 const MEGABYTE = 1024 * 1024;
-
-/** The zooms full survey detail may be asked for from: the range a map of this kind is ever drawn at. */
-const CENTERLINE_ZOOM_RANGE = { min: 1, max: 22 } as const;
-
-/**
- * The smallest line budget a person may set. Lower withholds all but the smallest survey, which
- * reads on the map as the overlay being broken rather than as a choice.
- */
-const CENTERLINE_MIN_PATHS = 100;
 
 /** A byte count as the megabytes a person reads and types: whole ones, and never "0". */
 function megabytes(bytes: number): number {
@@ -180,7 +176,7 @@ export default function AdvancedSettingsPage() {
             <InputNumber
               min={CENTERLINE_MIN_PATHS}
               max={mapConfig?.centerlineMaxPathsLimit}
-              step={1000}
+              step={CENTERLINE_PATHS_STEP}
               precision={0}
               aria-label={t('settings.advanced.centerlinesMaxPaths')}
               value={maxPaths ?? null}

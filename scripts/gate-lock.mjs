@@ -37,7 +37,15 @@
 //   node scripts/gate-lock.mjs acquire [--no-wait] [--label <text>]
 //   node scripts/gate-lock.mjs release
 //   node scripts/gate-lock.mjs steal --pid <holder> [--force]
-//   node scripts/gate-lock.mjs run [--label <text>] [--result <file>] [--full] -- <command> [args...]
+//   node scripts/gate-lock.mjs run [--label <text>] [--result <file>] [--full] [--mode fast|precise]
+//                                  -- <command> [args...]
+//
+// --mode says how much of its surroundings each API integration test has to itself, and is handed
+// to the command as SILEXGIS_TEST_MODE: `precise`, the default, builds an application for every
+// test; `fast` lets the tests of a class take turns on one, which is several times quicker and
+// proves less. A result file always names the mode, and a fast run that passed is written down as
+// `green-fast`, never `green` — so that whatever reads a verdict to decide a landing cannot take
+// the weaker one for the stronger without saying so.
 //
 // `run` is the normal form: take the lock (waiting in line by default), run the command with
 // inherited stdio, write a small JSON result file when it ends (so a detached caller can
@@ -489,18 +497,87 @@ function shardedRunnerIn(command) {
 /**
  * Whether a command is the whole API integration suite: `dotnet test` naming the Api.Tests
  * project or its directory, with nothing narrowing it — or the sharded runner asked for every
- * shard. Purely lexical, on purpose — the point is to refuse before anything runs.
+ * shard of every class. Purely lexical, on purpose — the point is to refuse before anything runs.
  */
 export function isUnfilteredApiSuite(command) {
   if (command.length < 2) return false;
   const sharded = shardedRunnerIn(command);
-  if (sharded) return !sharded.rest.includes('--only');
+  // Asked for the classes a change selects, the runner refuses the whole suite itself.
+  if (sharded) return !['--only', '--classes', '--affected'].some((part) => sharded.rest.includes(part));
   const tool = basename(command[0].replaceAll('\\', '/')).replace(/\.exe$/i, '');
   if (tool !== 'dotnet' || command[1] !== 'test') return false;
   const namesSuite = command.some((a) => /Api\.Tests(\.csproj)?$/.test(a.replaceAll('\\', '/').replace(/\/+$/, '')));
   if (!namesSuite) return false;
   const narrowed = command.some((a) => a === '--filter' || a.startsWith('--filter=') || a === '--list-tests' || a === '-t');
   return !narrowed;
+}
+
+/**
+ * The test mode a wrapped run is in: what `run --mode` asked for, what the sharded runner's own
+ * `--mode` names, what SILEXGIS_TEST_MODE says — whichever of them says anything — else precise.
+ *
+ * Written down because nothing else in a result distinguishes the two. A fast run lets the tests
+ * of a class share one running application and so proves less than a precise one; a green
+ * verdict that does not say which it was would be read as the stronger of the two.
+ *
+ * Throws when two of the three disagree, or one names a mode there is not: a run labelled one way
+ * and executed the other is the one mistake here that nothing downstream could notice.
+ */
+export function testModeOf(command, environment = process.env, asked = undefined) {
+  // Only the sharded runner's own option is read out of a command; `--mode` means something
+  // else to plenty of other tools.
+  const rest = shardedRunnerIn(command)?.rest ?? [];
+  const at = rest.indexOf('--mode');
+  const named = at !== -1
+    ? rest[at + 1]
+    : rest.find((a) => a.startsWith('--mode='))?.slice('--mode='.length);
+  const said = [
+    ['--mode', asked],
+    ["the command's own --mode", named],
+    ['SILEXGIS_TEST_MODE', environment.SILEXGIS_TEST_MODE],
+  ]
+    .map(([where, value]) => [where, (value ?? '').trim().toLowerCase()])
+    .filter(([, value]) => value !== '');
+  for (const [where, value] of said) {
+    if (value !== 'fast' && value !== 'precise') {
+      throw new Error(`${where} is fast or precise, not "${value}"`);
+    }
+  }
+  if (new Set(said.map(([, value]) => value)).size > 1) {
+    throw new Error(
+      `the test mode is said two ways — ${said.map(([where, value]) => `${where} says ${value}`).join(', ')} — say one`);
+  }
+  return said[0]?.[1] ?? 'precise';
+}
+
+/**
+ * A run's verdict as its mode allows it to be read.
+ *
+ * A fast run that passed is `green-fast`, not `green`: every test passed while the tests of a
+ * class took turns on one application, which is less than each passing with an application of
+ * its own. The different word is the protection — a reader that knows only `green` does not
+ * take it for one, where a second field beside `green` would have to be remembered.
+ */
+export function inMode(counts, mode) {
+  if (mode !== 'fast') return counts;
+  if (counts.verdict === 'green') {
+    return {
+      ...counts,
+      verdict: 'green-fast',
+      verdictReason:
+        'every test passed while the tests of a class took turns on one running application; '
+          + 'only a precise run says each passes with an application of its own',
+    };
+  }
+  if (counts.verdict === 'red') {
+    return {
+      ...counts,
+      verdictReason:
+        `${counts.verdictReason}, in fast mode — a failure the same tests do not show in precise mode `
+          + 'is one test leaving something in the application for the next',
+    };
+  }
+  return counts;
 }
 
 /**
@@ -716,6 +793,19 @@ async function main() {
   }
 
   if (cmd === 'run') {
+    // Before anything else is taken out: the wrapped command may carry a --mode of its own, and
+    // this one is only ever what stands in front of the separator.
+    const before = args.indexOf('--');
+    const modeAt = args.slice(0, before === -1 ? args.length : before).indexOf('--mode');
+    let askedMode;
+    if (modeAt !== -1) {
+      askedMode = args[modeAt + 1];
+      if (askedMode === undefined || askedMode === '--') {
+        console.error('gate-lock: --mode is fast or precise');
+        process.exit(1);
+      }
+      args.splice(modeAt, 2);
+    }
     const label = take('--label');
     const resultFile = take('--result');
     const full = has('--full');
@@ -725,6 +815,14 @@ async function main() {
       process.exit(1);
     }
     const command = args.slice(sep + 1);
+
+    let testMode;
+    try {
+      testMode = testModeOf(command, process.env, askedMode);
+    } catch (error) {
+      console.error(`gate-lock: ${error.message}`);
+      process.exit(1);
+    }
 
     if (isUnfilteredApiSuite(command) && !full) {
       console.error(
@@ -748,7 +846,16 @@ async function main() {
 
     // The child's output is teed rather than inherited, so this can read the runner's own summary
     // line on the way past. Nothing about what the caller sees changes.
-    const child = spawn(command[0], command.slice(1), { stdio: ['inherit', 'pipe', 'pipe'] });
+    if (testMode === 'fast') {
+      console.error(
+        'gate-lock: test mode fast — the tests of a class take turns on one application; '
+          + 'a pass will be recorded as green-fast, not green',
+      );
+    }
+    const child = spawn(command[0], command.slice(1), {
+      stdio: ['inherit', 'pipe', 'pipe'],
+      env: { ...process.env, SILEXGIS_TEST_MODE: testMode },
+    });
     let tail = '';
     const watch = (stream, out) =>
       stream?.on('data', (chunk) => {
@@ -797,7 +904,7 @@ async function main() {
       }
     }
     if (resultFile) {
-      const counts = summarise(tail);
+      const counts = inMode(summarise(tail), testMode);
       writeFileSync(
         resultFile,
         JSON.stringify(
@@ -806,6 +913,7 @@ async function main() {
             command: command.join(' '),
             cwd: process.cwd(),
             full,
+            testMode,
             lock: lockFile(dir),
             exitCode,
             ...counts,
@@ -834,7 +942,7 @@ async function main() {
     process.exit(swap ? 75 : exitCode);
   }
 
-  console.error('usage: gate-lock.mjs status [--probe] | acquire [--no-wait] [--label X] | release | steal --pid N [--force] | run [--label X] [--result F] [--full] -- cmd...');
+  console.error('usage: gate-lock.mjs status [--probe] | acquire [--no-wait] [--label X] | release | steal --pid N [--force] | run [--label X] [--result F] [--full] [--mode fast|precise] -- cmd...');
   process.exit(1);
 }
 

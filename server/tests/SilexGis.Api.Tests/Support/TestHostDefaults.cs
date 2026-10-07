@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 
 namespace SilexGis.Api.Tests.Support;
 
@@ -51,6 +52,60 @@ internal static class TestHostDefaults
     internal static void OwnTheContainerRatherThanTheReaper()
     {
         Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true");
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => PostgresFixture.StopContainer();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            // First, because it is quick and the next thing is not: the runner gives a finished
+            // test process only a moment to leave, and stopping a container can outlast it.
+            SayHowManyApplicationsWereBuilt();
+            PostgresFixture.StopContainer();
+        };
+    }
+
+    /// <summary>
+    /// Leaves behind, where <c>SILEXGIS_TEST_HOST_STATS</c> names a file, how many applications
+    /// this process built and how many times a test was handed one already running.
+    ///
+    /// <para>
+    /// The two modes cannot be told apart from a run's result: fast mode that shared nothing — a
+    /// misspelt switch, a change that made every factory look different from the last — is simply
+    /// a slow green run. These two numbers are what says the mode did what it was asked, and the
+    /// runner that deals the suite into several processes adds them up.
+    /// </para>
+    /// </summary>
+    private static void SayHowManyApplicationsWereBuilt()
+    {
+        var path = Environment.GetEnvironmentVariable("SILEXGIS_TEST_HOST_STATS");
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            // Why each application was built, beside the two totals, and the same per class: in
+            // fast mode this is the list of what did not share, and so of where the time still goes.
+            var account = new
+            {
+                mode = TestMode.Fast ? "fast" : "precise",
+                built = SharedHosts.Built,
+                borrowed = SharedHosts.Borrowed,
+                stoppedEarly = SharedHosts.StoppedEarly,
+                because = SharedHosts.BuiltBecause.OrderByDescending(reason => reason.Value)
+                    .ToDictionary(reason => reason.Key, reason => reason.Value),
+                classes = SharedHosts.ByClass.OrderBy(made => made.Key, StringComparer.Ordinal).ToDictionary(
+                    made => made.Key,
+                    made => new
+                    {
+                        built = made.Value.Built,
+                        borrowed = made.Value.Borrowed,
+                        because = made.Value.Because.ToDictionary(reason => reason.Key, reason => reason.Value),
+                    }),
+            };
+            File.WriteAllText(path, JsonSerializer.Serialize(account) + "\n");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A number nobody could write down; not a reason to fail a run that has finished.
+        }
     }
 }
