@@ -421,7 +421,9 @@ feature and walkthroughs of whole jobs.
   English from a button on the page or from a link that names the language. A club pastes a
   block into its own website to show the same viewer in an article whose links can move it, and
   the framed viewer tells that article what it is showing. The same link lists
-  the cave's other parties being followed now and its finished published trips, each playable as
+  the cave's other parties being followed now — in a list shut until the reader opens it, from
+  which any of them can be watched on the link's own survey under a banner saying whose party it
+  is — and its finished published trips, gathered by camp, each playable as
   a replay on the survey its reports were measured in; any moment of a replay can be copied as a
   link that opens there, standing or already playing. The page names people as the installation
   decides — real names by default, a caption to keep one person off it — a cave with protected

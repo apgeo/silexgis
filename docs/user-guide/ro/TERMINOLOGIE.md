@@ -189,6 +189,17 @@ odată cu ea — și apoi paginile.
 | Time-lapse figure | Factor de accelerare |
 | Terrain over the cave | Relieful de deasupra peșterii |
 | Save this moment as a picture | Salvează acest moment ca imagine |
+| Also in this cave now | Tot în această peșteră, acum |
+| Watch (another party of the cave) | Vezi echipa |
+| Watching (the row of the party on screen) | Pe ecran acum |
+| Back to this link's trip | Înapoi la tura acestui link |
+| This link's trip | Tura acestui link |
+| Camp: … (on a row of a list) | Tabără: … |
+| Other trips of this cave | Alte ture din această peșteră |
+
+A vedea o altă echipă din peșteră nu este „urmărire": „urmărire" rămâne numele supravegherii
+unei ture. Butonul este **Vezi echipa**, rândul ales este marcat **Pe ecran acum**, iar în text
+verbul este *a privi* („privești o altă echipă", „echipa pe care o priveai").
 
 ## Alte
 

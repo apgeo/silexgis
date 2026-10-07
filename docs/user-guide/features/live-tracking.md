@@ -373,7 +373,10 @@ The page says what it is showing, for a reader who has never followed a trip:
   anybody went underground.
 - **How old the page is.** *Page updated 40 seconds ago*, and when a read fails *"This page has
   stopped refreshing"* says since when — that is about the page and the connection, never about
-  the trip. A framed page says the same in one line.
+  the trip. A framed page says the same in one line. The same notice stands while the phone
+  knows it has no connection (the page then does not even try to read, and tries by itself the
+  moment the connection is back) and while the server has asked the page to wait before asking
+  again — a busy server names the wait, and the page keeps to it instead of asking sooner.
 - **Times that stay true.** Every *N minutes ago* moves on by itself while the page is open
   (paused while its tab is in the background). Once the trip is over, or the link has stopped
   answering, the page prints the hour instead — with the date when it is not today — because a
@@ -389,12 +392,52 @@ The page says what it is showing, for a reader who has never followed a trip:
   opens: after the button is pressed its own tooltips stay as they were until the page is
   loaded again.
 
-**Past trips in this cave** opens the cave's list:
+Two lists stand at the bottom of the page, each shut until it is pressed. A reader who opens
+neither is told about nobody else, and the page asks the server for neither.
+
+**Also in this cave now** opens the parties being followed in the same cave at this moment:
 
 - **Being followed now** — every party of the same cave being followed at this moment, the
-  link's own trip marked *This link's trip*. A party whose watch has just been closed says
-  *Just finished*, never *Underground now*. These rows are for reading; the page keeps drawing
-  its own party.
+  link's own trip marked *This link's trip*. Every other party's row says how many of its people
+  are *Underground*, *Out* and *Not reported yet*, and the camp it is out from where it has one.
+  A party whose watch has just been closed says *Just finished*, never *Underground now*.
+- **Watch**, on another party's row, puts that party on the page in place of the link's own:
+  its name in the heading, its people in the list, its markers on the drawing — under a banner
+  that says *"You are watching another party of this cave"*, with **Back to this link's trip**
+  beside it. The watched row says *Watching*, and the link's own row carries the same way back.
+  In a framed viewer the list opens from the button on the frame's one line, and that line then
+  reads *Another party of this cave: …* with the way back beside it. What watching does and
+  does not show:
+  - **Only what the list already held.** Everybody holding the link is handed the cave's
+    followed parties when they open the list; **Watch** draws one of them and asks the server
+    for nothing more. It opens no other link and needs none.
+  - **On this link's survey, and no other.** A place the other party reported on a different
+    survey of the cave is listed as such and not drawn, exactly as for the link's own party.
+    The pictures and map sheets around the drawing stay the link's too.
+  - **The browser tab and the address stay the link's own trip.** An address copied while
+    watching opens the trip the link was published for: there is no link to "the other party",
+    and reloading the page returns to the link's own trip.
+  - **As fresh as the list.** The watched party is read with the list, every minute, for as
+    long as it is watched — the list need not stay open — and *Page updated …* then says how old
+    the list is.
+  - **It ends out loud.** A watched party whose watch is closed is told as *"This party's trip
+    is over"*. When it leaves the list — its link taken back, or the time a closed watch stays
+    readable run out — the page goes back to the link's own trip under a notice that names the
+    party it was. It never changes silently whom you are looking at. Picking a past trip ends a
+    watch as well: one party at a time.
+- **How fresh the list is.** While a party in it is underground the list is read again every
+  minute; while nobody is, every five minutes, for as long as the list is open and its tab is
+  in view — which is how a party that goes in later appears without reopening it.
+
+**Past trips in this cave** opens the cave's finished published trips:
+
+- **How fresh the list is.** The finished trips are not re-read on a clock: a list older than
+  five minutes is read again when you come back to the tab or open it again.
+- **Gathered by camp.** Where a finished trip was part of a camp, the list gathers the camp's
+  trips under *Camp: …*, with the trips of no camp last under *Other trips of this cave*; a
+  party being followed and a replay's banner say the camp in a line of their own. Where no trip
+  of the cave belongs to a camp the list is one plain list. The camp is named only — it cannot
+  be opened from here, and the lists cannot be narrowed to one camp.
 - **The cave's finished published trips** — **Play** replays one on the survey its reports were
   measured in, under a banner that says plainly *"You are looking at a past trip"*. The view can
   keep up with one team or person, and **Back to the party now** returns — as does the
@@ -500,6 +543,10 @@ document.addEventListener('silexgis:ready', function (event) {
     // (where the replay's clock stood, an instant such as 2019-07-06T13:40:00.000Z).
     // Nothing below is where anybody is now.
   }
+  if (said.watching) {
+    // ANOTHER PARTY of the cave, picked by the reader inside the frame: said.watching.title
+    // and said.watching.tripLogId. It is being followed now, but it is not this article's trip.
+  }
   said.party.forEach(function (member) {
     // member.ordinal        the place in the party (1, 2, 3...) - what data-silexgis-caver takes
     // member.name           the name the viewer draws them under
@@ -519,7 +566,8 @@ What to rely on:
 
 - **`silexgis:ready` is said again whenever what it says changes** — the view finishing loading,
   somebody moving (the minute's refresh while the party is underground, or a replay's clock
-  carrying somebody to another station), a replay starting or being left. It is **not** said on
+  carrying somebody to another station), a replay starting or being left, the reader choosing
+  another party of the cave to watch or going back from one. It is **not** said on
   every tick of a replay's clock: `past.at` is the moment the announcement was true at, not a
   running clock.
 - **Wait for `loaded: true`.** The first announcement usually arrives before the party has,
@@ -527,6 +575,23 @@ What to rely on:
   nobody on it.
 - **`past` present means a replay.** Absent, the party is the block's own trip as it stands
   now. Never print a replayed party as where people are.
+- **`watching` present means another party of the cave.** The reader opened the frame's list
+  of parties being followed in the cave and pressed **Watch** on one of them. That party is
+  underground now and its members are numbered from 1 exactly as your trip's are, so a page
+  that prints *"caver 3 is at …"* must say whose caver 3 it is — or print nothing while
+  `watching` is present. Absent, the party is not another party: it is the block's own trip, or
+  a replay when `past` is present; the two are never present together. A link with
+  `data-silexgis-trip="live"` brings the frame back to the block's own trip from either.
+
+  **A listener written before `watching` existed has to be changed before it is right again.**
+  While a party is watched, `party` carries *that* party's people and stations — the same
+  member, in the same shape, with nothing else about it different — and a pressed link with
+  `data-silexgis-caver` is answered from the party on screen as well. A page that prints names
+  or places from `party` without reading `watching` therefore prints another party's people
+  under its own trip's heading from the moment its reader presses **Watch** inside the frame.
+  Nothing is disclosed that the link did not already hand over, but the words would be wrong.
+  If your page prints anything from `party`, add the `if (said.watching)` check above — print
+  whose party it is, or print nothing — before relying on the frame's list of parties.
 - **`station: null` has three meanings**, and two of them are not "nobody knows". Nobody has
   reported where that person is; or somebody has, on a different survey of the cave
   (`onOtherSurvey`); or at a station the drawing in the frame does not hold (`notOnDrawing`).

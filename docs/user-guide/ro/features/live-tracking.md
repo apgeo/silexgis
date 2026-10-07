@@ -394,7 +394,11 @@ Pagina spune ce arată, pentru un cititor care nu a mai urmărit niciodată o tu
   **pornită**, nu cea la care a intrat cineva în peșteră.
 - **Cât de veche este pagina.** *Pagină împrospătată acum 40 de secunde*, iar când o citire
   eșuează *„Pagina nu se mai împrospătează"* spune de când — este despre pagină și conexiune,
-  niciodată despre tură. O pagină încadrată spune același lucru într-un singur rând.
+  niciodată despre tură. O pagină încadrată spune același lucru într-un singur rând. Aceeași
+  înștiințare rămâne cât timp telefonul știe că nu are conexiune (pagina nici nu mai încearcă
+  atunci să citească, și încearcă singură de îndată ce conexiunea revine) și cât timp serverul
+  i-a cerut paginii să aștepte înainte să întrebe din nou — un server ocupat spune cât, iar
+  pagina respectă așteptarea în loc să întrebe mai devreme.
 - **Ore care rămân adevărate.** Fiecare *acum N minute* înaintează singur cât timp pagina este
   deschisă (cu pauză cât fila este în fundal). După ce tura s-a încheiat sau linkul nu mai
   răspunde, pagina scrie ora — cu data, când nu este azi — pentru că altfel un „acum" al unei
@@ -410,12 +414,54 @@ Pagina spune ce arată, pentru un cititor care nu a mai urmărit niciodată o tu
   singură dată, la deschidere: după apăsarea butonului, indicațiile lui proprii rămân cum erau
   până la reîncărcarea paginii.
 
-**Ture trecute în această peșteră** deschide lista peșterii:
+În partea de jos a paginii stau două liste, fiecare închisă până când este apăsată. Un cititor
+care nu deschide niciuna nu află despre nimeni altcineva, iar pagina nu cere serverului niciuna.
+
+**Tot în această peșteră, acum** deschide echipele urmărite în aceeași peșteră în acest moment:
 
 - **Urmărite acum** — fiecare echipă din aceeași peșteră urmărită în acest moment, cu tura
-  linkului marcată *Tura acestui link*. O echipă a cărei urmărire tocmai a fost închisă spune
-  *Abia încheiată*, niciodată *În peșteră acum*. Rândurile sunt de citit; pagina continuă să
-  deseneze propria echipă.
+  linkului marcată *Tura acestui link*. Rândul fiecărei alte echipe spune câți dintre oamenii ei
+  sunt *În peșteră*, *Ieșit* și *Încă neraportat*, și tabăra din care a plecat, acolo unde are
+  una. O echipă a cărei urmărire tocmai a fost închisă spune *Abia încheiată*, niciodată *În
+  peșteră acum*.
+- **Vezi echipa**, pe rândul unei alte echipe, pune acea echipă pe pagină în locul celei a
+  linkului: numele ei în titlu, oamenii ei în listă, marcajele ei pe desen — sub un banner care
+  spune *„Privești o altă echipă din această peșteră"*, cu **Înapoi la tura acestui link**
+  alături. Rândul privit spune *Pe ecran acum*, iar rândul turei linkului poartă același drum
+  înapoi. Într-o vizualizare încadrată lista se deschide din butonul de pe singurul rând al
+  cadrului, iar rândul acela spune apoi *Altă echipă din această peșteră: …*, cu drumul înapoi
+  alături. Ce arată și ce nu arată:
+  - **Numai ce avea deja lista.** Oricine deține linkul primește echipele urmărite ale peșterii
+    când deschide lista; **Vezi echipa** desenează una dintre ele și nu mai cere nimic
+    serverului. Nu deschide alt link și nu are nevoie de vreunul.
+  - **Pe ridicarea acestui link, și pe niciuna alta.** Un loc raportat de cealaltă echipă pe
+    altă ridicare a peșterii este trecut în listă ca atare și nu este desenat, exact ca pentru
+    echipa linkului. Fotografiile și planșele din jurul desenului rămân tot ale linkului.
+  - **Fila browserului și adresa rămân ale turei linkului.** O adresă copiată în timp ce priviți
+    altă echipă deschide tura pentru care a fost publicat linkul: nu există un link „către
+    cealaltă echipă", iar reîncărcarea paginii revine la tura linkului.
+  - **La fel de proaspătă ca lista.** Echipa privită este citită odată cu lista, în fiecare
+    minut, atât cât este privită — lista nu trebuie să rămână deschisă — iar *Pagină
+    împrospătată …* spune atunci cât de veche este lista.
+  - **Se încheie spunând-o.** O echipă privită a cărei urmărire este închisă este anunțată cu
+    *„Tura acestei echipe s-a încheiat"*. Când iese din listă — linkul ei a fost retras, sau a
+    trecut timpul cât o urmărire închisă mai rămâne citibilă — pagina revine la tura linkului,
+    sub o înștiințare care numește echipa care era pe ecran. Nu schimbă niciodată pe tăcute pe
+    cine priviți. Alegerea unei ture trecute încheie și ea privirea: câte o echipă pe rând.
+- **Cât de proaspătă este lista.** Cât timp o echipă din ea este în peșteră, lista este citită
+  din nou în fiecare minut; cât timp nu este niciuna, la cinci minute, atât cât lista este
+  deschisă și fila ei este la vedere — așa apare, fără redeschidere, o echipă care intră mai
+  târziu.
+
+**Ture trecute în această peșteră** deschide turele încheiate și publicate ale peșterii:
+
+- **Cât de proaspătă este lista.** Turele încheiate nu sunt recitite după ceas: o listă mai
+  veche de cinci minute este citită din nou când reveniți la filă sau o deschideți iar.
+- **Grupate pe tabere.** Unde o tură încheiată a făcut parte dintr-o tabără, lista adună turele
+  taberei sub *Tabără: …*, cu turele din nicio tabără la urmă, sub *Alte ture din această
+  peșteră*; o echipă urmărită și bannerul unei reluări spun tabăra într-un rând al lor. Unde
+  nicio tură a peșterii nu ține de o tabără, lista este o singură listă simplă. Tabăra este doar
+  numită — nu poate fi deschisă de aici, iar listele nu pot fi restrânse la o singură tabără.
 - **Turele încheiate și publicate ale peșterii** — **Redă** reia una pe ridicarea în care au fost
   măsurate rapoartele ei, sub un banner care spune limpede *„Aceasta este o tură trecută"*.
   Vederea poate ține pasul cu o echipă sau cu o persoană, iar **Înapoi la echipa din peșteră
@@ -521,6 +567,10 @@ document.addEventListener('silexgis:ready', function (event) {
     // (unde stătea ceasul reluării, un moment de forma 2019-07-06T13:40:00.000Z).
     // Nimic de mai jos nu spune unde se află cineva acum.
   }
+  if (said.watching) {
+    // O ALTĂ ECHIPĂ din peșteră, aleasă de cititor în cadru: said.watching.title și
+    // said.watching.tripLogId. Este urmărită acum, dar nu este tura acestui articol.
+  }
   said.party.forEach(function (member) {
     // member.ordinal        locul în echipă (1, 2, 3...) - ce primește data-silexgis-caver
     // member.name           numele sub care îl desenează vizualizarea
@@ -541,13 +591,33 @@ Pe ce vă puteți baza:
 - **`silexgis:ready` este spus din nou ori de câte ori se schimbă ce spune** — vederea a terminat
   de încărcat, cineva s-a mutat (împrospătarea din fiecare minut cât echipa este în peșteră, sau
   ceasul unei reluări care duce pe cineva la altă stație), o reluare a pornit sau a fost
-  părăsită. **Nu** este spus la fiecare pas al ceasului unei reluări: `past.at` este momentul la
+  părăsită, cititorul a ales să vadă o altă echipă din peșteră sau s-a întors de la ea. **Nu**
+  este spus la fiecare pas al ceasului unei reluări: `past.at` este momentul la
   care anunțul era adevărat, nu un ceas care merge.
 - **Așteptați `loaded: true`.** Primul anunț sosește de obicei înaintea echipei, cu
   `loaded: false` și o echipă goală. O echipă goală cu `loaded: true` este o tură fără nimeni
   pe ea.
 - **`past` prezent înseamnă o reluare.** Absent, echipa este cea a turei publicate de bloc, așa
   cum stă acum. Nu scrieți niciodată o echipă reluată ca loc în care se află oamenii.
+- **`watching` prezent înseamnă o altă echipă din peșteră.** Cititorul a deschis în cadru lista
+  echipelor urmărite în peșteră și a apăsat **Vezi echipa** pe una dintre ele. Acea echipă este
+  în peșteră acum, iar membrii ei sunt numărați de la 1 exact ca ai turei dumneavoastră, așa că
+  o pagină care scrie *„speologul 3 este la …"* trebuie să spună al cui este speologul 3 — sau să
+  nu scrie nimic cât timp `watching` este prezent. Absent, echipa nu este o altă echipă: este
+  tura publicată de bloc sau, când `past` este prezent, o reluare; cele două nu sunt niciodată
+  prezente împreună. O legătură cu `data-silexgis-trip="live"` aduce cadrul înapoi la tura
+  publicată de bloc din oricare dintre ele.
+
+  **Un ascultător scris înainte să existe `watching` trebuie schimbat ca să fie din nou
+  corect.** Cât timp cititorul privește o altă echipă, `party` poartă oamenii și stațiile
+  *acelei* echipe — același membru, în aceeași formă, fără nimic altceva diferit — iar o
+  legătură apăsată cu `data-silexgis-caver` primește răspuns tot de la echipa de pe ecran. O
+  pagină care scrie nume sau locuri din `party` fără să citească `watching` scrie deci oamenii
+  altei echipe sub titlul propriei ture, din clipa în care cititorul apasă **Vezi echipa** în
+  cadru. Nu se dezvăluie nimic din ce linkul nu dădea deja, dar cuvintele ar fi greșite. Dacă
+  pagina dumneavoastră scrie ceva din `party`, adăugați verificarea `if (said.watching)` de mai
+  sus — scrieți a cui este echipa sau nu scrieți nimic — înainte de a vă baza pe lista de
+  echipe din cadru.
 - **`station: null` are trei înțelesuri**, iar două dintre ele nu sunt „nu știe nimeni". Nimeni
   nu a raportat unde este acea persoană; sau cineva a raportat, pe altă ridicare a peșterii
   (`onOtherSurvey`); sau la o stație pe care desenul din cadru nu o conține (`notOnDrawing`).
