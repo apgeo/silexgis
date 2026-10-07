@@ -21,7 +21,7 @@ namespace SilexGis.Domain.Import.TrackingCsv;
 /// <para>
 /// <b>The list of what goes into it is the guarantee.</b> Every value that reaches a written row is
 /// in it — the line, the instant, the person, the team, the kind, the station, the depth, the note
-/// and whether a report is already there to be replaced — together with the two facts about the
+/// whether a report is already there to be replaced and whether its place is left standing — together with the two facts about the
 /// sheet that decide what a replacement leaves standing, and the survey and the cave a placed row
 /// is anchored to. A value that changed a written row and was not in here would be a change no
 /// commit is refused for; a value in here that is only shown (how a name was matched, the place as
@@ -48,7 +48,7 @@ public static class TrackingCsvPlanDigest
     /// Said first, so that a change to how the rest is written down gives every plan a new name
     /// rather than, by accident, an old plan's.
     /// </summary>
-    private const string Shape = "tracking-sheet-plan/2";
+    private const string Shape = "tracking-sheet-plan/3";
 
     /// <summary>The name, as 64 lower-case hexadecimal digits.</summary>
     /// <param name="plan">What the sheet would write.</param>
@@ -69,8 +69,10 @@ public static class TrackingCsvPlanDigest
         Put(text, Shape);
         Put(text, plan.CarriesTeam ? "1" : "0");
         Put(text, plan.CarriesNote ? "1" : "0");
-        // The anchor reaches only rows that claim a station, so a plan with none does not name it.
-        var places = plan.Reports.Any(r => r.ViewerStationName is not null);
+        // The anchor reaches only rows that are placed by this plan, so a plan with none does not
+        // name it: a row that claims no station writes no anchor, and neither does one that leaves
+        // the place the log holds standing.
+        var places = plan.Reports.Any(r => r.ViewerStationName is not null && !r.KeepsStoredPlace);
         Put(text, places ? plan.SurveyModelId?.ToString("N") : null);
         Put(text, places ? plan.CaveFeatureId?.ToString("N") : null);
         Put(text, plan.Reports.Count.ToString(CultureInfo.InvariantCulture));
@@ -87,6 +89,9 @@ public static class TrackingCsvPlanDigest
             Put(text, Depth(report.DepthM));
             Put(text, report.Note);
             Put(text, report.Replaces ? "1" : "0");
+            // Whether the place is written or left as the log holds it is a difference in what a
+            // commit does to the row, with every other value here the same.
+            Put(text, report.KeepsStoredPlace ? "1" : "0");
 
             if (!report.Replaces) continue;
             if (before is null || !before.TryGetValue((report.CaverId, report.At), out var stood))

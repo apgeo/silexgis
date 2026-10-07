@@ -65,7 +65,8 @@ public static class CaverNameLadder
     /// <param name="roster">
     /// Everybody this reader may be matched against, as (key, full name). The caller decides who is
     /// in it — a roster narrowed to the trip's own participants matches only them, and one holding
-    /// the whole instance matches anybody.
+    /// the whole instance matches anybody. A person who goes by two names is given once under
+    /// each, with one key, and is found by either.
     /// </param>
     /// <returns>
     /// Every person the winning rung found. Empty is nobody; one is a match; more than one is
@@ -81,22 +82,28 @@ public static class CaverNameLadder
             return [];
         }
 
-        // One entry per person, whatever the roster repeats. A trip's roster is one row per person
-        // per job, so somebody who both led and surveyed arrives here twice under one key — and two
-        // hits with one key are not two people to choose between, they are one person named twice.
-        // Collapsed here rather than left to every caller, because a caller that forgot would refuse
-        // the trip leader as ambiguous with a message naming them against themselves.
+        // One entry per person and spelling, whatever the roster repeats. A trip's roster is one
+        // row per person per job, so somebody who both led and surveyed arrives here twice under
+        // one key; and one person may be handed in under two names — the roster's entry and the
+        // name their account goes by — which are two spellings to be found by and still one
+        // person. Either way two hits with one key are not two people to choose between, so every
+        // rung answers through Found, which gives each person once. Collapsed here rather than
+        // left to every caller, because a caller that forgot would refuse the trip leader as
+        // ambiguous with a message naming them against themselves.
         var people = roster
             .Select(person => (person.Key, Display: person.Name ?? string.Empty, Words: Words(person.Name)))
             .Where(person => person.Words.Length > 0)
-            .DistinctBy(person => person.Key)
+            .DistinctBy(person => (person.Key, Spelling: string.Join(' ', person.Words)))
             .ToList();
+
+        IReadOnlyList<Hit<T>> Found(IEnumerable<(T Key, string Display, string[] Words)> hits, Rung by) =>
+            [.. hits.DistinctBy(p => p.Key).Select(p => new Hit<T>(p.Key, p.Display, by))];
 
         // Rung one: the whole thing, which is also what a sheet written up properly carries.
         var whole = people.Where(person => person.Words.SequenceEqual(asked)).ToList();
         if (whole.Count > 0)
         {
-            return [.. whole.Select(p => new Hit<T>(p.Key, p.Display, Rung.FullName))];
+            return Found(whole, Rung.FullName);
         }
 
         // Rung two: the whole thing again, in whatever order its words were written. A register
@@ -110,7 +117,7 @@ public static class CaverNameLadder
             var reordered = people.Where(person => Sorted(person.Words).SequenceEqual(sorted)).ToList();
             if (reordered.Count > 0)
             {
-                return [.. reordered.Select(p => new Hit<T>(p.Key, p.Display, Rung.FullNameAnyOrder))];
+                return Found(reordered, Rung.FullNameAnyOrder);
             }
         }
 
@@ -131,7 +138,7 @@ public static class CaverNameLadder
 
             if (byInitial.Count > 0)
             {
-                return [.. byInitial.Select(p => new Hit<T>(p.Key, p.Display, Rung.GivenNameAndInitial))];
+                return Found(byInitial, Rung.GivenNameAndInitial);
             }
         }
 
@@ -151,7 +158,7 @@ public static class CaverNameLadder
 
             if (bySurname.Count > 0)
             {
-                return [.. bySurname.Select(p => new Hit<T>(p.Key, p.Display, Rung.InitialAndSurname))];
+                return Found(bySurname, Rung.InitialAndSurname);
             }
         }
 
@@ -164,7 +171,7 @@ public static class CaverNameLadder
 
             if (byGiven.Count > 0)
             {
-                return [.. byGiven.Select(p => new Hit<T>(p.Key, p.Display, Rung.GivenName))];
+                return Found(byGiven, Rung.GivenName);
             }
         }
 

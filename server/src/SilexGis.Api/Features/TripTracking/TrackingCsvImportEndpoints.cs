@@ -135,9 +135,14 @@ public static class TrackingCsvImportEndpoints
     /// <para>
     /// <b>People are named as this caller is shown them</b> on every other signed-in screen, by
     /// the one rule that decides it, and not by the roster's own entry: a file is not a way to
-    /// read a name the screen does not show. The import matches the roster's entry, so where an
-    /// account goes by another label the row comes back refused as naming nobody on the trip —
-    /// loudly, and without writing anything.
+    /// read a name the screen does not show. The import finds a person by that name as well as by
+    /// the roster's entry, so the sheet reads back whichever of the two it was written in.
+    /// </para>
+    /// <para>
+    /// <b>A station or a depth is written as the report holds it, with nothing saying which survey
+    /// it was made on.</b> It does not need to: the import leaves the place of a report alone
+    /// where the row says of it what the report already says, so a report made on a survey the
+    /// watch has since left comes back as itself and is not read again against another.
     /// </para>
     /// <para>
     /// <b>Named by the trip's id and the day it was taken</b>, never by the trip's title or its
@@ -197,9 +202,11 @@ public static class TrackingCsvImportEndpoints
 
     private static async Task<Results<Ok<TrackingCsvPreviewDto>, ProblemHttpResult>> PreviewAsync(
         Guid tripLogId, TrackingCsvImportRequest request, SilexGisDbContext db, IAccessService access,
-        FeatureProtection protection, IAccessContextAccessor accessAccessor, CancellationToken ct)
+        FeatureProtection protection, IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor, CancellationToken ct)
     {
-        var loaded = await LoadAsync(tripLogId, forWriting: false, db, access, protection, accessAccessor, ct);
+        var loaded = await LoadAsync(
+            tripLogId, forWriting: false, db, access, protection, accessAccessor, userAccessor, ct);
         if (loaded.Refusal is { } refusal) return refusal;
 
         if (Read(request.Options, out var options, out var mapping) is { } unreadable) return unreadable;
@@ -240,7 +247,8 @@ public static class TrackingCsvImportEndpoints
         FeatureProtection protection, IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor, CancellationToken ct)
     {
-        var loaded = await LoadAsync(tripLogId, forWriting: true, db, access, protection, accessAccessor, ct);
+        var loaded = await LoadAsync(
+            tripLogId, forWriting: true, db, access, protection, accessAccessor, userAccessor, ct);
         if (loaded.Refusal is { } refusal) return refusal;
 
         var user = await userAccessor.GetAsync(ct);
@@ -339,19 +347,40 @@ public static class TrackingCsvImportEndpoints
                 // with a new identity, so anything hanging off the old one is orphaned by a fixed
                 // typo — and the change is audited either way.
                 //
-                // Only what the sheet carries is written. The place and the kind always are — a
-                // row is a statement of where somebody was. The team and the note are written
-                // where the sheet has a column for them, an empty cell included; a sheet with no
-                // such column says nothing about them, and a note typed onto the report by hand
-                // is not something a sheet of times and depths was asked to erase. Who recorded
-                // the report first is left as it is: the audit names who changed it.
-                row.Kind = report.Kind;
-                row.SurveyModelId = report.ViewerStationName is null ? null : plan.SurveyModelId;
-                row.CaveFeatureId = report.ViewerStationName is null ? null : plan.CaveFeatureId;
-                row.ViewerStationName = report.ViewerStationName;
-                row.DepthEnteredM = report.Kind == TripPositionEventKind.AtDepth ? report.DepthM : null;
+                // Only what the sheet carries is written. The place and the kind are — a row is
+                // a statement of where somebody was — unless the row says of the report exactly
+                // what the report already says. Then the place is left as the log holds it, with
+                // the survey and the cave it is anchored to: the report may have been made on a
+                // survey the watch has since left, or under a datum and declared places that have
+                // changed, and writing it again would read an untouched statement against all of
+                // that and move it. The team and the note are written where the sheet has a
+                // column for them, an empty cell included; a sheet with no such column says
+                // nothing about them, and a note typed onto the report by hand is not something a
+                // sheet of times and depths was asked to erase. Who recorded the report first is
+                // left as it is: the audit names who changed it.
+                if (!report.KeepsStoredPlace)
+                {
+                    row.Kind = report.Kind;
+                    row.SurveyModelId = report.ViewerStationName is null ? null : plan.SurveyModelId;
+                    row.CaveFeatureId = report.ViewerStationName is null ? null : plan.CaveFeatureId;
+                    row.ViewerStationName = report.ViewerStationName;
+                    row.DepthEnteredM = report.Kind == TripPositionEventKind.AtDepth ? report.DepthM : null;
+                }
+
                 if (plan.CarriesTeam) row.TeamId = report.TeamId;
-                if (plan.CarriesNote) row.Note = report.Note;
+
+                // A note is written only where it reads differently. A cell is tidied as it is
+                // read — a line break and a doubled space become one space, and a cell that only
+                // ever said "nothing here" becomes no note — while a typed note is stored as it
+                // was typed. So the stored note is read the way its own cell would be before the
+                // two are compared, and a note nobody touched keeps its line breaks instead of
+                // being rewritten as its tidied self and marked as corrected.
+                if (plan.CarriesNote
+                    && !string.Equals(
+                        TripCsvValues.Single(row.Note, options.SkipTokens), report.Note, StringComparison.Ordinal))
+                {
+                    row.Note = report.Note;
+                }
 
                 // Counted as changed only where a stored value really is another one, asked of the
                 // same comparison that decides whether the row is written at all — so the count is
@@ -491,7 +520,8 @@ public static class TrackingCsvImportEndpoints
     /// </param>
     private static async Task<Loaded> LoadAsync(
         Guid tripLogId, bool forWriting, SilexGisDbContext db, IAccessService access,
-        FeatureProtection protection, IAccessContextAccessor accessAccessor, CancellationToken ct)
+        FeatureProtection protection, IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var trip = ctx is null
@@ -526,6 +556,25 @@ public static class TrackingCsvImportEndpoints
             .Distinct()
             .ToListAsync(ct);
 
+        // Each person under the roster's own entry and, where it is another, under the name this
+        // caller is shown for them everywhere else — which is the name a log written out as a
+        // sheet carries. An account's name can change after the roster entry was made, and the
+        // entry can be renamed by whoever keeps the roster, so the two drift; a sheet may have
+        // been written in either, and both mean the one person. Nothing is disclosed by matching
+        // the second: it is the name this caller already reads on the trip.
+        var labels = await CaverDirectory.ResolveLabelsAsync(
+            db, await userAccessor.GetAsync(ct), roster.Select(r => r.Id), ct);
+        List<(Guid Key, string? Name)> names = [];
+        foreach (var person in roster)
+        {
+            names.Add((person.Id, person.FullName));
+            if (labels.TryGetValue(person.Id, out var label)
+                && !string.Equals(label, person.FullName, StringComparison.Ordinal))
+            {
+                names.Add((person.Id, label));
+            }
+        }
+
         var teams = await db.TripTeams.AsNoTracking()
             .Where(t => t.TripLogId == tripLogId)
             .Select(t => new { t.Id, Name = t.Title })
@@ -556,9 +605,21 @@ public static class TrackingCsvImportEndpoints
             .GroupBy(e => (e.CaverId, At: e.RecordedAt))
             .ToDictionary(g => g.Key, g => g.Count() == 1 ? g.First() : null);
 
+        // Where each report held once says the person was, for the rows that only repeat it —
+        // as far as this caller may be told. A report whose place is withheld from them is left
+        // out, so a station or a depth tried against it is planned as any other row is and the
+        // answer does not depend on whether it was the right one.
+        var placedRows = stored.Values.OfType<TripPositionEvent>().Where(TrackingWithholding.HasPosition).ToList();
+        var openCaves = await TrackingWithholding.OpenCavesOfAsync(db, access, protection, ctx, placedRows, ct);
+        var storedPlaces = placedRows
+            .Where(e => TrackingWithholding.PositionOpen(e, openCaves))
+            .ToDictionary(
+                e => (e.CaverId, At: e.RecordedAt),
+                e => new TrackingCsvStoredPlace(e.Kind, e.ViewerStationName, e.DepthEnteredM));
+
         var subject = new TrackingCsvSubject
         {
-            Roster = [.. roster.Select(r => (r.Id, (string?)r.FullName))],
+            Roster = names,
             Teams = [.. teams.Select(t => (t.Id, t.Name))],
             Declarations = declarations,
             Stations = stations,
@@ -571,6 +632,7 @@ public static class TrackingCsvImportEndpoints
             DepthFilter = tracking.DepthFilter,
             Existing = stored.Keys.ToHashSet(),
             ExistingSeveralTimes = stored.Where(e => e.Value is null).Select(e => e.Key).ToHashSet(),
+            Stored = storedPlaces,
             Now = DateTimeOffset.UtcNow,
         };
 

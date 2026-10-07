@@ -115,6 +115,32 @@ public class CaverNameLadderTests
     }
 
     [Fact]
+    public void A_person_handed_in_under_two_names_is_found_by_either_and_is_one_person()
+    {
+        // The roster's entry and the name the person's account goes by: two spellings, one key.
+        // A sheet may have been written in either, and a short form both spellings answer to is
+        // still one person and not a choice between two.
+        (int Key, string? Name)[] twoNames =
+        [
+            (1, "Ion Popescu"),
+            (1, "Ion P. Speologul"),
+            (3, "Ana Georgescu"),
+        ];
+
+        CaverNameLadder.Match("Ion Popescu", twoNames).ShouldHaveSingleItem().Key.ShouldBe(1);
+        var byAccount = CaverNameLadder.Match("Ion P. Speologul", twoNames).ShouldHaveSingleItem();
+        byAccount.Key.ShouldBe(1);
+        byAccount.By.ShouldBe(CaverNameLadder.Rung.FullName);
+        byAccount.Name.ShouldBe("Ion P. Speologul");
+        CaverNameLadder.Match("Ion", twoNames).ShouldHaveSingleItem().Key.ShouldBe(1);
+
+        // The twin: a name two different people answer to is still a question, whichever of
+        // their spellings it was found under.
+        (int Key, string? Name)[] shared = [(1, "Ion Popescu"), (1, "Nelu"), (2, "Nelu")];
+        CaverNameLadder.Match("Nelu", shared).Select(h => h.Key).ShouldBe([1, 2]);
+    }
+
+    [Fact]
     public void A_whole_name_written_surname_first_finds_its_person()
     {
         // A register is kept surname first and a roster given name first. Both are the whole
