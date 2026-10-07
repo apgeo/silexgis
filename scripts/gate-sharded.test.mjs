@@ -10,6 +10,7 @@ import {
   modeOf,
   parseArguments,
   quietClasses,
+  sharesFor,
   summaryLineOf,
   threadsFor,
   whereApplicationsWereBuilt,
@@ -46,6 +47,8 @@ test('the cores are shared out between the shards, and no shard is left with one
   assert.equal(threadsFor(8, 32), 4);
   assert.equal(threadsFor(12, 32), 2);
   assert.equal(threadsFor(8, 4), 2);
+  // A lone shard is not handed every core: past eight threads a process gains nothing.
+  assert.equal(threadsFor(1, 32), 8);
 });
 
 test('arguments are read by name, and one it does not know is refused', () => {
@@ -56,6 +59,8 @@ test('arguments are read by name, and one it does not know is refused', () => {
     project: null,
     only: null,
     mode: null,
+    classes: null,
+    affected: null,
   });
   assert.deepEqual(parseArguments(['--count', '6', '--threads', '5', '--results', 'out']), {
     count: 6,
@@ -64,6 +69,8 @@ test('arguments are read by name, and one it does not know is refused', () => {
     project: null,
     only: null,
     mode: null,
+    classes: null,
+    affected: null,
   });
   assert.throws(() => parseArguments(['--count', '0']), /whole number/);
   assert.throws(() => parseArguments(['--count']), /incomplete/);
@@ -164,13 +171,28 @@ test('why applications were built is added up too, by reason and by class', () =
   assert.equal(whereApplicationsWereBuilt(hosts, 1).length, 4);
 });
 
+test('a run of some classes is dealt into no more shards than they are worth', () => {
+  // The whole suite: as many as asked.
+  assert.equal(sharesFor(8, 262, { restricted: false, mode: 'precise' }), 8);
+  assert.equal(sharesFor(8, 262, { restricted: false, mode: 'fast' }), 8);
+  // Some classes, precise: a class is minutes, so a process for every two.
+  assert.equal(sharesFor(8, 3, { restricted: true, mode: 'precise' }), 2);
+  assert.equal(sharesFor(8, 40, { restricted: true, mode: 'precise' }), 8);
+  // Some classes, fast: a class is seconds, so half a dozen to a database server.
+  assert.equal(sharesFor(8, 3, { restricted: true, mode: 'fast' }), 1);
+  assert.equal(sharesFor(8, 14, { restricted: true, mode: 'fast' }), 3);
+  assert.equal(sharesFor(8, 200, { restricted: true, mode: 'fast' }), 8);
+  // Never none, and never more than was asked for.
+  assert.equal(sharesFor(8, 0, { restricted: true, mode: 'fast' }), 1);
+  assert.equal(sharesFor(2, 40, { restricted: true, mode: 'precise' }), 2);
+});
 
 test('a run that did not do what its mode says is refused, whichever way it went wrong', () => {
   const fast = (borrowed) => ({ processes: 8, missing: 0, built: 300, borrowed, modes: ['fast'] });
   assert.equal(modeComplaint('fast', fast(2000)), null);
   // Asked to share and shared nothing: a slow run wearing the quick one's label.
   assert.match(modeComplaint('fast', fast(0)), /no test was handed a running application/);
-  // Of a shard or two that may be honest, so only the whole suite is held to it.
+  // Of a few classes that may be honest — one test each — so only the whole suite is held to it.
   assert.equal(modeComplaint('fast', fast(0), { whole: false }), null);
   assert.match(
     modeComplaint('precise', { processes: 1, missing: 0, built: 9, borrowed: 2, modes: ['precise'] }, { whole: false }),
@@ -191,3 +213,19 @@ test('a run that did not do what its mode says is refused, whichever way it went
   assert.equal(modeComplaint('fast', null), null);
 });
 
+test('a run can be of named classes only, and a name that is no class is refused', () => {
+  assert.deepEqual(parseArguments(['--classes', 'CalendarTests, TripAndTagTests']).classes, [
+    'CalendarTests',
+    'TripAndTagTests',
+  ]);
+  // Not a class name: a filter expression, a path, nothing at all.
+  assert.throws(() => parseArguments(['--classes', 'FullyQualifiedName~Calendar']), /class names/);
+  assert.throws(() => parseArguments(['--classes', 'tests/CalendarTests.cs']), /class names/);
+  assert.throws(() => parseArguments(['--classes', ',']), /class names/);
+});
+
+test('a run can be of the classes a change selects, and not of those and named ones at once', () => {
+  assert.equal(parseArguments(['--affected', 'master']).affected, 'master');
+  assert.throws(() => parseArguments(['--affected']), /unknown or incomplete/);
+  assert.throws(() => parseArguments(['--affected', 'master', '--classes', 'CalendarTests']), /say one of them/);
+});

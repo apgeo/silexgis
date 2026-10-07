@@ -497,12 +497,13 @@ function shardedRunnerIn(command) {
 /**
  * Whether a command is the whole API integration suite: `dotnet test` naming the Api.Tests
  * project or its directory, with nothing narrowing it — or the sharded runner asked for every
- * shard. Purely lexical, on purpose — the point is to refuse before anything runs.
+ * shard of every class. Purely lexical, on purpose — the point is to refuse before anything runs.
  */
 export function isUnfilteredApiSuite(command) {
   if (command.length < 2) return false;
   const sharded = shardedRunnerIn(command);
-  if (sharded) return !sharded.rest.includes('--only');
+  // Asked for the classes a change selects, the runner refuses the whole suite itself.
+  if (sharded) return !['--only', '--classes', '--affected'].some((part) => sharded.rest.includes(part));
   const tool = basename(command[0].replaceAll('\\', '/')).replace(/\.exe$/i, '');
   if (tool !== 'dotnet' || command[1] !== 'test') return false;
   const namesSuite = command.some((a) => /Api\.Tests(\.csproj)?$/.test(a.replaceAll('\\', '/').replace(/\/+$/, '')));

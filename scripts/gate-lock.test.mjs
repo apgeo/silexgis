@@ -424,8 +424,10 @@ describe('the whole API suite is a deliberate act', () => {
       isUnfilteredApiSuite([process.execPath, 'C:\\repo\\scripts\\gate-sharded.mjs', '--project', 'x.csproj']),
       true,
     );
-    // Some shards of the deal are not the suite, as a filter is not.
+    // Some shards of the deal are not the suite, as a filter is not; nor are some of its classes.
     assert.equal(isUnfilteredApiSuite(['node', 'scripts/gate-sharded.mjs', '--only', '3']), false);
+    assert.equal(isUnfilteredApiSuite(['node', 'scripts/gate-sharded.mjs', '--classes', 'CalendarTests']), false);
+    assert.equal(isUnfilteredApiSuite(['node', 'scripts/gate-sharded.mjs', '--affected', 'master']), false);
     assert.equal(isUnfilteredApiSuite(['node', 'scripts/gate-shard.mjs', '--index', '0', '--count', '8']), false);
   });
 

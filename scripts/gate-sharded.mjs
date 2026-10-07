@@ -23,6 +23,15 @@
 // Usage, from the repository root:
 //   node scripts/gate-sharded.mjs [--count 8] [--threads 4] [--results <dir>] [--project <csproj>]
 //                                 [--only 2,5,quiet] [--mode precise|fast]
+//                                 [--classes A,B,C | --affected <base>]
+//
+// --classes deals only the named classes, for a run that is not the whole suite, and --affected
+// deals the classes that answer for the working tree's changes against <base>, as
+// scripts/gate-affected.mjs selects them: they cost the same per test as any others, and several
+// processes pay it side by side just as well for forty classes as for all of them. Fewer
+// processes are started for fewer classes, since each stands up a database server before its
+// first test; --count is then the most there may be. A change that selects the whole suite is
+// not run under this name: the runner says so and exits 10, as gate-affected does.
 //
 // --mode says how much of its surroundings each test has to itself. `precise`, the default, is the
 // suite as written: an application built for every test. `fast` lets the tests of a class take
@@ -49,7 +58,7 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import process from 'node:process';
 
-import { filterExpression } from './gate-affected.mjs';
+import { filterExpression, selectionFor } from './gate-affected.mjs';
 import { listClasses, shard, testDir } from './gate-shard.mjs';
 
 /**
@@ -78,19 +87,38 @@ export function summaryLineOf(output) {
  * more than it computes, so a shard with one thread spends most of its time idle.
  */
 export function threadsFor(count, cores = availableParallelism()) {
-  return Math.max(2, Math.floor(cores / count));
+  // And never more than eight, the suite's own setting: past that a single process was measured
+  // gaining nothing, so a lone shard is not handed the whole machine to idle on.
+  return Math.min(8, Math.max(2, Math.floor(cores / count)));
+}
+
+/**
+ * How many shards a run of some classes is dealt into: `count` at most, and no more than the
+ * classes are worth.
+ *
+ * Every shard starts a database server and builds the schema into it before its first test —
+ * a quarter of a minute nobody gets back. In precise mode a class is minutes of application
+ * building, so a process for every two classes still pays; in fast mode a class is seconds, and
+ * it takes half a dozen to be worth a server. The whole suite is dealt as asked.
+ */
+export function sharesFor(count, classes, { restricted, mode }) {
+  if (!restricted) return count;
+  return Math.max(1, Math.min(count, Math.ceil(classes / (mode === 'fast' ? 6 : 2))));
 }
 
 /** Reads `--name value` options; anything it does not know is an error rather than a guess. */
 export function parseArguments(argv) {
-  const options = { count: 8, threads: null, results: null, project: null, only: null, mode: null };
+  const options = {
+    count: 8, threads: null, results: null, project: null, only: null, mode: null, classes: null,
+    affected: null,
+  };
+  const known = [
+    '--count', '--threads', '--results', '--project', '--only', '--mode', '--classes', '--affected',
+  ];
   for (let index = 0; index < argv.length; index += 1) {
     const name = argv[index];
     const value = argv[index + 1];
-    if (
-      !['--count', '--threads', '--results', '--project', '--only', '--mode'].includes(name)
-      || value === undefined
-    ) {
+    if (!known.includes(name) || value === undefined) {
       throw new Error(`unknown or incomplete argument: ${name}`);
     }
     index += 1;
@@ -100,6 +128,12 @@ export function parseArguments(argv) {
         throw new Error(`${name} takes a whole number of at least 1, not "${value}"`);
       }
       options[name.slice(2)] = number;
+    } else if (name === '--classes') {
+      const classes = value.split(',').map((word) => word.trim()).filter(Boolean);
+      if (classes.length === 0 || classes.some((word) => !/^[A-Za-z0-9]+Tests$/.test(word))) {
+        throw new Error(`--classes takes test class names separated by commas, not "${value}"`);
+      }
+      options.classes = classes;
     } else if (name === '--mode') {
       if (value !== 'fast' && value !== 'precise') {
         throw new Error(`--mode is fast or precise, not "${value}"`);
@@ -118,6 +152,9 @@ export function parseArguments(argv) {
   }
   if (options.only?.some((n) => n !== 'quiet' && n >= options.count)) {
     throw new Error(`--only names a shard the deal does not have: there are ${options.count}, numbered from 0`);
+  }
+  if (options.classes && options.affected) {
+    throw new Error('--classes names the classes and --affected has them worked out; say one of them');
   }
   return options;
 }
@@ -206,7 +243,8 @@ export function whereApplicationsWereBuilt(hosts, most = 8) {
  * A fast run of the whole suite in which no test was ever handed a running application did not do
  * what it was asked; a precise run in which one was, or a process that ran in the other mode, did
  * something it was not asked. Either way the result would be read as something it is not. A fast
- * run of a shard or two may honestly share nothing, so only the whole suite is held to it.
+ * run of a few classes may honestly share nothing — one test each, or every test asking for an
+ * application of its own — so only the whole suite is held to it.
  */
 export function modeComplaint(mode, hosts, { whole = true } = {}) {
   if (hosts === null) return null;
@@ -272,10 +310,40 @@ async function main() {
   }
   const results = resolve(options.results ?? join(dirname(project), 'TestResults', 'shards'));
   const wanted = (which) => !options.only || options.only.includes(which);
-  const all = listClasses(dirname(project));
+  const every = listClasses(dirname(project));
+  let named = options.classes;
+  if (options.affected) {
+    const selection = await selectionFor(options.affected);
+    console.log(
+      `against ${selection.base}: ${selection.changed} changed files select `
+        + (selection.mode === 'targeted' ? `${selection.classes.length} classes` : selection.mode === 'full' ? 'the whole suite' : 'no class'),
+    );
+    for (const reason of selection.reasons) console.log(`  - ${reason}`);
+    if (selection.mode === 'full') {
+      console.log(
+        'The whole suite is not run under this name: run it without --affected, under '
+          + '`gate-lock.mjs run --full`.',
+      );
+      process.exit(10);
+    }
+    if (selection.mode === 'none') {
+      console.log('Nothing to run: the change is outside what the integration classes answer for.');
+      process.exit(0);
+    }
+    named = selection.classes;
+  }
+  const unknown = (named ?? []).filter((name) => !every.includes(name));
+  if (unknown.length > 0) {
+    // A name that matches nothing would otherwise run nothing and be reported as a pass.
+    throw new Error(`no such test class beside ${project}: ${unknown.join(', ')}`);
+  }
+  const all = named ? every.filter((name) => named.includes(name)) : every;
   const quiet = quietClasses(dirname(project), all);
   const dealt = all.filter((name) => !quiet.includes(name));
-  const count = options.count;
+  const count = sharesFor(options.count, dealt.length, { restricted: named !== null, mode });
+  if (options.only?.some((n) => n !== 'quiet' && n >= count)) {
+    throw new Error(`--only names a shard this deal does not have: these classes make ${count}, numbered from 0`);
+  }
   const shards = Array.from({ length: count }, (_, index) => index).filter(wanted);
   const threads = options.threads ?? threadsFor(Math.max(1, shards.length));
   mkdirSync(results, { recursive: true });
@@ -333,7 +401,7 @@ async function main() {
     console.log('applications built, by why they could not be one already running:');
     for (const line of whereApplicationsWereBuilt(hosts)) console.log(line);
   }
-  const complaint = modeComplaint(mode, hosts, { whole: !options.only });
+  const complaint = modeComplaint(mode, hosts, { whole: named === null && !options.only });
   if (complaint) {
     console.log(`THE MODE IS NOT WHAT WAS ASKED FOR: ${complaint}`);
   }
