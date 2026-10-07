@@ -1010,6 +1010,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-models/{id}/reading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queues another reading of the model's stored file (Write on the cave). Refused while a reading is queued or running. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurveyModelDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{caveId}/survey-sources": {
         parameters: {
             query?: never;
@@ -2203,6 +2241,42 @@ export interface paths {
         get?: never;
         put?: never;
         /** Enqueues a sweep that makes a readable copy of every office document that has none yet; requires Execute on the Jobs domain. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProcessingJobDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/survey-reading-backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueues a sweep that reads every line-plot survey again, so that surveys read by an earlier version get what the present reader produces; requires Execute on the Jobs domain. */
         post: {
             parameters: {
                 query?: never;
@@ -25189,6 +25263,7 @@ export interface components {
             mergedStationCount: null | number;
             /** Format: int32 */
             anonymousStationCount: null | number;
+            readingAgain: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */

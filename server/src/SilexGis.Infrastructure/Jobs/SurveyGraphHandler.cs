@@ -71,8 +71,17 @@ public sealed class SurveyGraphHandler(
         var upload = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == model.FileId, ct)
             ?? throw new InvalidOperationException($"Stored file {model.FileId} no longer exists.");
 
-        model.Status = SurveyModelStatus.Processing;
-        await db.SaveChangesAsync(ct);
+        // A model that is ready holds a reading already, and this is another one of the same file.
+        // It goes on saying it is ready throughout, because that stays true: its rows are there
+        // until the transaction below replaces them, and everything that draws or measures the
+        // survey takes any other status to mean there is nothing to draw or measure. Only a model
+        // that holds nothing is marked as being read.
+        var holdsAReading = model.Status == SurveyModelStatus.Ready;
+        if (!holdsAReading)
+        {
+            model.Status = SurveyModelStatus.Processing;
+            await db.SaveChangesAsync(ct);
+        }
 
         // The walls this reading built, once their bytes are in the file store. Declared out here
         // because the bytes are written before the transaction that records them, and a reading
@@ -210,7 +219,8 @@ public sealed class SurveyGraphHandler(
             // and is not described to them.
             await RecordFailureAsync(
                 payload.SurveyModelId,
-                e is SurveySourceException ? e.Message : "The survey could not be read.");
+                e is SurveySourceException ? e.Message : "The survey could not be read.",
+                holdsAReading);
             throw;
         }
     }
@@ -453,10 +463,31 @@ public sealed class SurveyGraphHandler(
     /// general shape: anything that fails at the save, for a reason nobody has anticipated, must
     /// leave the model saying it failed rather than saying it is still being read.
     /// </para>
+    ///
+    /// <para>
+    /// A model that held a reading when this one began is the exception, and is not written to at
+    /// all: see the body.
+    /// </para>
     /// </summary>
-    private async Task RecordFailureAsync(Guid surveyModelId, string reason)
+    private async Task RecordFailureAsync(Guid surveyModelId, string reason, bool holdsAReading)
     {
         ForgetPendingChanges();
+
+        if (holdsAReading)
+        {
+            // Another reading of a model that had one, and the transaction that would have
+            // replaced its rows never committed: the stations, the legs and the figures of the
+            // earlier reading are all still there and still true of the file. Marking the model
+            // as failed would report a survey that draws and measures as one that holds nothing,
+            // to every screen that uses it. So the model is left as it was, and the failure is the
+            // job's: the exception rethrown by the caller is recorded on the job and sent to
+            // whoever asked for the reading.
+            logger.LogWarning(
+                "Another reading of survey model {SurveyModelId} failed and it keeps the reading it had: {Reason}",
+                surveyModelId,
+                reason);
+            return;
+        }
 
         var model = await db.SurveyModels
             .FirstOrDefaultAsync(m => m.Id == surveyModelId, CancellationToken.None);

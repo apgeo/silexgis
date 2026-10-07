@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using FluentValidation;
 using NetTopologySuite.Geometries;
-using SilexGis.Infrastructure.Jobs;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -102,6 +101,12 @@ public sealed record SurveyModelDto(
     /// </para>
     /// </summary>
     int? AnonymousStationCount,
+    /// <summary>
+    /// Another reading of the stored file is queued or running, and the model goes on answering
+    /// from the reading it holds until that one replaces it. Only ever true of a model that is
+    /// ready: one that holds nothing says it is waiting through <see cref="Status"/> instead.
+    /// </summary>
+    bool ReadingAgain,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -318,6 +323,9 @@ public static class SurveyModelEndpoints
         api.MapPut("/survey-models/{id:guid}/current", MakeCurrentAsync)
             .WithTags("SurveyModels")
             .WithSummary("Makes this the model its cave is represented by, among the cave's models of the same kind (Write on the cave).");
+        api.MapPost("/survey-models/{id:guid}/reading", ReadAgainAsync)
+            .WithTags("SurveyModels")
+            .WithSummary("Queues another reading of the model's stored file (Write on the cave). Refused while a reading is queued or running.");
         api.MapDelete("/survey-models/{id:guid}", DeleteAsync)
             .WithTags("SurveyModels")
             .WithSummary("Deletes the survey model (Write on the cave); the stored file is kept. Refused while a trip's live tracking is armed on it.");
@@ -352,7 +360,8 @@ public static class SurveyModelEndpoints
             .OrderBy(m => m.CreatedAt)
             .ToListAsync(ct);
         var sizes = await MeshSizesAsync(db, models, ct);
-        return TypedResults.Ok(models.Select(m => m.ToDto(tokens, sizes)).ToList());
+        var outstanding = await SurveyModelReading.OutstandingAsync(db, ct);
+        return TypedResults.Ok(models.Select(m => m.ToDto(tokens, sizes, outstanding)).ToList());
     }
 
     private static async Task<Results<Created<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
@@ -472,21 +481,7 @@ public static class SurveyModelEndpoints
         // 3D scene draws, and a line plot has to be read into the station and shot rows that carry
         // its own flags. The row and the job are written in one save, so a model can never be
         // stored in a state that says work is coming with nothing queued to do it.
-        var kind = model.Format switch
-        {
-            SurveyModelFormat.Stl => ProcessingJobKinds.SurveyMesh,
-            _ => ProcessingJobKinds.SurveyGraph,
-        };
-
-        model.Status = SurveyModelStatus.Pending;
-        db.ProcessingJobs.Add(new ProcessingJob
-        {
-            Kind = kind,
-            Payload = kind == ProcessingJobKinds.SurveyMesh
-                ? JsonSerializer.Serialize(new SurveyMeshPayload(model.Id), JsonSerializerOptions.Web)
-                : JsonSerializer.Serialize(new SurveyGraphPayload(model.Id), JsonSerializerOptions.Web),
-            RequestedBy = ctx.UserId,
-        });
+        SurveyModelReading.QueueFirst(db, model, ctx.UserId);
 
         // The first model of a kind is the one the cave is represented by; a later one takes over
         // only when somebody says so. Arriving is not choosing: a second line plot may be a
@@ -504,7 +499,7 @@ public static class SurveyModelEndpoints
             await db.SaveChangesAsync(ct);
         }
 
-        return TypedResults.Created($"/api/v1/survey-models/{model.Id}", model.ToDto(tokens, null));
+        return TypedResults.Created($"/api/v1/survey-models/{model.Id}", model.ToDto(tokens, null, null));
     }
 
     private static async Task<Results<Ok<SurveyModelDto>, ProblemHttpResult>> GetAsync(
@@ -526,7 +521,7 @@ public static class SurveyModelEndpoints
         }
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.SurveyModels, model.Id, ct);
-        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct)));
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
     }
 
     /// <summary>
@@ -710,7 +705,7 @@ public static class SurveyModelEndpoints
         model.Description = request.Description;
         model.SurveyedAt = request.SurveyedAt;
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct)));
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
     }
 
     /// <summary>
@@ -791,7 +786,90 @@ public static class SurveyModelEndpoints
             await transaction.CommitAsync(ct);
         }
 
-        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct)));
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
+    }
+
+    /// <summary>
+    /// Queues another reading of the file this model was uploaded as, and answers the model as it
+    /// now stands: being read again if it held a reading, and otherwise waiting, with whatever the
+    /// last reading complained of cleared.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A stored file is read once, when it arrives, and what that reading produced is what every
+    /// later screen uses. So when the reader itself improves, or a reading failed for a reason
+    /// that has since gone, the only way to a better answer used to be uploading the same file a
+    /// second time — which makes a second model, with a second set of rows, and leaves every trip
+    /// that was followed on the first one pointing at the old reading. This asks the question again
+    /// of the model that is already there.
+    /// </para>
+    /// <para>
+    /// The same gates as choosing the current model, and for the same reason: it is a write to the
+    /// cave's surveys, so the cave must be visible with its exact location open, and writable. A
+    /// caller who may not place the cave is told the model does not exist, and no answer of this
+    /// route names a station, a survey or a position.
+    /// </para>
+    /// <para>
+    /// A model that could not be read may be read again — that is the retry a failed reading never
+    /// had — and goes back to waiting, since it holds nothing. A model that has been read stays
+    /// ready and is answered as being read again: it goes on drawing, measuring and placing from
+    /// the reading it holds until the new one replaces it, and keeps that reading if the new one
+    /// fails. A model whose reading is queued or running is refused instead of queued a second
+    /// time: the second job would read the same bytes into the same rows, and the person asking
+    /// would learn nothing from being told it had been accepted.
+    /// </para>
+    /// <para>
+    /// A watch running on the model does not stand in the way, and loses nothing while the reading
+    /// waits. What it can lose is narrow and is the price of the correction: a reading by a newer
+    /// reader may store a station under a different name than the earlier one did — a station its
+    /// file gives no name is the case, stored under the label the viewer shows it by where it used
+    /// to be stored under the file's number for it. A position already recorded at such a station
+    /// keeps the name it was recorded under and no longer finds a row, so it stays on the record
+    /// and is no longer drawn. Every station the file names keeps its name.
+    /// </para>
+    /// <para>
+    /// A wall mesh is converted again by the same request, and its earlier conversion is replaced.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> ReadAgainAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IAccessService access,
+        FeatureProtection protection,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
+        var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
+        if (model is null || cave is null
+            || !await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct))
+        {
+            return ApiProblems.NotFound("survey_model.not_found");
+        }
+
+        if (!await SurveyModelAccess.WritableAsync(access, ctx, cave, ct))
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        // Asked of the database and not of the row loaded above: two requests arriving together
+        // both loaded a finished model, and only one of them may queue the reading.
+        if (await SurveyModelReading.QueueAgainAsync(db, model, ctx.UserId, ct)
+            == SurveyReadingRequest.AlreadyInProgress)
+        {
+            return ApiProblems.Conflict(
+                "survey_model.reading_in_progress",
+                "This model is already being read. Wait for that reading to finish before asking for another.");
+        }
+
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
@@ -966,7 +1044,10 @@ public static class SurveyModelEndpoints
     }
 
     private static SurveyModelDto ToDto(
-        this SurveyModel m, IFileAccessTokenService tokens, IReadOnlyDictionary<Guid, long>? meshSizes) => new(
+        this SurveyModel m,
+        IFileAccessTokenService tokens,
+        IReadOnlyDictionary<Guid, long>? meshSizes,
+        IReadOnlySet<Guid>? readingOutstanding) => new(
         m.Id,
         m.CaveFeatureId,
         m.Name,
@@ -988,6 +1069,7 @@ public static class SurveyModelEndpoints
         m.DroppedShotCount,
         m.MergedStationCount,
         m.AnonymousStationCount,
+        m.Status == SurveyModelStatus.Ready && readingOutstanding is not null && readingOutstanding.Contains(m.Id),
         m.CreatedAt,
         m.UpdatedAt);
 
