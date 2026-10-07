@@ -1674,7 +1674,10 @@ grep "read refused"` shows the lines; add `| grep Jq3x0aBc` for one link.
 **The counters.** The API counts, for the whole installation and never per link, under the meter
 `SilexGis.PublicTrips`: `silexgis.public_trip.reads`, by `route` and `outcome` (`served`, or one
 of the reason words below), and `silexgis.public_trip.limited`, by `route` — reads turned away
-with `429` before they reached a route. They are read with Microsoft's `dotnet-counters` from
+with `429` before they reached a route. A read answered `304` counts as `served`: a browser that
+already holds the answer is told "unchanged" instead of being sent it again, but the answer was
+built in full before the two could be compared, so `304` in the request log is a page being read
+and not a fault. They are read with Microsoft's `dotnet-counters` from
 where it can see the API process: `dotnet-counters ps` lists the processes, then
 `dotnet-counters monitor --process-id <pid> --counters SilexGis.PublicTrips`. On a non-Docker
 install that is the server itself, as the account the service runs under. The packaged API image

@@ -62,6 +62,7 @@ public static class TripPastTrackEndpoints
             .WithTags("TripTracking")
             .AllowAnonymous()
             .RequireRateLimiting(PublicTripRateLimits.PolicyName)
+            .WithPublicTripValidator()
             .WithMetadata(PublicTripRoute.Past)
             .WithSummary("Past trips of this link's cave: the ones that were published and are now over, newest first.");
 
@@ -69,6 +70,7 @@ public static class TripPastTrackEndpoints
             .WithTags("TripTracking")
             .AllowAnonymous()
             .RequireRateLimiting(PublicTripRateLimits.PolicyName)
+            .WithPublicTripValidator()
             .WithMetadata(PublicTripRoute.PastTrip)
             .WithSummary("One past trip of this link's cave, played back: the party by their place in it and where each was reported over time.");
 

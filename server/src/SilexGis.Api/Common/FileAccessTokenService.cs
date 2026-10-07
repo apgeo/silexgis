@@ -98,7 +98,12 @@ public sealed record FileAccessGrant(FileDelivery Delivery, Guid? UserId);
 public sealed class FileAccessTokenService : IFileAccessTokenService
 {
     /// <summary>Long enough for a gallery page, short enough to limit link sharing.</summary>
-    private static readonly TimeSpan FetchLifetime = TimeSpan.FromMinutes(10);
+    /// <remarks>
+    /// Readable by the rest of the application because an answer that hands such an address out
+    /// may be kept by its reader, and whatever decides how long a kept copy may go on being
+    /// confirmed has to be sized against this and not against a second copy of the number.
+    /// </remarks>
+    internal static readonly TimeSpan FetchLifetime = TimeSpan.FromMinutes(10);
 
     /// <summary>
     /// Long enough for a map session over a raster read in ranges. Four hours and not a day: the

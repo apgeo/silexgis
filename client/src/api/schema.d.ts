@@ -2499,6 +2499,13 @@ export interface paths {
                         "application/json": components["schemas"]["PublicTripTrackingEnvelopeDto"];
                     };
                 };
+                /** @description Not Modified */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         put?: never;
@@ -2575,6 +2582,13 @@ export interface paths {
                         "application/json": components["schemas"]["PublicPastTripListDto"];
                     };
                 };
+                /** @description Not Modified */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         put?: never;
@@ -2614,6 +2628,13 @@ export interface paths {
                         "application/json": components["schemas"]["PublicPastTrackDto"];
                     };
                 };
+                /** @description Not Modified */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         put?: never;
@@ -2651,6 +2672,13 @@ export interface paths {
                     content: {
                         "application/json": components["schemas"]["PublicLiveTripListDto"];
                     };
+                };
+                /** @description Not Modified */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };

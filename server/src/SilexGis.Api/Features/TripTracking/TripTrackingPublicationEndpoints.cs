@@ -110,6 +110,7 @@ public static class TripTrackingPublicationEndpoints
             .WithTags("TripTracking")
             .AllowAnonymous()
             .RequireRateLimiting(PublicTripRateLimits.PolicyName)
+            .WithPublicTripValidator()
             .WithMetadata(PublicTripRoute.Follow)
             .WithSummary("Follow a published trip: the party, where each of them was last reported, and the survey model to draw it in.");
 

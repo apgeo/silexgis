@@ -68,6 +68,7 @@ public static class TripLiveSiblingEndpoints
             .WithTags("TripTracking")
             .AllowAnonymous()
             .RequireRateLimiting(PublicTripRateLimits.PolicyName)
+            .WithPublicTripValidator()
             .WithMetadata(PublicTripRoute.Live)
             .WithSummary("Trips of this link's cave being followed right now, each with its party, drawn on this link's survey.");
 

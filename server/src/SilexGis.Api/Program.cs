@@ -261,8 +261,8 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // own so that a group scanning labels from behind one connection cannot spend the sign-in
     // allowance of everyone else behind it.
     var qrPermitLimit = PerMinuteLimit.Read(builder.Configuration, "Qr:RateLimitPerMinute", 60);
-    // Cost control on the published-trip surface, which is anonymous, uncached, and backs a whole
-    // envelope folded out of a trip's report log — see PublicTripRateLimits for why it is a window
+    // Cost control on the published-trip surface, which is anonymous, read from the database on
+    // every request, and backs a whole envelope folded out of a trip's report log — see PublicTripRateLimits for why it is a window
     // of its own and why it is not a confidentiality control.
     var publicTripPermitLimit = PerMinuteLimit.Read(
         builder.Configuration, PublicTripRateLimits.ConfigurationKey, PublicTripRateLimits.DefaultPerMinute);

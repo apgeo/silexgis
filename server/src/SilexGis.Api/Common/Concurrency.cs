@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Extensions.Primitives;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Common;
@@ -77,24 +78,63 @@ public static class Concurrency
                 : null;
         }
 
-        var current = Canonical($"\"{await ConcurrencySql.VersionAsync(db, table, id, ct)}\"");
-        foreach (var value in header)
+        if (Names(header, $"\"{await ConcurrencySql.VersionAsync(db, table, id, ct)}\""))
         {
-            // One header line may carry a list of tags. Ours are digits, so splitting on the
-            // comma cannot cut one in half.
-            foreach (var candidate in (value ?? string.Empty).Split(','))
-            {
-                var trimmed = candidate.Trim();
-                if (trimmed == "*" || Canonical(trimmed) == current)
-                {
-                    return null;
-                }
-            }
+            return null;
         }
 
         return ApiProblems.PreconditionFailed(
             "concurrency.version_mismatch",
             "The resource changed since it was loaded. Reload and reapply your edits.");
+    }
+
+    /// <summary>
+    /// A weak entity tag over a value this application computed: a validator for an answer that
+    /// means the same as the last one without being the same bytes.
+    /// </summary>
+    /// <remarks>
+    /// Weak on purpose where it is used: a compressing proxy may pass a weak tag through as it is
+    /// and must alter or drop a strong one, and an answer carrying a freshly signed address
+    /// differs from the previous answer byte for byte while saying the same thing. The value must
+    /// hold no comma and end in none of the coding suffixes, since a request's list of tags is
+    /// split on the one and a proxy's suffix is cut off by the other; digits and hexadecimal are
+    /// both safe.
+    /// </remarks>
+    public static string WeakETag(string value) => $"W/\"{value}\"";
+
+    /// <summary>
+    /// Whether the request's <c>If-None-Match</c> names <paramref name="currentTag"/> — that is,
+    /// whether the caller already holds the answer about to be sent.
+    /// </summary>
+    /// <remarks>
+    /// The same comparison a write's <c>If-Match</c> gets, for the same reason: the tag comes back
+    /// as a proxy left it, weakened or with the coding it applied appended, and neither says the
+    /// answer changed. A request without the header holds nothing and matches nothing.
+    /// </remarks>
+    public static bool MatchesIfNoneMatch(HttpContext http, string currentTag) =>
+        Names(http.Request.Headers.IfNoneMatch, currentTag);
+
+    /// <summary>
+    /// Whether a conditional header — one tag, a list of them, or <c>*</c> — names the current tag.
+    /// </summary>
+    private static bool Names(StringValues header, string currentTag)
+    {
+        var current = Canonical(currentTag);
+        foreach (var value in header)
+        {
+            // One header line may carry a list of tags. Ours are digits or hexadecimal, so
+            // splitting on the comma cannot cut one in half.
+            foreach (var candidate in (value ?? string.Empty).Split(','))
+            {
+                var trimmed = candidate.Trim();
+                if (trimmed == "*" || Canonical(trimmed) == current)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
