@@ -40,14 +40,30 @@ public static class TrackingDepthResolver
         /// to. Made here rather than at each caller so that every list of stations fed to this
         /// resolver gets its second name from the one rule that knows how.
         /// </summary>
+        /// <param name="fileStationId">
+        /// The number the file gives the station. It is what says whether the station has a name of
+        /// its own, which the name alone cannot; a caller that does not pass it is saying every
+        /// station it holds can be drawn.
+        /// </param>
         public static Station Of(
             SurveyModelFormat format,
             string? rootSurveyName,
             string name,
             string? surveyName,
             double z,
-            bool isEntrance) =>
-            new(name, SurveyStationNames.ViewerName(format, rootSurveyName, name), surveyName, z, isEntrance);
+            bool isEntrance,
+            long? fileStationId = null) =>
+            new(name, SurveyStationNames.ViewerName(format, rootSurveyName, name), surveyName, z, isEntrance)
+            {
+                NoViewerLabel = SurveyStationNames.HasNoViewerLabel(format, name, fileStationId),
+            };
+
+        /// <summary>
+        /// The station is one the file gives no name and the viewer gives no label, so a position
+        /// stamped with it would be drawn nowhere. It still has an altitude, and stays in the list
+        /// for everything that only measures; it is never chosen as the place somebody is.
+        /// </summary>
+        public bool NoViewerLabel { get; init; }
     }
 
     /// <summary>A station that could be "at that depth", with how far off it is.</summary>
@@ -159,6 +175,10 @@ public static class TrackingDepthResolver
     /// the spelling they did not use would keep nothing at all, and every depth report would be
     /// refused with nothing on screen explaining why.
     /// </para>
+    ///
+    /// <para>
+    /// Stations the viewer cannot draw (<see cref="Station.NoViewerLabel"/>) are passed over.
+    /// </para>
     /// </summary>
     public static IReadOnlyList<Candidate> Resolve(
         IReadOnlyCollection<Station> stations,
@@ -169,8 +189,11 @@ public static class TrackingDepthResolver
     {
         var target = Math.Abs(askedDepthM);
 
+        // A station the viewer has no label for is never the answer: the depth would be recorded
+        // at a place the model cannot show, and the report would read as lost when nobody mistyped
+        // anything. The next nearest station that can be drawn is the honest answer.
         return stations
-            .Where(s => InDeclaredParts(s, filterPrefixes))
+            .Where(s => !s.NoViewerLabel && InDeclaredParts(s, filterPrefixes))
             .Select(s => new Candidate(
                 s.Name, s.ViewerName, s.SurveyName, referenceZ - s.Z, Math.Abs(referenceZ - s.Z - target)))
             .OrderBy(c => c.DeltaM)

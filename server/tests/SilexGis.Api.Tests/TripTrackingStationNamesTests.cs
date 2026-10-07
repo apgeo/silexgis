@@ -550,6 +550,159 @@ public sealed class TripTrackingStationNamesTests : IAsyncLifetime, IDisposable,
 
     // ---- plumbing --------------------------------------------------------------------------
 
+    // ---- stations the survey file gives no name ----------------------------------------------
+
+    [Fact]
+    public async Task A_nameless_station_pressed_on_a_therion_model_is_recorded_under_the_label_it_was_pressed_by()
+    {
+        var (trip, cavers) = await CreateTripAsync();
+        var model = await SeedModelAsync(SurveyModelFormat.Lox, rootSurveyName: "cave");
+        // As a reading stores a station the file gives no name: the viewer's own label for it,
+        // beneath its survey, with the number the file wrote it at beside it.
+        await AddStationAsync(model, "cave.upper.[7]", "cave.upper", 320, fileStationId: 7);
+        (await ArmAsync(trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var recorded = await ReportStationAsync(trip, cavers, "upper.[7]");
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK, await recorded.Content.ReadAsStringAsync());
+        (await BodyAsync(recorded)).EnumerateArray().Single()
+            .GetProperty("stationName").GetString().ShouldBe("upper.[7]");
+
+        // The row, and what the watch hands the panel that draws the markers: both are the label
+        // the viewer gives a station its file left nameless, as its loader is written. That the
+        // viewer then draws it is not shown here — no viewer runs in this test, and no published
+        // survey holds such a station for a browser check to load.
+        (await StoredNamesAsync(trip)).ShouldBe(["upper.[7]"]);
+        (await StateAsync(trip)).GetProperty("participants").EnumerateArray().Single()
+            .GetProperty("stationName").GetString().ShouldBe("upper.[7]");
+    }
+
+    [Fact]
+    public async Task A_nameless_station_of_a_model_read_before_is_refused_as_wanting_the_survey_read_again()
+    {
+        var (trip, cavers) = await CreateTripAsync();
+        var model = await SeedModelAsync(SurveyModelFormat.Lox, rootSurveyName: "cave");
+        // The same station as an earlier reading stored it, and beside it a station a surveyor
+        // really did name with a hash sign — the file wrote that one third, not eighth.
+        await AddStationAsync(model, "cave.upper.#7", "cave.upper", 320, fileStationId: 7);
+        await AddStationAsync(model, "cave.upper.#8", "cave.upper", 310, fileStationId: 3);
+        (await ArmAsync(trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The station exists and the press is right; what is stale is the stored reading. Said
+        // under its own code, and without the station's name in any spelling.
+        var outdated = await ReportStationAsync(trip, cavers, "upper.[7]");
+        var said = await outdated.Content.ReadAsStringAsync();
+        outdated.StatusCode.ShouldBe(HttpStatusCode.Conflict, said);
+        JsonDocument.Parse(said).RootElement.GetProperty("code").GetString()
+            .ShouldBe("tracking.station_reading_outdated");
+        said.ShouldNotContain("[7]");
+        said.ShouldNotContain("#7");
+        said.ShouldNotContain("upper");
+
+        // The two refusals it must not swallow: a label whose number is some other station's — the
+        // row called "#8" is a named station and not the one pressed — and a label for no row at
+        // all. Both are simply stations the model does not have.
+        foreach (var absent in new[] { "upper.[8]", "upper.[9]" })
+        {
+            var unknown = await ReportStationAsync(trip, cavers, absent);
+            unknown.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await BodyAsync(unknown)).GetProperty("code").GetString().ShouldBe("tracking.station_unknown");
+        }
+
+        (await StoredNamesAsync(trip)).ShouldBeEmpty();
+
+        // And the named station with a hash sign is reported at like any other.
+        (await ReportStationAsync(trip, cavers, "upper.#8")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Read again, the row carries the viewer's label and the same press is recorded — the
+        // refusal was about the reading and nothing else.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var row = await db.SurveyStations.SingleAsync(s => s.SurveyModelId == model && s.FileStationId == 7);
+            row.Name = "cave.upper.[7]";
+            await db.SaveChangesAsync();
+        }
+
+        (await ReportStationAsync(trip, cavers, "upper.[7]")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await StoredNamesAsync(trip)).ShouldBe(["upper.#8", "upper.[7]"]);
+    }
+
+    [Theory]
+    // The file wrote the row at number 9 and gave it no name: the viewer leaves it out.
+    [InlineData(9L, "cave.upper.2")]
+    // The same row, were "#9" a name a surveyor chose for the station the file wrote fourth: an
+    // ordinary station, nearest to the depth, and the answer.
+    [InlineData(4L, "#9")]
+    public async Task A_depth_never_lands_on_a_station_a_survex_file_gives_no_name(long fileStationId, string landsOn)
+    {
+        var (trip, cavers) = await CreateTripAsync();
+        var model = await SeedModelAsync(SurveyModelFormat.Survex3d, rootSurveyName: null);
+        // Exactly 50.5 m below the entrance at 350 m, where the nearest named station is half a
+        // metre off — so measuring alone would choose this row every time.
+        await AddStationAsync(model, "#9", null, 299.5, fileStationId);
+        (await ArmAsync(trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var nameless = landsOn != "#9";
+
+        var preview = await owner.PostAsJsonAsync(
+            $"/api/v1/trip-logs/{trip}/tracking/resolve-depth", new { depthM = 50.5 });
+        preview.StatusCode.ShouldBe(HttpStatusCode.OK, await preview.Content.ReadAsStringAsync());
+        var offered = (await BodyAsync(preview)).EnumerateArray()
+            .Select(c => c.GetProperty("stationName").GetString()).ToList();
+        offered[0].ShouldBe(landsOn);
+        offered.Contains("#9").ShouldBe(!nameless);
+
+        var recorded = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", new
+        {
+            caverIds = cavers,
+            kind = "atDepth",
+            depthM = 50.5,
+        });
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK, await recorded.Content.ReadAsStringAsync());
+        (await StoredNamesAsync(trip)).ShouldBe([landsOn]);
+
+        // A declaration made against that name — before this survey arrived, say — is listed as
+        // naming no station a report can land on while the row is nameless, and as an ordinary
+        // declared place when it is a station somebody named. Written to the table directly: the
+        // cave's own route refuses the nameless one, which is a different test.
+        var cave = await CaveOfAsync(model);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.CaveDepthPlaces.Add(new CaveDepthPlace
+            {
+                CaveFeatureId = cave, DepthM = 80m, ViewerStationName = "#9", PlaceLabel = "Sala",
+            });
+            db.CaveDepthPlaces.Add(new CaveDepthPlace
+            {
+                CaveFeatureId = cave, DepthM = 10m, ViewerStationName = "cave.upper.1", PlaceLabel = "Galeria",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var places = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/places");
+        places.StatusCode.ShouldBe(HttpStatusCode.OK, await places.Content.ReadAsStringAsync());
+        var listed = (await BodyAsync(places)).EnumerateArray()
+            .ToDictionary(p => p.GetProperty("placeLabel").GetString()!, p => p.GetProperty("stationInModel").GetBoolean());
+        listed["Sala"].ShouldBe(!nameless);
+        listed["Galeria"].ShouldBeTrue();
+    }
+
+    private async Task AddStationAsync(Guid modelId, string name, string? survey, double z, long fileStationId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.SurveyStations.Add(new SurveyStation
+        {
+            SurveyModelId = modelId,
+            Name = name,
+            SurveyName = survey,
+            FileStationId = fileStationId,
+            Position = new Point(new CoordinateZ(25.5, 45.5, z)) { SRID = 4326 },
+            Flags = SurveyStationFlags.Underground,
+        });
+        await db.SaveChangesAsync();
+    }
+
     private async Task<(Guid Trip, List<Guid> Cavers)> CreateTripAsync()
     {
         var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new

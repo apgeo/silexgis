@@ -216,4 +216,121 @@ public class SurveyStationNamesTests
         SurveyStationNames.IsAnonymousPoint("cave.entrance.-").ShouldBeFalse();
         SurveyStationNames.IsAnonymousPoint("cave.entrance.").ShouldBeFalse();
     }
+
+    // ---- a station the file gives no name ---------------------------------------------------
+
+    [Fact]
+    public void A_nameless_station_is_spelled_the_viewers_way_where_the_viewer_labels_it()
+    {
+        // The viewer labels a nameless station of a compiled Therion file with its number in square
+        // brackets; it gives one of a Survex file no label at all, so there the rows keep a
+        // spelling of their own. Stated as the two strings, because the first of them has to be
+        // character for character what a press on the drawing sends.
+        SurveyStationNames.NamelessLeaf(SurveyModelFormat.Lox, 42).ShouldBe("[42]");
+        SurveyStationNames.NamelessLeaf(SurveyModelFormat.Survex3d, 42).ShouldBe("#42");
+    }
+
+    [Theory]
+    [InlineData(SurveyModelFormat.Lox, "[42]", 42L)]
+    [InlineData(SurveyModelFormat.Lox, "cave.entrance.[42]", 42L)]
+    // A Therion model read before its rows took the viewer's label: the same station, behind a
+    // hash sign until the survey is read again.
+    [InlineData(SurveyModelFormat.Lox, "cave.entrance.#42", 42L)]
+    [InlineData(SurveyModelFormat.Lox, "#42", 42L)]
+    [InlineData(SurveyModelFormat.Survex3d, "#42", 42L)]
+    [InlineData(SurveyModelFormat.Survex3d, "#0", 0L)]
+    public void A_station_called_by_its_own_file_number_has_no_name(
+        SurveyModelFormat format, string storedName, long fileStationId)
+    {
+        SurveyStationNames.IsNameless(format, storedName, fileStationId).ShouldBeTrue();
+    }
+
+    [Theory]
+    // A surveyor may name a station with a hash sign or in brackets. It is a name unless the file
+    // also wrote that very station at that very number — so the number beside it decides, and a
+    // test on the look of the name alone would take these away from whoever chose them.
+    [InlineData(SurveyModelFormat.Lox, "cave.entrance.#3", 7L)]
+    [InlineData(SurveyModelFormat.Lox, "cave.entrance.[3]", 7L)]
+    [InlineData(SurveyModelFormat.Survex3d, "#3", 7L)]
+    // Starting like the fallback, or ending like it without being a whole last component.
+    [InlineData(SurveyModelFormat.Lox, "cave.entrance.[42]a", 42L)]
+    [InlineData(SurveyModelFormat.Lox, "cave.entrance.x[42]", 42L)]
+    [InlineData(SurveyModelFormat.Lox, "cave.entrance.#421", 42L)]
+    [InlineData(SurveyModelFormat.Survex3d, "#421", 42L)]
+    // A Survex label is the whole name, and the viewer's brackets mean nothing there.
+    [InlineData(SurveyModelFormat.Survex3d, "cave.#42", 42L)]
+    [InlineData(SurveyModelFormat.Survex3d, "[42]", 42L)]
+    // An ordinary name, and a row that carries no file number at all.
+    [InlineData(SurveyModelFormat.Lox, "cave.entrance.42", 42L)]
+    [InlineData(SurveyModelFormat.Survex3d, "#42", null)]
+    [InlineData(SurveyModelFormat.Lox, "[42]", null)]
+    public void A_station_somebody_named_is_not_nameless_however_its_name_looks(
+        SurveyModelFormat format, string storedName, long? fileStationId)
+    {
+        SurveyStationNames.IsNameless(format, storedName, fileStationId).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Only_a_nameless_station_the_viewer_has_no_label_for_cannot_be_drawn()
+    {
+        // The three cases, side by side. A Therion station in the viewer's brackets is nameless and
+        // can be pressed and drawn; the same station as an earlier reading stored it cannot, and
+        // neither can any nameless station of a Survex model, which the viewer leaves out.
+        SurveyStationNames.HasNoViewerLabel(SurveyModelFormat.Lox, "cave.entrance.[42]", 42).ShouldBeFalse();
+        SurveyStationNames.HasNoViewerLabel(SurveyModelFormat.Lox, "cave.entrance.#42", 42).ShouldBeTrue();
+        SurveyStationNames.HasNoViewerLabel(SurveyModelFormat.Survex3d, "#42", 42).ShouldBeTrue();
+
+        // And a named station is never one of them, whatever it looks like.
+        SurveyStationNames.HasNoViewerLabel(SurveyModelFormat.Lox, "cave.entrance.#42", 7).ShouldBeFalse();
+        SurveyStationNames.HasNoViewerLabel(SurveyModelFormat.Survex3d, "#42", 7).ShouldBeFalse();
+        SurveyStationNames.HasNoViewerLabel(SurveyModelFormat.Survex3d, "cave.entrance.1", 42).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_nameless_station_under_a_named_root_converts_like_any_other()
+    {
+        // The label is the last component and the root survey is the first, so the one conversion
+        // there is does not touch it: what the rows hold and what a press sends meet through the
+        // same prefix as every named station's.
+        SurveyStationNames.ViewerName(SurveyModelFormat.Lox, Root, "cave.entrance.[42]").ShouldBe("entrance.[42]");
+        SurveyStationNames.StoredCandidates(SurveyModelFormat.Lox, Root, "entrance.[42]")
+            .ShouldBe(["cave.entrance.[42]", "entrance.[42]"]);
+    }
+
+    [Fact]
+    public void The_earlier_spelling_of_a_pressed_nameless_station_is_where_an_old_reading_holds_it()
+    {
+        // Pressed on the drawing as "entrance.[42]"; a reading from before held it as
+        // "cave.entrance.#42" (or, were the press already in the rows' spelling, "entrance.#42").
+        var earlier = SurveyStationNames.EarlierNamelessSpelling(SurveyModelFormat.Lox, Root, "entrance.[42]");
+        earlier.ShouldNotBeNull();
+        earlier.Value.FileStationId.ShouldBe(42);
+        earlier.Value.StoredNames.ShouldBe(["cave.entrance.#42", "entrance.#42"]);
+
+        // With no root name and no survey path there is one reading and nothing in front of it.
+        var bare = SurveyStationNames.EarlierNamelessSpelling(SurveyModelFormat.Lox, null, "[7]");
+        bare.ShouldNotBeNull();
+        bare.Value.StoredNames.ShouldBe(["#7"]);
+        bare.Value.FileStationId.ShouldBe(7);
+    }
+
+    [Theory]
+    [InlineData(SurveyModelFormat.Lox, "entrance.42")]
+    [InlineData(SurveyModelFormat.Lox, "entrance.[]")]
+    [InlineData(SurveyModelFormat.Lox, "entrance.[4a]")]
+    [InlineData(SurveyModelFormat.Lox, "entrance.[007]")]
+    [InlineData(SurveyModelFormat.Lox, "entrance.[-7]")]
+    [InlineData(SurveyModelFormat.Lox, "entrance.[42].1")]
+    [InlineData(SurveyModelFormat.Lox, "entrance.#42")]
+    [InlineData(SurveyModelFormat.Lox, "")]
+    // The viewer gives a nameless Survex station no label, so nothing pressed there is one.
+    [InlineData(SurveyModelFormat.Survex3d, "entrance.[42]")]
+    [InlineData(SurveyModelFormat.Survex3d, "[42]")]
+    public void A_name_that_is_not_the_viewers_label_for_a_nameless_station_has_no_earlier_spelling(
+        SurveyModelFormat format, string given)
+    {
+        // The positive twin of the test above, and what keeps "read the survey again" from being
+        // said about a station that is simply not there.
+        SurveyStationNames.EarlierNamelessSpelling(format, "cave", given).ShouldBeNull();
+    }
 }

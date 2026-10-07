@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Globalization;
 using SilexGis.Domain.Entities;
 
 namespace SilexGis.Domain.Surveys;
@@ -50,11 +51,21 @@ namespace SilexGis.Domain.Surveys;
 /// </para>
 ///
 /// <para>
-/// <b>Nothing here recovers a station the two sides name differently for some other reason.</b> A
-/// station the file gives no name at all is one such case — the rows call it by the number the file
-/// wrote it at, the viewer by the same number in its own punctuation — and that is a question about
-/// whether a nameless station can be addressed at all, not about the survey tree. Such a name
-/// converts to itself, and whoever asked is told the station is not one of the model's.
+/// <b>A station the file gives no name at all is stored under the label the viewer gives it.</b>
+/// Both sides have to call such a station something, and each falls back on the number the file
+/// wrote it at. For a compiled Therion file the viewer writes that number in square brackets, so
+/// the rows store it in square brackets too — the pressed station and the stored station are then
+/// one string and nothing has to be converted. A Survex file is the other case: the viewer leaves
+/// a station without a label out of its tree altogether, so there is no label to share and the row
+/// keeps the number behind a hash sign, a spelling nobody can press. <see cref="IsNameless"/> says
+/// which rows these are and <see cref="HasNoViewerLabel"/> which of them the viewer cannot draw.
+/// </para>
+///
+/// <para>
+/// <b>That number is the file's, not the cave's.</b> It is stable for as long as the model is the
+/// same file, which is all a position reported on that model needs. It is reassigned by the next
+/// export, so nothing that outlives a model — a place declared for the cave as a whole — may be
+/// pinned to it.
 /// </para>
 /// </summary>
 public static class SurveyStationNames
@@ -103,6 +114,116 @@ public static class SurveyStationNames
     /// </para>
     /// </summary>
     public static bool IsAnonymousPoint(string? leafName) => leafName is "-" or ".";
+
+    /// <summary>
+    /// What a station the file gives no name is called in the rows of a model of
+    /// <paramref name="format"/>: the number the file wrote it at, in the viewer's own punctuation
+    /// where the viewer labels such a station at all, and behind a hash sign where it does not.
+    /// This is the last component of the stored name; the survey path goes in front of it as for
+    /// any other station.
+    /// </summary>
+    public static string NamelessLeaf(SurveyModelFormat format, long fileStationId) =>
+        format == SurveyModelFormat.Lox ? ViewerNamelessLeaf(fileStationId) : UnlabelledLeaf(fileStationId);
+
+    /// <summary>
+    /// Whether the station a row calls <paramref name="storedName"/> has no name of its own — what
+    /// identifies it is only the number the file wrote it at.
+    ///
+    /// <para>
+    /// <b>Exact, and asked of the row's own number.</b> The name has to be precisely the fallback
+    /// for this very station: a surveyor may well call a station <c>#3</c> or <c>[3]</c>, and that
+    /// is an ordinary name unless the file also happens to have written that station third. A
+    /// test on how the name starts, or on its shape alone, would take those names away from the
+    /// people who chose them.
+    /// </para>
+    ///
+    /// <para>
+    /// A compiled Therion model answers yes under either punctuation, because a model read before
+    /// its rows took the viewer's label holds the same station behind a hash sign until it is read
+    /// again. A Survex label is already the whole name, so there the whole name is compared; a
+    /// Therion station is named within its survey, so there it is the last component.
+    /// </para>
+    /// </summary>
+    /// <param name="fileStationId">The number the file gives the station; a row without one has a name.</param>
+    public static bool IsNameless(SurveyModelFormat format, string storedName, long? fileStationId)
+    {
+        ArgumentNullException.ThrowIfNull(storedName);
+
+        if (fileStationId is not { } id)
+        {
+            return false;
+        }
+
+        return format == SurveyModelFormat.Lox
+            ? EndsInLeaf(storedName, ViewerNamelessLeaf(id)) || EndsInLeaf(storedName, UnlabelledLeaf(id))
+            : string.Equals(storedName, UnlabelledLeaf(id), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Whether the station is a nameless one the viewer has no label for, and so one that can be
+    /// neither pressed nor drawn: every nameless station of a Survex model, and a nameless station
+    /// of a Therion model whose rows were read before they took the viewer's label.
+    ///
+    /// <para>
+    /// Such a row is real — the survey's legs run through it and its altitude is as good as any —
+    /// but a position stamped with its name is a marker that never appears, so nothing that
+    /// chooses a station on somebody's behalf may choose it.
+    /// </para>
+    /// </summary>
+    public static bool HasNoViewerLabel(SurveyModelFormat format, string storedName, long? fileStationId)
+    {
+        ArgumentNullException.ThrowIfNull(storedName);
+
+        return fileStationId is { } id
+            && (format == SurveyModelFormat.Lox
+                ? EndsInLeaf(storedName, UnlabelledLeaf(id))
+                : string.Equals(storedName, UnlabelledLeaf(id), StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Where the rows of a model read before nameless stations took the viewer's label would hold
+    /// the station the viewer addresses as <paramref name="given"/> — or null when
+    /// <paramref name="given"/> is not the viewer's label for a nameless station at all.
+    ///
+    /// <para>
+    /// This exists to tell two refusals apart. A pressed station the model has no row for is
+    /// ordinarily a name from some other survey, and the remedy is to pick a station that is
+    /// there. A pressed nameless station whose row is still spelled the earlier way is a station
+    /// the model does have, and the remedy is to read the survey again — which nobody would guess
+    /// from being told the station is unknown. The caller looks for a row under one of the names
+    /// returned whose number is the one returned; only that is the earlier spelling of this
+    /// station rather than a coincidence of names.
+    /// </para>
+    /// </summary>
+    public static (IReadOnlyList<string> StoredNames, long FileStationId)? EarlierNamelessSpelling(
+        SurveyModelFormat format, string? rootSurveyName, string given)
+    {
+        ArgumentNullException.ThrowIfNull(given);
+
+        if (format != SurveyModelFormat.Lox)
+        {
+            return null;
+        }
+
+        var leafStart = given.LastIndexOf(Separator) + 1;
+        var leaf = given.AsSpan(leafStart);
+        if (leaf.Length < 3 || leaf[0] != '[' || leaf[^1] != ']')
+        {
+            return null;
+        }
+
+        // Digits and nothing else, and no leading zero: the label is the number as the viewer
+        // prints it, and "[007]" or "[+7]" is a name somebody chose, not that label.
+        var digits = leaf[1..^1];
+        if (!long.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var id)
+            || !digits.SequenceEqual(id.ToString(CultureInfo.InvariantCulture)))
+        {
+            return null;
+        }
+
+        var earlier = string.Concat(given.AsSpan(0, leafStart), UnlabelledLeaf(id));
+        return (StoredCandidates(format, rootSurveyName, earlier), id);
+    }
 
     /// <summary>
     /// How the viewer addresses the station a row calls <paramref name="storedName"/>.
@@ -215,4 +336,26 @@ public static class SurveyStationNames
         format == SurveyModelFormat.Lox && !string.IsNullOrEmpty(rootSurveyName)
             ? rootSurveyName + Separator
             : null;
+
+    /// <summary>The viewer's label for a station of a compiled Therion file that has no name.</summary>
+    private static string ViewerNamelessLeaf(long fileStationId) =>
+        "[" + fileStationId.ToString(CultureInfo.InvariantCulture) + "]";
+
+    /// <summary>
+    /// The number alone, behind a hash sign: what a nameless station is called where the viewer
+    /// has no label to share.
+    /// </summary>
+    private static string UnlabelledLeaf(long fileStationId) =>
+        "#" + fileStationId.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Whether <paramref name="storedName"/> is <paramref name="leaf"/> or ends in it as a whole
+    /// last component.
+    /// </summary>
+    private static bool EndsInLeaf(string storedName, string leaf) =>
+        storedName.Length == leaf.Length
+            ? string.Equals(storedName, leaf, StringComparison.Ordinal)
+            : storedName.Length > leaf.Length
+                && storedName[storedName.Length - leaf.Length - 1] == Separator
+                && storedName.EndsWith(leaf, StringComparison.Ordinal);
 }

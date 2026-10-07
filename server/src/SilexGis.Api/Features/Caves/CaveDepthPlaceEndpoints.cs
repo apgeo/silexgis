@@ -45,6 +45,15 @@ namespace SilexGis.Api.Features.Caves;
 /// the survey's terms — Read on the cave and its exact position open — and is null for everybody
 /// else, exactly as it is for a cave with no survey at all.
 /// </para>
+/// <para>
+/// <b>A station the survey file gives no name cannot be declared.</b> Such a station is known only
+/// by the number its file wrote it at, and the next export of the survey hands that number to some
+/// other station. A position reported on one model can live with that, because it is only ever
+/// drawn on that model; a declaration is the cave's, outlives every model, and would silently come
+/// to mean a different place. It is refused under its own code. The refusal is the one answer of
+/// this slice that says something about a survey, so it is given only to a caller who may see the
+/// cave's surveys: to anybody else the write behaves as it always has, and learns nothing.
+/// </para>
 /// </remarks>
 public static class CaveDepthPlaceEndpoints
 {
@@ -94,12 +103,21 @@ public static class CaveDepthPlaceEndpoints
 
     private static async Task<Results<Ok<CaveDepthPlaceDto>, ProblemHttpResult>> WriteAsync(
         Guid caveId, CaveDepthPlaceWriteRequest request, SilexGisDbContext db, IAccessService access,
-        IAccessContextAccessor accessAccessor, CancellationToken ct)
+        FeatureProtection protection, IAccessContextAccessor accessAccessor, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
-        if (await CaveAsync(db, access, ctx, caveId, AccessAction.Write, ct) is null)
+        if (await CaveAsync(db, access, ctx, caveId, AccessAction.Write, ct) is not { } cave)
         {
             return ApiProblems.NotFound("cave.not_found");
+        }
+
+        if (await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct)
+            && await NamesOnlyAFileNumberAsync(db, caveId, request.StationName!.Trim(), ct))
+        {
+            return ApiProblems.BadRequest(StationNamelessCode,
+                "That station has no name in the survey file, only the number the file wrote it at, and "
+                    + "the next export of the survey gives that number to another station. Declare the "
+                    + "depth at a station that has a name.");
         }
 
         // Keyed the way the table keys it — magnitude, one decimal — before it is looked up or
@@ -215,6 +233,66 @@ public static class CaveDepthPlaceEndpoints
 
         return name => TrackingDepthPlacements.NamesAStationOf(
             stations, new DeclaredDepthPlaces.Declared(0, name, null));
+    }
+
+    /// <summary>The station a declaration names is one its survey file gives no name.</summary>
+    public const string StationNamelessCode = "cave_depth_place.station_nameless";
+
+    /// <summary>
+    /// Whether <paramref name="given"/> is, in the surveys this cave holds, a station known only by
+    /// the number its file wrote it at — in at least one of them, and a named station in none.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the rows rather than of the look of the name, because a surveyor may call a station
+    /// by a hash sign and a number, and that is a name like any other; what makes a station
+    /// nameless is that the name is the file's own number for that very row. A name no survey of
+    /// the cave holds is not judged at all — nothing here has ever required a declared station to
+    /// exist, since the survey it was read off may arrive later.
+    /// </remarks>
+    private static async Task<bool> NamesOnlyAFileNumberAsync(
+        SilexGisDbContext db, Guid caveId, string given, CancellationToken ct)
+    {
+        var linePlots = SurveyModelKinds.FormatsOf(SurveyModelKind.LinePlot);
+        var models = await db.SurveyModels.AsNoTracking()
+            .Where(m => m.CaveFeatureId == caveId && linePlots.Contains(m.Format))
+            .Select(m => new { m.Id, m.Format, m.RootSurveyName })
+            .ToListAsync(ct);
+        if (models.Count == 0)
+        {
+            return false;
+        }
+
+        var byModel = models.ToDictionary(
+            m => m.Id,
+            m => (m.Format, Names: SurveyStationNames.StoredCandidates(m.Format, m.RootSurveyName, given)));
+        var modelIds = models.Select(m => m.Id).ToList();
+        var names = byModel.Values.SelectMany(m => m.Names).Distinct().ToList();
+
+        var rows = await db.SurveyStations.AsNoTracking()
+            .Where(s => modelIds.Contains(s.SurveyModelId) && names.Contains(s.Name))
+            .Select(s => new { s.SurveyModelId, s.Name, s.FileStationId })
+            .ToListAsync(ct);
+
+        var nameless = false;
+        foreach (var row in rows)
+        {
+            var (format, candidates) = byModel[row.SurveyModelId];
+            if (!candidates.Contains(row.Name))
+            {
+                continue;
+            }
+
+            if (!SurveyStationNames.IsNameless(format, row.Name, row.FileStationId))
+            {
+                // Somebody named a station this in one of the cave's surveys, so the name is one
+                // that can be come back to.
+                return false;
+            }
+
+            nameless = true;
+        }
+
+        return nameless;
     }
 
     /// <summary>The unique index on (cave, depth) refused the write, and nothing else did.</summary>

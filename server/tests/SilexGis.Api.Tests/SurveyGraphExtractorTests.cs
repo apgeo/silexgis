@@ -642,6 +642,90 @@ public class SurveyGraphExtractorTests
         return (station.Position.X, station.Position.Y);
     }
 
+    // ---- a station the file gives no name ---------------------------------------------------
+
+    [Theory]
+    [InlineData("cave", "cave.entrance.[4]", "entrance.[4]")]
+    [InlineData("", "entrance.[4]", "entrance.[4]")]
+    public void A_nameless_station_of_a_Therion_file_is_stored_under_the_label_the_viewer_shows(
+        string rootName, string stored, string pressed)
+    {
+        // Written with an empty name and read back from real bytes, so the station reaches the
+        // extractor exactly as the reader hands over a record whose name the file left out.
+        var read = WrittenAndReadBack(WithNamelessStation(TwoLevelCave(rootName)));
+        read.Stations.Single(s => s.Id == 4).Name.ShouldBeEmpty();
+
+        var extraction = Extractor.Extract(read, ModelId, Local);
+        var format = SurveyModelFormat.Lox;
+
+        // Stored under the viewer's own label for it — the number the file wrote it at, in square
+        // brackets, beneath its survey — so the station pressed on the drawing and the stored one
+        // are one string once the root survey's component is accounted for like any other's.
+        var nameless = extraction.Stations.Single(s => s.FileStationId == 4);
+        nameless.Name.ShouldBe(stored);
+        nameless.SurveyName.ShouldBe(rootName.Length == 0 ? "entrance" : "cave.entrance");
+        SurveyStationNames.ViewerName(format, extraction.RootSurveyName, nameless.Name).ShouldBe(pressed);
+        SurveyStationNames.ViewerNameOfMatch(
+                format, extraction.RootSurveyName, pressed, extraction.Stations.Select(s => s.Name).Contains)
+            .ShouldBe(pressed);
+
+        // It is the one row with no name of its own; the three the file did name are untouched,
+        // and it was not mistaken for a wall-shot placeholder, which is a different thing and is
+        // not a row at all.
+        extraction.Stations.Count.ShouldBe(4);
+        extraction.AnonymousStationCount.ShouldBe(0);
+        extraction.Stations
+            .Where(s => SurveyStationNames.IsNameless(format, s.Name, s.FileStationId))
+            .ShouldHaveSingleItem().ShouldBeSameAs(nameless);
+        extraction.Stations.ShouldAllBe(s => !SurveyStationNames.HasNoViewerLabel(format, s.Name, s.FileStationId));
+
+        // And the leg that ends there points at it by that name, so the network still joins up.
+        extraction.Shots.ShouldContain(l => l.ToStationName == stored || l.FromStationName == stored);
+        extraction.DroppedShotCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public void A_nameless_station_of_a_Survex_file_keeps_a_spelling_the_viewer_never_uses()
+    {
+        // The viewer leaves a label-less station of this format out of its tree, so there is no
+        // label to share: the row keeps the file's number behind a hash sign, and is recognisable
+        // afterwards as one the viewer cannot draw. Built as the reader's own model rather than
+        // from bytes, because nothing here writes this format with an empty label.
+        var model = new CaveModel
+        {
+            SourceFormat = CaveSourceFormat.Survex3d,
+            Stations =
+            [
+                new CaveStation { Id = 0, Name = "cave.entrance.1", Position = new CaveVector3(0, 0, 0) },
+                new CaveStation { Id = 1, Name = string.Empty, Position = new CaveVector3(10, 0, -5) },
+                new CaveStation { Id = 2, Name = "cave.entrance.#1", Position = new CaveVector3(20, 0, -9) },
+            ],
+        };
+
+        var extraction = Extractor.Extract(model, ModelId, Local);
+        var format = SurveyModelFormat.Survex3d;
+
+        extraction.Stations.Select(s => s.Name).ShouldBe(["cave.entrance.1", "#1", "cave.entrance.#1"]);
+        extraction.Stations
+            .Where(s => SurveyStationNames.HasNoViewerLabel(format, s.Name, s.FileStationId))
+            .ShouldHaveSingleItem().FileStationId.ShouldBe(1);
+
+        // The station beside it that a surveyor really did call "#1" is an ordinary named station.
+        SurveyStationNames.IsNameless(format, "cave.entrance.#1", 2).ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// The cave with one more station in its sub-survey that the file gives no name — record 4,
+    /// reached by a leg from station 2.
+    /// </summary>
+    private static CaveModel WithNamelessStation(CaveModel cave) => new()
+    {
+        SourceFormat = cave.SourceFormat,
+        Surveys = cave.Surveys,
+        Stations = [.. cave.Stations, StationIn(4, survey: 2, string.Empty, new CaveVector3(30, 0, -12), raw: 0)],
+        Shots = [.. cave.Shots, Leg(3, 4, raw: 0)],
+    };
+
     /// <summary>
     /// Writes the model as real bytes of its format and reads them back, so that what the extractor
     /// sees came out of a file rather than out of this test.

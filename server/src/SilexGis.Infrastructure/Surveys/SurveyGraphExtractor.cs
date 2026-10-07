@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using System.Globalization;
 using NetTopologySuite.Geometries;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
+using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Geodata;
 using Therion.Blender;
 
@@ -155,7 +155,7 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
             }
 
             var surveyName = SurveyNameOf(station.SurveyId, surveyPaths);
-            var name = StationName(station, surveyName, model.SeparatorChar);
+            var name = StationName(station, surveyName, model.SeparatorChar, model.SourceFormat);
             var (longitude, latitude, altitude) =
                 placement.ToWorld(station.Position.X, station.Position.Y, station.Position.Z);
 
@@ -562,18 +562,26 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
     ///
     /// <para>
     /// Nothing reaching here is one of the compiled Therion format's wall-shot placeholders: those
-    /// are not stations and were left out before this. The fallback below is a different case and
-    /// belongs to the other format — see the comment on it, and do not be tempted to widen it into
-    /// a way of telling the placeholders apart, which is the one thing it must not become.
+    /// are not stations and were left out before this. The fallback below is a different case — a
+    /// station with no name at all, which either format can write — so see the comment on it, and
+    /// do not be tempted to widen it into a way of telling the placeholders apart, which is the one
+    /// thing it must not become.
     /// </para>
     /// </summary>
-    private static string StationName(CaveStation station, string? surveyName, char separator)
+    private static string StationName(
+        CaveStation station, string? surveyName, char separator, CaveSourceFormat sourceFormat)
     {
-        // A station with no name at all, which the other of the two formats does emit. The number
-        // the file wrote it at is then the only handle there is. That number is assigned by file
-        // order and is reassigned by every re-export, which is exactly why it is not used for
-        // stations that do have names — such a station simply cannot be followed across two
-        // exports, and pretending otherwise would be worse than saying so.
+        // A station with no name at all, which both formats can emit. The number the file wrote it
+        // at is then the only handle there is. That number is reassigned by every re-export, which
+        // is exactly why it is not used for stations that do have names — such a station simply
+        // cannot be followed across two exports, and pretending otherwise would be worse than
+        // saying so.
+        //
+        // How the number is spelled is not decided here. The survey viewer labels a nameless
+        // station of a compiled Therion file itself, and the row has to carry that very label or a
+        // station pressed on the drawing is one this table has never heard of; the viewer gives a
+        // nameless station of the other format no label at all, so there the row keeps a spelling
+        // of its own. Both spellings, and the test that recognises them afterwards, have one home.
         //
         // It is also why this is not the answer for the compiled Therion format's wall-shot
         // placeholders, which do have a name — one character of it — and would fall straight
@@ -582,7 +590,9 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
         // can never resolve, which is a worse answer wearing the look of a fix.
         var name = station.Name.Length > 0
             ? station.Name
-            : "#" + station.Id.ToString(CultureInfo.InvariantCulture);
+            : SurveyStationNames.NamelessLeaf(
+                sourceFormat == CaveSourceFormat.Lox ? SurveyModelFormat.Lox : SurveyModelFormat.Survex3d,
+                station.Id);
 
         return surveyName is null ? name : surveyName + separator + name;
     }

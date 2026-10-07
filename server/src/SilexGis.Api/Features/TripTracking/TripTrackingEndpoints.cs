@@ -143,6 +143,29 @@ public static class TripTrackingEndpoints
             model.Format, model.RootSurveyName, given, found.Contains);
     }
 
+    /// <summary>
+    /// Whether <paramref name="given"/> is the viewer's label for a station the file gives no name
+    /// and this model's rows still hold under the spelling they used before they took that label.
+    /// Asked only once the name has been refused, to say that the survey wants reading again
+    /// rather than that the station does not exist.
+    /// </summary>
+    private static async Task<bool> HeldUnderEarlierSpellingAsync(
+        SilexGisDbContext db, SurveyModel model, string given, CancellationToken ct)
+    {
+        if (SurveyStationNames.EarlierNamelessSpelling(model.Format, model.RootSurveyName, given) is not { } earlier)
+        {
+            return false;
+        }
+
+        // The row's own number has to be the one in the label: a station somebody really named
+        // with a hash sign and a number is an ordinary station that merely is not the one pressed.
+        var names = earlier.StoredNames;
+        var number = earlier.FileStationId;
+        return await db.SurveyStations.AsNoTracking().AnyAsync(
+            s => s.SurveyModelId == model.Id && names.Contains(s.Name) && s.FileStationId == number,
+            ct);
+    }
+
     internal static async Task<IReadOnlyList<TrackingDepthResolver.Station>> StationsOfAsync(
         SilexGisDbContext db, SurveyModel model, CancellationToken ct)
     {
@@ -153,11 +176,12 @@ public static class TripTrackingEndpoints
         // with an altitude, so there is always one to take.
         var rows = await db.SurveyStations.AsNoTracking()
             .Where(s => s.SurveyModelId == model.Id)
-            .Select(s => new { s.Name, s.SurveyName, s.Position.Z, s.Flags })
+            .Select(s => new { s.Name, s.SurveyName, s.Position.Z, s.Flags, s.FileStationId })
             .ToListAsync(ct);
         return [.. rows.Select(r => TrackingDepthResolver.Station.Of(
             model.Format, model.RootSurveyName,
-            r.Name, r.SurveyName, r.Z, (r.Flags & SurveyStationFlags.Entrance) != 0))];
+            r.Name, r.SurveyName, r.Z, (r.Flags & SurveyStationFlags.Entrance) != 0,
+            r.FileStationId))];
     }
 
     // Which caves are open to this caller, whether a row claims a place, and whether that place
@@ -1016,8 +1040,17 @@ public static class TripTrackingEndpoints
                 // differently, so a station pressed on the model is a real station under a name a
                 // string comparison against the survey rows would call unknown.
                 resolvedStation = await ResolveStationAsync(db, usable.Value.Model, stationName!, ct);
-                if (resolvedStation is null) return Refused(ApiProblems.BadRequest(TrackingProblemCodes.StationUnknown,
-                    "The station is not one of the chosen model's stations."));
+                if (resolvedStation is null)
+                {
+                    // Said apart from an unknown station, and without naming it: this one exists,
+                    // and what stands between it and a report is the model's stored reading.
+                    return Refused(await HeldUnderEarlierSpellingAsync(db, usable.Value.Model, stationName!, ct)
+                        ? ApiProblems.Conflict(TrackingProblemCodes.StationReadingOutdated,
+                            "That station has no name in the survey file, and the survey was read before such "
+                                + "stations could be reported at. Read the survey again, then report.")
+                        : ApiProblems.BadRequest(TrackingProblemCodes.StationUnknown,
+                            "The station is not one of the chosen model's stations."));
+                }
             }
             else
             {
