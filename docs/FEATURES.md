@@ -392,10 +392,17 @@ feature and walkthroughs of whole jobs.
   time in one column or two — or times alone, for a sheet kept in a day — and may be read on a
   named time zone's clocks, summer and winter time included, instead of exactly as written.
   A trip can then be **published** with a link: anybody holding it, with no account, sees the
-  party on the survey, refreshed while they are underground, and a club pastes a block into its
-  own website to show the same viewer in an article whose links can move it. The same link lists
+  party on the survey, refreshed while they are underground. The page is written for a reader who
+  has never followed a trip: it says that a place is where somebody was last *reported* and not a
+  live position, since when the trip has been followed, how long ago the page itself was last
+  read — and that it has stopped refreshing, when it has — in times that keep moving while the
+  page is open and become the hour once the trip is over. It opens in Romanian and reads in
+  English from a button on the page or from a link that names the language. A club pastes a
+  block into its own website to show the same viewer in an article whose links can move it, and
+  the framed viewer tells that article what it is showing. The same link lists
   the cave's other parties being followed now and its finished published trips, each playable as
-  a replay on the survey its reports were measured in. The page names people as the installation
+  a replay on the survey its reports were measured in; any moment of a replay can be copied as a
+  link that opens there, standing or already playing. The page names people as the installation
   decides — real names by default, a caption to keep one person off it — a cave with protected
   coordinates cannot be published at all, and a link ends by itself a short while after the watch
   is closed. A link that has ended up in the wrong place is **replaced** in one act — the old
