@@ -30,6 +30,7 @@ import {
   parseAccessActions,
   useCan,
   useCavingGroups,
+  useCreateDoor,
   useDeleteTripLog,
   useEffectiveAccess,
   useImportTripTrack,
@@ -176,7 +177,9 @@ export default function TripLogDetailPage() {
   const domainFallback = useCan('tripLogs', 'write');
   // Whoever could have deleted a trip is who a deleted one might be waiting for: an account
   // that may delete trips, and one that may create them, since an author may delete their own.
-  const mayCreate = useCan('tripLogs', 'create');
+  // Creating is asked of the door rather than of the domain-level right, as the trip list asks
+  // it: somebody who records trips only for their caving group owns those trips all the same.
+  const { canCreate: mayCreate } = useCreateDoor('tripLogs');
   const mayDelete = useCan('tripLogs', 'delete');
   const canRestore = mayCreate || mayDelete;
   // What this installation does with a deleted trip, asked so the confirmation can say it.

@@ -9,9 +9,10 @@ import TripLogDetailPage from './TripLogDetailPage.tsx';
 
 const TRIP = '33333333-4444-5555-6666-777777777777';
 
-const { tripSpy, canSpy, importTrack, configSpy } = vi.hoisted(() => ({
+const { tripSpy, canSpy, doorSpy, importTrack, configSpy } = vi.hoisted(() => ({
   tripSpy: vi.fn(),
   canSpy: vi.fn(),
+  doorSpy: vi.fn(),
   importTrack: vi.fn(),
   configSpy: vi.fn(),
 }));
@@ -29,6 +30,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useEffectiveAccess: () => ({ data: undefined }),
   useTripLogConfig: () => configSpy(),
   useCan: () => canSpy(),
+  useCreateDoor: () => doorSpy(),
   parseAccessActions: (actions: string) => new Set(actions.split(',')),
 }));
 
@@ -144,6 +146,8 @@ afterEach(cleanup);
 beforeEach(() => {
   tripSpy.mockReturnValue({ data: trip(), isPending: false });
   canSpy.mockReturnValue(false);
+  // Shut unless a test opens it: no right to record trips, alone or through a caving group.
+  doorSpy.mockReset().mockReturnValue({ canCreate: false, unbound: false, cavingGroups: [] });
   importTrack.mockReset();
   configSpy.mockReset().mockReturnValue({ data: { deletedRetentionDays: 30 } });
 });
@@ -265,6 +269,25 @@ describe('the trip page', () => {
     expect(screen.getByText(/it may still be among the deleted trips/)).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('trip-not-found-deleted'));
     expect(screen.getByTestId('address').textContent).toBe('/trip-logs/deleted');
+  });
+
+  /**
+   * Somebody who records trips only for their caving group holds no right over trips as such,
+   * and owns the trips they record like anybody else — so one they deleted is waiting for them
+   * too. The hint is asked of the create door for that reason, as the trip list's is.
+   */
+  it('points somebody who records trips only for their caving group at the deleted trips', () => {
+    canSpy.mockReturnValue(false);
+    doorSpy.mockReturnValue({
+      canCreate: true,
+      unbound: false,
+      cavingGroups: [{ id: 'g1', name: 'Speo Club' }],
+    });
+    tripSpy.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    renderPage();
+
+    expect(screen.getByText(/it may still be among the deleted trips/)).toBeInTheDocument();
+    expect(screen.getByTestId('trip-not-found-deleted')).toBeInTheDocument();
   });
 
   /**

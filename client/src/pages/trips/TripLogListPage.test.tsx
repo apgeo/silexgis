@@ -5,11 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { TripListFacets, TripLogInfo, TripLogListParams } from '../../api/hooks.ts';
 
-const { listSpy, facetSpy, groupSpy, downloadSpy } = vi.hoisted(() => ({
+const { listSpy, facetSpy, groupSpy, downloadSpy, canSpy, doorSpy } = vi.hoisted(() => ({
   listSpy: vi.fn(),
   facetSpy: vi.fn(),
   groupSpy: vi.fn(),
   downloadSpy: vi.fn((_url: string) => Promise.resolve()),
+  canSpy: vi.fn((_domain: string, _action: string) => false),
+  doorSpy: vi.fn(),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
@@ -17,9 +19,15 @@ vi.mock('../../api/hooks.ts', () => ({
   useTripLogFacets: (params: unknown) => facetSpy(params),
   useTripLogGrouping: (params: unknown, enabled: boolean) => groupSpy(params, enabled),
   useTripTypes: () => ({ data: [{ id: 3, code: 'survey', name: 'Survey' }] }),
-  useCan: () => false,
-  useCreateDoor: () => ({ canCreate: false, unbound: false, cavingGroups: [] }),
+  useCan: (domain: string, action: string) => canSpy(domain, action),
+  useCreateDoor: () => doorSpy(),
 }));
+
+// The form behind the create control is mounted by name and not exercised: it has tests of its
+// own and asks the server for a dozen things this page knows nothing about. It is on the page
+// only for an account the create door is open to, which here is the one that is shown the door
+// to the deleted trips for the same reason.
+vi.mock('./TripFormModal.tsx', () => ({ default: () => null }));
 
 // Only the fetch is stood in for. The URL builder is the real one, because what this asserts is
 // which parameters reach the export route — a stand-in for it would be asserting the stand-in.
@@ -102,6 +110,10 @@ beforeEach(() => {
   facetSpy.mockReset();
   groupSpy.mockReset();
   downloadSpy.mockClear();
+  // An account that holds nothing over trips, which is what every test here assumed before the
+  // two answers could be told apart: no right over the domain, and no caving group to record for.
+  canSpy.mockReset().mockReturnValue(false);
+  doorSpy.mockReset().mockReturnValue({ canCreate: false, unbound: false, cavingGroups: [] });
   groupSpy.mockReturnValue({ data: undefined });
   listSpy.mockReturnValue({
     data: { items: [trip()], page: 1, pageSize: 20, totalItems: 4 },
@@ -297,5 +309,40 @@ describe('taking the listing away', () => {
     expect(address).toContain('trips=1');
     expect(address).not.toContain('sort=');
     expect(address).not.toContain('groupBy=');
+  });
+});
+
+/**
+ * The door to the deleted trips is offered to whoever could have deleted one. Which trips are on
+ * the page behind it is the server's decision, row by row; this only decides whether the door is
+ * worth showing. An author deletes their own trip by owning it, so "may record a trip" is half of
+ * the answer — and that half is the create door's, not the domain-level right, because somebody
+ * who records trips only for their caving group owns those trips like anybody else.
+ */
+describe('the door to the deleted trips', () => {
+  it('is not shown to somebody who may neither record a trip nor delete one', () => {
+    show();
+
+    expect(screen.queryByTestId('trip-list-deleted')).toBeNull();
+  });
+
+  it('is shown to somebody who records trips only for their caving group', () => {
+    // No right over trips as such, which is exactly what the domain-level answer says of them.
+    doorSpy.mockReturnValue({
+      canCreate: true,
+      unbound: false,
+      cavingGroups: [{ id: 'g1', name: 'Speo Club' }],
+    });
+    show();
+
+    fireEvent.click(screen.getByTestId('trip-list-deleted'));
+    expect(screen.getByTestId('trip-list-address').textContent).toBe('/trip-logs/deleted');
+  });
+
+  it('is shown to somebody who may delete trips and record none', () => {
+    canSpy.mockImplementation((domain, action) => domain === 'tripLogs' && action === 'delete');
+    show();
+
+    expect(screen.getByTestId('trip-list-deleted')).toBeTruthy();
   });
 });
