@@ -2,11 +2,12 @@
 namespace SilexGis.Api.Features.TripTracking;
 
 /// <summary>
-/// What an installation has decided a published trip may say about the people on it.
+/// What an installation has decided about its tracked trips: what a published one may say about
+/// the people on it, how long a link to one lasts, and what the coordinator's watch marks.
 /// </summary>
 /// <remarks>
-/// One setting, and it is here rather than in the domain because it is a choice the people running
-/// this server make once, not a rule about caves or trips.
+/// Here rather than in the domain because each is a choice the people running this server make
+/// once, not a rule about caves or trips.
 /// </remarks>
 public sealed class TripTrackingOptions
 {
@@ -120,4 +121,45 @@ public sealed class TripTrackingOptions
     /// installation whose live tracking is otherwise working.
     /// </remarks>
     public int EffectiveFollowedListSize => Math.Clamp(FollowedListSize, 1, MaxFollowedListSize);
+
+    /// <summary>
+    /// How long somebody underground may go unreported before the coordinator's watch marks them
+    /// as not heard from. <b>Three hours; zero switches the mark off.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It is a mark for the signed-in people running the watch and nothing more: nothing is sent,
+    /// no alarm is raised or stood down, and no page a visitor without an account reads says
+    /// anything about it. So the number is a matter of what a club finds worth a glance, which is
+    /// why an installation sets it — a club whose trips are all in one short cave and a club
+    /// running multi-day pushes below a camp do not mean the same thing by a long silence.
+    /// </para>
+    /// <para>
+    /// Three hours because word from underground arrives by relay, at the pace of somebody
+    /// climbing to where a telephone works: an hour without a report is ordinary on every trip,
+    /// and a mark that is lit most of the time is a mark nobody reads.
+    /// </para>
+    /// </remarks>
+    public TimeSpan QuietAfter { get; set; } = TimeSpan.FromHours(3);
+
+    /// <summary>
+    /// The threshold actually applied: what the operator asked for, with anything below zero read
+    /// as zero — the mark switched off.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A negative duration is held to zero where it is read rather than refused at startup: off
+    /// is the side to fail to, because the other reading of a nonsense threshold marks everybody
+    /// at once.
+    /// </para>
+    /// <para>
+    /// <b>That is the only mistake this absorbs.</b> A value that is not a duration at all
+    /// (<c>3h</c>) never gets here: the configuration binder refuses it when these options are
+    /// first read, and goes on refusing on every read — which fails every request that reads this
+    /// class, the published-trip routes among them, exactly as an unreadable link lifetime or
+    /// grace window above does. And a bare number is a number of days, so <c>3</c> is three days
+    /// and in practice the mark switched off. The accepted form is <c>[d.]hh:mm:ss</c>.
+    /// </para>
+    /// </remarks>
+    public TimeSpan EffectiveQuietAfter => QuietAfter > TimeSpan.Zero ? QuietAfter : TimeSpan.Zero;
 }

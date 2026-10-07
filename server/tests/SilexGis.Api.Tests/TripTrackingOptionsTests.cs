@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Shouldly;
 using SilexGis.Api.Features.TripTracking;
 
@@ -199,5 +202,56 @@ public class TripTrackingOptionsTests
         new TripPastTrackOptionsValidator().Validate(
                 null, new TripPastTrackOptions { Enabled = false, Retention = TimeSpan.FromDays(30) })
             .Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void The_quiet_threshold_is_three_hours_and_zero_or_less_switches_the_mark_off()
+    {
+        new TripTrackingOptions().QuietAfter.ShouldBe(TimeSpan.FromHours(3));
+        new TripTrackingOptions().EffectiveQuietAfter.ShouldBe(TimeSpan.FromHours(3));
+
+        new TripTrackingOptions { QuietAfter = TimeSpan.FromMinutes(45) }.EffectiveQuietAfter
+            .ShouldBe(TimeSpan.FromMinutes(45));
+        new TripTrackingOptions { QuietAfter = TimeSpan.Zero }.EffectiveQuietAfter.ShouldBe(TimeSpan.Zero);
+        // A negative duration is a typo; read as "off", because the other reading marks everybody.
+        new TripTrackingOptions { QuietAfter = TimeSpan.FromHours(-3) }.EffectiveQuietAfter.ShouldBe(TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// What an operator's spelling of the quiet threshold turns into, as the install guide and the
+    /// sample environment file describe it.
+    /// </summary>
+    /// <remarks>
+    /// Three sentences of documentation rest on this and nothing else asserted them: the form is
+    /// <c>[d.]hh:mm:ss</c>, a bare number is a number of days, and a value that is no duration is
+    /// refused when the options are read — every time they are read, since a failed read is not
+    /// kept. The last is the one an operator needs told, because the options are read by the
+    /// published-trip routes too. If the binding is ever made forgiving, this is the test that
+    /// says the documentation has to change with it.
+    /// </remarks>
+    [Fact]
+    public void The_quiet_threshold_is_read_from_configuration_as_the_documentation_says()
+    {
+        Read("03:00:00").Value.QuietAfter.ShouldBe(TimeSpan.FromHours(3));
+        Read("1.12:00:00").Value.QuietAfter.ShouldBe(TimeSpan.FromHours(36));
+        Read("3").Value.QuietAfter.ShouldBe(TimeSpan.FromDays(3));
+
+        var unreadable = Read("3h");
+        Should.Throw<InvalidOperationException>(() => unreadable.Value);
+        Should.Throw<InvalidOperationException>(() => unreadable.Value);
+    }
+
+    private static IOptions<TripTrackingOptions> Read(string quietAfter)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{TripTrackingOptions.SectionName}:QuietAfter"] = quietAfter,
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddOptions<TripTrackingOptions>().BindConfiguration(TripTrackingOptions.SectionName);
+        return services.BuildServiceProvider().GetRequiredService<IOptions<TripTrackingOptions>>();
     }
 }

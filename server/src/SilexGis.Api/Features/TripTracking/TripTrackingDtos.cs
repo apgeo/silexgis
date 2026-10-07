@@ -174,7 +174,26 @@ public sealed record TrackingParticipantDto(
     /// send. It is the label every signed-in surface shows that person under, resolved by the same
     /// rule and for the same caller, so it tells nobody a name they could not already read.
     /// </remarks>
-    string? Name);
+    string? Name,
+    /// <summary>
+    /// True when this person is underground by the log and nothing at all has been heard about
+    /// them for longer than the installation's threshold, on a watch that is running.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A mark for whoever is reading this, and nothing else.</b> It is worked out at the moment
+    /// of the read against the server's own clock and stored nowhere. Nothing is sent, raised or
+    /// stood down because of it; the trip's overdue callout neither reads it nor is read by it.
+    /// </para>
+    /// <para>
+    /// Always false for somebody who is out, for somebody never heard from, on a watch that is not
+    /// running, and on an installation that has switched the mark off. It says nothing of where
+    /// anybody is — it is a reading of <see cref="LastRecordedAt"/>, which every reader of the
+    /// trip is sent whether or not the place beside it is withheld — so it is answered the same
+    /// for every reader.
+    /// </para>
+    /// </remarks>
+    bool Quiet);
 
 public sealed record TrackingStateDto(
     TripTrackingState State,
@@ -261,7 +280,19 @@ public sealed record TrackingStateDto(
     /// </remarks>
     DateTimeOffset? PublishedUntil,
     IReadOnlyList<TrackingTeamDto> Teams,
-    IReadOnlyList<TrackingParticipantDto> Participants);
+    IReadOnlyList<TrackingParticipantDto> Participants,
+    /// <summary>
+    /// After how many seconds without a report somebody underground is marked as not heard from,
+    /// or null when nobody can be: the watch is not running, or the installation has switched the
+    /// mark off.
+    /// </summary>
+    /// <remarks>
+    /// Sent so that a surface can say what its mark means ("no word for over 3 h") in the
+    /// installation's own number rather than a guessed one, and can leave the whole subject out
+    /// where it does not apply. Which people are marked is <c>quiet</c> on each of them, decided
+    /// here; a surface does not work it out again from this number and its own clock.
+    /// </remarks>
+    int? QuietAfterSeconds);
 
 /// <summary>One report of the log, or the answer to recording or correcting one.</summary>
 /// <param name="DepthPlacement">

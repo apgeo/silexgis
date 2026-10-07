@@ -422,4 +422,51 @@ public static class TripTrackingRules
         }
         return standing;
     }
+
+    /// <summary>
+    /// Whether somebody on a running watch has gone unreported for longer than the installation's
+    /// threshold: underground by the log, and no word of any kind since.
+    /// </summary>
+    /// <param name="state">Where the watch itself stands. Only a running watch has quiet people.</param>
+    /// <param name="standing">What <see cref="StandingOf"/> made of the person's reports.</param>
+    /// <param name="lastHeardAt">The moment of their latest report of any kind, or null.</param>
+    /// <param name="now">The moment the question is asked at.</param>
+    /// <param name="quietAfter">
+    /// How long a silence has to last before it is marked. Zero switches the mark off, and so does
+    /// anything below zero: a threshold nobody could have meant marks nobody, which is the reading
+    /// that cannot cry wolf.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// <b>It is a mark on a screen and nothing else.</b> It is derived at the moment of reading and
+    /// stored nowhere; nothing is sent, raised or stood down because of it. A watch records what
+    /// it is told and watches no clock on anybody's behalf — whether a silence matters is for the
+    /// person reading the screen, who knows whether the party was expected to be out of reach.
+    /// </para>
+    /// <para>
+    /// <b>Only somebody underground can be quiet.</b> Somebody out has been accounted for and has
+    /// nothing further to report; somebody never heard from already has a state of their own that
+    /// says exactly that, and a second mark on them would say the same thing twice in a louder
+    /// voice. And once the watch is closed nobody is expected to report at all, so the silence
+    /// that follows a closed watch is the ordinary one.
+    /// </para>
+    /// <para>
+    /// <b>Any word resets it, a note included.</b> The question is how long it has been since
+    /// anything was heard about this person, not since they last moved: "radio contact, all well"
+    /// names no place and is precisely the report that ends a silence.
+    /// </para>
+    /// <para>
+    /// Strictly longer than the threshold, so a report made exactly that long ago is not yet
+    /// quiet; and a last word dated after <paramref name="now"/> — a clock a little ahead — is a
+    /// silence of no length.
+    /// </para>
+    /// </remarks>
+    public static bool IsQuiet(
+        TripTrackingState state, TripStanding standing, DateTimeOffset? lastHeardAt,
+        DateTimeOffset now, TimeSpan quietAfter) =>
+        quietAfter > TimeSpan.Zero
+        && state == TripTrackingState.Armed
+        && standing == TripStanding.Underground
+        && lastHeardAt is { } heard
+        && now - heard > quietAfter;
 }

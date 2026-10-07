@@ -27,6 +27,8 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
+    private readonly string connectionString;
+    private string ownerEmail = null!;
 
     private HttpClient owner = null!;
     private HttpClient reader = null!;
@@ -36,21 +38,29 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     public TripTrackingTests(PostgresFixture postgres)
     {
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-files-{Guid.NewGuid():N}");
+        connectionString = postgres.ConnectionString;
         factory = new SilexGisApiFactory(
-            postgres.ConnectionString,
-            new Dictionary<string, string?>
-            {
-                ["Files:Root"] = filesRoot,
-                ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
-            },
+            connectionString,
+            HostSettings(),
             // Workers off: the graph-extraction job would otherwise pick up the fake survey
             // file below, fail to parse it, and rewrite the very station rows these tests seed.
             JobWorkers.RemoveFrom);
     }
 
+    /// <summary>
+    /// What every host of this class is configured with, so that a test which needs a second one —
+    /// a clock it can move, a setting of its own — builds it on the same files and keys.
+    /// </summary>
+    private Dictionary<string, string?> HostSettings() => new()
+    {
+        ["Files:Root"] = filesRoot,
+        ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+    };
+
     public async Task InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
+        ownerEmail = $"trk-own-{suffix}@t.local";
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"trk-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"trk-read-{suffix}@t.local");
 
@@ -1396,6 +1406,150 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
             .ShouldBe(named);
     }
 
+    // ---- no word for hours -----------------------------------------------------------------
+
+    /// <summary>
+    /// The mark for somebody underground nobody has heard from, read on a clock the test moves.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A host of its own with a ten-minute threshold, so that the silence can be made by moving
+    /// that host's clock by minutes — inside the life of the token the coordinator signed in with —
+    /// instead of by waiting or by back-dating everything. The reports carry their own moments,
+    /// because recording stamps the machine's time and only the read asks the injected clock.
+    /// </para>
+    /// <para>
+    /// Every "not quiet" below is asserted of somebody who was quiet a step earlier or stands
+    /// beside somebody who still is, so that none of them passes merely because the mark is never
+    /// set at all.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Somebody_underground_with_no_word_past_the_threshold_is_marked_quiet_and_nobody_else_is()
+    {
+        var (trip, cavers) = await CreateTripAsync("Quiet", guests: 4);
+        var (silent, noted, leaver, unheard) = (cavers[0], cavers[1], cavers[2], cavers[3]);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var settings = HostSettings();
+        settings["TripTracking:QuietAfter"] = "00:10:00";
+        using var host = new SilexGisApiFactory(connectionString, settings, services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.AddSingleton<TimeProvider>(clock);
+        });
+        var coordinator = await AuthHelper.BearerClientAsync(host, ownerEmail);
+        var start = clock.Now;
+
+        (await ArmAsync(coordinator, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PostEventAsync(coordinator, trip, new
+        {
+            caverIds = new[] { silent, noted, leaver },
+            kind = "entered",
+            recordedAt = start.AddMinutes(-8),
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Eight minutes of silence against a threshold of ten: nobody yet, and the read says what
+        // the threshold is.
+        var early = await StateAsync(coordinator, trip);
+        early.GetProperty("quietAfterSeconds").GetInt32().ShouldBe(600);
+        new[] { silent, noted, leaver, unheard }.ShouldAllBe(caver => !Quiet(early, caver));
+
+        // Three minutes on, with nothing recorded in between: the three underground have crossed
+        // it. The one nobody has ever heard from has not — that is a state of its own.
+        clock.Now = start.AddMinutes(3);
+        var later = await StateAsync(coordinator, trip);
+        new[] { silent, noted, leaver }.ShouldAllBe(caver => Quiet(later, caver));
+        Quiet(later, unheard).ShouldBeFalse();
+        Participant(later, unheard).GetProperty("lastRecordedAt").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // A note names no place and ends a silence all the same; an exit ends the watch for a
+        // person. The third has had neither and stays marked.
+        (await PostEventAsync(coordinator, trip, new
+        {
+            caverIds = new[] { noted }, kind = "note", note = "voice contact", recordedAt = start,
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PostEventAsync(coordinator, trip, new
+        {
+            caverIds = new[] { leaver }, kind = "exited", recordedAt = start.AddMinutes(-7),
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var answered = await StateAsync(coordinator, trip);
+        Quiet(answered, silent).ShouldBeTrue();
+        Quiet(answered, noted).ShouldBeFalse();
+        Participant(answered, noted).GetProperty("in").GetBoolean().ShouldBeTrue();
+        // Out for longer than the threshold, and not quiet: somebody out has nothing left to report.
+        Quiet(answered, leaver).ShouldBeFalse();
+        Participant(answered, leaver).GetProperty("out").GetBoolean().ShouldBeTrue();
+
+        // The same trip at the same moment on an installation that switched the mark off: nobody
+        // is marked and no threshold is sent.
+        var offSettings = HostSettings();
+        offSettings["TripTracking:QuietAfter"] = "00:00:00";
+        using (var offHost = new SilexGisApiFactory(connectionString, offSettings, services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.AddSingleton<TimeProvider>(clock);
+        }))
+        {
+            var switchedOff = await StateAsync(await AuthHelper.BearerClientAsync(offHost, ownerEmail), trip);
+            switchedOff.GetProperty("quietAfterSeconds").ValueKind.ShouldBe(JsonValueKind.Null);
+            new[] { silent, noted, leaver, unheard }.ShouldAllBe(caver => !Quiet(switchedOff, caver));
+        }
+
+        // And on one left at its default of three hours, read on the machine's own clock: eleven
+        // minutes is nothing.
+        var byDefault = await StateAsync(owner, trip);
+        byDefault.GetProperty("quietAfterSeconds").GetInt32().ShouldBe(3 * 60 * 60);
+        Quiet(byDefault, silent).ShouldBeFalse();
+
+        // Closing the watch ends the subject: nobody is expected to report, so nobody is quiet —
+        // the one who was marked a moment ago included, still underground by the log.
+        (await PutConfigAsync(coordinator, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var closed = await StateAsync(coordinator, trip);
+        closed.GetProperty("quietAfterSeconds").ValueKind.ShouldBe(JsonValueKind.Null);
+        Participant(closed, silent).GetProperty("in").GetBoolean().ShouldBeTrue();
+        new[] { silent, noted, leaver, unheard }.ShouldAllBe(caver => !Quiet(closed, caver));
+    }
+
+    /// <summary>
+    /// The default threshold on the machine's own clock, and that the mark is told to a reader who
+    /// is refused the place beside it: it is a reading of when somebody was last heard from, which
+    /// that reader is sent anyway, and it says nothing of where.
+    /// </summary>
+    [Fact]
+    public async Task Four_silent_hours_mark_somebody_quiet_by_default_for_a_reader_who_is_refused_their_position_too()
+    {
+        var (trip, cavers) = await CreateTripAsync("Quiet by default", guests: 2);
+        var (silent, fresh) = (cavers[0], cavers[1]);
+        var cave = await CreateCaveAsync(locationProtected: true);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var now = DateTimeOffset.UtcNow;
+        await ReportAsync(
+            trip, new { caverIds = new[] { silent }, kind = "atStation", stationName = "cave.upper.2" }, now.AddHours(-4));
+        await ReportAsync(
+            trip, new { caverIds = new[] { fresh }, kind = "atStation", stationName = "cave.upper.1" }, now.AddHours(-2));
+
+        foreach (var client in new[] { owner, reader })
+        {
+            var state = await StateAsync(client, trip);
+            state.GetProperty("quietAfterSeconds").GetInt32().ShouldBe(3 * 60 * 60);
+            Participant(state, silent).GetProperty("quiet").GetBoolean().ShouldBeTrue();
+            Participant(state, fresh).GetProperty("quiet").GetBoolean().ShouldBeFalse();
+        }
+
+        // The reader really is the one the place is kept from, and the owner the one it is told to.
+        var told = await StateAsync(owner, trip);
+        var refused = await StateAsync(reader, trip);
+        Participant(told, silent).GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        refused.GetProperty("positionsWithheld").GetBoolean().ShouldBeTrue();
+        Participant(refused, silent).GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        TimeOf(Participant(refused, silent), "lastRecordedAt").ShouldNotBeNull();
+    }
+
     /// <summary>
     /// Rewrites a trip's roster the way its form does: the two lists sent are the whole of it.
     /// </summary>
@@ -1576,6 +1730,10 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         var response = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", json);
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
+
+    /// <summary>Whether the read marks this person as not heard from for too long.</summary>
+    private static bool Quiet(JsonElement state, Guid caverId) =>
+        Participant(state, caverId).GetProperty("quiet").GetBoolean();
 
     private static JsonElement Participant(JsonElement state, Guid caverId) =>
         state.GetProperty("participants").EnumerateArray()

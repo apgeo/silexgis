@@ -294,6 +294,9 @@ public static class TripTrackingEndpoints
             ? await CaverDirectory.ResolveLabelsAsync(db, await userAccessor.GetAsync(ct), offRoster, ct)
             : [];
 
+        var watchState = tracking?.State ?? TripTrackingState.Off;
+        var quietAfter = options.Value.EffectiveQuietAfter;
+
         var participants = new List<TrackingParticipantDto>();
         foreach (var caverId in rosterCavers.Concat(offRoster))
         {
@@ -342,12 +345,18 @@ public static class TripTrackingEndpoints
                 // names them.
                 listed ? TripTrackingPublicationEndpoints.NameFor(caverId, labels, publishedNames) : null,
                 listed,
-                listed ? null : formerNames.GetValueOrDefault(caverId)));
+                listed ? null : formerNames.GetValueOrDefault(caverId),
+                // Asked of Domain with the watch's own state, so that a closed watch, somebody out
+                // and somebody never heard from are each answered there and not by a test here.
+                // Measured from the last word of any kind — a note ends a silence as surely as a
+                // place does — and that moment is sent to every reader whatever is withheld, so
+                // the mark tells nobody anything the row beside it does not.
+                TripTrackingRules.IsQuiet(watchState, standing, last?.RecordedAt, now, quietAfter)));
         }
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
         return TypedResults.Ok(new TrackingStateDto(
-            tracking?.State ?? TripTrackingState.Off,
+            watchState,
             configOpen ? tracking?.SurveyModelId : null,
             // Said only to a caller who is being told which model it is: to anyone else the id
             // arrives null anyway, and "the survey that watch was on has been deleted" is a fact
@@ -364,7 +373,12 @@ public static class TripTrackingEndpoints
             publishedAt,
             publishedUntil,
             [.. teams.Select(t => new TrackingTeamDto(t.Id, t.Title))],
-            participants));
+            participants,
+            // The threshold only where the mark can apply: null says "nobody is being marked
+            // here", which is a different answer from a number nobody happens to have crossed.
+            watchState == TripTrackingState.Armed && quietAfter > TimeSpan.Zero
+                ? (int)Math.Min(quietAfter.TotalSeconds, int.MaxValue)
+                : null));
     }
 
     private static async Task<Results<Ok<PagedResult<TrackingEventDto>>, ProblemHttpResult>> ListEventsAsync(

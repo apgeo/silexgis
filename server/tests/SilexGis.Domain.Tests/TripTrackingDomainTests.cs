@@ -202,6 +202,51 @@ public class TripTrackingDomainTests
 
     // ---- where one member of the party stands --------------------------------------------
     //
+    private static readonly DateTimeOffset Noon = new(2026, 9, 12, 12, 0, 0, TimeSpan.Zero);
+    private static readonly TimeSpan ThreeHours = TimeSpan.FromHours(3);
+
+    [Fact]
+    public void Somebody_underground_on_a_running_watch_is_quiet_once_their_last_word_is_older_than_the_threshold()
+    {
+        static bool Quiet(double hoursSilent) => TripTrackingRules.IsQuiet(
+            TripTrackingState.Armed, TripStanding.Underground, Noon.AddHours(-hoursSilent), Noon, ThreeHours);
+
+        Quiet(4).ShouldBeTrue();
+        Quiet(3.01).ShouldBeTrue();
+        // Exactly the threshold is not yet past it, and anything fresher certainly is not.
+        Quiet(3).ShouldBeFalse();
+        Quiet(1).ShouldBeFalse();
+        Quiet(0).ShouldBeFalse();
+        // A last word dated a little ahead of the reader's clock is a silence of no length.
+        Quiet(-0.05).ShouldBeFalse();
+    }
+
+    [Theory]
+    // The one row that is quiet, first, so that every refusal below is of something that would
+    // otherwise have been marked: the same four silent hours in each.
+    [InlineData(TripTrackingState.Armed, TripStanding.Underground, true)]
+    [InlineData(TripTrackingState.Armed, TripStanding.Out, false)]
+    [InlineData(TripTrackingState.Armed, TripStanding.Unheard, false)]
+    [InlineData(TripTrackingState.Closed, TripStanding.Underground, false)]
+    [InlineData(TripTrackingState.Off, TripStanding.Underground, false)]
+    public void Nobody_is_quiet_who_is_out_or_unheard_or_on_a_watch_that_is_not_running(
+        TripTrackingState state, TripStanding standing, bool quiet) =>
+        TripTrackingRules.IsQuiet(state, standing, Noon.AddHours(-4), Noon, ThreeHours).ShouldBe(quiet);
+
+    [Fact]
+    public void A_threshold_of_zero_switches_the_mark_off_and_so_does_a_nonsense_one()
+    {
+        static bool Quiet(TimeSpan after) => TripTrackingRules.IsQuiet(
+            TripTrackingState.Armed, TripStanding.Underground, Noon.AddDays(-2), Noon, after);
+
+        Quiet(TimeSpan.FromMinutes(1)).ShouldBeTrue();
+        Quiet(TimeSpan.Zero).ShouldBeFalse();
+        Quiet(TimeSpan.FromHours(-3)).ShouldBeFalse();
+        // Somebody with no report at all has no silence to measure, whatever their standing says.
+        TripTrackingRules.IsQuiet(TripTrackingState.Armed, TripStanding.Underground, null, Noon, ThreeHours)
+            .ShouldBeFalse();
+    }
+
     // StandingOf is pure, takes a plain sequence and is the one home both tracking reads ask.
     // Every ordering it can be handed is enumerable here for the cost of a line, which is worth
     // doing precisely because the surfaces that consume it are HTTP tests against a database:
