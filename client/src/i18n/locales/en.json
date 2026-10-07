@@ -1785,6 +1785,7 @@
         "recordedInFuture": "A report cannot be about the future. Check the time on it.",
         "teamNotFound": "That team is no longer on this trip.",
         "eventNotFound": "That report is no longer on the log — somebody else may have taken it off.",
+        "eventNotRemoved": "That report is on the log again — somebody put it back. Take it off first, then delete it for good.",
         "concurrentWrite": "Somebody else wrote to this tracking at the same moment. The page has been read again; try once more.",
         "tripNotFound": "This trip is no longer there, or is no longer yours to read.",
         "ifMatchRequired": "This page lost track of which version it was changing. It has been read again; try once more.",

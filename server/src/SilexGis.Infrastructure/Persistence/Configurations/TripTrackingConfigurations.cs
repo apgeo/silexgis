@@ -39,8 +39,13 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
         // Where a party was is read from the model's side and from a person's side as well as
         // from the trip's, so the reports of a deleted trip are hidden here rather than by every
-        // reader remembering to ask the trip first.
-        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null);
+        // reader remembering to ask the trip first. A report taken off the log is hidden by the
+        // same filter, for the same reason: it is in no fold, no list and no published read
+        // because the model leaves it out, not because each of them was told to. One filter and
+        // not two, so a reader who asks past it has asked past both and must say which rows it
+        // then wants — there is no way to see removed reports that silently also keeps a deleted
+        // trip's rows out.
+        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null && x.RemovedAt == null);
         // Being tracked is a fact about the person; it blocks deleting the person, like the roster.
         builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<TripTeam>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.SetNull);
@@ -52,6 +57,9 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         // saying that plainly is the whole point. Protection continues to hang off CaveFeatureId.
         builder.HasOne<Feature>().WithMany().HasForeignKey(x => x.CaveFeatureId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.RecordedByUserId).OnDelete(DeleteBehavior.SetNull);
+        // Who took a report off the log is a courtesy on the row; the account going must not take
+        // the report, nor block the account's removal.
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.RemovedByUserId).OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => new { x.TripLogId, x.CaverId, x.RecordedAt });
         builder.HasIndex(x => new { x.TripLogId, x.RecordedAt });

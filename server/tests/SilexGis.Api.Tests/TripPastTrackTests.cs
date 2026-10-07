@@ -909,6 +909,36 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
 
     private static string PastTrack(string token, Guid tripLogId) => $"{Live(token)}/past/{tripLogId}";
 
+    /// <summary>
+    /// A report taken off the log is not on the past track, and one put back is.
+    /// </summary>
+    [Fact]
+    public async Task A_report_taken_off_the_log_is_not_on_the_past_track_until_it_is_put_back()
+    {
+        var published = await PublishedTripAsync("Past, with one taken off");
+        var cavers = await RosterOrderAsync(published.Trip);
+        await ReportAsync(published.Trip, cavers[0], "cave.deep.3");
+        var log = await Json(owner.GetAsync($"/api/v1/trip-logs/{published.Trip}/tracking/events"));
+        var eventId = log.GetProperty("items").EnumerateArray()
+            .Single(e => e.GetProperty("stationName").GetString() == "cave.deep.3").GetProperty("id").GetGuid();
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{published.Trip}/tracking/events/{eventId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        await CloseAsync(published.Trip, DateTimeOffset.UtcNow.AddDays(-5));
+
+        // The report that stayed is on the track; the one taken off is not, in any form.
+        var page = await TrackAsync(published.Token, published.Trip);
+        Track(page).Select(f => f.GetProperty("stationName").GetString()).ShouldBe(["cave.upper.2"]);
+        page.GetRawText().ShouldNotContain("cave.deep.3");
+        page.GetRawText().ShouldNotContain(eventId.ToString());
+
+        // A closed watch still takes the act, and the track then carries both.
+        (await owner.PostAsync($"/api/v1/trip-logs/{published.Trip}/tracking/events/{eventId}/restore", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        Track(await TrackAsync(published.Token, published.Trip))
+            .Select(f => f.GetProperty("stationName").GetString())
+            .ShouldBe(["cave.upper.2", "cave.deep.3"], ignoreOrder: true);
+    }
+
     private sealed record PastTrip(Guid Trip, Guid Cave, Guid Model, Guid ShareId, string Token);
 
     private sealed record NewTrip(Guid Trip, List<Guid> Cavers, List<string> Names);

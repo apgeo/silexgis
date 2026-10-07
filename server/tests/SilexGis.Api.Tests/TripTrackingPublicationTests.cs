@@ -2107,6 +2107,61 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
             .ToListAsync();
     }
 
+    /// <summary>
+    /// A report taken off the log leaves the published page with it, and the page's validator
+    /// changes — a follower holding the earlier answer is sent the new one, not told that nothing
+    /// changed. Put back, it is published again.
+    /// </summary>
+    [Fact]
+    public async Task A_report_taken_off_the_log_leaves_the_published_page_and_changes_its_validator()
+    {
+        var trip = await ArmedTripAsync("Published, then taken off", locationProtected: false);
+        await CaptionAsync(trip.Trip, trip.Cavers[0], "Placed");
+        var (_, token) = await PublishAsync(trip.Trip);
+        await ReportAsync(trip.Trip, new { caverIds = trip.Cavers, kind = "entered" }, At(9, 0));
+        await ReportAsync(
+            trip.Trip, new { caverIds = trip.Cavers, kind = "atStation", stationName = "cave.upper.2" }, At(9, 30));
+        var log = await BodyAsync(await owner.GetAsync($"/api/v1/trip-logs/{trip.Trip}/tracking/events"));
+        var eventId = log.GetProperty("items").EnumerateArray()
+            .Single(e => e.GetProperty("kind").GetString() == "atStation").GetProperty("id").GetGuid();
+
+        // Positive half: the report is published, and the answer carries a validator that holds.
+        var before = await anonymous.GetAsync(Follow(token));
+        before.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var validatorBefore = before.Headers.ETag.ShouldNotBeNull().ToString();
+        Member(await BodyAsync(before), "Placed").GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        (await ConditionalAsync(token, validatorBefore)).StatusCode.ShouldBe(HttpStatusCode.NotModified);
+
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{trip.Trip}/tracking/events/{eventId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Negative half: the earlier validator no longer holds, and the answer names no station —
+        // nor carries the removed report in any other form.
+        var after = await ConditionalAsync(token, validatorBefore);
+        after.StatusCode.ShouldBe(HttpStatusCode.OK, "a follower holding the earlier answer must be sent the new one");
+        after.Headers.ETag.ShouldNotBeNull().ToString().ShouldNotBe(validatorBefore);
+        var afterText = await after.Content.ReadAsStringAsync();
+        afterText.ShouldNotContain("cave.upper.2");
+        afterText.ShouldNotContain(eventId.ToString());
+        var placed = Member(JsonDocument.Parse(afterText).RootElement, "Placed");
+        placed.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        TimeOf(placed, "positionRecordedAt").ShouldBeNull();
+        TimeOf(placed, "lastRecordedAt").ShouldBe(At(9, 0));
+
+        var restored = await owner.PostAsync(
+            $"/api/v1/trip-logs/{trip.Trip}/tracking/events/{eventId}/restore", null);
+        restored.StatusCode.ShouldBe(HttpStatusCode.OK, await restored.Content.ReadAsStringAsync());
+        Member(await FollowAsync(token), "Placed").GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+    }
+
+    /// <summary>The followed page asked for by somebody who already holds an answer to it.</summary>
+    private async Task<HttpResponseMessage> ConditionalAsync(string token, string validator)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, Follow(token));
+        request.Headers.TryAddWithoutValidation("If-None-Match", validator);
+        return await anonymous.SendAsync(request);
+    }
+
     private static string Shares(Guid trip) => $"/api/v1/trip-logs/{trip}/tracking/shares";
 
     private static string Follow(string token) => $"/api/v1/public/trips/{Uri.EscapeDataString(token)}";

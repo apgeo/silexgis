@@ -152,6 +152,28 @@ public class TripPositionEvent : ITimestamped, IAuditable, IAuditChild
 
     public DateTimeOffset UpdatedAt { get; set; }
 
+    /// <summary>
+    /// When the report was taken off the log; null while it is on it.
+    ///
+    /// <para>
+    /// A report taken off is kept, not destroyed: it may be the only record of where somebody was,
+    /// and nothing else holds a station once the row is gone — the trip's history deliberately
+    /// keeps no place. So taking one off is this mark, putting it back clears the mark and returns
+    /// the same row with everything hung on it, and destroying it is a second, separate act that
+    /// only a marked row accepts.
+    /// </para>
+    /// <para>
+    /// A marked row is hidden by the model itself, with the rows of a deleted trip, so no fold,
+    /// list, count or published read has to remember to leave it out. The few readers that must
+    /// see it — the list of removed reports, the acts on one, and whatever holds a person in
+    /// place — ask past that on purpose.
+    /// </para>
+    /// </summary>
+    public DateTimeOffset? RemovedAt { get; set; }
+
+    /// <summary>Who took the report off the log; null once that account is gone.</summary>
+    public Guid? RemovedByUserId { get; set; }
+
     public string AuditId => Id.ToString();
 
     public string? RootEntityType => nameof(TripLog);

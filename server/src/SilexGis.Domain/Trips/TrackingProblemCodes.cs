@@ -72,6 +72,9 @@ public static class TrackingProblemCodes
     /// <summary>The report named is not, or is no longer, on this trip's log.</summary>
     public const string EventNotFound = "tracking.event_not_found";
 
+    /// <summary>A report was to be destroyed for good while it is still on the log.</summary>
+    public const string EventNotRemoved = "tracking.event_not_removed";
+
     /// <summary>The survey has no station by the name a report gave.</summary>
     public const string StationUnknown = "tracking.station_unknown";
 

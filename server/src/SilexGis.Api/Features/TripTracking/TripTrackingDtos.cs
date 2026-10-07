@@ -381,6 +381,18 @@ public sealed record TrackingEventDto(
     TrackingDepthPlacementOutcome? DepthPlacement = null);
 
 /// <summary>
+/// A report that was taken off the log and is still kept: what it said, read under the same
+/// withholding as the log, and when it was taken off.
+/// </summary>
+/// <remarks>
+/// Who took it off is on the trip's history with every other act on the log, and is not repeated
+/// here. Listed only for those who may write the log; nothing a visitor without an account reads
+/// carries a removed report in any form.
+/// </remarks>
+public sealed record TrackingRemovedEventDto(TrackingEventDto Report, DateTimeOffset RemovedAt);
+
+
+/// <summary>
 /// One place the watch's cave has declared: what it is called, which station it is, how deep.
 /// </summary>
 /// <remarks>

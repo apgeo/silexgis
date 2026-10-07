@@ -604,6 +604,12 @@ public sealed class TripLogWriteService(
     /// that keeps its people, costs no query here.
     /// </para>
     /// <para>
+    /// A report taken off the log speaks of nobody. The model hides it from this read as from
+    /// every other, so somebody whose only reports were taken off may leave a running watch; a
+    /// report put back afterwards is then about somebody off the roster, which the watch's own
+    /// read already shows and flags, exactly as it does once a watch has closed.
+    /// </para>
+    /// <para>
     /// <b>A check, not a lock.</b> The two facts are read here and the roster rows are removed at
     /// the caller's save, with nothing held in between; a first report about a leaver recorded in
     /// that interval is not seen. Closing that needs one lock taken both here and where reports

@@ -1785,6 +1785,7 @@
         "recordedInFuture": "Un raport nu poate fi despre viitor. Verifică ora de pe el.",
         "teamNotFound": "Acea echipă nu mai este pe această tură.",
         "eventNotFound": "Acel raport nu mai este în jurnal — s-ar putea să îl fi scos altcineva.",
+        "eventNotRemoved": "Acel raport este din nou în jurnal — l-a pus cineva înapoi. Scoateți-l mai întâi, apoi ștergeți-l definitiv.",
         "concurrentWrite": "Altcineva a scris în această urmărire în același moment. Pagina a fost citită din nou; mai încearcă o dată.",
         "tripNotFound": "Această tură nu mai există sau nu mai poate fi citită de tine.",
         "ifMatchRequired": "Pagina a pierdut versiunea pe care o modifica. A fost citită din nou; mai încearcă o dată.",

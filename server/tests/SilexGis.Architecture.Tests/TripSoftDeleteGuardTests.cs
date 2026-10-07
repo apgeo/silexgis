@@ -199,6 +199,10 @@ public class TripSoftDeleteGuardTests
                 (2, "a deleted trip still anchors the rules, files, tags and links kept on it"),
             ["server/src/SilexGis.Infrastructure/Permissions/PhotoPositionDisclosure.cs"] =
                 (1, "a picture filed under a camp stays guarded by the places a deleted member trip names"),
+            ["server/src/SilexGis.Api/Features/TripTracking/TripTrackingEndpoints.cs"] =
+                (1, "a report taken off the log is hidden by the same filter as a deleted trip's rows; listing "
+                    + "the removed ones to those who may write the log, putting one back and destroying one "
+                    + "all start from a single set that asks past it and says again that the trip is not deleted"),
             ["server/src/SilexGis.Api/Features/TripTracking/PublishedLinksAdminEndpoints.cs"] =
                 (1, "withdrawing every published link takes a deleted trip's links too, so that restoring "
                     + "the trip reopens no address an administrator was told had been taken back"),

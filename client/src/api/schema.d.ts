@@ -13973,10 +13973,12 @@ export interface paths {
             };
         };
         post?: never;
-        /** Take a report off the log, when what it recorded never happened rather than happened differently. */
+        /** Take a report off the log, when what it recorded never happened rather than happened differently — it is kept and can be put back; with permanent=true, destroy one already taken off. */
         delete: {
             parameters: {
-                query?: never;
+                query?: {
+                    permanent?: boolean;
+                };
                 header?: never;
                 path: {
                     tripLogId: string;
@@ -13995,6 +13997,86 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/events/removed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The reports taken off the trip's log, latest removal first, for those who may write the log; position fields follow the same withholding as the log. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfTrackingRemovedEventDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Put a report taken off the log back on it, unchanged and under its own id. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    eventId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingEventDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -23317,6 +23399,15 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfTrackingRemovedEventDto: {
+            items: components["schemas"]["TrackingRemovedEventDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfTripLogDto: {
             items: components["schemas"]["TripLogDto"][];
             /** Format: int32 */
@@ -25845,6 +25936,11 @@ export interface components {
             stationName: string;
             placeLabel: null | string;
             stationInModel: boolean;
+        };
+        TrackingRemovedEventDto: {
+            report: components["schemas"]["TrackingEventDto"];
+            /** Format: date-time */
+            removedAt: string;
         };
         TrackingResolveDepthRequest: {
             /** Format: double */
