@@ -96,7 +96,7 @@ distanță — caz în care verificați numărul sau declarația peșterii.
 **Când s-a spus** nu mai este opțional. Răspunsurile rapide (*Acum*, *acum 15 min*…) nu mai
 sunt oferite, iar un raport trimis cu câmpul gol este oprit cu *„Spune când s-a spus."* Un apel
 uitat sâmbătă și introdus luni ar fi altfel trecut luni: reluarea s-ar întinde cu două zile
-peste tură, iar un *A intrat* introdus așa ar arăta pe cineva în subteran într-o tură deja
+peste tură, iar un *A intrat* introdus așa ar arăta pe cineva în peșteră într-o tură deja
 terminată. **Marchează N ca ieșiți** cere și el momentul, la fel și **Înregistrează aici** de pe
 desen. Nimic altceva nu se schimbă la un jurnal încheiat — primește rapoarte ca înainte — iar
 pentru rapoartele unei ture întregi o foaie de calcul (mai jos) este calea mai rapidă.
@@ -164,11 +164,11 @@ Panoul modelului marchează fiecare om acolo unde a fost raportat ultima dată, 
 | **Nu îți este arătată** | Poziția există și nu vă poate fi comunicată: locația exactă a peșterii vă este ascunsă |
 
 **Arată doar părțile declarate** — oferit deasupra modelului când configurarea spune unde a spus
-echipa că merge — scoate din desen fiecare topografie în care nu se află nimic declarat și spune
+echipa că merge — scoate din desen fiecare ridicare în care nu se află nimic declarat și spune
 câte a ascuns. Toți își păstrează marcajul: cine este raportat în afara părților declarate este
 atunci desenat fără galeria din jur, adică exact ce spune eticheta portocalie din tabel.
-Comutatorul rămâne oprit, și spune de ce, când desenul nu are nicio topografie cu un nume
-declarat sau când toate topografiile lui sunt declarate. Oprirea lui aduce înapoi exact ce a
+Comutatorul rămâne oprit, și spune de ce, când desenul nu are nicio ridicare cu un nume
+declarat sau când toate ridicările lui sunt declarate. Oprirea lui aduce înapoi exact ce a
 ascuns.
 
 **Reia tura** redă tot jurnalul pe ridicare, cu notele spuse pe parcurs; **Înapoi la direct** vă
@@ -260,7 +260,7 @@ despre cine era, cât de adânc era și o notă. **Importă o foaie**, lângă r
 
 **Foaia este o treabă de birou.** Servește la trecerea unei ture în jurnal după notițe: este
 citită întreagă, verificată rând cu rând și apoi scrisă dintr-odată. Pentru un raport care
-sosește cât timp echipa este în subteran, folosiți formularul de raport — primește câte un
+sosește cât timp echipa este în peșteră, folosiți formularul de raport — primește câte un
 raport și nu suprascrie nimic. O urmărire care nu a fost pornită nu primește nicio foaie:
 citirea o spune de îndată, la fel cum ar spune-o importul.
 
@@ -749,7 +749,7 @@ listă care a stat deschisă o vreme.
 
 **Urmăriri lăsate pornite.** Urmărirea unei ture nu este încheiată decât de un om — aplicația nu
 hotărăște niciodată singură că o echipă a ieșit. Reversul este că o urmărire uitată rămâne
-pornită la nesfârșit: echipa rămâne pe pagina publicată ca fiind încă în subteran, iar după ce
+pornită la nesfârșit: echipa rămâne pe pagina publicată ca fiind încă în peșteră, iar după ce
 linkul expiră tura nu mai este în nicio listă publică, nici printre cele urmărite, nici printre
 turele trecute. Coloana **Urmărire pornită la** arată când a fost pornită ultima dată urmărirea
 fiecărei ture și, cât timp este pornită, de câte zile; un rând a cărui urmărire este încă

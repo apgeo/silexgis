@@ -1628,10 +1628,10 @@
       "outsideDeclaredParts": "În afara părților declarate",
       "outsideDeclaredPartsHelp": "Această stație nu se află în părțile peșterii în care echipa a spus că merge. Este un semn pentru cine citește această filă: nu se trimite nimic și nu se dă nicio alarmă.",
       "declaredOnly": "Arată doar părțile declarate",
-      "declaredOnlyHelp": "Scoate din desen fiecare topografie în care nu se află nimic din ce a spus echipa că parcurge. Marcajele rămân.",
-      "declaredOnlyHidden": "Topografii din afara părților declarate, ascunse: {{surveys}}. Cine este raportat acolo își păstrează marcajul, desenat fără galeria din jur.",
-      "declaredOnlyNothing": "Toate topografiile acestui desen sunt în părțile declarate.",
-      "declaredOnlyUnmatched": "Acest desen nu are nicio topografie numită: {{entries}}. Nu poate fi restrâns la părțile declarate.",
+      "declaredOnlyHelp": "Scoate din desen fiecare ridicare în care nu se află nimic din ce a spus echipa că parcurge. Marcajele rămân.",
+      "declaredOnlyHidden": "Ridicări din afara părților declarate, ascunse: {{surveys}}. Cine este raportat acolo își păstrează marcajul, desenat fără galeria din jur.",
+      "declaredOnlyNothing": "Toate ridicările acestui desen sunt în părțile declarate.",
+      "declaredOnlyUnmatched": "Acest desen nu are nicio ridicare numită: {{entries}}. Nu poate fi restrâns la părțile declarate.",
       "declaredOnlyWaiting": "Disponibil după încărcarea modelului.",
       "notOnRosterDetail": "A fost scos de pe lista turei după ce s-au înregistrat rapoarte despre el. Rapoartele rămân în jurnal; nu se mai poate înregistra nimic pentru el, iar o pagină publică nu îl arată.",
       "quiet": {
@@ -1982,7 +1982,7 @@
         "noteQuoted": "„{{note}}”",
         "beforeLabel": "Acum în jurnal:",
         "afterLabel": "După import:",
-        "deskTask": "Foaia este o treabă de birou: servește la trecerea unei ture în jurnal după notițe, este citită întreagă, verificată rând cu rând și apoi scrisă dintr-odată. Pentru un raport care sosește cât timp echipa este în subteran, folosește formularul de raport al turei — primește câte un raport și nu suprascrie nimic.",
+        "deskTask": "Foaia este o treabă de birou: servește la trecerea unei ture în jurnal după notițe, este citită întreagă, verificată rând cu rând și apoi scrisă dintr-odată. Pentru un raport care sosește cât timp echipa este în peșteră, folosește formularul de raport al turei — primește câte un raport și nu suprascrie nimic.",
         "planChangedTitle": "Tura s-a schimbat cât timp era verificată foaia"
       }
     },
@@ -6164,7 +6164,7 @@
       "createdAt": "Publicat la",
       "expiresAt": "Expiră la",
       "watchArmedAt": "Urmărire pornită la",
-      "watchArmedAtHelp": "Când a fost pornită ultima dată urmărirea acestei ture. Urmărirea nu este încheiată decât de un om, așa că una pornită de mult mai mult timp decât a durat tura a fost, cel mai probabil, uitată: echipa rămâne pe pagina publicată ca fiind încă în subteran sau, după ce linkul a expirat, nu mai este în nicio listă publică. Încheie-o din fila Urmărire a turei.",
+      "watchArmedAtHelp": "Când a fost pornită ultima dată urmărirea acestei ture. Urmărirea nu este încheiată decât de un om, așa că una pornită de mult mai mult timp decât a durat tura a fost, cel mai probabil, uitată: echipa rămâne pe pagina publicată ca fiind încă în peșteră sau, după ce linkul a expirat, nu mai este în nicio listă publică. Încheie-o din fila Urmărire a turei.",
       "handle": "Cod în jurnal",
       "handleHelp": "Codul scurt pe care jurnalul de cereri îl scrie în locul adresei unui link, ca o linie din jurnal să poată fi potrivită cu un rând de aici. Nu deschide nimic."
     },
