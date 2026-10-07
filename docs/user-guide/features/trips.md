@@ -258,6 +258,63 @@ disappears, so the same layout produces an honest document for a member and for 
 
 ---
 
+## Deleting and restoring a trip
+
+**Delete** on a trip's page asks *"Delete this trip log?"* and says underneath what is about to
+happen: **nothing on the trip is removed, and it can be restored from Deleted trips** — for how
+long is your installation's own number, and the confirmation states it.
+
+A deleted trip is **gone from everywhere at once**: the list and its counts, the map, the
+calendar and every calendar feed, *My trips*, its camp, the statistics, search, the links panel
+of every cave it named, and any public follow link — which answers exactly as a link nobody ever
+made. Its own address says *No such trip*, to its owner as to anybody else. Nobody on the trip is
+told.
+
+What is kept, hidden with it, is **everything**: the roster and who was asked, the caves and
+other things it names, its files, photographs, tags and write-up, its place in a camp, and the
+rules saying who may read it.
+
+### Deleted trips
+
+**Trip logs → Deleted trips** lists the deleted trips **you may put back**, most recently
+deleted first.
+
+| Column | |
+|---|---|
+| **Trip**, **Dates** | What it was |
+| **Deleted**, **Deleted by** | When, and by whom |
+| **Removed for good** | How long it has left — *in 12 days*, *within a day* — or *Not scheduled* on an installation that keeps deleted trips |
+
+- **Whoever may delete a trip may restore it.** The list is worked out trip by trip from that
+  right, together with being allowed to read the trip, so two people see different lists and
+  somebody who may delete nothing sees an empty one.
+- **Restore** asks first, puts the trip back **exactly as it was**, and opens it. Nobody is
+  notified.
+- A trip **past its time is no longer listed** and cannot be restored.
+
+When the time runs out the trip is **removed for good**, together with what means nothing without
+it: its roster, its place in the camp, its own links, the rules written on it and the write-up
+the application generated for it. **Photographs, and a report your club uploaded by hand, stay**
+in the library — only their pin on the trip goes.
+
+Three things worth knowing about a restored trip:
+
+- If a **cave it named was deleted in the meantime**, the trip comes back without that cave on
+  it — the way any trip reads once one of its caves is deleted. Nothing was lost: the cave is
+  back on the trip as soon as the cave itself is.
+- A **callout** that was armed is watched again from the moment the trip is back. If its hour
+  went by while the trip was deleted, the alarm is raised at the next check.
+- While a trip is deleted, the **people, the purpose and the roles it names stay in use**: the
+  application will not let you delete a person who is named only on a deleted trip, and says
+  so.
+
+How long a deleted trip is kept is set by whoever runs the installation — see
+`SILEXGIS__Trips__DeletedRetentionDays` in the
+[installation guide](../../INSTALL.md#configuration-reference). The default is 30 days; set to
+`0`, deleted trips are kept until that is changed.
+
+---
+
 ## Importing a club spreadsheet
 
 **Trip logs → Import** takes the *centralizator* a club has kept for years — one row per trip,
@@ -303,9 +360,16 @@ An ambiguous name is different: you settle it on the screen by picking which per
 Confirming files the whole thing as one batch. Imported trips are **silent** — nobody is
 notified, nobody is invited — and they land finished rather than as drafts.
 
-The batch appears under **Geodata → Imports**, where it can be undone. Undo removes the trips.
-It does **not** take back cavers or trip-type words the import created, because a word other
-trips may since have been given is not this batch's to remove.
+The batch appears under **Geodata → Imports**, where it can be undone. **Undo deletes the trips
+the way you would delete them by hand**, so each one is on **Deleted trips** afterwards and can
+be [restored](#deleting-and-restoring-a-trip) from there, one at a time, with the roster and the
+links the import gave it. The caves and areas the same import created are deleted too, and a
+restored trip does not bring them back.
+
+Undo does **not** take back cavers or trip-type words the import created, because a word other
+trips may since have been given is not this batch's to remove. And importing the same sheet
+again after an undo makes **new** trips: a deleted trip is matched by nothing, so nothing is
+quietly brought back and nothing collides if you later restore one of the old ones.
 
 ---
 

@@ -36,6 +36,8 @@ odată cu ea — și apoi paginile.
 | Calendar | Calendar |
 | Events | Evenimente |
 | Trip logs | Jurnale de tură |
+| Deleted trips | Ture șterse |
+| Restore (a deleted trip) | Restaurează |
 | Checklists | Liste de verificare |
 | Camps | Tabere |
 | People | Persoane |

@@ -262,6 +262,63 @@ membru, și pentru un editor.
 
 ---
 
+## Ștergerea și restaurarea unei ture
+
+**Șterge**, pe pagina unei ture, întreabă *„Ștergeți acest jurnal de tură?"* și spune dedesubt ce
+urmează să se întâmple: **nimic din tură nu este eliminat și poate fi restaurată din Ture
+șterse** — pentru cât timp este numărul propriu al instalației, iar confirmarea îl spune.
+
+O tură ștearsă **dispare de peste tot deodată**: din listă și din numărătorile ei, de pe hartă,
+din calendar și din orice flux de calendar, din *Turele mele*, din tabăra ei, din statistici, din
+căutare, din panoul de legături al fiecărei peșteri pe care o numea și de la orice adresă publică
+de urmărire — care răspunde exact ca o adresă pe care n-a făcut-o nimeni niciodată. Propria ei
+adresă spune *Nicio astfel de tură*, proprietarului ca oricui altcuiva. Nimeni de pe tură nu este
+anunțat.
+
+Ce se păstrează, ascuns odată cu ea, este **totul**: participanții și cei întrebați, peșterile și
+celelalte lucruri pe care le numește, fișierele, fotografiile, etichetele și redactarea ei, locul
+ei într-o tabără și regulile care spun cine o poate citi.
+
+### Ture șterse
+
+**Jurnale de tură → Ture șterse** arată turele șterse **pe care le puteți restaura**, cele șterse
+cel mai recent primele.
+
+| Coloană | |
+|---|---|
+| **Tură**, **Perioada** | Ce era |
+| **Ștearsă**, **Ștearsă de** | Când și de către cine |
+| **Eliminată definitiv** | Cât timp mai are — *în 12 zile*, *în mai puțin de o zi* — sau *Neprogramată* într-o instalație care păstrează turele șterse |
+
+- **Cine poate șterge o tură o poate și restaura.** Lista se calculează tură cu tură din acel
+  drept, împreună cu dreptul de a citi tura, așa că doi oameni văd liste diferite, iar cineva
+  care nu poate șterge nimic vede o listă goală.
+- **Restaurează** întreabă mai întâi, pune tura înapoi **exact cum era** și o deschide. Nimeni nu
+  este anunțat.
+- O tură **al cărei timp a trecut nu mai apare** în listă și nu mai poate fi restaurată.
+
+Când timpul se încheie, tura este **eliminată definitiv**, împreună cu ce nu mai înseamnă nimic
+fără ea: participanții, locul ei în tabără, legăturile ei proprii, regulile scrise pe ea și
+redactarea pe care aplicația a generat-o pentru ea. **Fotografiile și un raport încărcat de mână
+de club rămân** în bibliotecă — dispare doar prinderea lor de tură.
+
+Trei lucruri de știut despre o tură restaurată:
+
+- Dacă o **peșteră pe care o numea a fost ștearsă între timp**, tura revine fără acea peșteră —
+  așa cum se citește orice tură după ce una dintre peșterile ei este ștearsă. Nu s-a pierdut
+  nimic: peștera este din nou pe tură de îndată ce peștera însăși revine.
+- Un **apel de urgență** care era armat este urmărit din nou din clipa în care tura revine. Dacă
+  ora lui a trecut cât timp tura era ștearsă, alarma se dă la următoarea verificare.
+- Cât timp o tură este ștearsă, **oamenii, scopul și rolurile pe care le numește rămân în uz**:
+  aplicația nu vă lasă să ștergeți o persoană numită doar pe o tură ștearsă, și o spune.
+
+Cât timp se păstrează o tură ștearsă hotărăște cine administrează instalația — vedeți
+`SILEXGIS__Trips__DeletedRetentionDays` în
+[ghidul de instalare](../../../INSTALL.md#configuration-reference). Implicit sunt 30 de zile; cu
+valoarea `0`, turele șterse se păstrează până când aceasta se schimbă.
+
+---
+
 ## Importul unui tabel al clubului
 
 **Ture → Import** ia *centralizatorul* pe care un club îl ține de ani de zile — un rând pentru
@@ -306,9 +363,17 @@ Un nume ambiguu este altceva: pe el îl lămurești pe ecran, alegând despre ci
 Confirmarea depune totul ca un singur lot. Turele importate sunt **tăcute** — nu se anunță nimeni,
 nu se invită nimeni — și intră finalizate, nu ca ciorne.
 
-Lotul apare la **Geodate → Importuri**, de unde poate fi anulat. Anularea șterge turele. **Nu**
-retrage speologii sau cuvintele de tip de tură pe care le-a creat importul, fiindcă un cuvânt care
-între timp poate a fost dat altor ture nu este al acestui lot să-l retragă.
+Lotul apare la **Geodate → Importuri**, de unde poate fi anulat. **Anularea șterge turele așa cum
+le-ați șterge de mână**, deci fiecare ajunge apoi la **Ture șterse** și poate fi
+[restaurată](#ștergerea-și-restaurarea-unei-ture) de acolo, una câte una, cu participanții și
+legăturile pe care i le-a dat importul. Peșterile și zonele create de același import sunt șterse
+și ele, iar o tură restaurată nu le aduce înapoi.
+
+Anularea **nu** retrage speologii sau cuvintele de tip de tură pe care le-a creat importul, fiindcă
+un cuvânt care între timp poate a fost dat altor ture nu este al acestui lot să-l retragă. Iar
+importul aceluiași tabel după o anulare face ture **noi**: o tură ștearsă nu este potrivită cu
+nimic, așa că nimic nu este readus pe tăcute și nimic nu se ciocnește dacă restaurați mai târziu
+una dintre cele vechi.
 
 ---
 

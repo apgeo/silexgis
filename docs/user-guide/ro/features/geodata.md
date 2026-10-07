@@ -63,6 +63,11 @@ Registrul fiecărui import confirmat. Un rând per import, arătând:
 de acel import — *„Ștergeți toate cele n obiecte create de acest import?"* — inclusiv pe cele
 agățate de înregistrări care existau deja. Un import anulat este marcat ca atare, nu dispare.
 
+Pentru un import care a creat **ture**, confirmarea adaugă că fiecare dintre ele poate fi
+restaurată și pentru cât timp: anularea șterge o tură așa cum ați șterge-o de mână, deci ea ajunge
+apoi la [Ture șterse](trips.md#ștergerea-și-restaurarea-unei-ture). Detaliul unui import anulat
+marchează fiecare astfel de tură ca *Șters* și trimite acolo de unde poate fi restaurată.
+
 Dacă fișierul-sursă a fost șters între timp, rândul o spune; dacă importul nu a creat nimic, o
 spune și pe asta.
 

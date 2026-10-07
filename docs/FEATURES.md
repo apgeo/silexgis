@@ -209,6 +209,12 @@ feature and walkthroughs of whole jobs.
   hand over whole, the file says so inside itself. Narrowing by a person here is not the same
   question as asking *which trips did this person lead* — the roles stay inside the trip, and the
   page of your own trips is still worked out from whoever is signed in and asked about nobody else.
+- **A deleted trip can be put back** — deleting a trip removes nothing. It leaves every list, map,
+  calendar, statistic and public follow link at once, and waits on a list of **deleted trips** from
+  which it is restored exactly as it was: its roster, the places it names, its files and its place
+  in a camp. Whoever may delete a trip may restore it, and the confirmation says for how long — 30
+  days unless the installation chose otherwise — after which the trip is removed for good.
+  Undoing an import of trips deletes them the same way, so each can be restored on its own.
 - **What it all adds up to** — a person, a cave and a club each get their totals: trips, hours
   underground, metres surveyed, first visits, how many people, how many trips had an incident. Every
   one of them is counted **over the trips you may read**, and the screen says so, because two people
