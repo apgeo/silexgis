@@ -285,7 +285,7 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
 
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var chosen = await db.TripReportTemplates.AsNoTracking()
+        var chosen = await db.ReportTemplates.AsNoTracking()
             .Where(x => x.IsDefault)
             .Select(x => x.Kind)
             .ToListAsync();
@@ -503,11 +503,11 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
     {
         // The shipped layout for that kind, stored back unchanged: what is under test is which
         // kind a layout belongs to, not what a club chose to write in it.
-        using var shipped = await admin.GetAsync($"/api/v1/trip-report-templates/default?kind={kind}");
+        using var shipped = await admin.GetAsync($"/api/v1/report-templates/default?kind={kind}");
         shipped.StatusCode.ShouldBe(HttpStatusCode.OK, await shipped.Content.ReadAsStringAsync());
         var body = await shipped.Content.ReadAsStringAsync();
 
-        using var response = await admin.PostAsJsonAsync("/api/v1/trip-report-templates/", new
+        using var response = await admin.PostAsJsonAsync("/api/v1/report-templates/", new
         {
             name = $"{kind} layout {Guid.NewGuid():N}",
             body = body.TrimStart('﻿'),

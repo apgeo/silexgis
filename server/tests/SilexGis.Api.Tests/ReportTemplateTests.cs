@@ -12,7 +12,7 @@ using SilexGis.Domain;
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// A club's own layout for its trip write-ups: the system hands one out, somebody edits it in a
+/// A club's own layout for its write-ups: the system hands one out, somebody edits it in a
 /// text editor and uploads it back, and says which one write-ups should use.
 ///
 /// The rule the whole feature turns on is that a layout chooses what is written and never widens
@@ -20,7 +20,7 @@ namespace SilexGis.Api.Tests;
 /// its producer already has, so a layout naming a part of the record this reader is not given
 /// produces a document without that line — not an error, and not the line.
 /// </summary>
-public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
+public sealed class ReportTemplateTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
@@ -30,7 +30,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
     private HttpClient reader = null!;  // Viewer — may read the trip, may not change it
     private HttpClient admin = null!;   // holds the vocabulary rights a layout is written under
 
-    public TripReportTemplateTests(PostgresFixture postgres)
+    public ReportTemplateTests(PostgresFixture postgres)
     {
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-triptpl-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
@@ -65,7 +65,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
     [Fact]
     public async Task The_layout_the_system_hands_out_can_be_uploaded_back_and_a_write_up_built_in_it()
     {
-        using var handed = await admin.GetAsync("/api/v1/trip-report-templates/default");
+        using var handed = await admin.GetAsync("/api/v1/report-templates/default");
         handed.StatusCode.ShouldBe(HttpStatusCode.OK, await handed.Content.ReadAsStringAsync());
         handed.Content.Headers.ContentType!.MediaType.ShouldBe("text/plain");
         handed.Content.Headers.ContentDisposition!.FileName
@@ -101,7 +101,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
     [Fact]
     public async Task A_layout_that_cannot_be_read_is_refused_when_it_is_uploaded()
     {
-        using var refused = await admin.PostAsJsonAsync("/api/v1/trip-report-templates/", new
+        using var refused = await admin.PostAsJsonAsync("/api/v1/report-templates/", new
         {
             name = "Broken",
             body = "title: {title}\nphotograph: all of them\nfield: Where = {gps_position}",
@@ -112,7 +112,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
         refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, payload);
 
         var problem = JsonDocument.Parse(payload).RootElement;
-        problem.GetProperty("code").GetString().ShouldBe("trip_report_template.invalid");
+        problem.GetProperty("code").GetString().ShouldBe("report_template.invalid");
         var detail = problem.GetProperty("detail").GetString().ShouldNotBeNull();
         detail.ShouldContain("Line 2");
         detail.ShouldContain("Line 3");
@@ -186,7 +186,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
         const string Body = "title: {title}\nheading: Ordinary";
 
         using var refused = await admin.PostAsJsonAsync(
-            "/api/v1/trip-report-templates/", new { name = "Kindless", body = Body, isDefault = false });
+            "/api/v1/report-templates/", new { name = "Kindless", body = Body, isDefault = false });
         refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
 
         var stored = await StoreAsync(admin, "Kinded", Body, isDefault: false);
@@ -194,11 +194,11 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
         // And a rewrite of a stored layout is refused the same way, which is the case that
         // silently retyped one: the layout is still there afterwards, still of its own kind.
         using var rewritten = await admin.PutAsJsonAsync(
-            $"/api/v1/trip-report-templates/{stored}",
+            $"/api/v1/report-templates/{stored}",
             new { name = "Kindless again", body = Body, isDefault = false });
         rewritten.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await rewritten.Content.ReadAsStringAsync());
 
-        var listed = await admin.GetFromJsonAsync<JsonElement>("/api/v1/trip-report-templates/");
+        var listed = await admin.GetFromJsonAsync<JsonElement>("/api/v1/report-templates/");
         var row = listed.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == stored);
         row.GetProperty("name").GetString().ShouldBe("Kinded");
         row.GetProperty("kind").GetString().ShouldBe("trip");
@@ -219,7 +219,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
         text.ShouldContain("Chosen");
         text.ShouldNotContain("Ordinary");
 
-        var listed = await admin.GetFromJsonAsync<JsonElement>("/api/v1/trip-report-templates/");
+        var listed = await admin.GetFromJsonAsync<JsonElement>("/api/v1/report-templates/");
         listed.EnumerateArray()
             .Where(x => x.GetProperty("isDefault").GetBoolean())
             .Select(x => x.GetProperty("id").GetGuid())
@@ -241,7 +241,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         JsonDocument.Parse(await response.Content.ReadAsStringAsync())
             .RootElement.GetProperty("code").GetString()
-            .ShouldBe("trip_report_template.not_found");
+            .ShouldBe("report_template.not_found");
     }
 
     /// <summary>
@@ -251,7 +251,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
     [Fact]
     public async Task A_layout_is_written_by_whoever_may_edit_the_installations_vocabularies()
     {
-        using var refused = await reader.PostAsJsonAsync("/api/v1/trip-report-templates/", new
+        using var refused = await reader.PostAsJsonAsync("/api/v1/report-templates/", new
         {
             name = "Not mine",
             body = "title: {title}",
@@ -262,14 +262,14 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
 
         var stored = await StoreAsync(admin, "Theirs", "title: {title}", isDefault: false);
 
-        using var listed = await reader.GetAsync("/api/v1/trip-report-templates/");
+        using var listed = await reader.GetAsync("/api/v1/report-templates/");
         listed.StatusCode.ShouldBe(HttpStatusCode.OK, await listed.Content.ReadAsStringAsync());
         JsonDocument.Parse(await listed.Content.ReadAsStringAsync()).RootElement
             .EnumerateArray().Select(x => x.GetProperty("id").GetGuid())
             .ShouldContain(stored);
 
         using var anonymous = factory.CreateClient();
-        using var unsigned = await anonymous.GetAsync("/api/v1/trip-report-templates/");
+        using var unsigned = await anonymous.GetAsync("/api/v1/report-templates/");
         unsigned.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
@@ -299,7 +299,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
         (await DocumentTextAsync(owner, other, null)).ShouldNotContain(marker);
 
         // The answer names the binding, so the administration page can show it.
-        using var listed = await admin.GetAsync("/api/v1/trip-report-templates/?kind=trip");
+        using var listed = await admin.GetAsync("/api/v1/report-templates/?kind=trip");
         JsonDocument.Parse(await listed.Content.ReadAsStringAsync()).RootElement.EnumerateArray()
             .Where(x => x.GetProperty("tripTypeId").ValueKind == JsonValueKind.Number)
             .Select(x => x.GetProperty("tripTypeId").GetInt64())
@@ -307,21 +307,21 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
 
         // A second layout for the same purpose is refused with a code, as is a purpose this
         // installation does not have, and a camp layout bound to a purpose is a validation fault.
-        using var second = await admin.PostAsJsonAsync("/api/v1/trip-report-templates/", new
+        using var second = await admin.PostAsJsonAsync("/api/v1/report-templates/", new
         {
             name = $"Second {suffix}", body = "title: Again\n", isDefault = false, kind = "trip", tripTypeId = purpose,
         });
         second.StatusCode.ShouldBe(HttpStatusCode.Conflict, await second.Content.ReadAsStringAsync());
-        (await second.Content.ReadAsStringAsync()).ShouldContain("trip_report_template.type_taken");
+        (await second.Content.ReadAsStringAsync()).ShouldContain("report_template.type_taken");
 
-        using var unknown = await admin.PostAsJsonAsync("/api/v1/trip-report-templates/", new
+        using var unknown = await admin.PostAsJsonAsync("/api/v1/report-templates/", new
         {
             name = $"Unknown {suffix}", body = "title: Nowhere\n", isDefault = false, kind = "trip", tripTypeId = 987654321L,
         });
         unknown.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await unknown.Content.ReadAsStringAsync());
-        (await unknown.Content.ReadAsStringAsync()).ShouldContain("trip_report_template.type_unknown");
+        (await unknown.Content.ReadAsStringAsync()).ShouldContain("report_template.type_unknown");
 
-        using var camp = await admin.PostAsJsonAsync("/api/v1/trip-report-templates/", new
+        using var camp = await admin.PostAsJsonAsync("/api/v1/report-templates/", new
         {
             name = $"Camp {suffix}", body = "title: Camp\n", isDefault = false, kind = "expedition", tripTypeId = purpose,
         });
@@ -333,7 +333,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
         HttpClient client, string name, string body, bool isDefault, long? tripTypeId = null)
     {
         using var response = await client.PostAsJsonAsync(
-            "/api/v1/trip-report-templates/", new { name, body, isDefault, kind = "trip", tripTypeId });
+            "/api/v1/report-templates/", new { name, body, isDefault, kind = "trip", tripTypeId });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         var id = JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
@@ -409,7 +409,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
     {
         foreach (var id in stored)
         {
-            using var response = await admin.DeleteAsync($"/api/v1/trip-report-templates/{id}");
+            using var response = await admin.DeleteAsync($"/api/v1/report-templates/{id}");
         }
     }
 

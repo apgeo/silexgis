@@ -29,7 +29,7 @@ import {
   usePhotos,
   useTripLog,
   useTripParticipantRoles,
-  useTripReportTemplates,
+  useReportTemplates,
   useTripTypes,
   type TripLogInfo,
   type TripParticipantRole,
@@ -158,7 +158,7 @@ export default function TripReportPage() {
   const { data: participantRoles } = useTripParticipantRoles();
   const { data: cavers } = useCavers();
   const { data: capabilities } = useCapabilities();
-  const { data: templates } = useTripReportTemplates();
+  const { data: templates } = useReportTemplates();
   // Per-object capabilities once they arrive; the domain check only bridges the first render.
   // It decides nothing — filing a document against the trip is refused by the server for anyone
   // who may not change it, whatever this page offers.

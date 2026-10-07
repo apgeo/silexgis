@@ -278,7 +278,7 @@ export function expeditionReportUrl(id: string, templateId?: string): string {
 }
 
 /**
- * GET /api/v1/trip-report-templates/default — the layout the system ships, as a file to edit.
+ * GET /api/v1/report-templates/default — the layout the system ships, as a file to edit.
  *
  * It is the starting point for a club's own layout and it documents the whole substitution
  * vocabulary in its own comments, which is why it is handed over as a file rather than described
@@ -288,6 +288,6 @@ export function expeditionReportUrl(id: string, templateId?: string): string {
  * up a fortnight day by day and team by team, which a trip has no answer for — and the file being
  * edited is the only place either vocabulary is written down.
  */
-export function tripReportTemplateDefaultUrl(kind: string): string {
-  return buildUrl('/api/v1/trip-report-templates/default', { kind });
+export function reportTemplateDefaultUrl(kind: string): string {
+  return buildUrl('/api/v1/report-templates/default', { kind });
 }

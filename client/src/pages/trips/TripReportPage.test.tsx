@@ -60,7 +60,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useCavers: () => ({ data: [{ id: ANA, name: 'Ana Pop' }] }),
   useCapabilities: () => ({ data: { domains: { documents: 'read' } } }),
   useCave: () => ({ data: { id: CAVE, name: 'Peștera Mare' } }),
-  useTripReportTemplates: () => ({ data: [] }),
+  useReportTemplates: () => ({ data: [] }),
   useEffectiveAccess: () => ({ data: undefined }),
   // Somebody who may change the trip, so that both ways of producing a document are on the page.
   useCan: () => true,

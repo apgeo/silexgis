@@ -458,7 +458,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapExpeditionMapEndpoints();
     api.MapExpeditionLeadsEndpoints();
     api.MapExpeditionRosterEndpoints();
-    api.MapTripReportTemplateEndpoints();
+    api.MapReportTemplateEndpoints();
     api.MapTripTypeEndpoints();
     api.MapTripParticipantRoleEndpoints();
     api.MapExpeditionRosterRoleEndpoints();

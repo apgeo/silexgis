@@ -15751,7 +15751,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trip-report-templates": {
+    "/api/v1/report-templates": {
         parameters: {
             query?: never;
             header?: never;
@@ -15776,7 +15776,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TripReportTemplateDto"][];
+                        "application/json": components["schemas"]["ReportTemplateDto"][];
                     };
                 };
             };
@@ -15792,7 +15792,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["TripReportTemplateRequest"];
+                    "application/json": components["schemas"]["ReportTemplateRequest"];
                 };
             };
             responses: {
@@ -15802,7 +15802,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TripReportTemplateDto"];
+                        "application/json": components["schemas"]["ReportTemplateDto"];
                     };
                 };
             };
@@ -15813,7 +15813,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trip-report-templates/default": {
+    "/api/v1/report-templates/default": {
         parameters: {
             query?: never;
             header?: never;
@@ -15849,7 +15849,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trip-report-templates/{id}": {
+    "/api/v1/report-templates/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -15869,7 +15869,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["TripReportTemplateRequest"];
+                    "application/json": components["schemas"]["ReportTemplateRequest"];
                 };
             };
             responses: {
@@ -15879,7 +15879,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TripReportTemplateDto"];
+                        "application/json": components["schemas"]["ReportTemplateDto"];
                     };
                 };
             };
@@ -24018,8 +24018,30 @@ export interface components {
             /** Format: int32 */
             caveCount: number;
         };
+        ReportTemplateDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["ReportTemplateKind"];
+            body: string;
+            isDefault: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: int64 */
+            tripTypeId?: null | number;
+        };
         /** @enum {unknown} */
         ReportTemplateKind: "trip" | "expedition";
+        ReportTemplateRequest: {
+            name: string;
+            body: string;
+            isDefault: boolean;
+            kind: null | components["schemas"]["ReportTemplateKind"];
+            /** Format: int64 */
+            tripTypeId?: null | number;
+        };
         ResetPasswordRequest: {
             email: string;
             token: string;
@@ -26178,28 +26200,6 @@ export interface components {
             /** Format: uuid */
             fileId: string;
             fileName: string;
-        };
-        TripReportTemplateDto: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            kind: components["schemas"]["ReportTemplateKind"];
-            body: string;
-            isDefault: boolean;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-            /** Format: int64 */
-            tripTypeId?: null | number;
-        };
-        TripReportTemplateRequest: {
-            name: string;
-            body: string;
-            isDefault: boolean;
-            kind: null | components["schemas"]["ReportTemplateKind"];
-            /** Format: int64 */
-            tripTypeId?: null | number;
         };
         TripStatisticsDto: {
             /** Format: int32 */
