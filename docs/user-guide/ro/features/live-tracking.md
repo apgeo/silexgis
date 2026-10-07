@@ -488,8 +488,9 @@ Două consecințe bune de știut înainte de publicare:
   alte ture. Lista rămâne și după ce pagina în direct s-a încheiat, cât timp instalarea păstrează
   turele trecute (implicit, fără limită).
 - **Un link vechi continuă să arate cine este acum în peșteră**, prin *Urmărite acum*, cât timp
-  propria lui tură rămâne citibilă ca tură trecută. Un operator care nu vrea asta oprește turele
-  trecute sau stabilește cât sunt păstrate; vedeți [ghidul de
+  propria lui tură rămâne citibilă ca tură trecută. Un operator care nu vrea asta stabilește cât
+  timp după propria lui tură mai face un link vechi acest lucru — turele trecute rămân citibile —
+  sau oprește turele trecute, sau stabilește cât sunt păstrate; vedeți [ghidul de
   instalare](../../../INSTALL.md#configuration-reference).
 
 Regula întreagă — cât durează fiecare dintre acestea, ce predă o tură trecută și cum se scoate o

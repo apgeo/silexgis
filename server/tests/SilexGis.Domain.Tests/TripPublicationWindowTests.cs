@@ -152,4 +152,69 @@ public class TripPublicationWindowTests
         TripPublicationWindow.MayBeReplaced(Now.AddSeconds(-1)).ShouldBeFalse();
         TripPublicationWindow.MayBeReplaced(Now.AddYears(-1)).ShouldBeFalse();
     }
+
+    // ---- how long a lapsed link goes on listing the cave's other parties ----------------------
+
+    [Fact]
+    public void With_no_period_set_a_lapsed_link_lists_the_caves_parties_however_old_its_trip()
+    {
+        // The state of every installation that has not chosen: nothing is bounded. A period beside
+        // it is what shows the unset answer is "no bound" and not a function that says yes.
+        var trip = new DateOnly(2016, 9, 18);
+
+        TripPublicationWindow.WithinSiblingWindow(Now, trip, null, siblingWindowAfterLapse: null).ShouldBeTrue();
+        TripPublicationWindow.WithinSiblingWindow(Now, trip, null, TimeSpan.FromDays(90)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void The_period_is_counted_from_the_end_of_the_trips_last_day_and_its_last_instant_is_outside()
+    {
+        var start = new DateOnly(2026, 9, 1);
+        var end = new DateOnly(2026, 9, 21);
+        var ninety = TimeSpan.FromDays(90);
+        var endOfTrip = TripPublicationWindow.EndOfTrip(start, end);
+
+        TripPublicationWindow.WithinSiblingWindow(endOfTrip + ninety - TimeSpan.FromSeconds(1), start, end, ninety)
+            .ShouldBeTrue();
+        TripPublicationWindow.WithinSiblingWindow(endOfTrip + ninety, start, end, ninety).ShouldBeFalse();
+
+        // From the last day and not the first: a three-week camp is not ninety days from the
+        // morning it began, or its own link would stop listing the camp's later parties three
+        // weeks sooner than an afternoon trip's would.
+        var fromTheFirstDay = TripPublicationWindow.EndOfTrip(start, null) + ninety;
+        TripPublicationWindow.WithinSiblingWindow(fromTheFirstDay, start, end, ninety).ShouldBeTrue();
+        TripPublicationWindow.WithinSiblingWindow(fromTheFirstDay, start, null, ninety).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_period_of_nothing_ends_with_the_trips_last_day_and_not_before_it()
+    {
+        var day = new DateOnly(2026, 9, 20);
+        var midnightAfter = new DateTimeOffset(2026, 9, 21, 0, 0, 0, TimeSpan.Zero);
+
+        // The evening of the trip itself, its watch already closed and its own page over on an
+        // installation with no grace: still that day, so still inside.
+        TripPublicationWindow.WithinSiblingWindow(midnightAfter.AddHours(-2), day, null, TimeSpan.Zero).ShouldBeTrue();
+        TripPublicationWindow.WithinSiblingWindow(midnightAfter, day, null, TimeSpan.Zero).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_period_reaching_past_the_last_date_there_is_means_no_bound_and_does_not_throw()
+    {
+        // Somebody types ten million days to mean "for ever". Added to the trip's end that passes
+        // year 9999, and the plain sum throws — on every read of every link, since the rule is
+        // asked for each one that opens.
+        var trip = new DateOnly(2016, 9, 18);
+
+        TripPublicationWindow.WithinSiblingWindow(Now, trip, null, TimeSpan.MaxValue).ShouldBeTrue();
+        TripPublicationWindow.WithinSiblingWindow(Now, trip, null, TimeSpan.FromDays(9_999_999)).ShouldBeTrue();
+        TripPublicationWindow.WithinSiblingWindow(DateTimeOffset.MaxValue, trip, null, TimeSpan.MaxValue)
+            .ShouldBeTrue();
+
+        // The longest period that still has an end keeps it: the guard answers for the periods
+        // that have none, not for every long one.
+        var endOfTrip = TripPublicationWindow.EndOfTrip(trip, null);
+        var longest = DateTimeOffset.MaxValue - endOfTrip - TimeSpan.FromTicks(1);
+        TripPublicationWindow.WithinSiblingWindow(endOfTrip + longest, trip, null, longest).ShouldBeFalse();
+    }
 }

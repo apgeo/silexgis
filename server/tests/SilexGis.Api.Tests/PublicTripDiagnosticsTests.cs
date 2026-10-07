@@ -233,7 +233,8 @@ public sealed class PublicTripDiagnosticsTests : IAsyncLifetime, IDisposable, IC
 
     /// <summary>
     /// The archive's two settings, named when they are what refused — the switch on the archive's
-    /// own routes whatever the link, because there the link is never looked up.
+    /// own routes whatever the link, because there the link is never looked up — and the period
+    /// after which an old link stops listing the cave's current parties, named as itself.
     /// </summary>
     [Fact]
     public async Task The_archive_switched_off_and_the_retention_passed_are_each_named_as_what_refused()
@@ -292,6 +293,27 @@ public sealed class PublicTripDiagnosticsTests : IAsyncLifetime, IDisposable, IC
             // The followed page never asked about the archive: its reason is the watch.
             await ShouldBeRefusedAsync(
                 visitor, boundedLogs, Follow(old.Token), "follow", "closed_past_grace", await HandleAsync(old));
+        }
+
+        // The third setting ends an old link's view of who is underground now and nothing else, and
+        // says so under a word of its own — so that an operator who set it does not go looking for
+        // a retention nobody set, and one who did not set it never sees the word.
+        var lapsedLogs = new LogCapture();
+        using (var lapsed = HostWith(lapsedLogs, ("TripTracking:SiblingWindowAfterLapse", "30.00:00:00")))
+        using (var visitor = lapsed.CreateClient())
+        using (var meter = new Readings(lapsed.Services))
+        {
+            await ShouldBeRefusedAsync(
+                visitor, lapsedLogs, LiveList(old.Token), "live", "past_sibling_window", await HandleAsync(old));
+            meter.Reads("live", "past_sibling_window").ShouldBe(1);
+
+            // The same link's past trips are untouched, and reading them is not a refusal.
+            lapsedLogs.Clear();
+            (await visitor.GetAsync(PastList(old.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+            (await visitor.GetAsync(LiveList(running.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+            lapsedLogs.Events.Where(IsRefusal).ShouldBeEmpty();
+            meter.Reads("past", PublicTripDiagnostics.ServedOutcome).ShouldBe(1);
+            meter.Reads("live", PublicTripDiagnostics.ServedOutcome).ShouldBe(1);
         }
     }
 

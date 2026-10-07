@@ -67,6 +67,13 @@ public enum PublishedReadRefusal : short
     /// followed, or one older than the retention.
     /// </summary>
     TripNotInArchive = 8,
+
+    /// <summary>
+    /// The link's own trip ended longer ago than this installation lets a lapsed link go on
+    /// listing who is in the cave now. Said only of that list: the same link still opens its
+    /// cave's past trips.
+    /// </summary>
+    PastSiblingWindow = 9,
 }
 
 /// <summary>

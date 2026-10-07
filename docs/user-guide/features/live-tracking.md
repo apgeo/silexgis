@@ -463,8 +463,9 @@ Two consequences worth knowing before you publish:
   lasts after the live page has ended, for as long as the installation keeps past trips
   readable (by default, indefinitely).
 - **An old link keeps showing who is in the cave now**, through *Being followed now*, for as
-  long as its own trip stays readable as a past trip. An operator who does not want that turns
-  past trips off or sets how long they are kept; see the [install
+  long as its own trip stays readable as a past trip. An operator who does not want that sets
+  how long after its own trip an old link goes on doing so — the past trips stay readable — or
+  turns past trips off, or sets how long they are kept; see the [install
   guide](../../INSTALL.md#configuration-reference).
 
 The whole rule — how long each of these lasts, what a past trip hands over and how a trip is

@@ -207,5 +207,6 @@ public static class TripPastTrackWindow
     public static bool WithinRetention(
         DateTimeOffset now, DateOnly tripDate, DateOnly? tripDateEnd, TimeSpan? retention) =>
         retention is not { } window
-        || now < TripPublicationWindow.EndOfTrip(tripDate, tripDateEnd) + window;
+        || TripPublicationWindow.IsBeforeEndOfPeriod(
+            now, TripPublicationWindow.EndOfTrip(tripDate, tripDateEnd), window);
 }

@@ -4,11 +4,12 @@ using Microsoft.Extensions.Options;
 namespace SilexGis.Api.Features.TripTracking;
 
 /// <summary>
-/// Refuses to start on a follow-link lifetime or a closing grace that cannot mean anything.
+/// Refuses to start on a follow-link lifetime, a closing grace or a period after a lapse that
+/// cannot mean anything.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Why a refused start and not a quiet correction.</b> Both periods are read on anonymous
+/// <b>Why a refused start and not a quiet correction.</b> These periods are read on anonymous
 /// routes whose every refusal is the same 404 on purpose, so a wrong one does not fail anywhere
 /// an operator would look. The lifetime is counted from the midnight that ends a trip's last
 /// day. At zero a link therefore stops at that midnight — with a party that is late still
@@ -17,6 +18,11 @@ namespace SilexGis.Api.Features.TripTracking;
 /// person who finds out is a family member looking at an empty page. A container that will not
 /// come up, with a line that names the setting, is found by the person who typed it, at the
 /// moment they typed it.
+/// </para>
+/// <para>
+/// The period after a lapse is optional, and unset is its ordinary state. Below zero it would stop
+/// a link listing the cave's other parties before the link's own trip had ended, which nobody can
+/// have meant; zero has a meaning and is let through.
 /// </para>
 /// <para>
 /// <b>What is deliberately not checked here.</b> The size of the list of followed trips is held
@@ -48,6 +54,16 @@ public sealed class TripTrackingOptionsValidator : IValidateOptions<TripTracking
                 + $"{options.ShareGraceAfterClose}. It is how long a followed page keeps answering after its "
                 + "watch is closed, written days.hours:minutes:seconds. 00:00:00 is allowed and means the "
                 + "page stops answering the moment the watch is closed.");
+        }
+
+        if (options.SiblingWindowAfterLapse is { } siblings && siblings < TimeSpan.Zero)
+        {
+            failures.Add(
+                $"{Setting(nameof(TripTrackingOptions.SiblingWindowAfterLapse))} must not be negative when it "
+                + $"is set; got {siblings}. It is how long after its own trip is over a published link goes on "
+                + "listing who is being followed in the same cave now, written days.hours:minutes:seconds — "
+                + "90.00:00:00 is ninety days. 00:00:00 is allowed and ends that list with the trip's last day. "
+                + "For no limit, leave it unset.");
         }
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);

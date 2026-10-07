@@ -254,4 +254,64 @@ public class TripTrackingOptionsTests
         services.AddOptions<TripTrackingOptions>().BindConfiguration(TripTrackingOptions.SectionName);
         return services.BuildServiceProvider().GetRequiredService<IOptions<TripTrackingOptions>>();
     }
+
+    // ---- how long a lapsed link goes on listing the cave's other parties ----------------------
+
+    [Fact]
+    public void The_period_after_a_lapse_is_unset_as_shipped_and_is_read_from_the_name_it_is_documented_under()
+    {
+        // Unset is the whole of the shipped behaviour: an installation that has not chosen a
+        // period is bounded by nothing it did not have before.
+        new TripTrackingOptions().SiblingWindowAfterLapse.ShouldBeNull();
+        Bound().SiblingWindowAfterLapse.ShouldBeNull();
+
+        // And the name an operator types is the name that is read, in the form the guide writes it.
+        Bound(("TripTracking:SiblingWindowAfterLapse", "90.00:00:00"))
+            .SiblingWindowAfterLapse.ShouldBe(TimeSpan.FromDays(90));
+        Bound(("TripTracking:SiblingWindowAfterLapse", "00:00:00"))
+            .SiblingWindowAfterLapse.ShouldBe(TimeSpan.Zero);
+        // Setting it moves nothing else: the two periods beside it keep their own defaults.
+        var beside = Bound(("TripTracking:SiblingWindowAfterLapse", "90.00:00:00"));
+        beside.ShareLifetime.ShouldBe(TimeSpan.FromDays(14));
+        beside.ShareGraceAfterClose.ShouldBe(TimeSpan.FromDays(2));
+    }
+
+    [Theory]
+    [InlineData("-00:00:01")]
+    [InlineData("-90.00:00:00")]
+    public void A_negative_period_after_a_lapse_refuses_to_start_and_names_the_setting(string period)
+    {
+        var result = new TripTrackingOptionsValidator().Validate(
+            null, new TripTrackingOptions { SiblingWindowAfterLapse = TimeSpan.Parse(period) });
+
+        result.Failed.ShouldBeTrue();
+        result.FailureMessage.ShouldContain("SILEXGIS__TripTracking__SiblingWindowAfterLapse");
+        // The two things somebody can have meant by it, each said the way it is written.
+        result.FailureMessage.ShouldContain("leave it unset");
+        result.FailureMessage.ShouldContain("00:00:00 is allowed");
+        result.FailureMessage.ShouldNotContain("ShareLifetime");
+    }
+
+    [Fact]
+    public void No_period_after_a_lapse_a_period_of_nothing_and_any_longer_one_start()
+    {
+        foreach (var period in new TimeSpan?[] { null, TimeSpan.Zero, TimeSpan.FromSeconds(1), TimeSpan.FromDays(3650) })
+        {
+            new TripTrackingOptionsValidator().Validate(
+                    null, new TripTrackingOptions { SiblingWindowAfterLapse = period })
+                .Succeeded.ShouldBeTrue();
+        }
+    }
+
+    /// <summary>The tracking options as the application binds them from the given settings.</summary>
+    private static TripTrackingOptions Bound(params (string Key, string Value)[] settings)
+    {
+        var options = new TripTrackingOptions();
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(settings.Select(s => new KeyValuePair<string, string?>(s.Key, s.Value)))
+            .Build()
+            .GetSection(TripTrackingOptions.SectionName)
+            .Bind(options);
+        return options;
+    }
 }

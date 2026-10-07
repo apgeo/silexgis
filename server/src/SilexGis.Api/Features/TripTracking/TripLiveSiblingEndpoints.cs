@@ -49,13 +49,15 @@ namespace SilexGis.Api.Features.TripTracking;
 /// than left to be discovered: <b>an old link goes on reporting who is in the cave now for as long
 /// as its trip stays readable as past</b>, which by default is forever, because the archive's
 /// retention is unset by default. An installation that does not want a years-old article naming
-/// today's parties sets <c>SILEXGIS__TripPastTracks__Retention</c>, and that one setting closes
-/// both routes together.
+/// today's parties has two settings for it. <c>SILEXGIS__TripTracking__SiblingWindowAfterLapse</c>
+/// ends this list alone, that long after the link's own trip, and leaves the past trips readable;
+/// <c>SILEXGIS__TripPastTracks__Retention</c> ages the trip out of the archive and closes both
+/// routes together. Both are unset by default.
 /// </para>
 /// <para>
 /// Every refusal is the single 404 an invented token gets, with no branch a caller can read —
 /// unknown, malformed, over-length, revoked, lapsed, retention run out, the archive switched off,
-/// or a cave whose coordinates have since been protected.
+/// a link too long past its own trip, or a cave whose coordinates have since been protected.
 /// </para>
 /// </remarks>
 public static class TripLiveSiblingEndpoints
@@ -114,18 +116,26 @@ public static class TripLiveSiblingEndpoints
         }
 
         // This route's own gate over the shared one. A link still following its own party opens it
-        // outright; a link whose trip is over opens it only while the archive is switched on, which
-        // is what gives an operator a single lever over "an old article keeps naming today's
-        // parties". Switching the archive off therefore stops old links and not current ones — the
-        // distinction the shared gate keeps its two answers apart for. The reading of the two
-        // windows under that switch is the Domain's, shared with the administrator's list of
-        // published links, so that list cannot call a link open that this route refuses.
+        // outright. A link whose trip is over opens it only while the archive is switched on and,
+        // where the installation has set a period for it, only for that long after the trip ended
+        // — the two levers an operator has over "an old article keeps naming today's parties", the
+        // second of which leaves the past trips readable. Neither touches a current link: that is
+        // the distinction the shared gate keeps its two answers apart for. The reading is the
+        // Domain's and is never wider than the one the administrator's list of published links
+        // describes a link by, so this route cannot serve a link that list calls shut.
         var windows = new PublishedLinkWindows(opened.LiveWindowOpen, opened.PastReadable);
-        if (!windows.OpensAnything(past.Value.Enabled))
+        if (!windows.OpensTheFollowedList(past.Value.Enabled, opened.WithinSiblingWindow))
         {
-            // The shared gate opened, so one of the two windows is open; this refuses only the
-            // case where it is the past one and the archive is off.
-            diagnostics.Refused(PublicTripRoute.Live, PublishedReadRefusal.ArchiveOff, token);
+            // The shared gate opened, so one of the two windows is open, and it is the past one or
+            // this would have opened. Which of the two levers shut it is told apart for the log
+            // alone: where the link still opens its archive the switch is on, so it is the period.
+            // The answer is the one an invented token gets either way.
+            diagnostics.Refused(
+                PublicTripRoute.Live,
+                windows.OpensAnything(past.Value.Enabled)
+                    ? PublishedReadRefusal.PastSiblingWindow
+                    : PublishedReadRefusal.ArchiveOff,
+                token);
             return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
         }
 

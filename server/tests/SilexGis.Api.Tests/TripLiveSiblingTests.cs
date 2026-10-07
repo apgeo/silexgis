@@ -14,6 +14,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
@@ -762,6 +763,80 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
         // And the link of a trip still being followed is unaffected by that setting.
         (await boundedAnonymous.GetAsync(LiveList(now.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// An installation may bound how long an old link goes on naming today's parties, and the
+    /// bound takes that list and nothing else: the link's past trips stay readable, and a link
+    /// still following its own party is not asked.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One pair of trips in one cave, read at three instants by moving the reading host's clock:
+    /// a minute inside the period, a minute past it, and — past it — on a host that sets no period
+    /// at all. The rows are the same throughout, so each answer differs from the one before it by
+    /// the clock or by the setting and by nothing else. The last is the state of every
+    /// installation that has not decided, and it has to be what it was before the setting existed.
+    /// </para>
+    /// <para>
+    /// The trips are written through the class's own host, on the machine's clock, and only read
+    /// through the others: an anonymous read carries no session a moved clock could end.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_link_long_past_its_own_trip_stops_listing_the_parties_now_and_keeps_its_past_trips()
+    {
+        var written = DateTimeOffset.UtcNow;
+        var today = DateOnly.FromDateTime(written.UtcDateTime);
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var old = await PublishedTripAsync(
+            "Mine, over", cave, model, tripDate: today.AddDays(-10).ToString("yyyy-MM-dd"));
+        await CloseAsync(old.Trip, written.AddDays(-5));
+        var now = await PublishedTripAsync(
+            "Theirs, underground", cave, model, tripDate: today.ToString("yyyy-MM-dd"));
+
+        // Twenty days from the midnight that ended the old trip's one day.
+        var period = TimeSpan.FromDays(20);
+        var edge = TripPublicationWindow.EndOfTrip(today.AddDays(-10), null) + period;
+        var clock = new TestTimeProvider(edge.AddMinutes(-1));
+        SilexGisApiFactory ClockedHost(params (string Key, string Value)[] settings)
+        {
+            var host = HostSettings();
+            foreach (var (key, value) in settings) host[key] = value;
+            return new SilexGisApiFactory(connectionString, host, services =>
+            {
+                JobWorkers.RemoveFrom(services);
+                services.AddSingleton<TimeProvider>(clock);
+            });
+        }
+
+        using var bounded = ClockedHost(("TripTracking:SiblingWindowAfterLapse", "20.00:00:00"));
+        using var visitor = bounded.CreateClient();
+
+        // Inside the period: the old link's own page is over and it still names today's party.
+        (await visitor.GetAsync(Follow(old.Token))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        ListedIds(await Json(visitor.GetAsync(LiveList(old.Token)))).ShouldBe([now.Trip]);
+
+        // Past it: the list is gone for the old link, as the one answer an invented token gets.
+        clock.Now = edge.AddMinutes(1);
+        var refused = await visitor.GetAsync(LiveList(old.Token));
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await RefusalShapeAsync(refused)).ShouldBe(
+            await RefusalShapeAsync(await visitor.GetAsync(LiveList("not-a-token-at-all"))));
+
+        // Its past trips are not: the same link, the same instant, the same host.
+        var past = await Json(visitor.GetAsync(PastList(old.Token)));
+        past.GetProperty("trips").EnumerateArray().Select(t => t.GetProperty("tripLogId").GetGuid())
+            .ShouldContain(old.Trip);
+
+        // And the link of the party underground is not asked the question at all.
+        ListedIds(await Json(visitor.GetAsync(LiveList(now.Token)))).ShouldBe([now.Trip]);
+
+        // No period set, at that same instant past it: exactly what the old link always did.
+        using var unbounded = ClockedHost();
+        using var unboundedVisitor = unbounded.CreateClient();
+        ListedIds(await Json(unboundedVisitor.GetAsync(LiveList(old.Token)))).ShouldBe([now.Trip]);
     }
 
     [Fact]

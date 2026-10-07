@@ -564,7 +564,7 @@ public static class TripPastTrackEndpoints
         // differs, and the reason goes to the log.
         var notFound = ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
         OpenedToken Refused(PublishedReadRefusal why) =>
-            new(Guid.Empty, null, Guid.Empty, false, false, notFound, why);
+            new(Guid.Empty, null, Guid.Empty, false, false, false, notFound, why);
 
         if (string.IsNullOrEmpty(token) || token.Length > TripTrackingRules.MaxShareTokenLength)
         {
@@ -653,8 +653,13 @@ public static class TripPastTrackEndpoints
         var publishable = await TrackingWithholding.PublishableCaveIdsAsync(db, protection, [configCave], ct);
         if (!publishable.Contains(configCave)) return Refused(PublishedReadRefusal.CaveWithheld);
 
+        // Asked here because the trip's dates are in hand here and nowhere after: the one route
+        // that reads the answer would otherwise have to fetch the trip a second time to ask it.
+        var withinSiblingWindow = TripPublicationWindow.WithinSiblingWindow(
+            now, trip.TripDate, trip.TripDateEnd, live.SiblingWindowAfterLapse);
+
         return new OpenedToken(
-            configCave, tracking.SurveyModelId, trip.Id, liveOpen, pastReadable, null,
+            configCave, tracking.SurveyModelId, trip.Id, liveOpen, pastReadable, withinSiblingWindow, null,
             // Never read: a token that opened has no reason to give.
             default);
     }
@@ -685,6 +690,12 @@ public static class TripPastTrackEndpoints
     /// archive's retention. Never true at the same instant as <paramref name="LiveWindowOpen"/>:
     /// the two rules partition a published trip's life, and a Domain test holds that they do.
     /// </param>
+    /// <param name="WithinSiblingWindow">
+    /// True while this link's own trip ended recently enough for it to go on listing the parties
+    /// in its cave after it has stopped following its own — always, on an installation that sets no
+    /// such period. Read by the list of followed trips and by nothing else: the archive is not
+    /// bounded by it, and a link whose live window is open is never asked.
+    /// </param>
     /// <param name="Refusal">The answer to give when the token opened nothing; null when it opened.</param>
     /// <param name="Reason">
     /// Why it opened nothing, for the installation's log and for nothing else. Meaningful only
@@ -696,6 +707,7 @@ public static class TripPastTrackEndpoints
         Guid TripLogId,
         bool LiveWindowOpen,
         bool PastReadable,
+        bool WithinSiblingWindow,
         ProblemHttpResult? Refusal,
         PublishedReadRefusal Reason);
 }
