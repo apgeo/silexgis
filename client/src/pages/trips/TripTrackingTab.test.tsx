@@ -88,6 +88,7 @@ vi.mock('../../api/hooks.ts', async () => ({
   useTripTrackingShares: () => ({ data: [], error: null }),
   useMintTripTrackingShare: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useRevokeTripTrackingShare: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useReplaceTripTrackingShare: () => ({ mutateAsync: vi.fn(), isPending: false }),
   // Naming somebody as a follower of the published page sees them. The dialog that does it has its
   // own tests; what this suite asks is whether the tab reaches it at all, which nothing did before.
   useSetTrackingParticipantLabel: () => ({ mutateAsync: setLabel, isPending: false }),

@@ -49,6 +49,10 @@ export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   // publish. The act to take is the same and the sentence is not — one says a report cannot land,
   // the other says an address would be handed out that opens nothing.
   'tracking.publication_refused_not_armed': 'trips.tracking.problems.publicationNotArmed',
+  // Replacing a link somebody has already taken back. Its own sentence rather than the one for a
+  // link that is not there: this link is there, and what the reader has to do next is different —
+  // there is nothing left to exchange, so the trip is published afresh.
+  'tracking.share_revoked': 'trips.tracking.problems.shareRevoked',
   'trip_log.not_found': 'trips.tracking.problems.tripNotFound',
   'concurrency.if_match_required': 'trips.tracking.problems.ifMatchRequired',
   'concurrency.version_mismatch': 'trips.tracking.problems.versionMismatch',

@@ -61,6 +61,7 @@ import { SEEDED_EXPEDITION_ROSTER_ROLE_CODES } from '../components/expeditions/r
 import { SEEDED_PARTICIPANT_ROLE_CODES } from '../components/trips/participantRoles.ts';
 import { TRACKING_CSV_PROBLEMS } from '../components/trips/trackingCsvProblems.ts';
 import { TRACKING_PROBLEM_MESSAGE_KEYS } from '../components/trips/trackingProblems.ts';
+import { PUBLISHED_LINK_STATUSES } from '../pages/admin/publishedLinkStatuses.ts';
 import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
 import {
   HILLSHADE_LIGHTINGS,
@@ -741,6 +742,20 @@ describe('i18n locales', () => {
     expect(outcomes.filter((name) => !enOutcomes[name])).toEqual([]);
     expect(outcomes.filter((name) => !roOutcomes[name])).toEqual([]);
     expect(Object.keys(enOutcomes).sort()).toEqual(outcomes.sort());
+  });
+
+  /**
+   * What a published link is doing is the server's word, printed through a key built from it — so
+   * the scan over literal keys sees neither the name nor its explanation. A status with no wording
+   * would be shown as its own lookup key on the one page an administrator reads to learn what the
+   * installation has out on the internet.
+   */
+  it('every status of a published link is named and explained in both locales, and none is left over', () => {
+    const statuses = [...PUBLISHED_LINK_STATUSES].sort();
+    for (const locale of [en, ro]) {
+      expect(Object.keys(locale.publishedTrips.statuses).sort()).toEqual(statuses);
+      expect(Object.keys(locale.publishedTrips.statusHelp).sort()).toEqual(statuses);
+    }
   });
 
   it('every activity state the server publishes is named in both locales', () => {

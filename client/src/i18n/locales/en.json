@@ -51,7 +51,8 @@
     "registryCorrelation": "Correlations",
     "tripImport": "Import trips",
     "speleolocImport": "Import a recording",
-    "registryRegions": "Regions"
+    "registryRegions": "Regions",
+    "publishedTrips": "Published trips"
   },
   "terrain": {
     "title": "Terrain",
@@ -1686,7 +1687,8 @@
         "shareNotFound": "That follow link is no longer there — somebody may have taken it back already.",
         "publicationRefusedCave": "Publishing this trip hands over its cave's survey drawing, and that takes the right to share the cave. Ask whoever looks after it.",
         "publicationRefusedProtected": "This trip's cave has protected coordinates, so the trip cannot be published at all. A published page says where the party is inside the cave, and there is no version of that which withholds the position.",
-        "publicationNotArmed": "A follow link opens a page only while the watch is running. Arm the watch, then publish the trip."
+        "publicationNotArmed": "A follow link opens a page only while the watch is running. Arm the watch, then publish the trip.",
+        "shareRevoked": "That link has already been taken back, so there is nothing to replace. Publish the trip again instead."
       },
       "publish": {
         "title": "Publish this trip",
@@ -1718,7 +1720,15 @@
         "expiresAt": "Works until {{when}}",
         "ends": "A follow link ends on its own. It stops working when the watch is closed, and in any case on the date below — so an address left in an old article does not go on showing the party for ever. Taking it back ends it at once.",
         "mintedExpires": "This address stops working on {{when}}, or sooner when you close the watch.",
-        "tellsParty": "Everybody on this trip who has an account is told that it has been published."
+        "tellsParty": "Everybody on this trip who has an account is told that it has been published.",
+        "replace": "Replace link",
+        "replaceConfirm": "Replace this follow link? The old address stops answering at once, wherever it has been pasted. A fresh one is shown here, once; it runs out when the old one would have, and nobody on the trip is told.",
+        "replacedTitle": "The new address is ready",
+        "replacedOnce": "Copy it now — this is the only time it is shown. The old address no longer answers.",
+        "boundsWarning": "A protected cave, or one of its entrances, stands inside the area this trip's survey covers. This is a check by position only and cannot see inside the survey file — the survey may not enter that cave at all. Nothing was refused: look at the survey, and take the link back if it shows what should not be published.",
+        "statusRanOut": "Run out",
+        "ranOutAt": "Ran out {{when}}. It follows nobody any more — but while nobody takes it back, it can still keep this trip among its cave’s past trips, and its address still opens them.",
+        "revokeRanOutConfirm": "Take this follow link back? It already follows nobody. Taking it back also removes this trip from its cave’s past trips, unless another link of the trip still stands."
       },
       "published": {
         "title": "This trip is published",
@@ -5901,5 +5911,90 @@
     "replacePin": "Re-place",
     "pinSaved": "Point saved for {{station}}.",
     "pinDeleted": "Point deleted."
+  },
+  "publishedTrips": {
+    "title": "Published trips",
+    "intro": "Every follow link this installation has handed out, and what each one opens for whoever holds it. A link stays listed after it has been taken back, for as long as its trip exists.",
+    "asOf": "Statuses as of {{when}}.",
+    "refresh": "Refresh",
+    "namesShown": "The published pages of this installation show the party's real names.",
+    "namesHidden": "The published pages of this installation show places in the party, not people's names.",
+    "archiveOff": "Past trips are switched off here, so no link is in the archive: once a trip's own page has closed, its link opens nothing.",
+    "anyStatus": "Any status",
+    "empty": "Nothing has been published on this installation.",
+    "emptyFiltered": "No link has this status.",
+    "unavailable": "The list of published links could not be read.",
+    "failed": "That could not be completed. Refresh the list to see which links still stand.",
+    "irreversible": "This cannot be undone.",
+    "noCave": "No cave",
+    "unnamedCave": "Unnamed cave",
+    "unknownPublisher": "Account no longer shown",
+    "revokedAt": "Taken back {{when}}",
+    "statuses": {
+      "followable": "Followed now",
+      "inGrace": "Just closed",
+      "inArchive": "In the archive",
+      "withheld": "Withheld",
+      "lapsed": "Opens nothing",
+      "revoked": "Taken back"
+    },
+    "statusHelp": {
+      "followable": "The watch is running and the link shows the party as it is reported.",
+      "inGrace": "The watch has been closed. For a short while the link still opens the page, which says everybody is out.",
+      "inArchive": "The trip is over. The link opens it, and the other finished trips of its cave, as history.",
+      "withheld": "The link would open something were it not for its cave: the watch has lost its cave, or the cave's position is now protected. It answers like an unknown link for as long as that holds, and no longer.",
+      "lapsed": "Nobody took the link back, and it opens nothing: it ran out, its watch was stood down, or the archive no longer covers its trip.",
+      "revoked": "Somebody took the link back. It opens nothing and never will again."
+    },
+    "columns": {
+      "status": "Status",
+      "trip": "Trip",
+      "tripDate": "Trip date",
+      "cave": "Cave",
+      "publishedBy": "Published by",
+      "createdAt": "Published",
+      "expiresAt": "Runs out",
+      "handle": "Log code",
+      "handleHelp": "The short code the request log writes in place of a link's address, so a line in the log can be matched with a row here. It opens nothing."
+    },
+    "refused": {
+      "title": "For full administrators only",
+      "text": "This page lists every published trip of the installation, across every trip's own access rules, and can take all of them back. It is open to full administrators and to nobody else."
+    },
+    "bounds": {
+      "tag": "Protected cave nearby?",
+      "title": "A protected cave stands inside the area of a published survey",
+      "explain": "The position of a protected cave other than the trip's own, or of one of its entrances, lies inside the rectangle spanned by the stations of the survey this link hands out. This is a check by position only and cannot see inside the survey file: the survey may not enter that cave at all, and a survey that does can pass unmarked. Nothing was refused — open the survey and judge whether the link should stay."
+    },
+    "actions": {
+      "replace": "Replace link",
+      "unpublishTrip": "Unpublish this trip",
+      "unpublishEverything": "Unpublish everything"
+    },
+    "replace": {
+      "title": "Replace this link?",
+      "stops": "The old address stops answering at once. Wherever it has been pasted — a message, an article, a website block — it opens nothing from now on.",
+      "keeps": "A fresh address is shown here, once. It runs out when the old one would have, the trip stays in its cave's list of past trips, and nobody on the trip is told."
+    },
+    "replaced": {
+      "title": "The new address is ready",
+      "once": "Copy it now — this is the only time it is shown. The old address no longer answers.",
+      "expires": "It runs out on {{when}}, as the old one would have.",
+      "done": "I have copied it"
+    },
+    "trip": {
+      "title": "Unpublish this trip?",
+      "stops": "Every follow link of this trip is taken back at once. Anybody holding one stops being able to open the page.",
+      "leavesHistory": "The trip also leaves its cave's public list of past trips. A finished trip is published again only by starting its watch again.",
+      "done": "Links taken back: {{links}}"
+    },
+    "everything": {
+      "title": "Unpublish everything?",
+      "stops": "Every follow link of this installation is taken back at once — every trip, every cave. Links still standing: {{links}}. Every published page stops answering, on this installation and on any website showing one.",
+      "leavesHistory": "Every cave's public list of past trips empties. A finished trip is published again only by starting its watch again, one trip at a time.",
+      "typeWord": "To go on, type {{word}} below.",
+      "word": "UNPUBLISH",
+      "done": "Links taken back: {{links}} · Trips: {{trips}}"
+    }
   }
 }

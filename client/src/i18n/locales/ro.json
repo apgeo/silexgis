@@ -51,7 +51,8 @@
     "registryCorrelation": "Corelații",
     "tripImport": "Importă ture",
     "speleolocImport": "Importă o înregistrare",
-    "registryRegions": "Regiuni"
+    "registryRegions": "Regiuni",
+    "publishedTrips": "Ture publicate"
   },
   "terrain": {
     "title": "Relief",
@@ -1686,7 +1687,8 @@
         "shareNotFound": "Acel link de urmărire nu mai există — s-ar putea să îl fi retras deja cineva.",
         "publicationRefusedCave": "Publicarea acestei ture predă ridicarea topografică a peșterii, iar asta cere dreptul de a partaja peștera. Cere-l celui care se ocupă de ea.",
         "publicationRefusedProtected": "Peștera acestei ture are coordonate protejate, așa că tura nu poate fi publicată deloc. O pagină publicată spune unde se află echipa în peșteră, iar o variantă care ascunde poziția nu există.",
-        "publicationNotArmed": "Un link de urmărire deschide pagina doar cât timp urmărirea este pornită. Porniți urmărirea, apoi publicați tura."
+        "publicationNotArmed": "Un link de urmărire deschide pagina doar cât timp urmărirea este pornită. Porniți urmărirea, apoi publicați tura.",
+        "shareRevoked": "Acel link a fost deja retras, așa că nu mai este nimic de înlocuit. Publică tura din nou."
       },
       "publish": {
         "title": "Publică această tură",
@@ -1718,7 +1720,15 @@
         "expiresAt": "Funcționează până la {{when}}",
         "ends": "Un link de urmărire se încheie singur. Nu mai funcționează după închiderea urmăririi și, în orice caz, după data de mai jos — astfel încât o adresă rămasă într-un articol vechi să nu arate echipa la nesfârșit. Retragerea îl încheie imediat.",
         "mintedExpires": "Această adresă nu mai funcționează după {{when}}, sau mai devreme dacă închideți urmărirea.",
-        "tellsParty": "Toți participanții la această tură care au cont sunt anunțați că a fost publicată."
+        "tellsParty": "Toți participanții la această tură care au cont sunt anunțați că a fost publicată.",
+        "replace": "Înlocuiește linkul",
+        "replaceConfirm": "Înlocuiești acest link de urmărire? Adresa veche nu mai răspunde din acest moment, oriunde a fost lipită. Una nouă este arătată aici, o singură dată; expiră atunci când ar fi expirat cea veche și nimeni din tură nu este anunțat.",
+        "replacedTitle": "Adresa nouă este gata",
+        "replacedOnce": "Copiaz-o acum — este singurul moment în care este arătată. Adresa veche nu mai răspunde.",
+        "boundsWarning": "O peșteră protejată, sau una dintre intrările ei, se află în zona acoperită de ridicarea topografică a acestei ture. Verificarea se face doar după poziție și nu poate vedea în interiorul fișierului — se poate ca ridicarea să nu intre deloc în acea peșteră. Nimic nu a fost refuzat: uită-te la ridicare și retrage linkul dacă arată ce nu ar trebui publicat.",
+        "statusRanOut": "Expirat",
+        "ranOutAt": "A expirat la {{when}}. Nu mai urmărește pe nimeni — dar cât timp nu îl retrage nimeni, poate ține în continuare această tură în lista de ture trecute a peșterii, iar adresa lui încă o deschide.",
+        "revokeRanOutConfirm": "Retragi acest link de urmărire? Deja nu mai urmărește pe nimeni. Retragerea scoate și această tură din lista de ture trecute a peșterii, dacă nu mai rămâne alt link al turei."
       },
       "published": {
         "title": "Această tură este publicată",
@@ -5901,5 +5911,90 @@
     "replacePin": "Replasează",
     "pinSaved": "Punct salvat pentru {{station}}.",
     "pinDeleted": "Punct șters."
+  },
+  "publishedTrips": {
+    "title": "Ture publicate",
+    "intro": "Toate linkurile de urmărire date de această instalare și ce deschide fiecare pentru cine îl are. Un link rămâne în listă și după ce a fost retras, cât timp tura lui există.",
+    "asOf": "Stările sunt cele de la {{when}}.",
+    "refresh": "Reîncarcă",
+    "namesShown": "Paginile publicate de această instalare arată numele reale ale echipei.",
+    "namesHidden": "Paginile publicate de această instalare arată locuri în echipă, nu numele oamenilor.",
+    "archiveOff": "Turele trecute sunt oprite aici, așa că niciun link nu este în arhivă: după ce pagina proprie a unei ture s-a închis, linkul ei nu mai deschide nimic.",
+    "anyStatus": "Orice stare",
+    "empty": "Pe această instalare nu a fost publicat nimic.",
+    "emptyFiltered": "Niciun link nu are această stare.",
+    "unavailable": "Lista linkurilor publicate nu a putut fi citită.",
+    "failed": "Operația nu a putut fi dusă la capăt. Reîncarcă lista ca să vezi ce linkuri mai sunt active.",
+    "irreversible": "Această operație nu poate fi anulată.",
+    "noCave": "Fără peșteră",
+    "unnamedCave": "Peșteră fără nume",
+    "unknownPublisher": "Cont care nu mai este afișat",
+    "revokedAt": "Retras la {{when}}",
+    "statuses": {
+      "followable": "Urmărire în curs",
+      "inGrace": "Abia încheiată",
+      "inArchive": "În arhivă",
+      "withheld": "Reținut",
+      "lapsed": "Nu deschide nimic",
+      "revoked": "Retras"
+    },
+    "statusHelp": {
+      "followable": "Urmărirea este pornită, iar linkul arată echipa așa cum este raportată.",
+      "inGrace": "Urmărirea a fost încheiată. Pentru scurt timp linkul mai deschide pagina, care spune că toată lumea a ieșit.",
+      "inArchive": "Tura s-a terminat. Linkul o deschide, împreună cu celelalte ture încheiate ale peșterii, ca istoric.",
+      "withheld": "Linkul ar deschide ceva dacă nu ar fi peștera: urmărirea și-a pierdut peștera sau poziția peșterii este acum protejată. Răspunde ca un link necunoscut cât timp ține această situație, nu mai mult.",
+      "lapsed": "Nimeni nu a retras linkul și totuși nu deschide nimic: a expirat, urmărirea lui a fost oprită sau arhiva nu mai acoperă tura.",
+      "revoked": "Cineva a retras linkul. Nu deschide nimic și nu va mai deschide niciodată."
+    },
+    "columns": {
+      "status": "Stare",
+      "trip": "Tură",
+      "tripDate": "Data turei",
+      "cave": "Peșteră",
+      "publishedBy": "Publicat de",
+      "createdAt": "Publicat la",
+      "expiresAt": "Expiră la",
+      "handle": "Cod în jurnal",
+      "handleHelp": "Codul scurt pe care jurnalul de cereri îl scrie în locul adresei unui link, ca o linie din jurnal să poată fi potrivită cu un rând de aici. Nu deschide nimic."
+    },
+    "refused": {
+      "title": "Doar pentru administratorii deplini",
+      "text": "Această pagină arată toate turele publicate ale instalării, peste regulile de acces ale fiecărei ture, și le poate retrage pe toate. Este deschisă administratorilor deplini și nimănui altcuiva."
+    },
+    "bounds": {
+      "tag": "Peșteră protejată în apropiere?",
+      "title": "O peșteră protejată se află în zona unei ridicări topografice publicate",
+      "explain": "Poziția unei peșteri protejate, alta decât cea a turei, sau a uneia dintre intrările ei, cade în dreptunghiul acoperit de stațiile ridicării topografice pe care o predă acest link. Verificarea se face doar după poziție și nu poate vedea în interiorul fișierului: se poate ca ridicarea să nu intre deloc în acea peșteră, iar una care intră poate trece nemarcată. Nimic nu a fost refuzat — deschide ridicarea și judecă dacă linkul trebuie să rămână."
+    },
+    "actions": {
+      "replace": "Înlocuiește linkul",
+      "unpublishTrip": "Retrage publicarea turei",
+      "unpublishEverything": "Retrage tot ce este publicat"
+    },
+    "replace": {
+      "title": "Înlocuiești acest link?",
+      "stops": "Adresa veche nu mai răspunde din acest moment. Oriunde a fost lipită — un mesaj, un articol, un bloc de site — nu mai deschide nimic.",
+      "keeps": "O adresă nouă este arătată aici, o singură dată. Expiră atunci când ar fi expirat cea veche, tura rămâne în lista de ture trecute a peșterii și nimeni din tură nu este anunțat."
+    },
+    "replaced": {
+      "title": "Adresa nouă este gata",
+      "once": "Copiaz-o acum — este singurul moment în care este arătată. Adresa veche nu mai răspunde.",
+      "expires": "Expiră la {{when}}, la fel ca cea veche.",
+      "done": "Am copiat-o"
+    },
+    "trip": {
+      "title": "Retragi publicarea acestei ture?",
+      "stops": "Toate linkurile de urmărire ale acestei ture sunt retrase pe loc. Oricine are unul nu va mai putea deschide pagina.",
+      "leavesHistory": "Tura iese și din lista publică de ture trecute a peșterii ei. O tură încheiată se publică din nou doar pornindu-i iar urmărirea.",
+      "done": "Linkuri retrase: {{links}}"
+    },
+    "everything": {
+      "title": "Retragi tot ce este publicat?",
+      "stops": "Toate linkurile de urmărire ale acestei instalări sunt retrase pe loc — toate turele, toate peșterile. Linkuri încă active: {{links}}. Toate paginile publicate încetează să răspundă, pe această instalare și pe orice site care arată una.",
+      "leavesHistory": "Lista publică de ture trecute a fiecărei peșteri se golește. O tură încheiată se publică din nou doar pornindu-i iar urmărirea, tură cu tură.",
+      "typeWord": "Ca să continui, scrie {{word}} mai jos.",
+      "word": "RETRAGE",
+      "done": "Linkuri retrase: {{links}} · Ture: {{trips}}"
+    }
   }
 }

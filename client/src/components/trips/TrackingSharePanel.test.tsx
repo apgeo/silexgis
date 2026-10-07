@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -11,15 +11,25 @@ const TOKEN = 'abcDEF-123_xyz';
 
 const mint = vi.fn();
 const revoke = vi.fn();
-let shares: { data?: TripTrackingShare[]; error: unknown } = { data: [], error: null };
+const replace = vi.fn();
+let shares: { data?: TripTrackingShare[]; error: unknown } = {
+  data: [],
+  error: null,
+};
 
 vi.mock('../../api/hooks.ts', () => ({
   useTripTrackingShares: () => shares,
   useMintTripTrackingShare: () => ({ mutateAsync: mint, isPending: false }),
   useRevokeTripTrackingShare: () => ({ mutateAsync: revoke, isPending: false }),
+  useReplaceTripTrackingShare: () => ({
+    mutateAsync: replace,
+    isPending: false,
+  }),
 }));
 
-vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: () => false }));
+vi.mock('../../hooks/useCoarsePointer.ts', () => ({
+  useCoarsePointer: () => false,
+}));
 
 const { default: TrackingSharePanel } = await import('./TrackingSharePanel.tsx');
 
@@ -47,6 +57,7 @@ beforeEach(() => {
   shares = { data: [], error: null };
   mint.mockReset();
   revoke.mockReset();
+  replace.mockReset();
   mint.mockResolvedValue({
     id: SHARE,
     token: TOKEN,
@@ -129,12 +140,20 @@ describe('publishing a tracked trip', () => {
   });
 
   /**
-   * A link that has run out is not listed as live, and one that has not is.
+   * A link that has run out is listed as run out, with both of its buttons, and one that has not
+   * is listed as working.
    *
-   * Without the second half this passes against a panel that lists nothing at all. The two rows
-   * differ in one field, so what is being read is the expiry and not the presence of a row.
+   * <b>Running out ends the following, not the publication.</b> A link nobody took back is what
+   * keeps a finished trip among its cave's past trips, and every finished trip's link is in this
+   * state a fortnight after the trip. This panel used to drop such a row and say the trip was not
+   * published, while its address went on opening the cave's history — and there was then nothing
+   * to press Replace or Take it back on.
+   *
+   * The two rows differ in one field, so what is being read is the expiry and not the presence of
+   * a row; and the run-out half is seen under both answers about the trip, because nothing about
+   * the trip changes what a run-out link is.
    */
-  it('lists a link that is still within its window and drops one that has run out', () => {
+  it('lists a link that has run out as run out, still replaceable and still revocable', async () => {
     shares = {
       data: [
         {
@@ -148,10 +167,53 @@ describe('publishing a tracked trip', () => {
       ],
       error: null,
     };
-    const lapsed = view();
-    expect(screen.queryByTestId(`trip-tracking-publish-share-${SHARE}`)).toBeNull();
-    expect(screen.getByText(/This trip is not published/)).toBeInTheDocument();
-    lapsed.unmount();
+    for (const published of [false, true]) {
+      const lapsed = view(true, true, published);
+      expect(screen.getByTestId(`trip-tracking-publish-share-${SHARE}`)).toBeInTheDocument();
+      expect(screen.queryByText(/This trip is not published/)).toBeNull();
+      const status = screen.getByTestId(`trip-tracking-publish-status-${SHARE}`);
+      expect(status).toHaveTextContent('Run out');
+      expect(status).not.toHaveTextContent('Live');
+      const expires = screen.getByTestId(`trip-tracking-publish-expires-${SHARE}`);
+      expect(expires).toHaveTextContent(/Ran out/);
+      expect(expires).toHaveTextContent(/still keep this trip among its cave’s past trips/);
+      expect(expires).not.toHaveTextContent(/Works until/);
+      expect(expires).not.toHaveTextContent(/works again/);
+      expect(screen.getByTestId(`trip-tracking-publish-replace-${SHARE}`)).toBeInTheDocument();
+      expect(screen.getByTestId(`trip-tracking-publish-revoke-${SHARE}`)).toBeInTheDocument();
+      lapsed.unmount();
+    }
+
+    // Replacing it goes to the server like any other replacement, and the fresh address is shown.
+    replace.mockResolvedValue({
+      id: '22222222-2222-2222-2222-222222222222',
+      token: TOKEN,
+      createdAt: '2026-09-14T11:00:00Z',
+      expiresAt: '2020-01-01T00:00:00Z',
+    });
+    const replacing = view(true, true, false);
+    fireEvent.click(screen.getByTestId(`trip-tracking-publish-replace-${SHARE}`));
+    fireEvent.click(
+      within(await screen.findByRole('tooltip')).getByRole('button', {
+        name: 'Replace link',
+      }),
+    );
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith({
+        tripLogId: 'trip-1',
+        shareId: SHARE,
+      }),
+    );
+    expect(await screen.findByTestId('trip-tracking-publish-link')).toHaveValue(
+      `${window.location.origin}/shared/trips/${TOKEN}`,
+    );
+
+    // Taking it back says what that costs: the trip leaves the cave's past trips.
+    fireEvent.click(screen.getByTestId(`trip-tracking-publish-revoke-${SHARE}`));
+    expect(
+      await screen.findByText(/removes this trip from its cave’s past trips/),
+    ).toBeInTheDocument();
+    replacing.unmount();
 
     shares = {
       data: [
@@ -299,7 +361,10 @@ describe('publishing a tracked trip', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
 
     await waitFor(() =>
-      expect(revoke).toHaveBeenCalledWith({ tripLogId: 'trip-1', shareId: SHARE }),
+      expect(revoke).toHaveBeenCalledWith({
+        tripLogId: 'trip-1',
+        shareId: SHARE,
+      }),
     );
     await waitFor(() => expect(screen.queryByTestId('trip-tracking-publish-link')).toBeNull());
   });
@@ -336,7 +401,12 @@ describe('publishing a tracked trip', () => {
     fireEvent.click(screen.getByTestId(`trip-tracking-publish-revoke-${OLD}`));
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
 
-    await waitFor(() => expect(revoke).toHaveBeenCalledWith({ tripLogId: 'trip-1', shareId: OLD }));
+    await waitFor(() =>
+      expect(revoke).toHaveBeenCalledWith({
+        tripLogId: 'trip-1',
+        shareId: OLD,
+      }),
+    );
     const link = screen.getByTestId('trip-tracking-publish-link') as HTMLInputElement;
     expect(link.value).toBe(`${window.location.origin}/shared/trips/${TOKEN}`);
     expect(screen.getByTestId('trip-tracking-publish-snippet')).toBeVisible();
@@ -408,5 +478,128 @@ describe('publishing a tracked trip', () => {
 
     expect(screen.getByText(/could not be read/)).toBeInTheDocument();
     expect(screen.queryByText(/This trip is not published/)).toBeNull();
+  });
+
+  /**
+   * Replacing a link is one act, and its answer is treated exactly like a mint's: the fresh
+   * address is on screen at once, because it is the only copy there will ever be.
+   *
+   * The notice is worded apart from a first publication's, and that is asserted rather than left
+   * to the eye — after a replacement there is an old address somewhere that has just died, and
+   * the sentence saying so is the only thing telling the reader to go and change it.
+   */
+  it('replaces a link in one act and shows the fresh address, once, saying the old one is dead', async () => {
+    const FRESH = '33333333-3333-3333-3333-333333333333';
+    shares = {
+      data: [
+        {
+          id: SHARE,
+          createdBy: 'user-1',
+          createdAt: '2026-09-14T10:00:00Z',
+          revokedAt: null,
+          expiresAt: '2026-10-01T10:00:00Z',
+        },
+      ],
+      error: null,
+    };
+    replace.mockResolvedValue({
+      id: FRESH,
+      token: 'fresh-TOKEN_9',
+      createdAt: '2026-09-14T12:00:00Z',
+      expiresAt: '2026-10-01T10:00:00Z',
+      protectedCaveWithinSurveyBounds: false,
+    });
+    view();
+
+    fireEvent.click(screen.getByTestId(`trip-tracking-publish-replace-${SHARE}`));
+    // The confirmation says what goes with it before anything is sent.
+    expect(await screen.findByText(/old address stops answering at once/)).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+    // The confirming button carries the act's own name, as the row's does, so it is found inside
+    // the confirmation rather than by name alone.
+    fireEvent.click(
+      within(screen.getByRole('tooltip')).getByRole('button', {
+        name: 'Replace link',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith({
+        tripLogId: 'trip-1',
+        shareId: SHARE,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('trip-tracking-publish-link')).toHaveValue(
+        `${window.location.origin}/shared/trips/fresh-TOKEN_9`,
+      ),
+    );
+    expect(screen.getByTestId('trip-tracking-publish-minted')).toHaveTextContent(
+      /The new address is ready/,
+    );
+    expect(screen.getByTestId('trip-tracking-publish-minted-once')).toHaveTextContent(
+      /old address no longer answers/,
+    );
+    // Nothing was published that was not published a moment ago, so nothing was minted.
+    expect(mint).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('trip-tracking-publish-bounds-warning')).toBeNull();
+  });
+
+  it('says so when the link to replace was taken back by somebody else in the meantime', async () => {
+    const { ApiError } = await import('../../api/client.ts');
+    shares = {
+      data: [
+        {
+          id: SHARE,
+          createdBy: 'user-1',
+          createdAt: '2026-09-14T10:00:00Z',
+          revokedAt: null,
+          expiresAt: '2026-10-01T10:00:00Z',
+        },
+      ],
+      error: null,
+    };
+    replace.mockRejectedValue(new ApiError(409, 'tracking.share_revoked'));
+    view();
+
+    fireEvent.click(screen.getByTestId(`trip-tracking-publish-replace-${SHARE}`));
+    fireEvent.click(
+      within(await screen.findByRole('tooltip')).getByRole('button', {
+        name: 'Replace link',
+      }),
+    );
+
+    expect(await screen.findByText(/already been taken back/)).toBeInTheDocument();
+    expect(screen.queryByTestId('trip-tracking-publish-minted')).toBeNull();
+  });
+
+  /**
+   * The warning about a protected neighbour is the server's and is shown only when it was sent.
+   *
+   * Both halves in one test: a warning that is always on screen is one nobody reads, and one that
+   * never appears passes any assertion that it is absent.
+   */
+  it('warns beside a fresh address when the server says a protected cave stands in the survey’s area', async () => {
+    const plain = view();
+    fireEvent.click(screen.getByTestId('trip-tracking-publish-mint'));
+    await waitFor(() => expect(screen.getByTestId('trip-tracking-publish-link')).toBeVisible());
+    expect(screen.queryByTestId('trip-tracking-publish-bounds-warning')).toBeNull();
+    plain.unmount();
+
+    mint.mockResolvedValue({
+      id: SHARE,
+      token: TOKEN,
+      createdAt: '2026-09-14T10:00:00Z',
+      expiresAt: '2026-10-01T10:00:00Z',
+      protectedCaveWithinSurveyBounds: true,
+    });
+    view();
+    fireEvent.click(screen.getByTestId('trip-tracking-publish-mint'));
+
+    const warning = await screen.findByTestId('trip-tracking-publish-bounds-warning');
+    expect(warning).toHaveTextContent(/check by position only/);
+    expect(warning).toHaveTextContent(/cannot see inside the survey file/);
+    // A warning and not a refusal: the address is there beside it.
+    expect(screen.getByTestId('trip-tracking-publish-link')).toBeVisible();
   });
 });
