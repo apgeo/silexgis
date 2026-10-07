@@ -7693,6 +7693,12 @@ export function useMoveExpedition() {
 export type ExpeditionSharing = components['schemas']['ExpeditionSharingDto'];
 export type ExpeditionSharedRule = components['schemas']['ExpeditionSharedRuleDto'];
 export type ExpeditionShareEntry = components['schemas']['ExpeditionShareEntryWrite'];
+/**
+ * What applying a camp's sharing did: the sharing as it now stands, how many trips took it, the
+ * skipped trips the caller may read, and a bare count of the skipped ones they may not.
+ */
+export type ExpeditionSharingOutcome = components['schemas']['ExpeditionSharingOutcomeDto'];
+export type ExpeditionSkippedTrip = components['schemas']['ExpeditionSkippedTripDto'];
 
 /**
  * What a camp's sharing grants, and how many of its trips carry it.
@@ -7724,7 +7730,10 @@ function useInvalidateExpeditionSharing(expeditionId: string) {
   };
 }
 
-/** Shares the camp: adds and restates one rule per member trip, and never removes. */
+/**
+ * Shares the camp: adds and restates one rule per member trip the caller may administer, and
+ * never removes. The answer says which trips it skipped; a sharing that reached none is refused.
+ */
 export function useApplyExpeditionSharing(expeditionId: string) {
   const invalidate = useInvalidateExpeditionSharing(expeditionId);
   return useMutation({
@@ -7740,8 +7749,9 @@ export function useApplyExpeditionSharing(expeditionId: string) {
 }
 
 /**
- * Carries the camp's sharing onto the trips that joined since it was applied. A trip joining is
- * not covered by itself: coverage is an act somebody performs and the trail records.
+ * Carries the camp's sharing onto the trips it does not reach yet: ones that joined since it
+ * was applied, and ones skipped then whose owners have since delegated. A trip joining is not
+ * covered by itself: coverage is an act somebody performs and the trail records.
  */
 export function useReapplyExpeditionSharing(expeditionId: string) {
   const invalidate = useInvalidateExpeditionSharing(expeditionId);

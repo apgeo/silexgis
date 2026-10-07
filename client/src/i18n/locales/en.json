@@ -2072,7 +2072,7 @@
     "sharing": {
       "title": "Share the camp",
       "button": "Share",
-      "intro": "Sharing a camp writes one rule onto each trip it gathers, marked as the camp's, so whoever it is shared with can read what the camp gathered. It takes the right to manage permissions on every one of those trips: if any trip refuses, nothing is shared and you are told how many refused, never which. A trip that joins the camp later is not covered until the sharing is applied again.",
+      "intro": "Sharing a camp writes one rule onto each trip it gathers, marked as the camp's, so whoever it is shared with can read what the camp gathered. Each trip answers for itself: the camp is shared on every trip whose permissions you may manage, and the others are skipped and listed. A trip that joins the camp later is not covered until the sharing is applied again.",
       "memberTrips": "Trips in this camp: {{count}}.",
       "notAllowed": "You cannot share this camp.",
       "empty": "This camp is not shared with anybody yet.",
@@ -2080,19 +2080,27 @@
       "coverage": "Trips covered",
       "covered": "{{trips}} of {{total}}",
       "behind": "Not every trip",
-      "behindHint": "Trips have joined this camp since its sharing was last applied, and they do not carry it. Apply the sharing again to cover them.",
+      "behindHint": "Not every trip in this camp carries its sharing. Some joined after it was last applied; others were skipped because whoever applied it could not manage their permissions. Apply the sharing again to cover the ones you may.",
       "addTitle": "Share with somebody else",
       "apply": "Apply sharing",
-      "applyHint": "Writes these rules onto every trip in the camp. Rules already applied are kept; nothing is removed.",
+      "applyHint": "Writes these rules onto every trip in the camp whose permissions you may manage, and lists the ones it skipped. Rules already applied are kept; nothing is removed.",
       "applied": "The camp is shared.",
       "reapply": "Apply again",
       "reapplied": "The sharing now covers every trip in the camp.",
       "withdraw": "Withdraw sharing",
       "withdrawConfirm": "Withdraw this camp's sharing from every trip it gathers? Rules written on a trip's own permissions tab are kept.",
       "withdrawn": "The camp's sharing was withdrawn.",
-      "incomplete": "Not shared: {{count}} of this camp's trips refused it, because you may not manage their permissions. Their owners have to delegate that first.",
+      "incomplete": "Not shared: you may not manage the permissions of any of this camp's trips ({{count}}), or you asked to pass on more than you hold on them. Their owners have to let you manage their permissions first.",
       "noTrips": "This camp gathers no trips yet, so there is nothing to share.",
-      "nothingShared": "This camp shares nothing to apply again."
+      "nothingShared": "This camp shares nothing to apply again.",
+      "inPart": "Trips shared: {{shared}} of {{total}}. The rest were skipped — they are listed in this dialog.",
+      "skippedTitle": "Trips shared: {{shared}}. Trips skipped: {{skipped}}.",
+      "skippedReason": {
+        "notAdministered": "its owner must let you manage its permissions",
+        "beyondHolding": "you asked to pass on more than you hold on this trip yourself"
+      },
+      "skippedNotNamed": "Skipped trips that you may not read, and that are therefore not named here: {{count}}. Their owners must let you manage their permissions.",
+      "skippedHint": "Nothing was written onto a skipped trip. Apply the sharing again once that has changed, and it will be picked up."
     },
     "report": {
       "open": "Write-up",
