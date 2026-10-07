@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   keepPreviousData,
   queryOptions,
@@ -8374,6 +8374,23 @@ export function useTripTrackingEventLogs(tripLogIds: readonly string[]) {
   return useQueries({
     queries: tripLogIds.map((id) => ({ ...tripTrackingEventLogQuery(id), enabled: id !== '' })),
   });
+}
+
+/**
+ * Reads one trip's whole log again, now, and answers with it — whatever is already held.
+ *
+ * The whole log is not kept fresh by itself, and for a replay of a finished trip it has no need to
+ * be. A surface that is about to commit to what the log says of a trip still under way — a file made
+ * from it, which outlives the screen — asks through this first, and learns from the refusal when the
+ * log could not be read to its end. The answer also replaces what is held, so everything else
+ * drawn from the log follows. A read already on its way is waited for rather than started again.
+ */
+export function useRereadTripTrackingEventLog() {
+  const queryClient = useQueryClient();
+  return useCallback(
+    (tripLogId: string) => queryClient.fetchQuery({ ...tripTrackingEventLogQuery(tripLogId), staleTime: 0 }),
+    [queryClient],
+  );
 }
 
 /**

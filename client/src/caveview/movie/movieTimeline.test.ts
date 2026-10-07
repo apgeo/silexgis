@@ -5,6 +5,9 @@ import {
   buildMovieTimeline,
   movieFrameCount,
   movieFrames,
+  movieNewReports,
+  movieSpansAt,
+  movieTripIsLive,
   movieTripSpan,
   type MovieTripSpan,
 } from './movieTimeline.ts';
@@ -199,6 +202,38 @@ describe('movieTripSpan', () => {
   it('ends a trip still under way where the movie was opened', () => {
     const result = movieTripSpan('trip-a', { armedAt: at(T0), closedAt: null }, [], T0 + 2 * HOUR, 'model-1');
     expect(result?.window).toEqual({ from: T0, to: T0 + 2 * HOUR });
+  });
+
+  it('moves only the trips still under way when the spans are asked for again later', () => {
+    const live = { tripLogId: 'live', tracking: { armedAt: at(T0), closedAt: null }, events: [report(T0 + HOUR, 'model-1')] };
+    const done = {
+      tripLogId: 'done',
+      tracking: { armedAt: at(T0), closedAt: at(T0 + 2 * HOUR) },
+      events: [report(T0 + HOUR, 'model-1')],
+    };
+    expect(movieTripIsLive(live.tracking)).toBe(true);
+    expect(movieTripIsLive(done.tracking)).toBe(false);
+    expect(movieTripIsLive({ armedAt: null, closedAt: null })).toBe(false);
+
+    const opened = movieSpansAt([live, done], T0 + 3 * HOUR, 'model-1');
+    const exported = movieSpansAt([live, done], T0 + 5 * HOUR, 'model-1');
+    expect(opened?.map((entry) => entry.window.to)).toEqual([T0 + 3 * HOUR, T0 + 2 * HOUR]);
+    expect(exported?.map((entry) => entry.window.to)).toEqual([T0 + 5 * HOUR, T0 + 2 * HOUR]);
+    expect(exported?.map((entry) => entry.tripLogId)).toEqual(['live', 'done']);
+
+    // A trip with nothing to replay is not left out of the list, which would put every later
+    // trip's span against the wrong trip: there is no list.
+    const never = { tripLogId: 'never', tracking: { armedAt: null, closedAt: null }, events: [] };
+    expect(movieSpansAt([live, never, done], T0 + 5 * HOUR, 'model-1')).toBeNull();
+  });
+
+  it('counts the reports that have arrived by which they are, not by the time they carry', () => {
+    const known = new Set(['r1', 'r2']);
+    expect(movieNewReports([{ id: 'r1' }, { id: 'r2' }], known)).toBe(0);
+    // One entered since, about a moment before the two already known: still one new report.
+    expect(movieNewReports([{ id: 'r3' }, { id: 'r1' }, { id: 'r2' }], known)).toBe(1);
+    // One of the known ones taken back, another added.
+    expect(movieNewReports([{ id: 'r2' }, { id: 'r4' }], known)).toBe(1);
   });
 });
 

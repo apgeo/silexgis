@@ -39,16 +39,139 @@ const GIF_OVERHEAD_BYTES = 1024;
  */
 export const MOVIE_GIF_SIZE_BUDGET = 10 * 1024 * 1024;
 
-/** Roughly how many bytes a movie of these settings and this many frames comes to. */
+/**
+ * What the GIFs made in this browser have really cost, per pixel per frame at the richest palette:
+ * one figure for a camera that turns and one for a camera that stands still, each present only once
+ * a GIF of that kind has been made here.
+ *
+ * <b>Why the estimate is corrected from the files themselves.</b> The built-in figures are one
+ * guess for every cave. What a frame really costs follows the survey — a dense one with walls
+ * changes several times the pixels of a bare centre line — the number of markers moving, and the
+ * captions; none of that is known before a GIF is encoded, and all of it is much the same from one
+ * movie to the next for a reader who films the same few caves. The last file says what the next
+ * one of its kind will cost better than any constant can.
+ */
+export interface MovieGifCalibration {
+  turning?: number;
+  still?: number;
+}
+
+/**
+ * The least and the most a measured figure is believed. Outside them the measurement is of
+ * something else — a movie of an empty model, a file cut short — and one such file must not be
+ * able to switch the size warning off, or on, for every movie after it.
+ */
+const GIF_CALIBRATION_MIN = 0.002;
+const GIF_CALIBRATION_MAX = 0.5;
+/** A GIF of fewer frames than this says too little about what a frame costs to be learnt from. */
+const GIF_CALIBRATION_MIN_FRAMES = 10;
+/**
+ * How many times the reckoned first frame a GIF's later frames must come to before it is learnt
+ * from.
+ *
+ * <b>The first frame is reckoned, not measured, and reckoned high.</b> A first frame of a survey
+ * on black really costs about a fifth of the figure above (measured: 0.049 bytes a pixel at
+ * 640 × 360), and whatever the reckoning is out by is taken from the later frames and shared
+ * between them. In a GIF of two or three seconds that is most of what the later frames hold: a
+ * ten-frame trial taught less than a third of what a frame cost, and every estimate after it was
+ * several times too small — the direction that keeps the size warning from showing. Asked for four
+ * times the reckoned first frame, the later frames can be put out by no more than about a fifth of
+ * themselves, and a GIF too short for that is one more file that says too little.
+ */
+const GIF_CALIBRATION_MIN_LATER_SHARE = 4;
+
+/** A figure read back from storage: kept within the believed range, or nothing when it is no figure at all. */
+function believableGifFigure(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.min(GIF_CALIBRATION_MAX, Math.max(GIF_CALIBRATION_MIN, value))
+    : undefined;
+}
+
+/**
+ * A stored calibration made safe to use: whatever was read back — from an older version, or edited
+ * by hand — comes out as figures within the believed range, or as nothing.
+ */
+export function normaliseMovieGifCalibration(stored: unknown): MovieGifCalibration {
+  const from = (typeof stored === 'object' && stored !== null ? stored : {}) as Record<string, unknown>;
+  const turning = believableGifFigure(from.turning);
+  const still = believableGifFigure(from.still);
+  return {
+    ...(turning === undefined ? {} : { turning }),
+    ...(still === undefined ? {} : { still }),
+  };
+}
+
+/**
+ * The calibration after a GIF of these settings and this many frames came to `bytes`.
+ *
+ * The estimate's own sum is turned round: what the file holds beyond its header and its first
+ * frame, over the pixels of its later frames, at the palette it was made with. A figure past the
+ * most that is believed is taken as that most — erring towards the warning — and the result is
+ * <b>averaged with the one remembered</b>, so a single unusual movie moves the estimate half-way
+ * and no further.
+ *
+ * Returned unchanged when the file says nothing usable: too few frames; later frames that come to
+ * too little beside the reckoned first one for the reckoning's own error not to decide the figure;
+ * or a figure below the least that is believed, which is a movie of next to nothing and must not
+ * teach that a frame costs next to nothing.
+ */
+export function movieGifCalibrationFrom(
+  bytes: number,
+  settings: Pick<MovieSettings, 'size' | 'quality' | 'rotation'>,
+  frameCount: number,
+  before: MovieGifCalibration = {},
+): MovieGifCalibration {
+  const { width, height } = movieSize(settings as MovieSettings);
+  const pixels = width * height;
+  const firstFrame = pixels * GIF_FIRST_FRAME_BYTES_PER_PIXEL;
+  const later = bytes - GIF_OVERHEAD_BYTES - firstFrame;
+  if (
+    !Number.isFinite(bytes)
+    || frameCount < GIF_CALIBRATION_MIN_FRAMES
+    || pixels <= 0
+    || later < GIF_CALIBRATION_MIN_LATER_SHARE * firstFrame
+  ) {
+    return before;
+  }
+  const figure = later / ((frameCount - 1) * pixels * GIF_QUALITY_FACTOR[settings.quality]);
+  if (!Number.isFinite(figure) || figure < GIF_CALIBRATION_MIN) {
+    return before;
+  }
+  const measured = Math.min(GIF_CALIBRATION_MAX, figure);
+  const kind = settings.rotation.enabled ? 'turning' : 'still';
+  const held = believableGifFigure(before[kind]);
+  return { ...before, [kind]: held === undefined ? measured : (held + measured) / 2 };
+}
+
+/** Whether a GIF of these settings is estimated from a file made here rather than from the built-in figure. */
+export function movieEstimateIsCalibrated(
+  settings: Pick<MovieSettings, 'format' | 'rotation'>,
+  calibration: MovieGifCalibration | undefined,
+): boolean {
+  return (
+    settings.format === 'gif'
+    && believableGifFigure(calibration?.[settings.rotation.enabled ? 'turning' : 'still']) !== undefined
+  );
+}
+
+/**
+ * Roughly how many bytes a movie of these settings and this many frames comes to.
+ *
+ * @param calibration what GIFs made in this browser have cost; where it has a figure for this kind
+ *   of movie the figure replaces the built-in one.
+ */
 export function movieFileSizeEstimate(
   settings: Pick<MovieSettings, 'format' | 'size' | 'fps' | 'quality' | 'rotation'>,
   frameCount: number,
+  calibration?: MovieGifCalibration,
 ): number {
   const { width, height } = movieSize(settings as MovieSettings);
   const frames = Math.max(0, frameCount);
   if (settings.format === 'gif') {
     const pixels = width * height;
-    const perPixel = settings.rotation.enabled ? GIF_TURNING_BYTES_PER_PIXEL : GIF_STILL_BYTES_PER_PIXEL;
+    const perPixel = settings.rotation.enabled
+      ? (believableGifFigure(calibration?.turning) ?? GIF_TURNING_BYTES_PER_PIXEL)
+      : (believableGifFigure(calibration?.still) ?? GIF_STILL_BYTES_PER_PIXEL);
     const later = Math.max(0, frames - 1) * pixels * perPixel * GIF_QUALITY_FACTOR[settings.quality];
     return Math.round(GIF_OVERHEAD_BYTES + (frames > 0 ? pixels * GIF_FIRST_FRAME_BYTES_PER_PIXEL : 0) + later);
   }

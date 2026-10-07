@@ -31,8 +31,14 @@ const reads = vi.hoisted(() => ({
     trips: [],
     spans: [],
     empty: [],
+    newReports: new Map(),
+    rereadLive: () => Promise.resolve([]),
   } as unknown as MovieTripsState,
   movieIdsAsked: [] as (readonly string[])[],
+  /** Where each read was told a trip still under way ends. */
+  movieEndsAsked: [] as number[],
+  /** Whether each read was told to leave the logs of trips under way alone. */
+  moviePausedAsked: [] as boolean[],
 }));
 vi.mock('../../../api/hooks.ts', () => ({
   useSurveyModel: () => ({ data: { name: 'Main survey', caveId: 'cave-1' } }),
@@ -44,8 +50,10 @@ vi.mock('../../../api/hooks.ts', () => ({
   }),
 }));
 vi.mock('./useMovieTrips.ts', () => ({
-  useMovieTrips: (_model: string, ids: readonly string[]) => {
+  useMovieTrips: (_model: string, ids: readonly string[], liveEnd: number, paused: boolean) => {
     reads.movieIdsAsked.push(ids);
+    reads.movieEndsAsked.push(liveEnd);
+    reads.moviePausedAsked.push(paused);
     return reads.movie;
   },
 }));
@@ -223,6 +231,10 @@ function ready(...trips: { trip: MovieTripData; span: MovieTripSpan }[]): MovieT
     trips: trips.map((t) => t.trip),
     spans: trips.map((t) => t.span),
     empty: [],
+    newReports: new Map(),
+    // A test of a trip still under way says what its log reads on being asked again; one that does
+    // not, and has the log asked for all the same, fails on this.
+    rereadLive: () => Promise.reject(new Error('this test did not expect a log to be read again')),
   };
 }
 
@@ -288,10 +300,12 @@ beforeEach(() => {
   reads.trackedError = null;
   reads.movie = ready();
   reads.movieIdsAsked = [];
+  reads.movieEndsAsked = [];
+  reads.moviePausedAsked = [];
   recordMovie.mockReset();
   saveBlob.mockReset();
   drawMovieCaptions.mockReset();
-  useUiPrefsStore.setState({ movieSettings: undefined });
+  useUiPrefsStore.setState({ movieSettings: undefined, movieGifCalibration: undefined });
 });
 
 afterEach(() => {
@@ -419,6 +433,74 @@ describe('the tracking movie dialog', () => {
     open();
     expect(await screen.findByTestId('movie-summary')).toHaveTextContent('220 frames');
     expect(screen.queryByTestId('movie-too-large')).not.toBeInTheDocument();
+  });
+
+  it('estimates the next GIF from what the last one made here came to, and says that it does', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    // The default movie — 640 × 360, 220 frames, turning — reckoned at about 2 MB, comes to 3,000,000 bytes.
+    recordMovie.mockResolvedValue(new Blob([new Uint8Array(3_000_000)], { type: 'image/gif' }));
+    open(['trip-a']);
+
+    const summary = await screen.findByTestId('movie-summary');
+    expect(summary).toHaveTextContent('220 frames · about 2 MB');
+    expect(summary).not.toHaveTextContent('going by the last GIF');
+    const exportButton = screen.getByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+
+    // The same movie again is now reckoned at what it came to, and the dialog says why the figure moved.
+    await waitFor(() =>
+      expect(screen.getByTestId('movie-summary')).toHaveTextContent(
+        '220 frames · about 2.9 MB, going by the last GIF made here',
+      ),
+    );
+    // Two numbers are kept in this browser, and nothing about the movie they came from.
+    const kept = useUiPrefsStore.getState().movieGifCalibration;
+    expect(Object.keys(kept ?? {})).toEqual(['turning']);
+    expect(kept?.turning).toBeGreaterThan(0.05);
+    expect(kept?.turning).toBeLessThan(0.1);
+
+    // The next dialog starts from what was learnt...
+    cleanup();
+    open(['trip-a']);
+    expect(await screen.findByTestId('movie-summary')).toHaveTextContent('going by the last GIF made here');
+
+    // ...but a still camera's GIF is another kind of file, and is still reckoned from the built-in figure.
+    cleanup();
+    useUiPrefsStore.setState({
+      movieSettings: normaliseMovieSettings({
+        ...DEFAULT_MOVIE_SETTINGS,
+        rotation: { ...DEFAULT_MOVIE_SETTINGS.rotation, enabled: false },
+      }),
+    });
+    open(['trip-a']);
+    const still = await screen.findByTestId('movie-summary');
+    expect(still).toHaveTextContent('220 frames');
+    expect(still).not.toHaveTextContent('going by the last GIF');
+  });
+
+  it('learns nothing about GIFs from a video, or from a file too small to say anything', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
+    open(['trip-a']);
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByTestId('movie-cancel')).not.toBeInTheDocument());
+    expect(useUiPrefsStore.getState().movieGifCalibration).toBeUndefined();
+
+    cleanup();
+    useUiPrefsStore.setState({ movieSettings: normaliseMovieSettings({ ...DEFAULT_MOVIE_SETTINGS, format: 'webm' }) });
+    recordMovie.mockResolvedValue(new Blob([new Uint8Array(3_000_000)], { type: 'video/webm' }));
+    open(['trip-a']);
+    const again = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(again).not.toBeDisabled());
+    fireEvent.click(again);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId('movie-cancel')).not.toBeInTheDocument());
+    expect(useUiPrefsStore.getState().movieGifCalibration).toBeUndefined();
   });
 
   it('exports from the preview viewer with the chosen trips, and saves the file under a readable name', async () => {
@@ -788,22 +870,62 @@ describe('the tracking movie dialog', () => {
     const firstMoment = screen.getByTestId('movie-moment').textContent;
     expect(firstMoment).not.toBe('');
 
+    // Nothing from here on waits for the machine: a key on the slider is answered before the event
+    // returns, and the frames of the preview's play are handed over by the test, each stamped with
+    // the time the test says it is. Left to the real frame clock, how far play had got after a wait
+    // was a question about how busy the machine was.
+    const frameShown = () => screen.getByTestId('movie-position').dataset.frame;
     fireEvent.keyDown(handle, { key: 'End', code: 'End', keyCode: 35 });
-    await waitFor(() => expect(Number(screen.getByTestId('movie-position').dataset.frame)).toBeGreaterThan(0));
+    // The default movie: 20 s at 10 frames a second and a 2 s still, so the last frame is the 220th.
+    expect(frameShown()).toBe('219');
     // The captions follow the slider to the moment it shows, and so does the moment written beside it.
     expect(clockOf(drawMovieCaptions.mock.calls.at(-1)!)).not.toEqual(first);
     expect(screen.getByTestId('movie-moment').textContent).not.toBe(firstMoment);
     expect(handle).toHaveAttribute('aria-valuetext', screen.getByTestId('movie-moment').textContent);
 
     fireEvent.keyDown(handle, { key: 'Home', code: 'Home', keyCode: 36 });
-    await waitFor(() => expect(screen.getByTestId('movie-position').dataset.frame).toBe('0'));
-    fireEvent.click(screen.getByTestId('movie-play'));
-    await waitFor(() => expect(Number(screen.getByTestId('movie-position').dataset.frame)).toBeGreaterThan(0), {
-      timeout: 3000,
+    expect(frameShown()).toBe('0');
+
+    const frames: FrameRequestCallback[] = [];
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
     });
-    // Playing turns the camera with the movie.
-    expect((preview.viewer as ReturnType<typeof fakeViewer>).setCameraAngles).toHaveBeenCalled();
-    fireEvent.click(screen.getByTestId('movie-play'));
+    const viewer = preview.viewer as ReturnType<typeof fakeViewer>;
+    viewer.setCameraAngles.mockClear();
+    try {
+      // Play is pressed at a moment the test names, so every frame's distance from it is known.
+      const pressed = vi.spyOn(performance, 'now').mockReturnValue(50_000);
+      fireEvent.click(screen.getByTestId('movie-play'));
+      pressed.mockRestore();
+      expect(frames).toHaveLength(1);
+      // Nothing has moved before a frame is drawn: the camera was only brought to rest.
+      expect(frameShown()).toBe('0');
+      expect(viewer.setCameraAngles.mock.calls).toEqual([[{}]]);
+
+      // A quarter of a second on, at ten frames a second, the movie is at its third frame...
+      act(() => frames[0](50_250));
+      expect(frameShown()).toBe('2');
+      // ...and playing turns the camera with the movie: from where it stood when play was pressed,
+      // round by what the movie has turned by that frame, at the tilt it had.
+      const turned = viewer.setCameraAngles.mock.calls.at(-1)![0] as { azimuth: number; polar: number };
+      expect(turned.polar).toBe(1);
+      expect(turned.azimuth).not.toBe(0.5);
+
+      // It goes on asking for frames, and each shows the moment the time passed says, however
+      // unevenly they come: a second after play was pressed is the eleventh frame.
+      expect(frames).toHaveLength(2);
+      act(() => frames[1](51_000));
+      expect(frameShown()).toBe('10');
+      expect(frames).toHaveLength(3);
+
+      // Pressed again, it stops where it is and asks for no more frames.
+      fireEvent.click(screen.getByTestId('movie-play'));
+      expect(frameShown()).toBe('10');
+      expect(frames).toHaveLength(3);
+    } finally {
+      raf.mockRestore();
+    }
   });
 
   it('never plays the preview from before its start, whatever time the browser stamps the first frame with', async () => {
@@ -1154,6 +1276,121 @@ describe('the trip picker', () => {
 
     await waitFor(() => expect(reads.movieIdsAsked.at(-1)).toEqual([]));
     expect(screen.getByText('Choose at least one trip to preview and export a movie.')).toBeInTheDocument();
+  });
+
+  it('says a ticked trip is still under way and how many reports have come in since, and nothing of the kind for a finished one', async () => {
+    const live = movieTrip('trip-a', 'Alpha');
+    live.trip.tracking = { ...live.trip.tracking, state: 'armed', closedAt: null } as TrackingState;
+    const done = movieTrip('trip-b', 'Bravo');
+    reads.movie = { ...ready(live, done), newReports: new Map([['trip-a', 0]]) };
+    open(['trip-a', 'trip-b']);
+
+    expect(await screen.findByTestId('movie-trip-live-trip-a')).toHaveTextContent(
+      'Still under way · new reports since opening: 0',
+    );
+    // The finished trip beside it is in the movie too, and has nothing to say about arriving reports.
+    expect(within(screen.getByTestId('movie-trip-trip-b')).getByRole('checkbox')).toBeChecked();
+    expect(screen.queryByTestId('movie-trip-live-trip-b')).not.toBeInTheDocument();
+
+    // The count is the one the trips' reads keep, which is where the log is read again; the row
+    // follows it. Unticking the finished trip is only what has the dialog drawn again here.
+    reads.movie = { ...ready(live), newReports: new Map([['trip-a', 2]]) };
+    fireEvent.click(within(screen.getByTestId('movie-trip-trip-b')).getByRole('checkbox'));
+    await waitFor(() =>
+      expect(screen.getByTestId('movie-trip-live-trip-a')).toHaveTextContent(
+        'Still under way · new reports since opening: 2',
+      ),
+    );
+  });
+
+  it('ends a trip still under way when the export starts, on a log read again at that moment', async () => {
+    const report = (id: string, recordedAt: string) =>
+      ({ id, recordedAt, surveyModelId: MODEL, kind: 'note', caverIds: [] }) as unknown as TrackingEvent;
+    const live = movieTrip('trip-a', 'Alpha');
+    live.trip.tracking = { ...live.trip.tracking, state: 'armed', closedAt: null } as TrackingState;
+    // As it was folded when the dialog opened, which for this trip was two hours into it.
+    const openedAt = Date.parse(ARMED) + 2 * 3_600_000;
+    live.span.window = { from: Date.parse(ARMED), to: openedAt };
+    live.trip.events = [report('r1', ARMED)];
+    // What the log reads when the export asks for it again: a report recorded elsewhere, an hour
+    // after the dialog was opened.
+    const arrived = report('r2', new Date(openedAt + 3_600_000).toISOString());
+    const rereadLive = vi.fn(() => Promise.resolve([{ ...live.trip, events: [arrived, ...live.trip.events] }]));
+    reads.movie = { ...ready(live), rereadLive };
+    recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
+    open(['trip-a']);
+
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    const endsBefore = new Set(reads.movieEndsAsked);
+    expect(endsBefore.size).toBe(1);
+    expect(rereadLive).not.toHaveBeenCalled();
+    const pressedAt = Date.now();
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    const finishedAt = Date.now();
+
+    // The log was read again, once, and the movie was recorded from what it read then — the report
+    // that arrived while the dialog stood open is in the file, not only the stretch of time.
+    expect(rereadLive).toHaveBeenCalledTimes(1);
+    const { timeline, trips } = recordMovie.mock.calls[0][0];
+    expect(trips.map((trip) => trip.events.map((event) => event.id))).toEqual([['r2', 'r1']]);
+    // The movie that was recorded runs to the moment its export began...
+    const end = timeline.clock(timeline.length);
+    expect(end.kind).toBe('calendar');
+    const endAt = (end as { at: number }).at;
+    expect(endAt).toBeGreaterThanOrEqual(pressedAt);
+    expect(endAt).toBeLessThanOrEqual(finishedAt);
+    expect(endAt).toBeGreaterThan(openedAt);
+    // ...and the preview is moved to that same end, so what is looked at afterwards is what was made.
+    expect(reads.movieEndsAsked.at(-1)).toBe(endAt);
+    // While the export ran the reads were told to leave the logs alone, and not before or after.
+    expect(reads.moviePausedAsked[0]).toBe(false);
+    expect(reads.moviePausedAsked).toContain(true);
+    await waitFor(() => expect(reads.moviePausedAsked.at(-1)).toBe(false));
+  });
+
+  it('exports nothing of a trip still under way whose log cannot be read again, and says what the replay says', async () => {
+    const live = movieTrip('trip-a', 'Alpha');
+    live.trip.tracking = { ...live.trip.tracking, state: 'armed', closedAt: null } as TrackingState;
+    const rereadLive = vi.fn(() => Promise.reject(new Error('the tracking log has more pages than one read follows')));
+    reads.movie = { ...ready(live), rereadLive };
+    open(['trip-a']);
+
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    expect(screen.queryByTestId('movie-log-unavailable')).not.toBeInTheDocument();
+    fireEvent.click(exportButton);
+
+    expect(await screen.findByTestId('movie-log-unavailable')).toHaveTextContent('The log could not be read');
+    expect(recordMovie).not.toHaveBeenCalled();
+    expect(saveBlob).not.toHaveBeenCalled();
+    // Nothing is left running, and the export can be asked for again — which reads again.
+    await waitFor(() => expect(screen.queryByTestId('movie-cancel')).not.toBeInTheDocument());
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
+    rereadLive.mockImplementation(() => Promise.resolve([live.trip]) as never);
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('movie-log-unavailable')).not.toBeInTheDocument();
+  });
+
+  it('leaves a finished trip’s movie exactly as it was previewed, whenever it is exported', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
+    open(['trip-a']);
+
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+
+    const { timeline } = recordMovie.mock.calls[0][0];
+    expect(timeline.clock(timeline.length)).toEqual({ kind: 'calendar', at: Date.parse(CLOSED) });
+    // Nothing was read again as of another moment — and no log was read again at all, which the
+    // stand-in for the trips' reads would have refused.
+    expect(new Set(reads.movieEndsAsked).size).toBe(1);
+    expect(screen.queryByTestId('movie-trip-live-trip-a')).not.toBeInTheDocument();
   });
 
   it('holds the export back while a chosen trip’s log cannot be read to its end, saying what the replay says', async () => {
