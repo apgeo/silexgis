@@ -50,10 +50,11 @@ vi.mock('../../api/hooks.ts', () => ({
   useSurveyModel: () => ({ data: undefined, isPending: false, error: null }),
   usePublicPastTrips: (_token: string | undefined, enabled: boolean) =>
     enabled ? archive : { data: undefined, isPending: false, isError: false },
-  usePublicLiveTrips: (_token: string | undefined, enabled: boolean) => {
+  usePublicLiveTrips: (token: string | undefined, enabled: boolean) => {
     liveAsked = enabled;
     if (enabled) {
       liveReads++;
+      liveAskedUnder.push(token);
     }
     return enabled ? liveList : { data: undefined, isPending: false, isError: false };
   },
@@ -63,8 +64,12 @@ vi.mock('../../api/hooks.ts', () => ({
 
 const address = new URLSearchParams();
 const setAddress = vi.fn();
+/** The link the page is opened under, which a test can change under a page already drawn. */
+let linkToken = 'follow-token';
+/** Every link the list of parties was asked for under, while it was being asked for. */
+let liveAskedUnder: (string | undefined)[] = [];
 vi.mock('react-router-dom', () => ({
-  useParams: () => ({ token: 'follow-token' }),
+  useParams: () => ({ token: linkToken }),
   useSearchParams: () => [address, setAddress],
 }));
 
@@ -243,6 +248,8 @@ beforeEach(() => {
   };
   liveAsked = false;
   liveReads = 0;
+  liveAskedUnder = [];
+  linkToken = 'follow-token';
   given = undefined;
   viewersBuilt = 0;
   setAddress.mockClear();
@@ -597,5 +604,44 @@ describe('watching another party of the cave from a published link', () => {
     const written = setAddress.mock.calls.at(-1)?.[0] as URLSearchParams;
     expect(written.has('past')).toBe(false);
     expect(setAddress.mock.calls.at(-1)?.[1]).toEqual({ replace: true, flushSync: true });
+  });
+});
+
+describe('a second published link opened in the same tab, while another party was being watched', () => {
+  it('starts on its own party, with its sections shut and nobody else’s list read under it', () => {
+    // Two links of one cave, moved between with the browser's Back and Forward: the party watched
+    // under the first is in the second link's list too, so a watch left standing would be found
+    // there and the second link's page would open on it.
+    const { rerender } = render(<PublicTripPage />);
+    watchOther();
+    expect(drawn()).toEqual(['Mircea', 'Ileana', 'Radu']);
+    expect(screen.getByTestId('public-watch-banner')).toBeInTheDocument();
+
+    linkToken = 'second-link';
+    rerender(<PublicTripPage />);
+
+    expect(drawn()).toEqual(['Ana']);
+    expect(screen.queryByTestId('public-watch-banner')).toBeNull();
+    expect(screen.queryByTestId('public-watch-ended')).toBeNull();
+    expect(screen.getByTestId('public-trip-title')).toHaveTextContent('E1, the deep end');
+    // Nobody asked under the second link who else is in its cave.
+    expect(liveAsked).toBe(false);
+    expect(liveAskedUnder).not.toContain('second-link');
+    expect(screen.queryByTestId(`public-live-watch-${OTHER}`)).toBeNull();
+  });
+
+  it('does not carry over the notice that a watch ended under the first link', () => {
+    const { rerender } = render(<PublicTripPage />);
+    watchOther();
+    liveList = answered(ownRow());
+    rerender(<PublicTripPage />);
+    expect(screen.getByTestId('public-watch-ended')).toBeInTheDocument();
+
+    linkToken = 'second-link';
+    rerender(<PublicTripPage />);
+
+    // A link of another cave would otherwise open on a notice naming a party of the first's.
+    expect(screen.queryByTestId('public-watch-ended')).toBeNull();
+    expect(drawn()).toEqual(['Ana']);
   });
 });
