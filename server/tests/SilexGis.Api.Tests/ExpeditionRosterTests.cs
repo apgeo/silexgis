@@ -89,29 +89,38 @@ public sealed class ExpeditionRosterTests : IAsyncLifetime, IDisposable, IClassF
     }
 
     [Fact]
-    public async Task A_stay_of_one_day_comes_back_with_no_end_and_a_longer_one_keeps_its_own()
+    public async Task A_stay_of_one_day_keeps_its_day_and_only_somebody_still_there_has_no_last_day()
     {
-        // A surface offering a range has no way to say "one day" other than by picking the same
-        // day twice, so that is accepted and stored as nothing — one day never reads as a range of
-        // itself. The pair is asserted together because a writer that dropped every end would pass
-        // a test that only looked at the single day.
+        // Inverted from the day a one-day stay was stored as no last day at all. That made one
+        // empty value mean both "one day" and "still there", and a roster is the one record here
+        // that is kept while the thing it is about is still going on. The three are asserted
+        // together because a writer that kept every end, or dropped every end, would pass a test
+        // that looked at one of them.
         var camp = await CreateCampAsync("Weekend");
         var caver = await CreateCaverAsync("Came for the day");
 
         var oneDay = await CreateResponseAsync(camp, caver, memberRoleId, "2026-07-20", "2026-07-20");
-        (await Json(oneDay)).GetProperty("toDate").ValueKind.ShouldBe(JsonValueKind.Null);
+        (await Json(oneDay)).GetProperty("toDate").GetString().ShouldBe("2026-07-20");
 
         var ranOn = await CreateResponseAsync(camp, caver, cookRoleId, "2026-07-20", "2026-07-22");
         (await Json(ranOn)).GetProperty("toDate").GetString().ShouldBe("2026-07-22");
 
         var stored = (await RosterAsync(owner, camp)).GetProperty("entries").EnumerateArray()
             .ToDictionary(x => x.GetProperty("roleId").GetInt64(), x => x.GetProperty("toDate"));
-        stored[memberRoleId].ValueKind.ShouldBe(JsonValueKind.Null);
+        stored[memberRoleId].GetString().ShouldBe("2026-07-20");
         stored[cookRoleId].GetString().ShouldBe("2026-07-22");
 
-        // A stay recorded with no end at all is the same row: nothing ran on past the first day.
+        // No last day is somebody who has not left, and is a different row from the one-day one.
         var open = await CreateResponseAsync(camp, caver, memberRoleId, "2026-07-25", null);
-        (await Json(open)).GetProperty("toDate").ValueKind.ShouldBe(JsonValueKind.Null);
+        var openBody = await Json(open);
+        openBody.GetProperty("toDate").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // And a correction moves a stay between the two: the person left the day they came.
+        var left = await owner.PutAsJsonAsync(
+            $"/api/v1/expeditions/{camp}/roster/{openBody.GetProperty("id").GetInt64()}",
+            Body(caver, memberRoleId, "2026-07-25", "2026-07-25", null));
+        left.StatusCode.ShouldBe(HttpStatusCode.OK, await left.Content.ReadAsStringAsync());
+        (await Json(left)).GetProperty("toDate").GetString().ShouldBe("2026-07-25");
     }
 
     [Fact]

@@ -36,6 +36,9 @@ export const groups = {
     // what leaves and returns with it, who may put it back, and what the rest of the
     // application does about the rows it still holds.
     'TripSoftDeleteTests', 'TripRestoreTests', 'TripSoftDeleteHousekeepingTests',
+    // One day is stored one way: folded to no end on a trip, kept as its day on a camp's
+    // roster — and the calendar, the feed and the write-ups read both.
+    'OneDaySpanTests',
   ],
   events: [
     'EventAccessDomainTests', 'EventAuthoringTests', 'EventInvitationTests',
@@ -50,6 +53,7 @@ export const groups = {
     'ExpeditionRosterEntityTests',
     'ExpeditionRosterRoleVocabularyTests', 'ExpeditionRosterTests',
     'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
+    'OneDaySpanTests',
   ],
   documents: [
     'ContentMetadataTests', 'DemoPdfTests', 'DocumentAccessApiTests',

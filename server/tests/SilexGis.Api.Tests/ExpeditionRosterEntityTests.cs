@@ -41,7 +41,7 @@ public sealed class ExpeditionRosterEntityTests : IAsyncLifetime, IDisposable, I
     }
 
     [Fact]
-    public async Task A_stay_that_ran_on_keeps_its_end_and_a_single_day_has_none()
+    public async Task A_stay_that_ran_on_keeps_its_end_and_so_does_a_single_day()
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -52,9 +52,9 @@ public sealed class ExpeditionRosterEntityTests : IAsyncLifetime, IDisposable, I
         db.Cavers.Add(caver);
 
         var fortnight = New(camp, caver, memberRoleId, new DateOnly(2026, 7, 18));
-        fortnight.ToDate = DayRange.EndForStorage(fortnight.FromDate, new DateOnly(2026, 8, 1));
+        fortnight.ToDate = DayRange.OpenEndForStorage(fortnight.FromDate, new DateOnly(2026, 8, 1));
         var oneDay = New(camp, caver, cookRoleId, new DateOnly(2026, 7, 20));
-        oneDay.ToDate = DayRange.EndForStorage(oneDay.FromDate, new DateOnly(2026, 7, 20));
+        oneDay.ToDate = DayRange.OpenEndForStorage(oneDay.FromDate, new DateOnly(2026, 7, 20));
         db.ExpeditionRoster.AddRange(fortnight, oneDay);
         await db.SaveChangesAsync();
 
@@ -62,15 +62,17 @@ public sealed class ExpeditionRosterEntityTests : IAsyncLifetime, IDisposable, I
             .Where(x => x.Id == fortnight.Id || x.Id == oneDay.Id)
             .ToDictionaryAsync(x => x.Id, x => x.ToDate);
         stored[fortnight.Id].ShouldBe(new DateOnly(2026, 8, 1));
-        stored[oneDay.Id].ShouldBeNull();
+
+        // One day is a last day equal to the first — the row that tells it from somebody who is
+        // still there, which is the only thing an absent last day says on this table.
+        stored[oneDay.Id].ShouldBe(new DateOnly(2026, 7, 20));
     }
 
     [Fact]
     public async Task A_stay_with_no_end_is_somebody_who_is_still_there()
     {
-        // An absent end is not missing data: the row says nothing ran on past the first day, so
-        // while the camp is still going it reads as somebody who has not left. The column is
-        // nullable for that reason and no writer is obliged to supply one.
+        // An absent last day is not missing data and not one day: it is somebody who has not
+        // left. The column is nullable for that reason and no writer is obliged to supply one.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
 
@@ -89,12 +91,11 @@ public sealed class ExpeditionRosterEntityTests : IAsyncLifetime, IDisposable, I
     }
 
     [Fact]
-    public async Task A_stay_ending_the_day_it_starts_is_refused_by_the_database()
+    public async Task A_stay_ending_the_day_it_starts_is_taken_by_the_database()
     {
-        // The rule that a stored end means "and they stayed on to" is what every reader of the
-        // interval is written against, so it is held where no writer can miss it. A row that got
-        // past the write path's own normalisation would otherwise make one day read as a range of
-        // itself and nothing would notice.
+        // Inverted from the day this table followed the camp's own rule, when such a row was
+        // refused. The constraint has to take it now: it is the only way one day can be stored
+        // without being read as somebody who never left.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
 
@@ -107,7 +108,10 @@ public sealed class ExpeditionRosterEntityTests : IAsyncLifetime, IDisposable, I
         var sameDay = New(camp, caver, memberRoleId, new DateOnly(2026, 7, 18));
         sameDay.ToDate = new DateOnly(2026, 7, 18);
         db.ExpeditionRoster.Add(sameDay);
-        await Should.ThrowAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        await db.SaveChangesAsync();
+
+        var stored = await db.ExpeditionRoster.AsNoTracking().FirstAsync(x => x.Id == sameDay.Id);
+        stored.ToDate.ShouldBe(stored.FromDate);
     }
 
     [Fact]

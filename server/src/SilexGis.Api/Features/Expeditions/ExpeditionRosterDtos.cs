@@ -39,9 +39,9 @@ public sealed record ExpeditionRosterEntryDto
     public required DateOnly FromDate { get; init; }
 
     /// <summary>
-    /// The last day of the stay, absent when nothing ran on past the first day. While the camp is
-    /// still going that reads as somebody who has not left; on a camp that is over it reads as the
-    /// single day it was. A reader asks one field, never two.
+    /// The last day of the stay, absent only while the person is still there. A stay of a single
+    /// day carries a last day equal to its first — unlike a camp or a trip, where one day is an
+    /// absent end, because neither of those is ever written down as still going on.
     /// </summary>
     public DateOnly? ToDate { get; init; }
 
@@ -113,10 +113,9 @@ public sealed record ExpeditionRosterEntryWriteRequest
     public DateOnly FromDate { get; init; }
 
     /// <summary>
-    /// The last day. An end equal to the first day is accepted and stored as nothing, the way the
-    /// camp's own dates are, because a surface offering a range has no way to say "one day" other
-    /// than by picking the same day twice. An end before the first day is a mistyped date and is
-    /// refused rather than quietly turned into one day.
+    /// The last day, or nothing for somebody who is still there. Stored as sent: a last day
+    /// equal to the first is a stay of one day and is kept as that, so leaving it out never means
+    /// "one day". A last day before the first is a mistyped date and is refused.
     /// </summary>
     public DateOnly? ToDate { get; init; }
 

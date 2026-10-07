@@ -818,6 +818,40 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
         failures[0].GetProperty("reason").GetString().ShouldNotBeNullOrWhiteSpace();
     }
 
+    /// <summary>
+    /// A sheet's last-day column is stored by the rule a typed trip's is: the same day as the first
+    /// is one day and is stored as no end, and a last day before the first is that row's own
+    /// refusal, with its reason, rather than a constraint failing under the whole confirmation.
+    /// </summary>
+    [Fact]
+    public async Task A_row_s_last_day_is_stored_as_a_typed_trip_s_would_be()
+    {
+        var sheet =
+            "Nr crt.,Data inceput,Data sfarsit,Titlu\r\n"
+            + $"1,05/03/2024,05/03/2024,O zi scrisa de doua ori {tag}\r\n"
+            + $"2,17/04/2024,15/04/2024,Sfarsit inaintea inceputului {tag}\r\n"
+            + $"3,20/05/2024,22/05/2024,Trei zile {tag}\r\n";
+        var fileId = await UploadAsync("days.csv", sheet);
+
+        var result = await CommitAsync(fileId, [2, 3, 4]);
+
+        result.GetProperty("createdTripCount").GetInt32().ShouldBe(2);
+        var failures = result.GetProperty("failures").EnumerateArray().ToList();
+        failures.Count.ShouldBe(1);
+        failures[0].GetProperty("line").GetInt32().ShouldBe(3);
+        failures[0].GetProperty("code").GetString().ShouldBe("trip_log.end_before_start");
+        failures[0].GetProperty("reason").GetString().ShouldNotBeNullOrWhiteSpace();
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var ends = await db.TripLogs.AsNoTracking()
+            .Where(t => t.OwnerUserId == editorId && t.Title.EndsWith(tag))
+            .ToDictionaryAsync(t => t.TripDate, t => t.TripDateEnd);
+        ends.Count.ShouldBe(2);
+        ends[new DateOnly(2024, 3, 5)].ShouldBeNull();
+        ends[new DateOnly(2024, 5, 20)].ShouldBe(new DateOnly(2024, 5, 22));
+    }
+
     [Fact]
     public async Task A_confirmation_in_which_nothing_lands_is_refused_with_its_own_code()
     {

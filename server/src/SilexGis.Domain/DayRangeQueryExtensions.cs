@@ -30,6 +30,12 @@ namespace SilexGis.Domain;
 /// A caller that resolves its own default for a bound passes the resolved day, which is never
 /// absent and is therefore always applied.
 /// </para>
+/// <para>
+/// For spans stored by <see cref="DayRange.EndForStorage"/> only. A span that can be recorded
+/// while it is still going on — a stay at a camp — stores no end to mean "has not ended", and
+/// reading that as one day here would drop somebody who is still there out of every window
+/// after the day they arrived.
+/// </para>
 /// </remarks>
 public static class DayRangeQueryExtensions
 {

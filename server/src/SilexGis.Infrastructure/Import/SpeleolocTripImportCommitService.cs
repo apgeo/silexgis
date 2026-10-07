@@ -387,7 +387,12 @@ public sealed class SpeleolocTripImportCommitService(
         {
             Title = title,
             TripDate = DateOnly.FromDateTime(recording.StartedAt.UtcDateTime),
-            TripDateEnd = recording.EndedAt is { } ended
+            // A recording that says it ended before it began is a device clock, not a date
+            // anybody typed, and nobody can correct it inside an archive: its end is left out
+            // and the trip is the day it started. Sent on as written, the trip write would
+            // refuse the range and the whole recording with it, for a fault that has nothing to
+            // do with what was recorded.
+            TripDateEnd = recording.EndedAt is { } ended && ended >= recording.StartedAt
                 ? DateOnly.FromDateTime(ended.UtcDateTime)
                 : null,
             Description = Trimmed(recording.Description),
