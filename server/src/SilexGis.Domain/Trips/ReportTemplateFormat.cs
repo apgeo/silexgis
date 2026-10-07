@@ -41,6 +41,12 @@ public enum ReportTemplateDirective
 
     /// <summary>Who was at a camp in each role, one line per role.</summary>
     Teams = 11,
+
+    /// <summary>
+    /// What each trip a camp gathered wrote about itself: its account, its results and the
+    /// answers on its form.
+    /// </summary>
+    Accounts = 12,
 }
 
 /// <summary>
@@ -269,6 +275,7 @@ public static class ReportTemplateFormat
                 case ReportTemplateDirective.Trips:
                 case ReportTemplateDirective.Days:
                 case ReportTemplateDirective.Teams:
+                case ReportTemplateDirective.Accounts:
                     if (rest.Length > 0)
                     {
                         errors.Add($"Line {number}: '{word}' stands on its own and takes nothing after it.");
@@ -387,7 +394,10 @@ public static class ReportTemplateFormat
     /// {title}' has learned it for both. What differs is only what a camp has and a trip has not:
     /// the trips it gathered, the shape of its days, and who was there in which role. 'section' is
     /// absent because a camp fills in no form, so a layout naming one is a mistake worth saying out
-    /// loud rather than a line that quietly prints nothing.
+    /// loud rather than a line that quietly prints nothing. The forms its trips filled in are
+    /// reached through 'accounts' instead, which prints each trip's own words trip by trip: a
+    /// camp's layout cannot name one answer of one trip, because it does not know which trips
+    /// its reader will be given.
     /// </remarks>
     private static readonly Dictionary<string, ReportTemplateDirective> ExpeditionDirectives =
         new(StringComparer.Ordinal)
@@ -403,6 +413,7 @@ public static class ReportTemplateFormat
             ["trips"] = ReportTemplateDirective.Trips,
             ["days"] = ReportTemplateDirective.Days,
             ["teams"] = ReportTemplateDirective.Teams,
+            ["accounts"] = ReportTemplateDirective.Accounts,
         };
 
     /// <summary>
@@ -503,6 +514,8 @@ public static class ReportTemplateFormat
     /// the same reason the trip's does. What it is not is a trip layout with a few words changed:
     /// a fortnight is read day by day and team by team, and a document that simply concatenated
     /// twenty write-ups would be the thing this whole feature exists to stop somebody producing.
+    /// What each trip wrote about itself comes after that shape, as one part among the others,
+    /// and a club that does not want it takes one line out.
     /// </remarks>
     public static string ExpeditionDefault { get; } = string.Join(
         "\n",
@@ -520,6 +533,8 @@ public static class ReportTemplateFormat
         "#   trips                   the trips gathered into the camp, one line each",
         "#   days                    what ran on each day of the camp, day by day",
         "#   teams                   who was there in each role",
+        "#   accounts                what each of those trips wrote about itself: its account, its",
+        "#                           results and the answers on its form, trip by trip",
         "#   roster                  everybody recorded as having been there, one line each",
         "#   photographs             the pictures filed against the camp's trips",
         "#",
@@ -531,7 +546,9 @@ public static class ReportTemplateFormat
         "# A line whose braces all come back empty is left out. Every total is the sum of what the",
         "# person producing the document may read — a trip they may not open contributes nothing to",
         "# it, and the document says so where it matters, so two people producing the same write-up",
-        "# and getting different figures is expected rather than a fault in either of them.",
+        "# and getting different figures is expected rather than a fault in either of them. The",
+        "# same holds for what the trips wrote: each trip's words are the ones the person producing",
+        "# the document would read on that trip's own write-up, no more and no fewer.",
         "",
         "title: {title}",
         "note: {dates} · {club}",
@@ -559,6 +576,9 @@ public static class ReportTemplateFormat
         "",
         "heading: The trips",
         "trips",
+        "",
+        "heading: What each trip wrote",
+        "accounts",
         "",
         "heading: Who was there",
         "note: {people}",

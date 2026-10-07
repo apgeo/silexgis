@@ -320,6 +320,284 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
         filed[0].ShouldStartWith($"expedition-report-{campId.ToString("N")[..8]}-");
     }
 
+    /// <summary>
+    /// A camp's write-up carries what each trip it gathered wrote about itself — its account, its
+    /// results and the answers on its form — under the trip's own heading, and says nothing under
+    /// a heading for a trip that wrote nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_camp_write_up_carries_what_each_trip_its_reader_may_open_wrote_about_itself()
+    {
+        var typeId = await CreateTripTypeAsync();
+        var campId = await CreateCampAsync(owner, Visibility.Authenticated);
+        var written = await CreateWrittenTripAsync("Sump recce", "2026-07-03", Visibility.Authenticated, body =>
+        {
+            body["tripTypeId"] = typeId;
+            body["description"] = "The sump was open after the dry week.";
+            body["results"] = "Sixty metres of new passage beyond it.";
+            body["fieldData"] = JsonSerializer.SerializeToElement(new { water_level = "Lower than in May" });
+        });
+        var silent = await CreateTripAsync(owner, "Carry day", new DateOnly(2026, 7, 4), Visibility.Authenticated);
+        await JoinAsync(owner, campId, written);
+        await JoinAsync(owner, campId, silent);
+
+        // Both callers read the trip, so both are handed its words: this is not a part of the
+        // record that answers to a narrower audience than the trip itself.
+        foreach (var caller in new[] { owner, reader })
+        {
+            var text = await DocumentTextAsync(caller, campId);
+            text.ShouldContain("The sump was open after the dry week.");
+            text.ShouldContain("Sixty metres of new passage beyond it.");
+
+            // Under the name the form gave the question, as the trip's own write-up prints it.
+            text.ShouldContain("Water level");
+            text.ShouldContain("Lower than in May");
+
+            // A trip that wrote something is named twice — once in the list of trips, once above
+            // its own words. A trip that wrote nothing is named once: no heading with nothing
+            // under it, which on paper reads as an account somebody removed.
+            Occurrences(text, "2026-07-03 · Sump recce").ShouldBe(2);
+            Occurrences(text, "2026-07-04 · Carry day").ShouldBe(1);
+        }
+    }
+
+    /// <summary>
+    /// What a trip's own write-up withholds from a reader, the camp's write-up withholds from the
+    /// same reader — and hands to the same reader what the trip's own hands them.
+    /// </summary>
+    /// <remarks>
+    /// The account of what went wrong goes to whoever may change the trip and to nobody else. The
+    /// camp is the wider audience here, which is the dangerous direction: a rule restated for the
+    /// camp's document would be a second copy, and the day the two differed a fortnight's
+    /// write-up would print what each of its trips' own write-ups refuses to. So both documents
+    /// are produced for both callers over one fixture and compared.
+    /// </remarks>
+    [Fact]
+    public async Task A_camp_write_up_withholds_from_a_reader_what_the_trips_own_write_up_withholds()
+    {
+        const string Account = "Ana ran out of light below the third pitch; the spare was at camp.";
+        var typeId = await CreateTripTypeAsync();
+        var campId = await CreateCampAsync(owner, Visibility.Authenticated);
+        var tripId = await CreateWrittenTripAsync("Third pitch", "2026-07-03", Visibility.Authenticated, body =>
+        {
+            body["tripTypeId"] = typeId;
+            body["description"] = "Rigged to the third pitch and turned round.";
+            body["hadIncident"] = true;
+            body["safety"] = JsonSerializer.SerializeToElement(new { incident_account = Account });
+        });
+        await JoinAsync(owner, campId, tripId);
+
+        // Whoever may change the trip: both documents carry the account.
+        (await TripDocumentTextAsync(owner, tripId)).ShouldContain(Account);
+        var writersCamp = await DocumentTextAsync(owner, campId);
+        writersCamp.ShouldContain(Account);
+        writersCamp.ShouldContain("What happened");
+
+        // Whoever may only read it: neither does, and neither says a part was left out. The
+        // trip's ordinary words are still there, so this is the rule and not an empty document.
+        (await TripDocumentTextAsync(reader, tripId)).ShouldNotContain("third pitch;");
+        var readersCamp = await DocumentTextAsync(reader, campId);
+        readersCamp.ShouldContain("Rigged to the third pitch and turned round.");
+        readersCamp.ShouldNotContain("third pitch;");
+        readersCamp.ShouldNotContain("What happened");
+        readersCamp.ShouldNotContain("Safety");
+    }
+
+    /// <summary>
+    /// A trip the reader may not open leaves none of its words on their copy, and no heading
+    /// where they would have been.
+    /// </summary>
+    [Fact]
+    public async Task A_trip_the_reader_may_not_open_leaves_none_of_its_words_on_their_copy()
+    {
+        var campId = await CreateCampAsync(owner, Visibility.Authenticated);
+        var open = await CreateWrittenTripAsync("Open survey", "2026-07-03", Visibility.Authenticated, body =>
+            body["description"] = "Surveyed the stream passage to the choke.");
+        var closed = await CreateWrittenTripAsync("Private dig", "2026-07-04", Visibility.Private, body =>
+        {
+            body["description"] = "Dug the draughting hole above the bedding plane.";
+            body["results"] = "Two metres gained in the dig.";
+        });
+        await JoinAsync(owner, campId, open);
+        await JoinAsync(owner, campId, closed);
+
+        var withheld = await DocumentTextAsync(reader, campId);
+        withheld.ShouldContain("Surveyed the stream passage to the choke.");
+        withheld.ShouldNotContain("draughting hole");
+        withheld.ShouldNotContain("Two metres gained");
+        withheld.ShouldNotContain("Private dig");
+
+        var entitled = await DocumentTextAsync(owner, campId);
+        entitled.ShouldContain("Surveyed the stream passage to the choke.");
+        entitled.ShouldContain("Dug the draughting hole above the bedding plane.");
+        entitled.ShouldContain("Two metres gained in the dig.");
+    }
+
+    /// <summary>
+    /// The copy filed against the camp carries each trip's words as any account reads them — the
+    /// reading a trip's own filed write-up is built from — and never as the person filing it does.
+    /// </summary>
+    /// <remarks>
+    /// Everybody who may read the camp can open what is filed on it. The filer here may change
+    /// both trips, so their own download carries the account of what went wrong on one and the
+    /// whole of the other, which nobody else may read; a filed copy built from their reading
+    /// would put both where the camp's whole audience collects them. Both halves over one
+    /// fixture: a filed copy that had stopped carrying anything would pass the second half alone.
+    /// </remarks>
+    [Fact]
+    public async Task The_filed_copy_carries_each_trips_words_as_any_account_reads_them()
+    {
+        const string Account = "Vlad slipped on the traverse; the deviation had been left off the rig.";
+        var typeId = await CreateTripTypeAsync();
+        var campId = await CreateCampAsync(owner, Visibility.Authenticated);
+        var open = await CreateWrittenTripAsync("Traverse day", "2026-07-03", Visibility.Authenticated, body =>
+        {
+            body["tripTypeId"] = typeId;
+            body["description"] = "Crossed the traverse and rigged the far pitch.";
+            body["hadIncident"] = true;
+            body["safety"] = JsonSerializer.SerializeToElement(new { incident_account = Account });
+        });
+        var closed = await CreateWrittenTripAsync("Quiet lead", "2026-07-04", Visibility.Private, body =>
+            body["description"] = "Pushed the lead nobody has been told about yet.");
+        await JoinAsync(owner, campId, open);
+        await JoinAsync(owner, campId, closed);
+
+        var filersCopy = await DocumentTextAsync(owner, campId);
+        filersCopy.ShouldContain("Crossed the traverse and rigged the far pitch.");
+        filersCopy.ShouldContain(Account);
+        filersCopy.ShouldContain("Pushed the lead nobody has been told about yet.");
+
+        using var kept = await owner.PostAsync($"/api/v1/expeditions/{campId}/report", null);
+        kept.StatusCode.ShouldBe(HttpStatusCode.OK, await kept.Content.ReadAsStringAsync());
+
+        var filed = await FiledReportTextAsync(reader, "expedition", campId);
+        filed.ShouldContain("Crossed the traverse and rigged the far pitch.");
+        filed.ShouldNotContain("slipped on the traverse");
+        filed.ShouldNotContain("Pushed the lead");
+        filed.ShouldNotContain("Quiet lead");
+
+        // The same trip's own filed write-up, for the same words: the two filed documents are
+        // built from one reading and say the same thing about this trip.
+        using var keptTrip = await owner.PostAsync($"/api/v1/trip-logs/{open}/report", null);
+        keptTrip.StatusCode.ShouldBe(HttpStatusCode.OK, await keptTrip.Content.ReadAsStringAsync());
+        var filedTrip = await FiledReportTextAsync(reader, "tripLog", open);
+        filedTrip.ShouldContain("Crossed the traverse and rigged the far pitch.");
+        filedTrip.ShouldNotContain("slipped on the traverse");
+    }
+
+    /// <summary>
+    /// A trip that has been deleted is not in the camp's write-up: not its line, not its words.
+    /// </summary>
+    [Fact]
+    public async Task A_deleted_trip_leaves_the_camps_write_up_with_its_words()
+    {
+        var campId = await CreateCampAsync(owner, Visibility.Authenticated);
+        var kept = await CreateWrittenTripAsync("Kept survey", "2026-07-03", Visibility.Authenticated, body =>
+            body["description"] = "Closed the loop through the upper series.");
+        var gone = await CreateWrittenTripAsync("Withdrawn trip", "2026-07-04", Visibility.Authenticated, body =>
+            body["description"] = "Entered by mistake against the wrong camp.");
+        await JoinAsync(owner, campId, kept);
+        await JoinAsync(owner, campId, gone);
+
+        var before = await DocumentTextAsync(owner, campId);
+        before.ShouldContain("Entered by mistake against the wrong camp.");
+        before.ShouldContain("2 trips");
+
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{gone}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var after = await DocumentTextAsync(owner, campId);
+        after.ShouldContain("Closed the loop through the upper series.");
+        after.ShouldNotContain("Entered by mistake");
+        after.ShouldNotContain("Withdrawn trip");
+        after.ShouldContain("1 trip");
+        after.ShouldNotContain("2 trips");
+    }
+
+    private static int Occurrences(string text, string of)
+    {
+        var count = 0;
+        for (var at = text.IndexOf(of, StringComparison.Ordinal);
+            at >= 0;
+            at = text.IndexOf(of, at + of.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>The words of a trip's own write-up, as the same caller would download it.</summary>
+    private static async Task<string> TripDocumentTextAsync(HttpClient client, Guid tripId)
+    {
+        using var response = await client.GetAsync($"/api/v1/trip-logs/{tripId}/report");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        using var bytes = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var document = WordprocessingDocument.Open(bytes, false);
+        return document.MainDocumentPart!.Document!.InnerText;
+    }
+
+    /// <summary>
+    /// The words of the write-up filed against a camp or a trip, fetched the way a reader of it
+    /// reaches the file: its attachments, and the delivery address the listing hands out.
+    /// </summary>
+    private static async Task<string> FiledReportTextAsync(HttpClient client, string entityType, Guid entityId)
+    {
+        var attachments = await client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/attachments/?entityType={entityType}&entityId={entityId}");
+        var report = attachments.EnumerateArray()
+            .Single(a => a.GetProperty("role").GetString() == "report");
+
+        using var response = await client.GetAsync(
+            report.GetProperty("file").GetProperty("contentUrl").GetString());
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+
+        using var bytes = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var document = WordprocessingDocument.Open(bytes, false);
+        return document.MainDocumentPart!.Document!.InnerText;
+    }
+
+    /// <summary>A trip that wrote something about itself, shaped by the caller of this helper.</summary>
+    private async Task<Guid> CreateWrittenTripAsync(
+        string title, string date, Visibility visibility, Action<Dictionary<string, object?>> shape)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["title"] = title,
+            ["tripDate"] = date,
+            ["participants"] = Array.Empty<object>(),
+            ["visibility"] = visibility.ToString(),
+        };
+        shape(body);
+
+        using var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", body);
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// A club purpose whose form asks one thing about what was seen and one about what went wrong.
+    /// </summary>
+    private async Task<long> CreateTripTypeAsync()
+    {
+        var code = Guid.NewGuid().ToString("N")[..8];
+        using var response = await admin.PostAsJsonAsync("/api/v1/trip-types", new
+        {
+            code = $"camprep_{code}",
+            name = $"Camp report {code}",
+            description = (string?)null,
+            sortOrder = 0,
+            fieldDataSchema =
+                """{"type":"object","properties":{"water_level":{"type":"string","title":"Water level"}}}""",
+            logisticsSchema = (string?)null,
+            safetySchema =
+                """{"type":"object","properties":{"incident_account":{"type":"string","title":"What happened"}}}""",
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetInt64();
+    }
+
     /// <summary>The words of a generated camp document, as a word processor would read them.</summary>
     private static async Task<string> DocumentTextAsync(HttpClient client, Guid campId)
     {

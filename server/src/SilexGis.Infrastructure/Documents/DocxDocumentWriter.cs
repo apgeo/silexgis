@@ -37,6 +37,7 @@ public sealed class DocxDocumentWriter : IDocumentWriter
     private const string TitleHalfPoints = "32";
 
     private const string HeadingHalfPoints = "26";
+    private const string SubheadingHalfPoints = "24";
     private const string BodyHalfPoints = "22";
     private const string NoteHalfPoints = "18";
 
@@ -145,6 +146,7 @@ public sealed class DocxDocumentWriter : IDocumentWriter
         {
             DocumentBlockKind.Title => Run(text, TitleHalfPoints, bold: true, italic: false, colour: null),
             DocumentBlockKind.Heading => Run(text, HeadingHalfPoints, bold: true, italic: false, colour: null),
+            DocumentBlockKind.Subheading => Run(text, SubheadingHalfPoints, bold: true, italic: false, colour: null),
             DocumentBlockKind.Note => Run(text, NoteHalfPoints, bold: false, italic: true, colour: NoteColour),
             // A literal mark rather than a numbering definition: a bulleted list in this format is
             // a separate part of the package with its own identifiers, and a document somebody
@@ -164,6 +166,7 @@ public sealed class DocxDocumentWriter : IDocumentWriter
         {
             DocumentBlockKind.Title => (0, 240),
             DocumentBlockKind.Heading => (240, 120),
+            DocumentBlockKind.Subheading => (180, 60),
             DocumentBlockKind.Bullet => (0, 0),
             _ => (0, 120),
         };

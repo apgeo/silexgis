@@ -24,6 +24,13 @@ public enum DocumentBlockKind
 
     /// <summary>A picture, with an optional line under it.</summary>
     Picture = 6,
+
+    /// <summary>
+    /// A heading inside a part: the name of one of several like things the part goes through in
+    /// turn. It is not a part heading, so it is never taken out for having nothing under it —
+    /// whoever writes one writes it only above something.
+    /// </summary>
+    Subheading = 7,
 }
 
 /// <summary>
@@ -48,6 +55,8 @@ public sealed record DocumentBlock(
     public static DocumentBlock Title(string text) => new(DocumentBlockKind.Title, text);
 
     public static DocumentBlock Heading(string text) => new(DocumentBlockKind.Heading, text);
+
+    public static DocumentBlock Subheading(string text) => new(DocumentBlockKind.Subheading, text);
 
     public static DocumentBlock Paragraph(string text) => new(DocumentBlockKind.Paragraph, text);
 

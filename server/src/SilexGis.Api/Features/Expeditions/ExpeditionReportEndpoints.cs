@@ -210,6 +210,9 @@ internal static class ExpeditionReportEndpoints
     /// <summary>The bytes of a write-up, or the refusal the camp's own read would have given.</summary>
     private readonly record struct BuiltReport(byte[]? Bytes, string? FileName, ProblemHttpResult? Problem);
 
+    /// <summary>The field titles of a trip that has no purpose, and so no form that named any.</summary>
+    private static readonly Dictionary<TripSectionKey, IReadOnlyDictionary<string, string>> NoSectionTitles = [];
+
     /// <param name="ctx">Who is asking. Decides whether there is a document at all, and nothing else.</param>
     /// <param name="reading">
     /// Whose reading the document states. The caller's own for a download; the reading any account
@@ -259,7 +262,7 @@ internal static class ExpeditionReportEndpoints
             : ReportTemplateFormat.Parse(
                 ReportTemplateFormat.ExpeditionDefault, ReportTemplateKind.Expedition).Parts;
 
-        var trips = await TripsAsync(id, db, reading, protection, ct);
+        var trips = await TripsAsync(id, db, access, reading, protection, ct);
         var content = new ExpeditionReportContent(
             ExpeditionEndpoints.Map(camp),
             camp.CavingGroupId is { } groupId
@@ -288,6 +291,7 @@ internal static class ExpeditionReportEndpoints
     private static async Task<ExpeditionReportTrips> TripsAsync(
         Guid id,
         SilexGisDbContext db,
+        IAccessService access,
         AccessContext reading,
         FeatureProtection protection,
         CancellationToken ct)
@@ -296,22 +300,13 @@ internal static class ExpeditionReportEndpoints
             .Where(m => m.ExpeditionId == id)
             .Select(m => m.TripLogId);
 
+        // Whole rows rather than a handful of columns, because what a trip wrote about itself is
+        // decided over the trip — who may change it is a question about the row, not about a
+        // projection of it. A trip that has been deleted is not among them: the trip table hides
+        // those from every read that does not ask for them by name, and this one does not.
         var rows = await db.TripLogs.AsNoTracking()
             .VisibleTo(reading, AccessDomain.TripLogs)
             .Where(x => memberTripIds.Contains(x.Id))
-            .Select(x => new
-            {
-                x.Id,
-                x.Title,
-                x.TripDate,
-                x.TripDateEnd,
-                x.EntryTime,
-                x.ExitTime,
-                x.DepthReachedM,
-                x.LengthSurveyedM,
-                x.SurveyStations,
-                x.RopeMetres,
-            })
             .ToListAsync(ct);
         if (rows.Count == 0)
         {
@@ -319,6 +314,20 @@ internal static class ExpeditionReportEndpoints
         }
 
         var tripIds = rows.Select(x => x.Id).ToList();
+
+        // Each trip's own words, as this reading is told them. Asked of the one place that
+        // decides it for the trip's own page and its own write-up, and asked with this reading
+        // and nothing else — so a copy filed for everybody carries what a trip's own filed
+        // write-up carries, whoever pressed the button.
+        var told = await TripNarrativeReads.ForAsync(access, reading, rows, ct);
+
+        // What each purpose calls the questions on its form, so an answer is printed under the
+        // name the form that collected it gave it.
+        var typeIds = rows.Where(x => x.TripTypeId is not null).Select(x => x.TripTypeId!.Value).Distinct().ToList();
+        var sectionTitles = typeIds.Count == 0
+            ? []
+            : (await db.TripTypes.AsNoTracking().Where(t => typeIds.Contains(t.Id)).ToListAsync(ct))
+                .ToDictionary(t => t.Id, TripNarrativeComposition.SectionTitles);
 
         // People, counted distinctly per trip: a roster row is a person and a role, so somebody who
         // led and surveyed is two rows and one person, and counting rows is wrong in a way that
@@ -378,7 +387,11 @@ internal static class ExpeditionReportEndpoints
                         .Where(name => !string.IsNullOrWhiteSpace(name))
                         .Select(name => name!)
                         .Distinct(StringComparer.Ordinal),
-                ])));
+                ],
+                told[row.Id],
+                row.TripTypeId is { } typeId && sectionTitles.TryGetValue(typeId, out var titles)
+                    ? titles
+                    : NoSectionTitles)));
 
         return new ExpeditionReportTrips(trips, distinctPeople);
     }
