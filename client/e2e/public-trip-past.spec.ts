@@ -85,6 +85,29 @@ async function makeTrip(
   })) as { id: string; participants: { caverId: string; name: string }[] };
 }
 
+/**
+ * Waits until an uploaded survey has been read.
+ *
+ * The upload answers as soon as the file is stored; the survey's stations are written by a job
+ * that starts then, and the row says when it has finished. A report naming a station before that
+ * is refused as naming no station of the model — which the steps between an upload and the first
+ * such report are long enough to hide on a quiet machine, and not on a busy one. Waited on by the
+ * row's own word, so a survey that could not be read fails here, saying so.
+ */
+async function surveyRead(page: Page, token: string, modelId: string) {
+  await expect
+    .poll(
+      async () => {
+        const model = (await apiJson(page, token, 'GET', `/api/v1/survey-models/${modelId}`)) as {
+          status: string;
+        };
+        return model.status;
+      },
+      { timeout: 90_000, message: 'the uploaded survey was never read into its stations' },
+    )
+    .toBe('ready');
+}
+
 /** Points a trip's watch at a survey and moves it between states, honouring the read's etag. */
 async function setWatch(
   page: Page,
@@ -112,6 +135,11 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
   browser,
   consoleErrors: guard,
 }) => {
+  // One visit from the first press to the link's end: the page, the replay, a second link, the
+  // frame at four sizes, two refusals and a revocation — some thirteen hundred steps and close to
+  // two minutes of them on a quiet machine. The suite's default bound is two minutes, so on a
+  // busy one this flow was failed for its length, at whichever step the bound happened to fall.
+  test.setTimeout(300_000);
   // The visitor's browser is watched like the signed-in one, and this flow refuses a track on
   // purpose and then revokes the link: each is answered 404, which the browser logs.
   guard.allow(
@@ -164,6 +192,8 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
   });
   expect(laterUpload.status(), await laterUpload.text()).toBe(201);
   const laterModelId = ((await laterUpload.json()) as { id: string }).id;
+  await surveyRead(page, auth, modelId);
+  await surveyRead(page, auth, laterModelId);
 
   // ---- The earlier trip: tracked, reported, closed, published ----
   const pastTitle = `E2E the morning push ${stamp}`;
@@ -383,6 +413,82 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
     await pub.getByTestId('public-past-back').click();
     await expect(pub.getByTestId('public-past-banner')).toHaveCount(0);
 
+    // ---- A second link of the same cave, in the same tab ----
+    // Two links of one cave answer for the same past trips, so nothing but the page keeps one
+    // link's replay from standing under the other. The move between them is made inside the
+    // document — which is how the browser's Back and Forward move between two links once both
+    // are in a tab's history, and how a link on a club's own page moves — because a fresh load
+    // starts with nothing held and would pass whether or not the page forgot anything.
+    const secondShare = (await apiJson(
+      page,
+      auth,
+      'POST',
+      `/api/v1/trip-logs/${live.id}/tracking/shares`,
+    )) as { id: string; token: string };
+    expect(secondShare.token).not.toBe(liveShare.token);
+    const there = `/shared/trips/${secondShare.token}`;
+    // What the second link is asked for about the past, counted: it names no past trip, so it is
+    // asked for none.
+    const askedOfSecond: string[] = [];
+    pub.on('request', (request) => {
+      if (request.url().includes(`/public/trips/${secondShare.token}/past/`)) {
+        askedOfSecond.push(request.url());
+      }
+    });
+
+    await row.click();
+    await expect(pub.getByTestId('public-past-banner-what')).toContainText(pastTitle, {
+      timeout: 20_000,
+    });
+    await pub.evaluate((to) => {
+      window.history.pushState(null, '', to);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }, there);
+    // The second link's own party, with no replay over it and nothing of one in its address.
+    await expect(pub.getByTestId('public-trip-title')).toHaveText(liveTitle, { timeout: 30_000 });
+    await expect(pub.getByTestId('public-past-banner')).toHaveCount(0);
+    await expect(pub.getByTestId('public-trip-party')).toContainText('E2E Carmen');
+    await expect(pub.getByTestId('public-trip-party')).not.toContainText('E2E Mircea');
+    expect(new URL(pub.url()).pathname).toBe(there);
+    expect(new URL(pub.url()).searchParams.has('past')).toBe(false);
+    expect(askedOfSecond).toEqual([]);
+
+    // Back is the first link again, in the replay its own address names —
+    await pub.goBack();
+    await expect(pub.getByTestId('public-past-banner-what')).toContainText(pastTitle, {
+      timeout: 20_000,
+    });
+    await expect(pub.getByTestId('public-trip-party')).toContainText('E2E Mircea');
+    expect(new URL(pub.url()).pathname).toBe(here);
+    expect(new URL(pub.url()).searchParams.get('past')).toBe(past.id);
+    // — and Forward is the second link, still on its party now: the replay did not follow the
+    // reader across.
+    await pub.goForward();
+    await expect(pub.getByTestId('public-past-banner')).toHaveCount(0, { timeout: 20_000 });
+    await expect(pub.getByTestId('public-trip-title')).toHaveText(liveTitle);
+    await expect(pub.getByTestId('public-trip-party')).toContainText('E2E Carmen');
+    expect(new URL(pub.url()).pathname).toBe(there);
+    expect(askedOfSecond).toEqual([]);
+
+    // The rest of this visit is the first link's.
+    await pub.goBack();
+    await expect(pub.getByTestId('public-past-banner-what')).toContainText(pastTitle, {
+      timeout: 20_000,
+    });
+    // ---- Another trip of the cave, from under the strip ----
+    // Shut until pressed; opened, it holds the cave's past trips beside the replay, with the one
+    // on screen marked as playing.
+    await expect(pub.getByTestId('public-past-switch-list')).toHaveCount(0);
+    await pub.getByTestId('public-past-switch').click();
+    await expect(
+      pub.getByTestId('public-past-switch-list').getByTestId(`public-past-trip-${past.id}`),
+    ).toContainText('Playing');
+    await pub.getByTestId('public-past-switch').click();
+    await expect(pub.getByTestId('public-past-switch-list')).toHaveCount(0);
+    await pub.getByTestId('public-past-back').click();
+    await expect(pub.getByTestId('public-past-banner')).toHaveCount(0);
+    expect(new URL(pub.url()).pathname).toBe(here);
+
     // ---- The page's language, at the desk ----
     // The button at the foot of the wide layout. It changes what the page says and what the
     // document tells the browser, writes the language into the address in place of the entry it
@@ -502,19 +608,78 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
       await settledScreenshot(pub, `${process.env.PAST_SHOTS}/64-past-embed-picker.png`);
     }
     await embedRow.click();
-    await expect(pub.getByTestId('public-past-banner')).toContainText('past trip', {
-      timeout: 20_000,
-    });
+    // A frame this size has room for the whole strip: the statement that it is the past, and the
+    // trip's name under it.
+    await expect(pub.getByTestId('public-past-banner')).toContainText(
+      'You are looking at a past trip',
+      { timeout: 20_000 },
+    );
+    await expect(pub.getByTestId('public-past-banner')).toContainText(pastTitle);
     // The frame itself is marked, which costs no height in a box a club chose the size of.
     await expect(pub.getByTestId('public-trip-embed')).toHaveClass(/public-trip-embed-past/);
     if (process.env.PAST_SHOTS) {
       await settledScreenshot(pub, `${process.env.PAST_SHOTS}/62-past-embed.png`);
     }
 
-    // The frame at the width a club's article is actually read at. The drawing keeps the room the
+    // The frame as a wide desktop article holds it — the snippet's own 4:3 box in a column
+    // 1024px wide. The rail, the speed, the steps and whom to follow are on screen beside the
+    // drawing, with no sheet opened for them, and the drawing keeps well over half the box.
+    await pub.setViewportSize({ width: 1024, height: 768 });
+    await expect(pub.getByTestId('public-past-controls-open')).toHaveCount(0);
+    for (const id of [
+      'public-past-play',
+      'public-past-back',
+      'public-past-speed',
+      'public-past-report-next',
+      'public-past-follow',
+      'public-past-scrub',
+    ]) {
+      await expect(pub.getByTestId(id), id).toBeInViewport();
+    }
+    const deskRoom = await pub.evaluate(() => {
+      const tall = (id: string) =>
+        Math.round(
+          document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect().height ?? -1,
+        );
+      const strip = document.querySelector('[data-testid="public-past-bar"]');
+      return {
+        frame: tall('public-trip-embed'),
+        drawing: tall('caveview-container'),
+        strip: tall('public-past-bar'),
+        stripWhole: strip?.scrollHeight ?? -1,
+      };
+    });
+    const deskSaid = `frame ${deskRoom.frame}px: drawing ${deskRoom.drawing}px, strip ${deskRoom.strip}px showing of ${deskRoom.stripWhole}px`;
+    test.info().annotations.push({ type: 'measured', description: deskSaid });
+    expect(deskRoom.frame, deskSaid).toBe(768);
+    expect(deskRoom.drawing / deskRoom.frame, deskSaid).toBeGreaterThanOrEqual(0.5);
+    expect(deskRoom.stripWhole, deskSaid).toBeLessThanOrEqual(deskRoom.strip + 1);
+
+    // The same box in an ordinary article's column, 760px wide, is not that room: the whole strip
+    // with all it can have to say would be more than half of it. So it is the one line, with the
+    // rest of the transport a press away, and the drawing keeps most of the box.
+    await pub.setViewportSize({ width: 760, height: 570 });
+    await expect(pub.getByTestId('public-past-controls-open')).toBeInViewport();
+    await expect(pub.getByTestId('public-past-play')).toBeInViewport();
+    await expect(pub.getByTestId('public-past-banner')).toContainText('Past trip');
+    await expect(pub.getByTestId('public-past-scrub')).toBeHidden();
+    const columnRoom = await pub.evaluate(() => {
+      const tall = (id: string) =>
+        Math.round(
+          document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect().height ?? -1,
+        );
+      return { frame: tall('public-trip-embed'), drawing: tall('caveview-container') };
+    });
+    expect(columnRoom.frame).toBe(570);
+    expect(columnRoom.drawing / columnRoom.frame).toBeGreaterThanOrEqual(0.5);
+
+    // The frame at the width a club's article is actually read at on a phone: one line, a tag
+    // that says it is the past and the trip's name beside it. The drawing keeps the room the
     // snippet gave it and the strip keeps its own; nothing runs off the side.
     await pub.setViewportSize(NARROWEST);
     await expect(pub.getByTestId('public-past-banner')).toBeVisible();
+    await expect(pub.getByTestId('public-past-banner')).toContainText('Past trip');
+    await expect(pub.getByTestId('public-past-controls-open')).toBeVisible();
     const framedOverflow = await pub.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
@@ -649,6 +814,7 @@ test('a visitor watches another party of the cave on the survey of the link they
     });
     expect(uploaded.status(), await uploaded.text()).toBe(201);
     const modelId = ((await uploaded.json()) as { id: string }).id;
+    await surveyRead(page, auth, modelId);
 
     const today = new Date().toISOString().slice(0, 10);
     const report = (
