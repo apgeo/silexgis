@@ -13,13 +13,26 @@ namespace SilexGis.Api.Features.TripTracking;
 /// Field name to header, for the fields the reviewer pointed at by hand. A field left out is
 /// detected from the header row instead, under the spellings the installation ships with.
 /// </param>
+/// <param name="TimeZone">
+/// The zone the sheet's times were written in, as an IANA name ("Europe/Bucharest"), applied to
+/// every cell that states no offset of its own. Left out, such a cell is read exactly as written,
+/// as UTC. A cell that writes its offset is the instant it says under either choice.
+/// </param>
+/// <param name="Day">
+/// The day a sheet that writes only times of day was kept on. Used for a sheet with a time column
+/// and no date column, and there for the cells that write no date of their own; such a sheet is
+/// refused without it. Ignored by every other layout — a sheet that writes its dates says its own
+/// days.
+/// </param>
 public sealed record TrackingCsvImportOptionsDto(
     IReadOnlyDictionary<string, string>? Columns,
     string? Delimiter,
     string? MultiValueSeparators,
     TripCsvDateOrder? DateOrder,
     IReadOnlyList<string>? WentInWords,
-    IReadOnlyList<string>? CameOutWords);
+    IReadOnlyList<string>? CameOutWords,
+    string? TimeZone = null,
+    DateOnly? Day = null);
 
 /// <summary>A sheet to read, and how to read it.</summary>
 public sealed record TrackingCsvImportRequest(
@@ -58,7 +71,25 @@ public sealed class TrackingCsvImportOptionsDtoValidator : AbstractValidator<Tra
         RuleForEach(x => x.Columns!.Values).NotEmpty().MaximumLength(200).When(x => x.Columns is not null);
         RuleForEach(x => x.WentInWords!).NotEmpty().MaximumLength(100).When(x => x.WentInWords is not null);
         RuleForEach(x => x.CameOutWords!).NotEmpty().MaximumLength(100).When(x => x.CameOutWords is not null);
+        // A bound only. Whether the name is a zone at all is answered where the sheet is read, by
+        // the one rule that also resolves it, and refused there under a code of its own — a
+        // second description of a zone name here would be a second rule to keep in step.
+        RuleFor(x => x.TimeZone!).MaximumLength(TrackingCsvZones.MaxNameLength).When(x => x.TimeZone is not null);
+        // Bounded well inside the calendar, so that a time on that day stays an instant that can
+        // be written down whatever offset or zone it is then read in. Nothing is said here about
+        // the day being in the future: the rows are refused for that one by one, under the same
+        // rule and the same clock as a row that wrote its own date.
+        RuleFor(x => x.Day!.Value)
+            .InclusiveBetween(EarliestDay, LatestDay)
+            .OverridePropertyName(nameof(TrackingCsvImportOptionsDto.Day))
+            .When(x => x.Day is not null);
     }
+
+    /// <summary>The first day a sheet of times may be said to have been kept on.</summary>
+    public static readonly DateOnly EarliestDay = new(1900, 1, 1);
+
+    /// <summary>The last one.</summary>
+    public static readonly DateOnly LatestDay = new(2200, 12, 31);
 }
 
 public sealed class TrackingCsvImportRequestValidator : AbstractValidator<TrackingCsvImportRequest>
@@ -128,6 +159,16 @@ public sealed record TrackingCsvPreviewRowDto(
 /// <param name="ResolvedColumns">Field name to the header it was read from.</param>
 /// <param name="UnmappedColumns">Headers nothing claimed — usually a misspelling.</param>
 /// <param name="UnmatchedCavers">Written names nobody on the trip answered to, each once.</param>
+/// <param name="TimeZone">
+/// The zone the cells that state no offset were read in, by the name the caller gave for it;
+/// null when they were read exactly as written, as UTC. Every moment and every finding of this
+/// answer — what is in the future, what the log already holds — was decided on the instants this
+/// reading gave.
+/// </param>
+/// <param name="Day">
+/// The day the sheet's times were put on, where the sheet wrote times with no dates and the caller
+/// named the day; null where the rows wrote their own dates, whatever the caller sent.
+/// </param>
 public sealed record TrackingCsvPreviewDto(
     IReadOnlyList<string> Header,
     IReadOnlyDictionary<string, string> ResolvedColumns,
@@ -140,7 +181,9 @@ public sealed record TrackingCsvPreviewDto(
     IReadOnlyList<string> UnmatchedCavers,
     IReadOnlyList<TrackingCsvPreviewRowDto> Rows,
     IReadOnlyList<TrackingCsvDiagnosticDto> FileDiagnostics,
-    IReadOnlyList<TrackingCsvDiagnosticDto> Refused);
+    IReadOnlyList<TrackingCsvDiagnosticDto> Refused,
+    string? TimeZone,
+    DateOnly? Day);
 
 /// <summary>What committing a sheet did.</summary>
 public sealed record TrackingCsvCommitDto(

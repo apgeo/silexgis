@@ -81,6 +81,8 @@ const PREVIEW: Preview = {
   ],
   fileDiagnostics: [],
   refused: [],
+  timeZone: null,
+  day: null,
 };
 
 /**

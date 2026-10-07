@@ -25258,6 +25258,9 @@ export interface components {
             dateOrder: null | components["schemas"]["TripCsvDateOrder"];
             wentInWords: null | string[];
             cameOutWords: null | string[];
+            timeZone?: null | string;
+            /** Format: date */
+            day?: null | string;
         };
         TrackingCsvImportRequest: {
             text: null | string;
@@ -25281,6 +25284,9 @@ export interface components {
             rows: components["schemas"]["TrackingCsvPreviewRowDto"][];
             fileDiagnostics: components["schemas"]["TrackingCsvDiagnosticDto"][];
             refused: components["schemas"]["TrackingCsvDiagnosticDto"][];
+            timeZone: null | string;
+            /** Format: date */
+            day: null | string;
         };
         TrackingCsvPreviewRowDto: {
             /** Format: int32 */

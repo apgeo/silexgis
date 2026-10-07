@@ -31,6 +31,27 @@ public sealed record TrackingCsvOptions
     /// </remarks>
     public TripCsvDateOrder DateOrder { get; init; } = TripCsvDateOrder.DayFirst;
 
+    /// <summary>
+    /// The zone the sheet's times were written in, or null to read them exactly as written.
+    /// </summary>
+    /// <remarks>
+    /// It decides one thing only: the instant of a cell that states no offset. Null stamps such a
+    /// cell as UTC, which is how every sheet was read before a zone could be named, so a caller
+    /// that says nothing gets the reading it always got. A cell that writes its own offset is
+    /// never touched by this.
+    /// </remarks>
+    public TimeZoneInfo? Zone { get; init; }
+
+    /// <summary>
+    /// The day a sheet that writes only times of day was kept on, or null where nobody named one.
+    /// </summary>
+    /// <remarks>
+    /// Consulted only for a sheet with a time column and no date column, and there only for a cell
+    /// that writes no date of its own. It is one day for the whole sheet: the reader does not move
+    /// to the next day when the times start again from midnight, it tells the reviewer they did.
+    /// </remarks>
+    public DateOnly? Day { get; init; }
+
     /// <summary>Cell contents that mean "nothing was written here".</summary>
     public IReadOnlySet<string> SkipTokens { get; init; } =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "-", "--", "n/a", "na", "?" };

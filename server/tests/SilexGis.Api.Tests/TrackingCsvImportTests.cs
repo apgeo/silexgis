@@ -363,6 +363,389 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
         (await EventCountAsync(trip)).ShouldBe(0);
     }
 
+    /// <summary>
+    /// A sheet kept on a zone's clocks: one row in summer, one in winter, and one that wrote its
+    /// own offset. All three are entry rows, so nothing but the moment is under test.
+    /// </summary>
+    private const string ClockSheet =
+        "Data si ora,Speologi,Stare\r\n"
+        + "12.07.2026 14:05,Ion Popescu,intrare\r\n"
+        + "12.01.2026 14:05,Ion Popescu,intrare\r\n"
+        + "2026-07-12T14:05:00+01:00,Maria Pop,intrare\r\n";
+
+    [Fact]
+    public async Task A_sheet_read_in_a_named_zone_lands_apart_from_its_reading_as_written_by_that_zones_offset_on_each_date()
+    {
+        var trip = await ArmedTripAsync();
+
+        var written = await PreviewAsync(trip, ClockSheet, options: null);
+        var zoned = await PreviewAsync(trip, ClockSheet, new { timeZone = "Europe/Bucharest" });
+
+        // The answer says which reading it is: nothing for as written, the zone by name otherwise.
+        written.GetProperty("timeZone").ValueKind.ShouldBe(JsonValueKind.Null);
+        zoned.GetProperty("timeZone").GetString().ShouldBe("Europe/Bucharest");
+
+        // As written, a cell with no offset is the instant it spells, as UTC — what it always was.
+        MomentOf(written, line: 2).ShouldBe(new DateTimeOffset(2026, 7, 12, 14, 5, 0, TimeSpan.Zero));
+        MomentOf(written, line: 3).ShouldBe(new DateTimeOffset(2026, 1, 12, 14, 5, 0, TimeSpan.Zero));
+
+        // In the zone, the same cells are earlier by exactly what Bucharest was ahead of UTC on
+        // that date: three hours in July, two in January. One figure for the sheet would get one
+        // of the two wrong.
+        (MomentOf(written, line: 2) - MomentOf(zoned, line: 2)).ShouldBe(TimeSpan.FromHours(3));
+        (MomentOf(written, line: 3) - MomentOf(zoned, line: 3)).ShouldBe(TimeSpan.FromHours(2));
+
+        // The row that wrote its own offset is the same instant under either reading.
+        MomentOf(zoned, line: 4).ShouldBe(new DateTimeOffset(2026, 7, 12, 13, 5, 0, TimeSpan.Zero));
+        MomentOf(written, line: 4).ShouldBe(MomentOf(zoned, line: 4));
+
+        // And the commit writes what its preview showed, not the reading as written.
+        var commit = await CommitAsync(trip, ClockSheet, options: new { timeZone = "Europe/Bucharest" });
+        commit.GetProperty("created").GetInt32().ShouldBe(3);
+        (await StoredMomentsAsync(trip)).ShouldBe(
+        [
+            new DateTimeOffset(2026, 1, 12, 12, 5, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 7, 12, 11, 5, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 7, 12, 13, 5, 0, TimeSpan.Zero),
+        ]);
+    }
+
+    [Fact]
+    public async Task A_row_read_in_the_zone_corrects_the_report_typed_for_the_same_local_time()
+    {
+        // A coordinator in Bucharest typed that Ion went in at 14:05 by the wall clock; the page
+        // sent the instant, 11:05 UTC. Their sheet says "14:05" for the same call.
+        var (trip, cavers) = await CreateTripAsync();
+        var (model, _) = await SeedModelAsync();
+        (await ArmAsync(trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var typed = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", new
+        {
+            caverIds = new[] { cavers[0] },
+            kind = "entered",
+            recordedAt = new DateTimeOffset(2026, 9, 12, 14, 5, 0, TimeSpan.FromHours(3)),
+        });
+        typed.StatusCode.ShouldBe(HttpStatusCode.OK, await typed.Content.ReadAsStringAsync());
+        var before = await EventIdsAsync(trip);
+
+        const string sheet = "Data si ora,Speologi,Stare,Nota\r\n12.09.2026 14:05,Ion Popescu,intrare,de pe foaie\r\n";
+        var bucharest = new { timeZone = "Europe/Bucharest" };
+
+        // Read as written the row is another report, three hours after the typed one: this is the
+        // doubling the zone is there to prevent, shown on the same sheet.
+        var written = await PreviewAsync(trip, sheet, options: null);
+        written.GetProperty("creates").GetInt32().ShouldBe(1);
+        written.GetProperty("replaces").GetInt32().ShouldBe(0);
+
+        // Read in the zone it is the typed report, said again.
+        var zoned = await PreviewAsync(trip, sheet, bucharest);
+        zoned.GetProperty("creates").GetInt32().ShouldBe(0);
+        zoned.GetProperty("replaces").GetInt32().ShouldBe(1);
+        zoned.GetProperty("rows")[0].GetProperty("replaces").GetBoolean().ShouldBeTrue();
+
+        var commit = await CommitAsync(trip, sheet, replaceExisting: true, options: bucharest);
+        commit.GetProperty("created").GetInt32().ShouldBe(0);
+        commit.GetProperty("updated").GetInt32().ShouldBe(1);
+
+        // One report still, the row it was, at the instant it was — now carrying the sheet's note.
+        (await EventIdsAsync(trip)).ShouldBe(before);
+        (await StoredMomentsAsync(trip)).ShouldBe([new DateTimeOffset(2026, 9, 12, 11, 5, 0, TimeSpan.Zero)]);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TripPositionEvents.AsNoTracking().SingleAsync(e => e.TripLogId == trip))
+            .Note.ShouldBe("de pe foaie");
+    }
+
+    [Fact]
+    public async Task A_zone_this_server_does_not_know_is_refused_by_the_preview_and_by_the_commit_and_nothing_is_read_without_it()
+    {
+        var trip = await ArmedTripAsync();
+
+        // A name shaped like a zone that no zone database carries; the host's own zone under the
+        // name its files give it; and a name that is no zone name at all. Each would otherwise be
+        // read as something else — as written, or on the server's clock — without a word.
+        foreach (var name in new[] { "Mars/Olympus_Mons", "localtime", "GTB Standard Time" })
+        {
+            var body = new { text = ClockSheet, options = new { timeZone = name } };
+
+            var preview = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/csv-import/preview", body);
+            preview.StatusCode.ShouldBe(HttpStatusCode.BadRequest, name);
+            (await BodyAsync(preview)).GetProperty("code").GetString().ShouldBe("tracking_csv.zone_unknown");
+
+            var commit = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/csv-import/commit", body);
+            commit.StatusCode.ShouldBe(HttpStatusCode.BadRequest, name);
+            (await BodyAsync(commit)).GetProperty("code").GetString().ShouldBe("tracking_csv.zone_unknown");
+        }
+
+        // The bound on the name is the shared rule set's, so it too is refused by both.
+        var overlong = new { text = ClockSheet, options = new { timeZone = "Europe/" + new string('a', 64) } };
+        (await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/csv-import/preview", overlong))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/csv-import/commit", overlong))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        (await EventCountAsync(trip)).ShouldBe(0);
+
+        // The twin: the same sheet with a zone the server does know is read, and with the choice
+        // left empty it is read as written — an empty choice is the caller saying nothing.
+        (await PreviewAsync(trip, ClockSheet, new { timeZone = "UTC" }))
+            .GetProperty("timeZone").GetString().ShouldBe("UTC");
+        (await PreviewAsync(trip, ClockSheet, new { timeZone = "" }))
+            .GetProperty("timeZone").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task A_zone_named_by_the_old_spelling_of_a_respelled_place_is_read_and_answered_under_the_name_that_was_sent()
+    {
+        var trip = await ArmedTripAsync();
+
+        // What one family of browsers hands over for a machine in Ukraine or in India, whether or
+        // not this host's zone files still carry the old spelling. Read as the zone it is — three
+        // hours ahead in July, five and a half all year — and answered under the name the screen
+        // chose, which is the one it will format the rows with.
+        var kiev = await PreviewAsync(trip, ClockSheet, new { timeZone = "Europe/Kiev" });
+        kiev.GetProperty("timeZone").GetString().ShouldBe("Europe/Kiev");
+        MomentOf(kiev, line: 2).ShouldBe(new DateTimeOffset(2026, 7, 12, 11, 5, 0, TimeSpan.Zero));
+        MomentOf(kiev, line: 3).ShouldBe(new DateTimeOffset(2026, 1, 12, 12, 5, 0, TimeSpan.Zero));
+
+        var calcutta = await PreviewAsync(trip, ClockSheet, new { timeZone = "Asia/Calcutta" });
+        calcutta.GetProperty("timeZone").GetString().ShouldBe("Asia/Calcutta");
+        MomentOf(calcutta, line: 2).ShouldBe(new DateTimeOffset(2026, 7, 12, 8, 35, 0, TimeSpan.Zero));
+
+        // The new spelling is the same reading, and the commit takes the old one as the preview did.
+        var kyiv = await PreviewAsync(trip, ClockSheet, new { timeZone = "Europe/Kyiv" });
+        MomentOf(kyiv, line: 2).ShouldBe(MomentOf(kiev, line: 2));
+        (await CommitAsync(trip, ClockSheet, options: new { timeZone = "Europe/Kiev" }))
+            .GetProperty("created").GetInt32().ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task A_cell_dated_at_the_edge_of_the_calendar_costs_its_own_row_and_not_the_request()
+    {
+        var trip = await ArmedTripAsync();
+
+        // Read in a zone east of Greenwich, the first row's instant is before the first date there
+        // is; the second wrote an offset that carries it past the last. Each is a finding on its
+        // row, and the true row between them is read.
+        const string sheet =
+            "Data si ora,Speologi,Stare\r\n"
+            + "01.01.0001 00:30,Ion Popescu,intrare\r\n"
+            + "12.07.2026 14:05,Ion Popescu,intrare\r\n"
+            + "9999-12-31T23:30-05:00,Maria Pop,intrare\r\n";
+
+        var preview = await PreviewAsync(trip, sheet, new { timeZone = "Europe/Bucharest" });
+        preview.GetProperty("creates").GetInt32().ShouldBe(1);
+        MomentOf(preview, line: 3).ShouldBe(new DateTimeOffset(2026, 7, 12, 11, 5, 0, TimeSpan.Zero));
+        preview.GetProperty("refused").EnumerateArray()
+            .Select(d => (d.GetProperty("line").GetInt32(), d.GetProperty("problem").GetString()))
+            .ShouldBe([(2, "MomentUnreadable"), (4, "MomentUnreadable")]);
+
+        (await CommitAsync(trip, sheet, options: new { timeZone = "Europe/Bucharest" }))
+            .GetProperty("created").GetInt32().ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task What_is_in_the_future_and_what_is_the_same_report_twice_are_decided_on_the_instants_the_zone_gives()
+    {
+        var trip = await ArmedTripAsync();
+
+        // Two clock readings an hour either side of now, as a sheet would spell them. Zones with
+        // one offset all year, so the arithmetic holds on whatever day this runs.
+        var now = DateTimeOffset.UtcNow;
+        var ahead = now.AddHours(1).ToString("dd.MM.yyyy HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+        var behind = now.AddHours(-1).ToString("dd.MM.yyyy HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+        var aheadSheet = $"Data si ora,Speologi,Stare\r\n{ahead},Ion Popescu,intrare\r\n";
+        var behindSheet = $"Data si ora,Speologi,Stare\r\n{behind},Ion Popescu,intrare\r\n";
+
+        // A reading an hour ahead of UTC is in the future as written, and four and a half hours
+        // ago on a clock five and a half hours ahead of UTC.
+        var aheadWritten = await PreviewAsync(trip, aheadSheet, options: null);
+        aheadWritten.GetProperty("creates").GetInt32().ShouldBe(0);
+        ProblemsOf(aheadWritten.GetProperty("refused")).ShouldBe(["MomentInFuture"]);
+        var aheadZoned = await PreviewAsync(trip, aheadSheet, new { timeZone = "Asia/Kolkata" });
+        aheadZoned.GetProperty("creates").GetInt32().ShouldBe(1);
+        aheadZoned.GetProperty("refused").EnumerateArray().ShouldBeEmpty();
+
+        // The other way round: a reading an hour behind UTC is in the past as written, and four
+        // hours ahead on a clock five hours behind UTC. The commit refuses it too.
+        var behindWritten = await PreviewAsync(trip, behindSheet, options: null);
+        behindWritten.GetProperty("creates").GetInt32().ShouldBe(1);
+        var west = new { timeZone = "America/Bogota" };
+        var behindZoned = await PreviewAsync(trip, behindSheet, west);
+        behindZoned.GetProperty("creates").GetInt32().ShouldBe(0);
+        ProblemsOf(behindZoned.GetProperty("refused")).ShouldBe(["MomentInFuture"]);
+        var refusedCommit = await CommitAsync(trip, behindSheet, options: west);
+        refusedCommit.GetProperty("created").GetInt32().ShouldBe(0);
+        ProblemsOf(refusedCommit.GetProperty("refused")).ShouldBe(["MomentInFuture"]);
+        (await EventCountAsync(trip)).ShouldBe(0);
+
+        // Two rows about Ion that spell different times and are one instant once the first is
+        // read in Bucharest: 14:05 there on a July day is 11:05 UTC, which the second row says
+        // outright. As written they are two reports three hours apart; in the zone they are one,
+        // and each row is told about the other.
+        const string twice =
+            "Data si ora,Speologi,Stare\r\n"
+            + "12.07.2026 14:05,Ion Popescu,intrare\r\n"
+            + "2026-07-12T11:05:00Z,Ion Popescu,intrare\r\n";
+        var twiceWritten = await PreviewAsync(trip, twice, options: null);
+        twiceWritten.GetProperty("creates").GetInt32().ShouldBe(2);
+        twiceWritten.GetProperty("refused").EnumerateArray().ShouldBeEmpty();
+        var twiceZoned = await PreviewAsync(trip, twice, new { timeZone = "Europe/Bucharest" });
+        twiceZoned.GetProperty("creates").GetInt32().ShouldBe(1);
+        ProblemsOf(twiceZoned.GetProperty("refused")).ShouldBe(["DuplicateInFile"]);
+    }
+
+    [Fact]
+    public async Task A_sheet_that_keeps_the_date_and_the_time_in_two_columns_is_joined_and_imported()
+    {
+        var trip = await ArmedTripAsync();
+        const string sheet =
+            "Data,Ora,Speologi,Stare\r\n"
+            + "12.09.2026,08:15,\"Ion Popescu; Maria Pop\",intrare\r\n"
+            + "13.09.2026,0640,Ion Popescu,iesire\r\n"
+            + ",07:00,Maria Pop,iesire\r\n";
+
+        var preview = await PreviewAsync(trip, sheet);
+
+        preview.GetProperty("fileDiagnostics").EnumerateArray().ShouldBeEmpty();
+        preview.GetProperty("unmappedColumns").EnumerateArray().ShouldBeEmpty();
+        preview.GetProperty("resolvedColumns").EnumerateObject()
+            .Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)
+            .ShouldBe(["Cavers", "Date", "State", "Time"]);
+        // No day was named and none was needed: the sheet says its own.
+        preview.GetProperty("day").ValueKind.ShouldBe(JsonValueKind.Null);
+        preview.GetProperty("creates").GetInt32().ShouldBe(3);
+        MomentOf(preview, line: 3).ShouldBe(new DateTimeOffset(2026, 9, 13, 6, 40, 0, TimeSpan.Zero));
+        // The row that left its date blank is refused on the row; the day above is not carried down.
+        preview.GetProperty("refused").EnumerateArray()
+            .Select(d => (d.GetProperty("problem").GetString(), d.GetProperty("line").GetInt32(),
+                d.GetProperty("column").GetString()))
+            .ShouldBe([("MomentWithoutDate", 4, "Data + Ora")]);
+
+        // Joined cells meet the sheet's zone exactly as one cell does.
+        var zoned = await PreviewAsync(trip, sheet, new { timeZone = "Europe/Bucharest" });
+        MomentOf(zoned, line: 3).ShouldBe(new DateTimeOffset(2026, 9, 13, 3, 40, 0, TimeSpan.Zero));
+
+        var commit = await CommitAsync(trip, sheet);
+        commit.GetProperty("created").GetInt32().ShouldBe(3);
+        (await StoredMomentsAsync(trip)).ShouldBe(
+        [
+            new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 9, 13, 6, 40, 0, TimeSpan.Zero),
+        ]);
+    }
+
+    /// <summary>
+    /// A sheet of times with no dates that runs past midnight: Ion in at 22:10, out at 23:50, and
+    /// a row at half past midnight written on the same page.
+    /// </summary>
+    private const string NightSheet =
+        "Ora,Speologi,Stare\r\n"
+        + "22:10,Ion Popescu,intrare\r\n"
+        + "23:50,Ion Popescu,iesire\r\n"
+        + "00:30,Ion Popescu,intrare\r\n";
+
+    [Fact]
+    public async Task A_sheet_of_times_is_refused_until_its_day_is_named_and_then_lands_on_that_day()
+    {
+        var trip = await ArmedTripAsync();
+
+        // Without a day: refused once for the file, with the reason and the column, and no row is
+        // read — by the preview and by a commit sent regardless.
+        var refused = await PreviewAsync(trip, NightSheet);
+        refused.GetProperty("rowsRead").GetInt32().ShouldBe(0);
+        refused.GetProperty("creates").GetInt32().ShouldBe(0);
+        refused.GetProperty("fileDiagnostics").EnumerateArray()
+            .Select(d => (d.GetProperty("severity").GetString(), d.GetProperty("problem").GetString(),
+                d.GetProperty("column").GetString()))
+            .ShouldBe([("Error", "TimeColumnNeedsADay", "Ora")]);
+        refused.GetProperty("resolvedColumns").GetProperty("Time").GetString().ShouldBe("Ora");
+        (await CommitAsync(trip, NightSheet)).GetProperty("created").GetInt32().ShouldBe(0);
+        (await EventCountAsync(trip)).ShouldBe(0);
+
+        // With the day: every row is on it, the answer says which day was used, and the row whose
+        // time falls before one Ion already has is imported there and told — not moved to the 13th.
+        var named = new { day = "2026-09-12" };
+        var preview = await PreviewAsync(trip, NightSheet, named);
+        preview.GetProperty("fileDiagnostics").EnumerateArray().ShouldBeEmpty();
+        preview.GetProperty("day").GetString().ShouldBe("2026-09-12");
+        preview.GetProperty("creates").GetInt32().ShouldBe(3);
+        MomentOf(preview, line: 2).ShouldBe(new DateTimeOffset(2026, 9, 12, 22, 10, 0, TimeSpan.Zero));
+        MomentOf(preview, line: 4).ShouldBe(new DateTimeOffset(2026, 9, 12, 0, 30, 0, TimeSpan.Zero));
+        var told = preview.GetProperty("rows").EnumerateArray()
+            .Where(r => r.GetProperty("diagnostics").GetArrayLength() > 0)
+            .Select(r => (r.GetProperty("line").GetInt32(),
+                r.GetProperty("diagnostics")[0].GetProperty("problem").GetString(),
+                r.GetProperty("diagnostics")[0].GetProperty("severity").GetString(),
+                r.GetProperty("diagnostics")[0].GetProperty("detail").GetString()))
+            .ToList();
+        told.ShouldBe([(4, "ClockRunsBackwards", "Warning", "3")]);
+
+        // The named day's times are on the sheet's zone like any other time without an offset.
+        var zoned = await PreviewAsync(trip, NightSheet, new { day = "2026-09-12", timeZone = "Europe/Bucharest" });
+        MomentOf(zoned, line: 2).ShouldBe(new DateTimeOffset(2026, 9, 12, 19, 10, 0, TimeSpan.Zero));
+
+        var commit = await CommitAsync(trip, NightSheet, options: named);
+        commit.GetProperty("created").GetInt32().ShouldBe(3);
+        (await StoredMomentsAsync(trip)).ShouldBe(
+        [
+            new DateTimeOffset(2026, 9, 12, 0, 30, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 9, 12, 22, 10, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 9, 12, 23, 50, 0, TimeSpan.Zero),
+        ]);
+    }
+
+    [Fact]
+    public async Task A_named_day_changes_nothing_for_a_sheet_that_writes_its_own_dates_and_a_day_off_the_calendar_is_refused()
+    {
+        var trip = await ArmedTripAsync();
+
+        // The sheet every other test imports, with a day named beside it: the same answer, and
+        // the answer does not claim the day was used.
+        var plain = await PreviewAsync(trip, ClockSheet);
+        var withADay = await PreviewAsync(trip, ClockSheet, new { day = "2020-01-01" });
+        withADay.GetProperty("day").ValueKind.ShouldBe(JsonValueKind.Null);
+        foreach (var line in new[] { 2, 3, 4 })
+        {
+            MomentOf(withADay, line).ShouldBe(MomentOf(plain, line));
+        }
+
+        // A day no sheet was kept on is refused as a reading choice, by both routes alike.
+        foreach (var day in new[] { "0001-01-01", "9999-12-31" })
+        {
+            var body = new { text = NightSheet, options = new { day } };
+            (await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/csv-import/preview", body))
+                .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/csv-import/commit", body))
+                .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        }
+
+        (await EventCountAsync(trip)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task The_column_roles_published_for_a_mapping_screen_include_the_date_and_the_time_kept_apart()
+    {
+        var response = await owner.GetAsync("/api/v1/tracking-csv-import/fields");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var listed = (await BodyAsync(response)).EnumerateArray().ToList();
+        var fields = listed.ToDictionary(
+            f => f.GetProperty("field").GetString()!,
+            f => f.GetProperty("candidates").EnumerateArray().Select(c => c.GetString()!).ToList());
+
+        // Three roles for the moment, listed together and first, each under spellings of its own:
+        // a header one of them is detected under is never one another would have claimed.
+        listed.Take(3).Select(f => f.GetProperty("field").GetString())
+            .ShouldBe(["RecordedAt", "Date", "Time"]);
+        fields["Date"].ShouldBe(["data", "date"]);
+        fields["Time"].ShouldBe(["ora", "timp", "time"]);
+        fields["RecordedAt"].ShouldContain("data si ora");
+        fields["RecordedAt"].Intersect(fields["Date"].Concat(fields["Time"])).ShouldBeEmpty();
+
+        (await factory.CreateClient().GetAsync("/api/v1/tracking-csv-import/fields"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
     [Fact]
     public async Task Importing_needs_what_recording_needs()
     {
@@ -581,20 +964,44 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
 
     // ---- plumbing --------------------------------------------------------------------------
 
-    private async Task<JsonElement> PreviewAsync(Guid trip, string text)
+    private Task<JsonElement> PreviewAsync(Guid trip, string text) => PreviewAsync(trip, text, options: null);
+
+    /// <summary>A preview under reading choices; null sends none, which is how a sheet was always read.</summary>
+    private async Task<JsonElement> PreviewAsync(Guid trip, string text, object? options)
     {
         var response = await owner.PostAsJsonAsync(
-            $"/api/v1/trip-logs/{trip}/tracking/csv-import/preview", new { text });
+            $"/api/v1/trip-logs/{trip}/tracking/csv-import/preview", new { text, options });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await BodyAsync(response);
     }
 
-    private async Task<JsonElement> CommitAsync(Guid trip, string text, bool replaceExisting = false)
+    private async Task<JsonElement> CommitAsync(
+        Guid trip, string text, bool replaceExisting = false, object? options = null)
     {
         var response = await owner.PostAsJsonAsync(
-            $"/api/v1/trip-logs/{trip}/tracking/csv-import/commit", new { text, replaceExisting });
+            $"/api/v1/trip-logs/{trip}/tracking/csv-import/commit", new { text, options, replaceExisting });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await BodyAsync(response);
+    }
+
+    /// <summary>The instant the preview gives the one report read from a physical line.</summary>
+    private static DateTimeOffset MomentOf(JsonElement preview, int line) =>
+        preview.GetProperty("rows").EnumerateArray()
+            .Single(r => r.GetProperty("line").GetInt32() == line)
+            .GetProperty("recordedAt").GetDateTimeOffset();
+
+    private static List<string> ProblemsOf(JsonElement diagnostics) =>
+        [.. diagnostics.EnumerateArray().Select(d => d.GetProperty("problem").GetString()!)];
+
+    private async Task<List<DateTimeOffset>> StoredMomentsAsync(Guid trip)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.TripPositionEvents.AsNoTracking()
+            .Where(e => e.TripLogId == trip)
+            .OrderBy(e => e.RecordedAt)
+            .Select(e => e.RecordedAt)
+            .ToListAsync();
     }
 
     private static async Task<JsonElement> BodyAsync(HttpResponseMessage response) =>

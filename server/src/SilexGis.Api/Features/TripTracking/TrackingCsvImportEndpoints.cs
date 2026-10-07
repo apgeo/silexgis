@@ -120,7 +120,7 @@ public static class TrackingCsvImportEndpoints
         var loaded = await LoadAsync(tripLogId, db, access, protection, accessAccessor, ct);
         if (loaded.Refusal is { } refusal) return refusal;
 
-        var (options, mapping) = Read(request.Options);
+        if (Read(request.Options, out var options, out var mapping) is { } unreadable) return unreadable;
         var parsed = TrackingCsvParser.Parse(request.Text, options, mapping);
         var plan = TrackingCsvPlanner.Plan(parsed.Rows, loaded.Subject!);
 
@@ -136,7 +136,9 @@ public static class TrackingCsvImportEndpoints
             plan.UnmatchedCavers,
             [.. plan.Reports.Select(Row)],
             [.. parsed.FileDiagnostics.Select(Diagnostic)],
-            [.. plan.Refused.Select(Diagnostic)]));
+            [.. plan.Refused.Select(Diagnostic)],
+            ZoneAsAsked(request.Options?.TimeZone, options.Zone),
+            parsed.NamedDay));
     }
 
     // ---- commit -------------------------------------------------------------------------
@@ -158,7 +160,7 @@ public static class TrackingCsvImportEndpoints
                 "A report lands on a watch that is armed or has been closed — arm the watch first.");
         }
 
-        var (options, mapping) = Read(request.Options);
+        if (Read(request.Options, out var options, out var mapping) is { } unreadable) return unreadable;
         var parsed = TrackingCsvParser.Parse(request.Text, options, mapping);
         var plan = TrackingCsvPlanner.Plan(parsed.Rows, loaded.Subject!);
 
@@ -370,22 +372,68 @@ public static class TrackingCsvImportEndpoints
 
     // ---- request and answer shapes ------------------------------------------------------
 
+    /// <summary>What a sheet is refused with when the zone it names is not one this server can read it in.</summary>
+    public const string ZoneUnknownCode = "tracking_csv.zone_unknown";
+
     /// <summary>
-    /// The caller's choices as the reader wants them.
+    /// The caller's choices as the reader wants them, or the refusal where one of them cannot be
+    /// honoured.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A field the caller did not name is left out of the mapping rather than given an empty
     /// header: the parser treats a named field as "look for exactly this and say so if it is
     /// missing", so naming a field with nothing would report every column as absent.
+    /// </para>
+    /// <para>
+    /// <b>A zone this server does not know refuses the whole request, here, for the preview and
+    /// the commit alike.</b> It cannot be dropped the way a malformed delimiter is: reading the
+    /// sheet without it moves every time by the zone's offset, so a commit that fell back would
+    /// write instants its preview never showed. And it cannot be a finding on a row, because it is
+    /// not about any row. An empty name is the caller saying nothing, as with every other choice
+    /// here.
+    /// </para>
     /// </remarks>
-    private static (TrackingCsvOptions Options, TrackingCsvColumnMapping Mapping) Read(
-        TrackingCsvImportOptionsDto? dto)
+    /// <summary>
+    /// The zone a sheet was read in, under the name the caller chose it by.
+    /// </summary>
+    /// <remarks>
+    /// The caller's spelling and not the zone's own, because the two differ for a place the zone
+    /// database has respelled, and the screen that sent "Europe/Kiev" formats times and words its
+    /// summary with the name it gets back: a browser old enough to offer only the old spelling may
+    /// not know the new one. UTC is the exception only in its letter case.
+    /// </remarks>
+    private static string? ZoneAsAsked(string? asked, TimeZoneInfo? zone) =>
+        zone is null ? null
+        : ReferenceEquals(zone, TimeZoneInfo.Utc) || asked is null ? zone.Id
+        : asked;
+
+    private static ProblemHttpResult? Read(
+        TrackingCsvImportOptionsDto? dto,
+        out TrackingCsvOptions options,
+        out TrackingCsvColumnMapping mapping)
     {
-        var options = TrackingCsvOptions.Default;
-        var mapping = TrackingCsvColumnMapping.Auto;
+        options = TrackingCsvOptions.Default;
+        mapping = TrackingCsvColumnMapping.Auto;
         if (dto is null)
         {
-            return (options, mapping);
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.TimeZone))
+        {
+            if (!TrackingCsvZones.TryFind(dto.TimeZone, out var zone))
+            {
+                return ApiProblems.BadRequest(ZoneUnknownCode,
+                    "The time zone must be an IANA zone name this server knows, such as 'Europe/Bucharest' or 'UTC'.");
+            }
+
+            options = options with { Zone = zone };
+        }
+
+        if (dto.Day is { } day)
+        {
+            options = options with { Day = day };
         }
 
         if (dto.Delimiter is { Length: 1 } delimiter)
@@ -428,7 +476,7 @@ public static class TrackingCsvImportEndpoints
             }
         }
 
-        return (options, mapping);
+        return null;
     }
 
     private static TrackingCsvPreviewRowDto Row(TrackingCsvPlannedReport report) =>

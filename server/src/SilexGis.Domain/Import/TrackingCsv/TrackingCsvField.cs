@@ -17,8 +17,29 @@ namespace SilexGis.Domain.Import.TrackingCsv;
 /// </remarks>
 public enum TrackingCsvField
 {
-    /// <summary>When the report was made, as the reporter gave it. Date and time.</summary>
+    /// <summary>When the report was made, as the reporter gave it. Date and time in one column.</summary>
     RecordedAt,
+
+    /// <summary>
+    /// The day the report was made, in a sheet that keeps the time of day in a column of its own.
+    /// </summary>
+    /// <remarks>
+    /// Joined with <see cref="Time"/> into the one moment a row has, and read by the same reader as
+    /// a column carrying both — a sheet laid out in two columns gets the same answers about day
+    /// order, offsets and zones as one laid out in one. Where a sheet also has a column carrying
+    /// both, that column is the moment and this one is left unread.
+    /// </remarks>
+    Date,
+
+    /// <summary>
+    /// The time of day the report was made, in a sheet that keeps the date apart or writes none.
+    /// </summary>
+    /// <remarks>
+    /// Beside a <see cref="Date"/> column it is the second half of the moment. Alone, it places
+    /// nothing in time by itself: the importer names the one day the sheet was kept on, and a sheet
+    /// that needs a day nobody named is refused rather than filed under a guessed one.
+    /// </remarks>
+    Time,
 
     /// <summary>
     /// The depth the reporter gave, in metres. Turned into a station by the trip's own datum and

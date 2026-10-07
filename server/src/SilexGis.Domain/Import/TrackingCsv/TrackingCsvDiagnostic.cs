@@ -36,17 +36,38 @@ public enum TrackingCsvProblem
     CaverColumnMissing,
 
     /// <summary>
-    /// The date and the time of day are in two columns. The moment is read from one column that
-    /// carries both, so the sheet is refused as a whole and told which two columns to join —
-    /// rather than every row being refused for a time that sits one column over.
+    /// The sheet writes its times in a column of their own and no dates anywhere, and nobody named
+    /// the day it was kept on. Refused once for the file, naming the time column, because the
+    /// repair is one answer for the whole sheet and not something to be told on every row.
     /// </summary>
-    MomentSplitAcrossColumns,
+    TimeColumnNeedsADay,
 
     /// <summary>Something is written in the moment cell and it is not a moment.</summary>
     MomentUnreadable,
 
     /// <summary>The moment cell carries a date and no time, which cannot place a report.</summary>
     MomentWithoutTime,
+
+    /// <summary>
+    /// The row writes a time and no date, in a sheet that has a place for the date. Refused on the
+    /// row: the day is not carried down from the row above, because a blank that meant "as above"
+    /// and a blank that was simply forgotten look the same.
+    /// </summary>
+    MomentWithoutDate,
+
+    /// <summary>
+    /// The moment cell names a date and time the sheet's zone never showed, because the clocks
+    /// were put forward over it. Refused on the row: there is no instant to file it under, and
+    /// the cell is either mistyped or was not kept on that zone's clocks.
+    /// </summary>
+    MomentSkippedByClockChange,
+
+    /// <summary>
+    /// The moment cell names a date and time the sheet's zone showed twice, because the clocks
+    /// were put back over it. Imported as the first of the two, and said out loud so the reviewer
+    /// can settle it by writing the offset in the cell.
+    /// </summary>
+    MomentRepeatedByClockChange,
 
     /// <summary>The row names nobody.</summary>
     NoCavers,
@@ -101,6 +122,14 @@ public enum TrackingCsvProblem
 
     /// <summary>A report cannot be about the future, whatever the sheet says.</summary>
     MomentInFuture,
+
+    /// <summary>
+    /// In a sheet read onto one named day, this row's time is earlier than the latest time on the
+    /// rows above it, whoever those rows are about — the sign of a sheet that ran past midnight.
+    /// Imported on the named day and said out loud, because the next day is a guess the importer
+    /// does not make: the reviewer leaves the row out, or gives the sheet a date column.
+    /// </summary>
+    ClockRunsBackwards,
 
     /// <summary>The log already holds this report and the reviewer did not allow overwriting.</summary>
     AlreadyRecorded,

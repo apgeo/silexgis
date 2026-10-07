@@ -19,16 +19,45 @@ public enum TrackingCsvMomentKind
 
     /// <summary>A date was read and no time with it, which for a tracking report is not enough.</summary>
     DateWithoutTime,
+
+    /// <summary>
+    /// A time of day was read and no date with it, and nobody named the day it was on. Told apart
+    /// from <see cref="Unreadable"/> because what is wrong is not the cell: it is a perfectly good
+    /// time, and the missing half is a date.
+    /// </summary>
+    TimeWithoutDate,
+
+    /// <summary>
+    /// A date and a time were read, and in the zone the sheet was kept in no clock ever showed
+    /// them: the clocks were put forward over that hour. There is no instant to file it under.
+    /// </summary>
+    SkippedByClockChange,
 }
 
 /// <summary>What one cell of a moment column turned out to be.</summary>
-public readonly record struct TrackingCsvMoment(TrackingCsvMomentKind Kind, DateTimeOffset At)
+/// <param name="RepeatedByClockChange">
+/// Read, but the sheet's zone showed that date and time twice — the clocks were put back over it —
+/// and <paramref name="At"/> is the first of the two. Only ever set beside
+/// <see cref="TrackingCsvMomentKind.Read"/>, so "was it read" stays one question with one answer.
+/// </param>
+/// <param name="OnNamedDay">
+/// Read, from a cell that wrote a time and no date, onto the day the importer named for the sheet.
+/// The date of such a moment is the importer's word and not the sheet's, which is what a caller
+/// checking whether the sheet ran past midnight has to know.
+/// </param>
+public readonly record struct TrackingCsvMoment(
+    TrackingCsvMomentKind Kind, DateTimeOffset At, bool RepeatedByClockChange = false, bool OnNamedDay = false)
 {
     public static TrackingCsvMoment Empty { get; } = new(TrackingCsvMomentKind.Empty, default);
 
     public static TrackingCsvMoment Unreadable { get; } = new(TrackingCsvMomentKind.Unreadable, default);
 
     public static TrackingCsvMoment DateWithoutTime { get; } = new(TrackingCsvMomentKind.DateWithoutTime, default);
+
+    public static TrackingCsvMoment TimeWithoutDate { get; } = new(TrackingCsvMomentKind.TimeWithoutDate, default);
+
+    public static TrackingCsvMoment SkippedByClockChange { get; } =
+        new(TrackingCsvMomentKind.SkippedByClockChange, default);
 }
 
 /// <summary>
@@ -54,12 +83,23 @@ public readonly record struct TrackingCsvMoment(TrackingCsvMomentKind Kind, Date
 /// way round.
 /// </para>
 /// <para>
-/// <b>Read as the instant it says, with no zone invented.</b> A club writes local wall-clock time
-/// and says nothing about offset. Treating that as UTC is a lie of up to three hours; inventing
-/// the server's zone is a lie that changes when the server moves. So the cell is read as an
-/// unspecified instant and stamped as UTC, and the importer says plainly that a sheet's times are
-/// taken at face value — which is the only reading that is stable, reversible, and the same on
-/// every installation.
+/// <b>Whose clock a time is on is said by the importer, never supplied by the server.</b> A club
+/// writes the time on its own wall and says nothing about offset. Inventing the server's zone for
+/// it is a lie that changes when the server moves, so that is never done. A cell that states its
+/// offset is the instant it says, whatever else was chosen. A cell that states none is read in the
+/// zone the importer named for the sheet, at the offset that zone kept on that date
+/// (<see cref="TrackingCsvZones.Resolve"/> holds the two hours a year where that is not one
+/// answer). Where the importer named no zone the cell is stamped as it stands, as UTC: wrong by
+/// the club's offset for a sheet kept on local time, but stable, reversible, the same on every
+/// installation — and said plainly on the screen, which is where the choice of a zone is offered.
+/// </para>
+/// <para>
+/// <b>A day is never invented either.</b> A cell that writes a time and no date is a moment only
+/// when the importer has named the day the sheet was kept on; then it is that day's time, read
+/// under the same offset and zone rules as any other. Otherwise it is reported as a time without a
+/// date. No day is carried down from the row above and none is rolled forward past midnight: both
+/// are guesses, and a guessed day files a report twenty-four hours from where it happened with
+/// nothing on the screen to show it.
 /// </para>
 /// </remarks>
 public static class TrackingCsvMoments
@@ -75,7 +115,17 @@ public static class TrackingCsvMoments
     /// <summary>
     /// The moment a cell names.
     /// </summary>
-    public static TrackingCsvMoment Read(string? text, TripCsvDateOrder order)
+    /// <param name="zone">
+    /// The zone the sheet's times were written in, applied to a cell that states no offset of its
+    /// own; null to stamp such a cell as it stands, as UTC.
+    /// </param>
+    /// <param name="day">
+    /// The day a cell that writes only a time of day is on, where the importer named one; null
+    /// where nobody did, and such a cell is then a time without a date. A cell that writes its own
+    /// date is on the date it wrote, whatever is given here.
+    /// </param>
+    public static TrackingCsvMoment Read(
+        string? text, TripCsvDateOrder order, TimeZoneInfo? zone, DateOnly? day = null)
     {
         var tidy = TripCsvValues.Tidy(text);
         if (tidy.Length == 0 || !TripCsvValues.CarriesMeaning(tidy))
@@ -91,20 +141,50 @@ public static class TrackingCsvMoments
         // the file's decided order, and only an offset the cell actually wrote is applied.
         var (datePart, timePart, offsetPart) = Divide(tidy);
 
-        var date = TripCsvDates.Read(datePart);
-        if (date.Kind == TripCsvDateKind.Unreadable || date.Kind == TripCsvDateKind.Empty)
+        // A time and nothing else. Four bare digits count as one only where a day was named —
+        // that is, in a column the sheet itself heads as a time. Anywhere else four digits are a
+        // year, and "2026" in a moment column goes on being a date with no time.
+        var onNamedDay = false;
+        DateOnly onDay;
+        if (datePart.Length == 0 && timePart.Length > 0)
         {
-            return TrackingCsvMoment.Unreadable;
-        }
+            if (day is not { } named)
+            {
+                // Said to be a time without a date only where it is a time: a cell that merely
+                // has a colon in it is as unreadable as it ever was.
+                return TimeOnly.TryParseExact(timePart, TimeFormats, CultureInfo.InvariantCulture,
+                        DateTimeStyles.AllowWhiteSpaces, out _)
+                    && TryReadOffset(offsetPart, out _)
+                    ? TrackingCsvMoment.TimeWithoutDate
+                    : TrackingCsvMoment.Unreadable;
+            }
 
-        if (!TripCsvDates.TryResolve(date, order, out var day, out _))
-        {
-            return TrackingCsvMoment.Unreadable;
+            onDay = named;
+            onNamedDay = true;
         }
-
-        if (timePart.Length == 0)
+        else if (day is { } namedDay && timePart.Length == 0 && IsBareClock(tidy))
         {
-            return TrackingCsvMoment.DateWithoutTime;
+            onDay = namedDay;
+            onNamedDay = true;
+            timePart = tidy;
+        }
+        else
+        {
+            var date = TripCsvDates.Read(datePart);
+            if (date.Kind == TripCsvDateKind.Unreadable || date.Kind == TripCsvDateKind.Empty)
+            {
+                return TrackingCsvMoment.Unreadable;
+            }
+
+            if (!TripCsvDates.TryResolve(date, order, out onDay, out _))
+            {
+                return TrackingCsvMoment.Unreadable;
+            }
+
+            if (timePart.Length == 0)
+            {
+                return TrackingCsvMoment.DateWithoutTime;
+            }
         }
 
         if (!TimeOnly.TryParseExact(timePart, TimeFormats, CultureInfo.InvariantCulture,
@@ -115,16 +195,58 @@ public static class TrackingCsvMoments
 
         // An instant that states its own offset, which is what an export or a device writes, is
         // taken as given and converted — it is the one case where the cell says what zone it
-        // means. A cell that states none is stamped as it stands, without shifting.
+        // means, and the zone chosen for the sheet has no say over it. That includes a cell that
+        // writes Z: it has stated an offset of nothing, which is not the same as stating none.
         if (!TryReadOffset(offsetPart, out var offset))
         {
             return TrackingCsvMoment.Unreadable;
         }
 
-        return new TrackingCsvMoment(
-            TrackingCsvMomentKind.Read,
-            new DateTimeOffset(day.ToDateTime(time), offset).ToUniversalTime());
+        if (offsetPart.Length > 0 || zone is null)
+        {
+            // Either the cell's own offset, or no offset and no zone: stamped as it stands. A
+            // cell on the first or last day of the calendar whose offset carries the instant off
+            // it is not a moment anybody can file, and is refused like any other cell that is not
+            // one.
+            return TrackingCsvZones.TryInstant(onDay.ToDateTime(time), offset, out var stamped)
+                ? new TrackingCsvMoment(TrackingCsvMomentKind.Read, stamped, OnNamedDay: onNamedDay)
+                : TrackingCsvMoment.Unreadable;
+        }
+
+        var onTheWall = TrackingCsvZones.Resolve(onDay.ToDateTime(time), zone);
+        return onTheWall.Kind switch
+        {
+            TrackingCsvWallClockKind.Never => TrackingCsvMoment.SkippedByClockChange,
+            TrackingCsvWallClockKind.OffTheCalendar => TrackingCsvMoment.Unreadable,
+            TrackingCsvWallClockKind.Twice => new TrackingCsvMoment(
+                TrackingCsvMomentKind.Read, onTheWall.At, RepeatedByClockChange: true, OnNamedDay: onNamedDay),
+            _ => new TrackingCsvMoment(TrackingCsvMomentKind.Read, onTheWall.At, OnNamedDay: onNamedDay),
+        };
     }
+
+    /// <summary>
+    /// Whether a cell of a time column writes a time of day and no date — the cell that needs a
+    /// day from somewhere else before it is a moment.
+    /// </summary>
+    /// <remarks>
+    /// Asked of a column the sheet heads as a time, so four bare digits are "0815" here and not a
+    /// year. A cell that carries its own date beside the time answers no: it already is a moment,
+    /// whatever its column is called.
+    /// </remarks>
+    public static bool IsTimeAlone(string? text)
+    {
+        var tidy = TripCsvValues.Tidy(text);
+        if (tidy.Length == 0 || !TripCsvValues.CarriesMeaning(tidy))
+        {
+            return false;
+        }
+
+        var (datePart, timePart, _) = Divide(tidy);
+        return (datePart.Length == 0 && timePart.Length > 0) || (timePart.Length == 0 && IsBareClock(tidy));
+    }
+
+    /// <summary>Four digits and nothing else: a time written without its colon, or a year.</summary>
+    private static bool IsBareClock(string tidy) => tidy.Length == 4 && tidy.All(char.IsAsciiDigit);
 
     /// <summary>
     /// The date half of a cell, read but not yet resolved — the evidence this row contributes to

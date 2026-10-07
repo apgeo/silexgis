@@ -64,6 +64,7 @@ public static class TrackingCsvParser
         }
 
         var columns = ResolveColumns(header, mapping, headerRecord.Line, fileDiagnostics);
+        SettleTheMoment(columns, mapping);
 
         var unmapped = header
             .Where((h, i) => !columns.ContainsValue(i) && TripCsvValues.Tidy(h).Length > 0)
@@ -76,29 +77,11 @@ public static class TrackingCsvParser
                 headerRecord.Line, column));
         }
 
-        // A date column beside a time column, which is how a hand-kept sheet often arrives and a
-        // layout this reader does not join. Read as it stands, every row would be refused for a
-        // missing time while the time sits one column over, and nothing on a mapping screen can
-        // join the two. Said once for the file, naming both columns, because the repair is to the
-        // sheet's layout and not to any row.
-        if (columns.TryGetValue(TrackingCsvField.RecordedAt, out var momentColumn)
-            && TrackingCsvColumnMapping.DateOnlyHeaders.Contains(FoldedText.Of(TripCsvValues.Tidy(header[momentColumn])).Value))
-        {
-            var dateHeader = TripCsvValues.Tidy(header[momentColumn]);
-            var timeHeader = unmapped.FirstOrDefault(h =>
-                TrackingCsvColumnMapping.TimeOnlyHeaders.Contains(FoldedText.Of(h).Value));
-            if (timeHeader is not null)
-            {
-                fileDiagnostics.Add(new TrackingCsvDiagnostic(
-                    TrackingCsvSeverity.Error, TrackingCsvProblem.MomentSplitAcrossColumns,
-                    headerRecord.Line, dateHeader, $"{dateHeader} + {timeHeader}"));
-            }
-        }
-
-        // Two columns without which no row means anything. Refused for the file rather than row by
+        // Two things without which no row means anything. Refused for the file rather than row by
         // row: a sheet whose moment column was misnamed would otherwise report the same error a
         // thousand times and bury the one thing the reviewer has to fix.
-        if (!columns.ContainsKey(TrackingCsvField.RecordedAt))
+        var moment = MomentColumns.Of(columns, header, options.Day);
+        if (moment is null)
         {
             fileDiagnostics.Add(new TrackingCsvDiagnostic(
                 TrackingCsvSeverity.Error, TrackingCsvProblem.MomentColumnMissing, headerRecord.Line));
@@ -111,7 +94,20 @@ public static class TrackingCsvParser
         }
 
         var data = read.Records.Skip(1).ToList();
-        if (fileDiagnostics.Any(d => d.Severity == TrackingCsvSeverity.Error))
+
+        // A sheet of times with no dates anywhere and no day named for it. Said once for the file,
+        // for the reason above — the answer is one day for the whole sheet — and only where a cell
+        // actually needs it: a column headed as a time whose every cell writes its date as well is
+        // a moment column under a modest name, and is read as it always was.
+        if (moment is { Day: null, Date: null, Time: { } timeColumn }
+            && data.Any(r => TrackingCsvMoments.IsTimeAlone(Cell(r, timeColumn))))
+        {
+            fileDiagnostics.Add(new TrackingCsvDiagnostic(
+                TrackingCsvSeverity.Error, TrackingCsvProblem.TimeColumnNeedsADay,
+                headerRecord.Line, moment.Name));
+        }
+
+        if (moment is null || fileDiagnostics.Any(d => d.Severity == TrackingCsvSeverity.Error))
         {
             return new TrackingCsvParseResult
             {
@@ -123,11 +119,11 @@ public static class TrackingCsvParser
             };
         }
 
-        // The whole moment column first, so day-first or month-first is answered once. A single
-        // cell cannot answer it — 5/11 is a real date either way — and a reader that guessed per
-        // row would let one unusual row import a different day from its neighbours.
-        var momentIndex = columns[TrackingCsvField.RecordedAt];
-        var readings = data.Select(r => TrackingCsvMoments.DatePartOf(Cell(r, momentIndex))).ToList();
+        // The whole of the column that carries the dates first, so day-first or month-first is
+        // answered once. A single cell cannot answer it — 5/11 is a real date either way — and a
+        // reader that guessed per row would let one unusual row import a different day from its
+        // neighbours.
+        var readings = data.Select(r => TrackingCsvMoments.DatePartOf(Cell(r, moment.DatesIn))).ToList();
         var (order, orderSource) = TripCsvDates.DecideOrder(readings, options.DateOrder);
         if (orderSource == TripCsvDateOrderSource.Conflict)
         {
@@ -139,7 +135,7 @@ public static class TrackingCsvParser
         var rows = new List<TrackingCsvRow>(data.Count);
         foreach (var record in data)
         {
-            var row = ReadRow(record, header, columns, options, order);
+            var row = ReadRow(record, header, columns, moment, options, order);
             if (row is not null)
             {
                 rows.Add(row);
@@ -155,7 +151,103 @@ public static class TrackingCsvParser
             UnmappedColumns = unmapped,
             DateOrder = order,
             DateOrderSource = orderSource,
+            NamedDay = rows.Any(r => r.OnNamedDay) ? options.Day : null,
         };
+    }
+
+    /// <summary>
+    /// Leaves a sheet with one way of saying when a row happened, where its header offers two.
+    /// </summary>
+    /// <remarks>
+    /// A column carrying the date and the time together is the moment, and a date or a time column
+    /// beside it is then left unclaimed — and so reported, like any other column nothing read —
+    /// rather than joined on as well: two readings of one row's moment that disagree have no
+    /// winner. The one exception is a reviewer who pointed at the date or the time column by hand
+    /// while the combined one was only detected: a choice somebody made outranks a guess.
+    /// </remarks>
+    private static void SettleTheMoment(
+        Dictionary<TrackingCsvField, int> columns, TrackingCsvColumnMapping mapping)
+    {
+        if (!columns.ContainsKey(TrackingCsvField.RecordedAt)
+            || !(columns.ContainsKey(TrackingCsvField.Date) || columns.ContainsKey(TrackingCsvField.Time)))
+        {
+            return;
+        }
+
+        var partsWereNamed = mapping.NamedHeader(TrackingCsvField.Date) is not null
+            || mapping.NamedHeader(TrackingCsvField.Time) is not null;
+        if (partsWereNamed && mapping.NamedHeader(TrackingCsvField.RecordedAt) is null)
+        {
+            columns.Remove(TrackingCsvField.RecordedAt);
+            return;
+        }
+
+        columns.Remove(TrackingCsvField.Date);
+        columns.Remove(TrackingCsvField.Time);
+    }
+
+    /// <summary>
+    /// Where a sheet keeps the moment of a row: in one column, in a date column and a time column,
+    /// or in either of those alone.
+    /// </summary>
+    /// <param name="Whole">The column carrying date and time together, when the sheet has one.</param>
+    /// <param name="Date">The date column of a sheet that keeps the two apart.</param>
+    /// <param name="Time">The time column of a sheet that keeps the two apart, or has only times.</param>
+    /// <param name="Name">The header, or the two headers, as a finding about the moment names them.</param>
+    /// <param name="Day">
+    /// The day the importer named, kept only for a sheet with times and no dates. A sheet that has
+    /// a date column says its own days, and a day named beside it is not allowed to fill its gaps.
+    /// </param>
+    private sealed record MomentColumns(int? Whole, int? Date, int? Time, string Name, DateOnly? Day)
+    {
+        public static MomentColumns? Of(
+            Dictionary<TrackingCsvField, int> columns, IReadOnlyList<string> header, DateOnly? day)
+        {
+            string Named(int index) => TripCsvValues.Tidy(header[index]);
+
+            if (columns.TryGetValue(TrackingCsvField.RecordedAt, out var whole))
+            {
+                return new MomentColumns(whole, null, null, Named(whole), null);
+            }
+
+            var hasDate = columns.TryGetValue(TrackingCsvField.Date, out var date);
+            var hasTime = columns.TryGetValue(TrackingCsvField.Time, out var time);
+            return (hasDate, hasTime) switch
+            {
+                (true, true) => new MomentColumns(null, date, time, $"{Named(date)} + {Named(time)}", null),
+                (true, false) => new MomentColumns(null, date, null, Named(date), null),
+                (false, true) => new MomentColumns(null, null, time, Named(time), day),
+                _ => null,
+            };
+        }
+
+        /// <summary>The column whose cells say how this sheet writes a date.</summary>
+        public int DatesIn => Whole ?? Date ?? Time!.Value;
+
+        /// <summary>
+        /// What a row says about when it happened, as one text the moment reader takes.
+        /// </summary>
+        /// <remarks>
+        /// The two halves of a split sheet are joined with a space and read as if they had been
+        /// written in one cell, so there is one reader and one set of rules. A half that is blank
+        /// is simply absent from the text: the reader then reports a date with no time or a time
+        /// with no date, which is exactly what the row is.
+        /// </remarks>
+        public string? TextOf(TripCsvRecord record, TrackingCsvOptions options)
+        {
+            string? Written(int? index) => index is { } at
+                ? TripCsvValues.Single(Cell(record, at), options.SkipTokens)
+                : null;
+
+            if (Whole is not null)
+            {
+                return Written(Whole);
+            }
+
+            var date = Written(Date);
+            var time = Written(Time);
+            return date is not null && time is not null ? $"{date} {time}" : date ?? time;
+        }
     }
 
     /// <summary>
@@ -224,6 +316,7 @@ public static class TrackingCsvParser
         TripCsvRecord record,
         IReadOnlyList<string> header,
         Dictionary<TrackingCsvField, int> columns,
+        MomentColumns momentColumns,
         TrackingCsvOptions options,
         TripCsvDateOrder order)
     {
@@ -251,18 +344,36 @@ public static class TrackingCsvParser
             ? TripCsvValues.Tidy(header.ElementAtOrDefault(index))
             : string.Empty;
 
-        var momentText = Text(TrackingCsvField.RecordedAt);
-        var moment = TrackingCsvMoments.Read(momentText, order);
+        var momentText = momentColumns.TextOf(record, options);
+        var moment = TrackingCsvMoments.Read(momentText, order, options.Zone, momentColumns.Day);
         DateTimeOffset? at = null;
         switch (moment.Kind)
         {
             case TrackingCsvMomentKind.Read:
                 at = moment.At;
+                if (moment.RepeatedByClockChange)
+                {
+                    // Imported, at the first of the two instants the reading names, and told to
+                    // the reviewer on the row — who is the only one who can know which was meant,
+                    // and can say so by writing the offset in the cell.
+                    diagnostics.Add(new TrackingCsvDiagnostic(
+                        TrackingCsvSeverity.Warning, TrackingCsvProblem.MomentRepeatedByClockChange,
+                        record.Line, momentColumns.Name, momentText));
+                }
+
+                break;
+            case TrackingCsvMomentKind.SkippedByClockChange:
+                // Refused rather than moved to the nearest hour that did exist: the sheet did not
+                // say that hour, and a report filed where nobody wrote it is worse than a row sent
+                // back to be corrected.
+                diagnostics.Add(new TrackingCsvDiagnostic(
+                    TrackingCsvSeverity.Error, TrackingCsvProblem.MomentSkippedByClockChange,
+                    record.Line, momentColumns.Name, momentText));
                 break;
             case TrackingCsvMomentKind.Empty:
                 diagnostics.Add(new TrackingCsvDiagnostic(
                     TrackingCsvSeverity.Error, TrackingCsvProblem.MomentMissing,
-                    record.Line, Named(TrackingCsvField.RecordedAt)));
+                    record.Line, momentColumns.Name));
                 break;
             case TrackingCsvMomentKind.DateWithoutTime:
                 // Refused rather than filed at midnight. A day's reports would collapse onto one
@@ -270,12 +381,20 @@ public static class TrackingCsvParser
                 // would overwrite each row with the next.
                 diagnostics.Add(new TrackingCsvDiagnostic(
                     TrackingCsvSeverity.Error, TrackingCsvProblem.MomentWithoutTime,
-                    record.Line, Named(TrackingCsvField.RecordedAt), momentText));
+                    record.Line, momentColumns.Name, momentText));
+                break;
+            case TrackingCsvMomentKind.TimeWithoutDate:
+                // Refused rather than put on the day of the row above or on a day named for the
+                // sheet: this sheet writes its own dates, and a blank among them is a question for
+                // whoever kept it.
+                diagnostics.Add(new TrackingCsvDiagnostic(
+                    TrackingCsvSeverity.Error, TrackingCsvProblem.MomentWithoutDate,
+                    record.Line, momentColumns.Name, momentText));
                 break;
             default:
                 diagnostics.Add(new TrackingCsvDiagnostic(
                     TrackingCsvSeverity.Error, TrackingCsvProblem.MomentUnreadable,
-                    record.Line, Named(TrackingCsvField.RecordedAt), momentText));
+                    record.Line, momentColumns.Name, momentText));
                 break;
         }
 
@@ -347,6 +466,7 @@ public static class TrackingCsvParser
         {
             Line = record.Line,
             At = at,
+            OnNamedDay = at is not null && moment.OnNamedDay,
             Cavers = cavers,
             Team = Text(TrackingCsvField.Team),
             StationName = stationName,
