@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { readFileSync } from 'node:fs';
 import { expect, type Page } from '@playwright/test';
+import { CHOICE_KEY } from '../src/i18n/languageStorage.ts';
 import { ownContext, test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
@@ -353,6 +354,94 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
     await pub.getByTestId('public-past-back').click();
     await expect(pub.getByTestId('public-past-banner')).toHaveCount(0);
     await expect(pub.getByTestId('public-trip-party')).toContainText('E2E Carmen');
+
+    // ---- The browser's own Back button ----
+    // What somebody presses on finding themselves in a trip of another day. Picking a trip is a
+    // step in the page's history, so Back undoes it and stays on the page — it used to replace
+    // the entry the reader was on, and Back then left the published trip altogether.
+    const here = `/shared/trips/${liveShare.token}`;
+    await row.click();
+    await expect(pub.getByTestId('public-past-banner-what')).toContainText(pastTitle, {
+      timeout: 20_000,
+    });
+    expect(new URL(pub.url()).searchParams.get('past')).toBe(past.id);
+    // Pressed as soon as the replay says which trip it is, while the browser is still parsing
+    // that trip's survey — the moment a reader who mis-tapped presses it, and the one in which
+    // the page once had not yet heard of its own pick and so saw nothing to go back from.
+    await pub.goBack();
+    await expect(pub.getByTestId('public-past-banner')).toHaveCount(0, { timeout: 20_000 });
+    await expect(pub.getByTestId('public-trip-party')).toContainText('E2E Carmen');
+    await expect(pub.getByTestId('public-trip-title')).toHaveText(liveTitle);
+    expect(new URL(pub.url()).pathname).toBe(here);
+    expect(new URL(pub.url()).searchParams.has('past')).toBe(false);
+    // And Forward is the pick again, read from the address like any link into the past.
+    await pub.goForward();
+    await expect(pub.getByTestId('public-past-banner-what')).toContainText(pastTitle, {
+      timeout: 20_000,
+    });
+    await pub.getByTestId('public-past-back').click();
+    await expect(pub.getByTestId('public-past-banner')).toHaveCount(0);
+
+    // ---- The page's language, at the desk ----
+    // The button at the foot of the wide layout. It changes what the page says and what the
+    // document tells the browser, writes the language into the address in place of the entry it
+    // is on, and leaves the signed-in application's own record of a language — English, in this
+    // suite's browsers — exactly as it was.
+    const appLanguage = () =>
+      pub.evaluate((key) => window.localStorage.getItem(key), CHOICE_KEY);
+    const languageButton = pub.getByTestId('public-trip-language');
+    await expect(languageButton).toHaveText('Română');
+    await languageButton.click();
+    await expect(pub.locator('html')).toHaveAttribute('lang', 'ro');
+    await expect(pub.getByTestId('public-trip-state-armed')).toHaveText('În peșteră acum');
+    expect(new URL(pub.url()).searchParams.get('lang')).toBe('ro');
+    expect(await appLanguage()).toBe('en');
+    await expect(languageButton).toHaveText('English');
+    await languageButton.click();
+    await expect(pub.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(pub.getByTestId('public-trip-state-armed')).toHaveText('Underground now');
+
+    // ---- A link that names a moment, and the buttons that write one ----
+    await anonymous.grantPermissions(['clipboard-read', 'clipboard-write']);
+    // Inside the trip's own stretch, between two of its reports, and to the second — which is
+    // how the page itself writes one.
+    const moment = new Date(Math.floor((Date.now() - 5 * 3_600_000) / 1000) * 1000)
+      .toISOString()
+      .replace('.000Z', 'Z');
+    const playButton = pub.getByTestId('public-past-play');
+    // The twin first: the same moment without the word opens standing still.
+    await pub.goto(`${here}?past=${past.id}&at=${moment}`);
+    await expect(pub.getByTestId('public-past-banner-what')).toContainText(pastTitle, {
+      timeout: 30_000,
+    });
+    await expect(playButton).toHaveAccessibleName('Play');
+    const standing = await pub.getByTestId('public-past-clock').textContent();
+    expect(standing).not.toBe('');
+    // With the word, nobody presses anything and the clock leaves the moment it opened at.
+    await pub.goto(`${here}?past=${past.id}&at=${moment}&play=1`);
+    await expect(playButton).toHaveAccessibleName('Pause', { timeout: 30_000 });
+    await expect
+      .poll(async () => pub.getByTestId('public-past-clock').textContent(), { timeout: 15_000 })
+      .not.toBe(standing);
+    await playButton.click();
+    await expect(playButton).toHaveAccessibleName('Play');
+    // The copy row at the wide layout: this moment, standing still.
+    const paused = await pub.getByTestId('public-past-clock').textContent();
+    await pub.getByTestId('public-past-copy-moment').click();
+    await expect(pub.getByTestId('public-past-copied')).toContainText('Link copied');
+    await expect(pub.getByTestId('public-past-copied')).toContainText(paused ?? 'no clock');
+    const copied = new URL(await pub.evaluate(() => navigator.clipboard.readText()));
+    expect(copied.pathname).toBe(here);
+    expect(copied.searchParams.get('past')).toBe(past.id);
+    expect(copied.searchParams.get('at')).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+    expect(copied.searchParams.has('play')).toBe(false);
+    // The address bar was given no moment by the press: only the copied link carries one.
+    expect(new URL(pub.url()).searchParams.get('at')).toBe(moment);
+    // Left as the next part expects to find it: the party now, and the cave's list open.
+    await pub.getByTestId('public-past-back').click();
+    await expect(pub.getByTestId('public-past-banner')).toHaveCount(0);
+    await expect(pub.getByTestId('public-trip-party')).toContainText('E2E Carmen');
+    await expect(row).toBeVisible({ timeout: 20_000 });
 
     // ---- Back and forth faster than a drawing loads ----
     // Every pick and every way back points the viewer at another survey file, and the one being

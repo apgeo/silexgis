@@ -275,6 +275,56 @@ test.describe('a cave’s past trips on a phone', () => {
     await expect(page.getByTestId('public-past-banner-following')).toHaveCount(0);
   });
 
+  test('a link naming a moment and saying play starts by itself, and the strip copies such a link', async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await serveCave(page);
+    await page.setViewportSize(NARROWEST);
+
+    // The twin first: the same moment without the word opens standing still, on the same clock.
+    await page.goto(`/shared/trips/${TOKEN}?past=${PAST_TRIP}&at=2019-07-06T11:00:00Z`);
+    await expect(page.getByTestId('public-past-banner-what')).toContainText(PAST_TITLE, {
+      timeout: 30_000,
+    });
+    const play = page.getByTestId('public-past-play');
+    await expect(play).toHaveAccessibleName('Play');
+    const standing = await page.getByTestId('public-past-clock').textContent();
+    expect(standing).not.toBe('');
+
+    // With the word, nobody presses anything and the clock leaves the moment it opened at.
+    await page.goto(`/shared/trips/${TOKEN}?past=${PAST_TRIP}&at=2019-07-06T11:00:00Z&play=1`);
+    await expect(play).toHaveAccessibleName('Pause', { timeout: 30_000 });
+    await expect
+      .poll(async () => page.getByTestId('public-past-clock').textContent(), { timeout: 15_000 })
+      .not.toBe(standing);
+
+    // The two buttons that write such a link, sized for the finger and inside the page's width.
+    await play.tap();
+    await expect(play).toHaveAccessibleName('Play');
+    await page.getByTestId('public-past-follow').scrollIntoViewIfNeeded();
+    await fingerSized(page.getByTestId('public-past-copy-moment'), 'copy link to this moment');
+    await fingerSized(page.getByTestId('public-past-copy-playing'), 'copy link that plays from here');
+    expect(await noSidewaysScroll(page)).toBeLessThanOrEqual(1);
+
+    const paused = await page.getByTestId('public-past-clock').textContent();
+    await page.getByTestId('public-past-copy-playing').tap();
+    await expect(page.getByTestId('public-past-copied')).toContainText('Link copied');
+    await expect(page.getByTestId('public-past-copied')).toContainText(paused ?? 'no clock');
+    const copied = new URL(await page.evaluate(() => navigator.clipboard.readText()));
+    expect(copied.pathname).toBe(`/shared/trips/${TOKEN}`);
+    expect(copied.searchParams.get('past')).toBe(PAST_TRIP);
+    expect(copied.searchParams.get('play')).toBe('1');
+    expect(copied.searchParams.get('at')).toMatch(/^2019-07-06T\d\d:\d\d:\d\dZ$/);
+    // The address bar was given no moment by the press: only the copied link carries one.
+    expect(new URL(page.url()).searchParams.get('at')).toBe('2019-07-06T11:00:00Z');
+
+    // And the link that was copied does what its button said, in a tab that never saw the strip.
+    await page.goto(copied.toString());
+    await expect(play).toHaveAccessibleName('Pause', { timeout: 30_000 });
+  });
+
   test('inside the smallest frame a club may paste, the archive opens under a tap and plays', async ({
     page,
   }) => {
