@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 import { isSettledRefusal } from '../../api/client.ts';
 import {
   useDeleteTrackingEvent,
+  useRestoreTrackingEvent,
   useTrackingDepthReadings,
   useTripMomentPictureLinks,
   useTripTracking,
@@ -44,6 +45,7 @@ import TrackingMomentPictures from '../../components/trips/TrackingMomentPicture
 import TrackingEventEditDialog from '../../components/trips/TrackingEventEditDialog.tsx';
 import TrackingPicturesDialog from '../../components/trips/TrackingPicturesDialog.tsx';
 import TrackingPublicNameDialog from '../../components/trips/TrackingPublicNameDialog.tsx';
+import TrackingRemovedReports from '../../components/trips/TrackingRemovedReports.tsx';
 import TrackingReportForm from '../../components/trips/TrackingReportForm.tsx';
 import TrackingSharePanel from '../../components/trips/TrackingSharePanel.tsx';
 import {
@@ -84,6 +86,16 @@ import './TripTrackingTab.css';
  * reading; the older ones are asked for a page at a time, by whoever wants them.
  */
 const RECENT_EVENTS = 20;
+
+/**
+ * How long, in seconds, the notice that a report has been taken off the log stays up.
+ *
+ * Longer than a notice that only reports, because this one carries the way back: somebody who
+ * pressed the bin on the wrong row has to read which row went, realise it, and reach the word
+ * Undo — on a phone, with the thumb that just pressed something else. The report is not lost when
+ * the notice goes; it is under the log with the other removed ones.
+ */
+const UNDO_NOTICE_SECONDS = 10;
 
 /**
  * Where the party is, as far as anybody above ground has been told.
@@ -186,6 +198,7 @@ export default function TripTrackingTab({
     setLogView({ ...logView, page: logLastPage });
   }
   const deleteEvent = useDeleteTrackingEvent();
+  const restoreEvent = useRestoreTrackingEvent();
   const [correcting, setCorrecting] = useState<TrackingEvent | null>(null);
   /** Whether the sheet-reading dialog is open. */
   const [importing, setImporting] = useState(false);
@@ -959,10 +972,47 @@ export default function TripTrackingTab({
   /** A confirmation is two more things to press, and they are pressed by the same finger. */
   const confirmSizes = { okButtonProps: { size: controlSize }, cancelButtonProps: { size: controlSize } };
 
+  /** Puts back a report this tab has just taken off the log — what Undo on the notice does. */
+  const onUndoDelete = async (eventId: string) => {
+    try {
+      await restoreEvent.mutateAsync({ tripLogId: trip.id, eventId });
+      message.success(t('trips.tracking.eventRestored'));
+    } catch (failure) {
+      message.error(trackingProblemMessage(failure, t));
+    }
+  };
+
+  /**
+   * Takes a report off the log, and says so with the way back in the same breath.
+   *
+   * The notice is keyed by the report, so the Undo inside it can take its own notice down the
+   * moment it is pressed — a second press on a notice still fading would otherwise be a second
+   * request for something already done.
+   */
   const onDeleteEvent = async (eventId: string) => {
     try {
       await deleteEvent.mutateAsync({ tripLogId: trip.id, eventId });
-      message.success(t('trips.tracking.eventDeleted'));
+      const key = `trip-tracking-event-deleted-${eventId}`;
+      message.success({
+        key,
+        duration: UNDO_NOTICE_SECONDS,
+        content: (
+          <span data-testid="trip-tracking-event-deleted">
+            {t('trips.tracking.eventDeleted')}
+            <Button
+              type="link"
+              size={controlSize}
+              data-testid="trip-tracking-event-undo"
+              onClick={() => {
+                message.destroy(key);
+                void onUndoDelete(eventId);
+              }}
+            >
+              {t('trips.tracking.eventDeleteUndo')}
+            </Button>
+          </span>
+        ),
+      });
     } catch (failure) {
       message.error(trackingProblemMessage(failure, t));
     }
@@ -1802,6 +1852,18 @@ export default function TripTrackingTab({
               )}
             </Flex>
           </Flex>
+        )}
+        {/* What has been taken off this log, with the way to put each one back. Under the same
+            condition as the bin on a row: the server answers this list only to those who may
+            write the log, and putting a report back is a write to it. */}
+        {rowsWritable && (
+          <TrackingRemovedReports
+            tripLogId={trip.id}
+            nameOf={named}
+            placeOf={eventPlace}
+            when={when}
+            controlSize={controlSize}
+          />
         )}
       </div>
 

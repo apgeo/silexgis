@@ -297,6 +297,11 @@ export const queryKeys = {
   // The whole log, under the same prefix so a recorded or deleted report reaches it too. Its own
   // last segment is a word rather than a narrowing, which no narrowing can collide with.
   tripTrackingEventLog: (id: string) => ['trip-logs', 'tracking-events', id, 'log'] as const,
+  // The reports taken off the log, under the same prefix again: taking one off, putting one back
+  // and destroying one each change this list and the log together, and one invalidation reaches
+  // both. The page is a second word-led segment, so no narrowing of the log can collide with it.
+  tripTrackingRemovedEvents: (id: string, page: number) =>
+    ['trip-logs', 'tracking-events', id, 'removed', page] as const,
   tripTrackingShares: (id: string) => ['trip-logs', 'tracking-shares', id] as const,
   // Every published link of the installation, for its administrators. Under the trips' prefix on
   // purpose: a status is read off a trip's watch and its links, so anything that writes a trip or
@@ -8346,6 +8351,7 @@ export type TrackingCsvPreviewRow = components['schemas']['TrackingCsvPreviewRow
 export type TrackingCsvDiagnostic = components['schemas']['TrackingCsvDiagnosticDto'];
 export type CaveDepthPlace = components['schemas']['CaveDepthPlaceDto'];
 export type TrackingEvent = components['schemas']['TrackingEventDto'];
+export type TrackingRemovedEvent = components['schemas']['TrackingRemovedEventDto'];
 export type TrackedTrip = components['schemas']['TrackedTripDto'];
 export type TrackingEventWrite = components['schemas']['TrackingEventRequest'];
 export type TrackingConfigWrite = components['schemas']['TrackingConfigRequest'];
@@ -8999,6 +9005,9 @@ export function useTrackingCsvFields() {
  * at all — somebody else's name typed, a call that turned out to be about another trip. A report
  * that happened differently is corrected rather than removed and re-entered, so that anything
  * hanging off it survives the fix.
+ *
+ * The report is kept, out of every read but the list of removed ones, and can be put back as it
+ * was; destroying it is a second act with a hook of its own.
  */
 export function useDeleteTrackingEvent() {
   const invalidate = useInvalidateTripTracking();
@@ -9007,6 +9016,81 @@ export function useDeleteTrackingEvent() {
       unwrapVoid(
         api.DELETE('/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}', {
           params: { path: { tripLogId, eventId } },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/** How many removed reports one page of their list holds. */
+export const TRACKING_REMOVED_PAGE_SIZE = 20;
+
+/**
+ * The reports taken off one trip's log, the latest removal first, a page at a time.
+ *
+ * Answered only to those who may write the log — anybody else is refused, so the caller asks only
+ * where the log's own controls are offered. The position fields of each report follow the same
+ * per-row withholding as the log: a place this reader may not be told is not told here either.
+ *
+ * Not polled. A removed report is nowhere on the watch, so nothing that has to keep up with the
+ * radio is drawn from this; it is read again when a report is taken off, put back or destroyed in
+ * this browser, and when somebody opens the list.
+ */
+export function useTripTrackingRemovedEvents(
+  tripLogId: string | undefined,
+  page = 1,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.tripTrackingRemovedEvents(tripLogId ?? '', page),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-logs/{tripLogId}/tracking/events/removed', {
+          params: {
+            path: { tripLogId: tripLogId! },
+            query: { page, pageSize: TRACKING_REMOVED_PAGE_SIZE },
+          },
+        }),
+      ),
+    enabled: !!tripLogId && enabled,
+    // The rows stay on screen while the next page arrives, as on the log itself.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Puts a report taken off the log back on it: the same report under the same id, saying what it
+ * said — its place, its moment, who recorded it and everything pinned to it.
+ *
+ * Asked of a report that is on the log already, it answers with that report and changes nothing,
+ * so an undo pressed twice, or pressed after somebody else put the report back, is not an error.
+ */
+export function useRestoreTrackingEvent() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({ tripLogId, eventId }: { tripLogId: string; eventId: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}/restore', {
+          params: { path: { tripLogId, eventId } },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * Destroys a report already taken off the log. Nothing brings it back afterwards.
+ *
+ * Only a removed report accepts this: one still on the log is refused, so the loss of what may be
+ * the only record of where somebody was always stands behind two deliberate acts.
+ */
+export function useDestroyTrackingEvent() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({ tripLogId, eventId }: { tripLogId: string; eventId: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}', {
+          params: { path: { tripLogId, eventId }, query: { permanent: true } },
         }),
       ),
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),

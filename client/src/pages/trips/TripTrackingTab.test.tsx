@@ -21,6 +21,10 @@ const depthReading = vi.fn();
  */
 const depthReadings = vi.fn();
 const deleteEvent = vi.fn();
+/** Putting back a report taken off the log — what Undo on the notice asks for. */
+const restoreEvent = vi.fn();
+/** The reports taken off the log, as the fold under it reads them. */
+const removedQuery = vi.fn();
 const setTracking = vi.fn();
 const setLabel = vi.fn();
 /** The trip's links, where a photograph hung on one of its moments lives. */
@@ -45,6 +49,12 @@ vi.mock('../../api/hooks.ts', async () => ({
   // a thing worth asserting: a report the screen cannot honestly measure must not cost a request.
   useTrackingDepthReadings: (...args: unknown[]) => depthReadings(...args),
   useDeleteTrackingEvent: () => ({ mutateAsync: deleteEvent, isPending: false }),
+  useRestoreTrackingEvent: () => ({ mutateAsync: restoreEvent, isPending: false }),
+  // The fold of removed reports under the log. What it does with a report has its own tests; what
+  // this suite asks is who it is asked on behalf of, so the question is passed through.
+  TRACKING_REMOVED_PAGE_SIZE: 20,
+  useTripTrackingRemovedEvents: (...asked: unknown[]) => removedQuery(...asked),
+  useDestroyTrackingEvent: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useSetTripTracking: () => ({ mutateAsync: setTracking, isPending: false }),
   useCreateTrackingTeam: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useRenameTrackingTeam: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -255,6 +265,14 @@ beforeEach(() => {
   depthReading.mockReset().mockReturnValue({ data: undefined, isFetching: false, error: null });
   depthReadings.mockReset().mockReturnValue(new Map());
   deleteEvent.mockReset().mockResolvedValue(undefined);
+  restoreEvent.mockReset().mockResolvedValue({});
+  removedQuery.mockReset().mockReturnValue({
+    data: { items: [], page: 1, pageSize: 20, totalItems: 0 },
+    isPending: false,
+    isPlaceholderData: false,
+    error: null,
+    refetch: vi.fn(),
+  });
   pictureLinks.mockReset().mockReturnValue({ data: undefined, isPending: false, error: null });
   detachPicture.mockReset().mockResolvedValue(undefined);
   pictureDialogProps.mockReset();
@@ -451,7 +469,9 @@ describe('TripTrackingTab', () => {
     show();
 
     const sentence = screen.getByText(/corrected in place/);
-    expect(sentence).toHaveTextContent('One that should not be there at all is deleted.');
+    expect(sentence).toHaveTextContent('One that should not be there at all is deleted');
+    // And a deleted one is not lost: the sentence says where it can be put back from.
+    expect(sentence).toHaveTextContent('can be put back from Removed reports under the log');
     expect(sentence).not.toHaveTextContent(/never edited/);
   });
 
@@ -729,7 +749,8 @@ describe('TripTrackingTab', () => {
   // say — while a report merely written down wrongly is corrected in place beside it. The delete
   // still has to be reachable, or such a report stays on the log for good — and its confirmation
   // is the last place to send a coordinator who only meant to fix a typo to the Correct control
-  // instead, since a deleted report takes whatever was pinned to its moment with it.
+  // instead. It also says where the report goes: it is kept and can be put back, so the sentence
+  // that used to say it was gone for good would now be untrue.
   it('takes a report that should not be there off the log, and points a mistyped one at Correct', async () => {
     eventsQuery.mockReturnValue({
       data: {
@@ -757,11 +778,162 @@ describe('TripTrackingTab', () => {
     fireEvent.click(screen.getByTestId('trip-tracking-event-delete-event-1'));
     const confirm = await screen.findByText(/Delete this report\?/);
     expect(confirm).toHaveTextContent('is corrected instead, with Correct beside it');
+    expect(confirm).toHaveTextContent('kept under Removed reports');
+    expect(confirm).toHaveTextContent('can be put back');
+    expect(confirm).not.toHaveTextContent(/for good/);
     expect(confirm).not.toHaveTextContent(/no other/);
     fireEvent.click(await screen.findByText('OK'));
 
     await waitFor(() => expect(deleteEvent).toHaveBeenCalledTimes(1));
     expect(deleteEvent.mock.calls[0][0]).toMatchObject({ tripLogId: 'trip-1', eventId: 'event-1' });
+  });
+
+  // The way back is on the notice that says the report went: the commonest wrong delete is the
+  // bin pressed on the row above the one that was meant, noticed at once.
+  it('offers Undo on the notice that a report is off the log, and puts that very report back', async () => {
+    eventsQuery.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: 'event-1',
+            caverId: ANA,
+            teamId: null,
+            kind: 'atStation',
+            surveyModelId: null,
+            stationName: 'P12',
+            depthEnteredM: null,
+            note: null,
+            recordedAt: '2026-09-12T07:00:00Z',
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        totalItems: 1,
+      },
+      isPending: false,
+    });
+    show();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-event-delete-event-1'));
+    fireEvent.click(await screen.findByText('OK'));
+
+    const notice = await screen.findByTestId('trip-tracking-event-deleted');
+    expect(notice).toHaveTextContent('The report is off the log.');
+    // Nothing is put back by the delete itself.
+    expect(restoreEvent).not.toHaveBeenCalled();
+
+    fireEvent.click(within(notice).getByRole('button', { name: 'Undo' }));
+
+    await waitFor(() => expect(restoreEvent).toHaveBeenCalledTimes(1));
+    expect(restoreEvent.mock.calls[0][0]).toEqual({ tripLogId: 'trip-1', eventId: 'event-1' });
+    expect(await screen.findByText('The report is back on the log, as it was.')).toBeTruthy();
+    // And nothing was deleted a second time by putting it back.
+    expect(deleteEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when a report cannot be put back, in the words of the refusal', async () => {
+    eventsQuery.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: 'event-1',
+            caverId: ANA,
+            teamId: null,
+            kind: 'note',
+            surveyModelId: null,
+            stationName: null,
+            depthEnteredM: null,
+            note: 'wrong trip',
+            recordedAt: '2026-09-12T07:00:00Z',
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        totalItems: 1,
+      },
+      isPending: false,
+    });
+    restoreEvent.mockRejectedValue(new ApiError(404, 'tracking.event_not_found', 'server words'));
+    show();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-event-delete-event-1'));
+    fireEvent.click(await screen.findByText('OK'));
+    fireEvent.click(await screen.findByTestId('trip-tracking-event-undo'));
+
+    expect(await screen.findByText(/That report is no longer on the log/)).toBeTruthy();
+  });
+
+  describe('the reports taken off the log', () => {
+    const oneRemoved = () =>
+      removedQuery.mockReturnValue({
+        data: {
+          items: [
+            {
+              report: {
+                id: 'event-9',
+                caverId: ANA,
+                teamId: null,
+                // A station report with no station: withheld from this reader, and nothing else.
+                kind: 'atStation',
+                surveyModelId: null,
+                stationName: null,
+                depthEnteredM: null,
+                note: null,
+                recordedAt: '2026-09-12T07:00:00Z',
+                corrected: false,
+                outsideDeclaredParts: false,
+              },
+              removedAt: '2026-09-12T08:00:00Z',
+            },
+          ],
+          page: 1,
+          pageSize: 20,
+          totalItems: 1,
+        },
+        isPending: false,
+        isPlaceholderData: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+    it('are listed under the log for somebody who may write it, a withheld place still withheld', async () => {
+      oneRemoved();
+      show();
+
+      const fold = screen.getByTestId('trip-tracking-removed');
+      expect(fold).toHaveTextContent('Removed reports: 1');
+      expect(removedQuery).toHaveBeenCalledWith('trip-1', 1);
+
+      fireEvent.click(screen.getByTestId('trip-tracking-removed-count'));
+      const place = await screen.findByTestId('trip-tracking-removed-place-event-9');
+      // Drawn by the function the log draws its own places with, so the withholding is the log's.
+      expect(within(place).getByTestId('trip-tracking-position-withheld')).toBeTruthy();
+      expect(within(fold).getByText('Ana Popescu')).toBeTruthy();
+    });
+
+    it('are not asked for on behalf of a reader who may not write the log', () => {
+      oneRemoved();
+      show(false);
+
+      // The server refuses this list to a reader, so the question is never put — and nothing is
+      // drawn of a list that, in this test, the stub would have answered.
+      expect(removedQuery).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('trip-tracking-removed')).toBeNull();
+    });
+
+    it('are not offered on a log that cannot be written, where putting one back would be refused', () => {
+      oneRemoved();
+      trackingQuery.mockReturnValue({
+        data: state({ state: 'off', armedAt: null, firstArmedAt: null }),
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show();
+
+      expect(removedQuery).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('trip-tracking-removed')).toBeNull();
+    });
   });
 
   it('shows a report whose position was withheld as withheld on the log too', () => {
