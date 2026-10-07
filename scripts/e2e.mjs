@@ -15,6 +15,13 @@
 // last lines say what did not run; a spec named on the command line runs whatever the mode.
 // What it leaves out, and why, is in e2e-mode.mjs. Without it the run is the whole suite.
 //
+//   node scripts/e2e.mjs --affected master   # only the specs that answer for the change
+//
+// --affected <base> runs the specs the working tree's changes against <base> select — and the
+// smoke spec, always — by the map in e2e-affected.map.mjs. A change wider than the map is not run
+// under this name: the runner says why and exits 10, and the whole suite is the command without
+// the option. It combines with --mode fast, which is the quickest look there is.
+//
 // Why this exists. Every piece of the browser leg was already here — the browsers are
 // installed, the specs are written, the config knows how to start Vite — and it was still
 // skipped batch after batch, always for the same reason: standing up a database, a migrated
@@ -40,6 +47,7 @@ import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
 import { pruneDependencyCaches } from './dependency-caches.mjs';
+import { selectionFor } from './e2e-affected.mjs';
 import { describeFast, fastRun, modeOf, suiteOf } from './e2e-mode.mjs';
 import {
   ATTEMPTS,
@@ -129,6 +137,27 @@ try {
   const { mode, rest } = modeOf(passthrough);
   passthrough = rest;
   const { specs, phoneOnly } = suiteOf(clientDir, join);
+
+  const affectedAt = passthrough.indexOf('--affected');
+  if (affectedAt !== -1) {
+    const base = passthrough[affectedAt + 1];
+    if (!base || base.startsWith('-')) throw new Error('--affected takes the ref to compare with, as in --affected master');
+    passthrough.splice(affectedAt, 2);
+    const selection = selectionFor(base, join(clientDir, 'e2e'));
+    console.log(`against ${selection.base}: ${selection.changed} changed files`);
+    for (const reason of selection.reasons) console.log(`  - ${reason}`);
+    if (selection.whole) {
+      console.log('The whole suite is not run under this name: run it without --affected.');
+      process.exit(10);
+    }
+    // The fast form has one project, and a phone spec has no test in it.
+    const isPhoneOnly = (name) => phoneOnly.some((pattern) => pattern.test(name));
+    const selected = selection.specs.filter((name) => mode !== 'fast' || !isPhoneOnly(name));
+    console.log(`${selected.length} specs answer for it: ${selected.join(', ')}`);
+    const dropped = selection.specs.filter((name) => !selected.includes(name));
+    if (dropped.length > 0) console.log(`not run in the fast form (phone specs): ${dropped.join(', ')}`);
+    passthrough = [...passthrough, ...selected.map((name) => `e2e/${name}`)];
+  }
 
   if (mode === 'fast') {
     const fast = fastRun(passthrough, specs, phoneOnly);
