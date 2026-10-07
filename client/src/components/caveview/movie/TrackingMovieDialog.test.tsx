@@ -1440,7 +1440,7 @@ describe('the trip picker', () => {
 });
 
 describe('the dialog and the keyboard', () => {
-  it('keeps the keys pressed on its controls from the viewer’s document-wide shortcuts, and lets the modal have Escape and Tab', async () => {
+  it('keeps the keys pressed on its controls from the viewer’s document-wide shortcuts, and lets the modal have Escape', async () => {
     open(['trip-a']);
     const seen: string[] = [];
     const listener = (event: KeyboardEvent) => seen.push(event.key);
@@ -1451,10 +1451,28 @@ describe('the dialog and the keyboard', () => {
       fireEvent.keyDown(title, { key: 'a' });
       fireEvent.keyDown(title, { key: 'Backspace' });
       fireEvent.keyDown(screen.getByTestId('movie-export'), { key: ' ' });
+      // Tab as well, from the controls the viewer does not leave alone by itself: a Tab that
+      // reached it with the pointer on the preview was cancelled, and the focus never moved.
+      fireEvent.keyDown(screen.getByTestId('movie-export'), { key: 'Tab' });
+      fireEvent.keyDown(screen.getByTestId('movie-play'), { key: 'Tab', shiftKey: true });
+      fireEvent.keyDown(screen.getByTestId('movie-caption-title'), { key: 'Tab' });
       expect(seen).toEqual([]);
+      // The X in the corner and the dialog's own frame — where the focus is put on opening — are
+      // drawn outside the dialog's body, and are the dialog's all the same: a Tab that left the X,
+      // an Enter that pressed it, the first Tab after opening.
+      const frame = screen.getByRole('dialog');
+      const corner = frame.querySelector<HTMLElement>('.ant-modal-close');
+      expect(corner).not.toBeNull();
+      expect(corner!.closest('.movie-dialog')).toBeNull();
+      fireEvent.keyDown(corner!, { key: 'Tab' });
+      fireEvent.keyDown(corner!, { key: 'Tab', shiftKey: true });
+      fireEvent.keyDown(corner!, { key: 'Enter' });
+      fireEvent.keyDown(corner!, { key: ' ' });
+      fireEvent.keyDown(frame, { key: 'Tab' });
+      expect(seen).toEqual([]);
+      // Escape is the one key the modal hears outside the dialog's own tree.
       fireEvent.keyDown(title, { key: 'Escape' });
-      fireEvent.keyDown(title, { key: 'Tab' });
-      expect(seen).toEqual(['Escape', 'Tab']);
+      expect(seen).toEqual(['Escape']);
     } finally {
       document.removeEventListener('keydown', listener);
     }

@@ -179,6 +179,10 @@ export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onC
       // A stray click beside the dialog would throw away the settings and any export under way; it
       // is not asked about either, since nobody meant anything by it.
       mask={{ closable: false }}
+      // Round the whole dialog, not only what is drawn in its body: the X in the corner and the
+      // dialog's own frame — which is where the focus is put on opening — take keys too, and the
+      // viewer behind the preview would cancel a Tab or an Enter pressed on either.
+      wrapProps={{ onKeyDown: keepKeysFromViewer }}
       data-testid="movie-dialog"
     >
       {surveyModelId !== null && (
@@ -238,16 +242,24 @@ function withoutTitleText(settings: MovieSettings): MovieSettings {
 }
 
 /**
- * Keeps a key pressed on one of the dialog's controls from the viewer's own shortcuts.
+ * Keeps a key pressed anywhere on the dialog from the viewer's own shortcuts.
  *
  * The viewer listens for keys on the whole document and, whenever the pointer is resting over it,
  * takes every key for itself and cancels it — so a title typed with the pointer left over the
  * preview wrote nothing, and the shortcuts turned the preview under a reader whose keys were meant
- * for a text box. A key pressed on the dialog is the dialog's. Only the two the modal answers on
- * its own frame, outside this body, go on past it: Escape to close, and Tab to keep the focus in.
+ * for a text box. A key pressed on the dialog is the dialog's — on its settings, on its buttons, on
+ * the X in its corner and on its frame, which holds the focus until the first Tab.
+ *
+ * <b>Only Escape goes on past it.</b> The modal closes on Escape from a listener on the window,
+ * which a key stopped here never reaches; the viewer cancels it on the way and has no use for it.
+ * Tab is stopped with the rest. The modal keeps the focus inside the dialog by watching where the
+ * focus goes, and sees the key on its way down before it ever gets here — so nothing of the
+ * modal's is lost — while a Tab left to travel on was cancelled by the viewer whenever the pointer
+ * rested on the preview and the focus was on a button, a switch or the slider: the focus stayed
+ * where it was, with no sign of why.
  */
 function keepKeysFromViewer(event: { key: string; stopPropagation(): void }): void {
-  if (event.key !== 'Escape' && event.key !== 'Tab') {
+  if (event.key !== 'Escape') {
     event.stopPropagation();
   }
 }
@@ -828,7 +840,7 @@ function MovieDialogBody({
       : movieClockText(timeline.clock(frames.frame(at).position), t, i18n.language);
 
   return (
-    <div className="movie-dialog" onKeyDown={keepKeysFromViewer}>
+    <div className="movie-dialog">
       <div className="movie-dialog-body">
         <Flex vertical gap="small" className="movie-dialog-preview">
           <MoviePreviewHost
