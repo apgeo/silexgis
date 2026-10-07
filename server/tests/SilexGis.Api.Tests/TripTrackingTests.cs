@@ -1207,6 +1207,100 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
             .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    /// <summary>
+    /// A report belongs to one trip and the address has to say which: asked for under another
+    /// trip's address it is not found, even by somebody who may write both trips.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The right to write is checked against the trip in the address. If the report were then
+    /// looked up by its own identifier alone, holding write on any one trip would be enough to
+    /// rewrite or remove a report of any other — the check would have been made on a trip the
+    /// report has nothing to do with. Here the caller may write both, which leaves the pairing of
+    /// report and trip as the only thing that can refuse.
+    /// </para>
+    /// <para>
+    /// Everything else about the crossed request is acceptable on purpose: the other trip's watch
+    /// is running on the same survey, so the station in the correction is one it knows, and the
+    /// correction is the very one that succeeds at the end under the report's own trip. Asked
+    /// again once the other trip's watch is closed, because a closed watch still takes
+    /// corrections and is the state a trip is usually in when its log is tidied.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_report_is_not_found_under_another_trip_the_caller_may_also_write()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        var (mine, cavers) = await CreateTripAsync("Holds the report", guests: 1);
+        var (other, others) = await CreateTripAsync("Another outing", guests: 1);
+        (await ArmAsync(owner, mine, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ArmAsync(owner, other, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var recorded = await PostEventAsync(owner, mine, new
+        {
+            caverIds = cavers, kind = "atStation", stationName = "cave.upper.2",
+        });
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK, await recorded.Content.ReadAsStringAsync());
+        var eventId = (await BodyAsync(recorded)).EnumerateArray().Single().GetProperty("id").GetGuid();
+
+        // The other trip has a report of its own, so that "its log is as it was" below is said of
+        // a log with something in it to disturb.
+        (await PostEventAsync(owner, other, new
+        {
+            caverIds = others, kind = "atStation", stationName = "cave.upper.2",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var mineBefore = await LogTextAsync(mine);
+        var otherBefore = await LogTextAsync(other);
+        mineBefore.ShouldContain(eventId.ToString());
+        otherBefore.ShouldNotContain(eventId.ToString());
+
+        async Task ShouldNotBeFoundThroughTheOtherTripAsync(string when)
+        {
+            var corrected = await PutEventAsync(owner, other, eventId, new
+            {
+                kind = "atStation", stationName = "cave.deep.3",
+            });
+            corrected.StatusCode.ShouldBe(HttpStatusCode.NotFound, when);
+            (await BodyAsync(corrected)).GetProperty("code").GetString()
+                .ShouldBe("tracking.event_not_found", when);
+
+            var removed = await owner.DeleteAsync($"/api/v1/trip-logs/{other}/tracking/events/{eventId}");
+            removed.StatusCode.ShouldBe(HttpStatusCode.NotFound, when);
+            (await BodyAsync(removed)).GetProperty("code").GetString()
+                .ShouldBe("tracking.event_not_found", when);
+        }
+
+        await ShouldNotBeFoundThroughTheOtherTripAsync("the other watch running");
+        (await PutConfigAsync(owner, other, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ShouldNotBeFoundThroughTheOtherTripAsync("the other watch closed");
+
+        // Nothing was written on either side: both logs read exactly as they did.
+        (await LogTextAsync(mine)).ShouldBe(mineBefore);
+        (await LogTextAsync(other)).ShouldBe(otherBefore);
+
+        // The positive twin: the same two requests under the report's own trip.
+        var own = await PutEventAsync(owner, mine, eventId, new
+        {
+            kind = "atStation", stationName = "cave.deep.3",
+        });
+        own.StatusCode.ShouldBe(HttpStatusCode.OK, await own.Content.ReadAsStringAsync());
+        (await BodyAsync(own)).GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{mine}/tracking/events/{eventId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await LogTextAsync(mine)).ShouldNotContain(eventId.ToString());
+        (await LogTextAsync(other)).ShouldBe(otherBefore);
+    }
+
+    /// <summary>A trip's whole log as the text the server sent, for comparing two readings of it.</summary>
+    private async Task<string> LogTextAsync(Guid trip)
+    {
+        var log = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events");
+        log.StatusCode.ShouldBe(HttpStatusCode.OK, await log.Content.ReadAsStringAsync());
+        return (await BodyAsync(log)).GetProperty("items").GetRawText();
+    }
+
     // ---- the places a report can name -------------------------------------------------------
 
     /// <summary>

@@ -370,10 +370,21 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
         // (409), so a trip holding a standing link and an Off watch cannot be built through the API
         // at all. It is written directly, because that is the only way this row exists — and because
         // the state is a plain recorded fact with nothing derived from it, unlike protection, which
-        // is never written this way. What is being tested is that the rule refuses it: the SQL
-        // narrowing above it is an optimisation, and a test that only exercised the narrowing would
-        // pass with the rule deleted.
+        // is never written this way.
+        //
+        // What this holds is the route's answer, and no more than that. Two things each keep such
+        // a row off the list: the query, which only fetches watches that were started, and the
+        // rule asked of every fetched row, which refuses a watch that is off however well it is
+        // published. From outside they cannot be told apart — the query drops the row before the
+        // rule is asked — so this test would stay green with the rule's own clause deleted. That
+        // clause is held where it can be reached alone: the unit test of the rule, which gives it
+        // an off watch with a standing link and an armed one beside it.
         var standDown = await PublishedTripAsync("Stood down", cave, model);
+
+        // Listed while its watch runs, so that its absence below is the state and nothing else.
+        ListedIds(await LiveListAsync(armed.Token))
+            .ShouldBe([armed.Trip, standDown.Trip], ignoreOrder: true);
+
         await SetStateAsync(standDown.Trip, TripTrackingState.Off);
 
         ListedIds(await LiveListAsync(armed.Token)).ShouldBe([armed.Trip]);
