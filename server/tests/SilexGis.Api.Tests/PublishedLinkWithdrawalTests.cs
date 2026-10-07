@@ -575,6 +575,84 @@ public sealed class PublishedLinkWithdrawalTests : IAsyncLifetime, IDisposable, 
         (await anonymous.GetAsync(Follow(one.Token))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    /// <summary>
+    /// Everything includes the links of a deleted trip. A deleted trip is hidden from every reader
+    /// and its links with it, but it can be put back, and its links come back exactly as they
+    /// stood — so a link the act passed over would open again on the day its trip was restored,
+    /// after an administrator had been told that every link was taken back.
+    /// </summary>
+    /// <remarks>
+    /// The two readings are held apart on purpose. What a reader can reach is asked through the
+    /// routes and the administrators' list, which go on hiding the deleted trip's link throughout;
+    /// what the act did is asked of the table past that hiding, of the number it answered and of
+    /// the trail. The list showing fewer rows than the act withdrew is the expected state here, not
+    /// a discrepancy.
+    /// </remarks>
+    [Fact]
+    public async Task Everything_takes_back_a_deleted_trips_links_too_so_restoring_the_trip_reopens_nothing()
+    {
+        var scene = await SceneAsync();
+        var deleted = scene.Current;
+        var elsewhere = await PublishedTripAsync(owner, "Still there");
+        var word = new { confirm = "revoke-everything" };
+
+        // The address answers on every route while the trip is there, so every refusal below is
+        // about what was done to it and not about an arrangement that never opened.
+        foreach (var route in scene.Routes)
+        {
+            (await anonymous.GetAsync(route(deleted.Token))).StatusCode.ShouldBe(HttpStatusCode.OK, route("…"));
+        }
+
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{deleted.Trip}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Deleted, its address is an unknown one — to the same number of questions asked of the
+        // database as an invented token costs — and no reading an administrator has shows the
+        // link: not the list, and not the withdrawal of one trip, which finds no such trip.
+        await ShouldAnswerLikeAnInventedTokenAsync(scene.Routes, deleted.Token);
+        (await StandingAsync(deleted.Trip)).ShouldBeEmpty();
+        (await ListedLinkIdsAsync()).ShouldNotContain(deleted.ShareId);
+        var oneTrip = await admin.PostAsync(RevokeTrip(deleted.Trip), null);
+        oneTrip.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        Code(await oneTrip.Content.ReadAsStringAsync()).ShouldBe("trip_log.not_found");
+
+        // And in storage it stands, which is the whole of the risk.
+        (await StoredRevokedAtAsync(deleted.ShareId)).ShouldBeNull();
+
+        // What the ordinary reading counts as standing leaves the deleted trip's link out; the act
+        // answers with one link and one trip more than that.
+        var (standingBefore, tripsBefore) = await StandingEverywhereAsync();
+        standingBefore.ShouldBeGreaterThanOrEqualTo(2);
+        (await WithdrawnAsync(await admin.PostAsJsonAsync(Everything, word)))
+            .ShouldBe((standingBefore + 1, tripsBefore + 1));
+
+        // Stamped, and on the trail under the administrator's name like any other link.
+        (await StoredRevokedAtAsync(deleted.ShareId)).ShouldNotBeNull();
+        (await AuditAsync(deleted.ShareId, AuditActions.Updated, adminId, deleted.Trip)).ShouldBe(1);
+        (await AuditAsync(elsewhere.ShareId, AuditActions.Updated, adminId, elsewhere.Trip)).ShouldBe(1);
+
+        // The list still hides it: fewer rows than the act withdrew.
+        var listed = await ListedLinkIdsAsync();
+        listed.ShouldContain(elsewhere.ShareId);
+        listed.ShouldNotContain(deleted.ShareId);
+
+        (await owner.PostAsync($"/api/v1/trip-logs/{deleted.Trip}/restore", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The trip is back, and the address it was published under is still one nobody ever made.
+        (await owner.GetAsync($"/api/v1/trip-logs/{deleted.Trip}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ShouldAnswerLikeAnInventedTokenAsync(scene.Routes, deleted.Token);
+        (await StandingAsync(deleted.Trip)).ShouldBeEmpty();
+
+        // With its trip back the link is on the list again, as a withdrawn one.
+        var rows = (await admin.GetFromJsonAsync<JsonElement>($"{Admin}?pageSize=500"))
+            .GetProperty("items").EnumerateArray().ToList();
+        rows.Single(r => r.GetProperty("id").GetGuid() == deleted.ShareId)
+            .GetProperty("status").GetString().ShouldBe("revoked");
+
+        // And nothing was left for a second asking.
+        (await WithdrawnAsync(await admin.PostAsJsonAsync(Everything, word))).ShouldBe((0, 0));
+    }
+
     // ---- the comparison with an invented token -----------------------------------------------
 
     /// <summary>
@@ -972,6 +1050,23 @@ public sealed class PublishedLinkWithdrawalTests : IAsyncLifetime, IDisposable, 
         return await db.TripTrackingShares.AsNoTracking()
             .Where(s => s.Id == share).Select(s => s.RevokedAt).SingleAsync();
     }
+
+    /// <summary>
+    /// When a link was taken back, read past the hiding of a deleted trip's rows: the one reading
+    /// in which a link that is kept and hidden can be told from one that was withdrawn.
+    /// </summary>
+    private async Task<DateTimeOffset?> StoredRevokedAtAsync(Guid share)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.TripTrackingShares.AsNoTracking().IgnoreQueryFilters()
+            .Where(s => s.Id == share).Select(s => s.RevokedAt).SingleAsync();
+    }
+
+    /// <summary>The links the administrators' list holds, whatever their status.</summary>
+    private async Task<List<Guid>> ListedLinkIdsAsync() =>
+        [.. (await admin.GetFromJsonAsync<JsonElement>($"{Admin}?pageSize=500"))
+            .GetProperty("items").EnumerateArray().Select(r => r.GetProperty("id").GetGuid())];
 
     /// <summary>
     /// How many trail rows one link has for one action by one account, filed under its trip.

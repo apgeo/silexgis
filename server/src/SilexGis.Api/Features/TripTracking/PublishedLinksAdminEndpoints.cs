@@ -172,9 +172,20 @@ public static class PublishedLinksAdminEndpoints
     /// no longer finds that link. Only links this act stamped are counted and leave its trail.
     /// </para>
     /// <para>
-    /// The links are read through the ordinary set, like every other read of them: what that set
-    /// does not show — a link the application treats as gone with its trip — opens nothing either,
-    /// and is not counted here.
+    /// <b>Everything includes the links of a deleted trip; one trip's links do not.</b> A deleted
+    /// trip is hidden from every reader, its links with it, and its address answers as one nobody
+    /// ever made — but the trip can be put back, and its links come back with it exactly as they
+    /// stood. A link this act passed over because it could not see it would open again on the day
+    /// its trip was restored, after an administrator had been told that every link was taken
+    /// back. So when everything is withdrawn the links are read past the filter that hides a
+    /// deleted trip's rows, and such a link is stamped, counted and put on the trail like any
+    /// other. Withdrawing one trip's links reads them as every reader does: a deleted trip answers
+    /// that route as a trip that does not exist.
+    /// </para>
+    /// <para>
+    /// The administrators' list is not changed by this and goes on hiding a deleted trip's links,
+    /// so it can show fewer rows than this act says it withdrew. The number is the one to trust
+    /// about what was taken back; the list is about what a reader could have opened.
     /// </para>
     /// <para>
     /// <b>It looks again after writing.</b> A link handed out, or exchanged for a fresh one, while
@@ -198,7 +209,10 @@ public static class PublishedLinksAdminEndpoints
             await using var transaction =
                 await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
 
-            var standing = await db.TripTrackingShares
+            // Past the filter only when everything is asked for, so that a deleted trip's links go
+            // too and restoring the trip reopens nothing; one trip's links are read as everywhere.
+            var shares = onlyTrip is null ? db.TripTrackingShares.IgnoreQueryFilters() : db.TripTrackingShares;
+            var standing = await shares
                 .Where(s => s.RevokedAt == null && (onlyTrip == null || s.TripLogId == onlyTrip))
                 .ToListAsync(ct);
             if (standing.Count == 0) break;
