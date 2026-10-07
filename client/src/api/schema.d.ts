@@ -17352,7 +17352,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Shares this camp: one rule onto every trip it gathers, bounded at each trip by what the caller holds there. Adds and restates; never removes. */
+        /** Shares this camp: one rule onto every trip it gathers that the caller may administer, bounded at each trip by what the caller holds there, and says which trips it skipped. Adds and restates; never removes. */
         post: {
             parameters: {
                 query?: never;
@@ -17374,7 +17374,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["ExpeditionSharingDto"];
+                        "application/json": components["schemas"]["ExpeditionSharingOutcomeDto"];
                     };
                 };
             };
@@ -17414,7 +17414,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Carries this camp's sharing onto the trips that joined since it was applied. A trip joining is not covered by itself — this is the act that covers it. */
+        /** Carries this camp's sharing onto the trips it does not reach yet — ones that joined since it was applied, and ones skipped then that the caller may now administer. A trip joining is not covered by itself: this is the act that covers it. */
         post: {
             parameters: {
                 query?: never;
@@ -17432,7 +17432,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["ExpeditionSharingDto"];
+                        "application/json": components["schemas"]["ExpeditionSharingOutcomeDto"];
                     };
                 };
             };
@@ -20067,6 +20067,8 @@ export interface components {
                 [key: string]: components["schemas"]["CreatableCavingGroupDto"][];
             };
         };
+        /** @enum {unknown} */
+        CascadeSkipReason: "notAdministered" | "beyondHolding";
         CaveCrossSectionDto: {
             /** Format: uuid */
             caveId: string;
@@ -21486,6 +21488,20 @@ export interface components {
             /** Format: int32 */
             memberTrips: number;
             rules: components["schemas"]["ExpeditionSharedRuleDto"][];
+        };
+        ExpeditionSharingOutcomeDto: {
+            sharing: components["schemas"]["ExpeditionSharingDto"];
+            /** Format: int32 */
+            sharedTrips: number;
+            skippedTrips: components["schemas"]["ExpeditionSkippedTripDto"][];
+            /** Format: int32 */
+            skippedTripsNotNamed: number;
+        };
+        ExpeditionSkippedTripDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            reason: components["schemas"]["CascadeSkipReason"];
         };
         ExpeditionTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];

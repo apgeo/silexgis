@@ -12,7 +12,7 @@ import {
 } from '../../api/hooks.ts';
 import List from '../../components/List.tsx';
 import { expeditionRosterRoleLabel } from '../../components/expeditions/rosterRoles.ts';
-import { formatTripDates } from '../../components/trips/tripDates.ts';
+import { formatStayDates } from '../../components/expeditions/stayDates.ts';
 import ExpeditionStayModal from './ExpeditionStayModal.tsx';
 
 /**
@@ -198,10 +198,14 @@ export default function ExpeditionRosterTab({ expeditionId, editable }: Expediti
                     )}
                   </>
                 }
-                // An absent end is "they did not stay on past the day they arrived", not "we do
-                // not know when they left" — so a one-day stay reads as that day and never as a
-                // range of itself.
-                description={formatTripDates(entry.fromDate, entry.toDate, i18n.resolvedLanguage)}
+                // No last day is somebody who has not left, and is said in words; one day is
+                // a last day equal to the first and reads as that day, never as a range of it.
+                description={formatStayDates(
+                  entry.fromDate,
+                  entry.toDate,
+                  i18n.resolvedLanguage,
+                  t,
+                )}
               />
               {entry.note && <Typography.Text type="secondary">{entry.note}</Typography.Text>}
             </List.Item>

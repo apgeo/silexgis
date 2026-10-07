@@ -20,8 +20,9 @@ namespace SilexGis.Api.Tests;
 /// Sharing a camp reaching the trips it gathered. Four things are driven here because each of
 /// them is a way the obvious implementation goes wrong: the writer adds rather than replaces,
 /// so a trip's own rules survive; every row still passes the no-amplification bound against its
-/// own trip's facts; a camp holding one trip the organiser may not administer refuses the whole
-/// sharing and says only how many; and exact location is refused rather than dropped.
+/// own trip's facts; a trip the organiser may not administer is skipped without refusing the
+/// others, and is named in the answer only where the organiser may read it; and exact location
+/// is refused rather than dropped.
 /// </summary>
 /// <remarks>
 /// Driven through the writer rather than a route: the rules are what this proves, and they hold
@@ -141,8 +142,12 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
         (await RulesOnAsync(trip)).Count.ShouldBe(2);
     }
 
+    /// <summary>
+    /// Inverted from the day one refusing trip refused the whole act. The two bounds on a trip
+    /// have not moved; what moved is that a trip answers only for itself.
+    /// </summary>
     [Fact]
-    public async Task A_member_trip_the_organiser_may_not_administer_refuses_the_whole_sharing_by_count()
+    public async Task A_member_trip_the_organiser_may_not_administer_is_skipped_and_the_others_are_shared()
     {
         var camp = await CreateCampAsync();
         var mine = await CreateTripAsync(organiser, "The organiser's own trip");
@@ -151,9 +156,35 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
         await JoinAsync(camp, mine);
         await JoinAsync(camp, theirs);
 
-        var refused = await CascadeAsync(camp, organiserId, new ExpeditionShareEntryWrite(
+        var applied = await CascadeAsync(camp, organiserId, new ExpeditionShareEntryWrite(
             AccessSubjectKind.User, readerId, AccessEffect.Allow, AccessAction.Read));
 
+        // Not a refusal any more: the trip that accepts the rule has it.
+        applied.Problem.ShouldBeNull();
+        applied.Trips.ShouldBe(2);
+        applied.Shared.ShouldBe(1);
+        applied.Written.ShouldBe(1);
+        (await RulesOnAsync(mine)).Count.ShouldBe(1);
+
+        // And the one nobody gave them authority over has nothing: skipping is not sharing less
+        // carefully, it is not sharing.
+        (await RulesOnAsync(theirs)).ShouldBeEmpty();
+
+        // Named, because the organiser may read it — an Editor reads every trip — and told why,
+        // which is whose consent is missing.
+        var skipped = applied.Skipped.ShouldHaveSingleItem();
+        skipped.TripId.ShouldBe(theirs);
+        skipped.Title.ShouldBe(TheirTitle);
+        skipped.Reason.ShouldBe(CascadeSkipReason.NotAdministered);
+        applied.SkippedNotNamed.ShouldBe(0);
+
+        // The control: with only the trip nobody gave them authority over, the same organiser
+        // and the same rule reach nothing, and that is still a refusal — by count, naming nothing.
+        var evicted = await organiser.DeleteAsync($"/api/v1/expeditions/{camp}/trips/{mine}");
+        evicted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await evicted.Content.ReadAsStringAsync());
+
+        var refused = await CascadeAsync(camp, organiserId, new ExpeditionShareEntryWrite(
+            AccessSubjectKind.User, readerId, AccessEffect.Allow, AccessAction.Read));
         refused.Problem.ShouldNotBeNull();
         refused.Problem!.StatusCode.ShouldBe((int)HttpStatusCode.Forbidden);
         CodeOf(refused).ShouldBe(AccessCascadeRules.IncompleteCode);
@@ -163,21 +194,186 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
         detail.ShouldContain("1");
         detail.ShouldNotContain(TheirTitle, Case.Insensitive);
         detail.ShouldNotContain(theirs.ToString(), Case.Insensitive);
-        detail.ShouldNotContain(mine.ToString(), Case.Insensitive);
-
-        // All or nothing: the trip that would have accepted the rule has none either.
-        (await RulesOnAsync(mine)).ShouldBeEmpty();
         (await RulesOnAsync(theirs)).ShouldBeEmpty();
+    }
 
-        // The positive half, and it is the same camp, the same organiser and the same rule —
-        // only the trip nobody gave them authority over has gone.
-        var evicted = await organiser.DeleteAsync($"/api/v1/expeditions/{camp}/trips/{theirs}");
-        evicted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await evicted.Content.ReadAsStringAsync());
+    /// <summary>
+    /// The camp the change exists for: trips the organiser owns, one somebody else owns and has
+    /// not delegated, and one the organiser cannot even read. Shared for the first, skipped and
+    /// named for the second, skipped and only counted for the third — and then the rest of the
+    /// life of that sharing: picked up after delegation, counted truthfully, withdrawn exactly.
+    /// </summary>
+    [Fact]
+    public async Task A_mixed_camp_is_shared_where_it_may_be_and_says_what_it_skipped_without_naming_what_the_organiser_cannot_read()
+    {
+        var camp = await CreateCampAsync();
+        var first = await CreateTripAsync(organiser, "Organiser's first");
+        var second = await CreateTripAsync(organiser, "Organiser's second");
+        const string LentTitle = "Lent by another club";
+        var lent = await CreateTripAsync(stranger, LentTitle);
+        const string HiddenTitle = "Unreadable to the organiser";
+        var hidden = await CreateTripAsync(stranger, HiddenTitle);
+        foreach (var trip in new[] { first, second, lent, hidden })
+        {
+            await JoinAsync(camp, trip);
+        }
+
+        // Gathered first and closed to the organiser afterwards, which is the order it happens
+        // in: a trip's owner tightens it, and the camp it was gathered into still holds it.
+        await DenyOnTripAsync(hidden, organiserId, AccessAction.Read);
+        (await organiser.GetAsync($"/api/v1/trip-logs/{hidden}")).StatusCode
+            .ShouldBe(HttpStatusCode.NotFound, "the fixture: the organiser cannot read this trip");
+        (await organiser.GetAsync($"/api/v1/trip-logs/{lent}")).StatusCode
+            .ShouldBe(HttpStatusCode.OK, "the fixture: the organiser can read this one");
+
+        // ---- applied: the answer the route gives ----
+        var response = await organiser.PostAsJsonAsync($"/api/v1/expeditions/{camp}/sharing", Body(readerId));
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        var answer = JsonDocument.Parse(payload).RootElement;
+
+        answer.GetProperty("sharedTrips").GetInt32().ShouldBe(2);
+        var named = answer.GetProperty("skippedTrips").EnumerateArray().ToList();
+        named.Count.ShouldBe(1);
+        named[0].GetProperty("id").GetGuid().ShouldBe(lent);
+        named[0].GetProperty("title").GetString().ShouldBe(LentTitle);
+        named[0].GetProperty("reason").GetString().ShouldBe("notAdministered");
+        answer.GetProperty("skippedTripsNotNamed").GetInt32().ShouldBe(1);
+
+        // The trip the organiser cannot read is in the answer as that one number and nowhere
+        // else — not its title, not its id, in any member of any depth.
+        payload.ShouldNotContain(HiddenTitle, Case.Insensitive);
+        payload.ShouldNotContain(hidden.ToString(), Case.Insensitive);
+
+        (await RulesOnAsync(first)).Count.ShouldBe(1);
+        (await RulesOnAsync(second)).Count.ShouldBe(1);
+        (await RulesOnAsync(lent)).ShouldBeEmpty();
+        (await RulesOnAsync(hidden)).Count.ShouldBe(1, "only the deny that closed it; the camp wrote nothing here");
+
+        // The coverage the panel shows is counted from the rows, so it is true of a camp shared
+        // in part: two of four.
+        var sharing = answer.GetProperty("sharing");
+        sharing.GetProperty("memberTrips").GetInt32().ShouldBe(4);
+        sharing.GetProperty("rules").EnumerateArray().Single().GetProperty("trips").GetInt32().ShouldBe(2);
+        var read = await ReadSharingAsync(camp);
+        read.MemberTrips.ShouldBe(4);
+        read.Rules.Single().Trips.ShouldBe(2);
+
+        // The trail says how many were skipped and names none of them: it is read by everybody
+        // who may read the camp.
+        var act = (await TrailOfAsync(camp)).Last(a => a.EntityType == nameof(Expedition)
+            && a.Action == AuditActions.PermissionChanged);
+        act.Changes.ShouldNotBeNull();
+        act.Changes!.ShouldContain("\"TripsSkipped\"");
+        act.Changes.ShouldNotContain(lent.ToString());
+        act.Changes.ShouldNotContain(hidden.ToString());
+        act.Changes.ShouldNotContain(LentTitle);
+        act.Changes.ShouldNotContain(HiddenTitle);
+
+        // ---- the lent trip's owner delegates, and applying again picks it up ----
+        await GrantOnTripAsync(lent, organiserId, AccessAction.ManagePermissions);
+
+        var again = await organiser.PostAsync($"/api/v1/expeditions/{camp}/sharing/re-apply", null);
+        var againPayload = await again.Content.ReadAsStringAsync();
+        again.StatusCode.ShouldBe(HttpStatusCode.OK, againPayload);
+        var reapplied = JsonDocument.Parse(againPayload).RootElement;
+
+        reapplied.GetProperty("sharedTrips").GetInt32().ShouldBe(3);
+        reapplied.GetProperty("skippedTrips").GetArrayLength().ShouldBe(0);
+        reapplied.GetProperty("skippedTripsNotNamed").GetInt32().ShouldBe(1);
+        againPayload.ShouldNotContain(HiddenTitle, Case.Insensitive);
+        againPayload.ShouldNotContain(hidden.ToString(), Case.Insensitive);
+
+        var onLent = await RulesOnAsync(lent);
+        onLent.Count.ShouldBe(2, "the delegation, and the camp's rule beside it");
+        onLent.Single(r => r.GrantedViaExpeditionId == camp).SubjectId.ShouldBe(readerId);
+        (await RulesOnAsync(first)).Count.ShouldBe(1, "and nothing was written twice");
+        (await ReadSharingAsync(camp)).Rules.Single().Trips.ShouldBe(3);
+
+        // ---- withdrawn: what this camp wrote, and nothing else ----
+        var withdrawn = await organiser.DeleteAsync($"/api/v1/expeditions/{camp}/sharing");
+        withdrawn.StatusCode.ShouldBe(HttpStatusCode.NoContent, await withdrawn.Content.ReadAsStringAsync());
+
+        (await RulesOnAsync(first)).ShouldBeEmpty();
+        (await RulesOnAsync(second)).ShouldBeEmpty();
+        var left = (await RulesOnAsync(lent)).ShouldHaveSingleItem();
+        left.GrantedViaExpeditionId.ShouldBeNull("the delegation was never the camp's to take back");
+        (await RulesOnAsync(hidden)).ShouldHaveSingleItem().Effect.ShouldBe(AccessEffect.Deny);
+        (await ReadSharingAsync(camp)).Rules.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The bound on how much may be handed out is taken at each trip, and one trip exceeding it
+    /// costs only that trip. The organiser holds everything on a trip they own and only what the
+    /// seeded ruleset gives them on one lent to the camp, so a rule carrying Delete lands on the
+    /// first and is refused on the second — which is told apart, in the answer, from a trip they
+    /// may not administer at all, because what they have to do about it is different.
+    /// </summary>
+    [Fact]
+    public async Task A_rule_carrying_more_than_the_organiser_holds_on_one_trip_skips_that_trip_and_no_other()
+    {
+        var camp = await CreateCampAsync();
+        var mine = await CreateTripAsync(organiser, "Owned outright");
+        var lent = await CreateTripAsync(stranger, "Lent with its rules delegated");
+        await JoinAsync(camp, mine);
+        await JoinAsync(camp, lent);
+        await GrantOnTripAsync(lent, organiserId, AccessAction.ManagePermissions);
 
         var applied = await CascadeAsync(camp, organiserId, new ExpeditionShareEntryWrite(
-            AccessSubjectKind.User, readerId, AccessEffect.Allow, AccessAction.Read));
+            AccessSubjectKind.User, readerId, AccessEffect.Allow,
+            AccessAction.Read | AccessAction.Delete));
+
         applied.Problem.ShouldBeNull();
-        (await RulesOnAsync(mine)).Count.ShouldBe(1);
+        applied.Shared.ShouldBe(1);
+        var written = (await RulesOnAsync(mine)).ShouldHaveSingleItem();
+        written.Actions.ShouldBe(AccessAction.Read | AccessAction.Delete);
+
+        // Nothing of the rule reached the trip it would have amplified on — not the part of it
+        // the organiser does hold there either. A trip takes the whole of a rule or none.
+        (await RulesOnAsync(lent)).ShouldHaveSingleItem().GrantedViaExpeditionId.ShouldBeNull();
+
+        var skipped = applied.Skipped.ShouldHaveSingleItem();
+        skipped.TripId.ShouldBe(lent);
+        skipped.Reason.ShouldBe(CascadeSkipReason.BeyondHolding);
+    }
+
+    /// <summary>
+    /// A trip that already carries the camp's sharing is covered whoever asks. Somebody who may
+    /// administer the camp but not that trip writes nothing onto it by applying again, so there
+    /// is nothing to refuse — and an answer calling it skipped would contradict the coverage the
+    /// camp reports for the same rows.
+    /// </summary>
+    [Fact]
+    public async Task Applying_again_does_not_call_a_trip_skipped_that_already_carries_the_sharing()
+    {
+        var camp = await CreateCampAsync();
+        var lent = await CreateTripAsync(stranger, "Shared while it was delegated");
+        var mine = await CreateTripAsync(organiser, "The organiser's");
+        await JoinAsync(camp, lent);
+        await JoinAsync(camp, mine);
+
+        // Delegated, shared, and the delegation then taken back: the camp's rule is on the trip
+        // and the organiser may no longer write one there.
+        var delegation = await GrantOnTripAsync(lent, organiserId, AccessAction.ManagePermissions);
+        var rule = new ExpeditionShareEntryWrite(
+            AccessSubjectKind.User, readerId, AccessEffect.Allow, AccessAction.Read);
+        (await CascadeAsync(camp, organiserId, rule)).Shared.ShouldBe(2);
+        await RemoveRuleAsync(delegation);
+
+        var again = await CascadeAsync(camp, organiserId, rule);
+        again.Problem.ShouldBeNull();
+        again.Shared.ShouldBe(2);
+        again.Written.ShouldBe(0);
+        again.Skipped.ShouldBeEmpty();
+        again.SkippedNotNamed.ShouldBe(0);
+
+        // The control, so that is a statement about a trip already covered and not about the
+        // check having gone: asking for something that trip does not carry is refused there.
+        var wider = await CascadeAsync(camp, organiserId, rule with { Actions = AccessAction.Read | AccessAction.Write });
+        wider.Problem.ShouldBeNull();
+        wider.Skipped.ShouldHaveSingleItem().TripId.ShouldBe(lent);
+        (await RulesOnAsync(lent)).Single(r => r.GrantedViaExpeditionId == camp)
+            .Actions.ShouldBe(AccessAction.Read, "the row the organiser may no longer write is as it was");
     }
 
     [Fact]
@@ -603,20 +799,40 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
             .ToListAsync();
     }
 
-    private async Task GrantOnTripAsync(Guid tripId, Guid userId, AccessAction actions)
+    private Task<long> GrantOnTripAsync(Guid tripId, Guid userId, AccessAction actions) =>
+        RuleOnTripAsync(tripId, userId, AccessEffect.Allow, actions);
+
+    /// <summary>
+    /// A refusal on one trip for one account, written straight to the table as the grant above
+    /// is: what a trip's owner does when they close it to somebody a wider rule lets in.
+    /// </summary>
+    private Task<long> DenyOnTripAsync(Guid tripId, Guid userId, AccessAction actions) =>
+        RuleOnTripAsync(tripId, userId, AccessEffect.Deny, actions);
+
+    private async Task<long> RuleOnTripAsync(Guid tripId, Guid userId, AccessEffect effect, AccessAction actions)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        db.AccessEntries.Add(new AccessEntry
+        var entry = new AccessEntry
         {
             SubjectKind = AccessSubjectKind.User,
             SubjectId = userId,
-            Effect = AccessEffect.Allow,
+            Effect = effect,
             Domain = AccessDomain.TripLogs,
             Actions = actions,
             ScopeKind = AccessScopeKind.Object,
             ScopeId = tripId,
-        });
+        };
+        db.AccessEntries.Add(entry);
+        await db.SaveChangesAsync();
+        return entry.Id;
+    }
+
+    private async Task RemoveRuleAsync(long entryId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Remove(await db.AccessEntries.SingleAsync(e => e.Id == entryId));
         await db.SaveChangesAsync();
     }
 

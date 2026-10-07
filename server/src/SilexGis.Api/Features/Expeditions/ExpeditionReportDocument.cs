@@ -283,7 +283,7 @@ internal static class ExpeditionReportDocument
             {
                 stay.CaverName,
                 stay.RoleName,
-                Dates(stay.FromDate, stay.ToDate),
+                StayDates(stay.FromDate, stay.ToDate),
                 stay.Note,
             }.Where(x => !string.IsNullOrWhiteSpace(x));
             blocks.Add(DocumentBlock.Bullet(string.Join(" · ", line)));
@@ -440,6 +440,16 @@ internal static class ExpeditionReportDocument
         end is { } last && last != start
             ? $"{start:yyyy-MM-dd} – {last:yyyy-MM-dd}"
             : start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The days of one stay. Not <see cref="Dates"/>: for a camp or a trip no last day is one
+    /// day, and for a stay it is somebody who has not left — a document that printed such a row
+    /// as a single date would file, under the club's name, that they went home the day they came.
+    /// </summary>
+    private static string StayDates(DateOnly from, DateOnly? to) =>
+        to is null
+            ? $"from {from:yyyy-MM-dd}, still there"
+            : Dates(from, to);
 
     private static string? Hours(TimeOnly? entry, TimeOnly? exit) =>
         entry is null && exit is null

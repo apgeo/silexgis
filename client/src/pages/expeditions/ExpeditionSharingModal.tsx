@@ -15,6 +15,7 @@ import {
   Typography,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { ApiError } from '../../api/client.ts';
 import {
   useApplyExpeditionSharing,
@@ -26,6 +27,7 @@ import {
   type AccessActionFlag,
   type ExpeditionSharedRule,
   type ExpeditionShareEntry,
+  type ExpeditionSharingOutcome,
 } from '../../api/hooks.ts';
 import { ACTION_ORDER, actionSetLabels, joinActions } from '../../components/permissions/accessDisplay.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
@@ -40,6 +42,10 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 const SHAREABLE: readonly AccessActionFlag[] = ACTION_ORDER.filter(
   (flag) => flag !== 'create' && flag !== 'viewExactLocation',
 );
+
+/** How many trips an act skipped: the ones it may name and the ones it only counts. */
+const skippedCount = (outcome: ExpeditionSharingOutcome): number =>
+  outcome.skippedTrips.length + outcome.skippedTripsNotNamed;
 
 /** A rule being composed, before the act that writes it onto every member trip. */
 interface Draft {
@@ -65,10 +71,15 @@ interface Props {
  * whole fortnight in one act and each trip still answers for itself. That shape sets the three
  * things this dialog has to say plainly: a trip that joins later is *not* covered until somebody
  * re-applies the sharing; the rules can be added to but a subject is only ever taken off by
- * withdrawing everything and applying the rest again; and the act needs the right to manage
- * permissions on *every* member trip, so a camp gathering three clubs' trips shares nothing until
- * every trip's owner has delegated — the server refuses the whole act and says how many trips
- * refused it, never which.
+ * withdrawing everything and applying the rest again; and each trip answers for itself — the act
+ * reaches the trips whose permissions the organiser may manage and skips the others, so a camp
+ * gathering three clubs' trips is shared for the organiser's own at once and for the rest as
+ * their owners delegate.
+ *
+ * What was skipped is said, because a sharing that silently reached nine trips of ten would be
+ * read as reaching ten. The server names the skipped trips the organiser may read and only
+ * counts the ones they may not — a camp can gather a trip its organiser cannot open — and this
+ * dialog shows exactly that and nothing it worked out for itself.
  */
 export default function ExpeditionSharingModal({ expeditionId, open, onClose }: Props) {
   const { t } = useTranslation();
@@ -86,6 +97,11 @@ export default function ExpeditionSharingModal({ expeditionId, open, onClose }: 
   const [userQuery, setUserQuery] = useState('');
   const debouncedUserQuery = useDebouncedValue(userQuery);
   const { data: users } = useUserSearch(debouncedUserQuery);
+
+  // What the last apply or re-apply in this dialog did — which trips it skipped. Held here and
+  // not in the cache: it is the answer to an act, not a state of the camp, and reading the camp's
+  // sharing again does not give it back.
+  const [outcome, setOutcome] = useState<ExpeditionSharingOutcome | null>(null);
 
   const memberTrips = sharing?.memberTrips ?? 0;
   const rules = sharing?.rules ?? [];
@@ -124,9 +140,9 @@ export default function ExpeditionSharingModal({ expeditionId, open, onClose }: 
   };
 
   /**
-   * The server's refusals, in words that say what to do about them. The incomplete refusal
-   * carries a count and nothing else, by design: a member trip the caller cannot see must not
-   * be disclosed by the refusal that mentions it.
+   * The server's refusals, in words that say what to do about them. The incomplete refusal is
+   * the sharing that reached no trip at all; it carries a count and nothing else, by design: a
+   * member trip the caller cannot see must not be disclosed by the refusal that mentions it.
    */
   const refusal = (error: unknown): string => {
     if (!(error instanceof ApiError)) {
@@ -146,6 +162,23 @@ export default function ExpeditionSharingModal({ expeditionId, open, onClose }: 
     }
   };
 
+  /**
+   * Says what an act did. "Shared" only when every trip took it; otherwise how many did, as a
+   * warning rather than a success, with the trips it skipped listed in the dialog itself — a
+   * toast is gone in three seconds and the list is what somebody has to act on.
+   */
+  const announce = (done: ExpeditionSharingOutcome, act: 'applied' | 'reapplied') => {
+    setOutcome(done);
+    const skipped = skippedCount(done);
+    if (skipped === 0) {
+      message.success(t(`expeditions.sharing.${act}`));
+    } else {
+      message.warning(
+        t('expeditions.sharing.inPart', { shared: done.sharedTrips, total: done.sharedTrips + skipped }),
+      );
+    }
+  };
+
   const onApply = async () => {
     const entries: ExpeditionShareEntry[] = drafts
       .filter((d) => d.actions.size > 0)
@@ -159,19 +192,19 @@ export default function ExpeditionSharingModal({ expeditionId, open, onClose }: 
       return;
     }
     try {
-      await apply.mutateAsync(entries);
+      announce(await apply.mutateAsync(entries), 'applied');
       setDrafts([]);
-      message.success(t('expeditions.sharing.applied'));
     } catch (error) {
+      setOutcome(null);
       message.error(refusal(error));
     }
   };
 
   const onReapply = async () => {
     try {
-      await reapply.mutateAsync();
-      message.success(t('expeditions.sharing.reapplied'));
+      announce(await reapply.mutateAsync(), 'reapplied');
     } catch (error) {
+      setOutcome(null);
       message.error(refusal(error));
     }
   };
@@ -179,22 +212,32 @@ export default function ExpeditionSharingModal({ expeditionId, open, onClose }: 
   const onWithdraw = async () => {
     try {
       await withdraw.mutateAsync();
+      // Nothing of the camp's is on any trip now, so what an earlier act skipped is no longer
+      // a statement about anything.
+      setOutcome(null);
       message.success(t('expeditions.sharing.withdrawn'));
     } catch (error) {
       message.error(refusal(error));
     }
   };
 
+  const close = () => {
+    setOutcome(null);
+    onClose();
+  };
+
   const busy = apply.isPending || reapply.isPending || withdraw.isPending;
-  // Fewer trips carrying a rule than the camp has means trips joined since the sharing was
-  // last applied — the one state this dialog exists to make visible.
+  // Fewer trips carrying a rule than the camp has means trips the sharing does not reach —
+  // joined since it was last applied, or skipped when it was — the one state this dialog exists
+  // to make visible.
   const behind = rules.some((rule) => rule.trips < memberTrips);
+  const skipped = outcome ? skippedCount(outcome) : 0;
 
   return (
     <Modal
       title={t('expeditions.sharing.title')}
       open={open}
-      onCancel={onClose}
+      onCancel={close}
       footer={null}
       width={860}
       destroyOnHidden
@@ -208,13 +251,54 @@ export default function ExpeditionSharingModal({ expeditionId, open, onClose }: 
             {t('expeditions.sharing.memberTrips', { count: memberTrips })}
           </Typography.Paragraph>
 
-          {behind && (
+          {behind && skipped === 0 && (
             <Alert
               type="warning"
               showIcon
               style={{ marginBottom: 12 }}
               title={t('expeditions.sharing.behindHint')}
               data-testid="expedition-sharing-behind"
+            />
+          )}
+
+          {outcome && skipped > 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 12 }}
+              title={t('expeditions.sharing.skippedTitle', {
+                shared: outcome.sharedTrips,
+                skipped,
+              })}
+              description={
+                <>
+                  {outcome.skippedTrips.length > 0 && (
+                    <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+                      {outcome.skippedTrips.map((trip) => (
+                        <li key={trip.id} data-testid="expedition-sharing-skipped-trip">
+                          <Link to={`/trip-logs/${trip.id}`}>{trip.title}</Link>
+                          {' — '}
+                          {t(`expeditions.sharing.skippedReason.${trip.reason}`)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {outcome.skippedTripsNotNamed > 0 && (
+                    <Typography.Paragraph
+                      style={{ marginTop: 8, marginBottom: 0 }}
+                      data-testid="expedition-sharing-skipped-unnamed"
+                    >
+                      {t('expeditions.sharing.skippedNotNamed', {
+                        count: outcome.skippedTripsNotNamed,
+                      })}
+                    </Typography.Paragraph>
+                  )}
+                  <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+                    {t('expeditions.sharing.skippedHint')}
+                  </Typography.Paragraph>
+                </>
+              }
+              data-testid="expedition-sharing-skipped"
             />
           )}
 

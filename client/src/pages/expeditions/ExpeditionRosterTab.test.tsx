@@ -106,7 +106,22 @@ describe('who was at a camp', () => {
     expect(screen.getByTestId('expedition-roster-tab').textContent).toContain('–');
   });
 
-  it('shows one day for a stay that did not run on past the day it started', () => {
+  it('shows one day for a stay whose last day is its first', () => {
+    const first = entry().fromDate;
+    rosterSpy.mockReturnValue({
+      data: roster({ entries: [entry({ toDate: first })] }),
+      isPending: false,
+      error: null,
+    });
+    show();
+
+    // One day, and never a range of itself — nor somebody still there.
+    const text = screen.getByTestId('expedition-roster-tab').textContent;
+    expect(text).not.toContain('–');
+    expect(text).not.toContain('still there');
+  });
+
+  it('says in words that somebody with no last day is still there', () => {
     rosterSpy.mockReturnValue({
       data: roster({ entries: [entry({ toDate: null })] }),
       isPending: false,
@@ -114,9 +129,9 @@ describe('who was at a camp', () => {
     });
     show();
 
-    // An absent end is "they did not stay on past the day they arrived", never "the end is
-    // unknown" — the same convention the camp's own dates follow.
-    expect(screen.getByTestId('expedition-roster-tab').textContent).not.toContain('–');
+    // No last day is not one day here, as it is for the camp's own dates: a roster is kept
+    // while the camp is running, and this is the row of somebody who has not left.
+    expect(screen.getByTestId('expedition-roster-tab').textContent).toContain('still there');
   });
 
   it('reports the head count the server worked out, not the number of rows', () => {

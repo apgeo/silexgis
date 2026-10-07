@@ -1345,7 +1345,7 @@ public static class DemoSeeder
                 CaverId = caverId,
                 RoleId = roleId,
                 FromDate = from,
-                ToDate = DayRange.EndForStorage(from, to),
+                ToDate = DayRange.OpenEndForStorage(from, to),
                 Note = note,
             });
         }
@@ -1361,8 +1361,8 @@ public static class DemoSeeder
             "Went back for the mid-camp resupply.");
         Add(caverIds[1], ExpeditionRosterRoleSeeds.MemberCode, end.AddDays(-4), end);
 
-        // There for one day, which stores no end at all — the row every reader of the interval is
-        // written against.
+        // There for one day, which stores that day as its last as well as its first: on a roster
+        // an absent last day is somebody who has not left.
         Add(caverIds[2], "base_camp", start.AddDays(2), start.AddDays(2),
             "Drove the food up and stayed the day.");
 

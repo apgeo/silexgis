@@ -66,6 +66,14 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
 
     public DateOnly TripDate { get; set; }
 
+    /// <summary>
+    /// The last day, or null when the trip lasted a single day. An end equal to the start is
+    /// stored as null, exactly as a camp's is, so one day never reads as a range of itself.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="DayRange.EndForStorage"/> is applied where a trip is written, and the database
+    /// holds the same rule as a constraint.
+    /// </remarks>
     public DateOnly? TripDateEnd { get; set; }
 
     /// <summary>Underground entry/exit wall-clock times (no time zone; duration is derived).</summary>

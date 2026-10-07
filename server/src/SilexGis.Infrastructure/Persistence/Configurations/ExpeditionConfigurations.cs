@@ -73,13 +73,15 @@ public sealed class ExpeditionRosterEntryConfiguration : IEntityTypeConfiguratio
 {
     public void Configure(EntityTypeBuilder<ExpeditionRosterEntry> builder)
     {
-        // A stored end means "and they stayed on to", exactly as the camp's own end date does, so
-        // it is either absent or strictly after the first day. Held in the database and not only
-        // in the write path, because every reader of the interval is written against it: a row
-        // whose end equalled its start would make one day read as a range of itself everywhere at
-        // once, and no reader would notice.
+        // A stored last day is never before the first, and may equal it: a stay is the one span
+        // here that can be recorded while it is still going on, so an absent last day means
+        // "still there" and a single day has to store its day to be told apart from that. The
+        // camp's own dates and a trip's are strict where this is not, because for them an absent
+        // end means one day. Held in the database and not only in the write path, so a writer
+        // that gets it backwards fails loudly instead of leaving a stay that ended before it
+        // began for every reader to second-guess.
         builder.ToTable("expedition_roster", t => t.HasCheckConstraint(
-            "ck_expedition_roster_dates", "to_date IS NULL OR to_date > from_date"));
+            "ck_expedition_roster_dates", "to_date IS NULL OR to_date >= from_date"));
 
         builder.Property(x => x.Note).HasMaxLength(500);
 

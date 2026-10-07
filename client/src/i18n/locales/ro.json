@@ -2095,6 +2095,12 @@
       "role": "Rol",
       "roleRequired": "Alegeți un rol",
       "daysHint": "Prima și ultima zi în care a fost acolo. Pentru o singură zi, alegeți-o de două ori.",
+      "daysRequired": "Alegeți prima și ultima zi sau bifați „încă acolo”.",
+      "firstDay": "Prima zi",
+      "lastDay": "Ultima zi",
+      "stillThere": "Încă acolo",
+      "stillThereChoice": "Încă acolo — nu a plecat încă",
+      "since": "din {{date}}, încă acolo",
       "note": "Notă",
       "notePlaceholder": "A sosit mai târziu, a plecat mai devreme, s-a întors…",
       "personGone": "Această persoană nu mai este în lista de speologi. Alegeți-o din nou sau scrieți-i numele."
@@ -2145,7 +2151,7 @@
     "sharing": {
       "title": "Partajează tabăra",
       "button": "Partajează",
-      "intro": "Partajarea unei tabere scrie câte o regulă pe fiecare tură adunată în ea, marcată ca fiind a taberei, astfel încât cel cu care este partajată poate citi ce a adunat tabăra. Necesită dreptul de a gestiona permisiunile pe fiecare dintre aceste ture: dacă vreo tură refuză, nu se partajează nimic și vi se spune câte au refuzat, niciodată care. O tură care se alătură taberei mai târziu nu este acoperită până când partajarea este aplicată din nou.",
+      "intro": "Partajarea unei tabere scrie câte o regulă pe fiecare tură adunată în ea, marcată ca fiind a taberei, astfel încât cel cu care este partajată poate citi ce a adunat tabăra. Fiecare tură răspunde pentru ea însăși: tabăra este partajată pe fiecare tură ale cărei permisiuni le puteți gestiona, iar celelalte sunt sărite și enumerate. O tură care se alătură taberei mai târziu nu este acoperită până când partajarea este aplicată din nou.",
       "memberTrips": "Ture în această tabără: {{count}}.",
       "notAllowed": "Nu puteți partaja această tabără.",
       "empty": "Această tabără nu este partajată încă cu nimeni.",
@@ -2153,19 +2159,27 @@
       "coverage": "Ture acoperite",
       "covered": "{{trips}} din {{total}}",
       "behind": "Nu toate turele",
-      "behindHint": "S-au alăturat ture acestei tabere de când partajarea a fost aplicată ultima dată, iar ele nu o poartă. Aplicați din nou partajarea pentru a le acoperi.",
+      "behindHint": "Nu toate turele din această tabără îi poartă partajarea. Unele s-au alăturat după ce a fost aplicată ultima dată; altele au fost sărite pentru că cel care a aplicat-o nu le putea gestiona permisiunile. Aplicați din nou partajarea pentru a le acoperi pe cele pe care le puteți.",
       "addTitle": "Partajează cu altcineva",
       "apply": "Aplică partajarea",
-      "applyHint": "Scrie aceste reguli pe fiecare tură din tabără. Regulile deja aplicate se păstrează; nimic nu este eliminat.",
+      "applyHint": "Scrie aceste reguli pe fiecare tură din tabără ale cărei permisiuni le puteți gestiona și le enumeră pe cele sărite. Regulile deja aplicate se păstrează; nimic nu este eliminat.",
       "applied": "Tabăra este partajată.",
       "reapply": "Aplică din nou",
       "reapplied": "Partajarea acoperă acum fiecare tură din tabără.",
       "withdraw": "Retrage partajarea",
       "withdrawConfirm": "Retrageți partajarea acestei tabere de pe fiecare tură adunată în ea? Regulile scrise pe fila de permisiuni a unei ture se păstrează.",
       "withdrawn": "Partajarea taberei a fost retrasă.",
-      "incomplete": "Nepartajat: {{count}} dintre turele acestei tabere au refuzat, pentru că nu le puteți gestiona permisiunile. Proprietarii lor trebuie să delege mai întâi acest drept.",
+      "incomplete": "Nepartajat: nu puteți gestiona permisiunile niciuneia dintre turele acestei tabere ({{count}}) sau ați cerut să dați mai mult decât aveți pe ele. Proprietarii lor trebuie să vă lase mai întâi să le gestionați permisiunile.",
       "noTrips": "Această tabără nu adună încă nicio tură, așa că nu este nimic de partajat.",
-      "nothingShared": "Această tabără nu partajează nimic de aplicat din nou."
+      "nothingShared": "Această tabără nu partajează nimic de aplicat din nou.",
+      "inPart": "Ture partajate: {{shared}} din {{total}}. Restul au fost sărite — sunt enumerate în acest dialog.",
+      "skippedTitle": "Ture partajate: {{shared}}. Ture sărite: {{skipped}}.",
+      "skippedReason": {
+        "notAdministered": "proprietarul ei trebuie să vă lase să îi gestionați permisiunile",
+        "beyondHolding": "ați cerut să dați mai mult decât aveți dumneavoastră pe această tură"
+      },
+      "skippedNotNamed": "Ture sărite pe care nu le puteți citi și care, de aceea, nu sunt numite aici: {{count}}. Proprietarii lor trebuie să vă lase să le gestionați permisiunile.",
+      "skippedHint": "Pe o tură sărită nu s-a scris nimic. Aplicați din nou partajarea după ce situația s-a schimbat, iar tura va fi preluată."
     },
     "report": {
       "open": "Raport",

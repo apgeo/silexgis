@@ -5,8 +5,8 @@ using SilexGis.Domain.Access;
 namespace SilexGis.Domain.Tests;
 
 /// <summary>
-/// The two rules a grant reaching from one thing to many must obey, driven without a database
-/// or a route because both are rules rather than behaviours of any one endpoint.
+/// The rules a grant reaching from one thing to many must obey, driven without a database or a
+/// route because they are rules rather than behaviours of any one endpoint.
 /// </summary>
 public sealed class AccessCascadeRulesTests
 {
@@ -44,6 +44,42 @@ public sealed class AccessCascadeRulesTests
         // same size are the same sentence whatever was refused.
         detail.ShouldBe(AccessCascadeRules.IncompleteDetail(7));
         detail.ShouldNotBe(AccessCascadeRules.IncompleteDetail(6));
+    }
+
+    [Fact]
+    public void A_skipped_row_is_named_only_to_a_caller_who_may_read_it()
+    {
+        // The whole disclosure rule of a cascade that went through in part. What the caller may
+        // read is handed back to be named; what they may not comes back as a number, and the
+        // answer has no member through which such a row could be told apart from another.
+        var disclosed = AccessCascadeRules.Disclose<string>(
+        [
+            ("readable-a", true),
+            ("unreadable-x", false),
+            ("readable-b", true),
+            ("unreadable-y", false),
+            ("unreadable-z", false),
+        ]);
+
+        disclosed.Named.ShouldBe(["readable-a", "readable-b"]);
+        disclosed.NotNamed.ShouldBe(3);
+    }
+
+    [Fact]
+    public void Rows_nobody_may_read_leave_a_count_and_rows_everybody_may_read_leave_no_count()
+    {
+        // Both ends, so the rule is a partition and not a habit of always doing one thing.
+        var hidden = AccessCascadeRules.Disclose<string>([("x", false), ("y", false)]);
+        hidden.Named.ShouldBeEmpty();
+        hidden.NotNamed.ShouldBe(2);
+
+        var open = AccessCascadeRules.Disclose<string>([("a", true), ("b", true)]);
+        open.Named.ShouldBe(["a", "b"]);
+        open.NotNamed.ShouldBe(0);
+
+        var nothing = AccessCascadeRules.Disclose<string>([]);
+        nothing.Named.ShouldBeEmpty();
+        nothing.NotNamed.ShouldBe(0);
     }
 
     [Fact]
