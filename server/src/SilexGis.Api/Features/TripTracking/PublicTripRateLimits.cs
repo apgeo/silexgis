@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Globalization;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Net.Http.Headers;
+
 namespace SilexGis.Api.Features.TripTracking;
 
 /// <summary>
@@ -57,4 +62,46 @@ internal static class PublicTripRateLimits
 
     /// <summary>Where an installation overrides it.</summary>
     internal const string ConfigurationKey = "TripTracking:PublicRateLimitPerMinute";
+
+    /// <summary>
+    /// What a read turned away by this window is told, and what the installation counts.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Called for every rejection of every window the application has, because the limiter has one
+    /// rejection callback and not one per policy; it acts only on a request whose route is under
+    /// this window and leaves every other rejection exactly as it was.
+    /// </para>
+    /// <para>
+    /// <b><c>Retry-After</c>, in whole seconds.</b> A page that is refused and asks again at once
+    /// spends the budget it was refused from, and so does a proxy relaying for many readers; with
+    /// the header both can wait the right time instead of guessing. The number is what the limiter
+    /// reports for the refused lease, which for a fixed window is the length of the window — an
+    /// upper bound on the wait rather than what is left of this window. That is the honest figure
+    /// to give: the limiter does not disclose where in its window it is, and a caller who waits
+    /// that long is certain to find a fresh one. Rounded up, never down, and never zero.
+    /// </para>
+    /// <para>
+    /// <b>A header and nothing else.</b> The refusal's body is the problem document the status-code
+    /// pages write after this returns; writing one here would replace it.
+    /// </para>
+    /// </remarks>
+    internal static void Rejected(OnRejectedContext context)
+    {
+        var http = context.HttpContext;
+        var endpoint = http.GetEndpoint();
+        if (endpoint?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName != PolicyName)
+        {
+            return;
+        }
+
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            var seconds = Math.Max(1, (long)Math.Ceiling(retryAfter.TotalSeconds));
+            http.Response.Headers[HeaderNames.RetryAfter] = seconds.ToString(CultureInfo.InvariantCulture);
+        }
+
+        http.RequestServices.GetRequiredService<PublicTripDiagnostics>()
+            .Limited(endpoint.Metadata.GetMetadata<PublicTripRoute>() ?? PublicTripRoute.Unnamed);
+    }
 }

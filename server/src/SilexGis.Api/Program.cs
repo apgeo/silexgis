@@ -221,6 +221,10 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // to know. Registered concretely: it is called from one place and substituted by nothing, so an
     // interface would be ceremony rather than a seam.
     builder.Services.AddScoped<SilexGis.Api.Features.TripTracking.TripPublicationAnnouncer>();
+    // Why a published page was refused and how much the published surface is read, for the
+    // operator: a log event and counters, and nothing in any response. One for the application's
+    // lifetime because it owns the counters.
+    builder.Services.AddSingleton<PublicTripDiagnostics>();
     // One resolver per resource-link target world; the directory is what the link
     // surface fans out through for display, the picker feed and the authoring floor.
     builder.Services.AddScoped<IResLinkTargetResolver, FeatureTargetResolver>();
@@ -257,6 +261,13 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        // Adds a header and a count and writes no body: the refusal's problem document is written
+        // afterwards by the status-code pages, and a body written here would replace it.
+        options.OnRejected = (context, _) =>
+        {
+            PublicTripRateLimits.Rejected(context);
+            return ValueTask.CompletedTask;
+        };
         options.AddPolicy("auth", context =>
             System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",

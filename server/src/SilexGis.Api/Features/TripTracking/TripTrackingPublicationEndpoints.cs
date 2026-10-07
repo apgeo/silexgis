@@ -110,6 +110,7 @@ public static class TripTrackingPublicationEndpoints
             .WithTags("TripTracking")
             .AllowAnonymous()
             .RequireRateLimiting(PublicTripRateLimits.PolicyName)
+            .WithMetadata(PublicTripRoute.Follow)
             .WithSummary("Follow a published trip: the party, where each of them was last reported, and the survey model to draw it in.");
 
         return api;
@@ -390,11 +391,20 @@ public static class TripTrackingPublicationEndpoints
     private static async Task<Results<Ok<PublicTripTrackingEnvelopeDto>, ProblemHttpResult>> FollowAsync(
         string token, SilexGisDbContext db, FeatureProtection protection, ICrsRegistry crs,
         IFileAccessTokenService tokens, IOptions<TripTrackingOptions> options, TimeProvider clock,
-        CancellationToken ct)
+        PublicTripDiagnostics diagnostics, CancellationToken ct)
     {
+        // Every refusal below is this one answer. What differs is the reason beside it, which goes
+        // to the installation's log for its operator and into nothing a caller receives; each
+        // reason is read off values this route has already fetched, so naming it adds no query.
+        ProblemHttpResult Refused(PublishedReadRefusal why)
+        {
+            diagnostics.Refused(PublicTripRoute.Follow, why, token);
+            return ApiProblems.NotFound(NotFoundCode);
+        }
+
         if (string.IsNullOrEmpty(token) || token.Length > TripTrackingRules.MaxShareTokenLength)
         {
-            return ApiProblems.NotFound(NotFoundCode);
+            return Refused(PublishedReadRefusal.UnknownLink);
         }
 
         // One round trip whatever the token turns out to be. The link, its trip and its watch are
@@ -411,7 +421,7 @@ public static class TripTrackingPublicationEndpoints
             join watch in db.TripTrackings.AsNoTracking() on log.Id equals watch.TripLogId
             where link.TokenHash == hash
             select new { Share = link, Trip = log, Tracking = watch }).FirstOrDefaultAsync(ct);
-        if (found is null) return ApiProblems.NotFound(NotFoundCode);
+        if (found is null) return Refused(PublishedReadRefusal.UnknownLink);
 
         var (share, trip, tracking) = (found.Share, found.Trip, found.Tracking);
 
@@ -429,22 +439,38 @@ public static class TripTrackingPublicationEndpoints
         // underground. Nothing there widens this: a link outside both windows answers exactly what
         // an invented one answers, so neither route tells a stranger that a token was once real.
         // Do not "unify" the two gates — they are two deliberate lifetimes, not an inconsistency.
+        var now = clock.GetUtcNow();
         var open = TripPublicationWindow.IsOpen(
-            clock.GetUtcNow(),
+            now,
             share.RevokedAt,
             share.ExpiresAt,
             tracking.State,
             tracking.ClosedAt,
             options.Value.ShareGraceAfterClose);
-        if (!open) return ApiProblems.NotFound(NotFoundCode);
+        if (!open)
+        {
+            // Why, asked of the same facts at the same instant through the function that explains
+            // this rule. It answers null only when the window is open, which the line above has
+            // just excluded; the fallback is there so that a disagreement between the two could
+            // never turn a refusal into an exception on an anonymous route.
+            return Refused(
+                TripPublicationRefusal.OfLiveWindow(
+                    now,
+                    share.RevokedAt,
+                    share.ExpiresAt,
+                    tracking.State,
+                    tracking.ClosedAt,
+                    options.Value.ShareGraceAfterClose)
+                ?? PublishedReadRefusal.Expired);
+        }
 
         // The refusal, taken again. A cave that was open when the link was minted and is
         // protected now closes the page, and so does a configuration that has lost the cave it
         // was anchored to — answered as an unknown token is, because whether this trip exists is
         // part of what the refusal keeps back.
-        if (tracking.CaveFeatureId is not { } configCave) return ApiProblems.NotFound(NotFoundCode);
+        if (tracking.CaveFeatureId is not { } configCave) return Refused(PublishedReadRefusal.CaveWithheld);
         var publishable = await TrackingWithholding.PublishableCaveIdsAsync(db, protection, [configCave], ct);
-        if (!publishable.Contains(configCave)) return ApiProblems.NotFound(NotFoundCode);
+        if (!publishable.Contains(configCave)) return Refused(PublishedReadRefusal.CaveWithheld);
 
         // The party, folded by the one routine both published reads use. Drawability is decided
         // against this trip's own survey, which for this route is the survey the envelope hands
@@ -453,7 +479,11 @@ public static class TripTrackingPublicationEndpoints
             db, protection, options.Value, trip.Id, tracking.SurveyModelId, configCave, ct);
 
         var camps = await ExpeditionsOfAsync(db, [trip.Id], ct);
+        // Read before the answer is built rather than inside it, so that the read is counted as
+        // served only once nothing is left that could fail.
+        var model = await ModelAsync(db, protection, crs, tokens, tracking.SurveyModelId, configCave, ct);
 
+        diagnostics.Served(PublicTripRoute.Follow);
         return TypedResults.Ok(new PublicTripTrackingEnvelopeDto(
             trip.Id,
             camps.GetValueOrDefault(trip.Id),
@@ -464,7 +494,7 @@ public static class TripTrackingPublicationEndpoints
             tracking.ArmedAt,
             tracking.ClosedAt,
             party.PositionsWithheld,
-            await ModelAsync(db, protection, crs, tokens, tracking.SurveyModelId, configCave, ct),
+            model,
             party.Teams,
             party.Participants));
     }
