@@ -100,6 +100,10 @@ party already out.
 **Back to live** returns. Photographs can be hung on **a moment** of the trip (*Photographs of
 this moment*) rather than on a report, so correcting or deleting a report never loses them.
 
+**Make a movie**, on the same panel, saves the replay as a file — a GIF or a video of the party
+moving through the survey, of this trip or of several. See
+[A movie of a tracked trip](tracking-movie.md).
+
 ---
 
 ## Correcting and deleting reports
@@ -417,4 +421,5 @@ Read it for what it is:
 
 Related: [Trips](trips.md) · [Checklists and the callout](checklists-and-callout.md) ·
 [Sharing, QR codes and public pages](sharing-and-public-pages.md) ·
+[A movie of a tracked trip](tracking-movie.md) ·
 [Location protection](../admin/location-protection.md)

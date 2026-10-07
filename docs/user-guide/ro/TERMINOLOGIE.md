@@ -156,6 +156,11 @@ odată cu ea — și apoi paginile.
 | Withheld / Opens nothing (a link's status) | Reținut / Nu deschide nimic |
 | Protected cave nearby? | Peșteră protejată în apropiere? |
 | Log code | Cod în jurnal |
+| Make a movie | Fă un film |
+| Export GIF / Cancel export | Exportă GIF / Anulează exportul |
+| Caver labels | Etichetele speologilor |
+| Captions (of a movie) | Texte |
+| Stop and close / Keep going | Oprește și închide / Continuă exportul |
 
 ## Alte
 

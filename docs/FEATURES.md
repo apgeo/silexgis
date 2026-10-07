@@ -411,6 +411,21 @@ feature and walkthroughs of whole jobs.
   publication is **flagged, never refused**, when a protected cave's position lies inside the
   area the survey's stations span — a check by position that cannot see inside the file, names
   no cave, and tells a publisher nothing about a cave they may not place.
+- **A tracked trip becomes a movie you can send** — from the trip's tracking tab, or from a survey
+  on the cave's page, a signed-in member makes a short film of the party moving through the
+  survey: one trip or several, on one calendar or side by side, the model turning or still. It is
+  made in the browser and saved as a **GIF, a WebM or an MP4** — nothing is uploaded, the
+  installation keeps no copy, and the public pages of a published trip offer no such thing. The
+  preview is the movie: what it shows is what the file holds. Because a file outlives the check
+  that let you see the trip, the movie starts cautious — first names, no notes, no altitude
+  display — and the dialog says what it will be called **before** it is made: the file is named
+  after the title the movie shows, and with the title switched off it is called only
+  `silexgis-movie` and the day, naming neither trip nor cave. A trip still under way can be
+  filmed, and its movie ends when the export starts. An export draws every frame anew — half a
+  minute to a few minutes on a computer without a graphics card — so it says how long it has left,
+  **Cancel export** stops it at once, and Escape or the X ask before throwing it away. The size
+  estimate of a GIF corrects itself from the GIFs you have made. The
+  [user guide](user-guide/features/tracking-movie.md) has the whole of it.
 - **Being asked onto a trip does not open the cave, so somebody who can open it is told** — an
   invitation grants nothing, so when a person asked onto a trip cannot read a cave the trip is about,
   the cave's owner and the full administrators get a message, whether the cave was already on the trip

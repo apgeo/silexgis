@@ -72,7 +72,8 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Abonarea la calendar](features/calendar-feed.md) ·
 [Tabere](features/camps.md) ·
 [Liste de verificare și apelul de urgență](features/checklists-and-callout.md) ·
-[Urmărirea în direct și turele publicate](features/live-tracking.md)
+[Urmărirea în direct și turele publicate](features/live-tracking.md) ·
+[Un film al unei ture urmărite](features/tracking-movie.md)
 
 **Persoane și contul dumneavoastră**
 [Persoane, speologi și cluburi](features/people-and-clubs.md) ·

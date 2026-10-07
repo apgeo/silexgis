@@ -105,6 +105,10 @@ Panoul modelului marchează fiecare om acolo unde a fost raportat ultima dată, 
 întoarce. Fotografiile pot fi puse pe **un moment** al turei (*Fotografii de la acest moment*),
 nu pe un raport, așa că o corectură sau o ștergere de raport nu le pierde niciodată.
 
+**Fă un film**, pe același panou, salvează reluarea ca fișier — un GIF sau un video cu echipa
+mișcându-se prin ridicare, al acestei ture sau al mai multora. Vedeți
+[Un film al unei ture urmărite](tracking-movie.md).
+
 ---
 
 ## Corectarea și ștergerea rapoartelor
@@ -433,4 +437,5 @@ Citiți-l drept ceea ce este:
 
 Înrudite: [Ture](trips.md) · [Liste de verificare și apelul de urgență](checklists-and-callout.md) ·
 [Partajare, coduri QR și pagini publice](sharing-and-public-pages.md) ·
+[Un film al unei ture urmărite](tracking-movie.md) ·
 [Protecția locațiilor](../admin/location-protection.md)

@@ -68,7 +68,8 @@ linking out to the reference pages for detail.
 [Subscribing to your calendar](features/calendar-feed.md) ·
 [Camps](features/camps.md) ·
 [Checklists and the callout](features/checklists-and-callout.md) ·
-[Live tracking and published trips](features/live-tracking.md)
+[Live tracking and published trips](features/live-tracking.md) ·
+[A movie of a tracked trip](features/tracking-movie.md)
 
 **People and yourself**
 [People, cavers and clubs](features/people-and-clubs.md) ·
