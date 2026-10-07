@@ -1720,7 +1720,13 @@
         "publicationRefusedCave": "Publicarea acestei ture predă ridicarea topografică a peșterii, iar asta cere dreptul de a partaja peștera. Cere-l celui care se ocupă de ea.",
         "publicationRefusedProtected": "Peștera acestei ture are coordonate protejate, așa că tura nu poate fi publicată deloc. O pagină publicată spune unde se află echipa în peșteră, iar o variantă care ascunde poziția nu există.",
         "publicationNotArmed": "Un link de urmărire deschide pagina doar cât timp urmărirea este pornită. Porniți urmărirea, apoi publicați tura.",
-        "shareRevoked": "Acel link a fost deja retras, așa că nu mai este nimic de înlocuit. Publică tura din nou."
+        "shareRevoked": "Acel link a fost deja retras, așa că nu mai este nimic de înlocuit. Publică tura din nou.",
+        "notTracked": "Urmărirea nu a fost pornită niciodată pentru această tură, așa că nu are momente la care să fie pusă o fotografie. Pornește-o întâi; o tură a cărei urmărire a fost închisă primește în continuare fotografii.",
+        "pictureInFuture": "O fotografie nu poate fi pusă la un moment care nu a avut loc încă. Verifică decalajul ceasului aparatului sau momentul dat fotografiilor fără oră proprie.",
+        "pictureNotImage": "Unul dintre fișierele alese nu este o imagine. La un moment pot fi puse doar fotografii.",
+        "pictureAlreadyAttached": "O fotografie aleasă este deja la acel moment al turei, așa că nu a fost adăugată din nou.",
+        "pictureRelationMissing": "Acestei instalări îi lipsește tipul de legătură care ține o fotografie de un moment al turei, așa că niciuna nu poate fi salvată. Anunță pe cel care administrează instalarea.",
+        "pictureNotFound": "Acea fotografie nu mai este la acest moment — s-ar putea să o fi scos altcineva."
       },
       "publish": {
         "title": "Publică această tură",

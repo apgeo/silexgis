@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { App } from 'antd';
+import { App, message } from 'antd';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 
 const attach = vi.fn();
 
@@ -74,7 +75,10 @@ beforeEach(() => {
   ];
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('TrackingPicturesDialog', () => {
   it('files each photograph at the moment its own file says it was taken', () => {
@@ -173,5 +177,107 @@ describe('TrackingPicturesDialog', () => {
     show();
     // Nothing chosen is nothing to send: the button is refused rather than writing an empty batch.
     expect(screen.getByRole('button', { name: /Attach/ })).toBeDisabled();
+  });
+
+  /**
+   * A refusal of the whole request arrives as a failed write. Each has a different remedy — start
+   * the watch, or tell whoever runs the installation — so each is said in its own words, and only a
+   * refusal nothing here has words for gets the dialog's general sentence.
+   */
+  it.each([
+    ['tracking.not_tracked', /never been started for this trip/],
+    ['tracking.picture_relation_missing', /installation is missing the kind of link/],
+  ])('says why the whole request was refused: %s', async (code, says) => {
+    const failed = vi.spyOn(message, 'error').mockImplementation(() => undefined as never);
+    attach.mockImplementation((_request, on: { onError(error: unknown): void }) =>
+      on.onError(new ApiError(409, code)),
+    );
+    show();
+    pick('doc-1');
+    await save();
+
+    expect(failed).toHaveBeenCalledTimes(1);
+    expect(failed.mock.calls[0][0]).toMatch(says);
+  });
+
+  it('keeps its general sentence for a refusal nobody has worded, and for a failure that is not one', async () => {
+    const failed = vi.spyOn(message, 'error').mockImplementation(() => undefined as never);
+    attach.mockImplementation((_request, on: { onError(error: unknown): void }) =>
+      on.onError(new ApiError(409, 'tracking.something_nobody_has_worded')),
+    );
+    show();
+    pick('doc-1');
+    await save();
+    expect(failed.mock.calls.at(-1)![0]).toBe('The photographs could not be attached.');
+
+    attach.mockImplementation((_request, on: { onError(error: unknown): void }) =>
+      on.onError(new TypeError('Failed to fetch')),
+    );
+    await save();
+    expect(failed.mock.calls.at(-1)![0]).toBe('The photographs could not be attached.');
+  });
+
+  /**
+   * The other kind arrives inside an answer that succeeded: the write takes every photograph it
+   * can and names, per photograph, why it left the rest. The count alone said that something was
+   * left out and never what to do about it.
+   */
+  it.each([
+    ['tracking.picture_in_future', /moment that has not happened yet/],
+    ['tracking.picture_not_image', /chosen files is not a picture/],
+    ['tracking.picture_already_attached', /already on that moment of the trip/],
+    ['tracking.caver_not_participant', /on the trip's roster first/],
+  ])('says why a photograph was left out: %s', async (code, says) => {
+    const counted = vi.spyOn(message, 'success').mockImplementation(() => undefined as never);
+    const explained = vi.spyOn(message, 'warning').mockImplementation(() => undefined as never);
+    attach.mockImplementation((_request, on: { onSuccess(result: unknown): void }) =>
+      on.onSuccess({
+        attached: [{ memberId: 'member-1', documentId: 'doc-1' }],
+        refused: { 'doc-2': code },
+      }),
+    );
+    show();
+    pick('doc-1');
+    pick('doc-2');
+    await save();
+
+    // Both halves are still counted, and the reason is a line of its own beside the count.
+    expect(counted.mock.calls[0][0]).toBe('Attached: 1. Not attached: 1.');
+    expect(explained).toHaveBeenCalledTimes(1);
+    expect(explained.mock.calls[0][0]).toMatch(says);
+  });
+
+  it('gives one reason once however many photographs share it, and no line for a reason it has no words for', async () => {
+    const explained = vi.spyOn(message, 'warning').mockImplementation(() => undefined as never);
+    vi.spyOn(message, 'success').mockImplementation(() => undefined as never);
+    attach.mockImplementation((_request, on: { onSuccess(result: unknown): void }) =>
+      on.onSuccess({
+        attached: [],
+        refused: {
+          'doc-1': 'tracking.picture_in_future',
+          'doc-2': 'tracking.picture_in_future',
+          'doc-3': 'tracking.something_nobody_has_worded',
+        },
+      }),
+    );
+    show();
+    pick('doc-1');
+    pick('doc-2');
+    pick('doc-3');
+    await save();
+
+    expect(explained).toHaveBeenCalledTimes(1);
+    expect(explained.mock.calls[0][0]).toMatch(/moment that has not happened yet/);
+
+    // Its twin: an answer that left nothing out explains nothing.
+    explained.mockClear();
+    attach.mockImplementation((_request, on: { onSuccess(result: unknown): void }) =>
+      on.onSuccess({ attached: [{ memberId: 'member-1', documentId: 'doc-1' }], refused: {} }),
+    );
+    cleanup();
+    show();
+    pick('doc-1');
+    await save();
+    expect(explained).not.toHaveBeenCalled();
   });
 });

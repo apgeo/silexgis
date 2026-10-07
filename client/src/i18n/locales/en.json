@@ -1720,7 +1720,13 @@
         "publicationRefusedCave": "Publishing this trip hands over its cave's survey drawing, and that takes the right to share the cave. Ask whoever looks after it.",
         "publicationRefusedProtected": "This trip's cave has protected coordinates, so the trip cannot be published at all. A published page says where the party is inside the cave, and there is no version of that which withholds the position.",
         "publicationNotArmed": "A follow link opens a page only while the watch is running. Arm the watch, then publish the trip.",
-        "shareRevoked": "That link has already been taken back, so there is nothing to replace. Publish the trip again instead."
+        "shareRevoked": "That link has already been taken back, so there is nothing to replace. Publish the trip again instead.",
+        "notTracked": "Tracking has never been started for this trip, so it has no moments to hang a photograph on. Start it first; a trip whose tracking has been closed still takes photographs.",
+        "pictureInFuture": "A photograph cannot be filed at a moment that has not happened yet. Check the camera's clock offset, or the moment given to photographs with no time of their own.",
+        "pictureNotImage": "One of the chosen files is not a picture. Only photographs can be hung on a moment.",
+        "pictureAlreadyAttached": "A chosen photograph is already on that moment of the trip, so it was not added again.",
+        "pictureRelationMissing": "This installation is missing the kind of link that ties a photograph to a trip's moment, so none can be stored. Tell whoever runs the installation.",
+        "pictureNotFound": "That photograph is no longer on this moment — somebody else may have taken it off."
       },
       "publish": {
         "title": "Publish this trip",
