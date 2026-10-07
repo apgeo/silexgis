@@ -58,6 +58,27 @@ offered in the same movie.
   the file. If the log cannot be read then, nothing is exported and the dialog says *"The log
   could not be read"*; press **Export** again.
 
+### Who appears
+
+Under each ticked trip, once it has been read, a line says *"Who appears: N of M"*. Press it to
+unfold the trip's roster, everybody ticked, and untick the people this movie should not show.
+
+- Somebody unticked has **no marker and no trail**, and **a note they spoke is not written over
+  the picture** — the latest note shown is then the latest said by somebody who is in the movie.
+- **Their reports do not pace the movie either.** With **Shorten quiet stretches** on, the clock
+  slows around each report and jumps across the hours between; it does so only at the reports of
+  the people who appear, so nothing in the file marks the moment somebody you left out was
+  reported. Leaving somebody out can therefore change how long each stretch plays and the
+  time-lapse figure.
+- **Somebody no longer on the trip's roster** — taken off the trip after their reports were
+  recorded — is not in the list, has no marker, and a note they spoke is never captioned.
+- Nobody else changes: trips and teams keep their colours and their lines of the legend. A label
+  is never lengthened because of somebody who is not shown — two people called Ana are told
+  apart by an initial only while both are in the movie.
+- The same person on two trips is ticked on each trip separately.
+- **The choice is for this movie only.** It is not remembered with your settings and is stored
+  nowhere: close the dialog, or untick the trip and tick it again, and everybody is back.
+
 With several trips, **Several trips** (under *Motion*) decides how they share the film:
 
 | Choice | What you get | The clock shows |
@@ -81,6 +102,23 @@ the shape of the frame.
   again** puts the camera back.
 - The slider, **Moment in the movie**, shows any moment of it. **Play the preview** runs the
   movie in real time, camera turn included.
+- **Save this moment as a picture** — the camera button beside play — saves the moment the slider
+  is on as a PNG, at the movie's own frame size. It is the frame the movie has at that moment:
+  the same people, labels, captions and legend, and the camera turned as far as the movie has
+  turned by then. No movie is made for it and nothing is uploaded. See
+  [The file's name](#the-files-name) for what it is called.
+
+**Keys.** Click the preview, or reach it or the slider with Tab — a ring around the preview shows
+when the keys are its own — and:
+
+| Key | What it does |
+|---|---|
+| **Space** | Plays the preview, and pauses it |
+| **Home**, **End** | Go to the first and the last moment of the movie |
+| **← →** on the slider | Step one frame back or forward |
+
+The keys do nothing while an export runs. On a button Space presses that button, and in the
+title box it types a space, as everywhere else.
 
 ---
 
@@ -90,6 +128,18 @@ The dialog opens on a small, cautious movie: a GIF, 640 × 360, 10 frames a seco
 and 2 still seconds at the end, the model turning 6° a second. Your settings are **remembered
 in this browser** for the next movie — all of them except the title you typed, which is never
 stored.
+
+**Presets** stand above the groups, for a file made in one press:
+
+| Preset | What it sets |
+|---|---|
+| **For a chat** | A GIF, 480 × 270, 10 frames a second, 15 seconds, medium quality — small enough to send in a message |
+| **HD video** | 1280 × 720, 30 frames a second, high quality, as an **MP4** where your browser can write one and a **WebM** where it cannot. Where it can write neither, nothing changes and the dialog says so |
+
+A preset changes **the file only** — the settings of the *Output* group. Who is labelled and how,
+what of the model shows and which captions are written are yours and are never touched by one. The
+trips you ticked and the people you left out are not settings, and stay through a preset and
+through a reset alike.
 
 | Group | Setting | What it decides |
 |---|---|---|
@@ -106,12 +156,38 @@ stored.
 | | **Marker colour** | Automatic (by team for one trip, by trip for several), by trip, by team, or one colour |
 | | **Show cavers who have come out** | Whether somebody reported out stays on the picture |
 | | **Trail of the route walked** | A line behind each marker |
-| **View** | The survey's layers, **Shading**, **Camera**, **Line width**, **Vertical scale** | What of the survey is drawn and how. A layer the survey does not have is greyed; the depth shadings need a survey that stands on real terrain |
-| **Captions** | **Title**, **Clock**, **Legend**, **Progress bar**, **Latest note**, **Caption size** | What is written over the picture |
+| **View** | The survey's layers, **Terrain over the cave**, **Shading**, **Camera**, **Line width**, **Vertical scale** | What of the survey is drawn and how. A layer the survey does not have is greyed; the depth shadings need a survey that stands on real terrain |
+| **Captions** | **Title**, **Clock**, **Time-lapse figure**, **Legend**, **Progress bar**, **Latest note**, **Caption size** | What is written over the picture |
+
+**Reset to defaults** stands under the presets and is not one of them: it puts *every* setting
+back to what a first opening shows — the captions, the labels and the view as well as the file,
+and the title you typed. If you had switched **Title** off, it comes back on, and with it the
+file named after the trip or the cave; the same defaults are what the next movie opens on. The
+trips you ticked and the people you left out stay as they are.
+
+**The time-lapse figure.** After the clock the movie says how many times faster than life it
+runs — *"12 Sep 2026, 14:05 · ×240"* — so somebody shown the file knows that a minute of it is
+four hours of the trip. It is rounded (to the nearest ten from a hundred up, to a whole number
+from ten up) and is the pace of what is shown: where **Shorten quiet stretches** cut a stretch
+short the clock jumps, and the jump is not counted as speed. A movie that runs at about the pace
+things happened at carries no figure. It is part of the clock's caption, so switching **Clock**
+off takes it away as well. On a small or narrow frame, or with a large **Caption size**, the clock
+and the figure may not both fit; the figure is then left out whole rather than cut short, and the
+preview shows it.
 
 **Marker colours.** There are twelve. A movie of more than twelve trips coloured by trip — or
 of more than eleven teams coloured by team — reuses them in the same order, and the legend then
 carries a line saying so: *"Trip colours repeat"* or *"Team colours repeat"*.
+
+**Terrain over the cave.** Some survey files carry the surface above the cave as well as the
+passages under it. **Terrain over the cave**, under *View*, draws that surface in the movie. It
+**starts off, and stays off until you turn it on**: passages drawn alone are a shape, but a cave
+drawn under its own hills can be placed on a map by whoever is sent the file — the same reason the
+compass and altitude display starts off. The switch is offered only for a survey whose file
+carries its own terrain; for any other it is greyed and says *"This survey file carries no terrain
+of its own, so there is none to draw."* The flat plane the 3D viewer can lay under a survey is not
+terrain and is never drawn in a movie. Like the rest of the view, the choice is remembered in
+this browser, and a preset does not touch it.
 
 ---
 
@@ -156,7 +232,9 @@ on, to people the installation never checked. So it is worth knowing what is in 
 | **Station names**, **station comments** | Off | — |
 | **The latest note** — free text somebody typed with a report | Off, because *"Notes are free text and can carry safety details"* | — |
 | **Compass and altitude display** | Off. Switched on, it *"prints altitudes and a bearing into every frame"* | — |
+| **The surface over the cave** — hills, valleys and where the entrances lie among them, where the survey's file carries its terrain | Off. Switched on, the cave is drawn under its own landscape, which somebody who knows the area can recognise | — leave **Terrain over the cave** off. It is remembered, so look at the preview before sending a movie made after one that had it on |
 | **The file's own name** | Follows the title — see below | **Title** off |
+| **A person** — their marker, their trail, a note they spoke | Everybody on each ticked trip's roster | Untick them under [Who appears](#who-appears) |
 
 A position that is withheld from you draws no marker in the movie, for the same reason it draws
 none on the trip's own survey panel.
@@ -178,13 +256,18 @@ The words are written in lower case, without accents, with hyphens for everythin
 letter or a digit, and cut at 60 characters. The date is the day the file was made, on your own
 calendar. The file is saved under exactly the name that was shown when you pressed **Export**.
 
+A picture saved from the preview is named by the same rule, ending in `.png` — so with the title
+caption off it, too, says nothing about which trip or which cave.
+
 ### A movie that says less
 
 Switch **Title** off, set **Caver labels** to *Initials* or *No labels*, switch **Time of the
 last report in the label** off, switch **Legend** off, choose **Side by side** or switch **Clock**
-off, and untick **Entrance names**. The file is then
+off, untick **Entrance names**, and leave **Terrain over the cave** off. Under
+[Who appears](#who-appears), untick anybody who should not be in it at all. The file is then
 called `silexgis-movie-<date>` and shows markers moving through an unnamed survey. The survey's
-own shape remains — a movie cannot hide the cave it is a movie of.
+own shape remains — a movie cannot hide the cave it is a movie of. A picture saved from such a
+preview says exactly as little, and is named the same way.
 
 ---
 

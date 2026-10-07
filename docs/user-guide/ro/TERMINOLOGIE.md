@@ -182,6 +182,13 @@ odată cu ea — și apoi paginile.
 | Caver labels | Etichetele speologilor |
 | Captions (of a movie) | Texte |
 | Stop and close / Keep going | Oprește și închide / Continuă exportul |
+| Presets (of a movie) | Presetări |
+| For a chat / HD video | Pentru chat / Video HD |
+| Reset to defaults | Revino la valorile implicite |
+| Who appears | Cine apare |
+| Time-lapse figure | Factor de accelerare |
+| Terrain over the cave | Relieful de deasupra peșterii |
+| Save this moment as a picture | Salvează acest moment ca imagine |
 
 ## Alte
 

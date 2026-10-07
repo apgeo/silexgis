@@ -468,7 +468,17 @@ feature and walkthroughs of whole jobs.
   filmed, and its movie ends when the export starts. An export draws every frame anew — half a
   minute to a few minutes on a computer without a graphics card — so it says how long it has left,
   **Cancel export** stops it at once, and Escape or the X ask before throwing it away. The size
-  estimate of a GIF corrects itself from the GIFs you have made. The
+  estimate of a GIF corrects itself from the GIFs you have made. Any moment of the preview can be
+  saved as a **picture** (a PNG of that frame, captions and legend included, named by the same
+  rule); two **presets** set the file up in one press — a small GIF for a chat, or an HD video as
+  MP4 or WebM, whichever the browser can write — and change the file only, never who appears, the
+  view or the captions; and with the preview or its slider in focus, **Space** plays and pauses
+  and **Home** and **End** go to the two ends. Under each ticked trip you choose **who appears** —
+  somebody left out has no marker, no trail and no note in the picture, and the choice is for that
+  movie only, stored nowhere. After the clock the movie says how many times faster than life it
+  runs (**×240**). And where a survey's file carries its own **terrain**, a switch draws the
+  surface over the cave — off until you turn it on, because a cave shown under its hills can be
+  placed by whoever gets the file. The
   [user guide](user-guide/features/tracking-movie.md) has the whole of it.
 - **Being asked onto a trip does not open the cave, so somebody who can open it is told** — an
   invitation grants nothing, so when a person asked onto a trip cannot read a cave the trip is about,
