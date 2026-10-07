@@ -280,6 +280,12 @@ rândul `accounts` din model; un club care nu o dorește scoate acel rând din m
 
 - **Descarcă documentul** îl salvează ca document Word, în modelul standard sau într-unul pe
   care clubul îl ține la **Configurare → Modele de raport**.
+  Un model al clubului poate tipări **`{watchhours}`**: orele-persoană în subteran la care ajung
+  [jurnalele de urmărire](live-tracking.md) ale taberei, de la raportul *a intrat* al fiecărei
+  persoane până la raportul *a ieșit* care i-a urmat. Este o a doua numărătoare pe lângă
+  `{hours}` și nu se adună niciodată la ea; o intrare pe care nu a închis-o nimeni nu adaugă
+  nimic, iar rândul lipsește acolo unde niciun jurnal nu are o ședere încheiată. Modelul standard
+  nu o tipărește.
 - **Descarcă PDF** dă același document ca PDF. Apare doar acolo unde instalarea rulează
   convertorul de documente; unde lipsește, **Tipărește** și *Salvează ca PDF* din browser este
   calea. Nimic din PDF nu se păstrează pe server, iar copia salvată la tabără este întotdeauna

@@ -268,6 +268,11 @@ club that does not want it takes that line out of its camp layout.
 
 - **Download document** saves it as a Word document, in the standard layout or in one your club
   keeps under **Configuration → Report layouts**.
+  A club's own layout may print **`{watchhours}`**: the person-hours underground that the camp's
+  [tracking logs](live-tracking.md) come to, from each person's *entered* report to the *exited*
+  one that followed. It is a second count beside `{hours}` and is never added to it; an entry
+  nobody closed adds nothing, and the line is left out where no log has a completed stay. The
+  standard layout does not print it.
 - **Download PDF** gives the same document as a PDF. It is there only where your installation
   runs its document converter; where it is not, **Print** and *Save as PDF* in the browser is
   the way. Nothing is kept of the PDF on the server, and the copy saved to the camp is always

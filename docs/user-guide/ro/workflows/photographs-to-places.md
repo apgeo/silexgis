@@ -117,5 +117,33 @@ Ajung în [galerie](../features/photographs.md). De acolo puteți:
 
 ---
 
+## Fotografii din subteran: plasate după oră, nu după GPS
+
+Tot ce este mai sus plasează o fotografie după poziția pe care o poartă fișierul ei, iar un
+aparat în subteran nu înregistrează niciuna. O fotografie făcută într-o **tură urmărită** se
+plasează altfel: după *când* a fost făcută și *despre cine* este, citite față de
+[jurnalul de urmărire](../features/live-tracking.md) al turei.
+
+1. Puneți fotografiile pe tură (fila **Fișiere**), ca la orice tură.
+2. În fila **Urmărire** a turei alegeți **Adaugă fotografii** — sau butonul cu poză de pe rândul
+   unui raport, care deschide dialogul la momentul acelui raport.
+3. Bifați fotografiile. Fiecare este pusă la momentul pe care îl spune fișierul ei; una al cărei
+   fișier nu spune nimic este semnalată și primește momentul la care a fost deschis dialogul.
+4. Spuneți despre cine sunt, o dată sus sau pentru fiecare fotografie pe rândul ei.
+5. **Citiți rândul de sub fiecare înainte de a atașa**: numește stația la care reluarea va
+   desena acea fotografie. Dacă rândurile spun *Până atunci nu fusese raportată nicio stație
+   pentru această persoană*, sau numesc o stație la care poza evident nu a fost făcută, ceasul
+   aparatului era greșit — corectați-l o singură dată la **Ceasul aparatului era înainte cu** și
+   toate rândurile îl urmează.
+
+O fotografie despre nimeni anume rămâne pe cronologie la momentul ei și nu se desenează la nicio
+stație: o echipă care s-a împărțit este în două locuri. Nimic de aici nu scrie un loc pe
+fotografie — corectați ulterior un raport și fotografia se mută odată cu el. Și nimic de aici
+nu vă spune o stație pe care nu o puteați vedea deja: acolo unde poziția peșterii vă este
+ascunsă, rândul spune asta. Rândurile sunt explicate unul câte unul la
+[Echipa pe ridicare](../features/live-tracking.md#echipa-pe-ridicare).
+
+---
+
 Urmează: [Planificarea și redactarea unei ture](plan-and-log-a-trip.md) ·
 Referință: [Fotografii](../features/photographs.md)

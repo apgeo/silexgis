@@ -214,21 +214,33 @@ sizes of the very thing the answer declined to state.
 A person, a cave, a caving group and a camp each get their totals:
 
 **Trips · People · Places · First visits · Hours underground · Surveyed · Rope · Survey
-stations · Trips with an incident · Photographs**
+stations · Trips with an incident · Photographs · Tracked trips · Hours underground, from
+tracking**
 
-Read the two caveats it prints:
+Read the caveats it prints:
 
 - **"Counted over the trips you may read."** Somebody with different access sees different
   totals for the same subject, **and both are right**.
 - **"Hours cover the n of m times somebody went where entry and exit times were written
   down."**
+- **"The hours from tracking are a second count … They are not added to the hours underground
+  above."** Shown once any trip counted was [tracked](live-tracking.md).
+
+**The two hours figures are two sources, and nobody adds them.** *Hours underground* comes from
+the entry and exit times typed on the trip and its people. *Hours underground, from tracking*
+comes from the tracking log: each person's *entered* report paired with the *exited* report
+that followed it, across midnight if it ran that long. Where a trip has both, they describe the
+same hours — so the sum of the two is not a figure. An entry nobody closed with an exit adds
+**nothing**: not nought, and not "still underground". Where no log has a completed stay the
+tile shows a dash rather than *0 h*, and the sentence says how many of the times somebody went
+the figure rests on. *Tracked trips* counts the trips with anything at all in their log.
 
 Nothing is stored. Hours are worked out from the times recorded, over however many days the
 trip really ran. A **first visit** is simply the earliest trip that took somebody somewhere —
 so typing up an older trip from the archive *corrects* the figures rather than leaving a
 stale flag behind.
 
-**Not every subject shows all ten:**
+**Not every subject shows all twelve:**
 
 | Whose totals | Left out | Why |
 |---|---|---|

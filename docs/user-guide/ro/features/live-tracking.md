@@ -185,6 +185,29 @@ ascuns.
 întoarce. Fotografiile pot fi puse pe **un moment** al turei (*Fotografii de la acest moment*),
 nu pe un raport, așa că o corectură sau o ștergere de raport nu le pierde niciodată.
 
+**Unde va fi desenată fiecare fotografie se vede înainte să o atașați.** Bifați fotografii în
+dialog și fiecare primește un rând: momentul la care va fi pusă, despre cine este și unde o va
+desena reluarea. Nimic despre acel loc nu se păstrează — reluarea îl citește din jurnal la
+momentul fotografiei, pentru persoana despre care este — așa că rândul este răspunsul
+jurnalului și se schimbă odată cu lucrurile de care depinde:
+
+| Rândul spune | Ce înseamnă | Ce îl schimbă |
+|---|---|---|
+| **Desenată la stația …** | Persoana despre care este fusese raportată la acea stație până în acel moment | — |
+| **Până atunci nu fusese raportată nicio stație pentru această persoană** | Nimic nu o plasase încă, sau doar o adâncime pentru care nimeni nu a numit o stație | De obicei ceasul aparatului: corectați **Ceasul aparatului era înainte cu** și fiecare rând se calculează din nou. Sau fotografia este despre altcineva |
+| **Atunci era plasat(ă) pe altă ridicare** | Locul din acel moment a fost raportat pe o ridicare pe care urmărirea a părăsit-o între timp | Nimic aici; fotografia se desenează când este privită acea ridicare |
+| **Locul din acel moment nu îți este arătat** | Locul acelui raport vă este ascuns, așa că nu vi se spune nicio stație | Nimic aici — cine are voie să vadă peștera o vede desenată |
+| **Tura nu are o ridicare pe care să o poți vedea desenată** | Poziția peșterii vă este ascunsă și nu vi se spune pe ce ridicare merge urmărirea — sau acea ridicare a fost ștearsă | Nimic aici |
+| **Doar pe cronologie — numește pe cineva ca să fie plasată** | Nu este despre nimeni anume | Alegeți o persoană pe rândul ei |
+
+**Despre**, în partea de sus a dialogului, numește o persoană pentru toate fotografiile alese;
+selectorul de pe rândul unei fotografii o face pe aceea despre altcineva — un card de memorie
+are poze cu mai mulți oameni — iar o nouă alegere sus se aplică din nou tuturor. O fotografie
+care nu se desenează nicăieri este atașată oricum și rămâne pe cronologie la momentul ei.
+Rândurile se citesc față de ridicarea pe care merge urmărirea, din tot jurnalul; cât timp
+jurnalul se citește, sau dacă nu poate fi citit, rândul spune asta în loc să ghicească, iar
+atașarea funcționează în continuare.
+
 **Vezi rapoartele pe** — un selector deasupra modelului, oferit doar la o tură ale cărei rapoarte
 nu au fost înregistrate toate pe aceeași ridicare: urmărirea a fost mutată, de pildă, pe o
 ridicare corectată în timpul turei, iar rapoartele de dinainte numesc stații ale celei părăsite.
@@ -387,8 +410,8 @@ citirea o spune de îndată, la fel cum ar spune-o importul.
    raportul așa cum este — și **După import**. Acolo unde locul raportului din jurnal nu vă
    poate fi comunicat, scrie *Nu îți este arătată*, în loc să rămână gol.
 4. **Setări coloane** — indicați un câmp către o coloană doar acolo unde detecția a greșit.
-   **Cuvinte pentru intrare** și **Cuvinte pentru ieșire** le înlocuiesc pe cele obișnuite pentru
-   partea respectivă.
+   **Cuvinte pentru intrare**, **Cuvinte pentru ieșire** și **Cuvinte pentru o notă** le
+   înlocuiesc pe cele obișnuite pentru partea respectivă.
 5. **Debifați** rândurile pe care nu le vreți (un rând al foii care numește mai multe persoane
    este luat sau lăsat deoparte întreg), bifați **Suprascrie ce are deja jurnalul la aceste
    momente** dacă asta vreți, și **Importă**.
@@ -412,7 +435,7 @@ Alegerea se face pentru toată foaia, la fiecare citire; nimic din ea nu se păs
 | Regulă | De ce |
 |---|---|
 | **Un raport este identificat prin persoană și moment** | O foaie corectată, importată din nou, schimbă rândurile corectate în loc să le dubleze |
-| **Suprascrierea schimbă doar ce are coloană în foaie** | Acolo unde jurnalul are deja raportul, locul în care era persoana este scris întotdeauna; echipa doar dacă foaia are coloană de echipă, iar nota doar dacă are coloană de notă sau de detalii — o celulă goală sub o asemenea coloană o șterge. O foaie cu ore și adâncimi lasă neatinsă o notă introdusă de mână. Rapoartele care spun deja ce spune foaia nu sunt scrise din nou și sunt numărate separat, ca *deja așa cum spune foaia* |
+| **Suprascrierea schimbă doar ce are coloană în foaie** | Acolo unde jurnalul are deja raportul, locul în care era persoana este scris atunci când rândul spune altceva decât raportul; echipa doar dacă foaia are coloană de echipă, iar nota doar dacă are coloană de notă sau de detalii — o celulă goală sub o asemenea coloană o șterge. O foaie cu ore și adâncimi lasă neatinsă o notă introdusă de mână. Rapoartele care spun deja ce spune foaia nu sunt scrise din nou și sunt numărate separat, ca *deja așa cum spune foaia* |
 | **Importul face ce arăta tabelul, sau nimic** | Foaia este citită din nou când apăsați **Importă**. Dacă tura s-a schimbat între timp — cineva a introdus un raport la unul dintre momentele foii sau a corectat unul pe care foaia l-ar înlocui, o echipă sau un participant s-a schimbat, un loc a fost declarat în peșteră, urmărirea a fost mutată pe altă ridicare — nu se scrie nimic, foaia este citită din nou și dialogul o spune: verificați rândurile, bifați din nou suprascrierea dacă încă o vreți și apăsați **Importă** |
 | **Aceeași foaie importată a doua oară nu scrie nimic** | Fiecare rând al ei se găsește deja în jurnal. Fără bifa de suprascriere, toate sunt *omise*; cu ea, fiecare este comparat cu raportul din jurnal și, spunând același lucru, este numărat ca *deja așa cum spune foaia* — niciun raport nu este adăugat, niciunul nu este rescris și niciunul nu devine **Corectat**. Așa că o foaie la care încă adăugați rânduri poate fi importată din nou ori de câte ori vreți: sunt scrise doar rândurile ei noi și cele schimbate |
 | **O oră scrisă fără fus orar este citită ca UTC, exact cum a fost scrisă — dacă nu numiți fusul orar al foii** | 14:30 din foaie devine 14:30 UTC, arătat în fusul dumneavoastră. Alegeți **Fusul orar al foii** la **Setări fișier** — fusul dumneavoastră este oferit pe nume, iar oricare altul poate fi căutat — și 14:30 este citit după ceasul acelui fus, cu ora de vară și de iarnă cu tot; previzualizarea spune ce fus s-a folosit și arată fiecare rând după ceasul lui. O celulă care își scrie singură decalajul (`2026-09-12T14:30+03:00`) este citită cum spune, oricare ar fi alegerea |
@@ -421,7 +444,9 @@ Alegerea se face pentru toată foaia, la fiecare citire; nimic din ea nu se păs
 | **O foaie cu ore fără date își cere ziua** | Dialogul cere **Ziua în care a fost ținută foaia** și propune data turei: verificați-o și citiți foaia din nou. O oră mai mică decât una aflată mai sus în foaie este semnalată, oricui i-ar aparține cele două rânduri, pentru că o foaie ținută în ordine care face asta a trecut de miezul nopții, iar rândul acela ține de ziua următoare — lăsați-l deoparte sau dați foii o coloană de dată |
 | **O dată fără oră este refuzată** | Puse la miezul nopții, rapoartele unei zile întregi s-ar suprapune într-un singur moment |
 | **Data și ora pot sta în două coloane separate** | Sunt unite și citite ca un singur moment, după aceleași reguli ca o singură coloană. Un rând care lasă data goală este refuzat — data nu se preia de pe rândul de deasupra |
-| **Numele sunt potrivite doar cu lista acestei ture** | Numele întreg, apoi prenumele și inițiala („Ion P."), apoi prenumele. Un nume care nu corespunde nimănui, sau corespunde la doi oameni, este refuzat, nu ghicit |
+| **Numele sunt potrivite doar cu lista acestei ture** | Numele întreg, apoi prenumele și inițiala („Ion P."), apoi prenumele. Un nume care nu corespunde nimănui, sau corespunde la doi oameni, este refuzat, nu ghicit. Cineva al cărui cont poartă alt nume decât are lista pentru el este găsit după oricare dintre ele |
+| **Un rând care repetă stația sau adâncimea pe care raportul o are deja lasă raportul unde este** | Un nume de stație sau o adâncime se citește pe ridicarea pe care este urmărirea *acum*, cu stația de referință, filtrul și locurile declarate de *acum*. Un raport făcut mai devreme — pe o ridicare pe care urmărirea a părăsit-o între timp sau înainte ca un loc declarat să fie schimbat — nu este deci citit din nou când rândul spune doar ce spune deja raportul: își păstrează stația și ridicarea pe care a fost făcut. Scrieți altă stație sau altă adâncime în rând și acel rând este așezat din nou, pe ridicarea în vigoare. Ca o adâncime să fie citită din nou după declarații schimbate, corectați raportul însuși |
+| **O notă este comparată așa cum se citește o celulă** | Rândurile noi și spațiile duble dintr-o notă introdusă de mână contează ca un singur spațiu, iar o notă care este doar `-`, `?` sau `n/a` contează ca goală. O notă care se citește la fel rămâne exact cum a fost introdusă |
 | **Locul unui rând: stația, apoi locul declarat, apoi adâncimea** | Intrarea și ieșirea nu revendică nicio stație |
 | **Un rând cu o notă și fără loc este o notă — dacă celulele de loc sunt goale** | Un apel care a spus „crește apa” și niciun loc este tot un raport. O adâncime care nu este un număr (*96 cm*) sau un cuvânt de stare pe care nu îl știe niciuna dintre liste nu este o celulă goală: rândul este refuzat, cu celula numită, în loc să fie trecut ca notă — corectați celula sau adăugați cuvântul la **Setări coloane** |
 | **Două rânduri pentru aceeași persoană la același moment sunt un singur raport** | Ultimul câștigă, iar amândouă rândurile o spun |
@@ -430,6 +455,28 @@ Alegerea se face pentru toată foaia, la fiecare citire; nimic din ea nu se păs
 
 O foaie poate fi importată și pe o urmărire **încheiată** — de obicei atunci este scrisă. O tură
 fără nicio urmărire nu are pe ce să importe: alegeți întâi o ridicare și salvați configurarea.
+
+### Scoaterea jurnalului ca foaie
+
+**Descarcă jurnalul (CSV)**, lângă rapoarte, salvează tot jurnalul ca foaia pe care o citește
+importul — aceleași coloane ca foaia exemplu, un raport pe rând, cel mai vechi primul. Oricine
+poate citi tura îl poate lua. Corectați-l într-o foaie de calcul și importați-l din nou cu
+**Suprascrie ce are deja jurnalul la aceste momente** bifat: rândurile schimbate sunt corectate,
+restul sunt numărate ca *deja așa cum spune foaia* — și acolo unde urmărirea a fost mutată între
+timp pe altă ridicare: un raport al cărui rând l-ați lăsat neatins rămâne pe ridicarea pe care a
+fost făcut.
+
+| Ce face foaia | De ce |
+|---|---|
+| **Momentul este scris întreg, cu decalajul lui** (`2026-09-12T14:30:07.123456Z`) | Un raport este regăsit după persoană și după momentul exact. Păstrați coloana ca text: o foaie de calcul care o transformă într-o dată a ei pierde fracțiunea de secundă, iar rândul se întoarce ca raport nou lângă cel vechi — previzualizarea îl arată **Nou** acolo unde așteptați **Înlocuiește** |
+| **Un raport de stație își poartă stația, unul de adâncime adâncimea, niciodată amândouă** | La întoarcere stația trece înaintea adâncimii, așa că o adâncime scrisă cu o stație alături n-ar mai fi un raport de adâncime |
+| **Coloana de stare spune** `intrare`, `iesire` **sau** `nota` | Nota are cuvântul ei pentru ca o notă în care nu s-a scris nimic să rămână un rând. Un club care scrie alt cuvânt îl numește la **Setări coloane**, **Cuvinte pentru o notă** |
+| **Un loc care nu vă poate fi comunicat nu este în fișier** | Raportul rămâne, cu ora, persoana și nota lui, și cu `retinut` în coloana de stare. Importat din nou, rândul este refuzat: un loc lăsat afară din copia dumneavoastră nu este scris niciodată peste locul din jurnal |
+| **Textul pe care o foaie de calcul l-ar rula ca formulă rămâne text** | O notă sau un nume care începe cu `=`, `+`, `-` sau `@` este scris cu un tabulator în față, pe care importul îl înlătură |
+| **Oamenii sunt numiți așa cum vi-i arată aplicația** | Acolo unde contul cuiva poartă alt nume decât are lista pentru el, foaia îl poartă pe al contului. Importul găsește persoana după oricare dintre ele |
+| **O stație sau o adâncime este scrisă așa cum o are raportul, fără ridicarea ei** | Foaia nu spune pe ce ridicare a fost făcut un raport și nici nu are nevoie: importat din nou, un rând a cărui stație sau adâncime ați lăsat-o neatinsă lasă raportul pe ridicarea lui. Schimbați stația sau adâncimea și rândul este citit pe ridicarea pe care este urmărirea acum — unde același nume de stație poate fi alt loc, iar o stație pe care acea ridicare nu o are este refuzată |
+| **Două rapoarte despre aceeași persoană la același moment sunt scrise amândouă și refuzate amândouă la întoarcere** | Importul nu poate ști pe care dintre cele două l-ar corecta un rând |
+| **Fișierul este numit după numărul turei și zi** | Niciodată după titlul turei sau după peșteră |
 
 ---
 

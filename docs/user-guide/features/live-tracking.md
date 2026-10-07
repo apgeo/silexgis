@@ -174,6 +174,28 @@ every survey of it is declared. Turning it off brings back exactly what it hid.
 **Back to live** returns. Photographs can be hung on **a moment** of the trip (*Photographs of
 this moment*) rather than on a report, so correcting or deleting a report never loses them.
 
+**Where each photograph will be drawn is shown before you attach it.** Tick photographs in the
+dialog and each one gets a line: the moment it will be filed at, whom it is about, and where the
+replay will draw it. Nothing about that place is stored — the replay reads it out of the log at
+the photograph's own moment, for the person it is about — so the line is the log's answer, and
+it changes as you change what it depends on:
+
+| The line says | What it means | What changes it |
+|---|---|---|
+| **Drawn at station …** | The person it is about had been reported at that station by that moment | — |
+| **No station had been reported for them by then** | Nothing had placed them yet, or only a depth nobody named a station for | Usually the camera's clock: correct **The camera's clock was ahead by** and every line is worked out again. Or it is about somebody else |
+| **They were placed on another survey then** | Their place at that moment was reported on a survey the watch has since left | Nothing here; the photograph is drawn when that survey is the one being looked at |
+| **Their place at that moment is not shown to you** | That report's place is withheld from you, so you are told no station | Nothing here — a reader who may see the cave sees it drawn |
+| **This trip has no survey you can see it drawn on** | The cave's location is withheld from you and you are not told which survey the watch is on — or that survey has been deleted | Nothing here |
+| **On the timeline only — name somebody to place it** | It is about nobody in particular | Choose a person on its line |
+
+**About** at the top of the dialog names one person for every chosen photograph; the chooser on
+a photograph's own line makes that one about somebody else — a memory card holds pictures of
+several people — and choosing at the top again applies to all of them. A photograph that is
+drawn nowhere is still attached and still on the timeline at its moment. The lines are read
+against the survey the watch is on, from the whole log; while the log is being read, or if it
+cannot be, the line says so rather than guessing, and attaching still works.
+
 **Look at the reports on** — a chooser above the model, offered only on a trip whose reports were
 not all recorded on one survey: the watch was moved to a corrected survey part-way through, say,
 and the earlier reports name stations of the one it left. It lists the watch's own survey and
@@ -368,7 +390,8 @@ started takes no sheet: reading one says so at once, as importing it would.
    **After the import**. Where the place of the report in the log is one you may not be told,
    it reads *Not shown to you* rather than being left blank.
 4. **Column settings** — point a field at a header only where the detection got it wrong. The
-   **Words for going in** and **Words for coming out** replace the usual lists for that side.
+   **Words for going in**, **Words for coming out** and **Words for a note** replace the usual
+   lists for that side.
 5. **Untick** any row you do not want (a line naming several people is taken or left out
    whole), tick **Overwrite what the log already holds at these moments** if you mean to, and
    **Import**.
@@ -391,7 +414,7 @@ made for the whole sheet, each time it is read; nothing about it is remembered o
 | Rule | Why |
 |---|---|
 | **A report is filed under the person and the moment** | A corrected sheet imported again corrects the rows it corrected instead of doubling them |
-| **Overwriting changes only what the sheet has a column for** | Where the log already holds the report, where the person was is always written; the team only if the sheet has a team column, and the note only if it has a note or a details column — an empty cell under such a column clears it. A sheet of times and depths leaves a note typed by hand standing. Reports that already say what the sheet says are not written again, and are counted apart as *already as the sheet says* |
+| **Overwriting changes only what the sheet has a column for** | Where the log already holds the report, where the person was is written when the row says something else than the report does; the team only if the sheet has a team column, and the note only if it has a note or a details column — an empty cell under such a column clears it. A sheet of times and depths leaves a note typed by hand standing. Reports that already say what the sheet says are not written again, and are counted apart as *already as the sheet says* |
 | **Import does what the table showed, or nothing** | The sheet is read again when you press **Import**. If the trip changed in between — somebody typed a report at one of the sheet's moments or corrected one the sheet would replace, a team or a participant changed, a place was declared in the cave, the watch was put on another survey — nothing is written, the sheet is read again and the dialog says so: check the rows, tick the overwrite again if you still mean to, and press **Import** |
 | **The same sheet imported a second time writes nothing** | Every one of its rows is found on the log already. Without the overwrite tick they are all *left out*; with it, each is compared with the report the log holds and, saying the same, is counted as *already as the sheet says* — no report is added, none is rewritten, and none becomes **Corrected**. So a sheet you are still adding to can be imported again as often as you like: only its new rows and its changed ones are written |
 | **A time written without a zone is read as UTC, exactly as written — unless you name the sheet's time zone** | A sheet's 14:30 becomes 14:30 UTC, shown in your own zone. Choose **Sheet's time zone** under **File settings** — your own zone is offered by name and any other can be searched — and 14:30 is read on that zone's clocks, summer and winter time included; the preview says which zone was used and shows each row on its clocks. A cell that writes its own offset (`2026-09-12T14:30+03:00`) is read as it says under either choice |
@@ -400,7 +423,9 @@ made for the whole sheet, each time it is read; nothing about it is remembered o
 | **A sheet of times with no dates asks for its day** | The dialog asks for **The day the sheet was kept on** and offers the trip's date: check it and read the sheet again. A time earlier than one further up the sheet is flagged, whoever the two rows are about, because a sheet kept in order that does this ran past midnight and that row belongs to the next day — leave it out, or give the sheet a date column |
 | **A date with no time is refused** | Filed at midnight, a whole day's reports would collapse onto one moment |
 | **The date and the time may be in two separate columns** | They are joined and read as one moment, under the same rules as a single column. A row that leaves its date blank is refused — the date is not carried down from the row above |
-| **Names are matched against this trip's roster only** | Full name, then given name and initial ("Ion P."), then given name. A name matching nobody, or two people, is refused rather than guessed |
+| **Names are matched against this trip's roster only** | Full name, then given name and initial ("Ion P."), then given name. A name matching nobody, or two people, is refused rather than guessed. Somebody whose account goes by another name than the roster has for them is found by either |
+| **A row that repeats the station or the depth a report already holds leaves that report where it is** | A station name or a depth is read against the survey the watch is on *now*, with the reference station, the filter and the declared places it has *now*. A report made earlier — on a survey the watch has since left, or before a declared place was changed — is therefore not read again when the row only says what it already says: it keeps its station and the survey it was made on. Write another station or another depth in the row and that row is placed afresh, on the survey in force. To have a depth read again under changed declarations, correct the report itself |
+| **A note is compared the way a cell is read** | Line breaks and doubled spaces in a typed note count as single spaces, and a note that is only `-`, `?` or `n/a` counts as empty. A note that reads the same is left exactly as it was typed |
 | **A row's place: station, then declared place, then depth** | Going in and coming out claim no station |
 | **A row with a note and no place is a note — if the place cells are empty** | A call that said "water rising" and no place is a report all the same. A depth that is not a number (*96 cm*) or a standing word neither list knows is not an empty cell: that row is refused, with the cell named, rather than filed as its note — correct the cell, or add the word under **Column settings** |
 | **Two rows for the same person at the same moment are one report** | The last one wins, and both lines say so |
@@ -409,6 +434,27 @@ made for the whole sheet, each time it is read; nothing about it is remembered o
 
 A sheet can be imported onto a **closed** watch — that is usually when it is typed up. A trip
 with no watch at all has nothing to import onto: choose a survey and save the setup first.
+
+### Taking the log out as a sheet
+
+**Download the log (CSV)**, beside the reports, saves the whole log as the sheet the import
+reads — the same columns as the sample, one report on a row, oldest first. Anybody who can read
+the trip can take it. Correct it in a spreadsheet and import it again with **Overwrite what the
+log already holds at these moments** ticked: the rows you changed are corrected, the rest are
+counted as *already as the sheet says* — also where the watch has since been put on another
+survey: a report whose row you left alone stays on the survey it was made on.
+
+| What the sheet does | Why |
+|---|---|
+| **The moment is written whole, with its offset** (`2026-09-12T14:30:07.123456Z`) | A report is found again by the person and the exact moment. Keep that column as text: a spreadsheet that turns it into a date of its own drops the fraction of a second, and the row then comes back as a new report beside the old one — the preview shows it as **New** where you expected **Replaces** |
+| **A station report carries its station, a depth report its depth, never both** | On the way back a station outranks a depth, so a depth written with a station beside it would stop being a depth report |
+| **The state column says** `intrare`, `iesire` **or** `nota` | A note has a word of its own so that a note with nothing written in it is still a row. A club that writes another word names it under **Column settings**, **Words for a note** |
+| **A place you may not be told is not in the file** | The report is still there, with its time, its person and its note, and `retinut` in the state column. Imported again, that row is refused: a place left out of your copy is never written over the place the log holds |
+| **Text a spreadsheet would run as a formula is kept as text** | A note or a name beginning with `=`, `+`, `-` or `@` is written with a tab in front of it, which the import drops again |
+| **People are named as the application shows them to you** | Where somebody's account goes by another name than the roster has for them, the sheet carries the account's. The import finds the person by either |
+| **A station or a depth is written as the report holds it, without its survey** | The sheet does not say which survey a report was made on, and does not need to: imported again, a row whose station or depth you left alone leaves the report on its survey. Change the station or the depth and the row is read on the survey the watch is on now — where the same station name can be another place, and a station that survey does not have is refused |
+| **Two reports about one person at one moment are both written, and both refused on the way back** | The import cannot tell which of the two a row would correct |
+| **The file is named by the trip's number and the day** | Never by the trip's title or the cave |
 
 ---
 
