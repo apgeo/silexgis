@@ -1489,6 +1489,31 @@ export function useSurveyModel(id: string | undefined) {
   });
 }
 
+/**
+ * Several models asked for by id, each exactly as {@link useSurveyModel} asks for one.
+ *
+ * For a list of ids read off something else — the surveys a trip's reports were recorded on — where
+ * some may have been deleted since and some belong to a cave this reader may not place. Both answer
+ * 404, and both are simply left out of what comes back: what is returned is the models that still
+ * exist and that this reader may open, which is the only list a chooser may offer. Nothing is
+ * retried and nothing is reported, for the reason given on the single read.
+ *
+ * The same key and the same refresh as the single read, so a model already on screen is not
+ * fetched a second time and its signed address is kept alive the same way.
+ */
+export function useSurveyModelsById(ids: readonly string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.surveyModel(id),
+      queryFn: () => unwrap(api.GET('/api/v1/survey-models/{id}', { params: { path: { id } } })),
+      staleTime: 5 * 60_000,
+      refetchInterval: SURVEY_MODEL_URL_REFRESH_MS,
+      retry: false,
+    })),
+    combine: (results) => results.flatMap((result) => (result.data ? [result.data] : [])),
+  });
+}
+
 export type SurveyStation = components['schemas']['SurveyStationDto'];
 
 /**

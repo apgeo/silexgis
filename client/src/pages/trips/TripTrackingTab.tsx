@@ -888,6 +888,33 @@ export default function TripTrackingTab({
   };
 
   /**
+   * A report whose place was measured in a survey this watch has since stopped using.
+   *
+   * <b>The same fact the table of people marks, said more quietly, because here it is history.</b>
+   * Up there it qualifies "where is this person now" and is a warning: the place is not one on the
+   * survey in force. Down here a row is a record of what was said at the time, and a watch pointed
+   * at a corrected survey half-way through leaves every earlier row in this state with nothing
+   * wrong with any of them — so it is a plain tag and not an amber one. Unmarked, the older rows
+   * read as places on the survey the watch uses now, where the same name may be another chamber.
+   *
+   * Asked by the same rule and only where the question has an answer this reader was given: the
+   * watch names its survey to them, and the row arrived with a place. A row whose place is kept
+   * back never reaches this — it carries no place to mark and is drawn as withheld — and a reader
+   * who is not told which survey the watch is on is told nothing about which rows differ from it.
+   */
+  const eventOtherModelTag = (row: TrackingEvent) =>
+    data.surveyModelId !== null && !drawableOn(row.surveyModelId, data.surveyModelId) ? (
+      <Tooltip title={t('trips.tracking.eventOtherModelDetail')}>
+        <Tag
+          className="tracking-position-other-model"
+          data-testid={`trip-tracking-event-other-model-${row.id}`}
+        >
+          {t('trips.tracking.positionOtherModel')}
+        </Tag>
+      </Tooltip>
+    ) : null;
+
+  /**
    * What one report says about a place. A station report and a depth report always carry one, so
    * an empty one on either of those kinds is a withholding and nothing else — there is no second
    * reading of it, unlike the folded position above.
@@ -906,6 +933,7 @@ export default function TripTrackingTab({
             }),
           )}
           {outsideDeclaredTag(row.outsideDeclaredParts, `trip-tracking-event-outside-declared-${row.id}`)}
+          {eventOtherModelTag(row)}
         </>
       );
     }
@@ -1599,6 +1627,9 @@ export default function TripTrackingTab({
         tracking={data}
         participants={trip.participants}
         events={events.data?.items}
+        // What says whether those rows are the whole log — the panel reads the rest only when
+        // they are not, to find which surveys the trip's reports were recorded on.
+        eventsTotal={events.data?.totalItems}
         canEdit={canEdit}
         // The same selection the card below records for. Handed down as an offer rather than as a
         // requirement: pressing a station on the model opens a dialog that asks who it is about,

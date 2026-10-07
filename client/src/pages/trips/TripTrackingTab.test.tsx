@@ -128,13 +128,17 @@ vi.mock('../../components/trips/TrackingPicturesDialog.tsx', () => ({
 let answerUnplaced: ((stations: ReadonlySet<string>) => void) | undefined;
 /** The reports the panel was last handed — which have to stay the newest page of the whole log. */
 let panelEvents: readonly { id: string }[] | undefined;
+/** How many reports the panel was told the log holds — what tells it those rows are not all of it. */
+let panelEventsTotal: number | undefined;
 vi.mock('../../components/trips/TrackingModelPanel.tsx', () => ({
   default: (props: {
     onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
     events?: readonly { id: string }[];
+    eventsTotal?: number;
   }) => {
     answerUnplaced = props.onUnplacedStationsChange;
     panelEvents = props.events;
+    panelEventsTotal = props.eventsTotal;
     return <div data-testid="trip-tracking-model-panel" />;
   },
 }));
@@ -282,6 +286,7 @@ beforeEach(() => {
   narrow = false;
   answerUnplaced = undefined;
   panelEvents = undefined;
+  panelEventsTotal = undefined;
   setTracking.mockReset().mockResolvedValue(state());
   setLabel.mockReset().mockResolvedValue({ caverId: ANA, label: null });
 });
@@ -2856,6 +2861,93 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
 
       expect(screen.getByTestId(`trip-tracking-position-other-model-${ANA}`)).toBeTruthy();
     });
+
+    /** One report on the log, at a station, against a named survey — or none, for a deleted one. */
+    const reported = (id: string, stationName: string | null, surveyModelId: string | null) => ({
+      id,
+      caverId: ANA,
+      teamId: null,
+      kind: 'atStation',
+      surveyModelId,
+      stationName,
+      depthEnteredM: null,
+      note: null,
+      recordedAt: '2026-09-12T07:00:00Z',
+      outsideDeclaredParts: false,
+    });
+    const logOf = (items: unknown[]) =>
+      eventsQuery.mockReturnValue({
+        data: { items, page: 1, pageSize: 20, totalItems: items.length },
+        isPending: false,
+      });
+
+    /**
+     * The table of people marks where somebody is; the log under it is the record of what was
+     * said, row by row. A watch pointed at a corrected survey half-way through a trip leaves every
+     * earlier row naming a station of the survey it left — and unmarked, those rows read as places
+     * on the survey in use, where the same name may be another chamber.
+     */
+    for (const layout of ['wide', 'stacked'] as const) {
+      it(`marks a report made on a survey the watch has left, and no other row (${layout})`, () => {
+        narrow = layout === 'stacked';
+        logOf([
+          reported('ev-now', 'P12', MODEL),
+          reported('ev-before', 'cave.deep.3', OTHER),
+          // What a deleted survey leaves on a row: the name, and no survey to read it in.
+          reported('ev-orphan', 'cave.deep.4', null),
+          { ...reported('ev-word', null, null), kind: 'note', note: 'all well' },
+        ]);
+        show();
+
+        const log = within(screen.getByTestId('trip-tracking-events'));
+        const mark = log.getByTestId('trip-tracking-event-other-model-ev-before');
+        expect(mark).toHaveTextContent('On another survey');
+        // The station stays: it is what was said, and the mark qualifies it rather than replacing it.
+        expect(log.getByText('cave.deep.3')).toBeTruthy();
+        // Quiet. On the table of people this fact is a warning about where somebody is now; on a
+        // row of the log it is history, and a trip re-pointed once would otherwise be half amber.
+        expect(mark.querySelector('.anticon-warning')).toBeNull();
+        expect(
+          screen
+            .getByTestId(`trip-tracking-position-other-model-${ANA}`)
+            .querySelector('.anticon-warning'),
+        ).not.toBeNull();
+        expect(log.getByTestId('trip-tracking-event-other-model-ev-orphan')).toBeTruthy();
+        // And the twins that keep it a rule about the survey: a place on the survey in use, and a
+        // report that names no place at all.
+        expect(log.queryByTestId('trip-tracking-event-other-model-ev-now')).toBeNull();
+        expect(log.queryByTestId('trip-tracking-event-other-model-ev-word')).toBeNull();
+      });
+    }
+
+    /**
+     * What a reader who may not place the cave is sent: a watch that does not say which survey it
+     * is on, and station reports with neither a station nor a survey. Neither is a difference
+     * between two surveys this page was told about, so neither is marked as one — the row says
+     * its place is not shown, and stops there.
+     */
+    it('marks nothing for a reader who is told neither the place nor the survey', () => {
+      const rows = [reported('ev-before', 'cave.deep.3', OTHER)];
+      logOf(rows);
+      show();
+      // The same row, to somebody who is told both: marked.
+      expect(screen.getByTestId('trip-tracking-event-other-model-ev-before')).toBeTruthy();
+      cleanup();
+
+      trackingQuery.mockReturnValue({
+        data: state({ surveyModelId: null, positionsWithheld: true }),
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      logOf([reported('ev-before', null, null)]);
+      show();
+
+      const log = within(screen.getByTestId('trip-tracking-events'));
+      expect(log.queryByTestId('trip-tracking-event-other-model-ev-before')).toBeNull();
+      expect(log.getByTestId('trip-tracking-position-withheld')).toBeTruthy();
+      expect(log.queryByText('On another survey')).toBeNull();
+    });
   });
 
   /**
@@ -3148,6 +3240,9 @@ describe('TripTrackingTab, reaching the whole log', () => {
     expect(firstReads.every(([, params]) => JSON.stringify(params) === '{"pageSize":20}')).toBe(true);
     expect(panelEvents?.[0]?.id).toBe('ev-1');
     expect(panelEvents).toHaveLength(20);
+    // And it is told how long the log really is, which is what lets it know those twenty rows
+    // cannot say which surveys the older reports were made on.
+    expect(panelEventsTotal).toBe(45);
 
     fireEvent.click(document.querySelector('.ant-pagination-item-3')!);
     expect(table().getByText('word 45')).toBeTruthy();

@@ -19,6 +19,9 @@ let askedFor: string | undefined;
 /** The whole log the replay reads, and whether anything has asked for it yet. */
 let log: TrackingEvent[] = [];
 let logAskedFor: { tripLogId: string | undefined; enabled: boolean } | undefined;
+/** The other surveys this server still answers for, by id, and which ids were last asked for. */
+let others: Record<string, SurveyModelInfo> = {};
+let othersAskedFor: readonly string[] | undefined;
 /**
  * The model's links — where a station's pictures come from — and what was asked for them.
  *
@@ -44,6 +47,12 @@ vi.mock('../../api/hooks.ts', () => ({
   useSurveyModel: (id: string | undefined) => {
     askedFor = id;
     return { data: id === undefined ? undefined : held, isPending: false };
+  },
+  // The other surveys a trip's reports name, read by id. What comes back is only what still
+  // resolves for this reader — a deleted survey and one they may not open both answer nothing.
+  useSurveyModelsById: (ids: readonly string[]) => {
+    othersAskedFor = ids;
+    return ids.flatMap((id) => (others[id] ? [others[id]] : []));
   },
   useTripTrackingEventLog: (tripLogId: string | undefined, enabled: boolean) => {
     logAskedFor = { tripLogId, enabled };
@@ -324,6 +333,7 @@ function show(
     selectedCaverIds?: string[];
     onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
     now?: number;
+    eventsTotal?: number;
   } = {},
 ) {
   return render(
@@ -335,6 +345,7 @@ function show(
         tracking={state}
         participants={roster}
         events={events}
+        eventsTotal={props.eventsTotal}
         canEdit={props.canEdit ?? true}
         selectedCaverIds={props.selectedCaverIds ?? [ANA]}
         onRecorded={onRecorded}
@@ -363,6 +374,8 @@ beforeEach(() => {
   given = undefined;
   log = [];
   logAskedFor = undefined;
+  others = {};
+  othersAskedFor = undefined;
   links = [];
   linksAskedFor = undefined;
   momentLinks = [];
@@ -1226,6 +1239,223 @@ describe('TrackingModelPanel', () => {
  * proved here is the panel's side of the bargain: what it fetches and when, what it hands
  * each pane, and that the viewer survives every switch.
  */
+/**
+ * A watch is on one survey, and its log need not be. Pointed at a corrected survey half-way
+ * through a trip, it leaves the earlier reports naming stations of the survey it left — true
+ * records that the panel, drawing only the watch's present survey, can show as nothing but "on
+ * another survey". The chooser lets them be seen where they were made.
+ *
+ * <b>It is for looking, and the property that matters is what it refuses.</b> A report is
+ * measured against the watch's own survey whatever is on screen, so a station pressed on an
+ * earlier one would be looked up by name in a survey it was not pressed on.
+ */
+describe('looking at the reports on another survey', () => {
+  const EARLIER = 'model-0';
+  const DELETED = 'model-gone';
+
+  /** A report made before the watch was pointed at the survey it is on now. */
+  const before = (caverId: string, recordedAt: string, stationName: string, on = EARLIER) =>
+    ({ ...atStation(caverId, recordedAt, stationName), surveyModelId: on }) as TrackingEvent;
+
+  /** Ana placed on the watch's survey, Bogdan last heard of on the earlier one. */
+  function splitParty() {
+    const [ana] = tracking().participants;
+    return tracking({
+      participants: [
+        ana,
+        {
+          ...ana,
+          caverId: BOGDAN,
+          stationName: 'old.3',
+          positionSurveyModelId: EARLIER,
+        },
+      ],
+    });
+  }
+
+  function openPanel() {
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+  }
+
+  /** Chooses an entry of the chooser by the words on it. */
+  function lookAt(label: RegExp) {
+    const chooser = screen.getByTestId('trip-tracking-view-on');
+    fireEvent.mouseDown(chooser.querySelector('.ant-select-selector') ?? chooser);
+    const option = Array.from(document.querySelectorAll('.ant-select-item-option')).find((entry) =>
+      label.test(entry.textContent ?? ''),
+    );
+    expect(option).toBeTruthy();
+    fireEvent.click(option!);
+  }
+
+  const positions = () =>
+    Object.fromEntries(given!.trackedCavers!.map((caver) => [caver.caverId, caver.position.kind]));
+
+  beforeEach(() => {
+    others = {
+      [EARLIER]: model({
+        id: EARLIER,
+        name: 'Pestera de test',
+        modelUrl: 'https://files.local/model-0',
+        createdAt: '2026-08-01T12:00:00Z',
+      } as Partial<SurveyModelInfo>),
+    };
+  });
+
+  it('offers no chooser on a trip whose every report is on the watch’s own survey', () => {
+    show(tracking(), [atStation(ANA, '2026-09-12T07:00:00Z', 'p.g.7')]);
+    openPanel();
+
+    expect(screen.queryByTestId('trip-tracking-view-on')).toBeNull();
+    expect(screen.queryByTestId('trip-tracking-view-on-readonly')).toBeNull();
+    expect(othersAskedFor).toEqual([]);
+  });
+
+  it('asks for the other surveys only once the model is opened', () => {
+    show(splitParty(), [before(BOGDAN, '2026-09-12T06:30:00Z', 'old.3')]);
+
+    // Read off the reports, and not fetched: this tab is opened routinely by somebody who only
+    // wants to record that the party went in.
+    expect(othersAskedFor).toEqual([]);
+
+    openPanel();
+
+    expect(othersAskedFor).toEqual([EARLIER]);
+  });
+
+  it('offers only the surveys that still answer, and can be drawn, beside the watch’s own', () => {
+    others.unread = model({ id: 'unread', status: 'processing' } as Partial<SurveyModelInfo>);
+    others.walls = model({ id: 'walls', format: 'stl' } as Partial<SurveyModelInfo>);
+    show(splitParty(), [
+      before(BOGDAN, '2026-09-12T06:30:00Z', 'old.3'),
+      // Deleted since, or of a cave this reader may not place: the read for it answers nothing.
+      before(BOGDAN, '2026-09-12T06:20:00Z', 'gone.1', DELETED),
+      before(BOGDAN, '2026-09-12T06:10:00Z', 'u.1', 'unread'),
+      before(BOGDAN, '2026-09-12T06:05:00Z', 'w.1', 'walls'),
+    ]);
+    openPanel();
+
+    expect(othersAskedFor).toEqual([EARLIER, DELETED, 'unread', 'walls'].sort());
+    const chooser = screen.getByTestId('trip-tracking-view-on');
+    fireEvent.mouseDown(chooser.querySelector('.ant-select-selector') ?? chooser);
+    const offered = Array.from(
+      document.querySelectorAll('.ant-select-item-option'),
+      (option) => option.textContent ?? '',
+    );
+    expect(offered).toHaveLength(2);
+    expect(offered[0]).toContain('this watch');
+    // Told apart by the day it arrived: two surveys of one cave are often one name.
+    expect(offered[1]).toMatch(/^Pestera de test — added /);
+  });
+
+  it('draws the reports made on the chosen survey, records nothing there, and puts everything back', () => {
+    const unplaced = vi.fn();
+    show(splitParty(), [before(BOGDAN, '2026-09-12T06:30:00Z', 'old.3')], {
+      onUnplacedStationsChange: unplaced,
+    });
+    openPanel();
+
+    // The watch's own survey: Ana drawn, Bogdan said to be on another one, a press takes a report.
+    expect(given).toMatchObject({ surveyModelId: MODEL });
+    expect(positions()).toEqual({ [ANA]: 'station', [BOGDAN]: 'otherModel' });
+    expect(given!.onPartPick).toBeDefined();
+    expect(given!.onUnplacedStationsChange).toBe(unplaced);
+    expect(screen.queryByTestId('trip-tracking-view-on-readonly')).toBeNull();
+
+    lookAt(/added/);
+
+    // The other survey, and the same party folded against it: the two answers swap.
+    expect(given).toMatchObject({
+      surveyModelId: EARLIER,
+      fileName: 'Pestera de test.lox',
+    });
+    expect(positions()).toEqual({ [ANA]: 'otherModel', [BOGDAN]: 'station' });
+    expect(screen.getByTestId('trip-tracking-view-on-readonly')).toHaveTextContent(
+      'Nothing can be recorded',
+    );
+    // No press channel on the drawing, so there is nothing a press could raise…
+    expect(given!.onPartPick).toBeUndefined();
+    expect(screen.queryByTestId('trip-tracking-record-here-open')).toBeNull();
+    // …and what this drawing cannot place is not carried up to a table that is about the other.
+    expect(given!.onUnplacedStationsChange).toBeUndefined();
+    expect(recordEvents).not.toHaveBeenCalled();
+
+    lookAt(/this watch/);
+
+    expect(given).toMatchObject({ surveyModelId: MODEL });
+    expect(positions()).toEqual({ [ANA]: 'station', [BOGDAN]: 'otherModel' });
+    expect(given!.onPartPick).toBeDefined();
+    expect(given!.onUnplacedStationsChange).toBe(unplaced);
+    expect(screen.queryByTestId('trip-tracking-view-on-readonly')).toBeNull();
+  });
+
+  it('lets go of an offer a press raised when another survey is chosen', () => {
+    show(splitParty(), [before(BOGDAN, '2026-09-12T06:30:00Z', 'old.3')]);
+    pressStation('p.g.42');
+    expect(screen.getByTestId('trip-tracking-picked-station')).toBeTruthy();
+
+    lookAt(/added/);
+
+    // The station was pressed on the watch's survey; left standing, its button would record a
+    // name under a drawing that may not hold it.
+    expect(screen.queryByTestId('trip-tracking-picked-station')).toBeNull();
+    expect(screen.queryByTestId('trip-tracking-record-here-open')).toBeNull();
+  });
+
+  it('replays the trip over the chosen survey from the same log', () => {
+    log = [
+      atStation(ANA, '2026-09-12T06:50:00Z', 'p.g.3'),
+      before(ANA, '2026-09-12T06:30:00Z', 'old.3'),
+      entered(ANA, '2026-09-12T06:10:00Z'),
+    ];
+    show(tracking(), [before(ANA, '2026-09-12T06:30:00Z', 'old.3')]);
+    openPanel();
+    lookAt(/added/);
+    fireEvent.click(screen.getByTestId('trip-tracking-replay-open'));
+    fireEvent.keyDown(screen.getByRole('slider'), { key: 'End', keyCode: 35 });
+
+    // At the end of the trip Ana's place is one on the watch's survey, so on this one she is said
+    // to be elsewhere — the fold is the replay's own, handed a different survey to fold against.
+    expect(given!.trackedCavers![0].position).toEqual({ kind: 'otherModel' });
+
+    lookAt(/this watch/);
+    expect(given!.trackedCavers![0].position).toEqual({ kind: 'station', station: 'p.g.3' });
+  });
+
+  it('opens on the watch’s own survey again after the model was hidden', () => {
+    show(splitParty(), [before(BOGDAN, '2026-09-12T06:30:00Z', 'old.3')]);
+    openPanel();
+    lookAt(/added/);
+    expect(given).toMatchObject({ surveyModelId: EARLIER });
+
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+    openPanel();
+
+    // A panel that takes no report for a reason chosen some time ago is the surprise to avoid.
+    expect(given).toMatchObject({ surveyModelId: MODEL });
+    expect(given!.onPartPick).toBeDefined();
+  });
+
+  it('reads the whole log on opening where the rows on the page are not all of it', () => {
+    // The older reports are the ones most likely to have been made on an earlier survey, and
+    // they are exactly the ones a page of the newest rows leaves out.
+    log = [before(BOGDAN, '2026-09-12T06:30:00Z', 'old.3')];
+    show(tracking(), [entered(ANA, '2026-09-12T06:10:00Z')], { eventsTotal: 40 });
+    expect(logAskedFor).toEqual({ tripLogId: 'trip-1', enabled: false });
+
+    openPanel();
+
+    expect(logAskedFor).toEqual({ tripLogId: 'trip-1', enabled: true });
+    expect(screen.getByTestId('trip-tracking-view-on')).toBeTruthy();
+    cleanup();
+
+    // And where the rows are the whole log, nothing more is asked for.
+    show(tracking(), [entered(ANA, '2026-09-12T06:10:00Z')], { eventsTotal: 1 });
+    openPanel();
+    expect(logAskedFor).toEqual({ tripLogId: 'trip-1', enabled: false });
+  });
+});
+
 describe('the movie of the trip', () => {
   it('opens the movie on the watch’s model with this trip already ticked', () => {
     show();
