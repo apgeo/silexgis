@@ -41,16 +41,17 @@ import { participantRoleLabel } from '../../components/trips/participantRoles.ts
 import { countPeople } from '../../components/trips/roster.ts';
 import { formatTripDates, formatUndergroundTime, isMultiDay } from '../../components/trips/tripDates.ts';
 import {
-  isCaverReferenceField,
+  TRIP_SECTIONS,
   tripSectionFieldLabel,
-  tripSectionValueText,
+  writtenSectionRows,
+  type TripSectionKey,
 } from '../../components/trips/tripSectionFields.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 import {
   useTripReportDownload,
   type ReportDownloadOutcome,
 } from '../../components/trips/useTripReportDownload.ts';
-import { parsePropertiesSchema, type SchemaField } from '../../components/typedProperties/propertiesSchema.ts';
+import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import '../../components/trips/TripReport.css';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
@@ -58,12 +59,6 @@ import { formatPosition, shapeLabelKey, tripGeometrySummary } from '../../compon
 
 /** How many photographs a write-up carries. The rest are one click away in the gallery. */
 const PlateCount = 24;
-
-/** The three per-purpose sections, in the order a report is written in. */
-const SECTIONS = ['fieldData', 'logistics', 'safety'] as const;
-type SectionKey = (typeof SECTIONS)[number];
-
-type Bag = Record<string, unknown>;
 
 /**
  * What a reader is told once a download has finished, by how it went.
@@ -79,9 +74,6 @@ const DOWNLOAD_NOTICES: Partial<
   'map-not-made': { level: 'warning', key: 'trips.report.map.notMade' },
   'map-refused': { level: 'warning', key: 'trips.report.map.refused' },
 };
-
-const asBag = (value: unknown): Bag =>
-  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Bag) : {};
 
 /** A drawn shape as this reader's language words it, or as it is stored when it has no wording. */
 function shapeLabel(type: string, t: TFunction): string {
@@ -221,18 +213,8 @@ export default function TripReportPage() {
   const photos = photosQuery.data?.items ?? [];
 
   /** The values a section actually holds, in the order its purpose declares them. */
-  const written = (section: SectionKey): { field: SchemaField; text: string }[] => {
-    const bag = asBag(trip[section]);
-    return schemas[section]
-      .map((field) => ({
-        field,
-        text: isCaverReferenceField(field)
-          ? (cavers?.find((caver) => caver.id === bag[field.key])?.name ??
-            (bag[field.key] == null ? '—' : String(bag[field.key])))
-          : tripSectionValueText(field, bag[field.key], t),
-      }))
-      .filter((row) => row.text !== '—');
-  };
+  const written = (section: TripSectionKey) =>
+    writtenSectionRows(trip[section], schemas[section], cavers, t);
 
   return (
     <div className="trip-report">
@@ -500,7 +482,7 @@ export default function TripReportPage() {
           </Part>
         )}
 
-        {SECTIONS.map((section) => {
+        {TRIP_SECTIONS.map((section) => {
           // The account of what went wrong arrives as nothing at all for a reader who may not
           // change the trip — not as an empty object — so this prints no heading for it rather
           // than an empty one, which on a circulated document would read as "nothing happened".

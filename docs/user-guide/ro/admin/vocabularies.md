@@ -78,10 +78,13 @@ ajunge la ea și din lista taberelor, sub *Configurare*.
 
 ## Configurare → Modele de raport
 
-**Ce guvernează:** modelul în care se redactează o tură.
+**Ce guvernează:** modelul în care se redactează o tură sau o tabără. Sunt două feluri de model,
+cu cuvinte diferite, iar fiecare fel are modelul său standard și modelul său ales.
 
-Descărcați-l pe cel standard — un fișier text scurt care se explică singur în propriile comentarii
-— editați-l, încărcați-l și alegeți-l.
+Descărcați-l pe cel standard pentru felul dorit — un fișier text scurt care se explică singur în
+propriile comentarii — editați-l, încărcați-l și alegeți-l. Un model de tabără are un rând al său,
+`accounts`, care tipărește ce a scris fiecare tură din tabără despre ea însăși; scoateți rândul
+pentru un document mai scurt.
 
 Două proprietăți care fac asta sigur:
 
@@ -90,7 +93,7 @@ Două proprietăți care fac asta sigur:
 - **Un rând al cărui conținut se dovedește gol pur și simplu dispare**, așa că același model
   produce un document onest și pentru un membru, și pentru un editor.
 
-Înrudit: [Ture](../features/trips.md#redactarea)
+Înrudit: [Ture](../features/trips.md#redactarea) · [Tabere](../features/camps.md#raportul)
 
 ---
 

@@ -7,8 +7,7 @@ import List from '../../components/List.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
-
-const PAGE_SIZE = 50;
+import { EXPEDITION_TRIPS_PAGE_SIZE } from './expeditionTrips.ts';
 
 /**
  * The trips gathered into one camp, and what they add up to.
@@ -20,7 +19,7 @@ const PAGE_SIZE = 50;
  */
 export default function ExpeditionTripsTab({ expeditionId }: { expeditionId: string }) {
   const { t, i18n } = useTranslation();
-  const { data, isPending } = useTripLogs({ expeditionId, page: 1, pageSize: PAGE_SIZE });
+  const { data, isPending } = useTripLogs({ expeditionId, page: 1, pageSize: EXPEDITION_TRIPS_PAGE_SIZE });
 
   return (
     <div data-testid="expedition-trips-tab">

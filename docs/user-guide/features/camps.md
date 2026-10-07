@@ -196,15 +196,23 @@ photographs are filed against this camp or the trips in it that you may read."*
 ## The write-up
 
 **Write-up**, in the camp's header, opens the camp arranged to be read: *About the camp*, *The
-trips*, *Who was there* and the pictures, built from what **you** may see — the page says so:
-*"This write-up shows what you may see. Somebody else reading the same camp may see more, or
-less: the trips in it, the people, the pictures."*
+trips*, *What each trip wrote*, *Who was there* and the pictures, built from what **you** may
+see — the page says so: *"This write-up shows what you may see. Somebody else reading the same
+camp may see more, or less: the trips in it, the people, the pictures."*
+
+**What each trip wrote** is each trip's own text under the trip's date and title: its account,
+its results and the answers on its form. You are shown, for each trip, exactly what that trip's
+own write-up would show you — so the account of what went wrong on a trip appears only if you
+may edit that trip, and a trip you may not read is not there at all. A trip that wrote nothing
+has no heading. In the Word document the same part is printed by the layout line `accounts`; a
+club that does not want it takes that line out of its camp layout.
 
 - **Download document** saves it as a Word document, in the standard layout or in one your club
   keeps under **Configuration → Report layouts**.
 - **Save to the camp** files the document on the camp's *Files* tab. The copy saved there can
   be opened by everybody who may read the camp, so it is built from what any account may see of
-  its trips; your own fuller copy is the download.
+  its trips — including what each trip wrote: a trip's text is in the saved copy only as any
+  account may read it, never as you do. Your own fuller copy is the download.
 - **Print** uses the browser, with the application's chrome left off the paper.
 
 ## Permissions and sharing

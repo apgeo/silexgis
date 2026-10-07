@@ -2097,6 +2097,8 @@
       "audienceNotice": "Acest raport arată ceea ce puteți vedea dumneavoastră. Altcineva care citește aceeași tabără poate vedea mai mult sau mai puțin: turele din ea, persoanele, fotografiile.",
       "account": "Despre tabără",
       "trips": "Turele",
+      "accounts": "Ce a scris fiecare tură",
+      "accountsVisibleToYou": "Ce a scris fiecare tură despre ea însăși, pentru turele din această tabără pe care le puteți citi. Altcineva poate vedea mai multe dintre ele sau mai mult din ce a scris una dintre ele.",
       "whoWasThere": "Cine a participat",
       "areaPoint": "Zonă de lucru: un punct la {{position}}.",
       "areaShape": "Zonă de lucru: {{shape}}, {{count}} puncte, centrată pe {{position}}."

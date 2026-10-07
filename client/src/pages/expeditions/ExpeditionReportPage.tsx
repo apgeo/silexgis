@@ -37,6 +37,7 @@ import '../../components/trips/TripReport.css';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import { formatPosition, shapeLabelKey, tripGeometrySummary } from '../../components/trips/tripGeometrySummary.ts';
 import ExpeditionRosterTab from './ExpeditionRosterTab.tsx';
+import ExpeditionTripAccounts from './ExpeditionTripAccounts.tsx';
 import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
 
 /**
@@ -276,6 +277,11 @@ export default function ExpeditionReportPage() {
         <Part title={t('expeditions.report.trips')}>
           <ExpeditionTripsTab expeditionId={camp.id} />
         </Part>
+
+        {/* What each of those trips wrote about itself, from the same answer the list above is
+            drawn from. It brings its own heading, so a camp none of whose trips wrote anything
+            shows no part here rather than an empty one. */}
+        <ExpeditionTripAccounts expeditionId={camp.id} />
 
         {/* The roster, read with the two rights that govern it and withheld whole where the
             reader may not read people; that refusal is drawn as it is on the camp's own tab. */}

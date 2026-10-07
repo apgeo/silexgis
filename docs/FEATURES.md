@@ -471,6 +471,12 @@ feature and walkthroughs of whole jobs.
   text file that explains itself in its own comments, edit it, upload it, and choose it. A layout can
   only ask for things the reader was already given, and a line whose contents turn out to be empty
   simply disappears — so the same layout produces an honest document for a member and for an editor.
+  **A camp writes itself up too**, as one document over the trips it gathered — day by day, team by
+  team, in a layout of its own kind — and it carries **what each trip wrote about itself**: the
+  trip's account, its results and the answers on its form, under the trip's date and title. Each
+  trip's text is exactly what that trip's own write-up would show the same reader, decided in one
+  place for both documents, so a camp's write-up can never print what a trip's withholds; the copy
+  filed against the camp carries each trip only as any account may read it.
 - **Tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.

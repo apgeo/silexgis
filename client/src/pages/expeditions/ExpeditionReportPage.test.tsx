@@ -40,6 +40,9 @@ vi.mock('./ExpeditionTripsTab.tsx', () => ({
 vi.mock('./ExpeditionRosterTab.tsx', () => ({
   default: () => <div>who was at the camp</div>,
 }));
+vi.mock('./ExpeditionTripAccounts.tsx', () => ({
+  default: () => <div>what each trip wrote about itself</div>,
+}));
 vi.mock('../../components/trips/TripGeometryField.tsx', () => ({
   default: () => <div>the working area, drawn</div>,
 }));

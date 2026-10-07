@@ -78,10 +78,13 @@ role is never offered at a camp. It is also reached from the camps list, under *
 
 ## Configuration → Report layouts
 
-**What it governs:** the layout a trip is written up in.
+**What it governs:** the layout a trip or a camp is written up in. The two are different kinds
+of layout with different words, and each kind has its own standard one and its own chosen one.
 
-Download the standard one — a short text file that explains itself in its own comments — edit
-it, upload it, and choose it.
+Download the standard one for the kind you want — a short text file that explains itself in its
+own comments — edit it, upload it, and choose it. A camp layout has a line of its own,
+`accounts`, that prints what each trip in the camp wrote about itself; take the line out for a
+shorter document.
 
 A layout can also be **one trip purpose's own** — the survey bulletin, say: a trip recorded under
 that purpose is written up in it unless somebody picks another, ahead of the layout chosen for
@@ -94,7 +97,7 @@ Two properties that make this safe:
 - **A line whose contents turn out to be empty simply disappears**, so the same layout
   produces an honest document for a member and for an editor.
 
-Related: [Trips](../features/trips.md#the-write-up)
+Related: [Trips](../features/trips.md#the-write-up) · [Camps](../features/camps.md#the-write-up)
 
 ---
 

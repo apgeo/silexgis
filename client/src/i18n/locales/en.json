@@ -2097,6 +2097,8 @@
       "audienceNotice": "This write-up shows what you may see. Somebody else reading the same camp may see more, or less: the trips in it, the people, the pictures.",
       "account": "About the camp",
       "trips": "The trips",
+      "accounts": "What each trip wrote",
+      "accountsVisibleToYou": "What each trip wrote about itself, for the trips in this camp you may read. Somebody else may see more of them, or more of what one of them wrote.",
       "whoWasThere": "Who was there",
       "areaPoint": "Working area: a point at {{position}}.",
       "areaShape": "Working area: {{shape}}, {{count}} points, centred on {{position}}."
