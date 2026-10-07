@@ -2016,6 +2016,12 @@
       "role": "Rol",
       "roleRequired": "Alegeți un rol",
       "daysHint": "Prima și ultima zi în care a fost acolo. Pentru o singură zi, alegeți-o de două ori.",
+      "daysRequired": "Alegeți prima și ultima zi sau bifați „încă acolo”.",
+      "firstDay": "Prima zi",
+      "lastDay": "Ultima zi",
+      "stillThere": "Încă acolo",
+      "stillThereChoice": "Încă acolo — nu a plecat încă",
+      "since": "din {{date}}, încă acolo",
       "note": "Notă",
       "notePlaceholder": "A sosit mai târziu, a plecat mai devreme, s-a întors…",
       "personGone": "Această persoană nu mai este în lista de speologi. Alegeți-o din nou sau scrieți-i numele."

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from 'react';
-import { App, DatePicker, Form, Input, Modal, Select, Typography } from 'antd';
+import { App, Checkbox, DatePicker, Form, Input, Modal, Select, Typography } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
@@ -13,8 +13,8 @@ import {
 } from '../../api/hooks.ts';
 import CaverNameField from '../../components/cavers/CaverNameField.tsx';
 import { expeditionRosterRoleLabel } from '../../components/expeditions/rosterRoles.ts';
+import { isStillThere, stayEndForWrite } from '../../components/expeditions/stayDates.ts';
 import { caverReference, type CaverReferenceRow } from '../../components/trips/roster.ts';
-import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 
 const { RangePicker } = DatePicker;
 
@@ -48,10 +48,13 @@ interface ExpeditionStayModalProps {
 interface FormValues {
   person: CaverReferenceRow;
   roleId: number;
-  // Always a range, on the camp's own convention: somebody there for one day picks that day
-  // twice, and the equal end is dropped on write — a stored end means "and they stayed on to",
-  // so one day never reads as a range of itself.
+  // The first day and the last. Somebody there for one day picks that day twice, and it is
+  // sent as picked: on a roster a last day equal to the first is how one day is said.
   dates: [Dayjs, Dayjs | null];
+  // Somebody who has not left. Its own answer rather than a last day left empty, because an
+  // empty box is also what a form looks like when nobody has got to it yet — and the two must
+  // not be stored as the same thing.
+  stillThere: boolean;
   note?: string;
 }
 
@@ -93,7 +96,8 @@ export default function ExpeditionStayModal({
           // means that person; typed over, it means whoever the new text names.
           person: { caverId: entry.caverId, loadedName: entry.caverName, name: entry.caverName },
           roleId: entry.roleId,
-          dates: [dayjs(entry.fromDate), dayjs(entry.toDate ?? entry.fromDate)],
+          dates: [dayjs(entry.fromDate), entry.toDate ? dayjs(entry.toDate) : null],
+          stillThere: isStillThere(entry.toDate),
           note: entry.note ?? undefined,
         });
       } else {
@@ -102,6 +106,7 @@ export default function ExpeditionStayModal({
           // The whole camp: most people were there for all of it, and whoever was not corrects
           // two dates rather than typing two.
           dates: [dayjs(campStart), dayjs(campEnd ?? campStart)],
+          stillThere: false,
         });
       }
     }
@@ -118,6 +123,19 @@ export default function ExpeditionStayModal({
       form.setFieldsValue({ roleId: defaultRoleId });
     }
   }, [open, entry, defaultRoleId, form]);
+
+  // Ticking "still there" takes the last day away, and unticking it puts one back — the camp's
+  // own last day where the stay began before it, and otherwise the day the stay began — so the
+  // two controls never say different things about one stay.
+  const stillThere = Form.useWatch('stillThere', form) ?? false;
+  const onStillThere = (checked: boolean) => {
+    const [start] = (form.getFieldValue('dates') ?? []) as [Dayjs | undefined, Dayjs | null];
+    if (!start) {
+      return;
+    }
+    const last = dayjs(campEnd ?? campStart);
+    form.setFieldsValue({ dates: [start, checked ? null : last.isBefore(start) ? start : last] });
+  };
 
   const onOk = async () => {
     let values: FormValues;
@@ -136,7 +154,7 @@ export default function ExpeditionStayModal({
       ...caverReference(values.person),
       roleId: values.roleId,
       fromDate,
-      toDate: tripDateEndForWrite(fromDate, end ? end.format('YYYY-MM-DD') : null),
+      toDate: stayEndForWrite(values.stillThere, end ? end.format('YYYY-MM-DD') : null),
       note: values.note?.trim() || null,
     };
 
@@ -229,9 +247,37 @@ export default function ExpeditionStayModal({
           name="dates"
           label={t('expeditions.dates')}
           extra={t('expeditions.stay.daysHint')}
-          rules={[{ required: true }]}
+          dependencies={['stillThere']}
+          rules={[
+            {
+              // A first day always; a last day unless the person is still there. The picker
+              // lets the last day be empty because "still there" empties it, so that it may be
+              // empty has to be decided here, against the box that says why.
+              validator: (_, value?: [Dayjs | null, Dayjs | null]) =>
+                value?.[0] && (value[1] || form.getFieldValue('stillThere'))
+                  ? Promise.resolve()
+                  : Promise.reject(new Error(t('expeditions.stay.daysRequired'))),
+            },
+          ]}
         >
-          <RangePicker style={{ width: '100%' }} allowClear={false} />
+          <RangePicker
+            style={{ width: '100%' }}
+            allowClear={false}
+            allowEmpty={[false, true]}
+            disabled={[false, stillThere]}
+            placeholder={[
+              t('expeditions.stay.firstDay'),
+              stillThere ? t('expeditions.stay.stillThere') : t('expeditions.stay.lastDay'),
+            ]}
+          />
+        </Form.Item>
+        <Form.Item name="stillThere" valuePropName="checked">
+          <Checkbox
+            data-testid="expedition-stay-still-there"
+            onChange={(event) => onStillThere(event.target.checked)}
+          >
+            {t('expeditions.stay.stillThereChoice')}
+          </Checkbox>
         </Form.Item>
         <Form.Item name="note" label={t('expeditions.stay.note')}>
           <Input

@@ -2016,6 +2016,12 @@
       "role": "Role",
       "roleRequired": "Choose a role",
       "daysHint": "The first and the last day they were there. For a single day, pick it twice.",
+      "daysRequired": "Pick the first and the last day, or tick “still there”.",
+      "firstDay": "First day",
+      "lastDay": "Last day",
+      "stillThere": "Still there",
+      "stillThereChoice": "Still there — they have not left yet",
+      "since": "from {{date}}, still there",
       "note": "Note",
       "notePlaceholder": "Arrived late, left early, came back…",
       "personGone": "That person is no longer in the list of cavers. Choose them again, or type their name."

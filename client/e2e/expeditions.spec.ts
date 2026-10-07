@@ -386,6 +386,28 @@ test('a stay names somebody new, appears on the roster, and puts them in the dir
   await expect(stays).toHaveCount(2, { timeout: 15_000 });
   await expect(page.getByTestId('expedition-roster-people')).toContainText('People at this camp: 1');
 
+  // ---- somebody who has not left: said by a choice of its own, and read back in words
+  // A stay with no last day is not a stay of one day. The first row is corrected to say the
+  // person is still there, and the roster then says so rather than printing the day they came.
+  const corrected = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' &&
+      /\/api\/v1\/expeditions\/[^/]+\/roster\/\d+/.test(response.url()),
+    { timeout: 30_000 },
+  );
+  await stays.first().locator('[data-testid^="expedition-stay-edit-"]').click();
+  const editing = page.getByRole('dialog', { name: 'Edit stay' });
+  await expect(editing).toBeVisible({ timeout: 15_000 });
+  await expect(editing.getByTestId('expedition-stay-still-there')).not.toBeChecked();
+  await editing.getByTestId('expedition-stay-still-there').check();
+  await editing.getByRole('button', { name: 'OK' }).click();
+  expect((await corrected).status()).toBe(200);
+  await expect(editing).toBeHidden({ timeout: 15_000 });
+  await expect(stays.first()).toContainText('still there', { timeout: 15_000 });
+  // The other stay kept both of its days: the choice was about one row.
+  await expect(stays.nth(1)).toContainText('–');
+  await expect(stays.nth(1)).not.toContainText('still there');
+
   // ---- and in the directory, once: the name made one entry and the second stay made none
   await gotoRoute(page, '/cavers');
   await page.getByPlaceholder('Search by name…').fill(person);

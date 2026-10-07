@@ -85,6 +85,7 @@ function show(
 const who = () => screen.getByTestId('expedition-stay-person') as HTMLInputElement;
 const typeWho = (text: string) => fireEvent.change(who(), { target: { value: text } });
 const press = () => fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+const stillThere = () => screen.getByTestId('expedition-stay-still-there') as HTMLInputElement;
 
 /** The body the dialog handed the create route, once the save has been awaited. */
 async function created(): Promise<ExpeditionRosterEntryWrite> {
@@ -141,15 +142,38 @@ describe('recording a stay', () => {
     expect(body.roleId).toBe(1);
   });
 
-  it('records one day with no end on a camp of one day', async () => {
-    // The stay starts out as the camp's own days, and the camp's convention is the stay's: an
-    // end equal to the first day is sent as no end at all, so one day never reads as a range.
+  it('records one day as that day twice on a camp of one day', async () => {
+    // The stay starts out as the camp's own days, but not on the camp's convention: for a stay
+    // no last day means the person has not left, so one day is sent with its day as the last.
     show(null, { campEnd: null });
     typeWho('Day visitor');
 
     const body = await created();
     expect(body.fromDate).toBe('2026-07-18');
+    expect(body.toDate).toBe('2026-07-18');
+  });
+
+  it('records somebody still there with no last day, as a choice of its own', async () => {
+    show(null);
+    typeWho('Has not left');
+    expect(stillThere().checked).toBe(false);
+    fireEvent.click(stillThere());
+
+    const body = await created();
+    expect(body.fromDate).toBe('2026-07-18');
     expect(body.toDate).toBeNull();
+  });
+
+  it('puts the last day back when "still there" is taken back', async () => {
+    // Ticked and unticked again: the stay is the camp's own days once more, not a stay with a
+    // first day and an empty box where the last should be.
+    show(null);
+    typeWho('Changed their mind');
+    fireEvent.click(stillThere());
+    fireEvent.click(stillThere());
+
+    const body = await created();
+    expect(body.toDate).toBe('2026-08-01');
   });
 
   it('refuses to send a stay that says nobody was there', async () => {
@@ -212,12 +236,33 @@ describe('correcting a stay', () => {
     expect(body.newCaverName).toBe('Somebody Else');
   });
 
-  it('shows a one-day stay as that day and sends it back with no end', async () => {
+  it('opens a stay with no last day as somebody still there and sends it back as that', async () => {
+    // Opened and saved untouched, it must not come back as a stay of one day: that would send
+    // home, on the record, everybody whose row was merely looked at.
     show(stay({ toDate: null }));
+    expect(stillThere().checked).toBe(true);
 
     const { body } = await corrected();
     expect(body.fromDate).toBe('2026-07-20');
     expect(body.toDate).toBeNull();
+  });
+
+  it('opens a one-day stay as one day and sends it back with its day', async () => {
+    show(stay({ toDate: '2026-07-20' }));
+    expect(stillThere().checked).toBe(false);
+
+    const { body } = await corrected();
+    expect(body.fromDate).toBe('2026-07-20');
+    expect(body.toDate).toBe('2026-07-20');
+  });
+
+  it('gives somebody who has since left a last day', async () => {
+    // Unticking is how a stay stops being open; the last day it starts from is the camp's own.
+    show(stay({ toDate: null }));
+    fireEvent.click(stillThere());
+
+    const { body } = await corrected();
+    expect(body.toDate).toBe('2026-08-01');
   });
 
   it('clears a note that was emptied rather than keeping the old one', async () => {
