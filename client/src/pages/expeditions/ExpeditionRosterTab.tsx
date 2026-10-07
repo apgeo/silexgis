@@ -80,6 +80,14 @@ export default function ExpeditionRosterTab({ expeditionId, editable }: Expediti
     setSubject(entry);
     setDialogOpen(true);
   };
+  // Which stay the "remove it?" question is open on, by the stay's own identity. The list draws
+  // its rows by position, so a question left to remember for itself that it is open stays with
+  // the position: read the roster again a row shorter while it is up, and it is now asking
+  // about whichever stay moved into that row — and removes that one. Held here, it follows the
+  // stay it was asked about, and closes if that stay is no longer on the list. The rows are
+  // keyed by their stay for the other half of the same reason: a row that comes to draw a
+  // different stay is made again, so nothing the old one had open is left standing on the new.
+  const [removing, setRemoving] = useState<number | null>(null);
 
   if (error instanceof ApiError && error.code === PEOPLE_UNREADABLE) {
     return (
@@ -144,6 +152,7 @@ export default function ExpeditionRosterTab({ expeditionId, editable }: Expediti
           dataSource={data.entries}
           renderItem={(entry) => (
             <List.Item
+              key={entry.id}
               data-testid={`expedition-stay-${entry.id}`}
               actions={
                 canEdit
@@ -157,11 +166,14 @@ export default function ExpeditionRosterTab({ expeditionId, editable }: Expediti
                         onClick={() => openOn(entry)}
                         data-testid={`expedition-stay-edit-${entry.id}`}
                       />,
-                      // Confirmed first, and in words that say what goes and what does not: the
-                      // stay, never the person, who is in the directory for other reasons too.
+                      // Confirmed first, in words that say whose stay it is and what goes with
+                      // it: the stay, never the person, who is in the directory for other
+                      // reasons too.
                       <Popconfirm
                         key="remove"
-                        title={t('expeditions.stay.removeConfirm')}
+                        title={t('expeditions.stay.removeConfirm', { name: entry.caverName })}
+                        open={removing === entry.id}
+                        onOpenChange={(open) => setRemoving(open ? entry.id : null)}
                         onConfirm={() => void onRemove(entry)}
                       >
                         <Button

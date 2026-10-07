@@ -282,6 +282,49 @@ describe('keeping a camp’s roster', () => {
     expect(removeStay).toHaveBeenCalledTimes(1);
   });
 
+  it('removes the stay its confirmation was opened on, though the rows move under it', async () => {
+    // Three stays, and the question is open on the middle one when the list is read again a
+    // row shorter — an earlier removal landing, or somebody else's. The answer belongs to the
+    // stay it was asked about and not to whichever stay now sits where that one was.
+    const stays = [
+      entry({ id: 5, caverId: 'caver-1', caverName: 'Ana Pop' }),
+      entry({ id: 6, caverId: 'caver-2', caverName: 'Bogdan Ilie' }),
+      entry({ id: 7, caverId: 'caver-3', caverName: 'Carmen Radu' }),
+    ];
+    rosterSpy.mockReturnValue({
+      data: roster({ entries: stays, people: 3 }),
+      isPending: false,
+      error: null,
+    });
+    const view = showToAKeeper();
+    fireEvent.click(screen.getByTestId('expedition-stay-remove-6'));
+    // The question says whose stay it is about, so it cannot come to be read as another's.
+    expect(await screen.findByText(/Remove this stay of Bogdan Ilie\?/)).toBeTruthy();
+
+    rosterSpy.mockReturnValue({
+      data: roster({ entries: stays.slice(1), people: 2 }),
+      isPending: false,
+      error: null,
+    });
+    view.rerender(
+      <App>
+        <ExpeditionRosterTab expeditionId={CAMP} editable={CAMP_DAYS} />
+      </App>,
+    );
+
+    // Still the same question, about the same person, on a list that has moved — and the only
+    // one: the row it used to stand on now draws another stay, and has nothing of the old one's
+    // left open on it to be pressed by mistake.
+    const open = Array.from(document.querySelectorAll<HTMLElement>('.ant-popconfirm'));
+    expect(open.map((popup) => popup.textContent)).toEqual([
+      expect.stringContaining('Remove this stay of Bogdan Ilie?'),
+    ]);
+    fireEvent.click(open[0].querySelector('.ant-btn-primary')!);
+    await vi.waitFor(() => expect(removeStay).toHaveBeenCalled());
+    expect(removeStay).toHaveBeenCalledWith(6);
+    expect(removeStay).toHaveBeenCalledTimes(1);
+  });
+
   it('offers the first stay from a camp nobody has been recorded at', async () => {
     rosterSpy.mockReturnValue({
       data: roster({ entries: [], people: 0 }),

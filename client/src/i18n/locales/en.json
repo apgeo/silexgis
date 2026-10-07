@@ -1918,7 +1918,7 @@
       "add": "Add a stay",
       "edit": "Edit stay",
       "remove": "Remove stay",
-      "removeConfirm": "Remove this stay? Only the record that they were at this camp for these days goes — the person stays in the list of cavers.",
+      "removeConfirm": "Remove this stay of {{name}}? Only the record that they were at this camp for these days goes — the person stays in the list of cavers.",
       "hint": "One stay is one person in one role, for one stretch of days. Somebody who cooked and also surveyed is two stays, and so is somebody who left and came back.",
       "person": "Who",
       "personPlaceholder": "Somebody from the list of cavers, or a new name",

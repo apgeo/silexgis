@@ -1918,7 +1918,7 @@
       "add": "Adaugă o ședere",
       "edit": "Editare ședere",
       "remove": "Șterge șederea",
-      "removeConfirm": "Ștergeți această ședere? Dispare doar consemnarea că a fost la această tabără în aceste zile — persoana rămâne în lista de speologi.",
+      "removeConfirm": "Ștergeți această ședere pentru {{name}}? Dispare doar consemnarea că a fost la această tabără în aceste zile — persoana rămâne în lista de speologi.",
       "hint": "O ședere înseamnă o persoană, într-un rol, pentru un interval de zile. Cine a gătit și a și cartat are două șederi, la fel și cine a plecat și s-a întors.",
       "person": "Cine",
       "personPlaceholder": "Cineva din lista de speologi sau un nume nou",
