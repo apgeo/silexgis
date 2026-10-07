@@ -143,6 +143,10 @@ odată cu ea — și apoi paginile.
 | Record a report | Înregistrează un raport |
 | Went in / Came out | A intrat / A ieșit |
 | Correct (a report) | Corectează |
+| Removed reports (taken off the log, still kept) | Rapoarte scoase |
+| Put back (a removed report) / Undo (on the notice) | Pune înapoi / Anulează |
+| Delete for good | Șterge definitiv |
+| First started / Started again (a watch) | Începută prima dată / Începută din nou |
 | Import a sheet | Importă o foaie |
 | What this cave's depths mean | Ce înseamnă adâncimile acestei peșteri |
 | Declare a depth | Declară o adâncime |

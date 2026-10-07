@@ -44,7 +44,9 @@ Then **Start tracking**. The trip now shows *Tracking*, and reports can be recor
   being followed; a published page says the trip is over, and stops showing it once the grace
   period after closing has run out. **The log itself stays open** — reports can still be
   recorded, corrected or removed afterwards, so the write-up does not have to be finished
-  first. **Start tracking again** reopens the watch.
+  first. **Start tracking again** reopens the watch. A watch that was started again shows both
+  moments on the setup card — **First started** and **Started again** — so the hour the party
+  was first followed from is not lost to the restart.
 - **A trip where tracking was never started takes no reports** — a report names a place on a
   survey, and there is no survey yet. The tab says so and points at **Start tracking**.
 
@@ -180,10 +182,29 @@ Each row of **Reports** offers two controls, and they mean different things:
   person cannot be changed: a report about somebody else is a different report, so delete this
   one and record that one. The dialog says plainly that this changes what the log says
   happened — the replay and the published page follow it.
-- **Delete this report** — only for a report that should not be there at all. It leaves the log
-  for good.
+- **Delete this report** — only for a report that should not be there at all. It comes off the
+  log, and off everything drawn from the log: the party table, the survey, a replay, a
+  published page. **It is not destroyed** — see *Putting a deleted report back* below.
 
 Both work on a **closed** watch as well as a running one.
+
+**Putting a deleted report back.** The notice that says *The report is off the log* carries
+**Undo** for a few seconds — for the bin pressed on the wrong row. After that the report waits
+under the log, in **Removed reports** (the heading carries the count, *Removed reports: 2*, and
+is not drawn while there are none). Open it and each removed report is listed with its moment,
+its person, its place and when it was taken off, beside two buttons:
+
+- **Put back** — the report returns to the log exactly as it was: the same moment, the same
+  place on the same survey, the same note. It is not marked **Corrected**, because nobody
+  corrected it.
+- **Delete for good** — destroys the report. The confirmation says so: **this cannot be
+  undone**, and nothing in the application brings the report back afterwards. Only a report
+  already taken off the log can be deleted for good, so losing one always takes two separate
+  acts.
+
+A removed report is kept for as long as its trip exists; deleting the trip for good takes its
+removed reports with it. *Removed reports* is shown to those who may write the trip's log, and
+a place you may not be told on the log is not told there either.
 
 **Reaching the report.** **Reports** shows twenty at a time, the most recent first, and the
 whole log is behind it: the page numbers under the table, or on a phone **Show older reports**
@@ -327,7 +348,12 @@ with no watch at all has nothing to import onto: choose a survey and save the se
   can miss, is under [Everything published](#everything-published-for-full-administrators).
 
 **Who the page names.** By default this installation publishes **real names**; an operator can
-switch that off for everybody, after which people appear as *Caver 1*, *Caver 2*. The
+switch that off for everybody, after which people appear as *Caver 1*, *Caver 2*. **A person's
+number stays theirs**: it is given when the trip first names them and does not move when the
+roster is edited afterwards — giving somebody another role, or taking somebody else off the
+trip, renumbers nobody. Somebody taken off leaves a gap (*Caver 1*, *Caver 3*) rather than
+handing their number to the next person, and gets the same number back if the trip names them
+again. The
 **On the public page** column shows, for each person, what the page will call them. A
 **caption** outranks that setting in both directions — *"third of the party"* keeps one person
 off a page that would otherwise name them, without turning names off for the club.
@@ -666,7 +692,8 @@ their times, and the survey they were measured on. **Nothing is copied when a tr
 published** — the replay is read from the trip's own tracking log every time. So people are
 named by the rule in force *today* (a caption added now keeps that person's name out of a
 replay of last year's trip, and switching names off for the installation does so for
-everybody) and a report corrected or deleted in the log is corrected or gone in the replay.
+everybody) and a report corrected or deleted in the log is corrected or gone in the replay —
+and back in it when the report is put back.
 
 **Running out removes nothing.** A link that has ended, and a trip that has aged out of the
 past trips, are only no longer *shown to visitors*: the trip, its tracking log and its reports
@@ -677,7 +704,7 @@ stay in the installation exactly as they were, for the members who may read them
 | You want | Do this |
 |---|---|
 | One person's name off the page and the replay | Give them a **caption** on the trip — it applies from the next read |
-| One report gone | Delete it in the tracking log |
+| One report gone | Delete it in the tracking log: it leaves the page and the replay at once. It is still kept under **Removed reports** for the trip's coordinators — **Delete for good** there if it must not exist at all |
 | The live page closed now | **Take it back**, on each link in **Publish this trip** |
 | The trip out of the cave's past trips | **Take back every link the panel lists for that trip**, the ones marked **Not open** included. With none left the trip is no longer listed or replayable, at once |
 | Everything of that trip gone | Delete the trip: its links end with it |
@@ -823,6 +850,7 @@ outside, what one link answers. The full table, with the reason word for each ca
 | *"That survey belongs to a different cave…"* | A running watch stays in its cave — close it first |
 | *"No station matches that depth under this trip's filter…"* | Widen **Where the party said it was going**, or report a station |
 | *"A report cannot be about the future."* | Check the time on it |
+| *"That report is on the log again — somebody put it back. Take it off first, then delete it for good."* | Somebody else pressed **Put back** on it while your list of removed reports was open. Nothing was destroyed; if it still has to go, delete it from the log again |
 | *"Say when this was said. The tracking is closed, so the report cannot be stamped with the present time."* | A report added to a closed watch is being written up afterwards: fill in **When it was said** with the moment it was made during the trip |
 | *"This trip has no watch to import reports onto."* | Choose a survey and save the tracking setup first |
 | *"Nothing was imported. The trip or its log changed after this sheet was read…"* (headed *The trip changed while this sheet was being checked*) | Between your reading the sheet and pressing **Import**, something the import depends on changed — somebody recorded a report at one of the sheet's moments, a team or a participant was changed, a place was declared in the cave — so the sheet no longer matches what you were shown. Nothing was written and the sheet has been read again: check the rows, tick the overwrite again if you still mean it, and press **Import** |

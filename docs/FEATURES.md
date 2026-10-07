@@ -398,7 +398,10 @@ feature and walkthroughs of whole jobs.
   Meander, at this station — so a depth phoned out lands on the station people mean rather than
   on whichever one arithmetic finds nearest, and the report card warns when a depth sits far from
   the station it will land on. A report written down wrongly is corrected in place, keeping
-  everything pinned to it, and a finished trip's log stays open for the write-up. A coordinator's
+  everything pinned to it, and a finished trip's log stays open for the write-up. A report
+  deleted from the log is kept: it can be put back exactly as it was — by **Undo** on the
+  notice, or later from **Removed reports** under the log — and is destroyed only by a second,
+  separate **Delete for good**. A coordinator's
   spreadsheet of calls is read onto the log through a preview that says, row by row, what it
   would create, correct or refuse and states how it read the times; each report is filed under
   the person and the moment, so a corrected sheet imported again corrects instead of doubling.
@@ -434,7 +437,9 @@ feature and walkthroughs of whole jobs.
   is — and its finished published trips, gathered by camp, each playable as
   a replay on the survey its reports were measured in; any moment of a replay can be copied as a
   link that opens there, standing or already playing. The page names people as the installation
-  decides — real names by default, a caption to keep one person off it — a cave with protected
+  decides — real names by default, a caption to keep one person off it; where names are off, a
+  person's number (*Caver 3*) is theirs from the moment the trip first names them and does not
+  move when the roster is edited — a cave with protected
   coordinates cannot be published at all, and a link ends by itself a short while after the watch
   is closed. A link that has ended up in the wrong place is **replaced** in one act — the old
   address stops answering, a fresh one is shown once, and the trip keeps its place in the cave's

@@ -45,7 +45,9 @@ Apoi **Pornește urmărirea**. Tura arată acum *În urmărire* și se pot înre
   urmărit; o pagină publicată spune că tura s-a încheiat și nu o mai arată după ce trece perioada
   de grație de după închidere. **Jurnalul rămâne însă deschis** — rapoartele pot fi înregistrate,
   corectate sau șterse și după aceea, așa că nu trebuie terminat totul înainte.
-  **Pornește urmărirea din nou** redeschide urmărirea.
+  **Pornește urmărirea din nou** redeschide urmărirea. O urmărire pornită din nou arată ambele
+  momente pe cardul de configurare — **Începută prima dată** și **Începută din nou** — așa că
+  ora de la care echipa a fost urmărită prima dată nu se pierde la repornire.
 - **O tură a cărei urmărire nu a fost pornită niciodată nu primește rapoarte** — un raport
   numește un loc pe o ridicare, iar încă nu există niciuna. Fila o spune și trimite la
   **Pornește urmărirea**.
@@ -190,10 +192,27 @@ Fiecare rând din **Rapoarte** oferă două comenzi, și ele înseamnă lucruri 
   schimba: un raport despre altcineva este alt raport, așa că îl ștergeți pe acesta și îl
   înregistrați pe celălalt. Dialogul spune limpede că asta schimbă ce spune jurnalul că s-a
   întâmplat — reluarea și pagina publicată îl urmează.
-- **Șterge acest raport** — doar pentru un raport care nu ar trebui să existe deloc. Dispare din
-  jurnal definitiv.
+- **Șterge acest raport** — doar pentru un raport care nu ar trebui să existe deloc. Iese din
+  jurnal și din tot ce se desenează din jurnal: tabelul echipei, ridicarea, o reluare, o pagină
+  publicată. **Nu este distrus** — vedeți mai jos *Punerea înapoi a unui raport șters*.
 
 Amândouă funcționează atât pe o urmărire **încheiată**, cât și pe una pornită.
+
+**Punerea înapoi a unui raport șters.** Mesajul care spune *Raportul a fost scos din jurnal*
+poartă, câteva secunde, **Anulează** — pentru coșul apăsat pe rândul greșit. După aceea raportul
+așteaptă sub jurnal, la **Rapoarte scoase** (titlul poartă numărul, *Rapoarte scoase: 2*, și nu
+este desenat cât timp nu există niciunul). Deschideți-l și fiecare raport scos este listat cu
+momentul, persoana, locul lui și momentul în care a fost scos, lângă două butoane:
+
+- **Pune înapoi** — raportul revine în jurnal exact cum era: același moment, același loc pe
+  aceeași ridicare, aceeași notă. Nu este marcat **Corectat**, pentru că nu l-a corectat nimeni.
+- **Șterge definitiv** — distruge raportul. Confirmarea o spune: **acțiunea nu poate fi
+  anulată**, iar nimic din aplicație nu mai aduce raportul înapoi. Doar un raport deja scos din
+  jurnal poate fi șters definitiv, așa că pierderea unuia cere întotdeauna două acte separate.
+
+Un raport scos se păstrează cât timp există tura lui; eliminarea definitivă a turei îi ia și
+rapoartele scoase. *Rapoarte scoase* este arătat celor care pot scrie în jurnalul turei, iar un
+loc care nu vă poate fi spus în jurnal nu vă este spus nici acolo.
 
 **Cum ajungeți la raport.** **Rapoarte** arată câte douăzeci, cele mai recente întâi, iar în
 spatele lor este tot jurnalul: numerele de pagină de sub tabel sau, pe telefon, **Arată
@@ -347,7 +366,12 @@ pornită.
   [Tot ce este publicat](#tot-ce-este-publicat-pentru-administratorii-deplini).
 
 **Pe cine numește pagina.** Implicit, această instalare publică **numele reale**; un operator
-poate opri asta pentru toată lumea, după care oamenii apar ca *Speolog 1*, *Speolog 2*. Coloana
+poate opri asta pentru toată lumea, după care oamenii apar ca *Speolog 1*, *Speolog 2*.
+**Numărul unei persoane rămâne al ei**: îl primește când tura o numește prima dată și nu se
+mai mută când lista turei este editată după aceea — un alt rol dat cuiva sau scoaterea altcuiva
+de pe tură nu renumerotează pe nimeni. Cine este scos lasă un loc gol (*Speolog 1*,
+*Speolog 3*) în loc să-și dea numărul următorului și primește același număr înapoi dacă tura îl
+numește din nou. Coloana
 **Pe pagina publică** arată, pentru fiecare persoană, cum o va numi pagina. O **etichetă** are
 întâietate față de acea setare în ambele sensuri — *„al treilea din echipă"* ține o persoană
 departe de o pagină care altfel ar numi-o, fără a opri numele pentru tot clubul.
@@ -696,7 +720,7 @@ reluarea este citită de fiecare dată din jurnalul de urmărire al turei. Așad
 numiți după regula în vigoare *astăzi* (o etichetă adăugată acum ține numele acelei persoane în
 afara reluării unei ture de anul trecut, iar oprirea numelor pentru toată instalarea face
 același lucru pentru toți), iar un raport corectat sau șters în jurnal este corectat sau
-dispărut și în reluare.
+dispărut și în reluare — și revine în ea când raportul este pus înapoi.
 
 **Expirarea nu șterge nimic.** Un link încheiat și o tură care a ieșit din turele trecute prin
 vechime doar nu mai sunt *arătate vizitatorilor*: tura, jurnalul ei de urmărire și rapoartele ei
@@ -707,7 +731,7 @@ rămân în instalare exact cum erau, pentru membrii care le pot citi.
 | Doriți | Faceți așa |
 |---|---|
 | Numele unei persoane scos de pe pagină și din reluare | Dați-i o **etichetă** pe tură — se aplică de la următoarea citire |
-| Un raport dispărut | Ștergeți-l din jurnalul de urmărire |
+| Un raport dispărut | Ștergeți-l din jurnalul de urmărire: iese de pe pagină și din reluare pe loc. Se păstrează încă la **Rapoarte scoase**, pentru coordonatorii turei — **Șterge definitiv** acolo dacă nu trebuie să existe deloc |
 | Pagina în direct închisă acum | **Retrage-l**, pe fiecare link din **Publică această tură** |
 | Tura scoasă dintre turele trecute ale peșterii | **Retrageți fiecare link pe care panoul îl listează pentru acea tură**, inclusiv pe cele marcate **Inactiv**. Când nu mai rămâne niciunul, tura nu mai este listată și nu mai poate fi reluată, imediat |
 | Tot ce ține de acea tură dispărut | Ștergeți tura: linkurile ei se încheie odată cu ea |
@@ -861,6 +885,7 @@ instalare](../../../INSTALL.md#when-a-published-page-or-the-article-showing-it-s
 | *„Acea ridicare aparține altei peșteri…"* | O urmărire pornită rămâne în peștera ei — închideți-o întâi |
 | *„Nicio stație nu corespunde acelei adâncimi sub filtrul acestei ture…"* | Lărgiți **Unde a spus echipa că merge** sau raportați o stație |
 | *„Un raport nu poate fi despre viitor."* | Verificați ora de pe el |
+| *„Acel raport este din nou în jurnal — l-a pus cineva înapoi. Scoate-l mai întâi, apoi șterge-l definitiv."* | Altcineva a apăsat **Pune înapoi** pe el cât timp lista dumneavoastră de rapoarte scoase era deschisă. Nu s-a distrus nimic; dacă tot trebuie să dispară, ștergeți-l din nou din jurnal |
 | *„Spune când s-a spus. Urmărirea este încheiată, așa că raportul nu poate fi marcat cu ora de acum."* | Un raport adăugat pe o urmărire încheiată este completat ulterior: treceți la **Când s-a spus** momentul în care a fost făcut, în timpul turei |
 | *„Această tură nu are nicio urmărire pe care să fie importate rapoarte."* | Alegeți o ridicare și salvați întâi configurarea urmăririi |
 | *„Nu s-a importat nimic. Tura sau jurnalul ei s-au schimbat după ce foaia a fost citită…"* (cu titlul *Tura s-a schimbat cât timp era verificată foaia*) | Între citirea foii și apăsarea pe **Importă** s-a schimbat ceva de care depinde importul — cineva a înregistrat un raport la unul dintre momentele foii, o echipă sau un participant a fost modificat, un loc a fost declarat în peșteră — așa că foaia nu mai corespunde cu ce vi s-a arătat. Nu s-a scris nimic, iar foaia a fost citită din nou: verificați rândurile, bifați din nou suprascrierea dacă încă o vreți și apăsați **Importă** |
