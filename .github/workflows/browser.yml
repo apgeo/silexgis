@@ -110,7 +110,7 @@ jobs:
           cache: npm
           cache-dependency-path: client/package-lock.json
       # The picture generator is Python, and draws with Pillow.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - run: pip install Pillow
