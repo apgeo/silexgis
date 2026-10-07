@@ -48,7 +48,7 @@ jobs:
         run: node scripts/e2e.mjs --project=desktop --shard=${{ matrix.shard }}/4
       - name: Keep the traces of what failed
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-desktop-${{ matrix.shard }}
           path: |
@@ -80,7 +80,7 @@ jobs:
         run: node scripts/e2e.mjs --project=mobile-android --project=mobile-android-landscape --project=mobile-ios-smoke
       - name: Keep the traces of what failed
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-phones
           path: |
@@ -122,7 +122,7 @@ jobs:
         run: node scripts/e2e-photo-libraries.mjs
       - name: Keep the traces of what failed
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-photo-libraries
           path: |
