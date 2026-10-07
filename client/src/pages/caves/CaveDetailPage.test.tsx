@@ -51,6 +51,11 @@ vi.mock('../../api/hooks.ts', () => ({
   useCaveSummary: () => ({ data: summary }),
   // The declared-depths card is drawn on this page; nothing declared, so it says so.
   useCaveDepthPlaces: () => ({ data: [] }),
+  // What the declared-places card reads beside its own list: the cave's surveys, to know which
+  // one's stations to offer, and that survey's stations as a name is typed. None here.
+  useSurveyModels: () => ({ data: [] }),
+  useSurveyModelStationSearch: () => ({ data: undefined }),
+  surveyModelCanPlaceACaver: () => false,
   useWriteCaveDepthPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteCaveDepthPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useEntrances: () => ({ data: entrances }),

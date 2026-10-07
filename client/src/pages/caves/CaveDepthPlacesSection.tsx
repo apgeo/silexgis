@@ -1,14 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { App, Button, Card, Empty, Flex, Form, Input, InputNumber, Table, Typography } from 'antd';
+import {
+  App,
+  Button,
+  Card,
+  Empty,
+  Flex,
+  Form,
+  Input,
+  InputNumber,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
+  surveyModelCanPlaceACaver,
   useCaveDepthPlaces,
   useDeleteCaveDepthPlace,
+  useSurveyModels,
   useWriteCaveDepthPlace,
   type CaveDepthPlace,
 } from '../../api/hooks.ts';
+import SurveyStationInput from '../../components/caves/SurveyStationInput.tsx';
 
 interface DeclarationForm {
   depthM: number | null;
@@ -40,6 +55,21 @@ interface DeclarationForm {
  * twice under two depths — the report chooser offers two "Meandru", and an imported row naming it
  * is refused because which station is meant cannot be decided. So a correction that moves the
  * depth withdraws the declaration it moved, once the new one has landed.
+ *
+ * <b>A declaration naming a station the cave's current survey does not hold is marked.</b> A
+ * declaration is only followed where its station exists, so one that was mistyped, or whose
+ * station was renamed in the survey since made the current one, quietly stops meaning anything —
+ * every report of that depth goes back to the nearest station and nothing says why. The server
+ * says, per declaration, whether the survey marked as the cave's current line plot holds the
+ * station; only an outright "no" is marked here. A survey that has merely been uploaded is not
+ * judged until it is made the current one: arriving does not take the mark from the survey that
+ * has it. Where the answer is withheld — no current survey read yet, or a reader who may not be
+ * told the cave's survey — nothing is drawn at all, so a row with no mark never claims the
+ * station is there.
+ *
+ * <b>The station is offered as it is typed, out of the cave's current survey,</b> and any text is
+ * still taken: a cave can declare its places before its survey is uploaded, and a reader who is
+ * not told the survey's stations is offered none and can still write the name down.
  */
 export default function CaveDepthPlacesSection({
   caveId,
@@ -51,6 +81,15 @@ export default function CaveDepthPlacesSection({
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const { data: places } = useCaveDepthPlaces(caveId);
+  const { data: models } = useSurveyModels(caveId);
+  // The survey names are offered from: the one marked as the cave's current line plot, once it
+  // has been read — which is, by the same rule, the only survey the server judges each row's
+  // station against. Where there is none the field is a plain text box and no row is marked:
+  // offering names out of some other survey of the cave would be offering names the mark beside
+  // each row may then contradict.
+  const offeredFrom =
+    (models ?? []).find((model) => model.isCurrent && surveyModelCanPlaceACaver(model))?.id ?? null;
+  const someMissing = (places ?? []).some((place) => place.stationInSurvey === false);
   const write = useWriteCaveDepthPlace(caveId);
   const remove = useDeleteCaveDepthPlace(caveId);
   const [form] = Form.useForm<DeclarationForm>();
@@ -167,7 +206,26 @@ export default function CaveDepthPlacesSection({
               width: 110,
               render: (depth: number) => t('caves.depthPlaces.metres', { depth }),
             },
-            { title: t('caves.depthPlaces.station'), dataIndex: 'stationName' },
+            {
+              title: t('caves.depthPlaces.station'),
+              dataIndex: 'stationName',
+              render: (station: string, place: CaveDepthPlace) => (
+                <Flex gap={8} align="center" wrap>
+                  <span>{station}</span>
+                  {/* Only an outright "no". Null is the server not saying — no survey read, or
+                      a reader who is not told — and is drawn exactly as "yes" is: as nothing. */}
+                  {place.stationInSurvey === false && (
+                    <Tag
+                      color="warning"
+                      style={{ marginInlineEnd: 0 }}
+                      data-testid={`cave-depth-place-not-in-survey-${place.id}`}
+                    >
+                      {t('caves.depthPlaces.stationNotInSurvey')}
+                    </Tag>
+                  )}
+                </Flex>
+              ),
+            },
             {
               title: t('caves.depthPlaces.place'),
               dataIndex: 'placeLabel',
@@ -217,6 +275,19 @@ export default function CaveDepthPlacesSection({
         />
       )}
 
+      {/* What the mark means and what to do about it, said once under the table rather than in a
+          tooltip per row: a tooltip is not reachable on a phone or from a keyboard, and the answer
+          is the same for every marked row. */}
+      {someMissing && (
+        <Typography.Paragraph
+          type="secondary"
+          style={{ marginTop: 8, marginBottom: 0 }}
+          data-testid="cave-depth-places-not-in-survey-help"
+        >
+          {t('caves.depthPlaces.stationNotInSurveyHelp')}
+        </Typography.Paragraph>
+      )}
+
       {canEdit && adding && (
         <Form<DeclarationForm>
           form={form}
@@ -245,7 +316,11 @@ export default function CaveDepthPlacesSection({
             label={t('caves.depthPlaces.station')}
             rules={[{ required: true, message: t('caves.depthPlaces.stationRequired') }]}
           >
-            <Input style={{ width: 180 }} data-testid="cave-depth-place-station" />
+            <SurveyStationInput
+              surveyModelId={offeredFrom}
+              style={{ width: 180 }}
+              data-testid="cave-depth-place-station"
+            />
           </Form.Item>
           <Form.Item name="placeLabel" label={t('caves.depthPlaces.place')}>
             <Input style={{ width: 200 }} data-testid="cave-depth-place-label" />

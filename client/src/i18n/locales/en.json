@@ -601,6 +601,8 @@
       "saved": "Declared.",
       "saveFailed": "That could not be saved.",
       "oldDepthKept": "Declared at {{depth}} m, but the declaration at {{old}} m could not be withdrawn, so the place is now declared twice. Withdraw the one at {{old}} m by hand.",
+      "stationNotInSurvey": "Not in the current survey",
+      "stationNotInSurveyHelp": "A place marked “Not in the current survey” names a station this cave's current survey does not hold, so the declaration is not followed there: a report of that depth lands on the nearest station instead. Correct the station's name, or check which survey is the cave's current one.",
       "withdraw": "Withdraw",
       "withdrawConfirm": "Withdraw the declaration for {{depth}} m? Reports already recorded keep the station they were given; new ones will fall back to the nearest station.",
       "unnamed": "Unnamed"
@@ -3140,6 +3142,7 @@
   },
   "surveyModels": {
     "title": "3D survey models",
+    "stationSearchMore": "More stations: {{count}} — type more of the name",
     "upload": "Upload model",
     "uploaded": "Model uploaded",
     "uploadFailed": "Upload failed",

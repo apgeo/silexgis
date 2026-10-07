@@ -601,6 +601,8 @@
       "saved": "Declarat.",
       "saveFailed": "Nu s-a putut salva.",
       "oldDepthKept": "Declarat la {{depth}} m, dar declarația de la {{old}} m nu a putut fi retrasă, așa că locul este acum declarat de două ori. Retrage-o manual pe cea de la {{old}} m.",
+      "stationNotInSurvey": "Nu este în ridicarea curentă",
+      "stationNotInSurveyHelp": "Un loc marcat „Nu este în ridicarea curentă” numește o stație pe care ridicarea curentă a acestei peșteri nu o are, așa că declarația nu este urmată acolo: un raport la acea adâncime ajunge pe stația cea mai apropiată. Corectează numele stației sau verifică care ridicare este cea curentă a peșterii.",
       "withdraw": "Retrage",
       "withdrawConfirm": "Retragi declarația pentru {{depth}} m? Rapoartele deja înregistrate păstrează stația primită; cele noi vor reveni la stația cea mai apropiată.",
       "unnamed": "Fără nume"
@@ -3140,6 +3142,7 @@
   },
   "surveyModels": {
     "title": "Modele topo 3D",
+    "stationSearchMore": "Alte stații: {{count}} — scrie mai mult din nume",
     "upload": "Încarcă model",
     "uploaded": "Model încărcat",
     "uploadFailed": "Încărcarea a eșuat",

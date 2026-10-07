@@ -164,6 +164,9 @@ export const queryKeys = {
   entrances: (caveId: string) => ['entrances', caveId] as const,
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
   surveyModel: (id: string) => ['survey-model', id] as const,
+  // A survey's stations whose names begin with what somebody has typed. Under the survey's own
+  // prefix, so anything that makes the survey be asked for again makes its names be asked again.
+  surveyModelStationSearch: (id: string, q: string) => ['survey-model', id, 'stations', q] as const,
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
   surveyCompilations: (caveId: string) => ['survey-compilations', caveId] as const,
   caveExternalIds: (caveId: string) => ['cave-external-ids', caveId] as const,
@@ -1434,6 +1437,12 @@ function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveCrossSection(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.cavePattern(caveId) });
+  // Not a figure, and changed by the same events all the same: each declared place is sent with
+  // whether the cave's current survey holds its station. A survey being read, removed or made the
+  // current one changes that answer without a declaration being touched — and the card showing it
+  // tells its reader to go and check which survey is current, on the same page, so a mark that
+  // outlived the change it asked for would contradict the very act it prompted.
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveDepthPlaces(caveId) });
   // Stored beside the survey rather than recomputed per request, but changed by exactly the same
   // events: the figures are rewritten when a file is read, and a cave whose answering upload was
   // deleted is measured from a different one or from none at all.
@@ -1477,6 +1486,52 @@ export function useSurveyModel(id: string | undefined) {
     staleTime: 5 * 60_000,
     refetchInterval: SURVEY_MODEL_URL_REFRESH_MS,
     retry: false,
+  });
+}
+
+export type SurveyStation = components['schemas']['SurveyStationDto'];
+
+/**
+ * How many stations one search asks for. A chooser shows a short list under a field and asks
+ * again on the next keystroke; the answer says how many there are in all, so the list can say
+ * that there are more and that typing further narrows them.
+ */
+export const STATION_SEARCH_PAGE_SIZE = 20;
+
+/**
+ * The stations of one survey whose names begin with what somebody has typed, for a field that
+ * offers them while the name is still being written.
+ *
+ * <b>It offers; it never decides.</b> Whether a station exists is the server's answer when the
+ * report or the declaration is saved. This only saves somebody spelling a name from memory, so a
+ * field fed by it still takes any text at all.
+ *
+ * <b>A reader who may not place the cave gets an empty list, exactly as for a survey that does not
+ * exist</b> — the server answers the same page for both — so the field falls back to plain typing
+ * and says nothing about why. Nothing is asked until something has been typed: a survey holds
+ * tens of thousands of stations, and "all of them" is not a list anybody chooses from.
+ *
+ * The previous answer stays on screen while the next one is fetched, so the list does not blink
+ * shut between two keystrokes — but only an answer about the same survey: names from one survey
+ * offered under a field that is now about another would be wrong names.
+ */
+export function useSurveyModelStationSearch(surveyModelId: string | undefined, q: string) {
+  const asked = q.trim();
+  return useQuery({
+    queryKey: queryKeys.surveyModelStationSearch(surveyModelId ?? '', asked),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/survey-models/{id}/stations', {
+          params: {
+            path: { id: surveyModelId! },
+            query: { q: asked, pageSize: STATION_SEARCH_PAGE_SIZE },
+          },
+        }),
+      ),
+    enabled: !!surveyModelId && asked.length > 0,
+    staleTime: 60_000,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === surveyModelId ? previous : undefined,
   });
 }
 

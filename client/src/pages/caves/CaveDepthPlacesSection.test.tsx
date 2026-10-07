@@ -7,6 +7,10 @@ import '../../i18n';
 const write = vi.fn();
 const remove = vi.fn();
 const places = vi.fn();
+/** The cave's uploaded surveys, as the list this reader is given holds them. */
+const models = vi.fn();
+/** The stations of one survey beginning with what has been typed, and which survey was asked. */
+const stationSearch = vi.fn();
 
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
@@ -15,20 +19,32 @@ vi.mock('../../api/hooks.ts', async () => {
     useCaveDepthPlaces: () => ({ data: places() }),
     useWriteCaveDepthPlace: () => ({ mutateAsync: write, isPending: false }),
     useDeleteCaveDepthPlace: () => ({ mutateAsync: remove, isPending: false }),
+    useSurveyModels: () => ({ data: models() }),
+    useSurveyModelStationSearch: (surveyModelId: string | undefined, q: string) =>
+      stationSearch(surveyModelId, q),
   };
 });
 
 const { default: CaveDepthPlacesSection } = await import('./CaveDepthPlacesSection.tsx');
 
 const DECLARED = [
-  { id: 'p-1', depthM: 96, stationName: 'upper.2', placeLabel: 'Meandru' },
-  { id: 'p-2', depthM: 150, stationName: 'deep.3', placeLabel: null },
+  { id: 'p-1', depthM: 96, stationName: 'upper.2', placeLabel: 'Meandru', stationInSurvey: true },
+  { id: 'p-2', depthM: 150, stationName: 'deep.3', placeLabel: null, stationInSurvey: true },
+];
+
+/** A cave's surveys: an older line plot, the one marked current, and a current file of walls. */
+const SURVEYS = [
+  { id: 'model-old', isCurrent: false, format: 'survex3d', status: 'ready' },
+  { id: 'model-current', isCurrent: true, format: 'lox', status: 'ready' },
+  { id: 'model-walls', isCurrent: true, format: 'stl', status: 'ready' },
 ];
 
 beforeEach(() => {
   write.mockReset().mockResolvedValue(DECLARED[0]);
   remove.mockReset().mockResolvedValue(undefined);
   places.mockReset().mockReturnValue(DECLARED);
+  models.mockReset().mockReturnValue(SURVEYS);
+  stationSearch.mockReset().mockReturnValue({ data: undefined });
 });
 afterEach(cleanup);
 
@@ -246,5 +262,145 @@ describe('CaveDepthPlacesSection', () => {
     expect(screen.getByText('Meandru')).toBeInTheDocument();
     expect(screen.queryByTestId('cave-depth-place-add')).not.toBeInTheDocument();
     expect(screen.queryByTestId('cave-depth-place-save')).not.toBeInTheDocument();
+  });
+
+  /**
+   * A declaration whose station the cave's survey does not hold.
+   *
+   * Such a declaration is not followed — reports of that depth go back to the nearest station —
+   * and nothing used to say so. The server answers per row; what is tested here is that only an
+   * outright "no" is marked, because the other two answers must not be told apart on screen: a row
+   * the server would not speak about has to look exactly like one whose station is there.
+   */
+  describe('a station the survey does not hold', () => {
+    it('marks the declaration the survey has no station for, and says what that means', () => {
+      places.mockReturnValue([
+        { ...DECLARED[0], stationInSurvey: false },
+        { ...DECLARED[1], stationInSurvey: true },
+      ]);
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+
+      expect(screen.getByTestId('cave-depth-place-not-in-survey-p-1')).toHaveTextContent(
+        'Not in the current survey',
+      );
+      expect(screen.queryByTestId('cave-depth-place-not-in-survey-p-2')).toBeNull();
+      expect(screen.getByTestId('cave-depth-places-not-in-survey-help').textContent).toMatch(
+        /nearest station/,
+      );
+    });
+
+    it('draws nothing where the server does not say, exactly as where the station is there', () => {
+      // Null is the server keeping quiet: no survey read yet, or a reader who may not be told the
+      // cave's survey. A mark here would tell that reader something about a survey they were
+      // refused; so would a "found" mark on the other row, which is why there is no such mark.
+      places.mockReturnValue([
+        { ...DECLARED[0], stationInSurvey: null },
+        { ...DECLARED[1], stationInSurvey: true },
+      ]);
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+
+      expect(screen.getByText('upper.2')).toBeInTheDocument();
+      expect(document.querySelectorAll('[data-testid^="cave-depth-place-not-in-survey-"]')).toHaveLength(0);
+      expect(screen.queryByTestId('cave-depth-places-not-in-survey-help')).toBeNull();
+    });
+  });
+
+  /**
+   * The station, offered while it is typed.
+   *
+   * Offered out of the survey marked as the cave's current line plot and no other, and never
+   * required: a cave can declare a place before its survey is uploaded, and a reader who is not
+   * told the survey's stations is offered nothing and can still write the name down.
+   */
+  describe('the station as it is typed', () => {
+    it('offers the current line plot\'s stations, and takes the one chosen', async () => {
+      stationSearch.mockImplementation((_model: string | undefined, q: string) => ({
+        data:
+          q === ''
+            ? undefined
+            : { items: [{ viewerName: 'deep.4' }, { viewerName: 'deep.41' }], totalItems: 2 },
+      }));
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+      fireEvent.click(screen.getByTestId('cave-depth-place-add'));
+
+      // Reached by its label, so without a pointer too.
+      const station = screen.getByLabelText('Station');
+      expect(station).toBe(screen.getByTestId('cave-depth-place-station'));
+      fireEvent.change(screen.getByTestId('cave-depth-place-depth'), { target: { value: '110' } });
+      fireEvent.change(station, { target: { value: 'deep' } });
+
+      // The line plot marked current — not the older line plot, and not the current file of
+      // walls, which holds no station at all.
+      await waitFor(() => expect(stationSearch).toHaveBeenCalledWith('model-current', 'deep'));
+      fireEvent.click(
+        await waitFor(() => {
+          const option = document.querySelector('.ant-select-item-option[title="deep.41"]');
+          expect(option).not.toBeNull();
+          return option!;
+        }),
+      );
+      fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+
+      await waitFor(() => expect(write).toHaveBeenCalledOnce());
+      expect(write.mock.calls[0][0]).toMatchObject({ depthM: 110, stationName: 'deep.41' });
+    });
+
+    it('asks no survey and still takes the name where the cave has no current line plot', async () => {
+      // What a reader who may not place the cave is given too: their list of the cave's surveys
+      // arrives empty, so there is nothing to offer from and nothing is asked.
+      models.mockReturnValue([]);
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+      fireEvent.click(screen.getByTestId('cave-depth-place-add'));
+      fireEvent.change(screen.getByTestId('cave-depth-place-depth'), { target: { value: '110' } });
+      fireEvent.change(screen.getByTestId('cave-depth-place-station'), { target: { value: 'deep.4' } });
+      fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+
+      await waitFor(() => expect(write).toHaveBeenCalledOnce());
+      expect(write.mock.calls[0][0]).toMatchObject({ stationName: 'deep.4' });
+      expect(stationSearch.mock.calls.every(([model]) => model === undefined)).toBe(true);
+    });
+
+    it('offers nothing from a survey standing in for a current one that could not be read', async () => {
+      // The marked upload failed to read and a later one was read fine. The later one answers
+      // for the cave's figures, but it is not the survey the page calls current and not the one
+      // the rows are judged against — the server says nothing about any row in this state — so
+      // its names are not offered either. The two halves of the card are about one survey or none.
+      models.mockReturnValue([
+        { id: 'model-failed', isCurrent: true, format: 'lox', status: 'failed' },
+        { id: 'model-stand-in', isCurrent: false, format: 'lox', status: 'ready' },
+      ]);
+      places.mockReturnValue(DECLARED.map((place) => ({ ...place, stationInSurvey: null })));
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+      expect(document.querySelectorAll('[data-testid^="cave-depth-place-not-in-survey-"]')).toHaveLength(0);
+
+      fireEvent.click(screen.getByTestId('cave-depth-place-add'));
+      fireEvent.change(screen.getByTestId('cave-depth-place-depth'), { target: { value: '110' } });
+      fireEvent.change(screen.getByTestId('cave-depth-place-station'), { target: { value: 'deep.4' } });
+      fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+
+      await waitFor(() => expect(write).toHaveBeenCalledOnce());
+      expect(write.mock.calls[0][0]).toMatchObject({ stationName: 'deep.4' });
+      expect(stationSearch.mock.calls.every(([model]) => model === undefined)).toBe(true);
+    });
   });
 });
