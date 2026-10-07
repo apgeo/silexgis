@@ -1311,6 +1311,24 @@ export function surveyModelUnsettled(status: SurveyModelInfo['status']): boolean
 }
 
 /**
+ * A model the server still has work queued or running for, whether or not it has anything to show
+ * meanwhile.
+ *
+ * Wider than {@link surveyModelUnsettled} by one case, and the difference is the point. A model
+ * that has been read and is being read again stays ready: its stations, its figures and its
+ * drawing are all still there until the new reading replaces them, so everything that asks "can
+ * this survey be used" must go on being told yes. What that model shares with an unsettled one is
+ * only that its row will change by itself — so a list watching for that, and an action that would
+ * queue a second reading behind the first, ask this question and nothing else does.
+ */
+export function surveyModelWorkOutstanding(model: {
+  status: SurveyModelInfo['status'];
+  readingAgain?: boolean;
+}): boolean {
+  return surveyModelUnsettled(model.status) || model.readingAgain === true;
+}
+
+/**
  * Whether the embedded survey viewer can read this model itself.
  *
  * The viewer parses the line-plot formats natively, choosing its parser by the extension of the
@@ -1414,9 +1432,9 @@ export function caveHasMeasurableSurvey(
  * seconds to prove it did nothing.
  */
 export function surveyModelPollInterval(
-  models: { status: SurveyModelInfo['status'] }[] | undefined,
+  models: { status: SurveyModelInfo['status']; readingAgain?: boolean }[] | undefined,
 ): number {
-  return (models ?? []).some((model) => surveyModelUnsettled(model.status))
+  return (models ?? []).some(surveyModelWorkOutstanding)
     ? SURVEY_MODEL_CONVERSION_POLL_MS
     : SURVEY_MODEL_URL_REFRESH_MS;
 }
@@ -1580,7 +1598,7 @@ export function useSurveyModels(caveId: string | undefined) {
   //
   // Keyed on the transition rather than the state, so a page that arrives after everything has
   // settled — the ordinary visit to a cave whose survey was read weeks ago — asks for nothing.
-  const outstanding = (query.data ?? []).some((model) => surveyModelUnsettled(model.status));
+  const outstanding = (query.data ?? []).some(surveyModelWorkOutstanding);
   const wasOutstanding = useRef(outstanding);
   useEffect(() => {
     if (wasOutstanding.current && !outstanding && caveId) {
@@ -1787,6 +1805,33 @@ export function useMakeSurveyModelCurrent() {
     mutationFn: ({ id }: { id: string; caveId: string }): Promise<SurveyModelInfo> =>
       unwrap(api.PUT('/api/v1/survey-models/{id}/current', { params: { path: { id } } })),
     onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
+/**
+ * Asks for a model's stored file to be read again, replacing what the last reading produced.
+ *
+ * The list is asked for again whichever way the request ends. Accepted, the model has a reading
+ * on its way — waiting if it held nothing, still ready and marked as being read again if it held
+ * one — and the list's own poll takes over until the reading is done. Refused because a reading
+ * is already under way, the row on screen was out of date — or the action would not have been
+ * offered — and saying so without refreshing it would leave the same button inviting the same
+ * refusal.
+ *
+ * The model's own record is asked for again as well. It is what a watch's drawing is built from,
+ * on another page, and it is otherwise read only every few minutes: a model whose failed reading
+ * has just been queued again would go on being described there as unreadable.
+ */
+export function useReadSurveyModelAgain() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: ({ id }: { id: string; caveId: string }): Promise<SurveyModelInfo> =>
+      unwrap(api.POST('/api/v1/survey-models/{id}/reading', { params: { path: { id } } })),
+    onSettled: (_data, _error, { id, caveId }) => {
+      invalidate(caveId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModel(id) });
+    },
   });
 }
 

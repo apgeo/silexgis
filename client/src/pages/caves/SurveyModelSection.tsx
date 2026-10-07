@@ -6,6 +6,7 @@ import {
   ExportOutlined,
   EyeOutlined,
   PictureOutlined,
+  ReloadOutlined,
   UploadOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons';
@@ -15,8 +16,10 @@ import { useNavigate } from 'react-router-dom';
 import {
   surveyModelReadableByViewer,
   surveyModelUnsettled,
+  surveyModelWorkOutstanding,
   useDeleteSurveyModel,
   useMakeSurveyModelCurrent,
+  useReadSurveyModelAgain,
   useSurveyModels,
   type SurveyModelInfo,
 } from '../../api/hooks.ts';
@@ -54,6 +57,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
   const { data: models } = useSurveyModels(caveId);
   const remove = useDeleteSurveyModel();
   const makeCurrent = useMakeSurveyModelCurrent();
+  const readAgain = useReadSurveyModelAgain();
   const [viewing, setViewing] = useState<SurveyModelInfo | null>(null);
   /** The model a movie is being made on, or null while the movie dialog is closed. */
   const [movieModelId, setMovieModelId] = useState<string | null>(null);
@@ -90,6 +94,13 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
     return (
       <Flex vertical gap={2}>
         <Tag color="success">{t('surveyModels.statusValues.ready')}</Tag>
+        {/* Still ready, and said to be so: what the last reading produced is all in use until
+            the one now queued replaces it. This only says that the row is about to change. */}
+        {model.readingAgain && (
+          <Tag color="processing" data-testid={`survey-model-reading-again-${model.id}`}>
+            {t(walls ? 'surveyModels.convertingAgain' : 'surveyModels.readingAgain')}
+          </Tag>
+        )}
         {model.triangleCount !== null && (
           <Flex gap={6}>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -235,6 +246,40 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
                   >
                     {t('surveyModels.makeCurrent')}
                   </Button>
+                )}
+                {/* Another reading of the file that is already stored, for a model that has been
+                    read or could not be. Not offered while a reading is queued or running —
+                    the first one, or another one of a model that stays ready meanwhile: the
+                    server would refuse it, and a second reading of the same bytes behind the
+                    first would tell nobody anything. Asked about first, because it replaces
+                    what the last reading produced. */}
+                {canEdit && !surveyModelWorkOutstanding(model) && (
+                  <Popconfirm
+                    title={t('surveyModels.readAgainConfirm')}
+                    description={
+                      <div style={{ maxWidth: 360 }}>{t('surveyModels.readAgainHint')}</div>
+                    }
+                    onConfirm={async () => {
+                      try {
+                        await readAgain.mutateAsync({ id: model.id, caveId });
+                        message.success(t('surveyModels.readAgainStarted'));
+                      } catch (error) {
+                        message.error(
+                          surveyModelProblemMessage(error, t, 'surveyModels.readAgainFailed'),
+                        );
+                      }
+                    }}
+                  >
+                    <Tooltip title={t('surveyModels.readAgain')}>
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<ReloadOutlined />}
+                        aria-label={t('surveyModels.readAgain')}
+                        data-testid={`survey-model-read-again-${model.id}`}
+                      />
+                    </Tooltip>
+                  </Popconfirm>
                 )}
                 {canEdit && (
                   <Popconfirm
