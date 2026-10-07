@@ -193,7 +193,28 @@ public sealed record TrackingParticipantDto(
     /// for every reader.
     /// </para>
     /// </remarks>
-    bool Quiet);
+    bool Quiet,
+    /// <summary>
+    /// True when the place this person was last reported at is known to lie outside the parts of
+    /// the cave the watch declared — somewhere the party did not say it was going.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The declaration is the watch's own list of survey parts (<c>depthFilter</c> on the state),
+    /// and the comparison is the one a reported depth is resolved by. False where nothing was
+    /// declared, where the place was measured on a survey the watch has since left, and where the
+    /// survey no longer holds that station: the mark says "known to be elsewhere" and is not
+    /// raised on a guess.
+    /// </para>
+    /// <para>
+    /// <b>Said only beside a place that is being told.</b> It is false whenever
+    /// <see cref="StationName"/> is withheld, and whenever the declaration itself is — either
+    /// would otherwise tell a reader one fact about station names they were refused. It is a word
+    /// on a row for the people running the watch: nothing is sent or raised because of it, and no
+    /// published page carries it.
+    /// </para>
+    /// </remarks>
+    bool OutsideDeclaredParts);
 
 public sealed record TrackingStateDto(
     TripTrackingState State,
@@ -309,6 +330,13 @@ public sealed record TrackingStateDto(
 /// it. It says nothing of where anybody was, so it is answered the same whether or not the place
 /// beside it is withheld.
 /// </param>
+/// <param name="OutsideDeclaredParts">
+/// Whether this report's station is known to lie outside the parts of the cave the watch declared.
+/// False where nothing is declared, where the report was measured on a survey the watch has since
+/// left, and wherever the place or the declaration is withheld from the caller — it rides the
+/// place's own branch. On the sheet import's "what is there now" it is not worked out and reads
+/// false. Signed-in log only.
+/// </param>
 public sealed record TrackingEventDto(
     Guid Id,
     Guid CaverId,
@@ -320,6 +348,7 @@ public sealed record TrackingEventDto(
     string? Note,
     DateTimeOffset RecordedAt,
     bool Corrected,
+    bool OutsideDeclaredParts,
     TrackingDepthPlacementOutcome? DepthPlacement = null);
 
 /// <summary>

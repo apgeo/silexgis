@@ -130,6 +130,54 @@ public class TripTrackingDomainTests
     }
 
     [Fact]
+    public void A_station_is_in_the_declared_parts_by_either_spelling_or_by_its_survey_name()
+    {
+        var deep = Shaft.Single(s => s.Name == "cave.deep.3");
+
+        // The rows' spelling, the viewer's spelling, and the survey the station belongs to.
+        TrackingDepthResolver.InDeclaredParts(deep, ["cave.deep"]).ShouldBeTrue();
+        TrackingDepthResolver.InDeclaredParts(deep, ["deep"]).ShouldBeTrue();
+        var bySurveyOnly = new TrackingDepthResolver.Station("a.1", "a.1", "pit-series", 100, false);
+        TrackingDepthResolver.InDeclaredParts(bySurveyOnly, ["pit"]).ShouldBeTrue();
+
+        // One matching entry among several is enough; none matching is out.
+        TrackingDepthResolver.InDeclaredParts(deep, ["cave.upper", "deep"]).ShouldBeTrue();
+        TrackingDepthResolver.InDeclaredParts(deep, ["cave.upper", "parallel"]).ShouldBeFalse();
+
+        // Nothing declared is the whole model.
+        TrackingDepthResolver.InDeclaredParts(deep, []).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Outside_the_declared_parts_is_said_only_of_a_known_station_under_a_declaration()
+    {
+        var deep = Shaft.Single(s => s.Name == "cave.deep.3");
+        var upper = Shaft.Single(s => s.Name == "cave.upper.2");
+
+        TrackingDepthResolver.OutsideDeclaredParts(deep, ["cave.upper"]).ShouldBeTrue();
+        TrackingDepthResolver.OutsideDeclaredParts(deep, ["upper"]).ShouldBeTrue();
+        TrackingDepthResolver.OutsideDeclaredParts(upper, ["cave.upper"]).ShouldBeFalse();
+        TrackingDepthResolver.OutsideDeclaredParts(upper, ["upper"]).ShouldBeFalse();
+
+        // No declaration is no plan to be outside of, and a station the survey no longer holds
+        // cannot be placed in or out of anything.
+        TrackingDepthResolver.OutsideDeclaredParts(deep, []).ShouldBeFalse();
+        TrackingDepthResolver.OutsideDeclaredParts(null, ["cave.upper"]).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_depth_never_resolves_outside_the_declared_parts()
+    {
+        // The resolver and the comparison read the entries through one test, so whatever a depth
+        // resolves to under a declaration is, by that declaration, inside it.
+        string[] declared = ["cave.parallel"];
+        var byName = Shaft.ToDictionary(s => s.Name);
+        var candidates = TrackingDepthResolver.Resolve(Shaft, 350, 50, declared, take: 5);
+        candidates.ShouldNotBeEmpty();
+        candidates.ShouldAllBe(c => !TrackingDepthResolver.OutsideDeclaredParts(byName[c.Name], declared));
+    }
+
+    [Fact]
     public void A_candidate_comes_back_under_both_of_its_names()
     {
         // What is stored and drawn is the viewer's name; what the filter and the survey listing

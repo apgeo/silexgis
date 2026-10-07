@@ -188,8 +188,14 @@ internal static class TrackingWithholding
     /// <para>
     /// How a depth became its station is not carried: a stored report does not keep it.
     /// </para>
+    /// <para>
+    /// Whether the place lies outside the parts the watch declared is said on the same branch as
+    /// the place and never beside one taken out. A caller that does not pass the comparison — the
+    /// sheet import's "what is there now" — says nothing of it, which reads as "not marked".
+    /// </para>
     /// </remarks>
-    internal static TrackingEventDto Shown(TripPositionEvent e, HashSet<Guid> openCaves)
+    internal static TrackingEventDto Shown(
+        TripPositionEvent e, HashSet<Guid> openCaves, TrackingDeclaredParts? declaredParts = null)
     {
         var open = PositionOpen(e, openCaves);
         return new TrackingEventDto(
@@ -198,6 +204,7 @@ internal static class TrackingWithholding
             open ? e.ViewerStationName : null,
             open ? e.DepthEnteredM : null,
             e.Note, e.RecordedAt,
-            TripTrackingRules.ChangedSinceWritten(e.CreatedAt, e.UpdatedAt));
+            TripTrackingRules.ChangedSinceWritten(e.CreatedAt, e.UpdatedAt),
+            open && declaredParts is not null && declaredParts.Outside(e));
     }
 }

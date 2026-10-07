@@ -297,6 +297,17 @@ public static class TripTrackingEndpoints
         var watchState = tracking?.State ?? TripTrackingState.Off;
         var quietAfter = options.Value.EffectiveQuietAfter;
 
+        // Where the party said it was going, against where each of them was last reported — for
+        // the places this caller is about to be told and for no others, and only for a caller
+        // who is being told the declaration itself. One read of those few stations.
+        var declaredParts = await TrackingDeclaredParts.ForAsync(
+            db, tracking, configOpen,
+            byCaver.Values
+                .Select(reports => reports.LastOrDefault(TrackingWithholding.HasPosition))
+                .OfType<TripPositionEvent>()
+                .Where(lastPlace => TrackingWithholding.PositionOpen(lastPlace, openCaves)),
+            ct);
+
         var participants = new List<TrackingParticipantDto>();
         foreach (var caverId in rosterCavers.Concat(offRoster))
         {
@@ -351,7 +362,11 @@ public static class TripTrackingEndpoints
                 // Measured from the last word of any kind — a note ends a silence as surely as a
                 // place does — and that moment is sent to every reader whatever is withheld, so
                 // the mark tells nobody anything the row beside it does not.
-                TripTrackingRules.IsQuiet(watchState, standing, last?.RecordedAt, now, quietAfter)));
+                TripTrackingRules.IsQuiet(watchState, standing, last?.RecordedAt, now, quietAfter),
+                // On the branch the place itself is told on, and nowhere else: beside a withheld
+                // place the word would say that somebody is at a station, and that it is none of
+                // a set, to a reader who was refused both.
+                positionOpen && lastPositioned is not null && declaredParts.Outside(lastPositioned)));
         }
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
@@ -404,9 +419,22 @@ public static class TripTrackingEndpoints
             .OrderByDescending(e => e.RecordedAt).ThenByDescending(e => e.CreatedAt).ThenByDescending(e => e.Id)
             .ToPagedAsync(p, ps, e => e, ct);
 
-        var openCaves = await TrackingWithholding.OpenCavesOfAsync(
-            db, access, protection, ctx, result.Items, ct);
-        var dtos = result.Items.Select(e => TrackingWithholding.Shown(e, openCaves)).ToList();
+        // The watch's own cave is asked about together with the rows' caves: its declared parts
+        // are station vocabulary of that cave, and whether a row is outside them is said only to
+        // a caller who may be told both the row's place and the declaration.
+        var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
+        var openCaves = await TrackingWithholding.OpenCaveIdsAsync(
+            db, access, protection, ctx,
+            [.. result.Items.Where(e => e.CaveFeatureId is not null).Select(e => e.CaveFeatureId!.Value)
+                .Concat(tracking?.CaveFeatureId is { } watchCave ? [watchCave] : Array.Empty<Guid>())
+                .Distinct()],
+            ct);
+        var declaredParts = await TrackingDeclaredParts.ForAsync(
+            db, tracking,
+            declarationTold: tracking?.CaveFeatureId is { } declaredFor && openCaves.Contains(declaredFor),
+            result.Items.Where(e => TrackingWithholding.PositionOpen(e, openCaves)),
+            ct);
+        var dtos = result.Items.Select(e => TrackingWithholding.Shown(e, openCaves, declaredParts)).ToList();
 
         return TypedResults.Ok(new PagedResult<TrackingEventDto>(dtos, result.Page, result.PageSize, result.TotalItems));
     }
@@ -754,9 +782,15 @@ public static class TripTrackingEndpoints
         db.TripPositionEvents.AddRange(created);
         await db.SaveChangesAsync(ct);
 
+        // The answer says what the next read of the log will say, this included. A report that
+        // names a station got through the gate on placing anybody in the watch's cave, which is
+        // the right the declaration is told under; one that names none is asked nothing.
+        var declaredParts = await TrackingDeclaredParts.ForAsync(
+            db, tracking, declarationTold: placed.StationName is not null, created, ct);
         IReadOnlyList<TrackingEventDto> dtos = [.. created.Select(e => new TrackingEventDto(
             e.Id, e.CaverId, e.TeamId, e.Kind, e.SurveyModelId, e.ViewerStationName, e.DepthEnteredM, e.Note, e.RecordedAt,
             TripTrackingRules.ChangedSinceWritten(e.CreatedAt, e.UpdatedAt),
+            declaredParts.Outside(e),
             placed.Placement))];
         return TypedResults.Ok(dtos);
     }
@@ -950,12 +984,17 @@ public static class TripTrackingEndpoints
         row.RecordedAt = recordedAt;
         await db.SaveChangesAsync(ct);
 
+        // As on recording: a correction that names a station passed the gate on placing in the
+        // watch's cave, so the corrector is somebody the declaration is told to.
+        var declaredParts = await TrackingDeclaredParts.ForAsync(
+            db, tracking, declarationTold: placed.StationName is not null, [row], ct);
         return TypedResults.Ok(new TrackingEventDto(
             row.Id, row.CaverId, row.TeamId, row.Kind, row.SurveyModelId, row.ViewerStationName,
             row.DepthEnteredM, row.Note, row.RecordedAt,
             // Read off the row as it was saved: a correction that changed nothing leaves the stamps
             // where they were, and the answer then says what the next read of the log will say.
             TripTrackingRules.ChangedSinceWritten(row.CreatedAt, row.UpdatedAt),
+            declaredParts.Outside(row),
             placed.Placement));
     }
 

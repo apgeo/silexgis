@@ -1550,6 +1550,125 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         TimeOf(Participant(refused, silent), "lastRecordedAt").ShouldNotBeNull();
     }
 
+    // ---- where the party said it was going ------------------------------------------------
+
+    /// <summary>
+    /// The parts of the cave a watch declares are where the party said it was going. A station
+    /// reported outside them is marked on the person's row and on the report; one inside is not;
+    /// and with nothing declared nobody is outside of anything.
+    /// </summary>
+    [Fact]
+    public async Task A_place_outside_the_declared_parts_is_marked_on_the_row_and_in_the_log_and_never_without_a_declaration()
+    {
+        var (trip, cavers) = await CreateTripAsync("Declared parts", guests: 2);
+        var (strayed, asPlanned) = (cavers[0], cavers[1]);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model, depthFilter: ["cave.upper"])).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The answer to recording says what the next read of the log will say.
+        var outside = await PostEventAsync(owner, trip, new
+        {
+            caverIds = new[] { strayed }, kind = "atStation", stationName = "cave.deep.3", recordedAt = At(10, 0),
+        });
+        outside.StatusCode.ShouldBe(HttpStatusCode.OK, await outside.Content.ReadAsStringAsync());
+        (await BodyAsync(outside))[0].GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeTrue();
+        var inside = await PostEventAsync(owner, trip, new
+        {
+            caverIds = new[] { asPlanned }, kind = "atStation", stationName = "cave.upper.2", recordedAt = At(10, 5),
+        });
+        inside.StatusCode.ShouldBe(HttpStatusCode.OK, await inside.Content.ReadAsStringAsync());
+        (await BodyAsync(inside))[0].GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+        // A later note claims no place: it is marked nothing, and the person stays marked by the
+        // place they were last reported at.
+        await ReportAsync(trip, new { caverIds = new[] { strayed }, kind = "note", note = "resting" }, At(10, 30));
+
+        var state = await StateAsync(owner, trip);
+        Participant(state, strayed).GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        Participant(state, strayed).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeTrue();
+        Participant(state, asPlanned).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+
+        var log = await LogAsync(owner, trip);
+        log.Count.ShouldBe(3);
+        OutsideIn(log, "cave.deep.3").ShouldBeTrue();
+        OutsideIn(log, "cave.upper.2").ShouldBeFalse();
+        log.Single(e => e.GetProperty("kind").GetString() == "note")
+            .GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+
+        // A correction that moves the report inside the declared parts answers unmarked, and the
+        // other way round answers marked.
+        var strayedReport = log.Single(e => e.GetProperty("stationName").GetString() == "cave.deep.3")
+            .GetProperty("id").GetGuid();
+        var corrected = await PutEventAsync(owner, trip, strayedReport, new
+        {
+            kind = "atStation", stationName = "cave.upper.1", recordedAt = At(10, 0),
+        });
+        corrected.StatusCode.ShouldBe(HttpStatusCode.OK, await corrected.Content.ReadAsStringAsync());
+        (await BodyAsync(corrected)).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+        var back = await PutEventAsync(owner, trip, strayedReport, new
+        {
+            kind = "atStation", stationName = "cave.deep.3", recordedAt = At(10, 0),
+        });
+        back.StatusCode.ShouldBe(HttpStatusCode.OK, await back.Content.ReadAsStringAsync());
+        (await BodyAsync(back)).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeTrue();
+
+        // The declaration withdrawn: the same reports, and nobody is outside of anything.
+        (await ArmAsync(owner, trip, model, depthFilter: [])).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var undeclared = await StateAsync(owner, trip);
+        undeclared.GetProperty("depthFilter").GetArrayLength().ShouldBe(0);
+        Participant(undeclared, strayed).GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        Participant(undeclared, strayed).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+        (await LogAsync(owner, trip)).ShouldAllBe(e => !e.GetProperty("outsideDeclaredParts").GetBoolean());
+    }
+
+    /// <summary>
+    /// The mark rides the place: somebody refused the station learns nothing about it from this
+    /// either, while the person allowed to place in that cave reads the station and the mark.
+    /// </summary>
+    [Fact]
+    public async Task Outside_the_declared_parts_is_never_said_beside_a_withheld_place()
+    {
+        var (trip, cavers) = await CreateTripAsync("Declared, protected", guests: 1, visibility: "authenticated");
+        var cave = await CreateCaveAsync(locationProtected: true);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model, depthFilter: ["cave.upper"])).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ReportAsync(
+            trip, new { caverIds = cavers, kind = "atStation", stationName = "cave.deep.3" }, At(11, 0));
+
+        // Positive half: the placer is told the station, the declaration, and that the one lies
+        // outside the other — on the row and in the log.
+        var told = await StateAsync(owner, trip);
+        told.GetProperty("depthFilter").GetArrayLength().ShouldBe(1);
+        Participant(told, cavers[0]).GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        Participant(told, cavers[0]).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeTrue();
+        OutsideIn(await LogAsync(owner, trip), "cave.deep.3").ShouldBeTrue();
+
+        // Negative half: a reader of the trip with no right to the cave's exact location is told
+        // neither the station nor the declaration, and so not how they compare.
+        var refused = await StateAsync(reader, trip);
+        refused.GetProperty("positionsWithheld").GetBoolean().ShouldBeTrue();
+        refused.GetProperty("depthFilter").GetArrayLength().ShouldBe(0);
+        Participant(refused, cavers[0]).GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        Participant(refused, cavers[0]).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+        var theirLog = await LogAsync(reader, trip);
+        theirLog.Count.ShouldBe(1);
+        theirLog[0].GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        theirLog[0].GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+    }
+
+    private static async Task<List<JsonElement>> LogAsync(HttpClient client, Guid trip)
+    {
+        var response = await client.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        return [.. (await BodyAsync(response)).GetProperty("items").EnumerateArray()];
+    }
+
+    /// <summary>What the log says of the one report naming this station.</summary>
+    private static bool OutsideIn(List<JsonElement> log, string stationName) =>
+        log.Single(e => e.GetProperty("stationName").ValueKind == JsonValueKind.String
+                && e.GetProperty("stationName").GetString() == stationName)
+            .GetProperty("outsideDeclaredParts").GetBoolean();
+
     /// <summary>
     /// Rewrites a trip's roster the way its form does: the two lists sent are the whole of it.
     /// </summary>
