@@ -8,9 +8,60 @@ import {
   MOVIE_SIZES,
   MOVIE_VIEW_DIRECTIONS,
   MOVIE_VIEW_LAYERS,
+  movieSettingsNeedRewriting,
   movieSize,
   normaliseMovieSettings,
 } from './movieSettings.ts';
+import { MOVIE_SHADINGS } from './movieShadings.ts';
+
+describe('the remembered shading', () => {
+  it('is kept by name, every one of those offered', () => {
+    expect(DEFAULT_MOVIE_SETTINGS.view.shading).toBeNull();
+    for (const { id } of MOVIE_SHADINGS) {
+      expect(normaliseMovieSettings({ view: { shading: id } }).view.shading).toBe(id);
+    }
+    expect(normaliseMovieSettings({ view: { shading: null } }).view.shading).toBeNull();
+  });
+
+  it('never takes a number, or a name nothing offers, for a shading', () => {
+    for (const raw of [1, 6, 0, 2.5, 'rainbow', 'SHADING_HEIGHT', '1', true, {}]) {
+      expect(normaliseMovieSettings({ view: { shading: raw } }).view.shading, String(raw)).toBeNull();
+    }
+  });
+
+  it('reads the number an earlier version stored as the shading it stood for, and writes none back', () => {
+    const before = { format: 'webm', view: { grid: true, shadingMode: 6 } };
+    const settings = normaliseMovieSettings(before);
+    expect(settings.view.shading).toBe('survey');
+    // The rest of what was remembered beside it survives the translation.
+    expect(settings.format).toBe('webm');
+    expect(settings.view.grid).toBe(true);
+    // What is written back is in today's shape only, and reads the same again.
+    expect(settings.view).not.toHaveProperty('shadingMode');
+    expect(normaliseMovieSettings(structuredClone(settings))).toEqual(settings);
+  });
+
+  it('leaves the shading to the viewer when the stored number stood for none offered, or was nothing', () => {
+    for (const raw of [4, 7, 10, 12, 99, -1, 2.5, null, 'height']) {
+      expect(normaliseMovieSettings({ view: { shadingMode: raw } }).view.shading, String(raw)).toBeNull();
+    }
+  });
+
+  it('goes by the name when settings hold both, since the name is what was written last', () => {
+    expect(normaliseMovieSettings({ view: { shading: 'length', shadingMode: 6 } }).view.shading).toBe('length');
+    expect(normaliseMovieSettings({ view: { shading: null, shadingMode: 6 } }).view.shading).toBeNull();
+  });
+
+  it('says settings stored the old way need writing back, and settings in today’s shape do not', () => {
+    expect(movieSettingsNeedRewriting({ view: { shadingMode: 6 } })).toBe(true);
+    expect(movieSettingsNeedRewriting({ view: { shadingMode: null } })).toBe(true);
+    expect(movieSettingsNeedRewriting(normaliseMovieSettings({ view: { shadingMode: 6 } }))).toBe(false);
+    expect(movieSettingsNeedRewriting(DEFAULT_MOVIE_SETTINGS)).toBe(false);
+    for (const raw of [undefined, null, 'gif', [], { view: null }, {}]) {
+      expect(movieSettingsNeedRewriting(raw)).toBe(false);
+    }
+  });
+});
 
 describe('normaliseMovieSettings', () => {
   it('answers the defaults for nothing, and for anything that is not an object', () => {
@@ -68,7 +119,7 @@ describe('normaliseMovieSettings', () => {
       rotation: { mode: 'wobble', degreesPerSecond: 1000, enabled: 'yes' },
       timeline: { mode: 'sideways', quietGapMin: 0 },
       cavers: { labelSize: 400, colourBy: 'rainbow', transitionS: Number.NaN },
-      view: { linewidth: 3, zScale: -1, shadingMode: 2.5, camera: 'fisheye' },
+      view: { linewidth: 3, zScale: -1, shading: 'rainbow', camera: 'fisheye' },
       captions: { size: 0, titleText: 7 },
     });
     expect(settings.format).toBe(DEFAULT_MOVIE_SETTINGS.format);
@@ -85,7 +136,7 @@ describe('normaliseMovieSettings', () => {
     expect(settings.cavers.transitionS).toBe(DEFAULT_MOVIE_SETTINGS.cavers.transitionS);
     expect(settings.view.linewidth).toBe(1);
     expect(settings.view.zScale).toBe(0);
-    expect(settings.view.shadingMode).toBeNull();
+    expect(settings.view.shading).toBeNull();
     expect(settings.view.camera).toBe('perspective');
     expect(settings.captions.size).toBe(0.5);
     expect(settings.captions.titleText).toBe('');

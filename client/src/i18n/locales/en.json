@@ -2946,6 +2946,13 @@
       "progressElapsed": "{{elapsed}} elapsed",
       "progressTimes": "{{elapsed}} elapsed · about {{remaining}} left",
       "saved": "Saved {{name}}",
+      "fileNamed": "The file will be saved as {{name}}",
+      "closeWhileExporting": {
+        "title": "Stop making the movie?",
+        "body": "The export is still running. If you close now, the frames drawn so far are thrown away and no file is saved.",
+        "stop": "Stop and close",
+        "keep": "Keep going"
+      },
       "exportFailed": "The movie could not be made.",
       "videoTooLong": "This video renders every one of its frames, in software on a computer without a graphics card, and may take a long time to export. A shorter length, a lower frame rate or a smaller size is quicker.",
       "layersMissing": "Greyed layers: this model has none of them.",

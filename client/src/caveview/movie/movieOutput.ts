@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { videoBitrate } from './encode/video/videoEncoder.ts';
+import { movieAutoTitle, movieTitle } from './movieCaptions.ts';
 import type { MovieQuality, MovieSettings } from './movieSettings.ts';
 import { movieSize } from './movieSettings.ts';
 
@@ -83,6 +84,35 @@ export function movieSlug(title: string): string {
 export function movieFileName(title: string, isoDate: string, extension: string): string {
   const slug = movieSlug(title);
   return `silexgis-${slug.length > 0 ? slug : 'movie'}-${isoDate}.${extension}`;
+}
+
+/**
+ * What the file of a movie is called, decided in this one place for the name the dialog shows
+ * before an export and the name the export is saved under.
+ *
+ * <b>The file is named by the title the movie shows, and by nothing it does not show.</b> With the
+ * title caption on, that is the reader's own words when they wrote any, and otherwise what the
+ * movie is of — its one trip, or the cave. With the caption off the file is called `movie` and the
+ * day: a reader who took the title off the picture has said the movie should not say whose trip or
+ * which cave it is, and a file name travels with the file to everyone it is sent on to — further
+ * than the picture's own caption, since it shows in a chat before the movie is even opened.
+ *
+ * The days an automatic title of several trips ends in are left out of the name: it already ends
+ * in the day the file was made, and a second date beside it, in the reader's own order (9-29-2026,
+ * 29-09-2026), reads as neither.
+ *
+ * @param place the cave's name, or the model's when the cave's is not known.
+ * @param isoDate the day the file is made, as `yyyy-mm-dd`.
+ */
+export function movieExportName(
+  captions: Pick<MovieSettings['captions'], 'title' | 'titleText'>,
+  tripTitles: readonly string[],
+  place: string,
+  isoDate: string,
+  extension: string,
+): string {
+  const shown = movieTitle(captions, movieAutoTitle(tripTitles, place, null));
+  return movieFileName(shown ?? '', isoDate, extension);
 }
 
 /** The reader's own calendar day, as `yyyy-mm-dd` — the day they will say they made the file. */

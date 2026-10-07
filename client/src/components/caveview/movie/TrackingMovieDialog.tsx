@@ -5,12 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { saveBlob } from '../../../api/download.ts';
 import { useCave, useSurveyModel, useSurveyModelTrackedTrips, type TrackedTrip } from '../../../api/hooks.ts';
-import type {
-  CaveViewer,
-  CaveViewLabelText,
-  CaveViewLiveMarker,
-  Cv2Namespace,
-} from '../../../caveview/loadCaveView.ts';
+import type { CaveViewer, CaveViewLabelText, CaveViewLiveMarker } from '../../../caveview/loadCaveView.ts';
 import { syncLiveMarkers, type DrawnMarker } from '../../../caveview/liveMarkerSync.ts';
 import {
   MOVIE_EXTENSION,
@@ -27,13 +22,14 @@ import {
 import {
   localIsoDate,
   MOVIE_GIF_SIZE_BUDGET,
-  movieFileName,
+  movieExportName,
   movieFileSizeEstimate,
 } from '../../../caveview/movie/movieOutput.ts';
 import { movieParty, type MovieParty } from '../../../caveview/movie/movieParty.ts';
 import { isMovieAbort, recordMovie, type MovieProgress } from '../../../caveview/movie/movieRecorder.ts';
 import {
   DEFAULT_MOVIE_SETTINGS,
+  movieSettingsNeedRewriting,
   movieSize,
   normaliseMovieSettings,
   type MovieSettings,
@@ -45,7 +41,6 @@ import { useUiPrefsStore } from '../../../stores/uiPrefsStore.ts';
 import { formatTripDates } from '../../trips/tripDates.ts';
 import { movieTripDays } from './movieDays.ts';
 import MoviePreviewHost, { type MoviePreviewHandle } from './MoviePreviewHost.tsx';
-import { MOVIE_SHADINGS, type MovieShadingConstant } from './movieChoices.ts';
 import MovieSettingsForm from './MovieSettingsForm.tsx';
 import { useMovieTrips } from './useMovieTrips.ts';
 import './TrackingMovieDialog.css';
@@ -70,7 +65,14 @@ const SettingsForm = memo(MovieSettingsForm);
  *
  * <b>An export can take minutes and can be called off.</b> Every frame is rendered on demand, in
  * software on some machines, so the dialog says how far it has got and how long it has left, and
- * Cancel — or closing the dialog — stops it with nothing reported: calling it off is not a failure.
+ * Cancel stops it with nothing reported: calling it off is not a failure.
+ *
+ * <b>Closing the dialog is not how an export is called off, so it asks first.</b> Cancel export is
+ * a button that says what it does. Escape and the X in the corner say only "close", are pressed by
+ * habit, and during an export would throw away minutes of rendering without a word; so while one
+ * runs they ask whether to stop it, and the answers that need no thought — Escape again, or
+ * Enter on the button the question opens on — keep it going. A click beside the dialog does
+ * nothing at all.
  *
  * <b>A copy of what the reader could see.</b> Everything in the movie was sent to this reader under
  * their own rights; the file outlives that check, so the dialog says so, and the settings start
@@ -87,7 +89,63 @@ export interface TrackingMovieDialogProps {
 
 export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onClose }: TrackingMovieDialogProps) {
   const { t } = useTranslation();
+  const { modal } = App.useApp();
   const model = useSurveyModel(surveyModelId ?? undefined);
+
+  // What stops the export under way, handed up by the body for as long as one runs; null otherwise.
+  // A ref, not state: it is read when a key is pressed, and an export starting or ending must not
+  // draw the dialog's frame again.
+  const stopExportRef = useRef<(() => void) | null>(null);
+  const questionRef = useRef<{ destroy: () => void } | null>(null);
+  const onExportRunning = useCallback((stop: (() => void) | null) => {
+    stopExportRef.current = stop;
+    if (stop === null) {
+      // The export ended — finished, failed, cancelled or unmounted — while the question was still
+      // up. There is nothing left to stop, so the question goes; the dialog stays as it is.
+      questionRef.current?.destroy();
+      questionRef.current = null;
+    }
+  }, []);
+  // Escape and the X arrive here; the mask does not, and the footer's own buttons are the body's.
+  const requestClose = () => {
+    if (stopExportRef.current === null) {
+      onClose();
+      return;
+    }
+    if (questionRef.current !== null) {
+      return;
+    }
+    questionRef.current = modal.confirm({
+      title: t('caveview.movie.closeWhileExporting.title'),
+      content: t('caveview.movie.closeWhileExporting.body'),
+      okText: t('caveview.movie.closeWhileExporting.stop'),
+      okButtonProps: { danger: true },
+      cancelText: t('caveview.movie.closeWhileExporting.keep'),
+      // The question opens on "keep going": Enter pressed by habit after Escape must not be what
+      // throws the export away.
+      focusable: { autoFocusButton: 'cancel' },
+      onOk: () => {
+        questionRef.current = null;
+        // Stopped here rather than left to the body going away with the dialog: the body is only
+        // taken down once the dialog has finished closing, and frames would go on being rendered
+        // for a movie nobody wants until then.
+        stopExportRef.current?.();
+        onClose();
+      },
+      onCancel: () => {
+        questionRef.current = null;
+      },
+    });
+  };
+  // A question still up when the dialog itself goes has nothing left to ask about.
+  useEffect(
+    () => () => {
+      questionRef.current?.destroy();
+      questionRef.current = null;
+    },
+    [],
+  );
+
   return (
     <Modal
       title={
@@ -99,7 +157,7 @@ export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onC
         </Flex>
       }
       open={surveyModelId !== null}
-      onCancel={onClose}
+      onCancel={requestClose}
       footer={null}
       width="min(1320px, 96vw)"
       // Near the top of the window: the dialog is tall, and its export button is at the bottom.
@@ -107,7 +165,8 @@ export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onC
       // A second WebGL context is held for as long as the preview exists, so the whole body goes
       // with the dialog — and with it any export still running, which unmounting cancels.
       destroyOnHidden
-      // A stray click beside the dialog would throw away the settings and any export under way.
+      // A stray click beside the dialog would throw away the settings and any export under way; it
+      // is not asked about either, since nobody meant anything by it.
       mask={{ closable: false }}
       data-testid="movie-dialog"
     >
@@ -119,6 +178,7 @@ export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onC
           surveyModelId={surveyModelId}
           initialTripIds={initialTripIds ?? []}
           onClose={onClose}
+          onExportRunning={onExportRunning}
         />
       )}
     </Modal>
@@ -126,6 +186,8 @@ export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onC
 }
 
 interface ExportRun {
+  /** The name the file is saved under, fixed when the export starts. */
+  name: string;
   startedAt: number;
   progress: MovieProgress | null;
   now: number;
@@ -145,14 +207,6 @@ interface PreviewFacts {
   generation: number;
   layers: ReadonlySet<MovieViewLayer>;
   terrain: boolean;
-  shadings: Record<MovieShadingConstant, number>;
-}
-
-function shadingConstants(cv2: Cv2Namespace): Record<MovieShadingConstant, number> {
-  return Object.fromEntries(MOVIE_SHADINGS.map(({ constant }) => [constant, cv2[constant]])) as Record<
-    MovieShadingConstant,
-    number
-  >;
 }
 
 /** The settings without a written title, which belongs to one movie and is never remembered. */
@@ -181,10 +235,16 @@ function MovieDialogBody({
   surveyModelId,
   initialTripIds,
   onClose,
+  onExportRunning,
 }: {
   surveyModelId: string;
   initialTripIds: readonly string[];
   onClose: () => void;
+  /**
+   * Told how to stop the export for as long as one runs, and null when none does — so whatever
+   * closes the dialog from outside this body knows there is an export to ask about, and can stop it.
+   */
+  onExportRunning: (stop: (() => void) | null) => void;
 }) {
   const { t, i18n } = useTranslation();
   const { message } = App.useApp();
@@ -200,6 +260,13 @@ function MovieDialogBody({
   const [settings, setSettings] = useState<MovieSettings>(() =>
     withoutTitleText(remembered === undefined ? DEFAULT_MOVIE_SETTINGS : normaliseMovieSettings(remembered)),
   );
+  // Settings remembered in a shape no longer written are written back once, repaired, so the old
+  // shape does not outlive the first opening after an update — even for a reader who changes nothing.
+  useEffect(() => {
+    if (remembered !== undefined && movieSettingsNeedRewriting(remembered)) {
+      remember(withoutTitleText(normaliseMovieSettings(remembered)));
+    }
+  }, [remembered, remember]);
   // Playing the preview holds the camera: each of its frames puts the angles back from where play
   // began. A turn to another starting view made under it would be undone on the next frame, so play
   // stops first. Reached through refs because play is set up further down.
@@ -307,7 +374,6 @@ function MovieDialogBody({
             generation: (before?.generation ?? 0) + 1,
             layers: movieLayersAvailable(next.viewer),
             terrain: next.viewer.hasRealTerrain === true,
-            shadings: shadingConstants(next.cv2),
           },
     );
   }, []);
@@ -516,9 +582,30 @@ function MovieDialogBody({
     );
   }, [recording, recordedFrame, timeline, frames, movie.trips, surveyModelId, settings, words, title]);
 
+  // ---- what the file will be called ----
+  // Its name is shown before the export, not only said afterwards: with the title caption on it
+  // carries the trip's or the cave's name to whoever the file is sent on to, and the reader should
+  // see that while it can still be changed.
+  const fileName = movieExportName(
+    settings.captions,
+    movie.trips.map((trip) => trip.title),
+    place,
+    localIsoDate(),
+    MOVIE_EXTENSION[settings.format],
+  );
+
   // ---- exporting ----
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => () => abortRef.current?.abort(), []);
+  // Whatever closes the dialog from outside is told there is an export, and how to stop it, for
+  // exactly as long as one runs — and that there is none again when this body goes.
+  useEffect(() => {
+    if (!recording) {
+      return;
+    }
+    onExportRunning(() => abortRef.current?.abort());
+    return () => onExportRunning(null);
+  }, [recording, onExportRunning]);
   // The elapsed time moves on between frames too: one frame can take seconds in software.
   useEffect(() => {
     if (!recording) {
@@ -538,7 +625,10 @@ function MovieDialogBody({
     abortRef.current = controller;
     const startedAt = performance.now();
     setFailure(null);
-    setRun({ startedAt, progress: null, now: startedAt });
+    // The name the dialog was showing when the export was started, so the file is called what the
+    // reader was told it would be — even when the export runs past midnight.
+    const name = fileName;
+    setRun({ name, startedAt, progress: null, now: startedAt });
     try {
       const file = await recordMovie({
         viewer: handle.viewer,
@@ -553,22 +643,6 @@ function MovieDialogBody({
         signal: controller.signal,
         onProgress: (progress) => setRun((before) => before && { ...before, progress, now: performance.now() }),
       });
-      // Named for what the movie shows: the title written over it when there is one, and otherwise
-      // what it is of — the trip, or the cave. A title written but not drawn does not name it. The
-      // days an automatic title of several trips ends in are left off: the name already ends in the
-      // day the file was made, and a second date beside it, in the reader's own order (9-29-2026,
-      // 29-09-2026), reads as neither.
-      const written = settings.captions.title ? settings.captions.titleText.trim() : '';
-      const name = movieFileName(
-        written ||
-          movieAutoTitle(
-            movie.trips.map((trip) => trip.title),
-            place,
-            null,
-          ),
-        localIsoDate(),
-        MOVIE_EXTENSION[settings.format],
-      );
       saveBlob(file, name);
       message.success(t('caveview.movie.saved', { name }));
     } catch (error) {
@@ -736,7 +810,6 @@ function MovieDialogBody({
             formats={formats}
             videoEncoding={typeof VideoEncoder !== 'undefined'}
             layers={preview?.layers ?? null}
-            constants={preview?.shadings ?? null}
             terrain={preview?.terrain === true}
             autoTitle={autoTitle}
             summary={summary}
@@ -774,7 +847,12 @@ function MovieDialogBody({
         )}
         {run !== null && <ExportProgress run={run} />}
         <Alert type="info" showIcon title={t('caveview.movie.privacy')} data-testid="movie-privacy" />
-        <Flex justify="flex-end" gap="small">
+        <Flex justify="flex-end" align="center" gap="small" wrap>
+          {movie.trips.length > 0 && (
+            <Typography.Text type="secondary" className="movie-dialog-file-name" data-testid="movie-file-name">
+              {t('caveview.movie.fileNamed', { name: run?.name ?? fileName })}
+            </Typography.Text>
+          )}
           {recording ? (
             <Button onClick={cancelExport} data-testid="movie-cancel">
               {t('caveview.movie.cancelExport')}

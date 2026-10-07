@@ -39,6 +39,13 @@
   margin-top: 16px;
 }
 
+/* The name the file will be saved under, at the far side of the row from the buttons; a long one
+   breaks inside itself rather than pushing the export button off a narrow screen. */
+.movie-dialog-file-name {
+  margin-right: auto;
+  overflow-wrap: anywhere;
+}
+
 .movie-setting-help {
   display: block;
   font-size: 12px;

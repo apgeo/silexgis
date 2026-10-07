@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { App } from 'antd';
+import { App, ConfigProvider } from 'antd';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TrackedTrip, TrackingEvent, TrackingState } from '../../../api/hooks.ts';
 import type { MovieFormatSupport } from '../../../caveview/movie/encode/movieEncoder.ts';
@@ -104,6 +104,9 @@ function fakeViewer() {
 }
 const preview = vi.hoisted(() => ({
   viewer: null as unknown,
+  // How many previews have been taken down — which is where a real one ends its capture session,
+  // disposes of its viewer and gives its WebGL context back.
+  released: 0,
   recordingSeen: [] as boolean[],
   // What the preview was last asked to show, as the dialog hands it over.
   direction: null as string | null,
@@ -132,6 +135,12 @@ vi.mock('./MoviePreviewHost.tsx', () => ({
         } as never,
       });
     }, [onReady]);
+    useEffect(
+      () => () => {
+        preview.released++;
+      },
+      [],
+    );
     return <div data-testid="movie-preview">{overlay}</div>;
   },
 }));
@@ -233,8 +242,39 @@ function open(initialTripIds: string[] = []) {
   return { onClose };
 }
 
+/**
+ * The dialog under a parent that does close it when asked, as the pages that open it do. Without
+ * motion, because the dialog's body is only taken down once the closing animation has ended, and
+ * nothing ends an animation here.
+ */
+function openClosable(initialTripIds: string[] = []) {
+  const onClose = vi.fn();
+  function Page() {
+    const [modelId, setModelId] = useState<string | null>(MODEL);
+    return (
+      <TrackingMovieDialog
+        surveyModelId={modelId}
+        initialTripIds={initialTripIds}
+        onClose={() => {
+          onClose();
+          setModelId(null);
+        }}
+      />
+    );
+  }
+  render(
+    <ConfigProvider theme={{ token: { motion: false } }}>
+      <App>
+        <Page />
+      </App>
+    </ConfigProvider>,
+  );
+  return { onClose };
+}
+
 beforeEach(() => {
   preview.viewer = fakeViewer();
+  preview.released = 0;
   preview.recordingSeen = [];
   preview.direction = null;
   preview.viewRequest = null;
@@ -410,6 +450,8 @@ describe('the tracking movie dialog', () => {
     const [saved, name] = saveBlob.mock.calls[0] as [Blob, string];
     expect(saved).toBe(file);
     expect(name).toMatch(new RegExp(`^silexgis-${movieSlug('Pestera 1')}-\\d{4}-\\d{2}-\\d{2}\\.gif$`));
+    // It is saved under the name the dialog was showing.
+    expect(screen.getByTestId('movie-file-name')).toHaveTextContent(name);
     // The preview carries the captions the file will.
     expect(drawMovieCaptions).toHaveBeenCalled();
     // The preview was left alone while the recording held the viewer.
@@ -701,17 +743,27 @@ describe('the tracking movie dialog', () => {
     expect(useUiPrefsStore.getState().movieSettings?.captions.titleText).toBe('');
     expect(localStorage.getItem('silexgis.uiPrefs')).not.toContain('Another cave entirely');
 
-    // The title is written but not drawn, so it does not name the file either.
+    // No title is drawn, so nothing names the file: not the words written, not the trip, not the
+    // cave. The dialog says so before the export, and the file is saved under what it said.
     const exportButton = screen.getByTestId('movie-export');
     await waitFor(() => expect(exportButton).not.toBeDisabled());
+    const neutral = screen.getByTestId('movie-file-name').textContent ?? '';
+    expect(neutral).toMatch(/silexgis-movie-\d{4}-\d{2}-\d{2}\.gif$/);
+    for (const word of ['alpha', 'pestera', 'another']) {
+      expect(neutral.toLowerCase()).not.toContain(word);
+    }
     fireEvent.click(exportButton);
     await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
     expect(recordMovie.mock.calls[0][0].title).toBeNull();
-    expect(saveBlob.mock.calls[0][1]).toMatch(/^silexgis-alpha-\d{4}-\d{2}-\d{2}\.gif$/);
+    expect(saveBlob.mock.calls[0][1]).toMatch(/^silexgis-movie-\d{4}-\d{2}-\d{2}\.gif$/);
+    expect(neutral).toContain(saveBlob.mock.calls[0][1] as string);
 
-    // Drawn, it names the file.
+    // Drawn, it names the file — and the dialog shows that the moment the caption is switched on.
     await waitFor(() => expect(exportButton).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('movie-caption-title'));
+    await waitFor(() =>
+      expect(screen.getByTestId('movie-file-name')).toHaveTextContent(/silexgis-another-cave-entirely-/),
+    );
     fireEvent.click(exportButton);
     await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(2));
     expect(saveBlob.mock.calls[1][1]).toMatch(/^silexgis-another-cave-entirely-\d{4}-\d{2}-\d{2}\.gif$/);
@@ -837,6 +889,231 @@ describe('the tracking movie dialog', () => {
     await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
     expect(recordMovie.mock.calls[0][0].title).toBe('Alpha');
     expect(saveBlob.mock.calls[0][1]).toMatch(/^silexgis-alpha-\d{4}-\d{2}-\d{2}\.gif$/);
+  });
+
+  it('shows the name the file will get before anything is exported, and follows the format', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+
+    const name = await screen.findByTestId('movie-file-name');
+    expect(name).toHaveTextContent(/^The file will be saved as silexgis-alpha-\d{4}-\d{2}-\d{2}\.gif$/);
+    expect(recordMovie).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('movie-format-webm'));
+    await waitFor(() => expect(screen.getByTestId('movie-file-name')).toHaveTextContent(/\.webm$/));
+  });
+
+  it('shows no file name while there is no trip to make a movie of', async () => {
+    open();
+    await screen.findByTestId('movie-summary');
+    expect(screen.queryByTestId('movie-file-name')).not.toBeInTheDocument();
+  });
+});
+
+describe('the remembered shading', () => {
+  it('is remembered by its name, and handed to the export by its name', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
+    open(['trip-a']);
+    fireEvent.click(await screen.findByText('View'));
+    const choice = await screen.findByTestId('movie-shading');
+    await waitFor(() => expect(within(choice).getByRole('combobox')).not.toBeDisabled());
+    expect(choice).toHaveTextContent('As the viewer draws it');
+
+    fireEvent.mouseDown(within(choice).getByRole('combobox'));
+    fireEvent.click((await screen.findAllByTitle('By leg length')).at(-1)!);
+
+    await waitFor(() => expect(useUiPrefsStore.getState().movieSettings?.view.shading).toBe('length'));
+    // Nothing of the viewer's own numbering is kept in the browser.
+    expect(JSON.parse(localStorage.getItem('silexgis.uiPrefs')!).state.movieSettings.view).not.toHaveProperty(
+      'shadingMode',
+    );
+    const exportButton = screen.getByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(recordMovie).toHaveBeenCalled());
+    expect(recordMovie.mock.calls[0][0].settings.view.shading).toBe('length');
+  });
+
+  it('reads a shading remembered as the viewer’s number once, and writes it back by name without being asked', async () => {
+    // What an earlier version left in the browser: the viewer's number for "by survey".
+    const { shading: _name, ...view } = DEFAULT_MOVIE_SETTINGS.view;
+    useUiPrefsStore.setState({
+      movieSettings: { ...DEFAULT_MOVIE_SETTINGS, format: 'webm', view: { ...view, shadingMode: 6 } } as never,
+    });
+    open();
+
+    // Written back although the reader changed nothing — and the rest of what was remembered with it.
+    await waitFor(() => expect(useUiPrefsStore.getState().movieSettings?.view.shading).toBe('survey'));
+    expect(useUiPrefsStore.getState().movieSettings?.view).not.toHaveProperty('shadingMode');
+    expect(useUiPrefsStore.getState().movieSettings?.format).toBe('webm');
+    fireEvent.click(await screen.findByText('View'));
+    expect(await screen.findByTestId('movie-shading')).toHaveTextContent('By survey');
+  });
+
+  it('does not write settings back that are already in today’s shape', async () => {
+    const stored = normaliseMovieSettings({ ...DEFAULT_MOVIE_SETTINGS, format: 'webm' });
+    useUiPrefsStore.setState({ movieSettings: stored });
+    open();
+    await screen.findByTestId('movie-summary');
+    // The very object that was stored: nothing replaced it.
+    expect(useUiPrefsStore.getState().movieSettings).toBe(stored);
+  });
+});
+
+describe('closing the dialog while an export runs', () => {
+  // The question is a dialog of its own, over the movie's; counted by its own frame, since its
+  // title is written in it twice — once for the eye and once for assistive technology.
+  const questions = () => document.querySelectorAll('.ant-modal-confirm').length;
+  const asked = () => waitFor(() => expect(questions()).toBe(1));
+  const notAsked = () => expect(questions()).toBe(0);
+  const escape = (on: Element) => fireEvent.keyDown(on, { key: 'Escape', code: 'Escape', keyCode: 27 });
+
+  /** An export that runs until it is finished or stopped, under a parent that closes when asked. */
+  async function exporting() {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    const run: { signal?: AbortSignal; finish?: () => void } = {};
+    recordMovie.mockImplementation(
+      (recording) =>
+        new Promise<Blob>((resolve, reject) => {
+          run.signal = recording.signal;
+          run.finish = () => resolve(new Blob(['GIF89a'], { type: 'image/gif' }));
+          recording.signal?.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')));
+        }),
+    );
+    const { onClose } = openClosable(['trip-a']);
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await screen.findByTestId('movie-cancel');
+    await waitFor(() => expect(run.signal).toBeDefined());
+    return { onClose, run };
+  }
+
+  it('closes at once on Escape when no export is running', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    const { onClose } = openClosable(['trip-a']);
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+
+    escape(exportButton);
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    notAsked();
+    // The preview goes with the dialog, and with it the viewer it holds.
+    await waitFor(() => expect(preview.released).toBe(1));
+  });
+
+  it('asks on Escape, and keeping going loses nothing of the export', async () => {
+    const { onClose, run } = await exporting();
+
+    escape(screen.getByTestId('movie-cancel'));
+
+    await asked();
+    expect(document.querySelector('.ant-modal-confirm-title')).toHaveTextContent('Stop making the movie?');
+    expect(document.querySelector('.ant-modal-confirm-content')).toHaveTextContent('no file is saved');
+    // It opens on the answer that loses nothing, so Enter pressed by habit keeps the export.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Keep going' })).toHaveFocus());
+    expect(screen.getByRole('button', { name: 'Stop and close' })).not.toHaveFocus();
+    expect(run.signal?.aborted).toBe(false);
+    expect(onClose).not.toHaveBeenCalled();
+    // A second request to close while the question is up does not ask twice, and does not slip
+    // past the question.
+    escape(screen.getByTestId('movie-cancel'));
+    fireEvent.click(document.querySelector('.ant-modal-close')!);
+    expect(questions()).toBe(1);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(run.signal?.aborted).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep going' }));
+
+    await waitFor(notAsked);
+    expect(run.signal?.aborted).toBe(false);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(preview.released).toBe(0);
+    // The export it was asked about finishes and is saved as if nothing had been pressed.
+    await act(async () => run.finish?.());
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('movie-export')).toBeInTheDocument();
+  });
+
+  it('asks on the X, and stopping calls the export off, closes, and gives back what the dialog held', async () => {
+    const errors = vi.spyOn(console, 'error');
+    const { onClose, run } = await exporting();
+
+    fireEvent.click(document.querySelector('.ant-modal-close')!);
+
+    await asked();
+    expect(run.signal?.aborted).toBe(false);
+    expect(preview.released).toBe(0);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Stop and close' }));
+    });
+
+    // The recording is told to stop — which is what has it close its encoder and end its capture —
+    // at once, not when the dialog has finished going away.
+    expect(run.signal?.aborted).toBe(true);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    // And the preview is taken down with the dialog, as on any close: that is where the viewer is
+    // disposed of and its WebGL context given back.
+    await waitFor(() => expect(preview.released).toBe(1));
+    await waitFor(notAsked);
+    // Calling it off is not a failure: nothing saved, nothing reported, nothing logged.
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('movie-export-failed')).not.toBeInTheDocument();
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
+  });
+
+  it('takes the question away when the export ends under it, and leaves the dialog open', async () => {
+    const { onClose, run } = await exporting();
+    escape(screen.getByTestId('movie-cancel'));
+    await asked();
+
+    await act(async () => run.finish?.());
+
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    await waitFor(notAsked);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(preview.released).toBe(0);
+    // With no export left to ask about, closing closes at once again. By the X, not by Escape: the
+    // modal library hands Escape to the topmost open dialog by an id that is one fixed value under
+    // test, so a question that has come and gone takes the movie dialog's turn away with it here —
+    // which no browser does, where every dialog has an id of its own.
+    fireEvent.click(document.querySelector('.ant-modal-close')!);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    notAsked();
+  });
+
+  it('still stops at once on Cancel export, with no question, and stays open', async () => {
+    const { onClose, run } = await exporting();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('movie-cancel'));
+    });
+
+    expect(run.signal?.aborted).toBe(true);
+    notAsked();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(preview.released).toBe(0);
+    await waitFor(() => expect(screen.queryByTestId('movie-progress')).not.toBeInTheDocument());
+    // The export it stopped is over, so there is nothing to ask about on the way out.
+    escape(screen.getByTestId('movie-export'));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    notAsked();
+  });
+
+  it('ignores a click beside the dialog, export or no export', async () => {
+    const { onClose, run } = await exporting();
+    const beside = document.querySelector('.ant-modal-wrap')!;
+
+    fireEvent.mouseDown(beside);
+    fireEvent.mouseUp(beside);
+    fireEvent.click(beside);
+
+    notAsked();
+    expect(run.signal?.aborted).toBe(false);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
 

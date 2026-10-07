@@ -12,6 +12,7 @@
 
 import type { CaveViewLayerGetter } from '../loadCaveView.ts';
 import { GIF_FRAME_RATES, type MovieFormat, type MovieQuality } from './encode/movieFormats.ts';
+import { movieShadingId, movieShadingRememberedAs, type MovieShadingId } from './movieShadings.ts';
 
 // The format and quality are the encoders' words, and a GIF's frame rates are a fact about the
 // GIF format; each has its one home beside the encoders, and the settings speak them.
@@ -93,8 +94,11 @@ export interface MovieSettings {
      * from what the preview shows, so turning or zooming the preview afterwards is kept.
      */
     direction: MovieViewDirection;
-    /** A shading-mode constant of the viewer, or null for the viewer's own default. */
-    shadingMode: number | null;
+    /**
+     * The shading the model is drawn in, by name, or null for the viewer's own. A name rather than
+     * the viewer's number for it, which nothing promises is the same in the next viewer.
+     */
+    shading: MovieShadingId | null;
     camera: 'perspective' | 'orthographic';
     /** The viewer's line-width slider, 0..1. */
     linewidth: number;
@@ -206,7 +210,7 @@ export const DEFAULT_MOVIE_SETTINGS: MovieSettings = {
     box: false,
     grid: false,
     direction: 'north',
-    shadingMode: null,
+    shading: null,
     camera: 'perspective',
     linewidth: 0,
     zScale: 0.5,
@@ -228,6 +232,18 @@ type Loose = Record<string, unknown>;
 
 const record = (value: unknown): Loose =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Loose) : {};
+
+/** The key the shading was remembered under while it was remembered as the viewer's number. */
+const SHADING_NUMBER_KEY = 'shadingMode';
+
+/**
+ * Whether remembered settings were written in a shape no longer written, so that whoever read them
+ * writes them back repaired: once that is done, the old shape is gone from this browser and is not
+ * translated again on every opening.
+ */
+export function movieSettingsNeedRewriting(raw: unknown): boolean {
+  return Object.hasOwn(record(record(raw).view), SHADING_NUMBER_KEY);
+}
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
   typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
@@ -299,10 +315,11 @@ export function normaliseMovieSettings(raw: unknown): MovieSettings {
   const layers = Object.fromEntries(
     MOVIE_VIEW_LAYERS.map(({ key }) => [key, flag(view[key], d.view[key])]),
   ) as Record<MovieViewLayer, boolean>;
-  const shadingMode =
-    typeof view.shadingMode === 'number' && Number.isInteger(view.shadingMode) && view.shadingMode >= 0
-      ? view.shadingMode
-      : null;
+  // Settings written before the shading was remembered by name hold the viewer's number for it,
+  // under another key; that number is read as the shading it stood for. A number is never taken
+  // for a name, and a name nothing offers is the viewer's own shading.
+  const shading =
+    view.shading === undefined ? movieShadingRememberedAs(view[SHADING_NUMBER_KEY]) : movieShadingId(view.shading);
 
   return {
     format,
@@ -337,7 +354,7 @@ export function normaliseMovieSettings(raw: unknown): MovieSettings {
     view: {
       ...layers,
       direction: oneOf<MovieViewDirection>(view.direction, MOVIE_VIEW_DIRECTIONS, d.view.direction),
-      shadingMode,
+      shading,
       camera: oneOf(view.camera, ['perspective', 'orthographic'] as const, d.view.camera),
       linewidth: number(view.linewidth, d.view.linewidth, 0, 1),
       zScale: number(view.zScale, d.view.zScale, 0, 1),
