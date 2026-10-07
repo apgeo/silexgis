@@ -62,6 +62,8 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         in: true,
         out: false,
         publishedAs: null,
+        onRoster: true,
+        name: null,
       },
     ],
     ...overrides,
@@ -367,6 +369,8 @@ describe('trackedCaversAt', () => {
           out: false,
           label: null,
           publishedAs: null,
+          onRoster: true,
+          name: null,
         },
       ],
     });

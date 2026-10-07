@@ -313,6 +313,8 @@ describe('TrackingConfigCard', () => {
       out: false,
       label: null,
       publishedAs: null,
+      onRoster: true,
+      name: null,
     };
 
     const { unmount } = show(

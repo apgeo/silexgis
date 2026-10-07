@@ -25529,6 +25529,8 @@ export interface components {
             out: boolean;
             label: null | string;
             publishedAs: null | string;
+            onRoster: boolean;
+            name: null | string;
         };
         TrackingParticipantLabelDto: {
             /** Format: uuid */

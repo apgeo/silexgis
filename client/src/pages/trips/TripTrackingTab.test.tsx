@@ -174,6 +174,8 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         out: false,
         label: null,
         publishedAs: null,
+        onRoster: true,
+        name: null,
       },
       {
         caverId: BOGDAN,
@@ -188,6 +190,8 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         out: false,
         label: null,
         publishedAs: null,
+        onRoster: true,
+        name: null,
       },
     ],
     ...overrides,
@@ -283,6 +287,8 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
         ],
       }),
@@ -323,6 +329,8 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
           {
             caverId: CARMEN,
@@ -337,6 +345,8 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
         ],
       }),
@@ -376,6 +386,8 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
           {
             caverId: BOGDAN,
@@ -392,6 +404,8 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
         ],
       }),
@@ -848,6 +862,8 @@ describe('TripTrackingTab', () => {
               out: false,
               label: null,
               publishedAs: null,
+              onRoster: true,
+              name: null,
             },
           ],
         }),
@@ -1369,6 +1385,8 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
           {
             caverId: BOGDAN,
@@ -1383,6 +1401,8 @@ describe('TripTrackingTab', () => {
             out: true,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
           {
             // Nobody has said a single word about her. This is the row the whole change is for.
@@ -1398,6 +1418,8 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
         ],
       });
@@ -1527,6 +1549,8 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
           {
             caverId: BOGDAN,
@@ -1543,6 +1567,8 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
           {
             caverId: CARMEN,
@@ -1557,6 +1583,8 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
         ],
       });
@@ -1781,6 +1809,8 @@ describe('TripTrackingTab', () => {
               // calls her "Ana Popescu" everywhere else, so the two strings are different on
               // purpose and only one of them can be being read.
               publishedAs: 'Ana Maria Popescu',
+              onRoster: true,
+              name: null,
             },
           ],
         }),
@@ -1814,6 +1844,8 @@ describe('TripTrackingTab', () => {
               // Asked to be kept off the page, and this is the record of it.
               label: 'A club member',
               publishedAs: null,
+              onRoster: true,
+              name: null,
             },
             {
               caverId: BOGDAN,
@@ -1828,6 +1860,8 @@ describe('TripTrackingTab', () => {
               out: false,
               label: null,
               publishedAs: null,
+              onRoster: true,
+              name: null,
             },
           ],
         }),
@@ -1953,6 +1987,8 @@ describe('TripTrackingTab', () => {
               out: false,
               label: 'A club member',
               publishedAs: null,
+              onRoster: true,
+              name: null,
             },
           ],
         }),
@@ -2254,6 +2290,8 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
         ],
       }),
@@ -2494,6 +2532,8 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
           {
             caverId: BOGDAN,
@@ -2510,6 +2550,8 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
         ],
       });
@@ -2559,6 +2601,8 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               out: false,
               label: null,
               publishedAs: null,
+              onRoster: true,
+              name: null,
             },
           ],
         }),
@@ -2604,6 +2648,8 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
           {
             caverId: BOGDAN,
@@ -2618,6 +2664,8 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
           },
         ],
       });
@@ -2701,6 +2749,8 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               out: false,
               label: null,
               publishedAs: null,
+              onRoster: true,
+              name: null,
             },
           ],
         }),
@@ -2993,4 +3043,90 @@ describe('TripTrackingTab, reaching the whole log', () => {
       expect(screen.queryByTestId('trip-tracking-event-corrected-ev-3')).toBeNull();
     });
   }
+});
+
+/**
+ * Somebody the log speaks of and the trip no longer names.
+ *
+ * The watch goes on listing them, because their reports are still in its log and a table that
+ * dropped them would disagree with the log printed under it. What changes is everything that
+ * could be done about them: the server takes no report and no caption for somebody who is off the
+ * roster, so the row is read and never chosen.
+ */
+describe('TripTrackingTab, somebody taken off the roster', () => {
+  const DANA = '44444444-4444-4444-4444-444444444444';
+
+  /** Ana and Bogdan are on the trip and on the watch; Dana is on the watch alone. */
+  const withSomebodyGone = () => {
+    const party = state().participants;
+    trackingQuery.mockReturnValue({
+      data: state({
+        participants: [
+          ...party,
+          { ...party[0], caverId: DANA, onRoster: false, name: 'Dana Marin' },
+        ],
+      }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+  };
+
+  afterEach(() => {
+    narrow = false;
+  });
+
+  for (const layout of ['columns', 'stacked'] as const) {
+    it(`names them from the watch and marks the row, in ${layout}`, () => {
+      narrow = layout === 'stacked';
+      withSomebodyGone();
+      show();
+
+      const table = screen.getByTestId('trip-tracking-participants');
+      // The trip has no name for her any more; the watch sent one, and it is used.
+      expect(within(table).getByText('Dana Marin')).toBeTruthy();
+      expect(within(table).queryByText('Somebody not on the roster')).toBeNull();
+      expect(screen.getByTestId(`trip-tracking-off-roster-${DANA}`)).toHaveTextContent(
+        'No longer on the roster',
+      );
+      // And only that row: the mark on everybody would say nothing.
+      expect(screen.queryByTestId(`trip-tracking-off-roster-${ANA}`)).toBeNull();
+      expect(screen.queryByTestId(`trip-tracking-off-roster-${BOGDAN}`)).toBeNull();
+    });
+  }
+
+  it('leaves them out of "select everybody" and gives their row nothing to tick', () => {
+    withSomebodyGone();
+    show();
+
+    expect(screen.getByTestId('trip-tracking-select-all').closest('label')).toHaveTextContent(
+      'Select everybody (2)',
+    );
+    const checks = rowChecks();
+    expect(checks).toHaveLength(3);
+    expect(checks[0]).not.toBeDisabled();
+    expect(checks[1]).not.toBeDisabled();
+    expect(checks[2]).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-select-all'));
+    expect(screen.getByTestId('trip-tracking-record')).toHaveTextContent('Record for 2 selected');
+    expect(checks[2]).not.toBeChecked();
+  });
+
+  it('offers no caption for a page that does not show them', () => {
+    withSomebodyGone();
+    show();
+
+    expect(screen.queryByTestId(`trip-tracking-public-name-edit-${DANA}`)).toBeNull();
+    expect(screen.getByTestId(`trip-tracking-public-name-edit-${ANA}`)).toBeTruthy();
+  });
+
+  it('marks nobody on a watch whose whole party the trip still names', () => {
+    show();
+
+    expect(screen.queryByText('No longer on the roster')).toBeNull();
+    expect(screen.getByTestId('trip-tracking-select-all').closest('label')).toHaveTextContent(
+      'Select everybody (2)',
+    );
+  });
 });

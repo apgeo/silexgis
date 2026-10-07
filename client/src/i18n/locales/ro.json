@@ -1154,6 +1154,7 @@
     "participants": "Participanți",
     "participantName": "Nume participant",
     "participantRequired": "Introduceți un nume",
+    "participantTracked": "Cineva scos de pe listă are rapoarte în urmărirea acestei ture, iar urmărirea este încă pornită. Încheie întâi urmărirea sau păstrează persoana pe listă.",
     "participantRole": "Rol",
     "participantNote": "Notă",
     "participantDetails": "Rol, ore și notă",
@@ -1622,6 +1623,8 @@
         "unheard": "Fără nicio veste"
       },
       "unknownCaver": "Cineva care nu este pe listă",
+      "notOnRoster": "Nu mai este pe listă",
+      "notOnRosterDetail": "A fost scos de pe lista turei după ce s-au înregistrat rapoarte despre el. Rapoartele rămân în jurnal; nu se mai poate înregistra nimic pentru el, iar o pagină publică nu îl arată.",
       "modelTitle": "Echipa pe ridicarea topografică",
       "modelShow": "Arată modelul",
       "modelHide": "Ascunde modelul",

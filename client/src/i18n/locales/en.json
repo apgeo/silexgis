@@ -1154,6 +1154,7 @@
     "participants": "Participants",
     "participantName": "Participant name",
     "participantRequired": "Enter a name",
+    "participantTracked": "Somebody taken off the roster has reports on this trip's tracking, and it is still running. Close the tracking first, or keep them on the trip.",
     "participantRole": "Role",
     "participantNote": "Note",
     "participantDetails": "Role, times and note",
@@ -1622,6 +1623,8 @@
         "unheard": "Not heard from"
       },
       "unknownCaver": "Somebody not on the roster",
+      "notOnRoster": "No longer on the roster",
+      "notOnRosterDetail": "Taken off the trip's roster after reports about them were recorded. Their reports stay in the log; nothing more can be recorded for them, and a published page does not show them.",
       "modelTitle": "The party on the survey",
       "modelShow": "Show the model",
       "modelHide": "Hide the model",

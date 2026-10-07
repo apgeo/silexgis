@@ -234,6 +234,8 @@ function tracking(overrides: Partial<TrackingState> = {}): TrackingState {
         in: true,
         out: false,
         publishedAs: null,
+        onRoster: true,
+        name: null,
       },
     ],
     ...overrides,
@@ -903,6 +905,30 @@ describe('TrackingModelPanel', () => {
 
       expect(screen.getByTestId('trip-tracking-picked-station')).toHaveTextContent('p.g.7');
       expect(screen.queryByTestId('trip-tracking-dialog-place')).toBeNull();
+    });
+
+    it('offers only the people the trip still names as somebody a report can be about', () => {
+      // Somebody taken off the roster stays on the watch, drawn where they were last reported.
+      // The server takes no further report about them, so the chooser does not offer one.
+      const party = tracking().participants;
+      show(
+        tracking({
+          participants: [
+            ...party,
+            { ...party[0], caverId: BOGDAN, onRoster: false, name: 'Bogdan Ilie' },
+          ],
+        }),
+      );
+      pressStation('p.g.42');
+      fireEvent.click(screen.getByTestId('trip-tracking-record-here-open'));
+
+      const chooser = screen.getByTestId('trip-tracking-dialog-cavers');
+      fireEvent.mouseDown(chooser.querySelector('.ant-select-selector') ?? chooser);
+      const offered = Array.from(
+        document.querySelectorAll('.ant-select-item-option'),
+        (option) => option.textContent,
+      );
+      expect(offered).toEqual(['Ana Popescu']);
     });
 
     it('sends the report through the same call the card under the watch sends', async () => {

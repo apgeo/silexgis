@@ -333,6 +333,25 @@ export default function TripTrackingTab({
   }
 
   const names = new Map(trip.participants.map((person) => [person.caverId, person.name]));
+  // Somebody the log speaks of and the trip no longer names is still on this watch, and the trip
+  // has no name for them any more — so the watch sends theirs itself, for those rows alone.
+  for (const person of data.participants) {
+    if (!person.onRoster && person.name) {
+      names.set(person.caverId, person.name);
+    }
+  }
+  /**
+   * Who a report can still be about: the people the trip names.
+   *
+   * The server takes no report and no caption for anybody else, so a row for somebody taken off
+   * the roster is read and never chosen — it is left out of "select everybody", its checkbox is
+   * off, and whatever was ticked before the roster changed is dropped here rather than sent and
+   * refused.
+   */
+  const reportable = new Set(
+    data.participants.filter((person) => person.onRoster).map((person) => person.caverId),
+  );
+  const chosen = [...selected].filter((caverId) => reportable.has(caverId));
   const teamTitles = new Map(data.teams.map((team) => [team.id, team.title]));
   const named = (caverId: string) => names.get(caverId) ?? t('trips.tracking.unknownCaver');
   const when = (value: string | null) =>
@@ -442,6 +461,21 @@ export default function TripTrackingTab({
       </Tag>
     );
   };
+
+  /**
+   * The mark on somebody the watch still lists and the trip no longer names.
+   *
+   * Said beside the name, in both layouts, because it changes what every other cell of the row
+   * means: the standing and the place are the last anybody recorded, and nothing more will be.
+   */
+  const rosterTag = (participant: TrackingParticipant) =>
+    participant.onRoster ? null : (
+      <Tooltip title={t('trips.tracking.notOnRosterDetail')}>
+        <Tag color="warning" data-testid={`trip-tracking-off-roster-${participant.caverId}`}>
+          {t('trips.tracking.notOnRoster')}
+        </Tag>
+      </Tooltip>
+    );
 
   /**
    * What the trip's published page will call one person — answered before a link is minted rather
@@ -935,21 +969,26 @@ export default function TripTrackingTab({
    * names in one place and a list of what they publish to in another, which is exactly the pairing
    * somebody gets wrong at speed.
    */
-  const publicNameCell = (participant: TrackingParticipant) => (
-    <Flex gap={4} align="center" wrap>
-      {publicNameOf(participant)}
-      {canEdit && (
-        <Button
-          type="text"
-          size={controlSize}
-          icon={<EditOutlined />}
-          aria-label={t('trips.tracking.publicName.edit')}
-          onClick={() => setNaming(participant)}
-          data-testid={`trip-tracking-public-name-edit-${participant.caverId}`}
-        />
-      )}
-    </Flex>
-  );
+  const publicNameCell = (participant: TrackingParticipant) =>
+    // A published page counts the party from the trip's roster, so it shows nobody who is off it:
+    // there is no name to read here and none to set.
+    !participant.onRoster ? (
+      <Typography.Text type="secondary">—</Typography.Text>
+    ) : (
+      <Flex gap={4} align="center" wrap>
+        {publicNameOf(participant)}
+        {canEdit && (
+          <Button
+            type="text"
+            size={controlSize}
+            icon={<EditOutlined />}
+            aria-label={t('trips.tracking.publicName.edit')}
+            onClick={() => setNaming(participant)}
+            data-testid={`trip-tracking-public-name-edit-${participant.caverId}`}
+          />
+        )}
+      </Flex>
+    );
 
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
@@ -1170,21 +1209,15 @@ export default function TripTrackingTab({
             page, and Space on it silently selected the whole party on the surface that decides who
             a report is about. Said here instead, it is one control, it carries its own words, and
             it is large enough to press. */}
-        {canEdit && data.participants.length > 0 && (
+        {canEdit && reportable.size > 0 && (
           <Checkbox
             className="tracking-select-all"
-            checked={selected.size === data.participants.length}
-            indeterminate={selected.size > 0 && selected.size < data.participants.length}
-            onChange={(event) =>
-              setSelected(
-                event.target.checked
-                  ? new Set(data.participants.map((person) => person.caverId))
-                  : new Set(),
-              )
-            }
+            checked={chosen.length === reportable.size}
+            indeterminate={chosen.length > 0 && chosen.length < reportable.size}
+            onChange={(event) => setSelected(event.target.checked ? new Set(reportable) : new Set())}
             data-testid="trip-tracking-select-all"
           >
-            {t('trips.tracking.selectEverybody', { count: data.participants.length })}
+            {t('trips.tracking.selectEverybody', { count: reportable.size })}
           </Checkbox>
         )}
 
@@ -1207,8 +1240,9 @@ export default function TripTrackingTab({
           rowSelection={
             canEdit
               ? {
-                  selectedRowKeys: [...selected],
+                  selectedRowKeys: chosen,
                   onChange: (keys) => setSelected(new Set(keys as string[])),
+                  getCheckboxProps: (row) => ({ disabled: !row.onRoster }),
                   // Said above the table instead — see the note on that control.
                   hideSelectAll: true,
                   // The column is what the tap target is made of — see the stylesheet, which gives
@@ -1228,6 +1262,7 @@ export default function TripTrackingTab({
                       <div className="tracking-stacked">
                         <div className="tracking-stacked-head">
                           <Typography.Text strong>{named(row.caverId)}</Typography.Text>
+                          {rosterTag(row)}
                           {/* Beside the name rather than down among the fields: where somebody
                               stands is what the row is read for, and on a phone the fields below
                               are read only after one of these has said which row to read. */}
@@ -1251,6 +1286,7 @@ export default function TripTrackingTab({
                     render: (_value, row) => (
                       <Flex gap={8} align="center" wrap>
                         <span>{named(row.caverId)}</span>
+                        {rosterTag(row)}
                         {standingTag(row)}
                       </Flex>
                     ),
@@ -1319,7 +1355,7 @@ export default function TripTrackingTab({
         // The same selection the card below records for. Handed down as an offer rather than as a
         // requirement: pressing a station on the model opens a dialog that asks who it is about,
         // with these already chosen, so the fast path never depends on having ticked anybody.
-        selectedCaverIds={[...selected]}
+        selectedCaverIds={chosen}
         onRecorded={() => setSelected(new Set())}
         // Which stations the viewer in it could not place a marker at, so the table above says it
         // too. Answered empty while the model is closed, which is what keeps this table from
@@ -1337,7 +1373,7 @@ export default function TripTrackingTab({
           // The state itself rather than a yes or no, because a closed watch changes what the
           // card asks: a report written up afterwards has to say when it was made.
           state={data.state}
-          caverIds={[...selected]}
+          caverIds={chosen}
           teams={data.teams}
           onRecorded={() => setSelected(new Set())}
         />
@@ -1588,7 +1624,7 @@ export default function TripTrackingTab({
           // table above, offered rather than imposed: the dialog asks, and its chooser is where
           // the answer is actually settled.
           onAttach={() =>
-            setAttaching({ at: defaultPictureMoment, caverId: [...selected][0] ?? null })
+            setAttaching({ at: defaultPictureMoment, caverId: chosen[0] ?? null })
           }
         />
       )}

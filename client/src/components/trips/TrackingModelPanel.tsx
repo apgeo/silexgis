@@ -297,10 +297,17 @@ export default function TrackingModelPanel({
     }
   }, [maps, activeTab]);
 
-  const names = useMemo(
-    () => new Map(participants.map((person) => [person.caverId, person.name])),
-    [participants],
-  );
+  const names = useMemo(() => {
+    const known = new Map(participants.map((person) => [person.caverId, person.name]));
+    // Somebody the log speaks of and the trip no longer names: the watch carries their name
+    // itself, for those rows alone, so their marker is not drawn as a stranger's.
+    for (const person of tracking.participants) {
+      if (!person.onRoster && person.name) {
+        known.set(person.caverId, person.name);
+      }
+    }
+    return known;
+  }, [participants, tracking.participants]);
   const nameOf = useCallback(
     (caverId: string) => names.get(caverId) ?? t('trips.tracking.unknownCaver'),
     [names, t],
@@ -356,13 +363,21 @@ export default function TrackingModelPanel({
     [tracking, log.data, replayAt, nameOf, model?.id],
   );
 
-  /** The party as a chooser takes it — the watch says who is on it, the roster says their names. */
+  /**
+   * The party as a chooser takes it — the watch says who is on it, the roster says their names.
+   *
+   * Only the people the trip still names: the server takes no report about anybody else, so
+   * somebody taken off the roster is drawn where they were last reported and is never offered as
+   * somebody a new report could be about.
+   */
   const dialogCavers = useMemo(
     () =>
-      tracking.participants.map((participant) => ({
-        caverId: participant.caverId,
-        name: nameOf(participant.caverId),
-      })),
+      tracking.participants
+        .filter((participant) => participant.onRoster)
+        .map((participant) => ({
+          caverId: participant.caverId,
+          name: nameOf(participant.caverId),
+        })),
     [tracking.participants, nameOf],
   );
 

@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import dayjs from 'dayjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { TripLogInfo, TripLogWrite } from '../../api/hooks.ts';
 
 const createTrip = vi.fn();
@@ -644,5 +645,34 @@ describe('TripFormModal for somebody who may record trips only for a caving grou
     const body = await savedBody(updateTrip);
     expect(body.cavingGroupId).toBe('g-9');
     expect(body.visibility).toBe('cavingGroup');
+  });
+});
+
+describe('TripFormModal when a save is refused', () => {
+  beforeEach(() => {
+    updateTrip.mockReset();
+  });
+  afterEach(cleanup);
+
+  it('says why when the save would take somebody off a trip whose tracking has reports about them', async () => {
+    // The form sends the two lists back as the whole roster, so it is the form that walks people
+    // into this refusal — and "could not be saved" would leave them to guess which field was wrong.
+    updateTrip.mockRejectedValue(new ApiError(400, 'trip_log.participant_tracked'));
+    show(trip());
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText(/has reports on this trip's tracking/)).toBeInTheDocument();
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+  });
+
+  it('keeps the general sentence for a refusal it has no words for', async () => {
+    updateTrip.mockRejectedValue(new ApiError(400, 'trip_log.type_unknown'));
+    show(trip());
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText('The operation failed. Please try again.')).toBeInTheDocument();
+    expect(screen.queryByText(/has reports on this trip's tracking/)).toBeNull();
   });
 });
