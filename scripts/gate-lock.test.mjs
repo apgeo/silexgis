@@ -27,6 +27,9 @@ import {
   legacyBlocker,
   isUnfilteredApiSuite,
   outputDirsFor,
+  testModeOf,
+  inMode,
+  summarise,
   cpuSecondsOfTree,
   holderProgress,
 } from './gate-lock.mjs';
@@ -286,6 +289,117 @@ describe('telling a wedged holder from a slow one', () => {
       sleeper.kill('SIGKILL');
       release(dir, { heldByPid: -1 });
     }
+  });
+});
+
+describe('a result says which test mode produced it', () => {
+  const sharded = ['node', 'scripts/gate-sharded.mjs', '--count', '8'];
+  const plain = ['dotnet', 'test', 'x.csproj', '--filter', 'A'];
+
+  it('reads the mode from whichever of the three places says it, and is precise when none does', () => {
+    assert.equal(testModeOf(sharded, {}), 'precise');
+    assert.equal(testModeOf([...sharded, '--mode', 'fast'], {}), 'fast');
+    assert.equal(testModeOf([...sharded, '--mode=fast'], {}), 'fast');
+    assert.equal(testModeOf(sharded, { SILEXGIS_TEST_MODE: 'Fast' }), 'fast');
+    assert.equal(testModeOf(plain, { SILEXGIS_TEST_MODE: 'fast' }), 'fast');
+    assert.equal(testModeOf(plain, {}, 'fast'), 'fast');
+    // Said twice and alike is said once.
+    assert.equal(testModeOf([...sharded, '--mode', 'fast'], { SILEXGIS_TEST_MODE: 'fast' }, 'fast'), 'fast');
+  });
+
+  it('refuses a mode said two ways, and a mode there is not', () => {
+    assert.throws(() => testModeOf([...sharded, '--mode', 'precise'], { SILEXGIS_TEST_MODE: 'fast' }), /two ways/);
+    assert.throws(() => testModeOf(plain, { SILEXGIS_TEST_MODE: 'fast' }, 'precise'), /two ways/);
+    assert.throws(() => testModeOf(plain, { SILEXGIS_TEST_MODE: 'quick' }), /fast or precise/);
+    assert.throws(() => testModeOf(plain, {}, 'faster'), /fast or precise/);
+  });
+
+  it("leaves another tool's --mode alone", () => {
+    // Only the sharded runner's option is the test mode; anybody else's is theirs.
+    assert.equal(testModeOf(['npx', 'vite', 'build', '--mode', 'development'], {}), 'precise');
+  });
+
+  it('never calls a fast pass green', () => {
+    const passed = summarise('Passed!  - Failed:     0, Passed:    33, Skipped:     0, Total:    33, Duration: 1 s - X.dll');
+    assert.equal(passed.verdict, 'green');
+    assert.equal(inMode(passed, 'precise').verdict, 'green');
+    assert.equal(inMode(passed, 'fast').verdict, 'green-fast');
+    assert.match(inMode(passed, 'fast').verdictReason, /precise run/);
+
+    const failed = summarise('Failed!  - Failed:     2, Passed:    31, Skipped:     0, Total:    33, Duration: 1 s - X.dll');
+    assert.equal(inMode(failed, 'fast').verdict, 'red');
+    assert.match(inMode(failed, 'fast').verdictReason, /2 of 33 failed, in fast mode/);
+
+    // Nothing ran is nothing ran, in either mode.
+    assert.equal(inMode(summarise(''), 'fast').verdict, 'inconclusive');
+  });
+
+  const runIn = (name, options, environment, child) => {
+    const dir = freshDir(name);
+    const result = join(scratch, `${name}.json`);
+    const r = spawnSync(
+      process.execPath,
+      [script, 'run', '--result', result, ...options, '--', process.execPath, '-e', child],
+      // Whatever mode the shell running these tests happens to be in is not part of the question.
+      { env: envFor(dir, { SILEXGIS_TEST_MODE: '', ...environment }), encoding: 'utf8' },
+    );
+    return { r, result };
+  };
+  const summaryOfAPass = "console.log('Passed!  - Failed:     0, Passed:     3, Skipped:     0, Total:     3, Duration: 1 s - X.dll')";
+
+  it('writes the mode into the result file', () => {
+    const { r, result } = runIn('mode-env', [], { SILEXGIS_TEST_MODE: 'fast' }, summaryOfAPass);
+    assert.equal(r.status, 0, r.stderr);
+    const written = JSON.parse(readFileSync(result, 'utf8'));
+    assert.equal(written.testMode, 'fast');
+    assert.equal(written.verdict, 'green-fast');
+  });
+
+  it('hands the mode it was asked for to the command, and records a precise pass as green', () => {
+    const tellsItsMode = `console.log('mode=' + process.env.SILEXGIS_TEST_MODE); ${summaryOfAPass}`;
+    const fast = runIn('mode-fast', ['--mode', 'fast'], {}, tellsItsMode);
+    assert.equal(fast.r.status, 0, fast.r.stderr);
+    assert.match(fast.r.stdout, /mode=fast/);
+    assert.match(fast.r.stderr, /test mode fast/);
+    assert.equal(JSON.parse(readFileSync(fast.result, 'utf8')).verdict, 'green-fast');
+
+    const precise = runIn('mode-precise', [], {}, tellsItsMode);
+    assert.equal(precise.r.status, 0, precise.r.stderr);
+    assert.match(precise.r.stdout, /mode=precise/);
+    assert.equal(JSON.parse(readFileSync(precise.result, 'utf8')).verdict, 'green');
+    assert.equal(JSON.parse(readFileSync(precise.result, 'utf8')).testMode, 'precise');
+  });
+
+  it('starts nothing when the mode is said two ways', () => {
+    const { r, result } = runIn('mode-twice', ['--mode', 'precise'], { SILEXGIS_TEST_MODE: 'fast' }, summaryOfAPass);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /two ways/);
+    assert.equal(existsSync(result), false);
+  });
+
+  it("does not take the wrapped command's --mode for its own", () => {
+    // After the separator it is the command's: handed on untouched, and not the test mode.
+    const dir = freshDir('mode-theirs');
+    const result = join(scratch, 'mode-theirs.json');
+    const r = spawnSync(
+      process.execPath,
+      [
+        script, 'run', '--result', result, '--',
+        process.execPath, '-e', `console.log(process.argv.slice(1).join(' ')); ${summaryOfAPass}`,
+        // The second separator is node's own: what follows it is the script's, not node's.
+        '--', '--mode', 'development',
+      ],
+      { env: envFor(dir, { SILEXGIS_TEST_MODE: '' }), encoding: 'utf8' },
+    );
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /--mode development/);
+    assert.equal(JSON.parse(readFileSync(result, 'utf8')).testMode, 'precise');
+  });
+
+  it('wants a mode after --mode', () => {
+    const { r } = runIn('mode-missing', ['--mode'], {}, summaryOfAPass);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /fast or precise/);
   });
 });
 
