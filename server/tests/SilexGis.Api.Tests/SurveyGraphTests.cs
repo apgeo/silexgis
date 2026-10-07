@@ -241,6 +241,76 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable, IClassFixtur
     }
 
     [Fact]
+    public async Task A_station_search_reads_a_beginning_as_the_drawing_spells_it_and_folds_it()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var modelId = await SeedSearchableModelAsync(caveId);
+
+        // The beginning somebody types is the name the drawing shows, which leaves the file's root
+        // survey out; capitals are folded. Each answer carries both spellings.
+        var galleries = await PageAsync(owner, $"/api/v1/survey-models/{modelId}/stations?q=gal");
+        galleries.GetProperty("totalItems").GetInt32().ShouldBe(4);
+        var first = galleries.GetProperty("items")[0];
+        first.GetProperty("name").GetString().ShouldBe("Sys.Galerie.1");
+        first.GetProperty("viewerName").GetString().ShouldBe("Galerie.1");
+
+        // The spelling the rows hold is read as well: a name copied from a survey's own listing is
+        // not a mistake, and finds the same stations.
+        (await TotalAsync(owner, modelId, "sys.GAL")).ShouldBe(4);
+
+        // A beginning, not a fragment.
+        (await TotalAsync(owner, modelId, "alerie")).ShouldBe(0);
+
+        // An underscore and a percent sign are characters of a name, not wildcards: only the one
+        // station that really has the underscore, and nothing at all for a bare percent sign.
+        (await TotalAsync(owner, modelId, "galerie_")).ShouldBe(1);
+        (await TotalAsync(owner, modelId, "%25")).ShouldBe(0);
+
+        // Accents are folded as capitals are.
+        (await TotalAsync(owner, modelId, "emile")).ShouldBe(1);
+
+        // A station the file placed under no root survey is spelled one way by both sides.
+        var loose = await PageAsync(owner, $"/api/v1/survey-models/{modelId}/stations?q=loose");
+        loose.GetProperty("totalItems").GetInt32().ShouldBe(1);
+        loose.GetProperty("items")[0].GetProperty("viewerName").GetString().ShouldBe("loose.1");
+        loose.GetProperty("items")[0].GetProperty("name").GetString().ShouldBe("loose.1");
+
+        // A search answers with a short list whatever was asked for, and still says how many there
+        // are; the plain list keeps its own ceiling.
+        var many = await PageAsync(owner, $"/api/v1/survey-models/{modelId}/stations?q=many&pageSize=500");
+        many.GetProperty("totalItems").GetInt32().ShouldBe(60);
+        many.GetProperty("pageSize").GetInt32().ShouldBe(50);
+        many.GetProperty("items").GetArrayLength().ShouldBe(50);
+
+        var whole = await PageAsync(owner, $"/api/v1/survey-models/{modelId}/stations?pageSize=500");
+        whole.GetProperty("totalItems").GetInt32().ShouldBe(66);
+        whole.GetProperty("items").GetArrayLength().ShouldBe(66);
+    }
+
+    [Fact]
+    public async Task A_station_search_finds_nothing_in_a_survey_the_caller_may_not_place()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: true);
+        var modelId = await SeedSearchableModelAsync(caveId);
+
+        // The positive half, in the same test: the names are there, and the cave's owner finds them.
+        (await TotalAsync(owner, modelId, "gal")).ShouldBe(4);
+
+        // A genuine Viewer with no grant at all: the cave is readable to them, its position is
+        // not, and a station name is survey vocabulary. Every beginning answers the same empty
+        // page — a hit, a miss and a survey that does not exist cannot be told apart, so the
+        // names cannot be felt out a letter at a time.
+        var hit = await PageAsync(reader, $"/api/v1/survey-models/{modelId}/stations?q=gal");
+        hit.GetProperty("totalItems").GetInt32().ShouldBe(0);
+        hit.GetProperty("items").GetArrayLength().ShouldBe(0);
+
+        var miss = await PageAsync(reader, $"/api/v1/survey-models/{modelId}/stations?q=zzz");
+        var absent = await PageAsync(reader, $"/api/v1/survey-models/{Guid.NewGuid()}/stations?q=gal");
+        hit.GetRawText().ShouldBe(miss.GetRawText());
+        hit.GetRawText().ShouldBe(absent.GetRawText());
+    }
+
+    [Fact]
     public async Task A_survey_nobody_can_read_says_so_in_words_its_uploader_can_act_on()
     {
         var caveId = await CreateCaveAsync(locationProtected: false);
@@ -675,6 +745,42 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable, IClassFixtur
             form.Add(new StringContent("45.5"), "originLatitude");
             form.Add(new StringContent("1200"), "originHeightM");
         });
+
+    private static async Task<int> TotalAsync(HttpClient client, Guid modelId, string q) =>
+        (await PageAsync(client, $"/api/v1/survey-models/{modelId}/stations?q={q}"))
+            .GetProperty("totalItems").GetInt32();
+
+    /// <summary>
+    /// A survey whose station rows are written here rather than read out of a file, so that a
+    /// search has names chosen for what each of them proves: a root survey the drawing leaves out,
+    /// capitals, an accent, an underscore beside the same name without one, a station outside the
+    /// root, and more of one beginning than a search answers with. Sixty-six in all.
+    /// </summary>
+    private async Task<Guid> SeedSearchableModelAsync(Guid caveId)
+    {
+        var modelId = await UploadLocalLoxAsync(caveId, DisagreeingSplays());
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var model = await db.SurveyModels.SingleAsync(m => m.Id == modelId);
+        model.RootSurveyName = "Sys";
+
+        string[] named =
+        [
+            "Sys.Galerie.1", "Sys.Galerie.2", "Sys.galerie_a.1", "Sys.galerieXa.1", "Sys.\u00c9mile.1", "loose.1",
+        ];
+        var names = named.Concat(Enumerable.Range(1, 60).Select(i => $"Sys.many.{i:00}"));
+        db.SurveyStations.AddRange(names.Select(name => new SurveyStation
+        {
+            SurveyModelId = modelId,
+            Name = name,
+            SurveyName = null,
+            Position = new Point(new CoordinateZ(25.2, 45.5, 1200)) { SRID = 4326 },
+            Flags = SurveyStationFlags.Underground,
+        }));
+        await db.SaveChangesAsync();
+        return modelId;
+    }
 
     private static async Task<JsonElement> PageAsync(HttpClient client, string url)
     {

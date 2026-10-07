@@ -11,6 +11,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
@@ -113,12 +114,20 @@ public sealed record SurveyModelDto(
 /// wrote it at: one of the two formats assigns those by file order and reassigns them on every
 /// re-export.
 /// </param>
+/// <param name="ViewerName">
+/// What the drawing calls the same station. One of the two formats names its stations under the
+/// file's root survey and the drawing leaves that part out, so the two spellings differ there and
+/// are equal everywhere else. This is the spelling a report and a declared place keep, which is
+/// why a chooser offers this one and not <paramref name="Name"/>: the name somebody picks is the
+/// name they will then see on the model and in the log.
+/// </param>
 /// <param name="Flags">
 /// What the file says about the station, one name per flag it set. A list rather than a single
 /// value because these combine — an entrance station is above ground and underground at once.
 /// </param>
 public sealed record SurveyStationDto(
     string Name,
+    string ViewerName,
     string? SurveyName,
     double Longitude,
     double Latitude,
@@ -298,7 +307,7 @@ public static class SurveyModelEndpoints
             .WithSummary("Single survey model with a fresh file delivery URL.");
         api.MapGet("/survey-models/{id:guid}/stations", StationsAsync)
             .WithTags("SurveyModels")
-            .WithSummary("Stations read out of the survey; withheld without the exact-location permission.");
+            .WithSummary("Stations read out of the survey, optionally only those whose name begins with `q`; withheld without the exact-location permission.");
         api.MapGet("/survey-models/{id:guid}/shots", ShotsAsync)
             .WithTags("SurveyModels")
             .WithSummary("Legs read out of the survey; withheld without the exact-location permission.");
@@ -520,27 +529,93 @@ public static class SurveyModelEndpoints
         return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct)));
     }
 
+    /// <summary>
+    /// The most stations one search answers with, whatever page size was asked for.
+    /// </summary>
+    /// <remarks>
+    /// A search exists to feed a chooser, which shows a short list under the field and asks again
+    /// on the next keystroke. A surveyed cave holds tens of thousands of stations and a one-letter
+    /// beginning can match most of them, so the list's own ceiling would send hundreds of rows per
+    /// keystroke that nobody reads. The total is still reported, so a surface can say that there
+    /// are more and that typing further narrows them.
+    /// </remarks>
+    internal const int MaxStationSearchPageSize = 50;
+
+    /// <summary>The longest beginning a search is asked with: the longest name a station can have.</summary>
+    private const int MaxStationSearchLength = 400;
+
     private static async Task<Ok<PagedResult<SurveyStationDto>>> StationsAsync(
         Guid id,
         int? page,
         int? pageSize,
+        string? q,
         SilexGisDbContext db,
         IAccessService access,
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
+        // The gate first and the search after it, never the other way round: a withheld survey
+        // answers one empty page whatever was asked, so no beginning somebody tries can be told
+        // apart from any other and the names cannot be felt out a letter at a time.
         var (paging, model) = await ReadableAsync(id, page, pageSize, db, access, protection, accessAccessor, ct);
+        var search = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+        if (search is not null)
+        {
+            paging = (paging.Page, Math.Min(paging.PageSize, MaxStationSearchPageSize));
+        }
+
         if (model is null)
         {
             return TypedResults.Ok(EmptyPage<SurveyStationDto>(paging));
         }
 
-        return TypedResults.Ok(await db.SurveyStations.AsNoTracking()
-            .Where(s => s.SurveyModelId == model.Id)
+        var stations = db.SurveyStations.AsNoTracking().Where(s => s.SurveyModelId == model.Id);
+        if (search is not null)
+        {
+            if (search.Length > MaxStationSearchLength)
+            {
+                // Longer than any name can be, so it begins none of them. Answered rather than
+                // refused: this is a field being typed into, not a form being submitted.
+                return TypedResults.Ok(EmptyPage<SurveyStationDto>(paging));
+            }
+
+            // Somebody types the name they read off the drawing, and the rows may hold it under
+            // the file's root survey. The spelling rule already says which stored names a given
+            // name can mean, best reading first; a beginning is read the same way, so the search
+            // finds a station under the name the drawing shows and under the name the rows hold.
+            var readings = SurveyStationNames.StoredCandidates(model.Format, model.RootSurveyName, search);
+            var asDrawn = BeginningWith(readings[0]);
+            var asStored = BeginningWith(readings[^1]);
+
+            // Case and accents are folded, as the application's other name searches fold them: a
+            // name is typed from memory or from a relayed message, and surveys are not consistent
+            // about capitals among themselves.
+            stations = stations.Where(s =>
+                EF.Functions.ILike(EF.Functions.Unaccent(s.Name), EF.Functions.Unaccent(asDrawn), LikeEscape)
+                || EF.Functions.ILike(EF.Functions.Unaccent(s.Name), EF.Functions.Unaccent(asStored), LikeEscape));
+        }
+
+        return TypedResults.Ok(await stations
             .OrderBy(s => s.Name)
-            .ToPagedAsync(paging.Page, paging.PageSize, ToDto, ct));
+            .ToPagedAsync(paging.Page, paging.PageSize, s => ToDto(s, model), ct));
     }
+
+    private const string LikeEscape = "\\";
+
+    /// <summary>
+    /// The pattern matching every name that begins with <paramref name="typed"/>, read literally.
+    /// </summary>
+    /// <remarks>
+    /// Escaped because the characters a pattern treats as wildcards are ordinary in station names —
+    /// an underscore separates the parts of a great many of them — and an unescaped one would turn
+    /// "a_1" into a search for "ab1" as well.
+    /// </remarks>
+    private static string BeginningWith(string typed) =>
+        typed.Replace(LikeEscape, LikeEscape + LikeEscape, StringComparison.Ordinal)
+            .Replace("%", LikeEscape + "%", StringComparison.Ordinal)
+            .Replace("_", LikeEscape + "_", StringComparison.Ordinal)
+        + "%";
 
     private static async Task<Ok<PagedResult<SurveyShotDto>>> ShotsAsync(
         Guid id,
@@ -916,8 +991,9 @@ public static class SurveyModelEndpoints
         m.CreatedAt,
         m.UpdatedAt);
 
-    private static SurveyStationDto ToDto(SurveyStation s) => new(
+    private static SurveyStationDto ToDto(SurveyStation s, SurveyModel model) => new(
         s.Name,
+        SurveyStationNames.ViewerName(model.Format, model.RootSurveyName, s.Name),
         s.SurveyName,
         s.Position.X,
         s.Position.Y,

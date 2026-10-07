@@ -896,12 +896,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Stations read out of the survey; withheld without the exact-location permission. */
+        /** Stations read out of the survey, optionally only those whose name begins with `q`; withheld without the exact-location permission. */
         get: {
             parameters: {
                 query?: {
                     page?: number;
                     pageSize?: number;
+                    q?: string;
                 };
                 header?: never;
                 path: {
@@ -25178,6 +25179,7 @@ export interface components {
         SurveySourceKind: "therionSource" | "therionConfig" | "therionLog" | "survexSource" | "topoDroidArchive";
         SurveyStationDto: {
             name: string;
+            viewerName: string;
             surveyName: null | string;
             /** Format: double */
             longitude: number;
