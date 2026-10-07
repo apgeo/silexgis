@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { SurveyModelInfo } from '../../api/hooks.ts';
+import type { SurveyCompareOffer } from '../../caveview/surveyCompare.ts';
 
 /**
  * The survey-model pop-out, and which model it decides to show.
@@ -21,6 +22,8 @@ let pinned: SurveyModelInfo | undefined;
 let askedForId: string | undefined;
 let askedForCave: string | undefined;
 let busListener: ((event: unknown) => void) | undefined;
+let compareAnswer: SurveyCompareOffer | undefined;
+let comparedModel: string | undefined;
 
 vi.mock('../../api/hooks.ts', () => ({
   surveyModelReadableByViewer: (m: { format: string }) => m.format === 'lox' || m.format === 'survex3d',
@@ -37,10 +40,34 @@ vi.mock('../../api/hooks.ts', () => ({
   },
 }));
 
+// What the shown model can be compared with is read off the cave's list by a hook of its own,
+// faked here so that the list this file watches being asked for is only ever the page's own ask:
+// which model to show. The two are different questions, and only the second must never be
+// answered from a list in a window opened on one model.
+vi.mock('../../caveview/useCompareOffer.ts', () => ({
+  useCompareOffer: (shown: { id: string } | null | undefined) => {
+    comparedModel = shown?.id;
+    return compareAnswer;
+  },
+}));
+
 // The viewer itself is a three.js bundle with a drawing context; what it is handed is the point.
 vi.mock('../../components/caveview/CaveViewPanel.tsx', () => ({
-  default: ({ fileName, surveyModelId }: { fileName: string; surveyModelId?: string }) => (
-    <div data-testid="viewer" data-file={fileName} data-model={surveyModelId} />
+  default: ({
+    fileName,
+    surveyModelId,
+    compare,
+  }: {
+    fileName: string;
+    surveyModelId?: string;
+    compare?: SurveyCompareOffer;
+  }) => (
+    <div
+      data-testid="viewer"
+      data-file={fileName}
+      data-model={surveyModelId}
+      data-compare-with={compare?.others.map((other) => other.id).join(',') ?? ''}
+    />
   ),
 }));
 vi.mock('../../components/map/SelectionPanel.tsx', () => ({ default: () => null }));
@@ -78,6 +105,8 @@ beforeEach(() => {
   askedForId = undefined;
   askedForCave = undefined;
   busListener = undefined;
+  compareAnswer = undefined;
+  comparedModel = undefined;
 });
 
 afterEach(cleanup);
@@ -126,6 +155,31 @@ describe('the survey-model pop-out', () => {
     await waitFor(() =>
       expect(screen.getByTestId('viewer')).toHaveAttribute('data-file', 'Grind.3d'),
     );
+  });
+
+  it('offers the shown model a comparison with its cave\'s other surveys, pinned or followed', async () => {
+    const offer = (id: string): SurveyCompareOffer => ({
+      current: { id, name: 'Shown', fileUrl: `https://x/${id}`, fileName: 'Shown.lox' },
+      others: [{ id: 'resurvey', name: 'Resurvey', fileUrl: 'https://x/resurvey', fileName: 'Resurvey.lox' }],
+    });
+
+    // Opened on one model: the comparison is asked about that model, and reaches the viewer.
+    pinned = model('chosen', 'Chosen plot');
+    compareAnswer = offer('chosen');
+    const first = show('?model=chosen');
+
+    expect(await screen.findByTestId('viewer')).toHaveAttribute('data-compare-with', 'resurvey');
+    expect(comparedModel).toBe('chosen');
+    first.unmount();
+
+    // Following the selection: asked about whichever model the window turned out to show.
+    listed = [model('plot', 'Grind plot')];
+    compareAnswer = offer('plot');
+    show();
+    busListener?.({ kind: 'selection', selection: { kind: 'cave', caveId: 'cave-1' } });
+
+    expect(await screen.findByTestId('viewer')).toHaveAttribute('data-compare-with', 'resurvey');
+    expect(comparedModel).toBe('plot');
   });
 
   it('says the model is gone rather than telling the reader to pick a cave', async () => {

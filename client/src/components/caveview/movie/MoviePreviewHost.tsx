@@ -12,6 +12,7 @@ import {
 } from '../../../caveview/loadCaveView.ts';
 import { MOVIE_LABEL_SIZE_RANGE, type MovieSettings } from '../../../caveview/movie/movieSettings.ts';
 import { applyMovieMarkerLabels, applyMovieView, turnToMovieView } from '../../../caveview/movie/movieView.ts';
+import { releaseWebGlContext } from '../../../caveview/releaseWebGlContext.ts';
 import { viewerFileName } from '../../../caveview/viewerFileName.ts';
 import { previewBox, previewSurface } from './previewBox.ts';
 import './MoviePreviewHost.css';
@@ -237,6 +238,8 @@ export default function MoviePreviewHost({
         onReadyRef.current?.(null);
       }
       // The canvas is found before the viewer is disposed, which may take it out of its container.
+      // Given back at once: on the tracking tab the oldest context alive is the live trip's own
+      // viewer, made before any movie dialog was opened, and it is the one a browser would take.
       const canvas = container?.querySelector('canvas') ?? null;
       // A recording still holding the viewer is let go of first: ending a session is safe when
       // none is open, and a viewer disposed in the middle of one would leave its state behind.
@@ -334,24 +337,4 @@ export default function MoviePreviewHost({
       )}
     </div>
   );
-}
-
-/**
- * Gives a disposed viewer's WebGL context back at once, rather than whenever its canvas is
- * collected. Disposing the renderer frees what was drawn with the context but not the context; a
- * page may hold only so many, and past that the browser takes the oldest one still alive — which on
- * the tracking tab is the live trip's own viewer, made before any movie dialog was opened.
- */
-function releaseWebGlContext(canvas: HTMLCanvasElement | null): void {
-  if (canvas === null) {
-    return;
-  }
-  try {
-    // Asking for the kind of context a canvas already has answers that one; a canvas answers no
-    // other kind, so whichever of the two is not null is the viewer's.
-    const context = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
-    context?.getExtension('WEBGL_lose_context')?.loseContext();
-  } catch {
-    // A canvas that cannot be asked has nothing to give back.
-  }
 }

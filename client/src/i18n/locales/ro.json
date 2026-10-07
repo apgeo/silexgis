@@ -2648,6 +2648,27 @@
     "linkThisPart": "Leagă asta…",
     "notInThisModel": "Acel punct nu se află în acest model",
     "stationPicture": "Fotografie la această stație",
+    "compare": {
+      "open": "Compară cu…",
+      "overlaid": "Suprapuse",
+      "sideBySide": "Alăturate",
+      "mode": "Cum sunt arătate cele două modele",
+      "stop": "Oprește compararea",
+      "linkViews": "Leagă vederile",
+      "linkViewsHint": "Rotirea, înclinarea sau apropierea unui model face același lucru cu celălalt",
+      "sync": "Sincronizare",
+      "syncHint": "Arătarea sau ascunderea unei ridicări face același lucru cu ridicarea cu același nume din celălalt model",
+      "surveys": "Ridicări",
+      "surveysOf": "Ridicările din {{model}}",
+      "showAll": "Arată tot",
+      "noSurveys": "Acest model nu are ridicări denumite care să poată fi arătate sau ascunse.",
+      "legend": "Care model este care",
+      "apart": {
+        "title": "Aceste două modele nu sunt în aceleași coordonate",
+        "body": "Nu pot fi suprapuse. Unul poate fi măsurat față de un punct propriu, iar celălalt într-o proiecție națională, sau fiecare față de alt punct. Alăturate, fiecare este încadrat separat și pot fi comparate în continuare.",
+        "sideBySide": "Compară alăturat"
+      }
+    },
     "picked": {
       "modelStation": "Stația {{name}}",
       "modelStationRange": "Galeria de la {{name}}",

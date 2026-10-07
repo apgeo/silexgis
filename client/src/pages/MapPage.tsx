@@ -118,6 +118,7 @@ import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { attachViewSync2d, type ViewSync2dHandle } from '../map/viewSync2d.ts';
 import { openModelWindow } from '../caveview/openModelWindow.ts';
+import { useCompareOffer } from '../caveview/useCompareOffer.ts';
 import { viewerFileName } from '../caveview/viewerFileName.ts';
 import { hasScene3dHash } from '../scene3d/urlHash3d.ts';
 import { surfaceFeaturesChanged } from '../workspace/surfaceFeatureRefresh.ts';
@@ -652,6 +653,8 @@ export default function MapPage() {
   // its location — so there is nothing to report and nothing to draw, and the pane simply does not
   // open. The query does not retry, so a withheld model costs one request.
   const { data: caveViewModel } = useSurveyModel(caveViewModelId ?? undefined);
+  // The same cave's other line plots, for looking at this one together with another.
+  const caveViewCompare = useCompareOffer(caveViewModel);
 
   // An area picked elsewhere (?area=<id>, from the work-area overview or the dashboard board) is
   // framed on arrival, then the param is consumed — a one-shot instruction, exactly like ?view=
@@ -1432,6 +1435,7 @@ export default function MapPage() {
                   fileName={viewerFileName(caveViewModel)}
                   height="100%"
                   surveyModelId={caveViewModel.id}
+                  compare={caveViewCompare}
                 />
               </Suspense>
             </div>

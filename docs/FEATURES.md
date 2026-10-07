@@ -105,7 +105,10 @@ feature and walkthroughs of whole jobs.
   them. A cave keeps every model ever uploaded, and **one of each kind is marked current** —
   the line plot the map and the measurements read, the walls the 3D view draws. The first stays
   current until you choose another, and choosing a line plot moves the cave's shape on the map
-  with it, so the map and the figures never describe two different surveys.
+  with it, so the map and the figures never describe two different surveys. Two line plots of one
+  cave can be **compared** in the survey viewer: overlaid in two colours where they are in the
+  same coordinates, or side by side with linked views where they are not, with each survey's parts
+  shown and hidden together or separately.
 - **Survey closure** — archive the compilation log beside the model and the cave page reports how
   well the survey closes, in the compiler's own words: every loop it found, with both its relative
   error and its absolute error in metres, its length, its stations and its per-axis components. The

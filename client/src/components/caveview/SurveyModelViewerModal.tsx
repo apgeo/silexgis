@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { type SurveyModelInfo } from '../../api/hooks.ts';
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
 import type { PickedModelPart } from '../../caveview/modelParts.ts';
+import { useCompareOffer } from '../../caveview/useCompareOffer.ts';
 import { useStationMedia } from '../../caveview/useStationMedia.ts';
 import { coarsePointer } from '../../map/pointer.ts';
 import type { ArmedStation } from '../../rastermap/authoring.ts';
@@ -89,6 +90,11 @@ export default function SurveyModelViewerModal({ model, onClose }: SurveyModelVi
   // where they were taken. Asked for only while the viewer is open, because that is the only time
   // anything is drawn from them.
   const stationMedia = useStationMedia(model?.id, model !== null);
+
+  // The cave's other line plots, which this one can be looked at together with. The window given
+  // over to one survey is where a second belongs beside it; asked for like the pictures above,
+  // only while there is a model to compare.
+  const compare = useCompareOffer(model);
 
   // The model's incident links, read once for the whole tab set: the map declarations fold
   // out here, and each map pane folds its own pins from the same answer.
@@ -273,6 +279,7 @@ export default function SurveyModelViewerModal({ model, onClose }: SurveyModelVi
                     // for the same corner.
                     toolbar
                     stationMedia={stationMedia}
+                    compare={compare}
                   />
                 ),
               },
