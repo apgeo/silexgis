@@ -525,15 +525,56 @@ public static class TripTrackingPublicationEndpoints
     /// </remarks>
     internal static async Task<PublicParty> PartyAsync(
         SilexGisDbContext db, FeatureProtection protection, TripTrackingOptions options,
-        Guid tripLogId, Guid? drawnOnSurveyModelId, Guid configCave, CancellationToken ct)
-    {
-        var teams = await db.TripTeams.AsNoTracking()
-            .Where(t => t.TripLogId == tripLogId).OrderBy(t => t.Title).ToListAsync(ct);
-        var labels = await db.TripTrackingParticipants.AsNoTracking()
-            .Where(p => p.TripLogId == tripLogId)
-            .ToDictionaryAsync(p => p.CaverId, p => p.DisplayLabel, ct);
+        Guid tripLogId, Guid? drawnOnSurveyModelId, Guid configCave, CancellationToken ct) =>
+        (await PartiesAsync(db, protection, options, [tripLogId], drawnOnSurveyModelId, configCave, ct))
+            [tripLogId];
 
-        var roster = await RosterOrderAsync(db, tripLogId, ct);
+    /// <summary>
+    /// The parties of several trips of one cave, each folded as <see cref="PartyAsync"/> folds one,
+    /// for a number of database reads that does not depend on how many trips were asked for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>One read per kind of fact, whatever the number of trips.</b> Teams, captions, the roster,
+    /// the roster's names, the reports, and one decision about which caves may be shown are each
+    /// read once for every trip together and dealt out per trip in memory. Folded one trip at a
+    /// time, a list of twenty parties cost twenty times what one cost, on an anonymous route whose
+    /// cost a stranger chooses by asking.
+    /// </para>
+    /// <para>
+    /// <b>Nothing about what may be shown is decided differently for being read together.</b> Each
+    /// trip's rows are handed to the same fold, which asks the same Domain rules. The one set that
+    /// is genuinely shared is the caves that may be shown: it is asked once over every cave any of
+    /// these reports is anchored to, and whether a cave may be shown is a fact about that cave —
+    /// asking about it beside other caves cannot change the answer.
+    /// </para>
+    /// <para>
+    /// Every trip asked for has an entry in the result, including one with nobody on its roster.
+    /// </para>
+    /// </remarks>
+    internal static async Task<Dictionary<Guid, PublicParty>> PartiesAsync(
+        SilexGisDbContext db, FeatureProtection protection, TripTrackingOptions options,
+        IReadOnlyCollection<Guid> tripLogIds, Guid? drawnOnSurveyModelId, Guid configCave,
+        CancellationToken ct)
+    {
+        if (tripLogIds.Count == 0) return [];
+        var ids = tripLogIds.Distinct().ToList();
+
+        // Ordered by title across all the trips and dealt out below: grouping keeps the order rows
+        // arrive in, so each trip's teams come out in the order a read of that trip alone gives.
+        var teams = (await db.TripTeams.AsNoTracking()
+                .Where(t => ids.Contains(t.TripLogId)).OrderBy(t => t.Title)
+                .Select(t => new { t.TripLogId, t.Id, t.Title })
+                .ToListAsync(ct))
+            .ToLookup(t => t.TripLogId);
+
+        var labels = (await db.TripTrackingParticipants.AsNoTracking()
+                .Where(p => ids.Contains(p.TripLogId))
+                .Select(p => new { p.TripLogId, p.CaverId, p.DisplayLabel })
+                .ToListAsync(ct))
+            .ToLookup(p => p.TripLogId);
+
+        var rosters = await RosterOrdersAsync(db, ids, ct);
 
         // The roster's own name for each of them, where this installation publishes names at all.
         //
@@ -557,28 +598,60 @@ public static class TripTrackingPublicationEndpoints
         // every member who never chose a display name — a name-shaped string that identifies
         // nobody, on the page whose whole point is naming people. The control that does travel to
         // this page is the caption below, which an administrator sets per trip.
+        //
+        // One dictionary for every trip asked for: a name is a fact about the person, and the fold
+        // looks up only the people on the roster of the trip it is folding.
+        var everybody = rosters.Values.SelectMany(roster => roster).Distinct().ToList();
         var names = options.PublishRealNames
             ? await db.Cavers.AsNoTracking()
-                .Where(c => roster.Contains(c.Id))
+                .Where(c => everybody.Contains(c.Id))
                 .Select(c => new { c.Id, c.FullName })
                 .ToDictionaryAsync(c => c.Id, c => c.FullName, ct)
             : [];
 
         // A tracked trip's whole event log is small (reports arrive by relayed word, minutes
-        // apart) — fold the latest-per-caver in memory, exactly as the signed-in read does.
-        var events = await db.TripPositionEvents.AsNoTracking()
-            .Where(e => e.TripLogId == tripLogId)
-            .OrderBy(e => e.RecordedAt).ThenBy(e => e.CreatedAt).ThenBy(e => e.Id)
-            .ToListAsync(ct);
+        // apart) — fold the latest-per-caver in memory, exactly as the signed-in read does. Within
+        // one trip the order is the order that trip's own read uses; the trip leads the ordering
+        // only so that the index on trip and time serves it.
+        var events = (await db.TripPositionEvents.AsNoTracking()
+                .Where(e => ids.Contains(e.TripLogId))
+                .OrderBy(e => e.TripLogId).ThenBy(e => e.RecordedAt).ThenBy(e => e.CreatedAt).ThenBy(e => e.Id)
+                .ToListAsync(ct))
+            .ToLookup(e => e.TripLogId);
 
         // Per row, because history can span models: a position anchored to some other cave is
         // shown only if that cave could itself have been published, and one whose anchor is gone
         // is shown to nobody. The page-level refusal above is about the trip; this is about the
         // row, and both are the same predicate asked of different caves.
-        var caveIds = events.Where(e => e.CaveFeatureId is not null).Select(e => e.CaveFeatureId!.Value)
+        var caveIds = events.SelectMany(group => group)
+            .Where(e => e.CaveFeatureId is not null).Select(e => e.CaveFeatureId!.Value)
             .Append(configCave).Distinct().ToList();
         var openCaves = await TrackingWithholding.PublishableCaveIdsAsync(db, protection, caveIds, ct);
 
+        var parties = new Dictionary<Guid, PublicParty>(ids.Count);
+        foreach (var id in ids)
+        {
+            parties[id] = FoldParty(
+                [.. teams[id].Select(t => new PublicTripTeamDto(t.Id, t.Title))],
+                labels[id].ToDictionary(p => p.CaverId, p => p.DisplayLabel),
+                rosters.GetValueOrDefault(id) ?? [],
+                names,
+                [.. events[id]],
+                openCaves,
+                drawnOnSurveyModelId);
+        }
+        return parties;
+    }
+
+    /// <summary>
+    /// One trip's party, folded from rows already read. Reads nothing: every rule about what may be
+    /// shown of somebody is asked here, of the rows it is handed, through the function that owns it.
+    /// </summary>
+    private static PublicParty FoldParty(
+        IReadOnlyList<PublicTripTeamDto> teams, Dictionary<Guid, string> labels, List<Guid> roster,
+        Dictionary<Guid, string> names, List<TripPositionEvent> events, HashSet<Guid> openCaves,
+        Guid? drawnOnSurveyModelId)
+    {
         var byCaver = events.GroupBy(e => e.CaverId).ToDictionary(g => g.Key, g => g.ToList());
         var participants = new List<PublicTripParticipantDto>();
         var withheldAny = false;
@@ -641,10 +714,7 @@ public static class TripTrackingPublicationEndpoints
                 Out: standing == TripStanding.Out));
         }
 
-        return new PublicParty(
-            [.. teams.Select(t => new PublicTripTeamDto(t.Id, t.Title))],
-            participants,
-            withheldAny);
+        return new PublicParty(teams, participants, withheldAny);
     }
 
     /// <summary>
@@ -706,14 +776,26 @@ public static class TripTrackingPublicationEndpoints
     /// </para>
     /// </remarks>
     internal static async Task<List<Guid>> RosterOrderAsync(
-        SilexGisDbContext db, Guid tripLogId, CancellationToken ct)
+        SilexGisDbContext db, Guid tripLogId, CancellationToken ct) =>
+        (await RosterOrdersAsync(db, [tripLogId], ct)).GetValueOrDefault(tripLogId) ?? [];
+
+    /// <summary>
+    /// <see cref="RosterOrderAsync"/> for several trips in one read: the same derivation, grouped
+    /// by trip as well as by person. A trip with nobody on its roster has no entry.
+    /// </summary>
+    internal static async Task<Dictionary<Guid, List<Guid>>> RosterOrdersAsync(
+        SilexGisDbContext db, IReadOnlyCollection<Guid> tripLogIds, CancellationToken ct)
     {
         var rows = await db.TripLogParticipants.AsNoTracking()
-            .Where(p => p.TripLogId == tripLogId)
-            .GroupBy(p => p.CaverId)
-            .Select(g => new { CaverId = g.Key, FirstRowId = g.Min(p => p.Id) })
+            .Where(p => tripLogIds.Contains(p.TripLogId))
+            .GroupBy(p => new { p.TripLogId, p.CaverId })
+            .Select(g => new { g.Key.TripLogId, g.Key.CaverId, FirstRowId = g.Min(p => p.Id) })
             .ToListAsync(ct);
-        return [.. rows.OrderBy(r => r.FirstRowId).Select(r => r.CaverId)];
+        return rows
+            .GroupBy(r => r.TripLogId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(r => r.FirstRowId).Select(r => r.CaverId).ToList());
     }
 
     /// <summary>

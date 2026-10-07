@@ -84,11 +84,25 @@ public static class TripLiveSiblingEndpoints
     /// </remarks>
     private static int CandidateCap(int listSize) => Math.Max(100, listSize * 4);
 
+    /// <summary>
+    /// How much earlier than the grace window's own edge the candidate read still accepts a closed
+    /// watch.
+    /// </summary>
+    /// <remarks>
+    /// Only so that the narrowing in the query is looser than the rule and never equal to it: the
+    /// database keeps instants to the microsecond and compares against a bound rounded to one,
+    /// while the rule is asked of the clock's own finer reading. A minute is far more than that
+    /// difference and costs at most the few watches closed in that minute.
+    /// </remarks>
+    private static readonly TimeSpan CandidateSlack = TimeSpan.FromMinutes(1);
+
     private static async Task<Results<Ok<PublicLiveTripListDto>, ProblemHttpResult>> ListAsync(
         string token, SilexGisDbContext db, FeatureProtection protection,
         IOptions<TripTrackingOptions> live, IOptions<TripPastTrackOptions> past,
         TimeProvider clock, PublicTripDiagnostics diagnostics, CancellationToken ct)
     {
+        // The one reading of the clock this request takes: the gate and the list below are both
+        // asked at this instant.
         var now = clock.GetUtcNow();
         var opened = await TripPastTrackEndpoints.OpenAsync(
             token, db, protection, live.Value, past.Value, now, ct);
@@ -114,9 +128,56 @@ public static class TripLiveSiblingEndpoints
             return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
         }
 
+        var list = await ListFollowedAsync(opened, now, db, protection, live.Value, ct);
+
+        diagnostics.Served(PublicTripRoute.Live);
+        return TypedResults.Ok(list);
+    }
+
+    /// <summary>
+    /// The trips of an opened link's cave that are being followed at <paramref name="now"/>, each
+    /// with its party.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The instant is handed in, never read here.</b> This list and the archive's partition a
+    /// published trip's life between them, and that partition holds only at one instant: a caller
+    /// that wants both asks both with the same reading of the clock, and a trip crossing the edge
+    /// of its grace window is then in exactly one of them. Each routine reading the clock for
+    /// itself is how a trip comes to be in both lists of one page, or in neither.
+    /// </para>
+    /// <para>
+    /// It decides nothing about whether the link may read this list at all — that is the caller's
+    /// gate, already asked — and it records nothing: counting a read as served belongs to the route.
+    /// </para>
+    /// </remarks>
+    internal static async Task<PublicLiveTripListDto> ListFollowedAsync(
+        TripPastTrackEndpoints.OpenedToken opened, DateTimeOffset now, SilexGisDbContext db,
+        FeatureProtection protection, TripTrackingOptions live, CancellationToken ct)
+    {
         var configCave = opened.CaveFeatureId;
-        var size = live.Value.EffectiveFollowedListSize;
+        var size = live.EffectiveFollowedListSize;
         var cap = CandidateCap(size);
+
+        // A closed watch is followable only until its grace window runs out, so one closed before
+        // this instant cannot be on this list and is not read at all. Without it the candidates of
+        // a cave were every published trip it ever had, newest first, and a party still underground
+        // on a trip older than the newest hundred was crowded out by trips over for years.
+        //
+        // This is an optimisation and deliberately NOT the rule. It is strictly looser than
+        // TripPublicationWindow.IsOpen, which is still asked of every row below and remains the
+        // only thing that decides: that rule passes an armed watch, and a closed one while
+        // now < closedAt + grace. Every armed watch passes here; a closed one inside its grace has
+        // closedAt > now - grace, which is later than the bound below by the slack; and a closed
+        // watch with no closing instant, which the rule refuses, is let through here to be refused
+        // there. So no row the rule would pass is dropped by this, and the rows it lets through
+        // that the rule refuses (a lapsed link, the slack, a missing instant) are dropped below as
+        // they always were. Tightening the rule later keeps this correct; loosening it — a longer
+        // way of being followable after closing — must loosen this with it.
+        var back = live.ShareGraceAfterClose;
+        var closedAfter = back >= now - DateTimeOffset.MinValue - CandidateSlack
+            ? DateTimeOffset.MinValue
+            : now - back - CandidateSlack;
 
         // Narrowed in SQL to what can be narrowed there — this cave, a watch that was actually
         // started, and the existence of a link nobody revoked — then ordered and bounded here, so
@@ -128,6 +189,9 @@ public static class TripLiveSiblingEndpoints
             join trip in db.TripLogs.AsNoTracking() on tracking.TripLogId equals trip.Id
             where tracking.CaveFeatureId == configCave
                 && tracking.State != TripTrackingState.Off
+                && (tracking.State == TripTrackingState.Armed
+                    || tracking.ClosedAt == null
+                    || tracking.ClosedAt > closedAfter)
                 && db.TripTrackingShares.Any(s => s.TripLogId == trip.Id && s.RevokedAt == null)
             // Newest first, tiebroken to the identifier so the bound is deterministic — the same
             // ordering the archive uses, so a trip does not change its place in a reader's world as
@@ -144,12 +208,18 @@ public static class TripLiveSiblingEndpoints
                 tracking.State,
                 tracking.ArmedAt,
                 tracking.ClosedAt,
-            }).Take(cap).ToListAsync(ct);
+            })
+            // One row past the bound, read only to learn whether there is one: "the read came back
+            // full" is also what a cave with exactly that many candidates looks like, and saying
+            // "more" of it sends a reader looking for parties that do not exist.
+            .Take(cap + 1).ToListAsync(ct);
+
+        var beyondTheBound = candidates.Count > cap;
+        if (beyondTheBound) candidates.RemoveRange(cap, candidates.Count - cap);
 
         if (candidates.Count == 0)
         {
-            diagnostics.Served(PublicTripRoute.Live);
-            return TypedResults.Ok(new PublicLiveTripListDto([], false));
+            return new PublicLiveTripListDto([], false);
         }
 
         // One query for every candidate's latest unrevoked expiry rather than one each: the rule
@@ -168,30 +238,32 @@ public static class TripLiveSiblingEndpoints
                 expiries.TryGetValue(c.Id, out var expiry) ? expiry : null,
                 c.State,
                 c.ClosedAt,
-                live.Value.ShareGraceAfterClose))
+                live.ShareGraceAfterClose))
             .ToList();
 
         // Something more exists either because the fold left more than one page of it, or because
-        // the candidate read hit its cap and an older party still underground never arrived to be
+        // a candidate lay beyond the bound and an older party still underground never arrived to be
         // folded — the same two reasons the archive's bit has. Read from the list alone, a cave
-        // whose published trips outnumber the cap dropped a still-followable older trip and said
+        // whose candidates outnumber the bound dropped a still-followable older trip and said
         // nothing.
-        var more = followed.Count > size || candidates.Count >= cap;
+        var more = followed.Count > size || beyondTheBound;
         var shown = followed.Take(size).ToList();
+        var shownIds = shown.Select(row => row.Id).ToList();
 
-        // One query for the whole list, before the loop that folds each party.
-        var camps = await TripTrackingPublicationEndpoints.ExpeditionsOfAsync(
-            db, [.. shown.Select(row => row.Id)], ct);
+        // One query for the whole list.
+        var camps = await TripTrackingPublicationEndpoints.ExpeditionsOfAsync(db, shownIds, ct);
+
+        // Every party in the list, read together: the number of reads this costs is the same for
+        // one party as for twenty. Drawn on the token's survey, not each trip's — see the remarks
+        // on the type. The fold is the one the followed page uses, so what may be shown of somebody
+        // here and what may be shown of them there cannot come apart.
+        var parties = await TripTrackingPublicationEndpoints.PartiesAsync(
+            db, protection, live, shownIds, opened.SurveyModelId, configCave, ct);
 
         var trips = new List<PublicLiveTripDto>(shown.Count);
         foreach (var row in shown)
         {
-            // Drawn on the token's survey, not this trip's — see the remarks on the type. The party
-            // fold is the one the followed page uses, so what may be shown of somebody here and
-            // what may be shown of them there cannot come apart.
-            var party = await TripTrackingPublicationEndpoints.PartyAsync(
-                db, protection, live.Value, row.Id, opened.SurveyModelId, configCave, ct);
-
+            var party = parties[row.Id];
             trips.Add(new PublicLiveTripDto(
                 row.Id,
                 camps.GetValueOrDefault(row.Id),
@@ -206,7 +278,6 @@ public static class TripLiveSiblingEndpoints
                 party.Participants));
         }
 
-        diagnostics.Served(PublicTripRoute.Live);
-        return TypedResults.Ok(new PublicLiveTripListDto(trips, more));
+        return new PublicLiveTripListDto(trips, more);
     }
 }

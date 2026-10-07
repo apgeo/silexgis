@@ -709,6 +709,37 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
     }
 
     /// <summary>
+    /// "More" is said when a trip lies beyond the bounded read and not when the read was merely
+    /// full: exactly as many candidates as the bound is a cave with nothing older.
+    /// </summary>
+    /// <remarks>
+    /// The bound is two hundred on this host. A hundred and ninety-nine trips whose tracking closed
+    /// a moment ago — published, not running, so the read brings them back, and not past trips yet,
+    /// so the rule drops every one — make two hundred candidates with the one past trip, which is
+    /// older than all of them: it is the last row read, it is listed, and nothing is older. One
+    /// more such trip makes two hundred and one, the past trip is the one beyond the bound, and
+    /// the list — now empty — has to say so. The same rows give both answers, a single trip apart.
+    /// </remarks>
+    [Fact]
+    public async Task The_list_says_more_only_when_a_trip_lies_beyond_the_bounded_read()
+    {
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var past = await PastTripAsync("The one past trip", cave, model, tripDate: "2026-03-01");
+        await SeedJustClosedPublishedTripsAsync(cave, model, count: 199, from: new DateOnly(2026, 3, 2), past.ShareId);
+
+        var full = await ListAsync(past.Token);
+        ListedIds(full).ShouldBe(new[] { past.Trip });
+        full.GetProperty("more").GetBoolean().ShouldBeFalse();
+
+        await SeedJustClosedPublishedTripsAsync(cave, model, count: 1, from: new DateOnly(2026, 9, 20), past.ShareId);
+
+        var beyond = await ListAsync(past.Token);
+        ListedIds(beyond).ShouldBeEmpty();
+        beyond.GetProperty("more").GetBoolean().ShouldBeTrue();
+    }
+
+    /// <summary>
     /// A note about somebody is not on the past track, and it moves nobody between standings.
     /// </summary>
     /// <remarks>
@@ -978,6 +1009,55 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var tracking = await db.TripTrackings.SingleAsync(t => t.TripLogId == trip);
         tracking.ClosedAt = closedAt;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Published trips of the cave whose tracking closed a moment ago, written straight into the
+    /// tables.
+    /// </summary>
+    /// <remarks>
+    /// Still inside the period a closed trip stays on its own page, so each is a candidate for the
+    /// archive — published and not running — that the rule then refuses as not history yet. Two
+    /// hundred trips armed, published and closed through the API would be minutes of requests
+    /// proving nothing these rows do not. Dated a day apart from the given day on.
+    /// </remarks>
+    private async Task SeedJustClosedPublishedTripsAsync(
+        Guid cave, Guid model, int count, DateOnly from, Guid shareOfCreator)
+    {
+        var trips = new List<Guid>(count);
+        for (var i = 0; i < count; i++)
+        {
+            trips.Add((await CreateTripAsync("Just over", tripDate: from.AddDays(i).ToString("yyyy-MM-dd"))).Trip);
+        }
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var creator = await db.TripTrackingShares.AsNoTracking()
+            .Where(s => s.Id == shareOfCreator).Select(s => s.CreatedBy).SingleAsync();
+        var closedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        foreach (var trip in trips)
+        {
+            db.TripTrackings.Add(new SilexGis.Domain.Entities.TripTracking
+            {
+                TripLogId = trip,
+                State = TripTrackingState.Closed,
+                SurveyModelId = model,
+                CaveFeatureId = cave,
+                ArmedAt = closedAt.AddHours(-8),
+                ClosedAt = closedAt,
+            });
+            db.TripTrackingShares.Add(new TripTrackingShare
+            {
+                TripLogId = trip,
+                TokenHash = System.Buffers.Text.Base64Url.EncodeToString(
+                    System.Security.Cryptography.SHA256.HashData(
+                        System.Text.Encoding.UTF8.GetBytes($"seeded-{Guid.NewGuid():N}"))),
+                CreatedBy = creator,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(30),
+            });
+        }
+
         await db.SaveChangesAsync();
     }
 

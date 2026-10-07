@@ -140,13 +140,18 @@ public static class TripTrackingEndpoints
     internal static async Task<IReadOnlyList<TrackingDepthResolver.Station>> StationsOfAsync(
         SilexGisDbContext db, SurveyModel model, CancellationToken ct)
     {
+        // The altitude alone, taken in the database. Placing a report by depth asks how high each
+        // station is and nothing else about where it is, and a survey has thousands of stations:
+        // reading each one's whole point sent every coordinate of the cave across, to build an
+        // object per station that was then asked for one number. The column is declared as a point
+        // with an altitude, so there is always one to take.
         var rows = await db.SurveyStations.AsNoTracking()
             .Where(s => s.SurveyModelId == model.Id)
-            .Select(s => new { s.Name, s.SurveyName, s.Position, s.Flags })
+            .Select(s => new { s.Name, s.SurveyName, s.Position.Z, s.Flags })
             .ToListAsync(ct);
         return [.. rows.Select(r => TrackingDepthResolver.Station.Of(
             model.Format, model.RootSurveyName,
-            r.Name, r.SurveyName, r.Position.Coordinate.Z, (r.Flags & SurveyStationFlags.Entrance) != 0))];
+            r.Name, r.SurveyName, r.Z, (r.Flags & SurveyStationFlags.Entrance) != 0))];
     }
 
     // Which caves are open to this caller, whether a row claims a place, and whether that place

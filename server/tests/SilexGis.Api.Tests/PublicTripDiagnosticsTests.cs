@@ -232,8 +232,8 @@ public sealed class PublicTripDiagnosticsTests : IAsyncLifetime, IDisposable, IC
     }
 
     /// <summary>
-    /// The archive's two settings, named when they are what refused — and not named when the link
-    /// would have been refused anyway.
+    /// The archive's two settings, named when they are what refused — the switch on the archive's
+    /// own routes whatever the link, because there the link is never looked up.
     /// </summary>
     [Fact]
     public async Task The_archive_switched_off_and_the_retention_passed_are_each_named_as_what_refused()
@@ -266,12 +266,19 @@ public sealed class PublicTripDiagnosticsTests : IAsyncLifetime, IDisposable, IC
             (await visitor.GetAsync(LiveList(running.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
             offLogs.Events.Where(IsRefusal).ShouldBeEmpty();
 
-            // A link refused on any installation is refused for that, not for the switch: "the
-            // archive is off" would send an operator to a setting that changing would not help.
+            // The archive's own routes answer from the setting and never look the link up, so the
+            // switch is the reason there for a link taken back and for an invented one too: what
+            // the link itself is, is not known to a read that asked the database nothing.
             await ShouldBeRefusedAsync(
-                visitor, offLogs, PastList(revoked.Token), "past", "revoked", await HandleAsync(revoked));
+                visitor, offLogs, PastList(revoked.Token), "past", "archive_off", await HandleAsync(revoked));
             await ShouldBeRefusedAsync(
-                visitor, offLogs, PastList("not-a-token-at-all"), "past", "unknown_link", HandleOf("not-a-token-at-all"));
+                visitor, offLogs, PastList("not-a-token-at-all"), "past", "archive_off", HandleOf("not-a-token-at-all"));
+            // The same two links on the routes that do look them up are named for what they are,
+            // on the same installation — which is where an operator reads a link's own state.
+            await ShouldBeRefusedAsync(
+                visitor, offLogs, LiveList(revoked.Token), "live", "revoked", await HandleAsync(revoked));
+            await ShouldBeRefusedAsync(
+                visitor, offLogs, Follow("not-a-token-at-all"), "follow", "unknown_link", HandleOf("not-a-token-at-all"));
         }
 
         var boundedLogs = new LogCapture();

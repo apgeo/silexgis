@@ -104,27 +104,79 @@ public static class TripPastTrackEndpoints
         IOptions<TripTrackingOptions> live, IOptions<TripPastTrackOptions> past,
         TimeProvider clock, PublicTripDiagnostics diagnostics, CancellationToken ct)
     {
+        if (ArchiveOff(past.Value, PublicTripRoute.Past, token, diagnostics) is { } off) return off;
+
+        // The one reading of the clock this request takes: the gate and the list below are both
+        // asked at this instant.
         var now = clock.GetUtcNow();
         var opened = await OpenAsync(token, db, protection, live.Value, past.Value, now, ct);
-        // The archive's own feature switch, applied here rather than inside the shared gate: off,
-        // both these routes answer exactly what an unknown token answers — the feature is not there
-        // rather than there and empty — while the list of parties underground now, which shares the
-        // gate, is deliberately unaffected.
-        if (!past.Value.Enabled)
-        {
-            diagnostics.Refused(PublicTripRoute.Past, ArchiveOffOr(opened), token);
-            return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
-        }
-
         if (opened.Refusal is { } refused)
         {
             diagnostics.Refused(PublicTripRoute.Past, opened.Reason, token);
             return refused;
         }
 
+        var list = await ListPastAsync(opened, now, db, live.Value, past.Value, ct);
+
+        diagnostics.Served(PublicTripRoute.Past);
+        return TypedResults.Ok(list);
+    }
+
+    /// <summary>
+    /// The archive's own feature switch, asked before anything else on both of its routes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off, both routes answer exactly what an unknown token answers — the feature is not there
+    /// rather than there and empty — while the list of parties underground now, which shares the
+    /// gate below, is deliberately unaffected.
+    /// </para>
+    /// <para>
+    /// <b>Asked before the link is looked up, so a switched-off archive costs the database
+    /// nothing.</b> A page that reads the archive for every visitor would otherwise send a query
+    /// per visit to an installation that has said it offers no archive, to arrive at the answer
+    /// the setting had already given. Every token costs the same here — nothing — so the promise
+    /// that a once-real token costs what an invented one costs is kept in its strongest form.
+    /// </para>
+    /// <para>
+    /// <b>What that gives up, said so that nobody takes the log for more than it is.</b> The reason
+    /// written for the operator is the switch whatever the link was, because the link was never
+    /// read: on an installation with the archive off, a revoked or mistyped link asking for the
+    /// archive is logged as "the archive is off" and not as what it is. That is true as far as it
+    /// goes — switching the archive on is the first thing that would have to change — and the
+    /// link's own state is named on the same link's other reads, which do look it up.
+    /// </para>
+    /// </remarks>
+    /// <returns>The refusal, or null when the archive is on.</returns>
+    private static ProblemHttpResult? ArchiveOff(
+        TripPastTrackOptions past, PublicTripRoute route, string token, PublicTripDiagnostics diagnostics)
+    {
+        if (past.Enabled) return null;
+        diagnostics.Refused(route, PublishedReadRefusal.ArchiveOff, token);
+        return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+    }
+
+    /// <summary>
+    /// The trips of an opened link's cave that are over and readable at <paramref name="now"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The instant is handed in, never read here</b>, for the reason the list of parties
+    /// underground now gives: the two lists partition a published trip's life only at one instant,
+    /// so a caller that wants both asks both with the same reading of the clock.
+    /// </para>
+    /// <para>
+    /// It decides nothing about whether the link may read the archive at all — the switch and the
+    /// gate are the caller's, already asked — and it records nothing.
+    /// </para>
+    /// </remarks>
+    internal static async Task<PublicPastTripListDto> ListPastAsync(
+        OpenedToken opened, DateTimeOffset now, SilexGisDbContext db,
+        TripTrackingOptions live, TripPastTrackOptions past, CancellationToken ct)
+    {
         var configCave = opened.CaveFeatureId;
 
-        var size = past.Value.EffectiveListSize;
+        var size = past.EffectiveListSize;
         var cap = CandidateCap(size);
 
         // Narrowed in SQL to what can be narrowed there — the cave, a watch that is not armed, and
@@ -164,8 +216,14 @@ public static class TripPastTrackEndpoints
                     .Where(s => s.TripLogId == trip.Id && s.RevokedAt == null)
                     .Max(s => (DateTimeOffset?)s.ExpiresAt),
             })
-            .Take(cap)
+            // One row past the bound, read only to learn whether there is one: "the read came back
+            // full" is also what a cave with exactly that many candidates looks like, and saying
+            // "more" of it promises older trips that do not exist.
+            .Take(cap + 1)
             .ToListAsync(ct);
+
+        var beyondTheBound = candidates.Count > cap;
+        if (beyondTheBound) candidates.RemoveRange(cap, candidates.Count - cap);
 
         // The rule itself, asked in memory through the one function that owns it — never
         // transcribed into a Where. The slice already folds a trip's event log in memory for the
@@ -173,12 +231,12 @@ public static class TripPastTrackEndpoints
         var readable = candidates
             .Where(c => TripPastTrackWindow.IsReadableAsPast(
                 now, c.State, c.ClosedAt, c.LatestUnrevokedExpiry, c.TripDate, c.TripDateEnd,
-                live.Value.ShareGraceAfterClose, past.Value.Retention))
+                live.ShareGraceAfterClose, past.Retention))
             .ToList();
 
         // Something older exists either because the fold left more than one page of it, or because
-        // the candidate read hit its cap and the oldest never arrived to be folded.
-        var more = readable.Count > size || candidates.Count >= cap;
+        // a candidate lay beyond the bound and the oldest never arrived to be folded.
+        var more = readable.Count > size || beyondTheBound;
         var page = readable.Take(size).ToList();
         var ids = page.Select(p => p.Id).ToList();
 
@@ -231,8 +289,7 @@ public static class TripPastTrackEndpoints
         var camps = await TripTrackingPublicationEndpoints.ExpeditionsOfAsync(
             db, [.. page.Select(p => p.Id)], ct);
 
-        diagnostics.Served(PublicTripRoute.Past);
-        return TypedResults.Ok(new PublicPastTripListDto(
+        return new PublicPastTripListDto(
             [.. page.Select(p => new PublicPastTripDto(
                 p.Id,
                 camps.GetValueOrDefault(p.Id),
@@ -242,7 +299,7 @@ public static class TripPastTrackEndpoints
                 p.ClosedAt,
                 headcount.GetValueOrDefault(p.Id),
                 hasTrack.Contains(p.Id)))],
-            more));
+            more);
     }
 
     // ---- one past track ----------------------------------------------------------------------
@@ -253,18 +310,10 @@ public static class TripPastTrackEndpoints
         IOptions<TripTrackingOptions> live, IOptions<TripPastTrackOptions> past,
         TimeProvider clock, PublicTripDiagnostics diagnostics, CancellationToken ct)
     {
+        if (ArchiveOff(past.Value, PublicTripRoute.PastTrip, token, diagnostics) is { } off) return off;
+
         var now = clock.GetUtcNow();
         var opened = await OpenAsync(token, db, protection, live.Value, past.Value, now, ct);
-        // The archive's own feature switch, applied here rather than inside the shared gate: off,
-        // both these routes answer exactly what an unknown token answers — the feature is not there
-        // rather than there and empty — while the list of parties underground now, which shares the
-        // gate, is deliberately unaffected.
-        if (!past.Value.Enabled)
-        {
-            diagnostics.Refused(PublicTripRoute.PastTrip, ArchiveOffOr(opened), token);
-            return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
-        }
-
         if (opened.Refusal is { } refused)
         {
             diagnostics.Refused(PublicTripRoute.PastTrip, opened.Reason, token);
@@ -286,18 +335,35 @@ public static class TripPastTrackEndpoints
         // The scope check, and it is load-bearing: without it a link to one cave would read past
         // trips of every other cave on the installation. Asked as part of the lookup rather than
         // after it, so a trip of another cave is indistinguishable from a trip that does not exist.
-        var tracking = await db.TripTrackings.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.TripLogId == tripLogId && t.CaveFeatureId == configCave, ct);
-        if (tracking is null) return NotInArchive();
+        //
+        // The watch, its trip and the trip's latest unrevoked expiry in one round trip, as the gate
+        // above reads the link's: three facts about one trip are not three questions. The expiry is
+        // null when the trip was never published or every link of it has been withdrawn, and null
+        // is what "not published" means on this surface — there is no archive flag and no second
+        // act, only the publication rows that already exist. Which is also why revoking every link
+        // of a trip takes it out of the archive: revocation already means "end this publication,
+        // now", and it is read here as meaning exactly that.
+        var asked = await (
+            from watch in db.TripTrackings.AsNoTracking()
+            join log in db.TripLogs.AsNoTracking() on watch.TripLogId equals log.Id
+            where watch.TripLogId == tripLogId && watch.CaveFeatureId == configCave
+            select new
+            {
+                Tracking = watch,
+                Trip = log,
+                LatestUnrevokedExpiry = db.TripTrackingShares
+                    .Where(s => s.TripLogId == log.Id && s.RevokedAt == null)
+                    .Max(s => (DateTimeOffset?)s.ExpiresAt),
+            }).FirstOrDefaultAsync(ct);
+        if (asked is null) return NotInArchive();
 
-        var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
-        if (trip is null) return NotInArchive();
+        var (tracking, trip, latestUnrevokedExpiry) =
+            (asked.Tracking, asked.Trip, asked.LatestUnrevokedExpiry);
 
         // The same four clauses the list applies, asked of this one trip through the same function:
         // published and not withdrawn, not armed, its live window over, inside retention. A trip
         // that fails any of them answers exactly what an unguessed identifier answers, so guessing
         // one buys nothing.
-        var latestUnrevokedExpiry = await LatestUnrevokedExpiryAsync(db, tripLogId, ct);
         if (!TripPastTrackWindow.IsReadableAsPast(
                 now, tracking.State, tracking.ClosedAt, latestUnrevokedExpiry,
                 trip.TripDate, trip.TripDateEnd, live.Value.ShareGraceAfterClose, past.Value.Retention))
@@ -592,19 +658,6 @@ public static class TripPastTrackEndpoints
     }
 
     /// <summary>
-    /// The reason logged when the archive is switched off: the gate's own, where the link would
-    /// have been refused anyway, and otherwise the switch.
-    /// </summary>
-    /// <remarks>
-    /// The switch is tested ahead of the gate's refusal so that both cost the same; the reason is
-    /// read the other way round, because a link that is revoked or unknown is refused for that on
-    /// any installation, and "the archive is off" said of it would send an operator to a setting
-    /// that changing would not help.
-    /// </remarks>
-    private static PublishedReadRefusal ArchiveOffOr(OpenedToken opened) =>
-        opened.Refusal is null ? PublishedReadRefusal.ArchiveOff : opened.Reason;
-
-    /// <summary>
     /// What a token opened, once every gate on it has been asked.
     /// </summary>
     /// <remarks>
@@ -643,20 +696,4 @@ public static class TripPastTrackEndpoints
         bool PastReadable,
         ProblemHttpResult? Refusal,
         PublishedReadRefusal Reason);
-
-    /// <summary>
-    /// The latest expiry among a trip's links that nobody revoked, or null when it was never
-    /// published or every link of it has been withdrawn.
-    /// </summary>
-    /// <remarks>
-    /// Null is what "not published" means on this surface — there is no archive flag and no second
-    /// act, only the publication rows that already exist. Which is also why revoking every link of
-    /// a trip takes it out of the archive: revocation already means "end this publication, now",
-    /// and it is read here as meaning exactly that.
-    /// </remarks>
-    private static Task<DateTimeOffset?> LatestUnrevokedExpiryAsync(
-        SilexGisDbContext db, Guid tripLogId, CancellationToken ct) =>
-        db.TripTrackingShares.AsNoTracking()
-            .Where(s => s.TripLogId == tripLogId && s.RevokedAt == null)
-            .MaxAsync(s => (DateTimeOffset?)s.ExpiresAt, ct);
 }
