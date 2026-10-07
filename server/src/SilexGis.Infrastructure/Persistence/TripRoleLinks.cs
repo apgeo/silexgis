@@ -23,8 +23,16 @@ public static class TripRoleLinks
 {
     /// <summary>The vocabulary rows for the trip roles. Composed as a subquery, so an
     /// installation whose seeding ran later needs no cache to be invalidated.</summary>
+    /// <remarks>
+    /// It states no tracking option, and must not. It yields numbers, which are never tracked,
+    /// so saying "no tracking" here would do nothing for this query — and it would decide the
+    /// matter for the query this is composed into, because a tracking option is read off the
+    /// whole expression, wherever in it it was written. It did: a link found through a
+    /// condition built on this was handed to its editor untracked, and the edit was saved and
+    /// answered as saved without a column of it reaching the database.
+    /// </remarks>
     public static IQueryable<long> RoleIds(SilexGisDbContext db) =>
-        db.ResLinkRelationTypes.AsNoTracking()
+        db.ResLinkRelationTypes
             .Where(r => ResLinkRelationTypeSeeds.TripRoleCodes.Contains(r.Code))
             .Select(r => r.Id);
 

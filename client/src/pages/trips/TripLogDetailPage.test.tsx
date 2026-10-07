@@ -127,8 +127,9 @@ function Address() {
   return <span data-testid="address">{`${location.pathname}${location.search}`}</span>;
 }
 
-function renderPage(entry = `/trip-logs/${TRIP}`) {
-  return render(
+/** The page in its router, as an element — so a test can draw it again once an answer has moved. */
+function pageElement(entry = `/trip-logs/${TRIP}`) {
+  return (
     <App>
       <MemoryRouter initialEntries={['/somewhere-else', entry]} initialIndex={1}>
         <Address />
@@ -138,8 +139,12 @@ function renderPage(entry = `/trip-logs/${TRIP}`) {
           <Route path="/trip-logs/:id" element={<TripLogDetailPage />} />
         </Routes>
       </MemoryRouter>
-    </App>,
+    </App>
   );
+}
+
+function renderPage(entry = `/trip-logs/${TRIP}`) {
+  return render(pageElement(entry));
 }
 
 afterEach(cleanup);
@@ -321,13 +326,33 @@ describe('the trip page', () => {
       expect(text).not.toMatch(/\bfor \d/);
     });
 
-    it('promises nothing it has not been told yet', async () => {
-      configSpy.mockReturnValue({ data: undefined });
+    it('promises nothing where the installation could not be asked', async () => {
+      configSpy.mockReturnValue({ data: undefined, isLoading: false });
       renderPage();
 
       const text = await confirmation();
       expect(text).toContain('Delete this trip log?');
       expect(text).not.toContain('restored');
+    });
+
+    it('is not offered while the answer about restoring is still on its way', async () => {
+      // A confirmation opened before the answer gains a sentence when it arrives, and the wider
+      // box moves OK from under a press already aimed at it: the press lands on nothing, and
+      // whoever pressed it is looking at a trip they believe they deleted. So there is one
+      // confirmation, and it is whole when it opens.
+      configSpy.mockReturnValue({ data: undefined, isLoading: true });
+      const { rerender } = renderPage();
+
+      expect(screen.getByTestId('trip-delete')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('trip-delete'));
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+
+      configSpy.mockReturnValue({ data: { deletedRetentionDays: 30 }, isLoading: false });
+      rerender(pageElement());
+
+      expect(screen.getByTestId('trip-delete')).toBeEnabled();
+      const text = await confirmation();
+      expect(text).toContain('It can be restored from Deleted trips for 30 days.');
     });
   });
 
