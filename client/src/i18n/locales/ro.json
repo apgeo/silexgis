@@ -2778,8 +2778,8 @@
         "captions": "Texte"
       },
       "tripsHint": "Bifează turele pe care le arată filmul. Fiecare își păstrează culoarea în ordinea în care le bifezi.",
-      "tripReports": "Raportări: {{reports}}",
-      "tripLive": "Încă în desfășurare · raportări noi de la deschidere: {{count}}",
+      "tripReports": "Rapoarte: {{reports}}",
+      "tripLive": "Încă în desfășurare · rapoarte noi de la deschidere: {{count}}",
       "noTrackedTrips": "Nicio tură nu a fost urmărită încă pe acest model.",
       "trackedLoadError": "Turele urmărite pe acest model nu au putut fi citite.",
       "tripsLoadError": "Urmărirea unei ture alese nu a putut fi citită.",
@@ -2859,7 +2859,7 @@
       "labelSize": "Mărimea etichetei",
       "labelSizeHelp": "În pixeli ai filmului.",
       "labelPlate": "Fundal sub etichete",
-      "showTimes": "Ora ultimei raportări în etichetă",
+      "showTimes": "Ora ultimului raport în etichetă",
       "colourBy": "Culoarea marcajelor",
       "colourByValues": {
         "auto": "Automat",
