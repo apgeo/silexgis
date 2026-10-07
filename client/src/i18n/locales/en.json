@@ -3460,6 +3460,25 @@
       "photoLibrariesTab": "Photo libraries",
       "photoLibrariesIntro": "These switches stop this installation using a photo library it already has, and start it again afterwards. They cannot connect one: which libraries this installation has is decided by the deployment that gave them their addresses and credentials."
     },
+    "mapBackgrounds": {
+      "tab": "Maps in documents",
+      "intro": "Which map backgrounds a document may copy. A trip's downloaded write-up carries a map drawn over one background: the default one if it is switched on here, otherwise the first that is.",
+      "reason": "Copying a source's tiles into a document must be something that source's terms allow. Showing a map on screen and putting it into a file that is then mailed and printed are different uses, and each provider decides the second separately — so switch a background on only after reading its terms. The installation ships with an answer for each; what you decide here is kept across restarts and upgrades.",
+      "loadFailed": "The map backgrounds could not be loaded.",
+      "noneOn": "No background is switched on, so the map in a write-up is drawn on a plain ground, and says so.",
+      "columns": {
+        "background": "Background",
+        "inDocuments": "In documents",
+        "shipped": "As shipped"
+      },
+      "switchLabel": "Copy {{name}} into documents",
+      "shippedOn": "Shipped: on",
+      "shippedOff": "Shipped: off",
+      "decidedHere": "Decided here",
+      "useShipped": "Use the shipped answer",
+      "noCredit": "No credit is recorded for this source, so it cannot be copied into a document.",
+      "needsCredit": "That source has no credit to write under the picture, so it cannot be copied into a document."
+    },
     "documentTypes": {
       "title": "Document kinds",
       "intro": "The kinds of document this installation recognises, and the details each kind asks for. Rewriting a kind's details never changes documents already filed under it: they keep the version they were checked against and are re-checked only when someone next edits them.",

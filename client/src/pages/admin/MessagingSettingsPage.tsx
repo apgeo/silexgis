@@ -4,6 +4,7 @@ import {
   BellOutlined,
   CameraOutlined,
   EnvironmentOutlined,
+  FileImageOutlined,
   ImportOutlined,
   MailOutlined,
   MobileOutlined,
@@ -25,6 +26,7 @@ import {
   Typography,
 } from 'antd';
 import { useQueryClient } from '@tanstack/react-query';
+import MapBackgroundsForm from './MapBackgroundsForm.tsx';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import {
@@ -158,6 +160,19 @@ export default function MessagingSettingsPage() {
                 </span>
               ),
               children: <PhotoLibrariesForm settings={settings} onSaved={onSaved} />,
+            },
+            {
+              // Not a section of the stored settings: it is kept on the catalogue's own rows,
+              // so the form reads and writes for itself. It sits here because it is governed by
+              // the same right and is the same kind of thing — the installation's answer to a
+              // question only its administrators can answer.
+              key: 'map-backgrounds',
+              label: (
+                <span>
+                  <FileImageOutlined /> {t('admin.mapBackgrounds.tab')}
+                </span>
+              ),
+              children: <MapBackgroundsForm />,
             },
           ]}
         />

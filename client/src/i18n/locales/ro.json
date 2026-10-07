@@ -3460,6 +3460,25 @@
       "photoLibrariesTab": "Fototeci",
       "photoLibrariesIntro": "Aceste comutatoare opresc folosirea unei fototeci pe care instalarea o are deja și o pornesc la loc. Ele nu pot conecta una: ce fototeci are această instalare se decide prin implementarea care le-a dat adresele și credențialele."
     },
+    "mapBackgrounds": {
+      "tab": "Hărți în documente",
+      "intro": "Ce fundaluri de hartă pot fi copiate într-un document. Raportul descărcat al unei ture conține o hartă desenată peste un singur fundal: cel implicit, dacă este pornit aici, altfel primul care este.",
+      "reason": "Copierea plăcilor unei surse într-un document trebuie să fie permisă de termenii acelei surse. Afișarea unei hărți pe ecran și punerea ei într-un fișier care apoi este trimis și tipărit sunt utilizări diferite, iar fiecare furnizor o hotărăște separat pe a doua — porniți deci un fundal doar după ce i-ați citit termenii. Instalarea vine cu un răspuns pentru fiecare; ce hotărâți aici se păstrează la reporniri și actualizări.",
+      "loadFailed": "Fundalurile de hartă nu au putut fi încărcate.",
+      "noneOn": "Niciun fundal nu este pornit, deci harta dintr-un raport este desenată pe un fond simplu și spune acest lucru.",
+      "columns": {
+        "background": "Fundal",
+        "inDocuments": "În documente",
+        "shipped": "Livrat"
+      },
+      "switchLabel": "Copiază {{name}} în documente",
+      "shippedOn": "Livrat: pornit",
+      "shippedOff": "Livrat: oprit",
+      "decidedHere": "Hotărât aici",
+      "useShipped": "Folosește răspunsul livrat",
+      "noCredit": "Pentru această sursă nu este consemnată nicio mențiune de drepturi, deci nu poate fi copiată într-un document.",
+      "needsCredit": "Sursa nu are o mențiune de drepturi de scris sub imagine, deci nu poate fi copiată într-un document."
+    },
     "documentTypes": {
       "title": "Tipuri de documente",
       "intro": "Tipurile de document recunoscute de această instalare și detaliile cerute de fiecare tip. Rescrierea detaliilor unui tip nu modifică documentele deja înregistrate: acestea păstrează versiunea cu care au fost verificate și sunt reverificate abia la următoarea editare.",

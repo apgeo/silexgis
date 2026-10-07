@@ -155,6 +155,7 @@ export const queryKeys = {
     ['filters', 'resolve', world, [...ids].sort()] as const,
   dashboardSummary: ['dashboard', 'summary'] as const,
   mapLayers: ['map-layers'] as const,
+  mapBackgrounds: ['map-backgrounds'] as const,
   mapConfig: ['map-config'] as const,
   taxonomy: (kind: string) => ['taxonomy', kind] as const,
   caves: (params: CaveListParams) => ['caves', 'list', params] as const,
@@ -1115,6 +1116,47 @@ export function useMapLayers() {
     queryKey: queryKeys.mapLayers,
     queryFn: () => unwrap(api.GET('/api/v1/map-layers')),
     staleTime: 5 * 60_000,
+  });
+}
+
+export type MapBackground = components['schemas']['MapBackgroundDto'];
+export type MapBackgroundChoice = components['schemas']['MapLayerDocumentChoice'];
+
+/**
+ * The map backgrounds this installation publishes, each with whether a document may copy it,
+ * what the shipped catalogue says and what an administrator decided. An administrator's reading:
+ * the server refuses it to anybody who may not read the installation's settings.
+ */
+export function useMapBackgrounds(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.mapBackgrounds,
+    queryFn: () => unwrap(api.GET('/api/v1/admin/map-backgrounds')),
+    enabled,
+  });
+}
+
+/**
+ * Decides whether documents may copy one background: on, off, or back to what the catalogue
+ * says. The answer is the row as it now stands, so the list takes it in place; and the published
+ * catalogue is read again, because that is what a write-up's page chooses its background from —
+ * a page already open must stop copying a source the moment an administrator says so.
+ */
+export function useChooseMapBackground() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, choice }: { id: number; choice: MapBackgroundChoice }) =>
+      unwrap(
+        api.PUT('/api/v1/admin/map-backgrounds/{id}/in-documents', {
+          params: { path: { id } },
+          body: { choice },
+        }),
+      ),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MapBackground[]>(queryKeys.mapBackgrounds, (rows) =>
+        rows?.map((row) => (row.id === updated.id ? updated : row)),
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mapLayers });
+    },
   });
 }
 

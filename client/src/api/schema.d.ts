@@ -5572,6 +5572,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/map-backgrounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The map backgrounds this installation publishes, each with whether a document may copy it, what the catalogue says and what an administrator decided. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MapBackgroundDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/map-backgrounds/{id}/in-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Decides whether documents may copy one background: on, off, or default to follow the catalogue again. Kept across restarts. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MapBackgroundChoiceRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MapBackgroundDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves": {
         parameters: {
             query?: never;
@@ -22532,6 +22610,20 @@ export interface components {
         };
         /** @enum {unknown} */
         MailTransportSecurity: "auto" | "none" | "startTls" | "sslOnConnect";
+        MapBackgroundChoiceRequest: {
+            choice: components["schemas"]["MapLayerDocumentChoice"];
+        };
+        MapBackgroundDto: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            groupName: null | string;
+            attribution: null | string;
+            inDocuments: boolean;
+            catalogueDefault: boolean;
+            choice: components["schemas"]["MapLayerDocumentChoice"];
+            canBeCopied: boolean;
+        };
         MapConfigDto: {
             /** Format: int32 */
             centerlineDetailZoom: number;
@@ -22561,6 +22653,8 @@ export interface components {
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";
+        /** @enum {unknown} */
+        MapLayerDocumentChoice: "default" | "on" | "off";
         MapLayerDto: {
             /** Format: int64 */
             id: number;
