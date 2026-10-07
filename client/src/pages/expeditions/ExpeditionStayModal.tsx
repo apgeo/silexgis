@@ -148,11 +148,25 @@ export default function ExpeditionStayModal({
       message.success(t('common.saved'));
       onClose();
     } catch (error) {
-      message.error(
-        error instanceof ApiError && error.code === CAVER_UNKNOWN
-          ? t('expeditions.stay.personGone')
-          : t('common.saveFailed'),
-      );
+      if (error instanceof ApiError && error.code === CAVER_UNKNOWN) {
+        // The row lets go of the entry it was refused for, and keeps its text. A row means its
+        // entry for as long as it still reads the name it came under, and nothing about a
+        // refusal changes what it reads — so left alone it would send the same dead entry on
+        // every further press, and typing the name again, which is what the message suggests,
+        // would change nothing. From here the text is a name like any typed one: saved as one,
+        // or replaced by choosing somebody out of the list, which this refusal has just had
+        // read again. The line under the box says which of the two it now is.
+        //
+        // Only where the row still holds that entry. The fields stay live while a save is on
+        // its way, and somebody chosen in the meantime is not who the refusal was about.
+        const row = form.getFieldValue('person') as CaverReferenceRow | undefined;
+        if (row && row.caverId === body.caverId) {
+          form.setFieldValue('person', { name: row.name });
+        }
+        message.error(t('expeditions.stay.personGone'));
+      } else {
+        message.error(t('common.saveFailed'));
+      }
     }
   };
 

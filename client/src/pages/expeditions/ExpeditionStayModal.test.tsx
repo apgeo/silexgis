@@ -234,6 +234,55 @@ describe('correcting a stay', () => {
     expect(who().value).toBe('Ana P.');
   });
 
+  it('lets go of an entry the directory no longer holds, so the next save goes through', async () => {
+    // A row means its entry for as long as it still reads the name it came under — and after
+    // this refusal it still does, since nobody has typed anything. Left holding the entry, it
+    // would send the same dead one on every further press, and "type their name" would be
+    // advice that cannot be followed: typing the name that is already there changes nothing.
+    updateStay.mockRejectedValueOnce(new ApiError(400, 'expedition_roster.caver_unknown'));
+    show(stay());
+    expect(screen.getByTestId('caver-name-picked')).toBeTruthy();
+    press();
+    expect(await screen.findByText(/no longer in the list of cavers/)).toBeTruthy();
+
+    // The same text, now saying what it has become: a name, which means whoever the directory
+    // holds under it.
+    expect(who().value).toBe('Ana P.');
+    expect(await screen.findByTestId('caver-name-typed')).toBeTruthy();
+    expect(screen.queryByTestId('caver-name-picked')).toBeNull();
+
+    press();
+    await vi.waitFor(() => expect(updateStay).toHaveBeenCalledTimes(2));
+    const { body } = updateStay.mock.calls[1][0] as { body: ExpeditionRosterEntryWrite };
+    expect(body.caverId).toBeNull();
+    expect(body.newCaverName).toBe('Ana P.');
+  });
+
+  it('keeps somebody chosen while the refused save was on its way', async () => {
+    // The refusal is about the entry that was sent. A row that has since come to name somebody
+    // else is not the one it was about, and is left as it stands.
+    let refuse!: (error: unknown) => void;
+    updateStay.mockReturnValueOnce(
+      new Promise((_, reject) => {
+        refuse = reject;
+      }),
+    );
+    show(stay());
+    press();
+    await vi.waitFor(() => expect(updateStay).toHaveBeenCalledTimes(1));
+
+    typeWho('Ana');
+    fireEvent.click(document.querySelector('.ant-select-item-option[title="Ana Pop"]')!);
+    refuse(new ApiError(400, 'expedition_roster.caver_unknown'));
+    expect(await screen.findByText(/no longer in the list of cavers/)).toBeTruthy();
+
+    press();
+    await vi.waitFor(() => expect(updateStay).toHaveBeenCalledTimes(2));
+    const { body } = updateStay.mock.calls[1][0] as { body: ExpeditionRosterEntryWrite };
+    expect(body.caverId).toBe('caver-ana');
+    expect(body.newCaverName).toBeNull();
+  });
+
   it('stays open and says the save failed on any other refusal', async () => {
     updateStay.mockRejectedValue(new ApiError(403));
     const onClose = vi.fn();

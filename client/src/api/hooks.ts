@@ -7709,9 +7709,31 @@ function useExpeditionRosterWritten(expeditionId: string) {
   };
 }
 
+/**
+ * What a refused write on a camp's roster says about what is held here.
+ *
+ * One refusal is a statement about the cache rather than about the request: the entry a stay
+ * named is not in the directory any more. It was removed after the list of people was read, or
+ * — the only way it can go while a stay still names it — it was joined into another entry for
+ * the same person, and the stays it held moved to the one that was kept. Either way what is
+ * held here is behind: the list of people still offers the entry that is gone, and the roster
+ * may still show stays under it. Both are read again, so the next thing somebody presses is
+ * not the same dead entry.
+ */
+function useExpeditionRosterRefused(expeditionId: string) {
+  const queryClient = useQueryClient();
+  return (error: unknown) => {
+    if (error instanceof ApiError && error.code === 'expedition_roster.caver_unknown') {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cavers });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.expeditionRoster(expeditionId) });
+    }
+  };
+}
+
 /** Records that somebody was at a camp for a stretch of days. Takes the right to write the camp. */
 export function useCreateExpeditionRosterEntry(expeditionId: string) {
   const written = useExpeditionRosterWritten(expeditionId);
+  const refused = useExpeditionRosterRefused(expeditionId);
   return useMutation({
     mutationFn: (body: ExpeditionRosterEntryWrite) =>
       unwrap(
@@ -7721,6 +7743,7 @@ export function useCreateExpeditionRosterEntry(expeditionId: string) {
         }),
       ),
     onSuccess: () => written(),
+    onError: refused,
   });
 }
 
@@ -7730,6 +7753,7 @@ export function useCreateExpeditionRosterEntry(expeditionId: string) {
  */
 export function useUpdateExpeditionRosterEntry(expeditionId: string) {
   const written = useExpeditionRosterWritten(expeditionId);
+  const refused = useExpeditionRosterRefused(expeditionId);
   return useMutation({
     mutationFn: ({ entryId, body }: { entryId: number; body: ExpeditionRosterEntryWrite }) =>
       unwrap(
@@ -7739,6 +7763,7 @@ export function useUpdateExpeditionRosterEntry(expeditionId: string) {
         }),
       ),
     onSuccess: () => written(),
+    onError: refused,
   });
 }
 
