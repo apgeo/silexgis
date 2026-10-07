@@ -3,11 +3,12 @@ import { App } from 'antd';
 import { useEffect } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { SurveyModelInfo, TrackingEvent, TrackingState, TripParticipant } from '../../api/hooks.ts';
 import type { PickedModelPart } from '../../caveview/modelParts.ts';
 import type { TrackingMovieDialogProps } from '../caveview/movie/TrackingMovieDialog.tsx';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
+import { positionAgeOf } from './trackingWatch.ts';
 
 const ANA = 'caver-ana';
 const BOGDAN = 'caver-bogdan';
@@ -84,6 +85,14 @@ interface GivenProps {
    * words — see the test that engages a replay and watches it keep flowing.
    */
   onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
+  /** The watch's declared parts, whether to draw only those, and where the drawing answers. */
+  declaredParts?: readonly string[];
+  onlyDeclaredParts?: boolean;
+  onDeclaredPartsView?: (
+    view: { hide: readonly (readonly string[])[]; unmatched: readonly string[] } | null,
+  ) => void;
+  /** How the card over the model words a moment, or absent where it prints the clock. */
+  trackedMomentInWords?: (iso: string) => string | null;
   /** Which of the viewer's own controls this panel asks for — see the test that reads it. */
   toolbar?: boolean | { buttons?: readonly string[] };
   /**
@@ -138,6 +147,7 @@ interface FakeSheetPaneProps {
   active: boolean;
   cavers: readonly TrackedCaver[];
   onPickStation?: (station: string) => void;
+  momentInWords?: (iso: string) => string | null;
 }
 /** The latest props each mounted sheet pane was given, by declaration link id. */
 const sheetPanes = new Map<string, FakeSheetPaneProps>();
@@ -217,6 +227,7 @@ function tracking(overrides: Partial<TrackingState> = {}): TrackingState {
     // and a test about a published trip says both.
     publishedAt: null,
     publishedUntil: null,
+    quietAfterSeconds: null,
     teams: [{ id: 'team-1', title: 'Team A' }],
     participants: [
       {
@@ -234,6 +245,10 @@ function tracking(overrides: Partial<TrackingState> = {}): TrackingState {
         in: true,
         out: false,
         publishedAs: null,
+        onRoster: true,
+        name: null,
+        quiet: false,
+        outsideDeclaredParts: false,
       },
     ],
     ...overrides,
@@ -304,6 +319,7 @@ function show(
     canEdit?: boolean;
     selectedCaverIds?: string[];
     onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
+    now?: number;
   } = {},
 ) {
   return render(
@@ -319,6 +335,7 @@ function show(
         selectedCaverIds={props.selectedCaverIds ?? [ANA]}
         onRecorded={onRecorded}
         onUnplacedStationsChange={props.onUnplacedStationsChange}
+        now={props.now}
       />
     </App>,
   );
@@ -710,6 +727,44 @@ describe('TrackingModelPanel', () => {
   });
 
   /**
+   * The card over the model words a silence as the table above it does, from the page's instant.
+   *
+   * The table says "3 hours ago" and the card used to print a date and an hour for the reader to
+   * subtract from: two surfaces of one watch wording one silence differently. The panel hands the
+   * viewer the wording, measured from the instant the page gave it and through the watch's own
+   * module, so the two cannot round apart.
+   *
+   * And only over the watch as it stands. A replay is a past moment on screen, and a gap measured
+   * from now would date it by a clock it is not showing — so there the viewer is handed nothing
+   * and the card keeps its clock readings; leaving the replay hands the wording back.
+   */
+  it('hands the viewer the page\'s wording of a silence, and withholds it from a replay', () => {
+    log = [entered(ANA, '2026-09-12T06:10:00Z')];
+    const now = Date.parse('2026-09-12T12:00:00Z');
+    show(tracking(), [entered(ANA, '2026-09-12T06:10:00Z')], { now });
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+    expect(given!.trackedMomentInWords?.('2026-09-12T09:00:00Z')).toBe(
+      positionAgeOf('2026-09-12T09:00:00Z', now, i18n.language),
+    );
+    expect(given!.trackedMomentInWords?.('2026-09-12T09:00:00Z')).toMatch(/3 hours ago/);
+
+    fireEvent.click(screen.getByTestId('trip-tracking-replay-open'));
+    expect(given!.trackedMomentInWords).toBeUndefined();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-replay-leave'));
+    expect(given!.trackedMomentInWords).toBeDefined();
+  });
+
+  /** A page that hands down no instant gets the clock readings the card always printed. */
+  it('hands the viewer no wording when the page gave no instant', () => {
+    show();
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+    expect(given!.trackedMomentInWords).toBeUndefined();
+  });
+
+  /**
    * The drawing's own answer keeps reaching the table above, replay or no replay.
    *
    * <b>The two halves of this surface show different parties, and only one of them is in here.</b>
@@ -742,6 +797,64 @@ describe('TrackingModelPanel', () => {
     act(() => given!.onUnplacedStationsChange?.(new Set(['p.g.7'])));
 
     expect([...(answers.at(-1) ?? [])]).toEqual(['p.g.7']);
+  });
+
+  describe('narrowing the drawing to where the party said it was going', () => {
+    const declaring = () => tracking({ depthFilter: ['p.g'] });
+    const openModel = () => fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+    it('offers nothing on a watch that declared no parts', () => {
+      show();
+      openModel();
+
+      expect(screen.queryByTestId('trip-tracking-declared-only')).not.toBeInTheDocument();
+      expect(given!.declaredParts).toEqual([]);
+    });
+
+    it('waits for the drawing, then narrows it when asked and says how much went', () => {
+      show(declaring());
+      openModel();
+
+      // The viewer is handed the declaration and has not answered: nothing can be promised yet.
+      expect(given!.declaredParts).toEqual(['p.g']);
+      expect(given!.onlyDeclaredParts).toBe(false);
+      expect(screen.getByTestId('trip-tracking-declared-only')).toBeDisabled();
+
+      act(() => given!.onDeclaredPartsView?.({ hide: [['p', 'side'], ['p', 'far']], unmatched: [] }));
+      const narrow = screen.getByTestId('trip-tracking-declared-only');
+      expect(narrow).toBeEnabled();
+      expect(narrow).toHaveAttribute('aria-checked', 'false');
+
+      fireEvent.click(narrow);
+
+      expect(given!.onlyDeclaredParts).toBe(true);
+      expect(screen.getByTestId('trip-tracking-declared-only')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('trip-tracking-declared-only-note')).toHaveTextContent(/hidden: 2/);
+
+      fireEvent.click(screen.getByTestId('trip-tracking-declared-only'));
+      expect(given!.onlyDeclaredParts).toBe(false);
+    });
+
+    it('refuses, naming the entry, a declaration the drawing has no survey for', () => {
+      show(tracking({ depthFilter: ['p.g', 'elsewhere.series'] }));
+      openModel();
+      act(() =>
+        given!.onDeclaredPartsView?.({ hide: [['p', 'side']], unmatched: ['elsewhere.series'] }),
+      );
+
+      expect(screen.getByTestId('trip-tracking-declared-only')).toBeDisabled();
+      expect(screen.getByTestId('trip-tracking-declared-only-note')).toHaveTextContent(
+        'elsewhere.series',
+      );
+    });
+
+    it('offers nothing to switch where every survey of the drawing is declared', () => {
+      show(declaring());
+      openModel();
+      act(() => given!.onDeclaredPartsView?.({ hide: [], unmatched: [] }));
+
+      expect(screen.getByTestId('trip-tracking-declared-only')).toBeDisabled();
+    });
   });
 
   /**
@@ -903,6 +1016,30 @@ describe('TrackingModelPanel', () => {
 
       expect(screen.getByTestId('trip-tracking-picked-station')).toHaveTextContent('p.g.7');
       expect(screen.queryByTestId('trip-tracking-dialog-place')).toBeNull();
+    });
+
+    it('offers only the people the trip still names as somebody a report can be about', () => {
+      // Somebody taken off the roster stays on the watch, drawn where they were last reported.
+      // The server takes no further report about them, so the chooser does not offer one.
+      const party = tracking().participants;
+      show(
+        tracking({
+          participants: [
+            ...party,
+            { ...party[0], caverId: BOGDAN, onRoster: false, name: 'Bogdan Ilie' },
+          ],
+        }),
+      );
+      pressStation('p.g.42');
+      fireEvent.click(screen.getByTestId('trip-tracking-record-here-open'));
+
+      const chooser = screen.getByTestId('trip-tracking-dialog-cavers');
+      fireEvent.mouseDown(chooser.querySelector('.ant-select-selector') ?? chooser);
+      const offered = Array.from(
+        document.querySelectorAll('.ant-select-item-option'),
+        (option) => option.textContent,
+      );
+      expect(offered).toEqual(['Ana Popescu']);
     });
 
     it('sends the report through the same call the card under the watch sends', async () => {

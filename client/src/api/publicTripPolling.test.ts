@@ -2,7 +2,11 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from './client.ts';
 import {
+  PUBLIC_ARCHIVE_FRESH_MS,
+  PUBLIC_IDLE_POLL_MS,
   publicLiveTripsPollInterval,
+  publicLiveTripsRefetchOnReturn,
+  publicPastTripsRefetchOnReturn,
   publicTripPollInterval,
   publicTripRefetchInterval,
   type PublicLiveTripList,
@@ -130,9 +134,12 @@ const followed = (...states: TripTrackingState[]): PublicLiveTripList =>
   }) as unknown as PublicLiveTripList;
 
 /**
- * The list of parties being followed is a statement about now, and it is kept fresh only while
- * "now" can still change: a row whose watch has closed is a party that is out, and a list of such
- * rows is read once. A refusal that will not change stops the clock for good.
+ * The list of parties being followed is a statement about a cave, and the next party can go in at
+ * any time. So it is kept up for as long as it is being read: at the followed pace while somebody
+ * in it is underground, and slowly while nobody is — a row whose watch has closed is a party that
+ * is out, and nothing in a list of such rows moves, but the list itself still changes when the
+ * next party goes in and when a finished one leaves. A refusal that will not change stops the
+ * clock for good.
  */
 describe('how the parties being followed are kept fresh', () => {
   it('is re-read at the followed pace while any party is still underground', () => {
@@ -141,16 +148,77 @@ describe('how the parties being followed are kept fresh', () => {
     );
   });
 
-  it('is read once when every watch in it has closed, and when it is empty', () => {
-    expect(publicLiveTripsPollInterval(followed('closed', 'closed'), null)).toBe(false);
-    expect(publicLiveTripsPollInterval(followed(), null)).toBe(false);
-    expect(publicLiveTripsPollInterval(undefined, null)).toBe(false);
+  it('is re-read slowly, not once, when every watch in it has closed, and when it is empty', () => {
+    // It used to be read once, and a reader who left the list open was then shown "nobody is
+    // being followed" for as long as the tab lived, whoever went in meanwhile — and a party being
+    // watched out of it never visibly left. Slow is the whole of the concession to cost.
+    expect(publicLiveTripsPollInterval(followed('closed', 'closed'), null)).toBe(PUBLIC_IDLE_POLL_MS);
+    expect(publicLiveTripsPollInterval(followed(), null)).toBe(PUBLIC_IDLE_POLL_MS);
+    expect(publicLiveTripsPollInterval(undefined, null)).toBe(PUBLIC_IDLE_POLL_MS);
+    // The twin that makes "slowly" a statement: several times gentler than the followed pace.
+    expect(PUBLIC_IDLE_POLL_MS).toBeGreaterThanOrEqual(
+      3 * (publicTripPollInterval(published('armed')) as number),
+    );
   });
 
   it('stops for good once the link has been refused, and not for a fault that may clear', () => {
     expect(publicLiveTripsPollInterval(followed('armed'), new ApiError(404))).toBe(false);
+    expect(publicLiveTripsPollInterval(followed('closed'), new ApiError(404))).toBe(false);
+    expect(publicLiveTripsPollInterval(followed(), new ApiError(404))).toBe(false);
     expect(publicLiveTripsPollInterval(followed('armed'), new ApiError(503))).toBe(
       publicTripPollInterval(published('armed')),
     );
+  });
+});
+
+/**
+ * What a return to the tab costs. A reader flicking between two tabs returns many times a minute,
+ * and each return is a request unless something says otherwise.
+ */
+describe('the parties being followed, on a return to the tab', () => {
+  const NOW = Date.parse('2026-09-14T12:00:00Z');
+
+  it('are re-read at once while somebody is underground, however fresh the list', () => {
+    expect(publicLiveTripsRefetchOnReturn(followed('closed', 'armed'), null, NOW - 1000, NOW)).toBe(true);
+  });
+
+  it('are re-read when no list ever arrived', () => {
+    expect(publicLiveTripsRefetchOnReturn(undefined, new TypeError('Failed to fetch'), 0, NOW)).toBe(true);
+    expect(publicLiveTripsRefetchOnReturn(undefined, null, 0, NOW)).toBe(true);
+  });
+
+  it('are not re-read on every glance while nobody is underground, and are once the slow pace is owed', () => {
+    for (const list of [followed('closed'), followed()]) {
+      expect(publicLiveTripsRefetchOnReturn(list, null, NOW - 1000, NOW)).toBe(false);
+      expect(publicLiveTripsRefetchOnReturn(list, null, NOW - PUBLIC_IDLE_POLL_MS + 1, NOW)).toBe(false);
+      // A hidden tab's interval never fired: the return is the tick that was missed.
+      expect(publicLiveTripsRefetchOnReturn(list, null, NOW - PUBLIC_IDLE_POLL_MS, NOW)).toBe(true);
+    }
+  });
+
+  it('are never re-read once the link has been refused for good', () => {
+    expect(publicLiveTripsRefetchOnReturn(followed('armed'), new ApiError(404), 0, NOW)).toBe(false);
+    expect(publicLiveTripsRefetchOnReturn(undefined, new ApiError(404), 0, NOW)).toBe(false);
+  });
+});
+
+/**
+ * The archive is believed for a few minutes and re-read after that only when somebody is looking.
+ * How old the list is belongs to the query client; what is decided here is the one answer that is
+ * never asked for twice.
+ */
+describe('the past trips of a cave, on a return to the tab', () => {
+  it('may be re-read, unless the server has refused them for good', () => {
+    expect(publicPastTripsRefetchOnReturn(null)).toBe(true);
+    expect(publicPastTripsRefetchOnReturn(new TypeError('Failed to fetch'))).toBe(true);
+    expect(publicPastTripsRefetchOnReturn(new ApiError(503))).toBe(true);
+    expect(publicPastTripsRefetchOnReturn(new ApiError(429))).toBe(true);
+    // An installation that does not open its archive to visitors, or a link that is over.
+    expect(publicPastTripsRefetchOnReturn(new ApiError(404))).toBe(false);
+  });
+
+  it('are believed for minutes — long against a glance, short against an afternoon', () => {
+    expect(PUBLIC_ARCHIVE_FRESH_MS).toBeGreaterThanOrEqual(60_000);
+    expect(PUBLIC_ARCHIVE_FRESH_MS).toBeLessThanOrEqual(15 * 60_000);
   });
 });

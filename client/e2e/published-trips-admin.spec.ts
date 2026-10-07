@@ -174,6 +174,48 @@ test('an administrator replaces a published link and then unpublishes the trip, 
     await expect(firstRow).toContainText(tripTitle);
     await expect(firstRow).toContainText(caveName);
 
+    // ---- Where the server saw this request come from ----
+    // This run's browser reaches the API through the development server on this machine, with no
+    // reverse proxy stated in between, so the address printed is this machine's own — and the
+    // line says what it would mean were it a proxy's instead.
+    await expect(page.getByTestId('published-trips-seen-from-address')).toHaveText(
+      /^(127\.0\.0\.1|::1)$/,
+    );
+    await expect(page.getByTestId('published-trips-seen-from')).toContainText(
+      'SILEXGIS__Proxy__Hops',
+    );
+
+    // ---- Tracking that is running, and for how long ----
+    // Started a moment ago, so no whole day yet; the row leads to the trip's own tracking tab.
+    const running = page.getByTestId(`published-trips-running-${first.id}`);
+    await expect(running).toContainText('Days running: 0');
+    const toTracking = page.getByTestId(`published-trips-watch-${first.id}`);
+    await expect(toTracking).toHaveAttribute('href', `/trip-logs/${trip.id}?tab=tracking`);
+
+    // Narrowed to tracking running longer than thirty days, this trip's row goes; asked for
+    // everything that is running at all, it is back. The same row both times, so what removed it
+    // was the number of days.
+    const longRunning = page.getByRole('spinbutton', {
+      name: 'Tracking running longer than (days)',
+    });
+    await longRunning.fill('30');
+    await expect(firstStatus).toHaveCount(0, { timeout: 20_000 });
+    await longRunning.fill('0');
+    await expect(firstStatus).toHaveText('Followed now', { timeout: 20_000 });
+    await longRunning.fill('');
+    await expect(firstStatus).toHaveText('Followed now', { timeout: 20_000 });
+
+    // The way in lands on the tab where the coordinator's own Close is — nothing is closed from
+    // the administration page, and nothing closes by itself.
+    await toTracking.click();
+    await expect(page).toHaveURL(new RegExp(`/trip-logs/${trip.id}\\?tab=tracking$`));
+    await expect(page.getByRole('button', { name: 'Close tracking' })).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.goBack();
+    await expect(page.getByRole('heading', { name: 'Published trips' })).toBeVisible();
+    await expect(firstStatus).toHaveText('Followed now', { timeout: 20_000 });
+
     // ---- The visitor, holding the address as first handed out ----
     const anonymous = await ownContext(browser);
     try {

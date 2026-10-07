@@ -15,7 +15,7 @@ import {
   inboxPollIntervalMs,
   isInboxTransport,
 } from '../notifications/transport.ts';
-import { api, ApiError, isSettledRefusal, lastReadETag, readJson } from './client.ts';
+import { api, ApiError, isSettledRefusal, lastReadETag, readJson, retryAfterOf } from './client.ts';
 import type { components, paths } from './schema';
 
 export type CaveListItem = components['schemas']['CaveListItemDto'];
@@ -440,6 +440,7 @@ async function unwrap<T>(
       problem?.code,
       problem?.detail,
       problem as Record<string, unknown> | undefined,
+      retryAfterOf(response),
     );
   }
   return data;
@@ -8338,9 +8339,9 @@ export function useTripTrackings(tripLogIds: readonly string[]) {
 /**
  * The trip's reports, newest first.
  *
- * The log is append-only and a correction is a deletion followed by a fresh report, so this is
- * both the history and the only way a wrong report is taken back. Position fields are withheld
- * here under exactly the same rule as on the state read.
+ * One page of them, optionally one person's: a wrong report is corrected in place or deleted
+ * from the row it is read on, so being able to reach every page is what makes every report
+ * correctable. Position fields are withheld here under exactly the same rule as on the state read.
  *
  * Kept fresh on the same condition as the folded state, and deliberately from the same cache entry
  * rather than from a flag this caller passes: two coordinators with the tab open is the designed
@@ -8839,6 +8840,7 @@ export function useTrackingCsvCommit() {
       options = null,
       replaceExisting = false,
       lines = null,
+      planDigest = null,
     }: {
       tripLogId: string;
       text: string;
@@ -8846,11 +8848,17 @@ export function useTrackingCsvCommit() {
       replaceExisting?: boolean;
       /** The physical lines to commit, or null for every importable one. */
       lines?: number[] | null;
+      /**
+       * The name the preview gave for what importing would write. The server reads the sheet again
+       * for the write and refuses (`tracking_csv.plan_changed`) when that reading would no longer
+       * write what the preview named; left out, the sheet is committed as it reads by then.
+       */
+      planDigest?: string | null;
     }) =>
       unwrap(
         api.POST('/api/v1/trip-logs/{tripLogId}/tracking/csv-import/commit', {
           params: { path: { tripLogId } },
-          body: { text, options, replaceExisting, lines },
+          body: { text, options, replaceExisting, lines, planDigest },
         }),
       ),
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),
@@ -9217,10 +9225,22 @@ export type PublishedLinkStatus = components['schemas']['PublishedLinkStatus'];
 export type PublishedLinksWithdrawn = components['schemas']['PublishedLinksWithdrawnDto'];
 
 /** What the list of published links may be ordered by, spelled as the server reads it. */
-export type PublishedLinkSort = 'createdAt' | 'expiresAt' | 'tripDate' | 'tripTitle' | 'status';
+export type PublishedLinkSort =
+  | 'createdAt'
+  | 'expiresAt'
+  | 'tripDate'
+  | 'tripTitle'
+  | 'status'
+  | 'watchArmedAt';
 
 export interface PublishedLinksParams {
   status?: PublishedLinkStatus;
+  /**
+   * Keeps only links whose tracking is running and was started more than this many days ago.
+   * Sent with each question and stored nowhere: how long is too long is the reader's call. The
+   * server refuses a negative number and one over ten years.
+   */
+  armedLongerThanDays?: number;
   sort?: PublishedLinkSort;
   descending?: boolean;
   page: number;
@@ -9426,6 +9446,29 @@ export type PublicPastTrackParticipant = components['schemas']['PublicPastTrackP
 export type PublicPastTrackFix = components['schemas']['PublicPastTrackFixDto'];
 
 /**
+ * How long the list of a cave's past trips is believed before it is worth asking for again.
+ *
+ * Long against how often the answer changes and short against how long a tab is left open: a
+ * reader who glances back within it is shown what they were shown, at no cost to anybody, and one
+ * who comes back after lunch is shown the trip that finished meanwhile.
+ */
+export const PUBLIC_ARCHIVE_FRESH_MS = 5 * 60_000;
+
+/**
+ * Whether a return to the tab, or a reconnection, may re-read the list of past trips.
+ *
+ * <b>"May", because how old the list is decides the rest</b>: the query library re-reads on a
+ * return only what has outlived its freshness, so this answers yes for everything but one case. A
+ * settled refusal is that case — an installation that does not open its archive to visitors, or a
+ * link that is over, answers this route the same way for good, and a list that was never handed
+ * over counts as out of date for ever. Left to that rule, every glance at the tab would ask again
+ * for something that will never be given.
+ */
+export function publicPastTripsRefetchOnReturn(error: unknown) {
+  return !isSettledRefusal(error);
+}
+
+/**
  * The past trips of this link's cave — the archive behind a published page.
  *
  * <b>Asked for only when somebody asks for it, and that is a rule rather than a tuning.</b> The
@@ -9436,9 +9479,15 @@ export type PublicPastTrackFix = components['schemas']['PublicPastTrackFixDto'];
  * holds the gate — which is also what makes the embed's cost unchanged for an article whose reader
  * never opens the list.
  *
- * Read once and not polled. An archive of finished trips does not change while somebody is looking
- * at it, and this list carries no signed URL to go stale: what it holds is a title, two dates and
- * two numbers.
+ * <b>Believed for a few minutes, and never polled.</b> An archive changes only when a party
+ * comes out and its trip moves here from the list of parties being followed — a few times a day
+ * at the busiest camp — and this list carries no signed URL to go stale: what it holds is a title,
+ * two dates and two numbers. So no clock re-reads it. But a page left open through an afternoon
+ * must not go on listing the cave as it stood at noon: once the list is older than
+ * {@link PUBLIC_ARCHIVE_FRESH_MS} it is read again the next time somebody is actually looking —
+ * on coming back to the tab, on the signal returning, on opening the list again — and inside that
+ * time none of those costs a request. See {@link publicPastTripsRefetchOnReturn} for the one
+ * answer that is never asked for twice.
  */
 export function usePublicPastTrips(token: string | undefined, enabled: boolean) {
   return useQuery({
@@ -9446,7 +9495,9 @@ export function usePublicPastTrips(token: string | undefined, enabled: boolean) 
     queryFn: () =>
       unwrap(api.GET('/api/v1/public/trips/{token}/past', { params: { path: { token: token! } } })),
     enabled: !!token && enabled,
-    staleTime: Infinity,
+    staleTime: PUBLIC_ARCHIVE_FRESH_MS,
+    refetchOnWindowFocus: (query) => publicPastTripsRefetchOnReturn(query.state.error),
+    refetchOnReconnect: (query) => publicPastTripsRefetchOnReturn(query.state.error),
   });
 }
 
@@ -9484,15 +9535,35 @@ export type PublicLiveTripList = components['schemas']['PublicLiveTripListDto'];
 export type PublicLiveTrip = components['schemas']['PublicLiveTripDto'];
 
 /**
+ * How often the list of parties being followed is re-read while nobody in it is underground.
+ *
+ * Such a list is not finished the way a closed trip is: it is a statement about a cave, and the
+ * next party can go in at any time. A reader who left the list standing open — or who is watching
+ * a party that has just come out — would otherwise be shown "nobody is being followed" for as
+ * long as the tab lived, however many parties went in meanwhile, and would never be shown that
+ * the party they were watching has left the list. Slow, because nothing in such a list moves, and
+ * the same few minutes the archive is believed for: the two lists are the two halves of one cave
+ * and a trip passes from this one to that one.
+ */
+export const PUBLIC_IDLE_POLL_MS = 5 * 60_000;
+
+/**
  * How often the list of parties being followed is re-read, and when it stops.
  *
- * <b>Only while somebody in it is still underground.</b> A row whose watch has closed is a party
- * that is out and a trip on its way into the archive; nothing in it moves any more, and a list of
- * such rows is read once. A settled refusal stops the clock for good, as it does for the envelope:
- * a link that has been taken back does not go on asking after the cave's other parties.
+ * <b>At the followed pace while somebody in it is underground, slowly while nobody is, and never
+ * again once the link has been refused for good.</b> A row whose watch has closed is a party that
+ * is out and a trip on its way into the archive; nothing in it moves any more, so a list of such
+ * rows — or an empty one, or one whose first read has not landed — is kept at
+ * {@link PUBLIC_IDLE_POLL_MS}, which is what notices the next party going in and a finished one
+ * leaving. A settled refusal stops the clock, as it does for the envelope: a link that has been
+ * taken back does not go on asking after the cave's other parties.
  *
- * Exported to be checked directly, for the reason the envelope's interval is: this is what keeps
- * the archive of a finished expedition from being polled forever by every tab that opened it.
+ * <b>What bounds the cost is not this number but who is asked for it.</b> The caller reads this
+ * list only while a reader has its section open or is watching a party out of it, and an interval
+ * does not fire in a tab nobody is looking at — so the slow pace is paid by a visible page whose
+ * reader asked about the cave, and by nobody else.
+ *
+ * Exported to be checked directly, for the reason the envelope's interval is.
  */
 export function publicLiveTripsPollInterval(list: PublicLiveTripList | undefined, error: unknown) {
   if (isSettledRefusal(error)) {
@@ -9500,21 +9571,33 @@ export function publicLiveTripsPollInterval(list: PublicLiveTripList | undefined
   }
   return list?.trips.some((trip) => trip.state === 'armed')
     ? PUBLIC_TRACKING_POLL_MS
-    : (false as const);
+    : PUBLIC_IDLE_POLL_MS;
 }
 
 /**
- * Whether a return to the tab, or a reconnection, re-reads the list of parties being followed —
- * by the envelope's rule: when the interval would have, or when no list has arrived yet.
+ * Whether a return to the tab, or a reconnection, re-reads the list of parties being followed.
+ *
+ * <b>At once while somebody is underground or no list has arrived; otherwise only a list the slow
+ * pace would already have re-read.</b> A family coming back to the tab while a party is in wants
+ * where they are now, and a first read that never landed is what a return is for. A list in which
+ * nobody is underground is different: it changes rarely, a reader flicking between two tabs would
+ * ask for it on every flick, and nothing they are waiting for is in it. But a hidden tab's
+ * interval does not fire, so a reader back after an hour holds a list an hour old — and for them
+ * the return is the tick that was missed. `readAt` is when the list in hand arrived.
+ *
+ * A settled refusal is never asked again.
  */
 export function publicLiveTripsRefetchOnReturn(
   list: PublicLiveTripList | undefined,
   error: unknown,
+  readAt = 0,
+  now = Date.now(),
 ) {
-  if (isSettledRefusal(error)) {
+  const interval = publicLiveTripsPollInterval(list, error);
+  if (interval === false) {
     return false;
   }
-  return list === undefined || publicLiveTripsPollInterval(list, error) !== false;
+  return list === undefined || interval === PUBLIC_TRACKING_POLL_MS || now - readAt >= interval;
 }
 
 /**
@@ -9530,8 +9613,9 @@ export function publicLiveTripsRefetchOnReturn(
  * <b>Behind the same press as the archive, for the archive's reason.</b> The page this hangs off
  * is opened by families while a party is underground, on phones, in numbers nobody can see, and
  * its cost has to stay what it was; a reader who never opens the list is never charged for it.
- * Read afresh each time the list is opened — it is a statement about now — and kept fresh only
- * while a row in it is still underground.
+ * Read afresh each time the list is opened — it is a statement about now — and kept fresh for as
+ * long as it is being read: at the followed pace while a row in it is still underground, slowly
+ * otherwise.
  */
 export function usePublicLiveTrips(token: string | undefined, enabled: boolean) {
   return useQuery({
@@ -9541,9 +9625,17 @@ export function usePublicLiveTrips(token: string | undefined, enabled: boolean) 
     enabled: !!token && enabled,
     refetchInterval: (query) => publicLiveTripsPollInterval(query.state.data, query.state.error),
     refetchOnWindowFocus: (query) =>
-      publicLiveTripsRefetchOnReturn(query.state.data, query.state.error),
+      publicLiveTripsRefetchOnReturn(
+        query.state.data,
+        query.state.error,
+        query.state.dataUpdatedAt,
+      ),
     refetchOnReconnect: (query) =>
-      publicLiveTripsRefetchOnReturn(query.state.data, query.state.error),
+      publicLiveTripsRefetchOnReturn(
+        query.state.data,
+        query.state.error,
+        query.state.dataUpdatedAt,
+      ),
   });
 }
 

@@ -68,6 +68,7 @@ public static class TripLiveSiblingEndpoints
             .WithTags("TripTracking")
             .AllowAnonymous()
             .RequireRateLimiting(PublicTripRateLimits.PolicyName)
+            .WithMetadata(PublicTripRoute.Live)
             .WithSummary("Trips of this link's cave being followed right now, each with its party, drawn on this link's survey.");
 
         return api;
@@ -86,12 +87,16 @@ public static class TripLiveSiblingEndpoints
     private static async Task<Results<Ok<PublicLiveTripListDto>, ProblemHttpResult>> ListAsync(
         string token, SilexGisDbContext db, FeatureProtection protection,
         IOptions<TripTrackingOptions> live, IOptions<TripPastTrackOptions> past,
-        TimeProvider clock, CancellationToken ct)
+        TimeProvider clock, PublicTripDiagnostics diagnostics, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
         var opened = await TripPastTrackEndpoints.OpenAsync(
             token, db, protection, live.Value, past.Value, now, ct);
-        if (opened.Refusal is { } refused) return refused;
+        if (opened.Refusal is { } refused)
+        {
+            diagnostics.Refused(PublicTripRoute.Live, opened.Reason, token);
+            return refused;
+        }
 
         // This route's own gate over the shared one. A link still following its own party opens it
         // outright; a link whose trip is over opens it only while the archive is switched on, which
@@ -103,6 +108,9 @@ public static class TripLiveSiblingEndpoints
         var windows = new PublishedLinkWindows(opened.LiveWindowOpen, opened.PastReadable);
         if (!windows.OpensAnything(past.Value.Enabled))
         {
+            // The shared gate opened, so one of the two windows is open; this refuses only the
+            // case where it is the past one and the archive is off.
+            diagnostics.Refused(PublicTripRoute.Live, PublishedReadRefusal.ArchiveOff, token);
             return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
         }
 
@@ -140,6 +148,7 @@ public static class TripLiveSiblingEndpoints
 
         if (candidates.Count == 0)
         {
+            diagnostics.Served(PublicTripRoute.Live);
             return TypedResults.Ok(new PublicLiveTripListDto([], false));
         }
 
@@ -197,6 +206,7 @@ public static class TripLiveSiblingEndpoints
                 party.Participants));
         }
 
+        diagnostics.Served(PublicTripRoute.Live);
         return TypedResults.Ok(new PublicLiveTripListDto(trips, more));
     }
 }

@@ -443,7 +443,22 @@ public static class TrackingCsvParser
                 record.Line, Named(TrackingCsvField.State), stateText));
         }
 
-        if (state is null && decides == TrackingCsvPlaceKind.None)
+        var note = FoldNote(Text(TrackingCsvField.Note), Text(TrackingCsvField.Details));
+
+        // A row with a note and nothing else is a note, and is imported as one: a call that said
+        // "water rising" and no place is a report all the same, and refusing it would cost the
+        // one thing that row carried. Refused only when the note is empty as well, because then
+        // the row says nothing about anybody.
+        //
+        // "Nothing else" means the cells were empty, not that they could not be read. A depth
+        // that is not a number, or a standing word nobody listed, is the sheet saying where
+        // somebody was in a way this reading did not follow — and filing the row as its note
+        // would put that guess into a safety log: "afara" beside a note would leave the person
+        // recorded as still underground, and a depth with a slip in it would, on a re-import,
+        // write a note over the place the log already holds for that moment. Such a row is sent
+        // back, with the finding about the cell beside the refusal saying what to change.
+        var unreadPlace = depthProblem is not null || (stateText is not null && state is null);
+        if (state is null && decides == TrackingCsvPlaceKind.None && (note is null || unreadPlace))
         {
             diagnostics.Add(new TrackingCsvDiagnostic(
                 TrackingCsvSeverity.Error, TrackingCsvProblem.NoPlaceAndNoState, record.Line));
@@ -453,7 +468,6 @@ public static class TrackingCsvParser
         // overran it would otherwise be previewed as fine and then fail the whole file's write —
         // every other row of the sheet with it, and without a line to go and fix. Measured on
         // the folded note rather than on either column, since folding is what gets stored.
-        var note = FoldNote(Text(TrackingCsvField.Note), Text(TrackingCsvField.Details));
         if (note is { Length: > TripTrackingRules.MaxNoteLength })
         {
             diagnostics.Add(new TrackingCsvDiagnostic(
@@ -495,7 +509,7 @@ public static class TrackingCsvParser
             return (null, null);
         }
 
-        var written = text.Replace(',', '.');
+        var written = WithoutMetres(text).Replace(',', '.');
         if (!decimal.TryParse(written, NumberStyles.Float, CultureInfo.InvariantCulture, out var depth))
         {
             return (null, TrackingCsvProblem.DepthUnreadable);
@@ -510,6 +524,50 @@ public static class TrackingCsvParser
         // shows the depth the write will keep and the row is placed on that depth rather than on
         // a finer one the column would round away afterwards.
         return (TripTrackingRules.RecordedDepthM(depth), null);
+    }
+
+    /// <summary>
+    /// The ways a depth cell says "metres" after its number, longest first.
+    /// </summary>
+    /// <remarks>
+    /// Metres and nothing else. The column is in metres whether or not a cell says so, and a cell
+    /// that names another unit is not converted: it is left unreadable and reported, because a
+    /// sheet kept in feet or one stray "cm" is a question for whoever kept it, not arithmetic for
+    /// an importer to do quietly.
+    /// </remarks>
+    private static readonly string[] MetreWords =
+        ["meters", "metres", "meter", "metre", "metri", "metru", "m"];
+
+    /// <summary>
+    /// A depth cell with a trailing "m", "m.", "metri" or "meters" taken off: "96 m" is 96.
+    /// </summary>
+    /// <remarks>
+    /// Taken off only where a digit stands directly before it, spaces aside, so the only cells
+    /// this touches are a number followed by the unit. "96 cm" and "96 km" end in the letter too
+    /// and are not among them: what would be left of either is not a number, and the cell is
+    /// reported as it was written rather than read as 96 metres. A stop is taken off only
+    /// together with a unit, so "96." stays the number it already was.
+    /// </remarks>
+    private static string WithoutMetres(string text)
+    {
+        var trimmed = text.TrimEnd();
+        var body = trimmed.EndsWith('.') ? trimmed[..^1].TrimEnd() : trimmed;
+
+        foreach (var word in MetreWords)
+        {
+            if (!body.EndsWith(word, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var number = body[..^word.Length].TrimEnd();
+            if (number.Length > 0 && char.IsAsciiDigit(number[^1]))
+            {
+                return number;
+            }
+        }
+
+        return text;
     }
 
     /// <summary>

@@ -40,15 +40,6 @@ namespace SilexGis.Api.Features.TripTracking;
 /// </remarks>
 public static class TripTrackingPictureEndpoints
 {
-    /// <summary>Refusal codes, one home so the client can name them and the tests can assert them.</summary>
-    public const string NotTrackedCode = "tracking.not_tracked";
-    public const string InFutureCode = "tracking.picture_in_future";
-    public const string NotParticipantCode = "tracking.caver_not_participant";
-    public const string NotAPictureCode = "tracking.picture_not_image";
-    public const string AlreadyAttachedCode = "tracking.picture_already_attached";
-    public const string VocabularyMissingCode = "tracking.picture_relation_missing";
-    public const string NotFoundCode = "tracking.picture_not_found";
-
     public static RouteGroupBuilder MapTripTrackingPictureEndpoints(this RouteGroupBuilder api)
     {
         var pictures = api.MapGroup("/trip-logs/{tripLogId:guid}/tracking/pictures").WithTags("TripTracking");
@@ -88,7 +79,7 @@ public static class TripTrackingPictureEndpoints
             .FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         if (tracking?.ArmedAt is null)
         {
-            return ApiProblems.Conflict(NotTrackedCode, "This trip was never tracked, so it has no moments.");
+            return ApiProblems.Conflict(TrackingProblemCodes.NotTracked, "This trip was never tracked, so it has no moments.");
         }
 
         var items = request.Items!;
@@ -126,13 +117,13 @@ public static class TripTrackingPictureEndpoints
 
             if (TripTrackingRules.MomentIsInFuture(item.At, now))
             {
-                refused[item.DocumentId] = InFutureCode;
+                refused[item.DocumentId] = TrackingProblemCodes.PictureInFuture;
                 continue;
             }
 
             if (item.CaverId is { } subject && !onRoster.Contains(subject))
             {
-                refused[item.DocumentId] = NotParticipantCode;
+                refused[item.DocumentId] = TrackingProblemCodes.CaverNotParticipant;
                 continue;
             }
 
@@ -156,7 +147,7 @@ public static class TripTrackingPictureEndpoints
             // here would read as a defect on the one refusal a person can actually act on.
             if (content is not { Kind: FileKind.Image })
             {
-                refused[item.DocumentId] = NotAPictureCode;
+                refused[item.DocumentId] = TrackingProblemCodes.PictureNotImage;
                 continue;
             }
 
@@ -169,10 +160,10 @@ public static class TripTrackingPictureEndpoints
                         result.MemberId, item.DocumentId, item.At, item.CaverId));
                     break;
                 case TripMomentPictureOutcome.AlreadyThere:
-                    refused[item.DocumentId] = AlreadyAttachedCode;
+                    refused[item.DocumentId] = TrackingProblemCodes.PictureAlreadyAttached;
                     break;
                 default:
-                    return ApiProblems.Conflict(VocabularyMissingCode,
+                    return ApiProblems.Conflict(TrackingProblemCodes.PictureRelationMissing,
                         "The link vocabulary this feature is built on is not seeded here.");
             }
         }
@@ -209,7 +200,7 @@ public static class TripTrackingPictureEndpoints
         var pictures = new TripMomentPictures(db);
         if (!await pictures.DetachAsync(tripLogId, memberId, ct))
         {
-            return ApiProblems.NotFound(NotFoundCode);
+            return ApiProblems.NotFound(TrackingProblemCodes.PictureNotFound);
         }
 
         await db.SaveChangesAsync(ct);

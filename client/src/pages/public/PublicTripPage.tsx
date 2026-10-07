@@ -11,9 +11,11 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  CloseOutlined,
   EyeInvisibleOutlined,
   HistoryOutlined,
   QuestionCircleOutlined,
+  TeamOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
 import { Alert, Button, Card, Collapse, Flex, Result, Skeleton, Spin, Tabs, Tag, Typography, theme } from 'antd';
@@ -44,6 +46,9 @@ import PublicLanguageButton from './PublicLanguageButton.tsx';
 import PublicTripAbout from './PublicTripAbout.tsx';
 import PublicLiveTripList from './PublicLiveTripList.tsx';
 import PublicPastTripList from './PublicPastTripList.tsx';
+import PublicWatchBar from './PublicWatchBar.tsx';
+import { publicTripView, shownReadEnded, watchedParty } from './publicLiveWatch.ts';
+import { readNotLanding } from './publicReadFreshness.ts';
 import {
   ageInWords,
   clockInWords,
@@ -98,7 +103,10 @@ export default function PublicTripPage() {
   const { token } = useParams<{ token: string }>();
   const narrow = useIsMobile();
   const { token: antdToken } = theme.useToken();
-  const { data, isPending, error, refetch, dataUpdatedAt } = usePublicTrip(token);
+  // The failure of an attempt still being retried and whether the read is being held back are
+  // taken here with the rest, on every render: a page is redrawn only for the members it reads.
+  const { data, isPending, error, refetch, dataUpdatedAt, failureReason, isPaused } =
+    usePublicTrip(token);
   // The one clock of this page: every gap below is measured from it, and it is what redraws them
   // as time passes on a page that nothing else is redrawing.
   const present = useNow();
@@ -116,18 +124,76 @@ export default function PublicTripPage() {
   const language = usePublicLanguage();
 
   /**
-   * What the page is actually showing: the party now, or a past trip wound back to a moment.
+   * The other party of the cave this reader asked to see, if any — and its name as it stood when
+   * they asked, which is what a notice can still say once the party itself is gone from the list.
+   */
+  const [watch, setWatch] = useState<{ tripLogId: string; title: string } | null>(null);
+  /** The party whose watch ended under the reader, by name, until the notice saying so is closed. */
+  const [watchEnded, setWatchEnded] = useState<string | null>(null);
+  /**
+   * Whether the section of parties being followed now stands open, and so whether their list has
+   * been read at all.
+   *
+   * <b>Shut until a reader opens it, and never opened for them.</b> Who else is in the cave is
+   * not what this link was handed over for, and a page that read it on every open would charge
+   * every family for a list most of them never look at. Once a party from it is on screen the list
+   * goes on being read with the section shut again: it is where that party's positions come from,
+   * and where the page learns that the party is no longer being followed.
+   */
+  const [liveOpen, setLiveOpen] = useState(false);
+  const liveTrips = usePublicLiveTrips(token, liveOpen || watch !== null);
+  const watchId = watch?.tripLogId ?? null;
+  const ownTripLogId = data?.tripLogId;
+  const watched = useMemo(
+    () => watchedParty(liveTrips.data, watchId, ownTripLogId),
+    [liveTrips.data, watchId, ownTripLogId],
+  );
+
+  /**
+   * What the page is actually showing: the link's own party now, another party of the cave being
+   * followed now, or a past trip wound back to a moment.
    *
    * <b>One shape, and that is what keeps this honest.</b> A moment of a past trip is folded into
-   * the very envelope the live read produces, so everything below — the standings, the teams, the
-   * four reasons a place cannot be drawn, the markers, the sheets, the pictures — is the same code
-   * drawing the same shape. There is no second set of rules for the past to fall out of step with.
+   * the very envelope the live read produces, and so is a row of the list of parties being
+   * followed, so everything below — the standings, the teams, the four reasons a place cannot be
+   * drawn, the markers, the sheets, the pictures — is the same code drawing the same shape. There
+   * is no second set of rules for either to fall out of step with.
    *
-   * <b>Undefined while a chosen track is still in flight, and deliberately not the live party.</b>
-   * Falling back would draw the party who are underground right now under a banner saying this is
-   * the past, which is the one sentence this whole feature must never produce.
+   * <b>Undefined while what was asked for is not in hand, and deliberately not the link's own
+   * party.</b> Falling back would draw the party who are underground right now under a banner
+   * saying this is the past, or this is somebody else — the one sentence these views must never
+   * produce. Which of the three it is, and that rule, are decided in one place beside this page.
    */
-  const view = past.engaged ? (past.envelope ?? undefined) : data;
+  const pastEngaged = past.engaged;
+  const pastEnvelope = past.envelope;
+  const { mode, envelope: view } = useMemo(
+    () => publicTripView(data, { engaged: pastEngaged, envelope: pastEnvelope }, watched),
+    [data, pastEngaged, pastEnvelope, watched],
+  );
+
+  /**
+   * A watched party that is no longer in the list ends the watch, and the page says so.
+   *
+   * <b>Never a silent return.</b> The figures on screen change owner at that moment — from the
+   * party the reader asked for back to the one this link was published for — and a page that
+   * swapped them without a word would leave somebody reading one party's "everybody is out" as
+   * the other's. So the watch is dropped and a notice names the party it was.
+   */
+  useEffect(() => {
+    if (watch !== null && watched.kind === 'gone') {
+      setWatchEnded(watch.title);
+      setWatch(null);
+    }
+  }, [watch, watched]);
+  // Reaching a past trip by any road — a row, a link, the browser's Forward — is the later and
+  // more deliberate choice, so the watch is over rather than waiting underneath it: leaving the
+  // past returns to the trip this link was published for, as its way back says it does.
+  useEffect(() => {
+    if (pastEngaged) {
+      setWatch(null);
+      setWatchEnded(null);
+    }
+  }, [pastEngaged]);
 
   // A link in somebody's prose, opened in a fresh tab: the address carries which past trip to play
   // and, where it says so, whom to keep the camera on, where to start and whether to start
@@ -162,7 +228,13 @@ export default function PublicTripPage() {
   // The address the viewer is given: held still while it is the same survey, replaced when the
   // survey itself changes. Both halves matter and the reasoning for each lives with the rule,
   // beside the page that shares it.
-  const model = view?.model ?? null;
+  //
+  // The survey is the link's own unless a past trip is on screen. Another party of the cave is
+  // drawn on the link's survey and on nothing else, and read from the link's own answer rather
+  // than through that party's view so that a moment with nobody to draw — its list not in hand
+  // yet — still leaves the drawing standing, instead of tearing down a viewer that would be built
+  // again a second later.
+  const model = (mode === 'past' ? view?.model : data?.model) ?? null;
   // Pinned per drawing rather than per token, because the past is a second drawing reached from
   // the same address: a past trip's survey is its own, often a superseded one, and a pin held
   // across the switch would draw one survey's geometry under another survey's station names.
@@ -282,10 +354,6 @@ export default function PublicTripPage() {
     }
   }, [past.engaged]);
   const pastTrips = usePublicPastTrips(token, pastOpen);
-  // The other half of the cave's list, behind the same press: the parties being followed now,
-  // which the archive deliberately leaves out. Without it a second party of the same expedition
-  // is invisible from this page, and a trip whose watch has just closed is in neither list.
-  const liveTrips = usePublicLiveTrips(token, pastOpen);
   /**
    * Whether this link has been refused for good since the page opened. The cave's lists are read
    * with the same link, so while it is refused a refusal of either list may be nothing more than
@@ -293,6 +361,25 @@ export default function PublicTripPage() {
    * switched off gives. The lists are told, so that neither claims a reason it cannot know.
    */
   const linkEnded = error != null && isSettledRefusal(error);
+  /**
+   * Whether the list of past trips has failed in a way that leaves nothing to show.
+   *
+   * The list is read again when a reader comes back to it after a while, and such a re-read can
+   * fail with a perfectly good list still in hand. A request that merely did not land must not
+   * take that list away from somebody choosing from it — the rows are as true as they were a
+   * minute ago. A refusal the server settled is different: every row would be refused the same
+   * way when pressed, so the list gives way to the sentence that says so.
+   */
+  const archiveFailed =
+    pastTrips.isError && (pastTrips.data === undefined || isSettledRefusal(pastTrips.error));
+  /**
+   * The same of the list of parties being followed now, and it matters more there: that list is
+   * read again on a clock and on every return to the tab, and its rows carry the buttons a reader
+   * changes party with — the way back to this link's own trip among them. A minute's read that
+   * did not land must not replace them with an invitation to open the list again.
+   */
+  const liveFailed =
+    liveTrips.isError && (liveTrips.data === undefined || isSettledRefusal(liveTrips.error));
 
   /**
    * Bringing the statement that this is the past to where the reader is looking.
@@ -354,6 +441,9 @@ export default function PublicTripPage() {
    * committed before the press returns, and there is no such wait to press Back in.
    */
   const play = (tripLogId: string) => {
+    // One party at a time: the past trip replaces whoever was on screen, a watched party included.
+    setWatch(null);
+    setWatchEnded(null);
     past.open(tripLogId, { follow: null });
     setSearch(writePastLink(search, tripLogId, null), {
       replace: search.get('past') === tripLogId,
@@ -377,6 +467,61 @@ export default function PublicTripPage() {
     scrollOwedFor.current = null;
     past.backToNow();
     setSearch(writePastLink(search, null, null), { replace: true, flushSync: true });
+  };
+
+  /**
+   * Bringing the statement that another party is on screen to where the reader is looking.
+   *
+   * The list is at the foot of the page and the statement at its head, exactly as with a past
+   * trip, so a press on a row is answered by the strip being brought to the top of the viewport.
+   * Nothing has to be waited for here — the party pressed is already in hand and is drawn in the
+   * very render the press causes — so the layout that follows the press is the one to scroll in.
+   */
+  const watchBarRef = useRef<HTMLDivElement>(null);
+  const [watchPicked, setWatchPicked] = useState(0);
+  useLayoutEffect(() => {
+    if (watchPicked > 0) {
+      // Optional because a renderer that lays nothing out has no such method.
+      watchBarRef.current?.scrollIntoView?.({ block: 'start' });
+    }
+  }, [watchPicked]);
+
+  /** Back to the trip this link was published for, from another party of the cave. */
+  const leaveWatch = () => {
+    setWatch(null);
+    setWatchEnded(null);
+  };
+
+  /**
+   * Asking for a party of the cave to be drawn — or, given this link's own trip, for the way back.
+   *
+   * <b>Only a party the list in hand actually carries.</b> The press comes from a row, so there is
+   * one; asking for anything else is ignored rather than left standing as a watch of nobody.
+   *
+   * <b>Not written into the address.</b> Everything else this page draws can be sent on as a link,
+   * and this cannot, on purpose: a link that named a party to watch would have the page read the
+   * cave's list for every reader who opened it, where the rule is that the list is read when a
+   * reader asks for it. What the address still says — this link's trip — is also where the page
+   * returns when the watch ends, so a copied address never opens somebody else's party.
+   *
+   * A replay on screen is left first, address included: one party at a time, and the press asked
+   * for this one.
+   */
+  const watchParty = (tripLogId: string) => {
+    if (tripLogId === ownTripLogId) {
+      leaveWatch();
+      return;
+    }
+    const row = liveTrips.data?.trips.find((trip) => trip.tripLogId === tripLogId);
+    if (row === undefined) {
+      return;
+    }
+    if (past.engaged) {
+      leavePast();
+    }
+    setWatchEnded(null);
+    setWatch({ tripLogId, title: row.title });
+    setWatchPicked((count) => count + 1);
   };
 
   /**
@@ -456,7 +601,28 @@ export default function PublicTripPage() {
     '--silexgis-public-warning': antdToken.colorWarning,
   } as CSSProperties;
 
-  if (isPending) {
+  /**
+   * A first read the browser never sent, because it knows it has no connection.
+   *
+   * Nothing failed — nothing was attempted — so the read stays "pending" for as long as the phone
+   * is offline, and a page that drew pending as a spinner would spin at a family in a car park
+   * until they gave up. It is the same fact as a first read that went out and died, and is said
+   * the same way; the read goes out by itself the moment the connection is back.
+   */
+  const neverSent = data === undefined && isPaused === true;
+  /**
+   * A first read the server asked to have back later, and which is being held until then.
+   *
+   * The wait it names can be minutes, and is honoured before each further attempt — so "pending"
+   * is again not "about to arrive", and a spinner for that long is a page that looks broken to the
+   * very readers who arrive when the server is busiest. Said the way the other two are; the read
+   * is made again by itself when the wait is over, and the button asks at once.
+   */
+  const firstReadHeld =
+    neverSent
+    || (data === undefined && readNotLanding({ error: null, failureReason, isPaused }) != null);
+
+  if (isPending && !firstReadHeld) {
     return (
       <Flex align="center" justify="center" style={{ minHeight: '100dvh' }}>
         <Spin size="large" />
@@ -479,7 +645,7 @@ export default function PublicTripPage() {
   // link "may never have existed" on that evidence would be telling a family something false. So
   // a fault that may clear is said as one, with the way to try again; only a refusal the server
   // actually gave — and every unusable link gives the same one — is drawn as nothing to show.
-  if (data === undefined && error != null && !isSettledRefusal(error)) {
+  if (data === undefined && (firstReadHeld || (error != null && !isSettledRefusal(error)))) {
     return (
       <Flex align="center" justify="center" style={{ minHeight: '100dvh', padding: 16 }}>
         <Card style={{ maxWidth: 520, width: '100%' }}>
@@ -537,8 +703,8 @@ export default function PublicTripPage() {
   const now = past.engaged ? (past.at ?? present) : present;
 
   /**
-   * Whether what is on screen has stopped changing for good: the watch is closed, or the link has
-   * given its final answer.
+   * Whether what is on screen has stopped changing for good: the watch is closed, or the read it
+   * is drawn from has been given its final answer.
    *
    * From then on a moment is said as its hour rather than as a gap. A gap is right while the page
    * keeps up with it; on a page nothing will change again it either stands still and is wrong
@@ -547,7 +713,14 @@ export default function PublicTripPage() {
    * notice above them says since when they have not been refreshed. Nor is a replay, which
    * measures from the moment on its own scrubber.
    */
-  const settled = !past.engaged && (data.state !== 'armed' || linkEnded);
+  const shownState = mode === 'own' ? data.state : view?.state;
+  /**
+   * Whether the read feeding the screen has been refused for good — which, while another party of
+   * the cave is on screen, is a question about the list and not about this link's own read.
+   */
+  const shownEnded = shownReadEnded(mode, error, liveTrips.error);
+  const settled =
+    mode !== 'past' && ((shownState !== undefined && shownState !== 'armed') || shownEnded);
 
   /**
    * When this page last heard from the server, or null where it cannot say.
@@ -555,7 +728,26 @@ export default function PublicTripPage() {
    * The moment the last read that succeeded arrived — a read that fails leaves it standing, which
    * is exactly what makes it the answer to "how old is what I am looking at".
    */
-  const readAt = Number.isFinite(dataUpdatedAt) && dataUpdatedAt > 0 ? dataUpdatedAt : null;
+  const shownUpdatedAt = mode === 'watched' ? liveTrips.dataUpdatedAt : dataUpdatedAt;
+  const readAt = Number.isFinite(shownUpdatedAt) && shownUpdatedAt > 0 ? shownUpdatedAt : null;
+  /**
+   * The failure of the read that feeds what is on screen, or null while that read is landing.
+   *
+   * Another party of the cave arrives by the list, not by the link's own read, so while one is on
+   * screen it is the list failing that makes the page stale — and the link's own read failing
+   * that does not, for as long as the list still lands.
+   *
+   * "Failure" in the wide sense a reader means it: a read held back because the browser knows it
+   * is offline, and one waiting out a pause the server asked for, are not being refreshed either.
+   */
+  const readError =
+    mode === 'watched'
+      ? readNotLanding({
+          error: liveTrips.isError ? liveTrips.error : null,
+          failureReason: liveTrips.failureReason,
+          isPaused: liveTrips.isPaused,
+        })
+      : readNotLanding({ error, failureReason, isPaused });
 
   const when = (value: string | null) =>
     value === null ? '—' : new Date(value).toLocaleString(i18n.language);
@@ -713,8 +905,12 @@ export default function PublicTripPage() {
    * is the past. So the header says what it honestly has: that this is a past trip, without a name
    * for it until the name arrives. The browser tab keeps the link's own trip, because the tab is
    * the link.
+   *
+   * Another party of the cave is the same case with a different name on it: the header is that
+   * party's while it is on screen, and nobody's — never the link's own — for a moment in which it
+   * was asked for and is not in hand.
    */
-  const head = view ?? (past.engaged ? null : data);
+  const head = view ?? (mode === 'own' ? data : null);
   const dates =
     head === null ? null : tripDateRange(head.tripDate, head.tripDateEnd, i18n.language);
 
@@ -757,7 +953,11 @@ export default function PublicTripPage() {
           two stories at once. The tab keeps the link's own trip, because the tab is the link. */}
       <header className="public-trip-head">
         <h1 className="public-trip-title" data-testid="public-trip-title">
-          {head === null ? t('publicTrip.past.unknownTrip') : head.title}
+          {head !== null
+            ? head.title
+            : mode === 'watched' && watch !== null
+              ? watch.title
+              : t('publicTrip.past.unknownTrip')}
         </h1>
         {/* The dates and the standing belong to a trip; with no trip in hand there is neither to
             print, and a state tag is the one thing on this page that must never be guessed. */}
@@ -795,6 +995,37 @@ export default function PublicTripPage() {
               momentAddress={momentAddress}
             />
           </div>
+        )}
+
+        {/* The same place, for the same reason, while another party of the cave is on screen: whose
+            figures these are is said before any of them. */}
+        {mode === 'watched' && (
+          <div ref={watchBarRef}>
+            <PublicWatchBar
+              party={view === undefined || dates === null ? null : { title: view.title, dates }}
+              onBack={leaveWatch}
+            />
+          </div>
+        )}
+
+        {/* The watch that ended under the reader. Said where the banner stood, and kept until it is
+            closed or something else is asked for: the figures below changed owner without a press,
+            and that is not something to say for a few seconds and then take away. */}
+        {watchEnded !== null && mode === 'own' && (
+          <Alert
+            type="warning"
+            showIcon
+            // The icon is named although it is the library's own default: its alert draws a close
+            // button for an options object only when that object carries one.
+            closable={{
+              closeIcon: <CloseOutlined />,
+              onClose: () => setWatchEnded(null),
+              'aria-label': t('publicTrip.live.watchEndedClose'),
+            }}
+            title={t('publicTrip.live.watchEndedTitle')}
+            description={t('publicTrip.live.watchEndedBody', { title: watchEnded })}
+            data-testid="public-watch-ended"
+          />
         )}
 
         {view !== undefined && (
@@ -842,9 +1073,17 @@ export default function PublicTripPage() {
 
         {/* A poll that failed is a fact about the live read, so it is said while the live read is
             what is on screen. A reader watching a trip from 2019 does not need to be told that
-            this minute's refresh of a different trip did not land. */}
-        {error != null && !past.engaged && (
-          isSettledRefusal(error) ? (
+            this minute's refresh of a different trip did not land.
+
+            Both are facts about the read feeding what is on screen, and for another party of the
+            cave that is the list of parties being followed, not this link's own read. The two do
+            not end together: the link's own read is refused as soon as its trip is no longer
+            published, while the list may go on answering — so a final word about this link's own
+            trip is not said over a party that is still being refreshed every minute, and is said
+            when the reader goes back to that trip. And a list refused for good is final for the
+            party on screen even where the link's own read, no longer repeated, never heard it. */}
+        {mode !== 'past' && (shownEnded || readError != null) && (
+          shownEnded ? (
             // The server's own answer, and a final one: the link has been taken back or the
             // publication has run out. Said in those words, and without the promise that the
             // page will refresh — the poll has stopped for good, and a reader told "it starts
@@ -882,13 +1121,21 @@ export default function PublicTripPage() {
         )}
 
         {/* Superseded by the past banner while one is up: two notices saying "this is finished"
-            would compete, and only one of them says which trip. */}
-        {data.state !== 'armed' && !past.engaged && (
+            would compete, and only one of them says which trip.
+
+            About the party on screen, never about the link's own trip under somebody else's: a
+            reader watching a party that is still underground from a link whose own trip closed
+            this morning must not be told "this trip is over" above people who are not out. And a
+            watched party whose watch has closed is told in words of its own, because the page
+            does still change for it — it is about to leave the list. */}
+        {mode !== 'past' && shownState !== undefined && shownState !== 'armed' && (
           <Alert
             type="info"
             showIcon
-            title={t('publicTrip.closedTitle')}
-            description={t('publicTrip.closedBody')}
+            title={t(mode === 'watched' ? 'publicTrip.live.watchClosedTitle' : 'publicTrip.closedTitle')}
+            description={t(
+              mode === 'watched' ? 'publicTrip.live.watchClosedBody' : 'publicTrip.closedBody',
+            )}
             data-testid="public-trip-closed"
           />
         )}
@@ -1069,48 +1316,69 @@ export default function PublicTripPage() {
         </section>
         )}
 
-        {/* The archive, at the bottom and shut until it is asked for.
+        {/* The rest of the cave, at the bottom and shut until it is asked for: who else is being
+            followed in it now, and its past trips.
             <b>Shut for a reason and not for tidiness.</b> This page is opened by families while a
             party is underground, on phones, in numbers nobody can see, and its one job is to say
-            whether they are out. Reading a cave's whole history on every one of those opens would
-            double the cost of the cheapest surface here to answer a question nobody asked — so the
-            list is fetched on the press that opens the section, and a reader who never presses it
-            costs exactly what they cost before this existed. */}
+            whether they are out. Reading a cave's other parties and its whole history on every
+            one of those opens would multiply the cost of the cheapest surface here to answer
+            questions nobody asked — so each list is fetched on the press that opens its own
+            section, and a reader who never presses either costs exactly what they cost before
+            these existed.
+            <b>Two sections, each with one list.</b> They answer different questions and are read
+            from different routes, one of which an installation may have switched off: the parties
+            in the cave now are offered whether or not the cave's history is. */}
         <section className="public-trip-past" data-testid="public-trip-past">
           <Collapse
             ghost
-            activeKey={pastOpen ? ['past'] : []}
-            onChange={(keys) => setPastOpen(keys.length > 0)}
+            activeKey={[...(liveOpen ? ['live'] : []), ...(pastOpen ? ['past'] : [])]}
+            onChange={(keys) => {
+              setLiveOpen(keys.includes('live'));
+              setPastOpen(keys.includes('past'));
+            }}
             items={[
+              {
+                key: 'live',
+                label: (
+                  <span className="public-trip-past-label" data-testid="public-trip-live-section">
+                    <TeamOutlined /> {t('publicTrip.live.sectionTitle')}
+                  </span>
+                ),
+                children: (
+                  <PublicLiveTripList
+                    trips={liveTrips.data?.trips}
+                    more={liveTrips.data?.more ?? false}
+                    loading={liveTrips.isPending}
+                    failed={liveFailed}
+                    refused={isSettledRefusal(liveTrips.error)}
+                    // The list's own final refusal counts while it is what the screen is drawn
+                    // from: the notice above has just said this link stopped answering, and the
+                    // list must not invite another try beneath it.
+                    linkEnded={linkEnded || shownEnded}
+                    ownTripLogId={data.tripLogId}
+                    onWatch={watchParty}
+                    watchingId={mode === 'watched' ? watchId : null}
+                  />
+                ),
+              },
               {
                 key: 'past',
                 label: (
-                  <span className="public-trip-past-label">
+                  <span className="public-trip-past-label" data-testid="public-trip-past-section">
                     <HistoryOutlined /> {t('publicTrip.past.sectionTitle')}
                   </span>
                 ),
                 children: (
-                  <>
-                    <PublicLiveTripList
-                      trips={liveTrips.data?.trips}
-                      more={liveTrips.data?.more ?? false}
-                      loading={liveTrips.isPending}
-                      failed={liveTrips.isError}
-                      refused={isSettledRefusal(liveTrips.error)}
-                      linkEnded={linkEnded}
-                      ownTripLogId={data.tripLogId}
-                    />
-                    <PublicPastTripList
-                      trips={pastTrips.data?.trips}
-                      more={pastTrips.data?.more ?? false}
-                      loading={pastTrips.isPending}
-                      failed={pastTrips.isError}
-                      refused={isSettledRefusal(pastTrips.error)}
-                      linkEnded={linkEnded}
-                      playingId={past.tripLogId}
-                      onPlay={play}
-                    />
-                  </>
+                  <PublicPastTripList
+                    trips={pastTrips.data?.trips}
+                    more={pastTrips.data?.more ?? false}
+                    loading={pastTrips.isPending}
+                    failed={archiveFailed}
+                    refused={isSettledRefusal(pastTrips.error)}
+                    linkEnded={linkEnded}
+                    playingId={past.tripLogId}
+                    onPlay={play}
+                  />
                 ),
               },
             ]}

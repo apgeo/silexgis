@@ -44,12 +44,54 @@ export function movieTripSpan(
   if (window === null) {
     return null;
   }
-  const moments = events
+  return { tripLogId, window, moments: reportMoments(events, surveyModelId) };
+}
+
+/** The instants of the reports a movie of this model replays, ascending. */
+function reportMoments(
+  events: readonly Pick<TrackingEvent, 'recordedAt' | 'surveyModelId'>[],
+  surveyModelId: string,
+): number[] {
+  return events
     .filter((event) => event.surveyModelId === null || event.surveyModelId === surveyModelId)
     .map((event) => Date.parse(event.recordedAt))
     .filter((at) => Number.isFinite(at))
     .sort((left, right) => left - right);
-  return { tripLogId, window, moments };
+}
+
+/**
+ * The spans of a movie that shows only some of its trips' people: each trip's stretch as it was,
+ * and for its moments only the reports of somebody who appears.
+ *
+ * <b>A person left out of a movie must not pace it.</b> With quiet stretches shortened, the clock
+ * slows down around every report and jumps across the hours between them. Cut at the reports of
+ * somebody who is not shown, the file would dwell on a moment at which nobody in the picture did
+ * anything — and that moment is the time of a report by the person who was taken out. The stretch
+ * a trip covers is not touched: it is the trip's, whoever is shown of it.
+ *
+ * A span whose trip is not among `trips` is handed back as it is.
+ *
+ * @param appears whether a caver of a trip is shown in the movie.
+ */
+export function movieSpansShowing(
+  spans: readonly MovieTripSpan[],
+  trips: readonly {
+    tripLogId: string;
+    events: readonly Pick<TrackingEvent, 'recordedAt' | 'surveyModelId' | 'caverId'>[];
+  }[],
+  surveyModelId: string,
+  appears: (tripLogId: string, caverId: string) => boolean,
+): MovieTripSpan[] {
+  return spans.map((span) => {
+    const trip = trips.find((candidate) => candidate.tripLogId === span.tripLogId);
+    if (trip === undefined) {
+      return span;
+    }
+    const shown = trip.events.filter((event) => appears(trip.tripLogId, event.caverId));
+    return shown.length === trip.events.length
+      ? span
+      : { ...span, moments: reportMoments(shown, surveyModelId) };
+  });
 }
 
 /** Whether a trip's watch is still running: started and not ended, so its replay has no end of its own. */
@@ -266,6 +308,39 @@ export function movieFrameCount(
   const replayFrames = Math.max(1, Math.round(settings.durationS * settings.fps));
   const holdFrames = Math.max(0, Math.round(settings.holdEndS * settings.fps));
   return { replayFrames, holdFrames, count: replayFrames + holdFrames };
+}
+
+/**
+ * How many times faster than life a movie's clock runs while it plays, or null when the movie has
+ * no rate to speak of.
+ *
+ * <b>One figure for the whole movie, known before any frame is drawn.</b> Consecutive frames of the
+ * replay part are a fixed step of the timeline apart and a fixed time apart on screen, so the rate
+ * is the same at every frame — which is what lets the clock caption carry it on each of them, the
+ * still frames at the end included, without the plate changing width as the movie plays.
+ *
+ * It is the timeline's length that is divided, not the trips' real span: where a quiet stretch was
+ * shortened the clock jumps over the middle of it, and a jump is an instant, not a speed. What the
+ * figure says is how fast everything that <i>is</i> shown goes by.
+ *
+ * Measured between the first and the last frame of the replay part rather than over the length
+ * the reader asked for: the last frame shows the end of the timeline, so the timeline is crossed in
+ * one frame's time less than that length. On a long movie the two agree to within a rounding; on a
+ * two-second GIF at ten frames a second they differ by a twentieth, and the caption would be wrong
+ * by that much against a stopwatch held to the clock it stands beside.
+ */
+export function movieSpeedFactor(
+  timeline: Pick<MovieTimeline, 'length'>,
+  settings: Pick<MovieSettings, 'fps' | 'durationS' | 'holdEndS'>,
+): number | null {
+  const { replayFrames } = movieFrameCount(settings);
+  // A single frame shows one moment: nothing runs, at any speed.
+  if (replayFrames < 2 || !(settings.fps > 0)) {
+    return null;
+  }
+  const playedMs = ((replayFrames - 1) * 1000) / settings.fps;
+  const factor = timeline.length / playedMs;
+  return Number.isFinite(factor) && factor > 0 ? factor : null;
 }
 
 /**

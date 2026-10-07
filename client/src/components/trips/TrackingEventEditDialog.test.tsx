@@ -31,6 +31,8 @@ const REPORT: TrackingEvent = {
   depthEnteredM: null,
   note: 'first call',
   recordedAt: '2026-09-12T10:00:00Z',
+  corrected: false,
+  outsideDeclaredParts: false,
 };
 
 beforeEach(() => {

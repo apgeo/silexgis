@@ -113,11 +113,19 @@ public sealed class TrackingCsvImportRequestValidator : AbstractValidator<Tracki
 /// nothing: saying "none" is not the same as saying nothing. A reviewer who has read a
 /// preview commits what they read, and naming the lines is what makes that exact.
 /// </param>
+/// <param name="PlanDigest">
+/// The <see cref="TrackingCsvPreviewDto.PlanDigest"/> of the preview this commit was decided on.
+/// The sheet is read again for the write, against the trip as it is by then; where what that
+/// reading would write is no longer what the preview named, nothing is written and the answer is
+/// a conflict. Left out, the sheet is committed as it reads now — which is what a caller that
+/// never previewed is asking for.
+/// </param>
 public sealed record TrackingCsvCommitRequest(
     string? Text,
     TrackingCsvImportOptionsDto? Options,
     bool ReplaceExisting,
-    IReadOnlyList<int>? Lines);
+    IReadOnlyList<int>? Lines,
+    string? PlanDigest = null);
 
 public sealed class TrackingCsvCommitRequestValidator : AbstractValidator<TrackingCsvCommitRequest>
 {
@@ -127,6 +135,10 @@ public sealed class TrackingCsvCommitRequestValidator : AbstractValidator<Tracki
         RuleFor(x => x.Options!).SetValidator(new TrackingCsvImportOptionsDtoValidator())
             .When(x => x.Options is not null);
         RuleFor(x => x.Lines!.Count).LessThanOrEqualTo(20_000).When(x => x.Lines is not null);
+        // The shape a preview hands out and no other. Anything else was never a preview's, and
+        // answering it as a plan that changed would send the caller to read a sheet again for
+        // what is a malformed request.
+        RuleFor(x => x.PlanDigest!).Matches("^[0-9a-f]{64}$").When(x => x.PlanDigest is not null);
     }
 }
 
@@ -139,6 +151,17 @@ public sealed record TrackingCsvDiagnosticDto(
     string? Detail);
 
 /// <summary>One report a row would become, with what it matched.</summary>
+/// <param name="PlaceLabel">
+/// The place as the sheet named it, where <paramref name="StationName"/> is the station the cave
+/// declared that name to be; null where the row named a station outright, gave a depth, or claims
+/// no place.
+/// </param>
+/// <param name="Before">
+/// The report this row would replace, as the log holds it now — present exactly where
+/// <paramref name="Replaces"/> is true. It is a stored report and is answered as the log's own
+/// list answers it: to a caller who may not be told where the cave is, its station, its depth and
+/// its survey are null while its kind, note and team are not.
+/// </param>
 public sealed record TrackingCsvPreviewRowDto(
     int Line,
     DateTimeOffset RecordedAt,
@@ -149,9 +172,11 @@ public sealed record TrackingCsvPreviewRowDto(
     Guid? TeamId,
     TripPositionEventKind Kind,
     string? StationName,
+    string? PlaceLabel,
     decimal? DepthM,
     string? Note,
     bool Replaces,
+    TrackingEventDto? Before,
     IReadOnlyList<TrackingCsvDiagnosticDto> Diagnostics);
 
 /// <summary>What reading a sheet against this trip found.</summary>
@@ -169,6 +194,12 @@ public sealed record TrackingCsvPreviewRowDto(
 /// The day the sheet's times were put on, where the sheet wrote times with no dates and the caller
 /// named the day; null where the rows wrote their own dates, whatever the caller sent.
 /// </param>
+/// <param name="PlanDigest">
+/// A name for everything committing this sheet would write, to be sent back with the commit. It
+/// is worked out from the sheet and the trip each time and kept nowhere. Of the reports to be
+/// replaced it takes in what this answer shows of them and nothing more, so a place withheld from
+/// the caller here is not in the name either.
+/// </param>
 public sealed record TrackingCsvPreviewDto(
     IReadOnlyList<string> Header,
     IReadOnlyDictionary<string, string> ResolvedColumns,
@@ -183,12 +214,24 @@ public sealed record TrackingCsvPreviewDto(
     IReadOnlyList<TrackingCsvDiagnosticDto> FileDiagnostics,
     IReadOnlyList<TrackingCsvDiagnosticDto> Refused,
     string? TimeZone,
-    DateOnly? Day);
+    DateOnly? Day,
+    string PlanDigest);
 
 /// <summary>What committing a sheet did.</summary>
+/// <param name="Updated">Reports the log already held that the sheet changed.</param>
+/// <param name="Unchanged">
+/// Reports the log already held, that the sheet was allowed to overwrite, and that already said
+/// everything the sheet says about them — so nothing was written and they are not marked as
+/// corrected.
+/// </param>
+/// <param name="Skipped">
+/// Rows left out: those not among the lines asked for, and those the log already holds where
+/// overwriting was not allowed.
+/// </param>
 public sealed record TrackingCsvCommitDto(
     int Created,
     int Updated,
+    int Unchanged,
     int Skipped,
     IReadOnlyList<TrackingCsvDiagnosticDto> Refused);
 

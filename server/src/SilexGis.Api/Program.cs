@@ -197,13 +197,21 @@ try
     builder.Services.AddSingleton<IValidateOptions<SpatialOptions>, SpatialOptionsValidator>();
     builder.Services.AddOptions<SyncOptions>()
         .BindConfiguration(SyncOptions.SectionName);
+    // Checked while starting, like the working coordinate system above and for the same reason
+    // turned up a notch: these periods are read on anonymous routes that answer every refusal
+    // alike, so a lifetime of zero or less would not fail anywhere — links would simply read
+    // "not found" to the people they were handed to, at or before the midnight their trip ends.
     builder.Services.AddOptions<TripTrackingOptions>()
-        .BindConfiguration(TripTrackingOptions.SectionName);
+        .BindConfiguration(TripTrackingOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<TripTrackingOptions>, TripTrackingOptionsValidator>();
     // Bound beside the live tracking settings and deliberately in a section of its own: these
     // govern the second of a published trip's two lifetimes — how long it stays readable after it
     // is over — and one class holding both would leave a careless read between them.
     builder.Services.AddOptions<TripPastTrackOptions>()
-        .BindConfiguration(TripPastTrackOptions.SectionName);
+        .BindConfiguration(TripPastTrackOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<TripPastTrackOptions>, TripPastTrackOptionsValidator>();
     // The sizes bounded answers are cut at, each a backstop that says when it bit: settings so an
     // installation can move them and a test can lower them to where they bite.
     builder.Services.AddOptions<SilexGis.Api.Features.TripLogs.TripListOptions>()
@@ -221,6 +229,10 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // to know. Registered concretely: it is called from one place and substituted by nothing, so an
     // interface would be ceremony rather than a seam.
     builder.Services.AddScoped<SilexGis.Api.Features.TripTracking.TripPublicationAnnouncer>();
+    // Why a published page was refused and how much the published surface is read, for the
+    // operator: a log event and counters, and nothing in any response. One for the application's
+    // lifetime because it owns the counters.
+    builder.Services.AddSingleton<PublicTripDiagnostics>();
     // One resolver per resource-link target world; the directory is what the link
     // surface fans out through for display, the picker feed and the authoring floor.
     builder.Services.AddScoped<IResLinkTargetResolver, FeatureTargetResolver>();
@@ -236,27 +248,39 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     builder.Services.AddScoped<ResLinkTargetDirectory>();
     // Credential-guessing protection: per-IP fixed window on the auth surface.
     // Limit is configurable for installations behind shared NATs.
-    var authPermitLimit = builder.Configuration.GetValue("Auth:RateLimitPerMinute", 60);
+    //
+    // Each of the four limits below is read through PerMinuteLimit, which refuses the start on a
+    // value that is not positive: the limiter would otherwise accept it here and throw on the
+    // first request to the surface, which is a server error on every sign-in or every published
+    // page with nothing to connect it to a setting.
+    var authPermitLimit = PerMinuteLimit.Read(builder.Configuration, "Auth:RateLimitPerMinute", 60);
     // Abuse and cost control on the printed-code landing route, and deliberately not a
     // confidentiality control: a printed code is short and reproducible outside this server, so
     // its space is exhaustible at any rate a person would tolerate. What makes that pointless is
     // that a resolving code discloses nothing but the installation's own name. A window of its
     // own so that a group scanning labels from behind one connection cannot spend the sign-in
     // allowance of everyone else behind it.
-    var qrPermitLimit = builder.Configuration.GetValue("Qr:RateLimitPerMinute", 60);
+    var qrPermitLimit = PerMinuteLimit.Read(builder.Configuration, "Qr:RateLimitPerMinute", 60);
     // Cost control on the published-trip surface, which is anonymous, uncached, and backs a whole
     // envelope folded out of a trip's report log — see PublicTripRateLimits for why it is a window
     // of its own and why it is not a confidentiality control.
-    var publicTripPermitLimit = builder.Configuration.GetValue(
-        PublicTripRateLimits.ConfigurationKey, PublicTripRateLimits.DefaultPerMinute);
+    var publicTripPermitLimit = PerMinuteLimit.Read(
+        builder.Configuration, PublicTripRateLimits.ConfigurationKey, PublicTripRateLimits.DefaultPerMinute);
     // Cost control on the calendar feed, keyed on the feed's own token rather than on the
     // address — see CalendarFeedRateLimits for why a surface polled by calendar services for ever
     // cannot share the address-keyed shape above.
-    var calendarFeedPermitLimit = builder.Configuration.GetValue(
-        CalendarFeedRateLimits.ConfigurationKey, CalendarFeedRateLimits.DefaultPerMinute);
+    var calendarFeedPermitLimit = PerMinuteLimit.Read(
+        builder.Configuration, CalendarFeedRateLimits.ConfigurationKey, CalendarFeedRateLimits.DefaultPerMinute);
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        // Adds a header and a count and writes no body: the refusal's problem document is written
+        // afterwards by the status-code pages, and a body written here would replace it.
+        options.OnRejected = (context, _) =>
+        {
+            PublicTripRateLimits.Rejected(context);
+            return ValueTask.CompletedTask;
+        };
         options.AddPolicy("auth", context =>
             System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -312,7 +336,12 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // caller so the per-address limiters above key on the caller and not on the proxy. How many
     // proxies there are, and which networks they speak from, is configuration — see
     // TrustedProxies for why "any peer, one hop" is not safe under the TLS overlay.
-    app.UseForwardedHeaders(TrustedProxies.Read(builder.Configuration));
+    var proxies = TrustedProxies.Read(builder.Configuration);
+    app.UseForwardedHeaders(proxies);
+    // Says so in the log, at most once an hour, when what the walk above arrived at looks like one
+    // of this installation's own proxies rather than a caller. It reads and never writes: which
+    // address a request is counted under is decided above and is the same with or without it.
+    app.UseMiddleware<ProxyHopsCheck>(proxies);
 
     app.UseExceptionHandler();
     app.UseStatusCodePages();

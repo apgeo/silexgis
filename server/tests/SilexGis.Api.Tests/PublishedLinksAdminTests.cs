@@ -415,6 +415,154 @@ public sealed class PublishedLinksAdminTests : IAsyncLifetime, IDisposable, ICla
         row.EnumerateObject().Select(p => p.Name).ShouldNotContain("tokenHash");
     }
 
+    /// <summary>
+    /// A watch nobody closed is found by how long it has run, whatever its link is doing.
+    /// </summary>
+    /// <remarks>
+    /// The moments are written straight into their columns because each is a plain recorded fact
+    /// with nothing derived from it, read against the clock on every request — so a watch written
+    /// as started ten days ago is exactly a watch that was started ten days ago. The three watches
+    /// differ in one fact each, so what the filter keeps and what it loses are told apart by that
+    /// fact and nothing else.
+    /// </remarks>
+    [Fact]
+    public async Task A_watch_left_running_is_found_by_how_long_it_has_run_and_a_closed_one_is_not()
+    {
+        var forgotten = await PublishedTripAsync(owner, "Forgotten watch");
+        var fresh = await PublishedTripAsync(owner, "Fresh watch");
+        var closed = await PublishedTripAsync(owner, "Closed watch");
+        var tenDaysAgo = DateTimeOffset.UtcNow.AddDays(-10);
+        await SetArmedAtAsync(forgotten.Trip, tenDaysAgo);
+        await SetArmedAtAsync(closed.Trip, tenDaysAgo);
+        (await PutConfigAsync(owner, closed.Trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Every row says when its watch was started, the closed one included.
+        var everything = await ListAsync(admin, "?pageSize=500");
+        JsonElement RowOf(JsonElement answer, Published trip) =>
+            Rows(answer).Single(r => r.GetProperty("id").GetGuid() == trip.ShareId);
+        RowOf(everything, forgotten).GetProperty("watchArmedAt").GetDateTimeOffset()
+            .ShouldBe(tenDaysAgo, TimeSpan.FromMilliseconds(1));
+        RowOf(everything, closed).GetProperty("watchArmedAt").GetDateTimeOffset()
+            .ShouldBe(tenDaysAgo, TimeSpan.FromMilliseconds(1));
+        RowOf(everything, fresh).GetProperty("watchArmedAt").GetDateTimeOffset()
+            .ShouldBeGreaterThan(DateTimeOffset.UtcNow.AddHours(-1));
+
+        // Longer than a week: the forgotten one, and neither the one started today nor the one
+        // started just as long ago that somebody closed.
+        var overAWeek = await ListAsync(admin, "?armedLongerThanDays=7&pageSize=500");
+        Ids(overAWeek).ShouldContain(forgotten.ShareId);
+        Ids(overAWeek).ShouldNotContain(fresh.ShareId);
+        Ids(overAWeek).ShouldNotContain(closed.ShareId);
+        Rows(overAWeek).ShouldAllBe(r => r.GetProperty("watchState").GetString() == "armed");
+        overAWeek.GetProperty("totalItems").GetInt32().ShouldBe(Rows(overAWeek).Count);
+        // The figures above the list describe the installation and do not move with the question.
+        Counts(overAWeek).ShouldBe(Counts(everything));
+
+        // Zero days is "every watch that is running": both running ones, still not the closed one.
+        var running = Ids(await ListAsync(admin, "?armedLongerThanDays=0&pageSize=500"));
+        running.ShouldContain(forgotten.ShareId);
+        running.ShouldContain(fresh.ShareId);
+        running.ShouldNotContain(closed.ShareId);
+
+        // Longer than the watch has run: not found.
+        Ids(await ListAsync(admin, "?armedLongerThanDays=30&pageSize=500")).ShouldNotContain(forgotten.ShareId);
+
+        // Longest-running first when asked in that order.
+        var byStart = Ids(await ListAsync(admin, "?sort=watchArmedAt&armedLongerThanDays=0&pageSize=500"));
+        byStart.IndexOf(forgotten.ShareId).ShouldBeLessThan(byStart.IndexOf(fresh.ShareId));
+
+        // The case nobody notices: the forgotten watch's link runs out. It follows nothing and is
+        // in no public list — and it is still found here, because the question is asked of the
+        // watch. With the status it now has it is found; with the one it had it is not.
+        //
+        // First, what is true before it runs out: the link opens, both of its lists answer, and it
+        // is found as followable. Without this, every "not" below would also hold for a link that
+        // had never worked.
+        using var reader = factory.CreateClient();
+        (await reader.GetAsync(Live(forgotten.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await reader.GetAsync(LiveList(forgotten.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await reader.GetAsync(PastList(forgotten.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var followableAndRunning = await ListAsync(admin, "?status=followable&armedLongerThanDays=7&pageSize=500");
+        RowOf(followableAndRunning, forgotten).GetProperty("status").GetString().ShouldBe("followable");
+        Ids(await ListAsync(admin, "?status=lapsed&armedLongerThanDays=7&pageSize=500"))
+            .ShouldNotContain(forgotten.ShareId);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var link = await db.TripTrackingShares.SingleAsync(l => l.Id == forgotten.ShareId);
+            link.ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1);
+            await db.SaveChangesAsync();
+        }
+        (await reader.GetAsync(Live(forgotten.Token))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync(LiveList(forgotten.Token))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync(PastList(forgotten.Token))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var lapsedAndRunning = await ListAsync(admin, "?status=lapsed&armedLongerThanDays=7&pageSize=500");
+        RowOf(lapsedAndRunning, forgotten).GetProperty("status").GetString().ShouldBe("lapsed");
+        Ids(await ListAsync(admin, "?status=followable&armedLongerThanDays=7&pageSize=500"))
+            .ShouldNotContain(forgotten.ShareId);
+
+        // A number that cannot be a number of days is refused by name, not read as "no filter".
+        foreach (var query in new[] { "?armedLongerThanDays=-1", "?armedLongerThanDays=3651" })
+        {
+            var refused = await admin.GetAsync(List + query);
+            var body = await refused.Content.ReadAsStringAsync();
+            refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, query);
+            Code(body).ShouldBe("validation.failed", query);
+            JsonDocument.Parse(body).RootElement.GetProperty("errors").TryGetProperty("armedLongerThanDays", out _)
+                .ShouldBeTrue($"{query}: {body}");
+        }
+
+        // And the question is still only an administrator's to ask.
+        (await owner.GetAsync(List + "?armedLongerThanDays=7")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>
+    /// The list says which address the request was counted under, so a wrong proxy count shows.
+    /// </summary>
+    /// <remarks>
+    /// The test server has no peer address of its own, so the last entry of the forwarded header
+    /// stands in for the proxy that would be the peer in a real deployment — and a request with no
+    /// header at all has no address to report.
+    /// </remarks>
+    [Fact]
+    public async Task The_answer_names_the_address_the_request_was_counted_under_after_the_proxies()
+    {
+        async Task<JsonElement> SeenFromAsync(HttpClient client, string? forwardedFor)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, List + "?pageSize=1");
+            if (forwardedFor is not null) request.Headers.TryAddWithoutValidation("X-Forwarded-For", forwardedFor);
+            var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+            return JsonDocument.Parse(body).RootElement.GetProperty("seenFrom").Clone();
+        }
+
+        // Nothing to report is said as nothing, not as a made-up address.
+        (await SeenFromAsync(admin, null)).ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The packaged stack's one proxy: the reader's own address.
+        (await SeenFromAsync(admin, "203.0.113.10")).GetString().ShouldBe("203.0.113.10");
+
+        // Two proxies in front and the count left at one: the address shown is the outer proxy's.
+        // That is the whole use of the line — the reader does not recognise it as their own.
+        (await SeenFromAsync(admin, "203.0.113.10, 10.9.9.9")).GetString().ShouldBe("10.9.9.9");
+
+        // The same request to an application told there are two: the reader's own again.
+        var settings = HostSettings();
+        settings["Proxy:Hops"] = "2";
+        using var behindTwo = new SilexGisApiFactory(connectionString, settings, JobWorkers.RemoveFrom);
+        var behindTwoAdmin = await AuthHelper.BearerClientAsync(behindTwo, adminEmail);
+        (await SeenFromAsync(behindTwoAdmin, "203.0.113.10, 10.9.9.9")).GetString().ShouldBe("203.0.113.10");
+
+        // Somebody who may not read the list is told nothing about addresses either.
+        var asOwner = new HttpRequestMessage(HttpMethod.Get, List);
+        asOwner.Headers.TryAddWithoutValidation("X-Forwarded-For", "203.0.113.10");
+        var refused = await owner.SendAsync(asOwner);
+        refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await refused.Content.ReadAsStringAsync()).ShouldNotContain("203.0.113.10");
+    }
+
     // ---- fixtures ----------------------------------------------------------------------------
 
     private static string Shares(Guid trip) => $"/api/v1/trip-logs/{trip}/tracking/shares";
@@ -485,6 +633,16 @@ public sealed class PublishedLinksAdminTests : IAsyncLifetime, IDisposable, ICla
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var tracking = await db.TripTrackings.SingleAsync(t => t.TripLogId == trip);
         tracking.ClosedAt = closedAt;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Backdates the moment a running watch was started at. See the test that uses it.</summary>
+    private async Task SetArmedAtAsync(Guid trip, DateTimeOffset armedAt)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var tracking = await db.TripTrackings.SingleAsync(t => t.TripLogId == trip);
+        tracking.ArmedAt = armedAt;
         await db.SaveChangesAsync();
     }
 

@@ -15,6 +15,7 @@ import {
   Checkbox,
   Flex,
   Popconfirm,
+  Select,
   Skeleton,
   Space,
   Table,
@@ -55,8 +56,14 @@ import {
 } from '../../components/trips/trackingDepthGap.ts';
 import { publicNamingOf } from '../../components/trips/trackingPublicName.ts';
 import {
+  byLastHeard,
   lastHeardInWords,
+  lateSpanOf,
+  planHourInWords,
+  planStanding,
   positionAgeOf,
+  quietCount,
+  quietThresholdOf,
   trackingLogWritable,
   trackingStandingOf,
   trackingStandings,
@@ -66,12 +73,16 @@ import { drawableOn } from '../../caveview/drawableOn.ts';
 import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import { useNow } from '../../hooks/useNow.ts';
 // The position's age is worded by the followed page's own rule, called rather than copied — the
 // same reason the standing and the "last heard" age above are. A coordinator and a family read the
 // same position, and two roundings of one gap would have them disagreeing about it.
 import './TripTrackingTab.css';
 
-/** How many reports the log shows without being asked for more. */
+/**
+ * How many reports one page of the log holds. The newest page is what the tab opens on and keeps
+ * reading; the older ones are asked for a page at a time, by whoever wants them.
+ */
 const RECENT_EVENTS = 20;
 
 /**
@@ -126,13 +137,61 @@ export default function TripTrackingTab({
   // And chosen on the width, never on the pointer: how much room there is across is what decides
   // whether five columns can stand side by side, and a tablet with a trackpad has the room.
   const narrow = useIsMobile();
+  // The present moment, from the one ticker of this page. Every age on the screen is measured
+  // from it, so two rows cannot round one silence to different minutes — and it redraws the tab
+  // by itself, which a clock read once at render does not: on a closed watch nothing polls, and
+  // "planned out by 17:00" has to become "late" at 17:00 with nobody touching the page.
+  const now = useNow();
   const { data, isPending, isFetching, error, refetch } = useTripTracking(trip.id);
   const events = useTripTrackingEvents(trip.id, { pageSize: RECENT_EVENTS });
+  /**
+   * Which part of the log the table under the report card is showing: whose reports, and how far
+   * back.
+   *
+   * <b>A second read, and never a change to the first.</b> The newest page above is not only the
+   * table's opening rows: the survey panel reads when somebody went in off it, the photographs
+   * card opens at its latest moment, and the notice about a log that cannot be corrected asks it
+   * whether the log holds anything. Narrow that read to one person, or walk it to page three, and
+   * all of those start answering about a slice somebody happened to be looking at. So the table
+   * asks for its own page only once it has left the newest one, and everything else goes on
+   * reading the newest whatever the table shows.
+   *
+   * A page at a time in both layouts, rather than a list that grows: the log is re-read every half
+   * minute while a party is underground, and each depth on screen is measured against the survey,
+   * so what is on screen is what is paid for — on a phone, in a valley, most of all.
+   */
+  const [logView, setLogView] = useState<{ caverId: string | null; page: number }>({
+    caverId: null,
+    page: 1,
+  });
+  const logIsNewest = logView.caverId === null && logView.page === 1;
+  const reached = useTripTrackingEvents(
+    trip.id,
+    {
+      pageSize: RECENT_EVENTS,
+      page: logView.page,
+      ...(logView.caverId === null ? {} : { caverId: logView.caverId }),
+    },
+    !logIsNewest,
+  );
+  const log = logIsNewest ? events : reached;
+  const logTotal = log.data?.totalItems ?? 0;
+  const logLastPage = Math.max(1, Math.ceil(logTotal / RECENT_EVENTS));
+  // A page can empty under whoever is on it — the last report on it deleted, by them or by a
+  // second coordinator. The answer then says how many reports there are, and the table steps back
+  // to the last page that holds any rather than standing on an empty one that says "nothing has
+  // been reported". Only on an answer for the page actually asked for: the rows kept on screen
+  // while the next page loads are the previous page's, and their count is about that one.
+  if (log.data !== undefined && !log.isPlaceholderData && logView.page > logLastPage) {
+    setLogView({ ...logView, page: logLastPage });
+  }
   const deleteEvent = useDeleteTrackingEvent();
   const [correcting, setCorrecting] = useState<TrackingEvent | null>(null);
   /** Whether the sheet-reading dialog is open. */
   const [importing, setImporting] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  /** Whether the stacked party is ordered by silence rather than as the trip names it. */
+  const [silenceFirst, setSilenceFirst] = useState(false);
   /** Whose caption on the published page is being set, or null while nobody's is. */
   const [naming, setNaming] = useState<TrackingParticipant | null>(null);
   /**
@@ -208,14 +267,16 @@ export default function TripTrackingTab({
           typed.add(participant.depthM);
         }
       }
-      for (const row of events.data?.items ?? []) {
+      // The rows the table is showing, which are the newest page until somebody walks back or
+      // narrows the log — an older row's depth is as much a claim about a station as a new one's.
+      for (const row of log.data?.items ?? []) {
         if (row.depthEnteredM !== null && row.surveyModelId === watchModelId) {
           typed.add(row.depthEnteredM);
         }
       }
     }
     return [...typed].sort((a, b) => a - b);
-  }, [data?.surveyModelId, data?.participants, events.data?.items]);
+  }, [data?.surveyModelId, data?.participants, log.data?.items]);
 
   /**
    * What each of those depths means, asked of the server that resolves them.
@@ -286,15 +347,42 @@ export default function TripTrackingTab({
   }
 
   const names = new Map(trip.participants.map((person) => [person.caverId, person.name]));
+  // Somebody the log speaks of and the trip no longer names is still on this watch, and the trip
+  // has no name for them any more — so the watch sends theirs itself, for those rows alone.
+  for (const person of data.participants) {
+    if (!person.onRoster && person.name) {
+      names.set(person.caverId, person.name);
+    }
+  }
+  /**
+   * Who a report can still be about: the people the trip names.
+   *
+   * The server takes no report and no caption for anybody else, so a row for somebody taken off
+   * the roster is read and never chosen — it is left out of "select everybody", its checkbox is
+   * off, and whatever was ticked before the roster changed is dropped here rather than sent and
+   * refused.
+   */
+  const reportable = new Set(
+    data.participants.filter((person) => person.onRoster).map((person) => person.caverId),
+  );
+  const chosen = [...selected].filter((caverId) => reportable.has(caverId));
   const teamTitles = new Map(data.teams.map((team) => [team.id, team.title]));
   const named = (caverId: string) => names.get(caverId) ?? t('trips.tracking.unknownCaver');
   const when = (value: string | null) =>
     value ? new Date(value).toLocaleString(i18n.language) : '—';
-  // Taken once per render rather than per row, so every age on the screen is measured from one
-  // moment: two rows a millisecond apart rounding to different minutes would be a table disagreeing
-  // with itself about how long it has been.
-  const now = Date.now();
   const standings = trackingStandings(data.participants);
+  // What the installation calls a long silence, or null where the read sent no threshold — a watch
+  // that is not running, or an installation that switched the mark off. Null removes the whole
+  // subject from the screen rather than leaving a count of nought over a rule nobody is applying.
+  const quietThreshold = quietThresholdOf(data.quietAfterSeconds);
+  const quietPeople = quietCount(data.participants);
+  // The hour the party said it would be out by, read off the trip and against nothing but the
+  // party's own standing. The trip's overdue callout is a separate arrangement and is not asked.
+  const plan = planStanding({
+    expectedReturnAt: trip.expectedReturnAt,
+    underground: standings.underground,
+    now,
+  });
 
   /**
    * Whether a row of this log can be corrected or removed, and whether a photograph can be hung on
@@ -316,10 +404,13 @@ export default function TripTrackingTab({
   const rowsWritable = canEdit && trackingLogWritable(data.state);
   const rowsTakePictures = canEdit && data.armedAt !== null;
   const rowsHaveControls = rowsWritable || rowsTakePictures;
+  // Asked of the newest page of the whole log, not of what the table is showing: whether the log
+  // holds anything is not changed by narrowing it to somebody nobody has reported.
   const logReadOnly = canEdit && !rowsWritable && (events.data?.items.length ?? 0) > 0;
 
   /**
-   * The latest moment anybody was reported at, off the page of reports this tab is holding.
+   * The latest moment anybody was reported at, off the newest page of the log — which this tab
+   * goes on holding whatever page or person the table below has been turned to.
    *
    * The largest rather than the first: reports are listed by the moment they were <em>said</em>,
    * which a coordinator can backdate, and only the largest is the latest whatever the page's order
@@ -392,6 +483,43 @@ export default function TripTrackingTab({
       </Tag>
     );
   };
+
+  /**
+   * The mark on somebody underground nobody has heard from for longer than the installation's
+   * threshold, or nothing.
+   *
+   * <b>The server's mark, worded with the server's number.</b> Who is quiet is decided where the
+   * reports and the clock they are read against both live; this draws the answer and says what it
+   * means. Amber and not red: it is something to look at, sent to nobody, and the colour of an
+   * alarm on a screen that raises none would be a promise this page does not keep.
+   */
+  const quietTag = (participant: TrackingParticipant) => {
+    if (!participant.quiet || quietThreshold === null) {
+      return null;
+    }
+    return (
+      <Tag color="warning" data-testid={`trip-tracking-quiet-${participant.caverId}`}>
+        {quietThreshold.unit === 'hours'
+          ? t('trips.tracking.quiet.tagHours', { amount: quietThreshold.amount })
+          : t('trips.tracking.quiet.tagMinutes', { amount: quietThreshold.amount })}
+      </Tag>
+    );
+  };
+
+  /**
+   * The mark on somebody the watch still lists and the trip no longer names.
+   *
+   * Said beside the name, in both layouts, because it changes what every other cell of the row
+   * means: the standing and the place are the last anybody recorded, and nothing more will be.
+   */
+  const rosterTag = (participant: TrackingParticipant) =>
+    participant.onRoster ? null : (
+      <Tooltip title={t('trips.tracking.notOnRosterDetail')}>
+        <Tag color="warning" data-testid={`trip-tracking-off-roster-${participant.caverId}`}>
+          {t('trips.tracking.notOnRoster')}
+        </Tag>
+      </Tooltip>
+    );
 
   /**
    * What the trip's published page will call one person — answered before a link is minted rather
@@ -639,18 +767,46 @@ export default function TripTrackingTab({
    * in scope to draw. What is refused above all is the obvious repair — filling the gap from the
    * last word — which is the very sentence this whole change exists to stop the table saying.
    */
+  /**
+   * The mark on a place that lies outside the parts of the cave the watch declared.
+   *
+   * <b>The server's word, drawn only beside a place that is itself on screen.</b> Whether a station
+   * is outside the declaration is decided where the stations and their survey names are, by the
+   * same test a reported depth is resolved with; nothing here compares a name with the list. It is
+   * asked for from the two branches below that draw a place and from nowhere else, so it cannot
+   * stand next to "withheld" or a dash. It is a warning colour and no more than that: somebody
+   * went somewhere the plan did not name, which the coordinator wants to see and which alarms
+   * nobody — nothing is sent because of it.
+   */
+  const outsideDeclaredTag = (outside: boolean, testId: string) =>
+    outside ? (
+      <Tooltip title={t('trips.tracking.outsideDeclaredPartsHelp')}>
+        <Tag color="warning" data-testid={testId}>
+          {t('trips.tracking.outsideDeclaredParts')}
+        </Tag>
+      </Tooltip>
+    ) : null;
+
   const positionOf = (
     participant: TrackingParticipant,
   ): { shown: ReactNode; placedAt: string | null } => {
     if (participant.stationName !== null || participant.depthM !== null) {
-      const shown = place(
-        participant.stationName,
-        participant.depthM,
-        gapOf({
-          stationName: participant.stationName,
-          askedDepthM: participant.depthM,
-          surveyModelId: participant.positionSurveyModelId,
-        }),
+      const shown = (
+        <>
+          {place(
+            participant.stationName,
+            participant.depthM,
+            gapOf({
+              stationName: participant.stationName,
+              askedDepthM: participant.depthM,
+              surveyModelId: participant.positionSurveyModelId,
+            }),
+          )}
+          {outsideDeclaredTag(
+            participant.outsideDeclaredParts,
+            `trip-tracking-outside-declared-${participant.caverId}`,
+          )}
+        </>
       );
       // Two questions in order, and they are not the same question. The first is which survey this
       // place was measured in, which two stored ids answer. The second is whether the drawing of
@@ -725,18 +881,41 @@ export default function TripTrackingTab({
    */
   const eventPlace = (row: TrackingEvent) => {
     if (row.stationName !== null || row.depthEnteredM !== null) {
-      return place(
-        row.stationName,
-        row.depthEnteredM,
-        gapOf({
-          stationName: row.stationName,
-          askedDepthM: row.depthEnteredM,
-          surveyModelId: row.surveyModelId,
-        }),
+      return (
+        <>
+          {place(
+            row.stationName,
+            row.depthEnteredM,
+            gapOf({
+              stationName: row.stationName,
+              askedDepthM: row.depthEnteredM,
+              surveyModelId: row.surveyModelId,
+            }),
+          )}
+          {outsideDeclaredTag(row.outsideDeclaredParts, `trip-tracking-event-outside-declared-${row.id}`)}
+        </>
       );
     }
     return row.kind === 'atStation' || row.kind === 'atDepth' ? withheldTag(true) : '—';
   };
+
+  /**
+   * The mark on a report that no longer reads as it was first written down.
+   *
+   * <b>Beside the moment, because that is what the mark qualifies.</b> A log is what somebody said
+   * at a moment, and a row that was put right afterwards is still the best account there is of that
+   * moment — but a reader comparing this log with their own notes, or with what a family was shown
+   * yesterday, is owed knowing that it is not the first one. A word rather than an icon: it is read
+   * on a phone, where nothing hovers.
+   */
+  const correctedMark = (row: TrackingEvent) =>
+    row.corrected ? (
+      <Tooltip title={t('trips.tracking.eventCorrectedMarkHelp')}>
+        <Tag data-testid={`trip-tracking-event-corrected-${row.id}`}>
+          {t('trips.tracking.eventCorrectedMark')}
+        </Tag>
+      </Tooltip>
+    ) : null;
 
   const teamOf = (teamId: string | null) =>
     teamId && teamTitles.has(teamId) ? <Tag>{teamTitles.get(teamId)}</Tag> : '—';
@@ -867,21 +1046,26 @@ export default function TripTrackingTab({
    * names in one place and a list of what they publish to in another, which is exactly the pairing
    * somebody gets wrong at speed.
    */
-  const publicNameCell = (participant: TrackingParticipant) => (
-    <Flex gap={4} align="center" wrap>
-      {publicNameOf(participant)}
-      {canEdit && (
-        <Button
-          type="text"
-          size={controlSize}
-          icon={<EditOutlined />}
-          aria-label={t('trips.tracking.publicName.edit')}
-          onClick={() => setNaming(participant)}
-          data-testid={`trip-tracking-public-name-edit-${participant.caverId}`}
-        />
-      )}
-    </Flex>
-  );
+  const publicNameCell = (participant: TrackingParticipant) =>
+    // A published page counts the party from the trip's roster, so it shows nobody who is off it:
+    // there is no name to read here and none to set.
+    !participant.onRoster ? (
+      <Typography.Text type="secondary">—</Typography.Text>
+    ) : (
+      <Flex gap={4} align="center" wrap>
+        {publicNameOf(participant)}
+        {canEdit && (
+          <Button
+            type="text"
+            size={controlSize}
+            icon={<EditOutlined />}
+            aria-label={t('trips.tracking.publicName.edit')}
+            onClick={() => setNaming(participant)}
+            data-testid={`trip-tracking-public-name-edit-${participant.caverId}`}
+          />
+        )}
+      </Flex>
+    );
 
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
@@ -1024,7 +1208,14 @@ export default function TripTrackingTab({
             Drawn as three equal cells rather than as a sentence so the three stay side by side and
             comparable at 360px, and so the silent count cannot be mistaken for a footnote to the
             other two. */}
-        <div className="tracking-standings" data-testid="trip-tracking-counts">
+        <div
+          className={
+            plan !== null && !narrow
+              ? 'tracking-standings tracking-standings-with-plan'
+              : 'tracking-standings'
+          }
+          data-testid="trip-tracking-counts"
+        >
           {/* Written out one by one rather than mapped over the three names: the check that every
               translation key the code asks for exists reads literal calls out of the source, and
               these are the words that say whether anybody is still in a cave. */}
@@ -1052,6 +1243,86 @@ export default function TripTrackingTab({
               {t('trips.tracking.standing.unheard')}
             </Typography.Text>
           </div>
+          {/* <b>The hour the party said it would be out by, beside the counts it is read
+              against.</b> Absent on a trip with no plan. Once the hour has passed with somebody
+              still underground it turns amber and says by how much; with everybody out it stays
+              the plain hour, because a plan about people in a cave is over when they are not in
+              it. On a phone it takes a row of its own, so the three counts stay three across.
+
+              It reads the trip's planned return and nothing about the overdue callout, and it
+              does nothing: the line under the strip says so. */}
+          {plan !== null && (
+            <div
+              className={
+                narrow
+                  ? 'tracking-standing-cell tracking-plan-cell tracking-plan-cell-own-row'
+                  : 'tracking-standing-cell tracking-plan-cell'
+              }
+              data-testid="trip-tracking-plan"
+              data-late={plan.late ? 'true' : 'false'}
+            >
+              <Typography.Text
+                type={plan.late ? 'warning' : undefined}
+                className="tracking-standing-count"
+                title={when(plan.dueAt)}
+                data-testid="trip-tracking-plan-hour"
+              >
+                {planHourInWords(plan.dueAt, now, i18n.language)}
+              </Typography.Text>
+              <Typography.Text type="secondary" className="tracking-standing-label">
+                {t('trips.tracking.plan.label')}
+              </Typography.Text>
+              {plan.late && (
+                <Tag color="warning" className="tracking-plan-late" data-testid="trip-tracking-plan-late">
+                  {lateSpanOf(plan.lateByMs).unit === 'hours'
+                    ? t('trips.tracking.plan.lateHours', {
+                        amount: lateSpanOf(plan.lateByMs).amount,
+                      })
+                    : t('trips.tracking.plan.lateMinutes', {
+                        amount: lateSpanOf(plan.lateByMs).amount,
+                      })}
+                </Tag>
+              )}
+            </div>
+          )}
+          {/* How many of the people underground have gone unreported for longer than the
+              installation's threshold — a line under the three counts and not a fourth of them,
+              because it is a reading of the first count and not another way the party divides.
+              Drawn only where the read sent a threshold; amber once there is somebody to count. */}
+          {quietThreshold !== null && (
+            <div className="tracking-standings-line">
+              <Typography.Text
+                type={quietPeople > 0 ? 'warning' : 'secondary'}
+                data-testid="trip-tracking-count-quiet"
+                data-quiet={quietPeople}
+              >
+                {quietThreshold.unit === 'hours'
+                  ? t('trips.tracking.quiet.countHours', {
+                      amount: quietThreshold.amount,
+                      people: quietPeople,
+                    })
+                  : t('trips.tracking.quiet.countMinutes', {
+                      amount: quietThreshold.amount,
+                      people: quietPeople,
+                    })}
+              </Typography.Text>
+            </div>
+          )}
+          {/* <b>Said wherever either reading is on the screen: they alarm nobody.</b> An amber
+              figure over a party in a cave reads as something that has been noticed by more than
+              the person looking at it, and nothing has: no message goes out and the trip's
+              overdue callout is neither started nor stopped by anything here. */}
+          {(quietThreshold !== null || plan !== null) && (
+            <div className="tracking-standings-line">
+              <Typography.Text
+                type="secondary"
+                className="tracking-standing-label"
+                data-testid="trip-tracking-marks-note"
+              >
+                {t('trips.tracking.marksNote')}
+              </Typography.Text>
+            </div>
+          )}
         </div>
 
         {/* <b>What the published page will call this party, said before a link is minted rather
@@ -1102,21 +1373,15 @@ export default function TripTrackingTab({
             page, and Space on it silently selected the whole party on the surface that decides who
             a report is about. Said here instead, it is one control, it carries its own words, and
             it is large enough to press. */}
-        {canEdit && data.participants.length > 0 && (
+        {canEdit && reportable.size > 0 && (
           <Checkbox
             className="tracking-select-all"
-            checked={selected.size === data.participants.length}
-            indeterminate={selected.size > 0 && selected.size < data.participants.length}
-            onChange={(event) =>
-              setSelected(
-                event.target.checked
-                  ? new Set(data.participants.map((person) => person.caverId))
-                  : new Set(),
-              )
-            }
+            checked={chosen.length === reportable.size}
+            indeterminate={chosen.length > 0 && chosen.length < reportable.size}
+            onChange={(event) => setSelected(event.target.checked ? new Set(reportable) : new Set())}
             data-testid="trip-tracking-select-all"
           >
-            {t('trips.tracking.selectEverybody', { count: data.participants.length })}
+            {t('trips.tracking.selectEverybody', { count: reportable.size })}
           </Checkbox>
         )}
 
@@ -1126,6 +1391,22 @@ export default function TripTrackingTab({
             364px container — and because nothing clips it the whole page gains that width, so
             reading where somebody is and pressing Save became two views of the page 334px apart.
             Narrow, there is no sideways overflow to keep, because nothing stands side by side. */}
+        {/* <b>The stacked layout's way to the longest silence.</b> Wide, the Last heard heading
+            sorts; stacked, there is no heading to press — the rows carry their own labels — so
+            the one ordering this table offers would have existed on a desk and not on the phone
+            somebody holds at the entrance, which is where "who have we not heard from" is asked.
+            Said as a control of the page's own, like the selection above, and for the same
+            reason. Not offered for a party of one, where there is nothing to put in order. */}
+        {narrow && data.participants.length > 1 && (
+          <Checkbox
+            className="tracking-select-all"
+            checked={silenceFirst}
+            onChange={(event) => setSilenceFirst(event.target.checked)}
+            data-testid="trip-tracking-silence-first"
+          >
+            {t('trips.tracking.silenceFirst')}
+          </Checkbox>
+        )}
         <Table<TrackingParticipant>
           rowKey="caverId"
           size="small"
@@ -1133,14 +1414,22 @@ export default function TripTrackingTab({
           showHeader={!narrow}
           scroll={narrow ? undefined : { x: 'max-content' }}
           className={`tracking-table${narrow ? ' tracking-table-stacked' : ''}`}
-          dataSource={data.participants}
+          // Ordered here only where the heading cannot do it. By the same comparison the heading
+          // uses, on a copy: the read's own order is the trip's, and everything else on this page
+          // goes on reading it.
+          dataSource={
+            narrow && silenceFirst
+              ? [...data.participants].sort(byLastHeard)
+              : data.participants
+          }
           data-testid="trip-tracking-participants"
           locale={{ emptyText: t('trips.tracking.participantsNone') }}
           rowSelection={
             canEdit
               ? {
-                  selectedRowKeys: [...selected],
+                  selectedRowKeys: chosen,
                   onChange: (keys) => setSelected(new Set(keys as string[])),
+                  getCheckboxProps: (row) => ({ disabled: !row.onRoster }),
                   // Said above the table instead — see the note on that control.
                   hideSelectAll: true,
                   // The column is what the tap target is made of — see the stylesheet, which gives
@@ -1160,10 +1449,12 @@ export default function TripTrackingTab({
                       <div className="tracking-stacked">
                         <div className="tracking-stacked-head">
                           <Typography.Text strong>{named(row.caverId)}</Typography.Text>
+                          {rosterTag(row)}
                           {/* Beside the name rather than down among the fields: where somebody
                               stands is what the row is read for, and on a phone the fields below
                               are read only after one of these has said which row to read. */}
                           {standingTag(row)}
+                          {quietTag(row)}
                         </div>
                         <div className="tracking-stacked-facts">
                           {fact(t('trips.tracking.publicName.column'), publicNameCell(row))}
@@ -1183,7 +1474,9 @@ export default function TripTrackingTab({
                     render: (_value, row) => (
                       <Flex gap={8} align="center" wrap>
                         <span>{named(row.caverId)}</span>
+                        {rosterTag(row)}
                         {standingTag(row)}
+                        {quietTag(row)}
                       </Flex>
                     ),
                   },
@@ -1210,6 +1503,12 @@ export default function TripTrackingTab({
                     title: t('trips.tracking.columnLastHeard'),
                     key: 'lastHeard',
                     render: (_value, row) => lastHeard(row),
+                    // The one column that can be sorted, and the first press puts the longest
+                    // silence at the top — somebody never heard from above everybody. Unsorted,
+                    // the table stays in the order the trip names its party, which is the order
+                    // every other surface lists them in.
+                    sorter: byLastHeard,
+                    sortDirections: ['ascend', 'descend'],
                   },
                   {
                     title: t('trips.tracking.columnPosition'),
@@ -1251,12 +1550,15 @@ export default function TripTrackingTab({
         // The same selection the card below records for. Handed down as an offer rather than as a
         // requirement: pressing a station on the model opens a dialog that asks who it is about,
         // with these already chosen, so the fast path never depends on having ticked anybody.
-        selectedCaverIds={[...selected]}
+        selectedCaverIds={chosen}
         onRecorded={() => setSelected(new Set())}
         // Which stations the viewer in it could not place a marker at, so the table above says it
         // too. Answered empty while the model is closed, which is what keeps this table from
         // marking a row against a drawing nobody has opened.
         onUnplacedStationsChange={setUnplacedStations}
+        // The page's one instant, so the card over the model and the row above it for the same
+        // person word one silence the same way.
+        now={now}
       />
 
       {canEdit && (
@@ -1265,8 +1567,11 @@ export default function TripTrackingTab({
           // Offered on a closed watch as well as a running one: a finished trip is written up
           // afterwards, and the server takes a report on a closed log exactly as it takes a
           // correction or a removal there. Only a watch nobody started is refused.
-          writable={trackingLogWritable(data.state)}
-          caverIds={[...selected]}
+          //
+          // The state itself rather than a yes or no, because a closed watch changes what the
+          // card asks: a report written up afterwards has to say when it was made.
+          state={data.state}
+          caverIds={chosen}
           teams={data.teams}
           onRecorded={() => setSelected(new Set())}
         />
@@ -1313,7 +1618,7 @@ export default function TripTrackingTab({
             participants table showing cavers at stations — a failure to learn something drawn as
             a fact about the world, on the one surface that is the record of what came in over the
             radio. The rows already held are kept on screen; what is said about them changes. */}
-        {events.error != null && (
+        {log.error != null && (
           <Alert
             type="error"
             showIcon
@@ -1322,21 +1627,63 @@ export default function TripTrackingTab({
             data-testid="trip-tracking-events-unavailable"
           />
         )}
+        {/* Whose reports. Drawn once the log holds something, and kept while it is narrowed even
+            if that person turns out to have none — the control that emptied the table has to stay
+            on screen to un-empty it. The roster is the list because that is who a coordinator
+            thinks of the log as being about; a wrong report is nearly always "the one about
+            Maria around two", and paging through everybody to find it is the slow way. */}
+        {((events.data?.totalItems ?? 0) > 0 || logView.caverId !== null) && (
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            size={controlSize}
+            style={{ minWidth: 240, maxWidth: '100%', marginBottom: 8 }}
+            placeholder={t('trips.tracking.eventsFilterEverybody')}
+            aria-label={t('trips.tracking.eventsFilterCaver')}
+            value={logView.caverId}
+            // Always back to the newest page: page three of everybody's reports is not page three
+            // of one person's.
+            onChange={(caverId: string | null | undefined) =>
+              setLogView({ caverId: caverId ?? null, page: 1 })
+            }
+            // One option per person: the trip's roster holds a row per person per job, so
+            // somebody who leads and also surveys would otherwise be offered twice under one
+            // value. The map of names is already one entry per person.
+            options={[...names].map(([caverId, name]) => ({ value: caverId, label: name }))}
+            data-testid="trip-tracking-events-caver"
+          />
+        )}
         <Table<TrackingEvent>
           rowKey="id"
           size="small"
-          loading={events.isPending}
-          pagination={false}
+          loading={log.isPending}
+          // Pages across where there is room for the library's own pager; stacked, the two plain
+          // buttons under the table do the same walk at a size a finger can hit.
+          pagination={
+            narrow
+              ? false
+              : {
+                  current: logView.page,
+                  pageSize: RECENT_EVENTS,
+                  total: logTotal,
+                  showSizeChanger: false,
+                  hideOnSinglePage: true,
+                  onChange: (page) => setLogView({ ...logView, page }),
+                }
+          }
           showHeader={!narrow}
           scroll={narrow ? undefined : { x: 'max-content' }}
           className={`tracking-table${narrow ? ' tracking-table-stacked' : ''}`}
-          dataSource={events.data?.items ?? []}
+          dataSource={log.data?.items ?? []}
           data-testid="trip-tracking-events"
           locale={{
             emptyText:
-              events.error != null
+              log.error != null
                 ? t('trips.tracking.eventsUnavailable')
-                : t('trips.tracking.eventsNone'),
+                : logView.caverId !== null
+                  ? t('trips.tracking.eventsNoneForCaver')
+                  : t('trips.tracking.eventsNone'),
           }}
           columns={
             narrow
@@ -1348,6 +1695,7 @@ export default function TripTrackingTab({
                       <div className="tracking-stacked">
                         <div className="tracking-stacked-head">
                           <Typography.Text strong>{when(row.recordedAt)}</Typography.Text>
+                          {correctedMark(row)}
                           {/* On the row it corrects rather than in a column of its own. That
                               column was the last of six, so on a phone it began 457px past the
                               right edge of a scroller 364px wide — the only way to take a wrong
@@ -1373,7 +1721,12 @@ export default function TripTrackingTab({
                   {
                     title: t('trips.tracking.columnLastRecordedAt'),
                     dataIndex: 'recordedAt',
-                    render: (value: string) => when(value),
+                    render: (value: string, row) => (
+                      <Flex gap={6} align="center" wrap>
+                        {when(value)}
+                        {correctedMark(row)}
+                      </Flex>
+                    ),
                   },
                   {
                     title: t('trips.tracking.columnCaver'),
@@ -1417,6 +1770,39 @@ export default function TripTrackingTab({
                 ]
           }
         />
+        {/* The stacked layout's way back through the log. Drawn only where there is somewhere to
+            go: a log that fits on one page has neither button and no count. */}
+        {narrow && logTotal > RECENT_EVENTS && (
+          <Flex gap={8} align="center" justify="space-between" wrap style={{ marginTop: 8 }}>
+            <Typography.Text type="secondary" data-testid="trip-tracking-events-shown">
+              {t('trips.tracking.eventsShown', {
+                from: (logView.page - 1) * RECENT_EVENTS + 1,
+                to: Math.min(logView.page * RECENT_EVENTS, logTotal),
+                total: logTotal,
+              })}
+            </Typography.Text>
+            <Flex gap={8} wrap>
+              {logView.page > 1 && (
+                <Button
+                  size={controlSize}
+                  onClick={() => setLogView({ ...logView, page: logView.page - 1 })}
+                  data-testid="trip-tracking-events-newer"
+                >
+                  {t('trips.tracking.eventsNewer')}
+                </Button>
+              )}
+              {logView.page < logLastPage && (
+                <Button
+                  size={controlSize}
+                  onClick={() => setLogView({ ...logView, page: logView.page + 1 })}
+                  data-testid="trip-tracking-events-older"
+                >
+                  {t('trips.tracking.eventsOlder')}
+                </Button>
+              )}
+            </Flex>
+          </Flex>
+        )}
       </div>
 
       {/* The trip's photographs, under the log they belong beside and outside the survey panel
@@ -1436,13 +1822,13 @@ export default function TripTrackingTab({
           // table above, offered rather than imposed: the dialog asks, and its chooser is where
           // the answer is actually settled.
           onAttach={() =>
-            setAttaching({ at: defaultPictureMoment, caverId: [...selected][0] ?? null })
+            setAttaching({ at: defaultPictureMoment, caverId: chosen[0] ?? null })
           }
         />
       )}
 
       {/* One dialog for every row, opened by the row being corrected rather than mounted per row:
-          the log shows fifty reports and fifty mounted modals is fifty forms to keep in step. It
+          a page of the log is twenty reports and twenty mounted modals is twenty forms to keep in step. It
           fills itself from whichever report was pressed. */}
       {canEdit && (
         <TrackingEventEditDialog
@@ -1460,6 +1846,7 @@ export default function TripTrackingTab({
           open
           tripLogId={trip.id}
           tripDay={trip.tripDate}
+          teams={data?.teams ?? []}
           onClose={() => setImporting(false)}
         />
       )}

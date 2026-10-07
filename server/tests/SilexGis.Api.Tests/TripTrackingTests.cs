@@ -27,6 +27,8 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
+    private readonly string connectionString;
+    private string ownerEmail = null!;
 
     private HttpClient owner = null!;
     private HttpClient reader = null!;
@@ -36,21 +38,29 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     public TripTrackingTests(PostgresFixture postgres)
     {
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-files-{Guid.NewGuid():N}");
+        connectionString = postgres.ConnectionString;
         factory = new SilexGisApiFactory(
-            postgres.ConnectionString,
-            new Dictionary<string, string?>
-            {
-                ["Files:Root"] = filesRoot,
-                ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
-            },
+            connectionString,
+            HostSettings(),
             // Workers off: the graph-extraction job would otherwise pick up the fake survey
             // file below, fail to parse it, and rewrite the very station rows these tests seed.
             JobWorkers.RemoveFrom);
     }
 
+    /// <summary>
+    /// What every host of this class is configured with, so that a test which needs a second one —
+    /// a clock it can move, a setting of its own — builds it on the same files and keys.
+    /// </summary>
+    private Dictionary<string, string?> HostSettings() => new()
+    {
+        ["Files:Root"] = filesRoot,
+        ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+    };
+
     public async Task InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
+        ownerEmail = $"trk-own-{suffix}@t.local";
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"trk-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"trk-read-{suffix}@t.local");
 
@@ -1005,6 +1015,101 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     }
 
     /// <summary>
+    /// The log says which of its rows no longer read as they were first written down — and says
+    /// it of the corrected row only, to everybody who reads the trip, place or no place.
+    /// </summary>
+    /// <remarks>
+    /// A log is what somebody said at a moment, so a reader is owed knowing that a row was changed
+    /// afterwards. The mark is a yes or a no and says nothing of where anybody was, which is why it
+    /// stays on a row whose station is withheld; the last half of this test holds both of those at
+    /// once, for a reader the cave is protected from.
+    /// </remarks>
+    [Fact]
+    public async Task A_corrected_report_reads_as_corrected_and_an_untouched_one_does_not()
+    {
+        var (trip, cavers) = await CreateTripAsync("Read back afterwards", guests: 2);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var recorded = await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers,
+            kind = "atStation",
+            stationName = "cave.upper.2",
+            recordedAt = At(10, 0),
+        });
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK, await recorded.Content.ReadAsStringAsync());
+        var written = (await recorded.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().ToList();
+        written.Count.ShouldBe(2);
+        written.ShouldAllBe(e => !e.GetProperty("corrected").GetBoolean(), "a report just written is as written");
+        var fixedId = written.Single(e => e.GetProperty("caverId").GetGuid() == cavers[0]).GetProperty("id").GetGuid();
+        var leftId = written.Single(e => e.GetProperty("caverId").GetGuid() == cavers[1]).GetProperty("id").GetGuid();
+
+        async Task<Dictionary<Guid, JsonElement>> LogAsync(HttpClient client, string query = "")
+        {
+            var response = await client.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events{query}");
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+            return (await BodyAsync(response)).GetProperty("items").EnumerateArray()
+                .ToDictionary(e => e.GetProperty("id").GetGuid());
+        }
+
+        var before = await LogAsync(owner);
+        before[fixedId].GetProperty("corrected").GetBoolean().ShouldBeFalse();
+        before[leftId].GetProperty("corrected").GetBoolean().ShouldBeFalse();
+
+        // A correction that sends back exactly what the row holds changes nothing, and a row
+        // nothing was changed on has not been corrected.
+        var same = await PutEventAsync(owner, trip, fixedId, new
+        {
+            kind = "atStation",
+            stationName = "cave.upper.2",
+            recordedAt = At(10, 0),
+        });
+        same.StatusCode.ShouldBe(HttpStatusCode.OK, await same.Content.ReadAsStringAsync());
+        (await same.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("corrected").GetBoolean().ShouldBeFalse();
+        (await LogAsync(owner))[fixedId].GetProperty("corrected").GetBoolean().ShouldBeFalse();
+
+        var fixedUp = await PutEventAsync(owner, trip, fixedId, new
+        {
+            kind = "atStation",
+            stationName = "cave.deep.3",
+            recordedAt = At(10, 0),
+        });
+        fixedUp.StatusCode.ShouldBe(HttpStatusCode.OK, await fixedUp.Content.ReadAsStringAsync());
+        (await fixedUp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("corrected").GetBoolean()
+            .ShouldBeTrue("the answer to a correction says what the log will say");
+
+        var after = await LogAsync(owner);
+        after[fixedId].GetProperty("corrected").GetBoolean().ShouldBeTrue();
+        after[leftId].GetProperty("corrected").GetBoolean().ShouldBeFalse("only the row that was changed");
+
+        // The log narrowed to one person, and walked a page at a time, is the same rows saying
+        // the same thing — which is how a screen reaches a report older than its first page.
+        var oneCaver = await LogAsync(owner, $"?caverId={cavers[1]}");
+        oneCaver.Keys.ShouldBe([leftId]);
+        var pages = new List<Guid>();
+        foreach (var page in new[] { 1, 2 })
+        {
+            var response = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events?page={page}&pageSize=1");
+            var body = await BodyAsync(response);
+            body.GetProperty("totalItems").GetInt32().ShouldBe(2);
+            pages.Add(body.GetProperty("items").EnumerateArray().Single().GetProperty("id").GetGuid());
+        }
+        pages.ShouldBe([fixedId, leftId], ignoreOrder: true);
+
+        // Somebody the cave is protected from still reads that the row was corrected, and still
+        // reads no station on it; the placer beside them reads both.
+        await SetLocationProtectedAsync(cave, true);
+        var theirs = (await LogAsync(reader))[fixedId];
+        theirs.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        theirs.GetProperty("corrected").GetBoolean().ShouldBeTrue();
+        var mine = (await LogAsync(owner))[fixedId];
+        mine.GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        mine.GetProperty("corrected").GetBoolean().ShouldBeTrue();
+    }
+
+    /// <summary>
     /// A correction passes every gate the original report passed, asked again through the same code.
     /// </summary>
     [Fact]
@@ -1102,6 +1207,100 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
             .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    /// <summary>
+    /// A report belongs to one trip and the address has to say which: asked for under another
+    /// trip's address it is not found, even by somebody who may write both trips.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The right to write is checked against the trip in the address. If the report were then
+    /// looked up by its own identifier alone, holding write on any one trip would be enough to
+    /// rewrite or remove a report of any other — the check would have been made on a trip the
+    /// report has nothing to do with. Here the caller may write both, which leaves the pairing of
+    /// report and trip as the only thing that can refuse.
+    /// </para>
+    /// <para>
+    /// Everything else about the crossed request is acceptable on purpose: the other trip's watch
+    /// is running on the same survey, so the station in the correction is one it knows, and the
+    /// correction is the very one that succeeds at the end under the report's own trip. Asked
+    /// again once the other trip's watch is closed, because a closed watch still takes
+    /// corrections and is the state a trip is usually in when its log is tidied.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_report_is_not_found_under_another_trip_the_caller_may_also_write()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        var (mine, cavers) = await CreateTripAsync("Holds the report", guests: 1);
+        var (other, others) = await CreateTripAsync("Another outing", guests: 1);
+        (await ArmAsync(owner, mine, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ArmAsync(owner, other, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var recorded = await PostEventAsync(owner, mine, new
+        {
+            caverIds = cavers, kind = "atStation", stationName = "cave.upper.2",
+        });
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK, await recorded.Content.ReadAsStringAsync());
+        var eventId = (await BodyAsync(recorded)).EnumerateArray().Single().GetProperty("id").GetGuid();
+
+        // The other trip has a report of its own, so that "its log is as it was" below is said of
+        // a log with something in it to disturb.
+        (await PostEventAsync(owner, other, new
+        {
+            caverIds = others, kind = "atStation", stationName = "cave.upper.2",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var mineBefore = await LogTextAsync(mine);
+        var otherBefore = await LogTextAsync(other);
+        mineBefore.ShouldContain(eventId.ToString());
+        otherBefore.ShouldNotContain(eventId.ToString());
+
+        async Task ShouldNotBeFoundThroughTheOtherTripAsync(string when)
+        {
+            var corrected = await PutEventAsync(owner, other, eventId, new
+            {
+                kind = "atStation", stationName = "cave.deep.3",
+            });
+            corrected.StatusCode.ShouldBe(HttpStatusCode.NotFound, when);
+            (await BodyAsync(corrected)).GetProperty("code").GetString()
+                .ShouldBe("tracking.event_not_found", when);
+
+            var removed = await owner.DeleteAsync($"/api/v1/trip-logs/{other}/tracking/events/{eventId}");
+            removed.StatusCode.ShouldBe(HttpStatusCode.NotFound, when);
+            (await BodyAsync(removed)).GetProperty("code").GetString()
+                .ShouldBe("tracking.event_not_found", when);
+        }
+
+        await ShouldNotBeFoundThroughTheOtherTripAsync("the other watch running");
+        (await PutConfigAsync(owner, other, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ShouldNotBeFoundThroughTheOtherTripAsync("the other watch closed");
+
+        // Nothing was written on either side: both logs read exactly as they did.
+        (await LogTextAsync(mine)).ShouldBe(mineBefore);
+        (await LogTextAsync(other)).ShouldBe(otherBefore);
+
+        // The positive twin: the same two requests under the report's own trip.
+        var own = await PutEventAsync(owner, mine, eventId, new
+        {
+            kind = "atStation", stationName = "cave.deep.3",
+        });
+        own.StatusCode.ShouldBe(HttpStatusCode.OK, await own.Content.ReadAsStringAsync());
+        (await BodyAsync(own)).GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{mine}/tracking/events/{eventId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await LogTextAsync(mine)).ShouldNotContain(eventId.ToString());
+        (await LogTextAsync(other)).ShouldBe(otherBefore);
+    }
+
+    /// <summary>A trip's whole log as the text the server sent, for comparing two readings of it.</summary>
+    private async Task<string> LogTextAsync(Guid trip)
+    {
+        var log = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events");
+        log.StatusCode.ShouldBe(HttpStatusCode.OK, await log.Content.ReadAsStringAsync());
+        return (await BodyAsync(log)).GetProperty("items").GetRawText();
+    }
+
     // ---- the places a report can name -------------------------------------------------------
 
     /// <summary>
@@ -1172,6 +1371,427 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         (await preview.Content.ReadAsStringAsync()).ShouldContain("tracking.model_unavailable");
 
         (await owner.GetAsync(PlacesOf(trip))).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    // ---- the roster and the log ----------------------------------------------------------
+
+    /// <summary>
+    /// The trip's form sends the whole roster back, so an edit made for any other reason can take
+    /// somebody off it. While the watch runs that is refused for anybody it has reports about;
+    /// once it has closed it is allowed, and the watch goes on listing them — marked, and with
+    /// nothing said about what a published page would call them, because it shows them no more.
+    /// </summary>
+    [Fact]
+    public async Task Somebody_the_log_speaks_of_cannot_leave_a_running_watch_and_stays_in_sight_once_it_has_closed()
+    {
+        var (trip, cavers) = await CreateTripAsync("Roster and log", guests: 3);
+        var (stays, reported, silent) = (cavers[0], cavers[1], cavers[2]);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ReportAsync(trip, new { caverIds = new[] { stays, reported }, kind = "entered" }, At(9, 0));
+        await ReportAsync(
+            trip, new { caverIds = new[] { reported }, kind = "atStation", stationName = "cave.upper.2" }, At(10, 0));
+        // Captioned, so that the empty caption asserted at the end is a field that had something
+        // in it to withhold and not one that was empty anyway.
+        (await owner.PutAsJsonAsync(
+            $"/api/v1/trip-logs/{trip}/tracking/participants/{reported}", new { label = "R." }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Nobody has said anything about the third: the party changed at the entrance, and that is
+        // an ordinary edit on a running watch.
+        var trimmed = await PutRosterAsync(trip, [stays, reported]);
+        trimmed.StatusCode.ShouldBe(HttpStatusCode.OK, await trimmed.Content.ReadAsStringAsync());
+        (await StateAsync(owner, trip)).GetProperty("participants").EnumerateArray()
+            .Select(p => p.GetProperty("caverId").GetGuid())
+            .ShouldNotContain(silent, "somebody with no report and no place on the trip is not on its watch");
+
+        // A change of job is not a departure: the reported person stops being a participant and
+        // becomes the proposer, which removes one roster row and adds another, and is never refused.
+        var moved = await PutRosterAsync(trip, [stays], proposers: [reported]);
+        moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+        Participant(await StateAsync(owner, trip), reported).GetProperty("onRoster").GetBoolean().ShouldBeTrue();
+        (await PutRosterAsync(trip, [stays, reported])).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Off the trip altogether, while the watch runs: refused, by a code, naming nobody.
+        var refused = await PutRosterAsync(trip, [stays]);
+        var refusal = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, refusal);
+        refusal.ShouldContain("trip_log.participant_tracked");
+        refusal.Contains(reported.ToString(), StringComparison.OrdinalIgnoreCase).ShouldBeFalse();
+        (await RosterAsync(trip)).ShouldBe([stays, reported], ignoreOrder: true);
+        var running = Participant(await StateAsync(owner, trip), reported);
+        running.GetProperty("in").GetBoolean().ShouldBeTrue();
+        running.GetProperty("onRoster").GetBoolean().ShouldBeTrue();
+        running.GetProperty("label").GetString().ShouldBe("R.");
+
+        // Closed: the same write goes through, and the watch still shows the person.
+        (await PutConfigAsync(owner, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var removed = await PutRosterAsync(trip, [stays]);
+        removed.StatusCode.ShouldBe(HttpStatusCode.OK, await removed.Content.ReadAsStringAsync());
+        (await RosterAsync(trip)).ShouldBe([stays]);
+
+        var state = await StateAsync(owner, trip);
+        state.GetProperty("participants").EnumerateArray()
+            .Select(p => p.GetProperty("caverId").GetGuid())
+            .ShouldBe([stays, reported], "the people the trip names come first, the rest after them");
+
+        var listed = Participant(state, stays);
+        listed.GetProperty("onRoster").GetBoolean().ShouldBeTrue();
+        listed.GetProperty("name").ValueKind.ShouldBe(JsonValueKind.Null, "the trip itself names the people on its roster");
+        listed.GetProperty("publishedAs").ValueKind.ShouldBe(JsonValueKind.String);
+
+        var gone = Participant(state, reported);
+        gone.GetProperty("onRoster").GetBoolean().ShouldBeFalse();
+        gone.GetProperty("in").GetBoolean().ShouldBeTrue();
+        gone.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        gone.GetProperty("name").GetString().ShouldBe(await CaverNameAsync(reported));
+        // A published page counts the party from the roster, so it shows this person no longer —
+        // and a field saying what it would call them would be describing nothing.
+        gone.GetProperty("label").ValueKind.ShouldBe(JsonValueKind.Null);
+        gone.GetProperty("publishedAs").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The log has not changed, and now agrees with the table above it.
+        var log = await BodyAsync(await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events?caverId={reported}"));
+        log.GetProperty("items").GetArrayLength().ShouldBe(2);
+
+        // Nothing more can be recorded about somebody the trip no longer names: that rule is
+        // unchanged, and it is why the screen keeps such a row out of the report's candidates.
+        var late = await PostEventAsync(owner, trip, new { caverIds = new[] { reported }, kind = "exited" });
+        late.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await late.Content.ReadAsStringAsync()).ShouldContain("tracking.caver_not_participant");
+    }
+
+    /// <summary>
+    /// The party is listed in the order the trip names it, which is the order a published page
+    /// numbers it in — not in the order its people happened to be entered in the club's register.
+    /// </summary>
+    [Fact]
+    public async Task The_party_is_listed_in_the_order_the_trip_names_it()
+    {
+        // Somebody already in the register, from an earlier trip.
+        var (_, earlier) = await CreateTripAsync("Order, an earlier trip", guests: 1);
+        var registeredFirst = earlier[0];
+
+        // This trip names a newcomer first and the long-standing member second.
+        var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Order {Guid.NewGuid():N}",
+            tripDate = "2026-09-12",
+            participants = new object[]
+            {
+                new { newCaverName = $"Newcomer {Guid.NewGuid():N}"[..24] },
+                new { caverId = registeredFirst },
+            },
+            visibility = "authenticated",
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var trip = (await BodyAsync(response)).GetProperty("id").GetGuid();
+
+        var named = await RosterAsync(trip);
+        named.Count.ShouldBe(2);
+        named[1].ShouldBe(registeredFirst);
+        // What makes this a test of the order and not a coincidence: sorted by identity, the two
+        // would come out the other way round.
+        registeredFirst.CompareTo(named[0]).ShouldBeLessThan(0);
+
+        (await StateAsync(owner, trip)).GetProperty("participants").EnumerateArray()
+            .Select(p => p.GetProperty("caverId").GetGuid())
+            .ShouldBe(named);
+    }
+
+    // ---- no word for hours -----------------------------------------------------------------
+
+    /// <summary>
+    /// The mark for somebody underground nobody has heard from, read on a clock the test moves.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A host of its own with a ten-minute threshold, so that the silence can be made by moving
+    /// that host's clock by minutes — inside the life of the token the coordinator signed in with —
+    /// instead of by waiting or by back-dating everything. The reports carry their own moments,
+    /// because recording stamps the machine's time and only the read asks the injected clock.
+    /// </para>
+    /// <para>
+    /// Every "not quiet" below is asserted of somebody who was quiet a step earlier or stands
+    /// beside somebody who still is, so that none of them passes merely because the mark is never
+    /// set at all.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Somebody_underground_with_no_word_past_the_threshold_is_marked_quiet_and_nobody_else_is()
+    {
+        var (trip, cavers) = await CreateTripAsync("Quiet", guests: 4);
+        var (silent, noted, leaver, unheard) = (cavers[0], cavers[1], cavers[2], cavers[3]);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var settings = HostSettings();
+        settings["TripTracking:QuietAfter"] = "00:10:00";
+        using var host = new SilexGisApiFactory(connectionString, settings, services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.AddSingleton<TimeProvider>(clock);
+        });
+        var coordinator = await AuthHelper.BearerClientAsync(host, ownerEmail);
+        var start = clock.Now;
+
+        (await ArmAsync(coordinator, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PostEventAsync(coordinator, trip, new
+        {
+            caverIds = new[] { silent, noted, leaver },
+            kind = "entered",
+            recordedAt = start.AddMinutes(-8),
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Eight minutes of silence against a threshold of ten: nobody yet, and the read says what
+        // the threshold is.
+        var early = await StateAsync(coordinator, trip);
+        early.GetProperty("quietAfterSeconds").GetInt32().ShouldBe(600);
+        new[] { silent, noted, leaver, unheard }.ShouldAllBe(caver => !Quiet(early, caver));
+
+        // Three minutes on, with nothing recorded in between: the three underground have crossed
+        // it. The one nobody has ever heard from has not — that is a state of its own.
+        clock.Now = start.AddMinutes(3);
+        var later = await StateAsync(coordinator, trip);
+        new[] { silent, noted, leaver }.ShouldAllBe(caver => Quiet(later, caver));
+        Quiet(later, unheard).ShouldBeFalse();
+        Participant(later, unheard).GetProperty("lastRecordedAt").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // A note names no place and ends a silence all the same; an exit ends the watch for a
+        // person. The third has had neither and stays marked.
+        (await PostEventAsync(coordinator, trip, new
+        {
+            caverIds = new[] { noted }, kind = "note", note = "voice contact", recordedAt = start,
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PostEventAsync(coordinator, trip, new
+        {
+            caverIds = new[] { leaver }, kind = "exited", recordedAt = start.AddMinutes(-7),
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var answered = await StateAsync(coordinator, trip);
+        Quiet(answered, silent).ShouldBeTrue();
+        Quiet(answered, noted).ShouldBeFalse();
+        Participant(answered, noted).GetProperty("in").GetBoolean().ShouldBeTrue();
+        // Out for longer than the threshold, and not quiet: somebody out has nothing left to report.
+        Quiet(answered, leaver).ShouldBeFalse();
+        Participant(answered, leaver).GetProperty("out").GetBoolean().ShouldBeTrue();
+
+        // The same trip at the same moment on an installation that switched the mark off: nobody
+        // is marked and no threshold is sent.
+        var offSettings = HostSettings();
+        offSettings["TripTracking:QuietAfter"] = "00:00:00";
+        using (var offHost = new SilexGisApiFactory(connectionString, offSettings, services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.AddSingleton<TimeProvider>(clock);
+        }))
+        {
+            var switchedOff = await StateAsync(await AuthHelper.BearerClientAsync(offHost, ownerEmail), trip);
+            switchedOff.GetProperty("quietAfterSeconds").ValueKind.ShouldBe(JsonValueKind.Null);
+            new[] { silent, noted, leaver, unheard }.ShouldAllBe(caver => !Quiet(switchedOff, caver));
+        }
+
+        // And on one left at its default of three hours, read on the machine's own clock: eleven
+        // minutes is nothing.
+        var byDefault = await StateAsync(owner, trip);
+        byDefault.GetProperty("quietAfterSeconds").GetInt32().ShouldBe(3 * 60 * 60);
+        Quiet(byDefault, silent).ShouldBeFalse();
+
+        // Closing the watch ends the subject: nobody is expected to report, so nobody is quiet —
+        // the one who was marked a moment ago included, still underground by the log.
+        (await PutConfigAsync(coordinator, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var closed = await StateAsync(coordinator, trip);
+        closed.GetProperty("quietAfterSeconds").ValueKind.ShouldBe(JsonValueKind.Null);
+        Participant(closed, silent).GetProperty("in").GetBoolean().ShouldBeTrue();
+        new[] { silent, noted, leaver, unheard }.ShouldAllBe(caver => !Quiet(closed, caver));
+    }
+
+    /// <summary>
+    /// The default threshold on the machine's own clock, and that the mark is told to a reader who
+    /// is refused the place beside it: it is a reading of when somebody was last heard from, which
+    /// that reader is sent anyway, and it says nothing of where.
+    /// </summary>
+    [Fact]
+    public async Task Four_silent_hours_mark_somebody_quiet_by_default_for_a_reader_who_is_refused_their_position_too()
+    {
+        var (trip, cavers) = await CreateTripAsync("Quiet by default", guests: 2);
+        var (silent, fresh) = (cavers[0], cavers[1]);
+        var cave = await CreateCaveAsync(locationProtected: true);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var now = DateTimeOffset.UtcNow;
+        await ReportAsync(
+            trip, new { caverIds = new[] { silent }, kind = "atStation", stationName = "cave.upper.2" }, now.AddHours(-4));
+        await ReportAsync(
+            trip, new { caverIds = new[] { fresh }, kind = "atStation", stationName = "cave.upper.1" }, now.AddHours(-2));
+
+        foreach (var client in new[] { owner, reader })
+        {
+            var state = await StateAsync(client, trip);
+            state.GetProperty("quietAfterSeconds").GetInt32().ShouldBe(3 * 60 * 60);
+            Participant(state, silent).GetProperty("quiet").GetBoolean().ShouldBeTrue();
+            Participant(state, fresh).GetProperty("quiet").GetBoolean().ShouldBeFalse();
+        }
+
+        // The reader really is the one the place is kept from, and the owner the one it is told to.
+        var told = await StateAsync(owner, trip);
+        var refused = await StateAsync(reader, trip);
+        Participant(told, silent).GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        refused.GetProperty("positionsWithheld").GetBoolean().ShouldBeTrue();
+        Participant(refused, silent).GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        TimeOf(Participant(refused, silent), "lastRecordedAt").ShouldNotBeNull();
+    }
+
+    // ---- where the party said it was going ------------------------------------------------
+
+    /// <summary>
+    /// The parts of the cave a watch declares are where the party said it was going. A station
+    /// reported outside them is marked on the person's row and on the report; one inside is not;
+    /// and with nothing declared nobody is outside of anything.
+    /// </summary>
+    [Fact]
+    public async Task A_place_outside_the_declared_parts_is_marked_on_the_row_and_in_the_log_and_never_without_a_declaration()
+    {
+        var (trip, cavers) = await CreateTripAsync("Declared parts", guests: 2);
+        var (strayed, asPlanned) = (cavers[0], cavers[1]);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model, depthFilter: ["cave.upper"])).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The answer to recording says what the next read of the log will say.
+        var outside = await PostEventAsync(owner, trip, new
+        {
+            caverIds = new[] { strayed }, kind = "atStation", stationName = "cave.deep.3", recordedAt = At(10, 0),
+        });
+        outside.StatusCode.ShouldBe(HttpStatusCode.OK, await outside.Content.ReadAsStringAsync());
+        (await BodyAsync(outside))[0].GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeTrue();
+        var inside = await PostEventAsync(owner, trip, new
+        {
+            caverIds = new[] { asPlanned }, kind = "atStation", stationName = "cave.upper.2", recordedAt = At(10, 5),
+        });
+        inside.StatusCode.ShouldBe(HttpStatusCode.OK, await inside.Content.ReadAsStringAsync());
+        (await BodyAsync(inside))[0].GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+        // A later note claims no place: it is marked nothing, and the person stays marked by the
+        // place they were last reported at.
+        await ReportAsync(trip, new { caverIds = new[] { strayed }, kind = "note", note = "resting" }, At(10, 30));
+
+        var state = await StateAsync(owner, trip);
+        Participant(state, strayed).GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        Participant(state, strayed).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeTrue();
+        Participant(state, asPlanned).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+
+        var log = await LogAsync(owner, trip);
+        log.Count.ShouldBe(3);
+        OutsideIn(log, "cave.deep.3").ShouldBeTrue();
+        OutsideIn(log, "cave.upper.2").ShouldBeFalse();
+        log.Single(e => e.GetProperty("kind").GetString() == "note")
+            .GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+
+        // A correction that moves the report inside the declared parts answers unmarked, and the
+        // other way round answers marked.
+        var strayedReport = log.Single(e => e.GetProperty("stationName").GetString() == "cave.deep.3")
+            .GetProperty("id").GetGuid();
+        var corrected = await PutEventAsync(owner, trip, strayedReport, new
+        {
+            kind = "atStation", stationName = "cave.upper.1", recordedAt = At(10, 0),
+        });
+        corrected.StatusCode.ShouldBe(HttpStatusCode.OK, await corrected.Content.ReadAsStringAsync());
+        (await BodyAsync(corrected)).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+        var back = await PutEventAsync(owner, trip, strayedReport, new
+        {
+            kind = "atStation", stationName = "cave.deep.3", recordedAt = At(10, 0),
+        });
+        back.StatusCode.ShouldBe(HttpStatusCode.OK, await back.Content.ReadAsStringAsync());
+        (await BodyAsync(back)).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeTrue();
+
+        // The declaration withdrawn: the same reports, and nobody is outside of anything.
+        (await ArmAsync(owner, trip, model, depthFilter: [])).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var undeclared = await StateAsync(owner, trip);
+        undeclared.GetProperty("depthFilter").GetArrayLength().ShouldBe(0);
+        Participant(undeclared, strayed).GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        Participant(undeclared, strayed).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+        (await LogAsync(owner, trip)).ShouldAllBe(e => !e.GetProperty("outsideDeclaredParts").GetBoolean());
+    }
+
+    /// <summary>
+    /// The mark rides the place: somebody refused the station learns nothing about it from this
+    /// either, while the person allowed to place in that cave reads the station and the mark.
+    /// </summary>
+    [Fact]
+    public async Task Outside_the_declared_parts_is_never_said_beside_a_withheld_place()
+    {
+        var (trip, cavers) = await CreateTripAsync("Declared, protected", guests: 1, visibility: "authenticated");
+        var cave = await CreateCaveAsync(locationProtected: true);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model, depthFilter: ["cave.upper"])).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ReportAsync(
+            trip, new { caverIds = cavers, kind = "atStation", stationName = "cave.deep.3" }, At(11, 0));
+
+        // Positive half: the placer is told the station, the declaration, and that the one lies
+        // outside the other — on the row and in the log.
+        var told = await StateAsync(owner, trip);
+        told.GetProperty("depthFilter").GetArrayLength().ShouldBe(1);
+        Participant(told, cavers[0]).GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        Participant(told, cavers[0]).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeTrue();
+        OutsideIn(await LogAsync(owner, trip), "cave.deep.3").ShouldBeTrue();
+
+        // Negative half: a reader of the trip with no right to the cave's exact location is told
+        // neither the station nor the declaration, and so not how they compare.
+        var refused = await StateAsync(reader, trip);
+        refused.GetProperty("positionsWithheld").GetBoolean().ShouldBeTrue();
+        refused.GetProperty("depthFilter").GetArrayLength().ShouldBe(0);
+        Participant(refused, cavers[0]).GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        Participant(refused, cavers[0]).GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+        var theirLog = await LogAsync(reader, trip);
+        theirLog.Count.ShouldBe(1);
+        theirLog[0].GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        theirLog[0].GetProperty("outsideDeclaredParts").GetBoolean().ShouldBeFalse();
+    }
+
+    private static async Task<List<JsonElement>> LogAsync(HttpClient client, Guid trip)
+    {
+        var response = await client.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        return [.. (await BodyAsync(response)).GetProperty("items").EnumerateArray()];
+    }
+
+    /// <summary>What the log says of the one report naming this station.</summary>
+    private static bool OutsideIn(List<JsonElement> log, string stationName) =>
+        log.Single(e => e.GetProperty("stationName").ValueKind == JsonValueKind.String
+                && e.GetProperty("stationName").GetString() == stationName)
+            .GetProperty("outsideDeclaredParts").GetBoolean();
+
+    /// <summary>
+    /// Rewrites a trip's roster the way its form does: the two lists sent are the whole of it.
+    /// </summary>
+    private Task<HttpResponseMessage> PutRosterAsync(
+        Guid trip, IEnumerable<Guid> participants, IEnumerable<Guid>? proposers = null) =>
+        owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{trip}", new
+        {
+            title = $"Roster {Guid.NewGuid():N}"[..28],
+            tripDate = "2026-09-12",
+            participants = participants.Select(id => new { caverId = id }).ToArray(),
+            proposers = (proposers ?? []).Select(id => new { caverId = id }).ToArray(),
+            visibility = "authenticated",
+        });
+
+    /// <summary>The people a trip names, in the order it first named each of them.</summary>
+    private async Task<List<Guid>> RosterAsync(Guid trip)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var rows = await db.TripLogParticipants.Where(p => p.TripLogId == trip)
+            .OrderBy(p => p.Id).Select(p => p.CaverId).ToListAsync();
+        return [.. rows.Distinct()];
+    }
+
+    private async Task<string> CaverNameAsync(Guid caver)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Cavers.Where(c => c.Id == caver).Select(c => c.FullName).SingleAsync();
     }
 
     private static string PlacesOf(Guid trip) => $"/api/v1/trip-logs/{trip}/tracking/places";
@@ -1323,6 +1943,10 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         var response = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", json);
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
+
+    /// <summary>Whether the read marks this person as not heard from for too long.</summary>
+    private static bool Quiet(JsonElement state, Guid caverId) =>
+        Participant(state, caverId).GetProperty("quiet").GetBoolean();
 
     private static JsonElement Participant(JsonElement state, Guid caverId) =>
         state.GetProperty("participants").EnumerateArray()

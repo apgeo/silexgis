@@ -35,7 +35,7 @@ const pictureDialogProps = vi.fn();
 vi.mock('../../api/hooks.ts', async () => ({
   TRACKING_EVENT_KINDS: ['entered', 'atStation', 'atDepth', 'note', 'exited'],
   useTripTracking: () => trackingQuery(),
-  useTripTrackingEvents: () => eventsQuery(),
+  useTripTrackingEvents: (...asked: unknown[]) => eventsQuery(...asked),
   useRecordTrackingEvents: () => ({ mutateAsync: recordEvents, isPending: false }),
   useTrackingDepthReading: () => depthReading(),
   // Nothing declared, which is every cave until somebody declares something — so the place
@@ -115,9 +115,15 @@ vi.mock('../../components/trips/TrackingPicturesDialog.tsx', () => ({
  * and let a test drive it.
  */
 let answerUnplaced: ((stations: ReadonlySet<string>) => void) | undefined;
+/** The reports the panel was last handed — which have to stay the newest page of the whole log. */
+let panelEvents: readonly { id: string }[] | undefined;
 vi.mock('../../components/trips/TrackingModelPanel.tsx', () => ({
-  default: (props: { onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void }) => {
+  default: (props: {
+    onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
+    events?: readonly { id: string }[];
+  }) => {
     answerUnplaced = props.onUnplacedStationsChange;
+    panelEvents = props.events;
     return <div data-testid="trip-tracking-model-panel" />;
   },
 }));
@@ -153,6 +159,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
     // and a test about a published trip says both.
     publishedAt: null,
     publishedUntil: null,
+    quietAfterSeconds: null,
     teams: [],
     participants: [
       {
@@ -168,6 +175,10 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         out: false,
         label: null,
         publishedAs: null,
+        onRoster: true,
+        name: null,
+        quiet: false,
+        outsideDeclaredParts: false,
       },
       {
         caverId: BOGDAN,
@@ -182,6 +193,10 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         out: false,
         label: null,
         publishedAs: null,
+        onRoster: true,
+        name: null,
+        quiet: false,
+        outsideDeclaredParts: false,
       },
     ],
     ...overrides,
@@ -243,6 +258,7 @@ beforeEach(() => {
   coarse = false;
   narrow = false;
   answerUnplaced = undefined;
+  panelEvents = undefined;
   setTracking.mockReset().mockResolvedValue(state());
   setLabel.mockReset().mockResolvedValue({ caverId: ANA, label: null });
 });
@@ -276,6 +292,10 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       }),
@@ -316,6 +336,10 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: CARMEN,
@@ -330,6 +354,10 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       }),
@@ -369,6 +397,10 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: BOGDAN,
@@ -385,6 +417,10 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       }),
@@ -841,6 +877,10 @@ describe('TripTrackingTab', () => {
               out: false,
               label: null,
               publishedAs: null,
+              onRoster: true,
+              name: null,
+              quiet: false,
+              outsideDeclaredParts: false,
             },
           ],
         }),
@@ -1362,6 +1402,10 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: BOGDAN,
@@ -1376,6 +1420,10 @@ describe('TripTrackingTab', () => {
             out: true,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             // Nobody has said a single word about her. This is the row the whole change is for.
@@ -1391,6 +1439,10 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       });
@@ -1520,6 +1572,10 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: BOGDAN,
@@ -1536,6 +1592,10 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: CARMEN,
@@ -1550,6 +1610,10 @@ describe('TripTrackingTab', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       });
@@ -1774,6 +1838,10 @@ describe('TripTrackingTab', () => {
               // calls her "Ana Popescu" everywhere else, so the two strings are different on
               // purpose and only one of them can be being read.
               publishedAs: 'Ana Maria Popescu',
+              onRoster: true,
+              name: null,
+              quiet: false,
+              outsideDeclaredParts: false,
             },
           ],
         }),
@@ -1807,6 +1875,10 @@ describe('TripTrackingTab', () => {
               // Asked to be kept off the page, and this is the record of it.
               label: 'A club member',
               publishedAs: null,
+              onRoster: true,
+              name: null,
+              quiet: false,
+              outsideDeclaredParts: false,
             },
             {
               caverId: BOGDAN,
@@ -1821,6 +1893,10 @@ describe('TripTrackingTab', () => {
               out: false,
               label: null,
               publishedAs: null,
+              onRoster: true,
+              name: null,
+              quiet: false,
+              outsideDeclaredParts: false,
             },
           ],
         }),
@@ -1946,6 +2022,10 @@ describe('TripTrackingTab', () => {
               out: false,
               label: 'A club member',
               publishedAs: null,
+              onRoster: true,
+              name: null,
+              quiet: false,
+              outsideDeclaredParts: false,
             },
           ],
         }),
@@ -2247,6 +2327,10 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       }),
@@ -2487,6 +2571,10 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: BOGDAN,
@@ -2503,6 +2591,10 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       });
@@ -2552,6 +2644,10 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               out: false,
               label: null,
               publishedAs: null,
+              onRoster: true,
+              name: null,
+              quiet: false,
+              outsideDeclaredParts: false,
             },
           ],
         }),
@@ -2597,6 +2693,10 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: BOGDAN,
@@ -2611,6 +2711,10 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             out: false,
             label: null,
             publishedAs: null,
+            onRoster: true,
+            name: null,
+            quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       });
@@ -2694,6 +2798,10 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               out: false,
               label: null,
               publishedAs: null,
+              onRoster: true,
+              name: null,
+              quiet: false,
+              outsideDeclaredParts: false,
             },
           ],
         }),
@@ -2737,5 +2845,640 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
         /no callout is arranged for this trip/i,
       );
     });
+  });
+});
+
+/**
+ * Reaching a report that is not among the newest twenty, which is where a wrong one usually is by
+ * the time anybody notices it.
+ *
+ * <b>The log is corrected from its rows, so a row that cannot be reached cannot be corrected.</b>
+ * The table used to show the twenty most recent reports and nothing else: a party of six reporting
+ * through a long day passes that before lunch, and the report read back wrongly at nine was then
+ * on no screen at all. What is held here is that every page can be walked to, that the log can be
+ * narrowed to the one person a correction is about — and that neither act changes what the rest of
+ * this tab reads, because the survey panel and the photographs card take their bearings from the
+ * newest page.
+ */
+describe('TripTrackingTab, reaching the whole log', () => {
+  /** A log of this many reports, newest first: Ana's on the odd numbers, Bogdan's on the even. */
+  function logOf(count: number) {
+    return Array.from({ length: count }, (_unused, index) => {
+      const number = index + 1;
+      return {
+        id: `ev-${number}`,
+        caverId: number % 2 === 1 ? ANA : BOGDAN,
+        teamId: null,
+        kind: 'note',
+        surveyModelId: null,
+        stationName: null,
+        depthEnteredM: null,
+        note: `word ${number}`,
+        recordedAt: new Date(Date.UTC(2026, 8, 12, 20, 0) - number * 60_000).toISOString(),
+        corrected: false,
+        outsideDeclaredParts: false,
+      };
+    });
+  }
+
+  /**
+   * Answers each read the way the server does: by the person and the page it was asked for. A read
+   * that is switched off answers nothing, so a table showing rows off one is caught.
+   */
+  function serve(rows: ReturnType<typeof logOf>) {
+    eventsQuery.mockImplementation(
+      (
+        _tripLogId: string,
+        params: { caverId?: string; page?: number; pageSize?: number } = {},
+        enabled = true,
+      ) => {
+        if (!enabled) {
+          return { data: undefined, isPending: true, error: null };
+        }
+        const page = params.page ?? 1;
+        const pageSize = params.pageSize ?? 50;
+        const matching = rows.filter((row) => !params.caverId || row.caverId === params.caverId);
+        return {
+          data: {
+            items: matching.slice((page - 1) * pageSize, page * pageSize),
+            page,
+            pageSize,
+            totalItems: matching.length,
+          },
+          isPending: false,
+          error: null,
+        };
+      },
+    );
+  }
+
+  const table = () => within(screen.getByTestId('trip-tracking-events'));
+  /** What the table's own read was last asked for — the second of the two reads. */
+  const lastAsked = () =>
+    eventsQuery.mock.calls
+      .filter(([, , enabled]) => enabled === true)
+      .map(([, params]) => params)
+      .at(-1);
+
+  async function narrowTo(name: string) {
+    const chooser = screen.getByTestId('trip-tracking-events-caver');
+    fireEvent.mouseDown(chooser.querySelector('.ant-select-selector') ?? chooser);
+    await act(async () => {
+      fireEvent.click(document.querySelector(`.ant-select-item-option[title="${name}"]`)!);
+    });
+  }
+
+  it('walks to an older page across, and leaves the newest page with everything else that reads it', () => {
+    serve(logOf(45));
+    show();
+
+    expect(table().getByText('word 1')).toBeTruthy();
+    expect(table().queryByText('word 21')).toBeNull();
+    // On the newest page the table has no read of its own: one request, not two.
+    expect(lastAsked()).toBeUndefined();
+
+    fireEvent.click(document.querySelector('.ant-pagination-item-2')!);
+
+    expect(lastAsked()).toEqual({ pageSize: 20, page: 2 });
+    expect(table().getByText('word 21')).toBeTruthy();
+    expect(table().queryByText('word 1')).toBeNull();
+    // The first read is still asked exactly as it was, and is still what the survey panel holds.
+    const firstReads = eventsQuery.mock.calls.filter(([, , enabled]) => enabled === undefined);
+    expect(firstReads.length).toBeGreaterThan(0);
+    expect(firstReads.every(([, params]) => JSON.stringify(params) === '{"pageSize":20}')).toBe(true);
+    expect(panelEvents?.[0]?.id).toBe('ev-1');
+    expect(panelEvents).toHaveLength(20);
+
+    fireEvent.click(document.querySelector('.ant-pagination-item-3')!);
+    expect(table().getByText('word 45')).toBeTruthy();
+    expect(table().getAllByText(/^word /)).toHaveLength(5);
+  });
+
+  it('walks back through the stacked log a page at a time, saying where it is', () => {
+    narrow = true;
+    serve(logOf(45));
+    show();
+
+    expect(screen.getByTestId('trip-tracking-events-shown')).toHaveTextContent(
+      'Reports shown: 1–20 of 45',
+    );
+    // Nowhere newer to go from the newest page.
+    expect(screen.queryByTestId('trip-tracking-events-newer')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-events-older'));
+    expect(table().getByText('word 21')).toBeTruthy();
+    expect(screen.getByTestId('trip-tracking-events-shown')).toHaveTextContent(
+      'Reports shown: 21–40 of 45',
+    );
+
+    fireEvent.click(screen.getByTestId('trip-tracking-events-older'));
+    expect(table().getByText('word 45')).toBeTruthy();
+    expect(screen.getByTestId('trip-tracking-events-shown')).toHaveTextContent(
+      'Reports shown: 41–45 of 45',
+    );
+    // And nowhere older from the oldest.
+    expect(screen.queryByTestId('trip-tracking-events-older')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-events-newer'));
+    expect(table().getByText('word 21')).toBeTruthy();
+  });
+
+  for (const layout of ['wide', 'stacked'] as const) {
+    it(`offers no way to older reports on a log that fits on one page (${layout})`, () => {
+      narrow = layout === 'stacked';
+      serve(logOf(20));
+      show();
+
+      expect(table().getByText('word 20')).toBeTruthy();
+      expect(screen.queryByTestId('trip-tracking-events-older')).toBeNull();
+      expect(screen.queryByTestId('trip-tracking-events-shown')).toBeNull();
+      expect(document.querySelector('.ant-pagination-item-2')).toBeNull();
+    });
+  }
+
+  it('narrows the log to one person, from that person’s newest report', async () => {
+    serve(logOf(45));
+    show();
+    fireEvent.click(document.querySelector('.ant-pagination-item-2')!);
+
+    await narrowTo('Bogdan Ilie');
+
+    // Back to the first page: page two of everybody is not page two of one person.
+    expect(lastAsked()).toEqual({ pageSize: 20, page: 1, caverId: BOGDAN });
+    expect(table().getByText('word 2')).toBeTruthy();
+    expect(table().queryByText('word 1')).toBeNull();
+    expect(table().queryByText('word 21')).toBeNull();
+    // Twenty-two of the forty-five are his, so there is a second page of them and no third.
+    expect(document.querySelector('.ant-pagination-item-2')).not.toBeNull();
+    expect(document.querySelector('.ant-pagination-item-3')).toBeNull();
+    // What the survey panel reads is still everybody's newest page.
+    expect(panelEvents?.[0]?.id).toBe('ev-1');
+  });
+
+  it('says a person has no reports rather than that the log is empty, and keeps the way back', async () => {
+    serve(logOf(45));
+    show();
+
+    await narrowTo('Carmen Radu');
+
+    expect(table().getByText('Nothing has been reported about this person.')).toBeTruthy();
+    expect(screen.queryByText('Nothing has been reported yet.')).toBeNull();
+    // The control that emptied the table is still there to un-empty it.
+    expect(screen.getByTestId('trip-tracking-events-caver')).toBeTruthy();
+  });
+
+  it('offers somebody with two jobs on the trip once', () => {
+    // The roster is a row per person per job: the leader who also surveys is two rows and one
+    // person, and two options under one value is a person listed twice.
+    serve(logOf(45));
+    show(
+      true,
+      trip({
+        participants: [
+          { caverId: ANA, name: 'Ana Popescu' },
+          { caverId: BOGDAN, name: 'Bogdan Ilie' },
+          { caverId: ANA, name: 'Ana Popescu' },
+        ],
+      } as unknown as Partial<TripLogInfo>),
+    );
+
+    const chooser = screen.getByTestId('trip-tracking-events-caver');
+    fireEvent.mouseDown(chooser.querySelector('.ant-select-selector') ?? chooser);
+
+    expect(document.querySelectorAll('.ant-select-item-option[title="Ana Popescu"]')).toHaveLength(1);
+    expect(document.querySelectorAll('.ant-select-item-option[title="Bogdan Ilie"]')).toHaveLength(1);
+  });
+
+  it('does not offer to narrow a log that holds nothing', () => {
+    serve([]);
+    show();
+
+    expect(screen.queryByTestId('trip-tracking-events-caver')).toBeNull();
+    expect(table().getByText('Nothing has been reported yet.')).toBeTruthy();
+  });
+
+  it('steps back when the page it is on has emptied under it', () => {
+    narrow = true;
+    const rows = logOf(41);
+    serve(rows);
+    const { rerender } = show();
+    fireEvent.click(screen.getByTestId('trip-tracking-events-older'));
+    fireEvent.click(screen.getByTestId('trip-tracking-events-older'));
+    expect(table().getByText('word 41')).toBeTruthy();
+
+    // The one report on the third page is deleted — by this reader or by another coordinator —
+    // and the next read of that page comes back holding nothing.
+    serve(rows.slice(0, 40));
+    rerender(
+      <App>
+        <TripTrackingTab trip={trip()} canEdit />
+      </App>,
+    );
+
+    expect(table().getByText('word 40')).toBeTruthy();
+    expect(screen.queryByText('Nothing has been reported yet.')).toBeNull();
+    expect(screen.getByTestId('trip-tracking-events-shown')).toHaveTextContent(
+      'Reports shown: 21–40 of 40',
+    );
+  });
+
+  for (const layout of ['wide', 'stacked'] as const) {
+    it(`marks the report that was corrected, and only that one (${layout})`, () => {
+      narrow = layout === 'stacked';
+      const rows = logOf(3);
+      rows[1].corrected = true;
+      serve(rows);
+      show();
+
+      expect(screen.getByTestId('trip-tracking-event-corrected-ev-2')).toHaveTextContent('Corrected');
+      expect(screen.queryByTestId('trip-tracking-event-corrected-ev-1')).toBeNull();
+      expect(screen.queryByTestId('trip-tracking-event-corrected-ev-3')).toBeNull();
+    });
+
+    it(`marks a report made outside the declared parts, beside its place and nowhere else (${layout})`, () => {
+      narrow = layout === 'stacked';
+      const rows = logOf(3);
+      // The second names a station the read says is outside what the watch declared. The third
+      // carries the mark with no place beside it — which the server never sends, and which must
+      // draw nothing if it ever did: the word may only stand next to a place that is on screen.
+      Object.assign(rows[1], { kind: 'atStation', stationName: 'p.side.4', outsideDeclaredParts: true });
+      Object.assign(rows[2], { kind: 'atStation', outsideDeclaredParts: true });
+      serve(rows);
+      show();
+
+      expect(screen.getByTestId('trip-tracking-event-outside-declared-ev-2')).toHaveTextContent(
+        'Outside the declared parts',
+      );
+      expect(screen.queryByTestId('trip-tracking-event-outside-declared-ev-1')).toBeNull();
+      expect(screen.queryByTestId('trip-tracking-event-outside-declared-ev-3')).toBeNull();
+    });
+  }
+});
+
+describe('TripTrackingTab, somebody reported outside the declared parts', () => {
+  afterEach(() => {
+    narrow = false;
+  });
+
+  for (const layout of ['columns', 'stacked'] as const) {
+    it(`marks the person the read marks, beside the place it is about (${layout})`, () => {
+      narrow = layout === 'stacked';
+      const [ana, bogdan] = state().participants;
+      trackingQuery.mockReturnValue({
+        data: state({
+          depthFilter: ['p.g'],
+          participants: [
+            { ...ana, stationName: 'p.side.4', depthM: null, outsideDeclaredParts: true },
+            // No place is shown for him, so nothing is said about one — whatever the read carries.
+            {
+              ...bogdan,
+              stationName: null,
+              depthM: null,
+              positionRecordedAt: null,
+              outsideDeclaredParts: true,
+            },
+          ],
+        }),
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show();
+
+      expect(screen.getByTestId(`trip-tracking-outside-declared-${ANA}`)).toHaveTextContent(
+        'Outside the declared parts',
+      );
+      expect(screen.queryByTestId(`trip-tracking-outside-declared-${BOGDAN}`)).toBeNull();
+    });
+  }
+
+  it('marks nobody the read does not mark, whatever is declared', () => {
+    trackingQuery.mockReturnValue({
+      data: state({ depthFilter: ['somewhere.else'] }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    show();
+
+    // The party is on screen; the comparison is the server's and nothing here repeats it.
+    expect(screen.getByTestId('trip-tracking-participants')).toBeTruthy();
+    expect(screen.queryByTestId(`trip-tracking-outside-declared-${ANA}`)).toBeNull();
+    expect(screen.queryByTestId(`trip-tracking-outside-declared-${BOGDAN}`)).toBeNull();
+  });
+});
+
+/**
+ * Somebody the log speaks of and the trip no longer names.
+ *
+ * The watch goes on listing them, because their reports are still in its log and a table that
+ * dropped them would disagree with the log printed under it. What changes is everything that
+ * could be done about them: the server takes no report and no caption for somebody who is off the
+ * roster, so the row is read and never chosen.
+ */
+describe('TripTrackingTab, somebody taken off the roster', () => {
+  const DANA = '44444444-4444-4444-4444-444444444444';
+
+  /** Ana and Bogdan are on the trip and on the watch; Dana is on the watch alone. */
+  const withSomebodyGone = () => {
+    const party = state().participants;
+    trackingQuery.mockReturnValue({
+      data: state({
+        participants: [
+          ...party,
+          { ...party[0], caverId: DANA, onRoster: false, name: 'Dana Marin' },
+        ],
+      }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+  };
+
+  afterEach(() => {
+    narrow = false;
+  });
+
+  for (const layout of ['columns', 'stacked'] as const) {
+    it(`names them from the watch and marks the row, in ${layout}`, () => {
+      narrow = layout === 'stacked';
+      withSomebodyGone();
+      show();
+
+      const table = screen.getByTestId('trip-tracking-participants');
+      // The trip has no name for her any more; the watch sent one, and it is used.
+      expect(within(table).getByText('Dana Marin')).toBeTruthy();
+      expect(within(table).queryByText('Somebody not on the roster')).toBeNull();
+      expect(screen.getByTestId(`trip-tracking-off-roster-${DANA}`)).toHaveTextContent(
+        'No longer on the roster',
+      );
+      // And only that row: the mark on everybody would say nothing.
+      expect(screen.queryByTestId(`trip-tracking-off-roster-${ANA}`)).toBeNull();
+      expect(screen.queryByTestId(`trip-tracking-off-roster-${BOGDAN}`)).toBeNull();
+    });
+  }
+
+  it('leaves them out of "select everybody" and gives their row nothing to tick', () => {
+    withSomebodyGone();
+    show();
+
+    expect(screen.getByTestId('trip-tracking-select-all').closest('label')).toHaveTextContent(
+      'Select everybody (2)',
+    );
+    const checks = rowChecks();
+    expect(checks).toHaveLength(3);
+    expect(checks[0]).not.toBeDisabled();
+    expect(checks[1]).not.toBeDisabled();
+    expect(checks[2]).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-select-all'));
+    expect(screen.getByTestId('trip-tracking-record')).toHaveTextContent('Record for 2 selected');
+    expect(checks[2]).not.toBeChecked();
+  });
+
+  it('offers no caption for a page that does not show them', () => {
+    withSomebodyGone();
+    show();
+
+    expect(screen.queryByTestId(`trip-tracking-public-name-edit-${DANA}`)).toBeNull();
+    expect(screen.getByTestId(`trip-tracking-public-name-edit-${ANA}`)).toBeTruthy();
+  });
+
+  it('marks nobody on a watch whose whole party the trip still names', () => {
+    show();
+
+    expect(screen.queryByText('No longer on the roster')).toBeNull();
+    expect(screen.getByTestId('trip-tracking-select-all').closest('label')).toHaveTextContent(
+      'Select everybody (2)',
+    );
+  });
+});
+
+describe('TripTrackingTab, a long silence and a late return', () => {
+  /** Seven in the evening on the fixture's day: Ana was last heard from at 07:00. */
+  const AT_SEVEN_PM = Date.parse('2026-09-12T19:00:00Z');
+  const PLANNED = '2026-09-12T17:00:00Z';
+  let clock: MockInstance<() => number>;
+
+  /** Ana underground and marked by the read, Bogdan out, on a watch with a three-hour threshold. */
+  const withAnaQuiet = (overrides: Partial<TrackingState> = {}) => {
+    const [ana, bogdan] = state().participants;
+    trackingQuery.mockReturnValue({
+      data: state({
+        quietAfterSeconds: 3 * 3600,
+        participants: [
+          { ...ana, in: true, out: false, quiet: true, lastRecordedAt: '2026-09-12T07:00:00Z' },
+          { ...bogdan, in: false, out: true, lastKind: 'exited', quiet: false },
+        ],
+        ...overrides,
+      }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+  };
+
+  beforeEach(() => {
+    clock = vi.spyOn(Date, 'now').mockReturnValue(AT_SEVEN_PM);
+  });
+
+  afterEach(() => {
+    clock.mockRestore();
+    narrow = false;
+  });
+
+  for (const layout of ['columns', 'stacked'] as const) {
+    it(`marks the person the read marks, with the installation's number, in ${layout}`, () => {
+      narrow = layout === 'stacked';
+      withAnaQuiet();
+      show();
+
+      expect(screen.getByTestId(`trip-tracking-quiet-${ANA}`)).toHaveTextContent(
+        'No word for over 3 h',
+      );
+      // Bogdan is out and the read did not mark him: nothing is worked out here from the clock.
+      expect(screen.queryByTestId(`trip-tracking-quiet-${BOGDAN}`)).toBeNull();
+      expect(screen.getByTestId('trip-tracking-count-quiet')).toHaveTextContent(
+        'No word for over 3 h: 1',
+      );
+    });
+  }
+
+  it('says that neither reading alarms anybody', () => {
+    withAnaQuiet();
+    show();
+
+    expect(screen.getByTestId('trip-tracking-marks-note')).toHaveTextContent(
+      'Nothing is sent, no alarm is raised and none is stood down.',
+    );
+  });
+
+  it('counts nought, and marks nobody, where the read marks nobody', () => {
+    const [ana, bogdan] = state().participants;
+    withAnaQuiet({ participants: [{ ...ana, quiet: false }, bogdan] });
+    show();
+
+    expect(screen.getByTestId('trip-tracking-count-quiet')).toHaveTextContent(
+      'No word for over 3 h: 0',
+    );
+    expect(screen.queryByTestId(`trip-tracking-quiet-${ANA}`)).toBeNull();
+  });
+
+  it('leaves the whole subject out where the read sent no threshold', () => {
+    // A closed watch, or an installation that switched the mark off: no count, no tag — and with
+    // no plan on the trip either, no sentence about readings that are not on the screen.
+    withAnaQuiet({ quietAfterSeconds: null, state: 'closed' });
+    show();
+
+    expect(screen.getByTestId('trip-tracking-count-underground')).toHaveTextContent('1');
+    expect(screen.queryByTestId('trip-tracking-count-quiet')).toBeNull();
+    expect(screen.queryByTestId(`trip-tracking-quiet-${ANA}`)).toBeNull();
+    expect(screen.queryByTestId('trip-tracking-marks-note')).toBeNull();
+  });
+
+  it('words a threshold that is not whole hours in minutes', () => {
+    withAnaQuiet({ quietAfterSeconds: 45 * 60 });
+    show();
+
+    expect(screen.getByTestId(`trip-tracking-quiet-${ANA}`)).toHaveTextContent(
+      'No word for over 45 min',
+    );
+  });
+
+  it('shows no planned hour for a trip that has none', () => {
+    withAnaQuiet();
+    show(true, trip({ expectedReturnAt: null }));
+
+    // The counts are there, so the absence is the cell's and not the strip's.
+    expect(screen.getByTestId('trip-tracking-counts')).toBeTruthy();
+    expect(screen.queryByTestId('trip-tracking-plan')).toBeNull();
+  });
+
+  it('shows the planned hour plainly while it is still ahead', () => {
+    clock.mockReturnValue(Date.parse('2026-09-12T15:00:00Z'));
+    withAnaQuiet();
+    show(true, trip({ expectedReturnAt: PLANNED }));
+
+    const plan = screen.getByTestId('trip-tracking-plan');
+    expect(plan).toHaveAttribute('data-late', 'false');
+    expect(plan).toHaveTextContent('Planned out by');
+    expect(screen.getByTestId('trip-tracking-plan-hour')).toHaveTextContent(
+      new Date(PLANNED).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' }),
+    );
+    expect(screen.queryByTestId('trip-tracking-plan-late')).toBeNull();
+    // On the screen with no quiet mark needed for it: the sentence is about this reading too.
+    expect(screen.getByTestId('trip-tracking-marks-note')).toBeTruthy();
+  });
+
+  it('turns late, and says by how much, once the hour has passed with somebody underground', () => {
+    withAnaQuiet();
+    show(true, trip({ expectedReturnAt: PLANNED }));
+
+    expect(screen.getByTestId('trip-tracking-plan')).toHaveAttribute('data-late', 'true');
+    expect(screen.getByTestId('trip-tracking-plan-late')).toHaveTextContent('2 h late');
+  });
+
+  it('is not late with everybody out, at the same hour', () => {
+    const [ana, bogdan] = state().participants;
+    withAnaQuiet({
+      participants: [
+        { ...ana, in: false, out: true, lastKind: 'exited', quiet: false },
+        { ...bogdan, in: false, out: true, lastKind: 'exited', quiet: false },
+      ],
+    });
+    show(true, trip({ expectedReturnAt: PLANNED }));
+
+    expect(screen.getByTestId('trip-tracking-plan')).toHaveAttribute('data-late', 'false');
+    expect(screen.queryByTestId('trip-tracking-plan-late')).toBeNull();
+  });
+
+  it('reads the planned hour whatever the callout says, and the same with none arranged', () => {
+    withAnaQuiet();
+    const { unmount } = show(true, trip({ expectedReturnAt: PLANNED, calloutState: 'none' }));
+    expect(screen.getByTestId('trip-tracking-plan-late')).toHaveTextContent('2 h late');
+    unmount();
+
+    show(true, trip({ expectedReturnAt: PLANNED, calloutState: 'stoodDown' }));
+    expect(screen.getByTestId('trip-tracking-plan-late')).toHaveTextContent('2 h late');
+  });
+
+  it('gives the plan a row of its own on a phone and a fourth column otherwise', () => {
+    withAnaQuiet();
+    const wide = show(true, trip({ expectedReturnAt: PLANNED }));
+    expect(screen.getByTestId('trip-tracking-plan').className).not.toContain('own-row');
+    expect(screen.getByTestId('trip-tracking-counts').className).toContain('with-plan');
+    wide.unmount();
+
+    narrow = true;
+    show(true, trip({ expectedReturnAt: PLANNED }));
+    expect(screen.getByTestId('trip-tracking-plan').className).toContain('own-row');
+    expect(screen.getByTestId('trip-tracking-counts').className).not.toContain('with-plan');
+  });
+
+  it('sorts the party by the last word when its heading is pressed, longest silence first', () => {
+    const [ana, bogdan] = state().participants;
+    withAnaQuiet({
+      participants: [
+        { ...bogdan, lastRecordedAt: '2026-09-12T18:30:00Z' },
+        { ...ana, lastRecordedAt: '2026-09-12T07:00:00Z' },
+      ],
+    });
+    show();
+
+    const table = screen.getByTestId('trip-tracking-participants');
+    // The rows themselves, by the key the table gives each: a name is printed more than once in
+    // a row, and it is the order of the rows that is being asked about.
+    const order = () =>
+      Array.from(table.querySelectorAll('tr[data-row-key]'), (row) =>
+        row.getAttribute('data-row-key'),
+      );
+    // As the read sent them, until somebody asks otherwise.
+    expect(order()).toEqual([BOGDAN, ANA]);
+
+    // The heading that sorts, of which the table has exactly one.
+    const sorters = table.querySelectorAll('th.ant-table-column-has-sorters');
+    expect(sorters).toHaveLength(1);
+    expect(sorters[0]).toHaveTextContent('Last heard');
+    fireEvent.click(sorters[0]);
+    expect(order()).toEqual([ANA, BOGDAN]);
+    // The heading is the wide layout's control; the page's own is for where there is none.
+    expect(screen.queryByTestId('trip-tracking-silence-first')).toBeNull();
+  });
+
+  /**
+   * The stacked layout has no heading to press, and the same ordering is still reachable.
+   *
+   * A phone at the entrance is where "who have we not heard from" is asked, and the heading that
+   * sorts exists only where the columns stand side by side. So the stacked table gets a control
+   * of the page's own, ordering by the same comparison — the longest silence first, somebody
+   * never heard from above everybody — and it gives the trip's own order back when unticked.
+   */
+  it('orders the stacked party by the last word from a control of its own', () => {
+    narrow = true;
+    const [ana, bogdan] = state().participants;
+    withAnaQuiet({
+      participants: [
+        { ...bogdan, lastRecordedAt: '2026-09-12T18:30:00Z' },
+        { ...ana, lastRecordedAt: '2026-09-12T07:00:00Z' },
+      ],
+    });
+    show();
+
+    const table = screen.getByTestId('trip-tracking-participants');
+    const order = () =>
+      Array.from(table.querySelectorAll('tr[data-row-key]'), (row) =>
+        row.getAttribute('data-row-key'),
+      );
+    // No heading at all in this layout, so nothing in the table sorts.
+    expect(table.querySelectorAll('th.ant-table-column-has-sorters')).toHaveLength(0);
+    expect(order()).toEqual([BOGDAN, ANA]);
+
+    const control = screen.getByTestId('trip-tracking-silence-first');
+    expect(control.closest('label')).toHaveTextContent('Longest silence first');
+    fireEvent.click(control);
+    expect(order()).toEqual([ANA, BOGDAN]);
+
+    fireEvent.click(control);
+    expect(order()).toEqual([BOGDAN, ANA]);
   });
 });

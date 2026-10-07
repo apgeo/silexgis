@@ -6,6 +6,14 @@
 # Both variables are required (compose enforces it): `email` rejects an empty argument, so an
 # unset SILEXGIS_TLS_EMAIL would make Caddy fail to parse this file.
 #
+# A proxy of your own in FRONT of this one (a CDN, or a website's relay that fetches published
+# pages for its readers) hands this one a forwarded address for each of them, and Caddy discards
+# a forwarded address unless it comes from a proxy it was told to trust. Name that proxy's
+# network in the global options below — `servers { trusted_proxies static <cidr> }` — and count
+# it on the API as well: three hops in place of the two docker-compose.tls.yml sets, and its
+# network under SILEXGIS__Proxy__TrustedNetworks__… in .env. Without both, every reader behind
+# it is one caller and shares one request budget.
+#
 # Deliberately no request-body limit here. Caddy imposes none unless one is written, and the
 # nginx service behind it already caps bodies above every configured upload limit. A cap set
 # here as well would only add a second place to forget when an installation raises the upload

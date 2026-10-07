@@ -64,6 +64,67 @@ describe('applyMovieView', () => {
     expect(shown.shadingMode).toBe(LENGTH);
   });
 
+  describe('the surface over the cave', () => {
+    /** A viewer that records, in order, every property written to it. */
+    function recording(state: Record<string, unknown>): { shown: MovieViewViewer; writes: string[] } {
+      const writes: string[] = [];
+      const shown = new Proxy(
+        { ...(viewer(HEIGHT) as unknown as Record<string, unknown>), ...state },
+        {
+          set(target, key, value) {
+            writes.push(String(key));
+            target[String(key)] = value;
+            return true;
+          },
+        },
+      ) as unknown as MovieViewViewer;
+      return { shown, writes };
+    }
+
+    it('is drawn only when asked for, on a model whose file carries one — and is put back', () => {
+      const { shown } = recording({ hasTerrain: true, hasRealTerrain: true, terrain: false });
+      // The default leaves it off.
+      applyMovieView(shown, DEFAULT_MOVIE_SETTINGS.view, CONSTANTS, HEIGHT);
+      expect(shown.terrain).toBe(false);
+
+      const restore = applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, terrain: true }, CONSTANTS, HEIGHT);
+      expect(shown.terrain).toBe(true);
+      restore();
+      expect(shown.terrain).toBe(false);
+    });
+
+    it('is switched off when the viewer shows it on its own and the movie does not ask for it', () => {
+      // The viewer re-applies the view its reader saved as its default on every load.
+      const { shown } = recording({ hasTerrain: true, hasRealTerrain: true, terrain: true });
+      const restore = applyMovieView(shown, DEFAULT_MOVIE_SETTINGS.view, CONSTANTS, HEIGHT);
+      expect(shown.terrain).toBe(false);
+      restore();
+      expect(shown.terrain).toBe(true);
+    });
+
+    it('is never drawn from the flat plane the viewer lays under a survey with a coordinate system', () => {
+      // That plane is made of tiles asked for again as the camera moves: asked for or not, it is off.
+      const { shown } = recording({ hasTerrain: true, hasRealTerrain: false, terrain: true });
+      applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, terrain: true }, CONSTANTS, HEIGHT);
+      expect(shown.terrain).toBe(false);
+    });
+
+    it('is not written at all on a model with no terrain', () => {
+      const { shown, writes } = recording({ hasTerrain: false, hasRealTerrain: null });
+      applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, terrain: true, shading: 'length' }, CONSTANTS, HEIGHT);
+      expect(writes).not.toContain('terrain');
+      expect(writes).toContain('shadingMode');
+    });
+
+    it('is written before the shading, which a depth shading is measured from', () => {
+      const { shown, writes } = recording({ hasTerrain: true, hasRealTerrain: true, terrain: false });
+      applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, terrain: true, shading: 'depth' }, CONSTANTS, HEIGHT);
+      expect(shown.shadingMode).toBe(DEPTH);
+      expect(writes.indexOf('terrain')).toBeGreaterThanOrEqual(0);
+      expect(writes.indexOf('terrain')).toBeLessThan(writes.indexOf('shadingMode'));
+    });
+  });
+
   it('never sets a depth shading on a model without terrain, even as the viewer’s own', () => {
     const shown = viewer(HEIGHT);
     applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shading: 'depth' }, CONSTANTS, HEIGHT);

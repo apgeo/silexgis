@@ -2,7 +2,11 @@
 import { useEffect, useState } from 'react';
 import { Alert, ConfigProvider, Flex, Form, Input, Modal, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import type { TrackingTeam, TripPositionEventKind } from '../../api/hooks.ts';
+import type {
+  TrackingTeam,
+  TripPositionEventKind,
+  TripTrackingState,
+} from '../../api/hooks.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import TrackingWhenField from './TrackingWhenField.tsx';
 import { COARSE_CONTROL_HEIGHT, useTrackingPanelTheme } from './trackingControlSizes.ts';
@@ -11,6 +15,7 @@ import {
   useTrackingReport,
   type TrackingReportValues,
 } from './trackingReport.ts';
+import { trackingLogWritable } from './trackingWatch.ts';
 import './TrackingReportDialog.css';
 
 /**
@@ -42,6 +47,12 @@ interface DialogForm extends TrackingReportValues {
 interface Props {
   open: boolean;
   tripLogId: string;
+  /**
+   * The state the watch is in. A closed one is being written up afterwards, so the moment is asked
+   * for rather than left to the clock; one that was never started takes no report, and no dialog
+   * is drawn for it.
+   */
+  state: TripTrackingState;
   /** The station the model was pressed at, as the viewer spells it. Null while nothing is picked. */
   station: string | null;
   /** Everybody the watch names, in the roster's words. */
@@ -97,6 +108,7 @@ interface Props {
 export default function TrackingReportDialog({
   open,
   tripLogId,
+  state,
   station,
   cavers,
   teams,
@@ -125,6 +137,9 @@ export default function TrackingReportDialog({
    */
   const [stationDisputed, setStationDisputed] = useState(false);
   useEffect(() => setStationDisputed(false), [station, open]);
+
+  /** Whether this is a report written up after the trip — see the card's own note on why it matters. */
+  const afterClose = state === 'closed';
 
   const controlSize: 'large' | 'middle' = coarse ? 'large' : 'middle';
   // The portalled panels' own sizes, plus the height every `large` control in here is built from.
@@ -163,6 +178,12 @@ export default function TrackingReportDialog({
       setStationDisputed(true);
     }
   };
+
+  // The model's press is not offered on a watch nobody started, so this is never reached from
+  // there; said here as well so the dialog cannot be opened onto a report that can only be refused.
+  if (!trackingLogWritable(state)) {
+    return null;
+  }
 
   return (
     <ConfigProvider theme={theme}>
@@ -208,6 +229,17 @@ export default function TrackingReportDialog({
             title={t('trips.tracking.reportNoPlace', { station: station ?? '' })}
             style={{ marginBottom: 16 }}
             data-testid="trip-tracking-dialog-no-place"
+          />
+        )}
+
+        {afterClose && (
+          <Alert
+            type="info"
+            showIcon
+            title={t('trips.tracking.recordAfterCloseTitle')}
+            description={t('trips.tracking.recordAfterCloseBody')}
+            style={{ marginBottom: 16 }}
+            data-testid="trip-tracking-dialog-record-after"
           />
         )}
 
@@ -280,6 +312,7 @@ export default function TrackingReportDialog({
             coarse={coarse}
             idPrefix="trip-tracking-dialog"
             confined
+            required={afterClose}
           />
 
           <Form.Item name="note" label={t('trips.tracking.reportNote')}>

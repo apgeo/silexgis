@@ -4,6 +4,7 @@ import { Alert, App, Button, Card, Empty, Flex, Popconfirm, Skeleton, Typography
 import { useTranslation } from 'react-i18next';
 import { useDetachTrackingPicture } from '../../api/hooks.ts';
 import type { ReplayPicture } from '../../caveview/trackingReplay.ts';
+import { trackingProblemMessage } from './trackingProblems.ts';
 import './TrackingMomentPictures.css';
 
 export interface TrackingMomentPicturesProps {
@@ -65,8 +66,10 @@ export default function TrackingMomentPictures({
     try {
       await detach.mutateAsync({ tripLogId, memberId });
       message.success(t('trips.tracking.pictures.detached'));
-    } catch {
-      message.error(t('trips.tracking.pictures.detachFailed'));
+    } catch (error) {
+      // In its own words where the refusal has any: a photograph somebody else already took off is
+      // not a failure to try again, and the general sentence would invite exactly that.
+      message.error(trackingProblemMessage(error, t, t('trips.tracking.pictures.detachFailed')));
     }
   };
 

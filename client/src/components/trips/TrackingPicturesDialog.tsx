@@ -22,6 +22,7 @@ import {
   type PhotoInfo,
   type TrackingPictureInput,
 } from '../../api/hooks.ts';
+import { trackingProblemCodeMessage, trackingProblemMessage } from './trackingProblems.ts';
 
 export interface TrackingPicturesDialogProps {
   open: boolean;
@@ -155,11 +156,27 @@ export default function TrackingPicturesDialog({
               refused: refusedCount,
             }),
           );
+          // And why, once per reason rather than once per photograph: thirty pictures filed an
+          // hour into the future are one mistake with one remedy. A reason this application has no
+          // words for adds no line — the count above has already said that something was left out.
+          const reasons = new Set(
+            Object.values(result.refused ?? {})
+              .map((code) => trackingProblemCodeMessage(code, t))
+              .filter((sentence) => sentence !== undefined),
+          );
+          for (const sentence of reasons) {
+            void message.warning(sentence);
+          }
           setSelected([]);
           onAttached?.();
           onClose();
         },
-        onError: () => void message.error(t('trips.tracking.pictures.attachFailed')),
+        // A refusal of the whole request in its own words where it has any — a trip that was never
+        // followed is put right by a different act than an installation that cannot store the link.
+        onError: (error) =>
+          void message.error(
+            trackingProblemMessage(error, t, t('trips.tracking.pictures.attachFailed')),
+          ),
       },
     );
   };

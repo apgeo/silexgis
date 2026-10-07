@@ -24,6 +24,12 @@ public enum PublishedLinkSort
 
     /// <summary>What the link is doing, the links doing the most first.</summary>
     Status = 4,
+
+    /// <summary>
+    /// When the link's watch was last started, the longest-standing first. Read together with a
+    /// watch that is still running, this is the order somebody looking for a forgotten one wants.
+    /// </summary>
+    WatchArmedAt = 5,
 }
 
 /// <summary>
@@ -40,10 +46,17 @@ public enum PublishedLinkSort
 /// <param name="Descending">
 /// The direction. Absent means newest first for the default order and ascending for a named one.
 /// </param>
+/// <param name="ArmedLongerThanDays">
+/// Keeps only the links of a watch that is running now and was started more than this many days
+/// before the instant the answer names. Zero keeps every link of a running watch. A number sent
+/// with each question and stored nowhere: how long is too long differs between a day trip and an
+/// expedition, and is the reader's call each time.
+/// </param>
 /// <param name="Page">The page, from one.</param>
 /// <param name="PageSize">How many links a page holds.</param>
 public sealed record PublishedLinksQuery(
     [property: FromQuery(Name = "status")] string? Status,
+    [property: FromQuery(Name = "armedLongerThanDays")] int? ArmedLongerThanDays,
     [property: FromQuery(Name = "sort")] string? Sort,
     [property: FromQuery(Name = "descending")] bool? Descending,
     [property: FromQuery(Name = "page")] int? Page,
@@ -51,8 +64,22 @@ public sealed record PublishedLinksQuery(
 
 public sealed class PublishedLinksQueryValidator : AbstractValidator<PublishedLinksQuery>
 {
+    /// <summary>
+    /// The longest stretch a reader may ask about, in days: ten years. A bound only so that the
+    /// number can always be subtracted from a date; no watch is expected to be this old.
+    /// </summary>
+    public const int MaxArmedLongerThanDays = 3650;
+
     public PublishedLinksQueryValidator()
     {
+        // Refused rather than read as "no filter": a list somebody is about to close watches from
+        // must not quietly be the whole list because the number asked made no sense.
+        RuleFor(x => x.ArmedLongerThanDays)
+            .InclusiveBetween(0, MaxArmedLongerThanDays)
+            .When(x => x.ArmedLongerThanDays is not null)
+            .OverridePropertyName("armedLongerThanDays")
+            .WithMessage($"armedLongerThanDays must be between 0 and {MaxArmedLongerThanDays}.");
+
         // The two closed vocabularies are not judged here. A word that names no member is refused
         // by the route itself, under the code every closed vocabulary on a query string is refused
         // by, so a client can tell "not a word of this list" from "out of range" by the code alone.
@@ -101,6 +128,12 @@ public sealed record PublishedLinkCaveDto(Guid Id, string? Name);
 /// withheld or lapsed, never open.
 /// </param>
 /// <param name="WatchState">The watch the link follows.</param>
+/// <param name="WatchArmedAt">
+/// When that watch was last started, or null when nothing recorded it. Kept after the watch is
+/// closed, so it is "running since" only while <paramref name="WatchState"/> says the watch runs.
+/// Nothing closes a watch but a person: one that has been running far longer than its trip is
+/// most often one somebody forgot, and it is closed from the trip's own tracking tab.
+/// </param>
 /// <param name="WatchClosedAt">When that watch was closed, or null while it has not been.</param>
 /// <param name="CreatedByLabel">How the account that published it is shown, or null when it is gone.</param>
 /// <param name="ExpiresAt">
@@ -128,6 +161,7 @@ public sealed record PublishedLinkDto(
     DateOnly? TripDateEnd,
     PublishedLinkCaveDto? Cave,
     TripTrackingState WatchState,
+    DateTimeOffset? WatchArmedAt,
     DateTimeOffset? WatchClosedAt,
     Guid CreatedBy,
     string? CreatedByLabel,
@@ -143,7 +177,7 @@ public sealed record PublishedLinkStatusCountDto(PublishedLinkStatus Status, int
 /// <summary>
 /// A page of the installation's published links, with what a reader needs to understand it.
 /// </summary>
-/// <param name="TotalItems">How many links match the status asked for, across every page.</param>
+/// <param name="TotalItems">How many links match what was asked for, across every page.</param>
 /// <param name="AsOf">
 /// The one instant every status in this answer was decided at. A status is a reading of a clock,
 /// not a stored fact, so the answer says which reading it is.
@@ -161,6 +195,15 @@ public sealed record PublishedLinkStatusCountDto(PublishedLinkStatus Status, int
 /// Whether this installation serves finished trips as history. With it off no link is ever in the
 /// archive, and one whose live window has shut has lapsed.
 /// </param>
+/// <param name="SeenFrom">
+/// The address this very request was counted under, after the installation's stated reverse
+/// proxies were walked past — the address the per-address request limits would count this reader
+/// by. Null when the server could not tell. It is the reader's own address when the proxy settings
+/// are right; when it is the address of one of the installation's proxies instead, the stated
+/// number of proxies is too low and every reader behind that proxy shares one request budget.
+/// Shown to the person who made the request and to nobody else, and it changes nothing about how
+/// requests are counted.
+/// </param>
 public sealed record PublishedLinksDto(
     IReadOnlyList<PublishedLinkDto> Items,
     int Page,
@@ -169,7 +212,8 @@ public sealed record PublishedLinksDto(
     DateTimeOffset AsOf,
     IReadOnlyList<PublishedLinkStatusCountDto> Counts,
     bool PublishesRealNames,
-    bool ArchiveEnabled);
+    bool ArchiveEnabled,
+    string? SeenFrom);
 
 /// <summary>
 /// What withdrawing every link of the installation has to be asked with.

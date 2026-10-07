@@ -794,6 +794,78 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     }
 
     /// <summary>
+    /// The published party is the trip's roster and nothing wider, and the envelope has exactly
+    /// the members it had.
+    /// </summary>
+    /// <remarks>
+    /// The signed-in watch lists everybody its log speaks of, the trip's roster or not, and marks
+    /// the difference. None of that may reach this page: who a club publishes is who the trip
+    /// names, and whether somebody taken off a finished trip should still appear in its public
+    /// replay is a decision nobody has made. So the member names are pinned outright — a field
+    /// added to the signed-in row and copied here by habit fails by name — and the party is
+    /// counted on a trip where the two reads are known to differ, with the signed-in read asserted
+    /// beside it so that the shorter public list is shown to be a choice and not an empty log.
+    /// </remarks>
+    [Fact]
+    public async Task The_published_party_is_the_roster_alone_and_the_envelope_has_gained_no_member()
+    {
+        string[] envelopeMembers =
+        [
+            "tripLogId", "expedition", "title", "tripDate", "tripDateEnd", "state", "armedAt", "closedAt",
+            "positionsWithheld", "model", "teams", "participants",
+        ];
+        string[] participantMembers =
+        [
+            "ordinal", "label", "teamId", "stationName", "depthM", "lastRecordedAt", "positionRecordedAt",
+            "positionOnOtherModel", "in", "out",
+        ];
+
+        var trip = await TrackedTripAsync("Roster only", locationProtected: false, guests: 2);
+        var (placed, other) = (trip.Cavers[0], trip.Cavers[1]);
+        (await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip.Trip}/tracking/events", new
+        {
+            caverIds = new[] { other },
+            kind = "entered",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        var before = await FollowAsync(token);
+        before.EnumerateObject().Select(m => m.Name).ShouldBe(envelopeMembers, ignoreOrder: true);
+        var party = before.GetProperty("participants").EnumerateArray().ToList();
+        party.Count.ShouldBe(2);
+        party.ShouldAllBe(p => p.EnumerateObject().Select(m => m.Name).Order()
+            .SequenceEqual(participantMembers.Order()));
+
+        // The watch closes and the second person is taken off the trip; their reports remain.
+        (await PutConfigAsync(owner, trip.Trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var rewritten = await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{trip.Trip}", new
+        {
+            title = $"Roster only {Guid.NewGuid():N}"[..28],
+            tripDate = "2026-09-12",
+            participants = new[] { new { caverId = placed } },
+            visibility = "authenticated",
+        });
+        rewritten.StatusCode.ShouldBe(HttpStatusCode.OK, await rewritten.Content.ReadAsStringAsync());
+
+        // Signed in: both, one of them marked as no longer on the trip's list.
+        var signedIn = (await StateAsync(owner, trip.Trip)).GetProperty("participants").EnumerateArray().ToList();
+        signedIn.Count.ShouldBe(2);
+        signedIn.Single(p => !p.GetProperty("onRoster").GetBoolean())
+            .GetProperty("caverId").GetGuid().ShouldBe(other);
+
+        // Published: the roster, numbered from one, in the shape it always had.
+        var raw = await (await anonymous.GetAsync(Follow(token))).Content.ReadAsStringAsync();
+        raw.Contains("onRoster", StringComparison.OrdinalIgnoreCase).ShouldBeFalse();
+        var after = JsonDocument.Parse(raw).RootElement;
+        after.EnumerateObject().Select(m => m.Name).ShouldBe(envelopeMembers, ignoreOrder: true);
+        var published = after.GetProperty("participants").EnumerateArray().ToList();
+        published.Count.ShouldBe(1);
+        published[0].GetProperty("ordinal").GetInt32().ShouldBe(1);
+        published[0].GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        published[0].EnumerateObject().Select(m => m.Name).ShouldBe(participantMembers, ignoreOrder: true);
+    }
+
+    /// <summary>
     /// The installation-wide switch, and the one thing that outranks it.
     /// </summary>
     /// <remarks>

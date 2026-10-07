@@ -285,6 +285,37 @@ describe('an article that frames more than one trip', () => {
   });
 });
 
+describe('what an article hears when its reader watches another party of the cave', () => {
+  // The article prints names and stations from the announcement under its own trip's heading. The
+  // pasted block is the only road that announcement has to the article, and the block in an
+  // article was pasted before the viewer could say whose party it is announcing — so what is
+  // proved here is that the block hands on a member it has never heard of, untouched.
+  it('is handed whose party it is, by a block that knows nothing of the word', () => {
+    const page = hostPage(snippet({ token: TOKEN_A }));
+    const heard: Record<string, unknown>[] = [];
+    page.document.addEventListener('silexgis:ready', (event) => {
+      heard.push((event as CustomEvent<Record<string, unknown>>).detail);
+    });
+    const party = [
+      { ordinal: 1, name: 'Mircea', station: 'other.4', onOtherSurvey: false, notOnDrawing: false },
+    ];
+    const own = { silexgis: EMBED_CHANNEL, v: EMBED_PROTOCOL, type: 'ready', loaded: true, party };
+
+    page.receive(idA, own);
+    page.receive(idA, { ...own, watching: { tripLogId: 'trip-2', title: 'E2, the survey' } });
+
+    expect(heard).toHaveLength(2);
+    // Absent is the trip the block was pasted for; present is somebody else's party, by name.
+    expect(heard[0]).not.toHaveProperty('watching');
+    expect(heard[1]).toMatchObject({
+      party,
+      watching: { tripLogId: 'trip-2', title: 'E2, the survey' },
+    });
+    // The same protocol number as before: nothing about this needs a block pasted again.
+    expect(heard[1].v).toBe(1);
+  });
+});
+
 describe('greeting a viewer that cannot hear yet', () => {
   // The document inside the frame installs its listener from a script it loads after its own
   // load event, so a hello said when the article was ready and one said again when the frame had

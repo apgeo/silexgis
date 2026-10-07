@@ -92,12 +92,21 @@ public sealed record TrackingCsvRow
     /// <see cref="TripPositionEventKind.AtStation"/>, which is what a row naming a station
     /// outright becomes.
     /// </para>
+    /// <para>
+    /// A row that says neither is a <see cref="TripPositionEventKind.Note"/> when it has a note,
+    /// because that is what the row is: somebody rang at that moment and said something that was
+    /// not a place. A note is the last thing asked, so a row with a place or a standing never
+    /// becomes one — its note rides on the report it already is. A row with nothing in any of the
+    /// three has no kind, and is refused; so is one whose place or standing was written and could
+    /// not be read, whatever this answers for it, because a cell that was not understood is not a
+    /// cell that was empty.
+    /// </para>
     /// </remarks>
     public TripPositionEventKind? Kind => State ?? Decides switch
     {
         TrackingCsvPlaceKind.Station => TripPositionEventKind.AtStation,
         TrackingCsvPlaceKind.Place or TrackingCsvPlaceKind.Depth => TripPositionEventKind.AtDepth,
-        _ => null,
+        _ => Note is null ? null : TripPositionEventKind.Note,
     };
 
     /// <summary>Whether this row can be imported as it stands.</summary>

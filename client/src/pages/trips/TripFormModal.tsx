@@ -17,6 +17,7 @@ import {
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { ApiError } from '../../api/client.ts';
 import {
   useCavingGroups,
   useCreateDoor,
@@ -450,8 +451,17 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
           : await createTrip.mutateAsync(body);
       message.success(t('common.saved'));
       onClose(saved.id);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // One refusal is worded, because it is the one the form itself walks people into: the two
+      // lists are sent back as the whole roster, so a row removed here — or never loaded, on a
+      // form opened before somebody was added — takes that person off the trip. While the trip's
+      // tracking is running and has reports about them the server refuses, and "could not be
+      // saved" would leave whoever is coordinating to guess which of a page of fields was wrong.
+      message.error(
+        error instanceof ApiError && error.code === 'trip_log.participant_tracked'
+          ? t('trips.participantTracked')
+          : t('common.saveFailed'),
+      );
     }
   };
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CompressOutlined, ExpandOutlined, PushpinOutlined, VideoCameraOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Flex, Tabs, Typography } from 'antd';
+import { Alert, Button, Card, Flex, Switch, Tabs, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   surveyModelReadableByViewer,
@@ -14,6 +14,7 @@ import {
 } from '../../api/hooks.ts';
 import CaveViewPanel from '../caveview/CaveViewPanel.tsx';
 import LazyTrackingMovieDialog from '../caveview/movie/LazyTrackingMovieDialog.tsx';
+import type { DeclaredPartsView } from '../../caveview/declaredParts.ts';
 import type { CaveViewMediaEntry } from '../../caveview/loadCaveView.ts';
 import { partFromStation, pathOf, type PickedModelPart } from '../../caveview/modelParts.ts';
 import { trackedCaversFrom } from '../../caveview/trackedCavers.ts';
@@ -34,7 +35,7 @@ import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import TrackingPicturesDialog from './TrackingPicturesDialog.tsx';
 import TrackingReplayBar from './TrackingReplayBar.tsx';
 import TrackingReportDialog from './TrackingReportDialog.tsx';
-import { trackingLogWritable } from './trackingWatch.ts';
+import { positionAgeOf, trackingLogWritable } from './trackingWatch.ts';
 
 export interface TrackingModelPanelProps {
   /** Whose watch this is — the replay reads the trip's whole log for itself. */
@@ -71,10 +72,27 @@ export interface TrackingModelPanelProps {
    * replay changes nothing about it.
    */
   onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
+  /**
+   * The instant every gap on the page is measured from — the page's one ticker, handed down.
+   *
+   * With it, the card over the model words a silence as the table above does ("3 h ago", the
+   * clock reading as its title) instead of printing a date for the reader to subtract from. Taken
+   * from the page rather than read here, so that the card and the row for the same person are
+   * measured from the same instant and cannot be drawn a unit apart. Absent, the card prints
+   * clock readings.
+   */
+  now?: number;
 }
 
 /** The key of the one pane of the drawing strip that is not a declared map. */
 const TAB_3D = '3d';
+
+/**
+ * Whether the drawing can be narrowed to the declared parts: it has answered, it has a survey for
+ * every entry, and there is something outside them to take off.
+ */
+const declaredPartsUsable = (view: DeclaredPartsView | null) =>
+  view !== null && view.unmatched.length === 0 && view.hide.length > 0;
 
 /** Taller than a phone can spare, shorter than a desk screen would waste. */
 const HEIGHT = 460;
@@ -208,8 +226,9 @@ export default function TrackingModelPanel({
   selectedCaverIds,
   onRecorded,
   onUnplacedStationsChange,
+  now,
 }: TrackingModelPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const narrow = useIsMobile();
   // The controls this panel owns are pressed, and how big they have to be depends on what is
   // pressing them and on nothing else — the same rule, and the same hook, as the replay strip
@@ -237,6 +256,17 @@ export default function TrackingModelPanel({
    * against another model's stations under that picture.
    */
   const [movieModelId, setMovieModelId] = useState<string | null>(null);
+  /**
+   * Whether the drawing is narrowed to the parts of the cave the watch declared, and what the
+   * drawing on screen makes of that declaration.
+   *
+   * <b>The second is the viewer's answer and is waited for.</b> Which surveys a file has is known
+   * only once it is parsed, so until the viewer has said, the switch cannot promise anything and
+   * is not offered as working. It is also why the choice is kept here and not remembered: it is
+   * a way of looking at this drawing for a moment, and it means nothing for the next survey.
+   */
+  const [onlyDeclared, setOnlyDeclared] = useState(false);
+  const [declaredView, setDeclaredView] = useState<DeclaredPartsView | null>(null);
   const movieTrips = useMemo(() => [tripLogId], [tripLogId]);
   const { data: model } = useSurveyModel(tracking.surveyModelId ?? undefined);
   // Rendered on every path out of this panel, so that the model going unready under an open dialog
@@ -297,10 +327,17 @@ export default function TrackingModelPanel({
     }
   }, [maps, activeTab]);
 
-  const names = useMemo(
-    () => new Map(participants.map((person) => [person.caverId, person.name])),
-    [participants],
-  );
+  const names = useMemo(() => {
+    const known = new Map(participants.map((person) => [person.caverId, person.name]));
+    // Somebody the log speaks of and the trip no longer names: the watch carries their name
+    // itself, for those rows alone, so their marker is not drawn as a stranger's.
+    for (const person of tracking.participants) {
+      if (!person.onRoster && person.name) {
+        known.set(person.caverId, person.name);
+      }
+    }
+    return known;
+  }, [participants, tracking.participants]);
   const nameOf = useCallback(
     (caverId: string) => names.get(caverId) ?? t('trips.tracking.unknownCaver'),
     [names, t],
@@ -356,13 +393,21 @@ export default function TrackingModelPanel({
     [tracking, log.data, replayAt, nameOf, model?.id],
   );
 
-  /** The party as a chooser takes it — the watch says who is on it, the roster says their names. */
+  /**
+   * The party as a chooser takes it — the watch says who is on it, the roster says their names.
+   *
+   * Only the people the trip still names: the server takes no report about anybody else, so
+   * somebody taken off the roster is drawn where they were last reported and is never offered as
+   * somebody a new report could be about.
+   */
   const dialogCavers = useMemo(
     () =>
-      tracking.participants.map((participant) => ({
-        caverId: participant.caverId,
-        name: nameOf(participant.caverId),
-      })),
+      tracking.participants
+        .filter((participant) => participant.onRoster)
+        .map((participant) => ({
+          caverId: participant.caverId,
+          name: nameOf(participant.caverId),
+        })),
     [tracking.participants, nameOf],
   );
 
@@ -497,6 +542,18 @@ export default function TrackingModelPanel({
   }
 
   const shown = replaying && replayCavers !== null ? replayCavers : cavers;
+  /**
+   * How the card over either drawing words a moment, or undefined where it prints the clock.
+   *
+   * Gaps only over the watch as it stands. A replay shows the party at a moment somebody scrubbed
+   * back to, and "ago" measured from the present says nothing true about that moment, so there
+   * the card keeps its clock readings. Worded through the watch's own module, which is the one
+   * door to the rounding rule the table above and the followed page share.
+   */
+  const momentInWords =
+    now === undefined || replaying
+      ? undefined
+      : (iso: string) => positionAgeOf(iso, now, i18n.language);
   const controlSize: 'large' | 'small' = coarse ? 'large' : 'small';
   /**
    * Whether pressing a station is worth offering at all.
@@ -616,6 +673,40 @@ export default function TrackingModelPanel({
             // the party is out, when somebody empties a memory card and turns the log into a report.
             onAttachHere={canEdit ? (moment) => setAttachingAt(moment) : undefined}
           />
+          {/* Offered only on a watch that declared something, and only on the drawing that has
+              surveys to hide. The switch says what it did rather than leaving an emptier picture
+              unexplained, and it refuses — in words — a declaration the drawing cannot follow:
+              taking half of one off the screen would hide passage the party said it was going to.
+              Whoever is reported outside the declared parts keeps their marker either way; that
+              is told on the table above, by the server, and not by what is drawn here. */}
+          {tracking.depthFilter.length > 0 && activeTab === TAB_3D && (
+            <Flex gap="small" align="center" wrap>
+              <Switch
+                size="small"
+                checked={onlyDeclared && declaredPartsUsable(declaredView)}
+                disabled={!declaredPartsUsable(declaredView)}
+                onChange={setOnlyDeclared}
+                aria-label={t('trips.tracking.declaredOnly')}
+                data-testid="trip-tracking-declared-only"
+              />
+              <Typography.Text>{t('trips.tracking.declaredOnly')}</Typography.Text>
+              <Typography.Text type="secondary" data-testid="trip-tracking-declared-only-note">
+                {declaredView === null
+                  ? t('trips.tracking.declaredOnlyWaiting')
+                  : declaredView.unmatched.length > 0
+                    ? t('trips.tracking.declaredOnlyUnmatched', {
+                        entries: declaredView.unmatched.join(', '),
+                      })
+                    : declaredView.hide.length === 0
+                      ? t('trips.tracking.declaredOnlyNothing')
+                      : onlyDeclared
+                        ? t('trips.tracking.declaredOnlyHidden', {
+                            surveys: declaredView.hide.length,
+                          })
+                        : t('trips.tracking.declaredOnlyHelp')}
+              </Typography.Text>
+            </Flex>
+          )}
           {/* <b>The press names a station and offers to record there; it does not open a dialog by
               itself.</b> Looking around a model means pressing things, and a form that appeared on
               every press would make the model unusable as a model — which is the same reasoning the
@@ -666,9 +757,13 @@ export default function TrackingModelPanel({
                     height={modelHeight(narrow, large)}
                     surveyModelId={model.id}
                     trackedCavers={shown}
+                    trackedMomentInWords={momentInWords}
                     // Handed straight through, replay or no replay: what comes back names stations of the
                     // drawing, which is the one thing about this panel a scrubbed moment cannot change.
                     onUnplacedStationsChange={onUnplacedStationsChange}
+                    declaredParts={tracking.depthFilter}
+                    onlyDeclaredParts={onlyDeclared}
+                    onDeclaredPartsView={setDeclaredView}
                     // A leg or a splay names no single place to report from, so it clears the offer rather
                     // than leaving the last station standing under a press that meant something else.
                     onPartPick={
@@ -706,6 +801,7 @@ export default function TrackingModelPanel({
                     // the party they are both showing.
                     cavers={shown}
                     onPickStation={canRecord ? pickStation : undefined}
+                    momentInWords={momentInWords}
                   />
                 ),
               })),
@@ -715,6 +811,7 @@ export default function TrackingModelPanel({
             <TrackingReportDialog
               open={recording !== null}
               tripLogId={tripLogId}
+              state={tracking.state}
               station={recording}
               cavers={dialogCavers}
               teams={tracking.teams}

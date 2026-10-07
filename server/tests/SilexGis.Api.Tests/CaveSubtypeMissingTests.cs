@@ -5,7 +5,6 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog.Core;
-using Serilog.Events;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
@@ -276,43 +275,5 @@ public sealed class CaveSubtypeMissingTests : IAsyncLifetime, IDisposable, IClas
     {
         editor?.Dispose();
         factory.Dispose();
-    }
-}
-
-/// <summary>
-/// Everything the application logged during a test. Registered as a sink on the real logging
-/// pipeline — the host reads its sinks from the service collection — so a warning asserted here
-/// is one the code path under test emitted through the logger the installation actually uses.
-/// </summary>
-internal sealed class LogCapture : ILogEventSink
-{
-    private readonly List<string> lines = [];
-
-    public IReadOnlyList<string> Lines
-    {
-        get
-        {
-            lock (lines)
-            {
-                return [.. lines];
-            }
-        }
-    }
-
-    public void Clear()
-    {
-        lock (lines)
-        {
-            lines.Clear();
-        }
-    }
-
-    public void Emit(LogEvent logEvent)
-    {
-        var line = $"{logEvent.Level} {logEvent.RenderMessage()}";
-        lock (lines)
-        {
-            lines.Add(line);
-        }
     }
 }

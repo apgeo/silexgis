@@ -33,6 +33,8 @@ export type MovieViewViewer = Pick<
   | 'cameraType'
   | 'linewidth'
   | 'zScale'
+  | 'terrain'
+  | 'hasTerrain'
   | 'hasRealTerrain'
 >;
 
@@ -54,6 +56,15 @@ type Writable = Record<string, unknown>;
  * cannot draw. A shading the reader left to the viewer is `viewerShading`, the one the viewer drew
  * the model in before anything was set; with none given it is left as it stands.
  *
+ * <b>The surface is drawn only where it is the file's own, and only when asked for.</b> A viewer
+ * with no terrain at all has nothing to switch and is left alone. One with terrain is told either
+ * way — so a surface the reader's own saved view of the viewer turns on does not get into a movie
+ * whose settings say it is off. And terrain that is not real is always switched off: for a survey
+ * that names its coordinate system the viewer lays a flat plane under the model, made of tiles it
+ * asks a worker for again whenever the camera moves, so a movie that turns would be recorded with
+ * pieces of that plane still arriving. The file's own terrain is whole when the model has loaded.
+ * It is written before the shading, since the depth shadings are measured from it.
+ *
  * The settings name a shading; the viewer takes a number. The name is turned into this viewer's own
  * number here, where it is written, and one this viewer has no constant for is treated as left to
  * the viewer.
@@ -69,6 +80,9 @@ function wantedView(
     if (has === null || viewer[has]) {
       wanted.push([key, view[key]]);
     }
+  }
+  if (viewer.hasTerrain) {
+    wanted.push(['terrain', view.terrain && viewer.hasRealTerrain === true]);
   }
   const shading = (view.shading === null ? null : movieShadingNumber(view.shading, constants)) ?? viewerShading;
   const depthShading = shading === constants.SHADING_DEPTH || shading === constants.SHADING_DEPTH_CURSOR;

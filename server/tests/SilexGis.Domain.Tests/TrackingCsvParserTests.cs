@@ -622,6 +622,137 @@ public class TrackingCsvParserTests
         read.Rows[1].Cavers.ShouldBe(["Maria Pop"]);
     }
 
+    [Fact]
+    public void A_row_with_a_note_and_no_place_or_standing_is_a_note_and_one_with_nothing_is_refused()
+    {
+        var rows = TrackingCsvParser.Parse(
+            "Data si ora,Adancime,Statie,Loc,Speologi,Nota,Stare\r\n"
+            + "12.09.2026 09:00,,,,Ion,apa in crestere,\r\n"
+            + "12.09.2026 10:00,,,,Ion,,\r\n").Rows;
+
+        rows[0].Importable.ShouldBeTrue();
+        rows[0].Kind.ShouldBe(TripPositionEventKind.Note);
+        rows[0].Decides.ShouldBe(TrackingCsvPlaceKind.None);
+        rows[0].Note.ShouldBe("apa in crestere");
+        rows[0].Diagnostics.ShouldBeEmpty();
+
+        // The note empty too: the row says nothing about anybody, and is refused as before.
+        rows[1].Importable.ShouldBeFalse();
+        rows[1].Kind.ShouldBeNull();
+        rows[1].Diagnostics.ShouldContain(d =>
+            d.Problem == TrackingCsvProblem.NoPlaceAndNoState
+            && d.Severity == TrackingCsvSeverity.Error);
+    }
+
+    [Fact]
+    public void A_further_details_column_alone_is_enough_of_a_note()
+    {
+        // The note that is stored is the two columns folded, so either of them makes the row one.
+        var row = TrackingCsvParser.Parse(
+            "Data,Adancime,Speologi,Nota,Detalii\r\n"
+            + "12.09.2026 09:00,,Ion,,sifon inchis\r\n").Rows[0];
+
+        row.Importable.ShouldBeTrue();
+        row.Kind.ShouldBe(TripPositionEventKind.Note);
+        row.Note.ShouldBe("sifon inchis");
+    }
+
+    [Fact]
+    public void A_note_beside_a_place_or_a_standing_does_not_make_the_row_a_note()
+    {
+        // A note is what a row is when it is nothing else. Beside a place or a standing it rides
+        // on the report the row already was.
+        var rows = TrackingCsvParser.Parse(
+            "Data,Adancime,Speologi,Nota,Stare\r\n"
+            + "12.09.2026 09:00,96,Ion,apa mare,\r\n"
+            + "12.09.2026 16:00,,Ion,toti afara,iesire\r\n").Rows;
+
+        rows[0].Kind.ShouldBe(TripPositionEventKind.AtDepth);
+        rows[0].Note.ShouldBe("apa mare");
+        rows[1].Kind.ShouldBe(TripPositionEventKind.Exited);
+        rows[1].Note.ShouldBe("toti afara");
+    }
+
+    [Fact]
+    public void A_place_or_a_standing_that_was_written_and_could_not_be_read_is_not_filed_as_its_note()
+    {
+        // A cell that was not understood is not a cell that was empty. Filed as its note, the
+        // second row would leave somebody who came out recorded as underground, and the first
+        // would, on a re-import, write a note over the depth the log holds for that moment.
+        var rows = TrackingCsvParser.Parse(
+            "Data,Adancime,Speologi,Nota,Stare\r\n"
+            + "12.09.2026 09:00,96 cm,Ion,apa mare,\r\n"
+            + "12.09.2026 10:00,,Ion,toti afara,afara\r\n"
+            + "12.09.2026 11:00,99999,Ion,la sifon,\r\n").Rows;
+
+        rows.ShouldAllBe(r => !r.Importable);
+        rows.ShouldAllBe(r => r.Diagnostics.Any(d =>
+            d.Problem == TrackingCsvProblem.NoPlaceAndNoState && d.Severity == TrackingCsvSeverity.Error));
+        // What to change is still said on the cell, beside the refusal.
+        rows[0].Diagnostics.ShouldContain(d =>
+            d.Problem == TrackingCsvProblem.DepthUnreadable && d.Detail == "96 cm");
+        rows[1].Diagnostics.ShouldContain(d =>
+            d.Problem == TrackingCsvProblem.StateWordUnknown && d.Detail == "afara");
+        rows[2].Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.DepthOutOfRange);
+    }
+
+    [Fact]
+    public void A_word_nobody_listed_beside_a_place_that_was_read_still_imports_as_that_place()
+    {
+        // The twin: the standing was not understood, but the row says where somebody was all the
+        // same, so it is the report its place makes it and the word is remarked on.
+        var row = TrackingCsvParser.Parse(
+            "Data,Adancime,Speologi,Nota,Stare\r\n"
+            + "12.09.2026 10:00,96,Ion,dormim aici,bivuac\r\n").Rows[0];
+
+        row.Importable.ShouldBeTrue();
+        row.Kind.ShouldBe(TripPositionEventKind.AtDepth);
+        row.Note.ShouldBe("dormim aici");
+        row.Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.StateWordUnknown);
+    }
+
+    [Theory]
+    [InlineData("96 m", 96)]
+    [InlineData("96m", 96)]
+    [InlineData("96 m.", 96)]
+    [InlineData("96 M", 96)]
+    [InlineData("96 metri", 96)]
+    [InlineData("96 meters", 96)]
+    [InlineData("-12 m", -12)]
+    [InlineData("96,5 m", 96.5)]
+    public void A_depth_may_say_that_it_is_in_metres(string written, double metres)
+    {
+        var row = Parse($"12.09.2026 09:00,\"{written}\",Ion").Rows[0];
+
+        row.DepthM.ShouldBe((decimal)metres);
+        row.Decides.ShouldBe(TrackingCsvPlaceKind.Depth);
+        row.Diagnostics.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("96 cm")]
+    [InlineData("2 km")]
+    [InlineData("300 ft")]
+    [InlineData("metri")]
+    [InlineData("cam 96 m")]
+    public void A_depth_in_another_unit_or_in_words_is_reported_and_never_read_as_metres(string written)
+    {
+        // The half that matters: "96 cm" ends in the same letter, and read as 96 metres it would
+        // put somebody a hundred times deeper than the sheet said.
+        var row = Parse($"12.09.2026 09:00,{written},Ion").Rows[0];
+
+        row.DepthM.ShouldBeNull();
+        row.Diagnostics.ShouldContain(d =>
+            d.Problem == TrackingCsvProblem.DepthUnreadable && d.Detail == written);
+    }
+
+    [Fact]
+    public void A_number_ending_in_a_stop_is_still_the_number_it_was()
+    {
+        // The stop comes off with a unit and not otherwise.
+        Parse("12.09.2026 09:00,96.,Ion").Rows[0].DepthM.ShouldBe(96m);
+    }
+
     /// <summary>A three-column sheet: moment, depth, caver. Header supplied, rows given.</summary>
     private static TrackingCsvParseResult Parse(string rows) =>
         TrackingCsvParser.Parse("Data si ora,Adancime,Speologi\r\n" + rows + "\r\n");
