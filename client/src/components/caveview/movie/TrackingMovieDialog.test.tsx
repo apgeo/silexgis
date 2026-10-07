@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TrackedTrip, TrackingEvent, TrackingState } from '../../../api/hooks.ts';
 import type { MovieFormatSupport } from '../../../caveview/movie/encode/movieEncoder.ts';
 import type { MovieTripData } from '../../../caveview/movie/movieParty.ts';
-import type { MovieRecording } from '../../../caveview/movie/movieRecorder.ts';
+import type { MovieRecording, MovieStillRecording } from '../../../caveview/movie/movieRecorder.ts';
 import type { MovieTripSpan } from '../../../caveview/movie/movieTimeline.ts';
 import { movieSlug } from '../../../caveview/movie/movieOutput.ts';
 import { DEFAULT_MOVIE_SETTINGS, normaliseMovieSettings } from '../../../caveview/movie/movieSettings.ts';
@@ -67,9 +67,11 @@ vi.mock('../../../caveview/movie/encode/movieEncoder.ts', async (original) => ({
   probeMovieFormats: () => Promise.resolve(probe.answer),
 }));
 const recordMovie = vi.hoisted(() => vi.fn<(recording: MovieRecording) => Promise<Blob>>());
+const recordMovieStill = vi.hoisted(() => vi.fn<(recording: MovieStillRecording, index: number) => Promise<Blob>>());
 vi.mock('../../../caveview/movie/movieRecorder.ts', async (original) => ({
   ...(await original<typeof import('../../../caveview/movie/movieRecorder.ts')>()),
   recordMovie,
+  recordMovieStill,
 }));
 const saveBlob = vi.hoisted(() => vi.fn());
 vi.mock('../../../api/download.ts', () => ({ saveBlob }));
@@ -304,6 +306,7 @@ beforeEach(() => {
   reads.movieEndsAsked = [];
   reads.moviePausedAsked = [];
   recordMovie.mockReset();
+  recordMovieStill.mockReset();
   saveBlob.mockReset();
   drawMovieCaptions.mockReset();
   useUiPrefsStore.setState({ movieSettings: undefined, movieGifCalibration: undefined });
@@ -1676,6 +1679,27 @@ describe('who appears in the movie', () => {
     expect(window.location.href).toBe(address);
   });
 
+  it('leaves somebody unticked out still after the settings are reset or a preset is pressed', async () => {
+    reads.movie = ready(tripOfTwo('trip-a', 'Alpha'));
+    recordMovieStill.mockResolvedValue(new Blob(['png'], { type: 'image/png' }));
+    open(['trip-a']);
+    unfold('trip-a');
+    fireEvent.click(caverBox('trip-a', 'Bogdan Ionescu'));
+
+    fireEvent.click(screen.getByTestId('movie-reset'));
+    fireEvent.click(screen.getByTestId('movie-preset-chat'));
+    await waitFor(() => expect(useUiPrefsStore.getState().movieSettings?.size).toBe('480x270'));
+
+    expect(screen.getByTestId('movie-trip-cavers-toggle-trip-a')).toHaveTextContent('Who appears: 1 of 2');
+    expect(caverBox('trip-a', 'Bogdan Ionescu')).not.toBeChecked();
+    // And a picture taken now is of the movie with that person left out.
+    const still = screen.getByTestId('movie-still');
+    await waitFor(() => expect(still).not.toBeDisabled());
+    fireEvent.click(still);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    expect([...recordMovieStill.mock.calls[0][0].excluded]).toEqual(['trip-a:caver-2']);
+  });
+
   it('starts a trip with everybody again once it has been taken out of the movie and put back', async () => {
     reads.movie = ready(tripOfTwo('trip-a', 'Alpha'), tripOfTwo('trip-b', 'Bravo'));
     open(['trip-a', 'trip-b']);
@@ -1713,5 +1737,398 @@ describe('the time-lapse figure', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Clock' }));
     await waitFor(() => expect(speed).toBeDisabled());
     expect(useUiPrefsStore.getState().movieSettings?.captions.speed).toBe(true);
+  });
+});
+
+describe('a still picture of the preview', () => {
+  it('saves the moment the slider is on as a PNG named as the movie is, from the preview’s own viewer', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    const picture = new Blob(['png'], { type: 'image/png' });
+    recordMovieStill.mockResolvedValue(picture);
+    open(['trip-a']);
+
+    const still = await screen.findByTestId('movie-still');
+    expect(still).toHaveAccessibleName('Save this moment as a picture');
+    await waitFor(() => expect(still).not.toBeDisabled());
+    const handle = screen.getByRole('slider', { name: 'Moment in the movie' });
+    fireEvent.keyDown(handle, { key: 'End', code: 'End', keyCode: 35 });
+    fireEvent.click(still);
+
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    const [recording, index] = recordMovieStill.mock.calls[0];
+    expect(index).toBe(219);
+    expect(recording.viewer).toBe(preview.viewer);
+    expect(recording.surveyModelId).toBe(MODEL);
+    expect(recording.trips.map((trip) => trip.tripLogId)).toEqual(['trip-a']);
+    expect(recording.title).toBe('Alpha');
+    expect([...recording.excluded]).toEqual([]);
+    const [saved, name] = saveBlob.mock.calls[0] as [Blob, string];
+    expect(saved).toBe(picture);
+    expect(name).toMatch(/^silexgis-alpha-\d{4}-\d{2}-\d{2}\.png$/);
+    // The movie's own name with another ending: one rule names both.
+    expect(screen.getByTestId('movie-file-name')).toHaveTextContent(name.replace(/\.png$/, '.gif'));
+    // No movie was made for it, the dialog never went into an export, and nothing was learnt about GIFs.
+    expect(recordMovie).not.toHaveBeenCalled();
+    expect(preview.recordingSeen).not.toContain(true);
+    expect(screen.queryByTestId('movie-progress')).not.toBeInTheDocument();
+    expect(useUiPrefsStore.getState().movieGifCalibration).toBeUndefined();
+    await waitFor(() => expect(still).not.toBeDisabled());
+  });
+
+  it('names the picture neutrally when the title caption is off', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovieStill.mockResolvedValue(new Blob(['png'], { type: 'image/png' }));
+    useUiPrefsStore.setState({
+      movieSettings: {
+        ...DEFAULT_MOVIE_SETTINGS,
+        captions: { ...DEFAULT_MOVIE_SETTINGS.captions, title: false },
+      },
+    });
+    open(['trip-a']);
+
+    const still = await screen.findByTestId('movie-still');
+    await waitFor(() => expect(still).not.toBeDisabled());
+    fireEvent.click(still);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    expect(recordMovieStill.mock.calls[0][0].title).toBeNull();
+    expect(saveBlob.mock.calls[0][1]).toMatch(/^silexgis-movie-\d{4}-\d{2}-\d{2}\.png$/);
+  });
+
+  it('stops the preview playing first, so the picture is taken from where the movie starts', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    const viewer = preview.viewer as ReturnType<typeof fakeViewer>;
+    // What the camera had been told by the time the picture was asked for.
+    let toldBefore: unknown[][] = [];
+    recordMovieStill.mockImplementation(async () => {
+      toldBefore = [...viewer.setCameraAngles.mock.calls];
+      return new Blob(['png'], { type: 'image/png' });
+    });
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1);
+    try {
+      open(['trip-a']);
+      const play = await screen.findByTestId('movie-play');
+      await waitFor(() => expect(play).not.toBeDisabled());
+      fireEvent.click(play);
+      expect(play).toHaveAccessibleName('Stop the preview');
+      viewer.setCameraAngles.mockClear();
+
+      fireEvent.click(screen.getByTestId('movie-still'));
+      await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+      expect(play).toHaveAccessibleName('Play the preview');
+      // The camera was put back where play began before the recorder read it.
+      expect(toldBefore).toEqual([[{ azimuth: 0.5, polar: 1 }]]);
+    } finally {
+      raf.mockRestore();
+    }
+  });
+
+  it('says so when the picture cannot be made, and saves nothing', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovieStill.mockRejectedValue(new Error('the drawing was lost'));
+    open(['trip-a']);
+
+    const still = await screen.findByTestId('movie-still');
+    await waitFor(() => expect(still).not.toBeDisabled());
+    fireEvent.click(still);
+
+    const alert = await screen.findByTestId('movie-still-failed');
+    expect(alert).toHaveTextContent('The picture could not be made.');
+    expect(alert).toHaveTextContent('the drawing was lost');
+    expect(screen.queryByTestId('movie-export-failed')).not.toBeInTheDocument();
+    expect(saveBlob).not.toHaveBeenCalled();
+    await waitFor(() => expect(still).not.toBeDisabled());
+  });
+
+  it('is held back by what holds an export back, and is not offered while one runs', async () => {
+    // A chosen trip that could not be read: a picture quietly missing it would be believed too.
+    reads.movie = { ...ready(movieTrip('trip-a', 'Alpha')), failed: ['trip-b'] };
+    open(['trip-a', 'trip-b']);
+    const still = await screen.findByTestId('movie-still');
+    await screen.findByTestId('movie-trips-failed');
+    expect(still).toBeDisabled();
+    expect(screen.getByTestId('movie-export')).toBeDisabled();
+    cleanup();
+
+    // The positive case beside it: the same dialog with nothing unread offers the picture.
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    let finish: (file: Blob) => void = () => {};
+    recordMovie.mockImplementation(() => new Promise<Blob>((resolve) => (finish = resolve)));
+    open(['trip-a']);
+    const offered = await screen.findByTestId('movie-still');
+    await waitFor(() => expect(offered).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('movie-export'));
+    await screen.findByTestId('movie-cancel');
+    expect(offered).toBeDisabled();
+    fireEvent.click(offered);
+    expect(recordMovieStill).not.toHaveBeenCalled();
+    await act(async () => finish(new Blob(['GIF89a'], { type: 'image/gif' })));
+    await waitFor(() => expect(offered).not.toBeDisabled());
+  });
+});
+
+describe('the presets', () => {
+  /** Settings a reader has made their own in the groups that say what the file discloses. */
+  const CHOSEN = normaliseMovieSettings({
+    ...DEFAULT_MOVIE_SETTINGS,
+    format: 'webm',
+    size: '1920x1080',
+    fps: 25,
+    durationS: 40,
+    quality: 'low',
+    rotation: { ...DEFAULT_MOVIE_SETTINGS.rotation, enabled: false },
+    timeline: { ...DEFAULT_MOVIE_SETTINGS.timeline, mode: 'together' },
+    cavers: { ...DEFAULT_MOVIE_SETTINGS.cavers, labels: 'initials', labelPlate: false, showOut: false },
+    view: { ...DEFAULT_MOVIE_SETTINGS.view, HUD: true, grid: true, direction: 'plan' },
+    captions: { ...DEFAULT_MOVIE_SETTINGS.captions, title: false, clock: false, note: true },
+  });
+  const PRIVATE_GROUPS = ['rotation', 'timeline', 'cavers', 'view', 'captions'] as const;
+  const stored = () => useUiPrefsStore.getState().movieSettings!;
+
+  async function openWith(settings = CHOSEN) {
+    useUiPrefsStore.setState({ movieSettings: settings });
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+    await screen.findByTestId('movie-preset-chat');
+  }
+
+  it('are offered above the groups, each saying what it sets', async () => {
+    await openWith();
+    const presets = screen.getByRole('group', { name: 'Presets' });
+    expect(within(presets).getByRole('button', { name: 'For a chat' })).toHaveAttribute('title', expect.stringContaining('480 × 270'));
+    expect(within(presets).getByRole('button', { name: 'HD video' })).toHaveAttribute('title', expect.stringContaining('1280 × 720'));
+    expect(within(presets).getByRole('button', { name: 'Reset to defaults' })).toBeInTheDocument();
+    expect(presets).toHaveTextContent('never who appears, the view or the captions');
+    // Above the groups: before the first of them in the document.
+    const firstGroup = screen.getByText('Trips');
+    expect(presets.compareDocumentPosition(firstGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('change the file and leave who is shown, the view and the captions exactly as they were', async () => {
+    await openWith();
+    for (const group of PRIVATE_GROUPS) {
+      expect(CHOSEN[group], group).not.toEqual(DEFAULT_MOVIE_SETTINGS[group]);
+    }
+
+    fireEvent.click(screen.getByTestId('movie-preset-chat'));
+    await waitFor(() => expect(stored().format).toBe('gif'));
+    expect(stored()).toMatchObject({ size: '480x270', fps: 10, durationS: 15, quality: 'medium' });
+    for (const group of PRIVATE_GROUPS) {
+      expect(stored()[group], group).toEqual(CHOSEN[group]);
+    }
+    // Read off the file's name: every radio group of the form shares one name under test, so which
+    // button of one group is checked cannot be asked of the document here.
+    await waitFor(() => expect(screen.getByTestId('movie-file-name')).toHaveTextContent(/\.gif$/));
+
+    fireEvent.click(screen.getByTestId('movie-preset-hd'));
+    await waitFor(() => expect(stored().format).toBe('mp4'));
+    expect(stored()).toMatchObject({ size: '1280x720', fps: 30, quality: 'high', durationS: 15 });
+    for (const group of PRIVATE_GROUPS) {
+      expect(stored()[group], group).toEqual(CHOSEN[group]);
+    }
+    expect(screen.getByTestId('movie-file-name')).toHaveTextContent(/\.mp4$/);
+  });
+
+  it('make the HD video a WebM where this browser writes no MP4', async () => {
+    probe.answer = [
+      { format: 'gif', supported: true, codec: null },
+      { format: 'webm', supported: true, codec: 'vp09.00.10.08' },
+      { format: 'mp4', supported: false, codec: null },
+    ];
+    await openWith(DEFAULT_MOVIE_SETTINGS);
+    fireEvent.click(screen.getByTestId('movie-preset-hd'));
+    await waitFor(() => expect(stored()?.format).toBe('webm'));
+    expect(stored()).toMatchObject({ size: '1280x720', fps: 30, quality: 'high' });
+  });
+
+  it('leave everything alone where this browser writes no video, and say so', async () => {
+    probe.answer = [
+      { format: 'gif', supported: true, codec: null },
+      { format: 'webm', supported: false, codec: null },
+      { format: 'mp4', supported: false, codec: null },
+    ];
+    await openWith(DEFAULT_MOVIE_SETTINGS);
+    const before = stored();
+    fireEvent.click(screen.getByTestId('movie-preset-hd'));
+
+    expect(await screen.findByText('This browser cannot write a 1280 × 720 video, so nothing was changed.')).toBeInTheDocument();
+    expect(stored()).toEqual(DEFAULT_MOVIE_SETTINGS);
+    expect(screen.getByTestId('movie-file-name')).toHaveTextContent(/\.gif$/);
+    // Nothing was written at all: what is remembered is the very object it was, not a copy of it.
+    expect(stored()).toBe(before);
+    // The same press is not refused where the browser does write video: the refusal is the probe's.
+    probe.answer = ALL_FORMATS;
+    fireEvent.click(screen.getByTestId('movie-preset-hd'));
+    await waitFor(() => expect(screen.getByTestId('movie-file-name')).toHaveTextContent(/\.mp4$/));
+    expect(stored()).toMatchObject({ format: 'mp4', size: '1280x720', fps: 30, quality: 'high' });
+    expect(stored()).not.toBe(before);
+  });
+
+  it('reset puts every setting back, the written title included', async () => {
+    await openWith();
+    fireEvent.click(screen.getByText('Captions'));
+    fireEvent.click(await screen.findByTestId('movie-caption-title'));
+    const title = screen.getByTestId('movie-title-text');
+    fireEvent.change(title, { target: { value: 'Ours' } });
+    expect(title).toHaveValue('Ours');
+
+    fireEvent.click(screen.getByTestId('movie-reset'));
+
+    await waitFor(() => expect(stored()).toEqual(DEFAULT_MOVIE_SETTINGS));
+    await waitFor(() => expect(title).toHaveValue(''));
+    await waitFor(() => expect(screen.getByTestId('movie-file-name')).toHaveTextContent(/\.gif$/));
+    expect(preview.direction).toBe(DEFAULT_MOVIE_SETTINGS.view.direction);
+  });
+
+  it('change nothing while an export runs', async () => {
+    let finish: (file: Blob) => void = () => {};
+    recordMovie.mockImplementation(() => new Promise<Blob>((resolve) => (finish = resolve)));
+    await openWith(DEFAULT_MOVIE_SETTINGS);
+    const exportButton = screen.getByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await screen.findByTestId('movie-cancel');
+
+    for (const id of ['movie-preset-chat', 'movie-preset-hd', 'movie-reset']) {
+      expect(screen.getByTestId(id), id).toBeDisabled();
+    }
+    await act(async () => finish(new Blob(['GIF89a'], { type: 'image/gif' })));
+    await waitFor(() => expect(screen.getByTestId('movie-preset-chat')).not.toBeDisabled());
+  });
+});
+
+describe('the preview’s own keys', () => {
+  async function opened() {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+    const play = await screen.findByTestId('movie-play');
+    await waitFor(() => expect(play).not.toBeDisabled());
+    return {
+      play,
+      keys: screen.getByTestId('movie-preview-keys'),
+      handle: screen.getByRole('slider', { name: 'Moment in the movie' }),
+      frameShown: () => screen.getByTestId('movie-position').dataset.frame,
+    };
+  }
+  /** Whether the key was left to do what it does by itself: type, press, scroll. */
+  const leftAlone = (element: Element, init: KeyboardEventInit) => fireEvent.keyDown(element, init);
+
+  let raf: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    // Play asks for a frame and is handed none: whether it is playing is all these tests ask.
+    raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1);
+  });
+  afterEach(() => raf.mockRestore());
+
+  it('can be given the focus, says what its keys are, and plays and pauses on Space', async () => {
+    const { play, keys } = await opened();
+    expect(keys).toHaveAttribute('tabindex', '0');
+    expect(keys).toHaveAccessibleName('Preview of the movie');
+    expect(keys).toContainElement(screen.getByTestId('movie-preview'));
+    expect(screen.getByTestId('movie-keys-hint')).toHaveTextContent('Space plays and pauses');
+
+    expect(leftAlone(keys, { key: ' ' })).toBe(false);
+    expect(play).toHaveAccessibleName('Stop the preview');
+    expect(leftAlone(keys, { key: ' ' })).toBe(false);
+    expect(play).toHaveAccessibleName('Play the preview');
+  });
+
+  it('plays and pauses on Space from the moment slider as well', async () => {
+    const { play, handle } = await opened();
+    expect(leftAlone(handle, { key: ' ' })).toBe(false);
+    expect(play).toHaveAccessibleName('Stop the preview');
+    expect(leftAlone(handle, { key: ' ' })).toBe(false);
+    expect(play).toHaveAccessibleName('Play the preview');
+  });
+
+  it('goes to the ends of the movie on Home and End', async () => {
+    const { keys, handle, frameShown } = await opened();
+    expect(leftAlone(keys, { key: 'End' })).toBe(false);
+    expect(frameShown()).toBe('219');
+    expect(leftAlone(keys, { key: 'Home' })).toBe(false);
+    expect(frameShown()).toBe('0');
+    // On the slider's handle the two are the slider's own, and go to the same ends.
+    fireEvent.keyDown(handle, { key: 'End', code: 'End', keyCode: 35 });
+    expect(frameShown()).toBe('219');
+    fireEvent.keyDown(handle, { key: 'Home', code: 'Home', keyCode: 36 });
+    expect(frameShown()).toBe('0');
+  });
+
+  it('stops play when a key sends the preview to an end', async () => {
+    const { play, keys, frameShown } = await opened();
+    fireEvent.keyDown(keys, { key: ' ' });
+    expect(play).toHaveAccessibleName('Stop the preview');
+    fireEvent.keyDown(keys, { key: 'End' });
+    expect(play).toHaveAccessibleName('Play the preview');
+    expect(frameShown()).toBe('219');
+  });
+
+  it('leaves Space to a text box, where it types, and to a button, where it presses', async () => {
+    const { play } = await opened();
+    fireEvent.click(screen.getByText('Captions'));
+    const title = await screen.findByTestId('movie-title-text');
+    expect(leftAlone(title, { key: ' ' })).toBe(true);
+    fireEvent.change(title, { target: { value: 'Two words' } });
+    expect(title).toHaveValue('Two words');
+    expect(play).toHaveAccessibleName('Play the preview');
+
+    // On the play button itself the key is the button's: pressed once by the browser, which a
+    // second press of it from here would undo.
+    expect(leftAlone(play, { key: ' ' })).toBe(true);
+    expect(leftAlone(screen.getByTestId('movie-still'), { key: ' ' })).toBe(true);
+    expect(leftAlone(play, { key: 'Home' })).toBe(true);
+    expect(play).toHaveAccessibleName('Play the preview');
+  });
+
+  it('takes no key held with a modifier, and does not start and stop on a key held down', async () => {
+    const { play, keys, frameShown } = await opened();
+    expect(leftAlone(keys, { key: ' ', ctrlKey: true })).toBe(true);
+    expect(leftAlone(keys, { key: 'End', altKey: true })).toBe(true);
+    expect(leftAlone(keys, { key: 'End', metaKey: true })).toBe(true);
+    expect(play).toHaveAccessibleName('Play the preview');
+    expect(frameShown()).toBe('0');
+
+    fireEvent.keyDown(keys, { key: ' ' });
+    fireEvent.keyDown(keys, { key: ' ', repeat: true });
+    fireEvent.keyDown(keys, { key: ' ', repeat: true });
+    expect(play).toHaveAccessibleName('Stop the preview');
+  });
+
+  it('does nothing while an export runs', async () => {
+    let finish: (file: Blob) => void = () => {};
+    recordMovie.mockImplementation(() => new Promise<Blob>((resolve) => (finish = resolve)));
+    const { play, keys, frameShown } = await opened();
+    const exportButton = screen.getByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await screen.findByTestId('movie-cancel');
+
+    expect(leftAlone(keys, { key: ' ' })).toBe(true);
+    expect(leftAlone(keys, { key: 'End' })).toBe(true);
+    expect(play).toHaveAccessibleName('Play the preview');
+    expect(frameShown()).toBe('0');
+
+    await act(async () => finish(new Blob(['GIF89a'], { type: 'image/gif' })));
+    await waitFor(() => expect(play).not.toBeDisabled());
+    // The same key on the same preview, once the export is over.
+    expect(leftAlone(keys, { key: ' ' })).toBe(false);
+    expect(play).toHaveAccessibleName('Stop the preview');
+  });
+
+  it('keeps its keys from the viewer’s document-wide shortcuts like every other key on the dialog', async () => {
+    const { keys, handle } = await opened();
+    const seen: string[] = [];
+    const listener = (event: KeyboardEvent) => seen.push(event.key);
+    document.addEventListener('keydown', listener);
+    try {
+      fireEvent.keyDown(keys, { key: ' ' });
+      fireEvent.keyDown(keys, { key: 'Home' });
+      fireEvent.keyDown(handle, { key: ' ' });
+      fireEvent.keyDown(keys, { key: 'r' });
+      expect(seen).toEqual([]);
+      fireEvent.keyDown(keys, { key: 'Escape' });
+      expect(seen).toEqual(['Escape']);
+    } finally {
+      document.removeEventListener('keydown', listener);
+    }
   });
 });

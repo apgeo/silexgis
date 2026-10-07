@@ -3025,6 +3025,23 @@
       "playPreview": "Redă previzualizarea",
       "stopPreview": "Oprește previzualizarea",
       "previewHint": "Trage de model pentru a alege vederea de la care pornește filmul; camera se rotește de acolo.",
+      "preview": "Previzualizarea filmului",
+      "keysHint": "Cu previzualizarea sau cursorul selectat, Spațiu redă și oprește; Home și End duc la început și la sfârșit.",
+      "saveStill": "Salvează acest moment ca imagine",
+      "stillFailed": "Imaginea nu a putut fi făcută.",
+      "presetsTitle": "Presetări",
+      "presets": {
+        "chat": "Pentru chat",
+        "hd": "Video HD"
+      },
+      "presetHelp": {
+        "chat": "Un GIF mic: 480 × 270, 10 cadre pe secundă, 15 secunde, calitate medie.",
+        "hd": "Un video de 1280 × 720 la 30 de cadre pe secundă, calitate ridicată: MP4 unde acest browser îl poate scrie, WebM unde nu."
+      },
+      "presetsHelp": "O presetare schimbă doar fișierul — niciodată cine apare, vederea sau textele.",
+      "presetHdUnavailable": "Acest browser nu poate scrie un video de 1280 × 720, așa că nu s-a schimbat nimic.",
+      "reset": "Revino la valorile implicite",
+      "resetHelp": "Readuce fiecare setare la ce arată o primă deschidere. Turele și persoanele alese rămân cum sunt.",
       "privacy": "Filmul arată topografia peșterii și unde a fost echipa. Trimite-l doar celor care au voie să le vadă pe amândouă.",
       "export": "Exportă {{format}}",
       "cancelExport": "Anulează exportul",

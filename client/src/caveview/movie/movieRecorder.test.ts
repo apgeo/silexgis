@@ -14,7 +14,13 @@ import type {
 } from '../loadCaveView.ts';
 import type { MovieEncoder, MovieEncoderOptions } from './encode/movieEncoder.ts';
 import type { MovieTripData } from './movieParty.ts';
-import { isMovieAbort, movieSampleFrames, recordMovie, type MovieRecording } from './movieRecorder.ts';
+import {
+  isMovieAbort,
+  movieSampleFrames,
+  recordMovie,
+  recordMovieStill,
+  type MovieRecording,
+} from './movieRecorder.ts';
 import { DEFAULT_MOVIE_SETTINGS, type MovieSettings } from './movieSettings.ts';
 import { buildMovieTimeline } from './movieTimeline.ts';
 
@@ -585,5 +591,133 @@ describe('recordMovie', () => {
     expect(fake.viewer.endCapture).not.toHaveBeenCalled();
     expect(encoder.calls).toEqual(['close']);
     expect(scene(fake)).toEqual(before);
+  });
+});
+
+describe('recordMovieStill', () => {
+  /** A still's recording: the movie's own, with the picture written by a stand-in. */
+  function still(fake: ReturnType<typeof fakeViewer>, overrides: Partial<MovieRecording> = {}) {
+    const encoder = fakeEncoder();
+    const picture = new Blob(['picture'], { type: 'image/png' });
+    // What the viewer was doing when the picture was written.
+    const writtenWhile: { capturing: boolean; log: string[] }[] = [];
+    const toPng = vi.fn(async (_canvas: HTMLCanvasElement) => {
+      writtenWhile.push({ capturing: fake.viewer.capturing, log: [...fake.log] });
+      return picture;
+    });
+    return { encoder, picture, toPng, writtenWhile, recording: { ...recording(fake, encoder, overrides), toPng } };
+  }
+
+  it('draws the frame the movie has at that moment: its view, labels, people and camera angle', async () => {
+    const options = { settings: settings({}, { labelSize: 21, trails: true }) };
+    const movie = previewViewer();
+    await recordMovie(recording(movie, fakeEncoder(), options));
+    const fake = previewViewer();
+    const { recording: one, picture, toPng } = still(fake, options);
+
+    expect(await recordMovieStill(one, 17)).toBe(picture);
+
+    expect(fake.captured).toHaveLength(1);
+    // Everything but how far the markers slide: a still has everybody standing where they are.
+    const { advance: _movieAdvance, ...movieFrame } = movie.captured[17];
+    const { advance, ...stillFrame } = fake.captured[0];
+    expect(stillFrame).toEqual(movieFrame);
+    expect(advance).toBe(0);
+    expect(stillFrame.drawnInto).toBe(true);
+    expect(stillFrame.labelSize).toBe(21);
+    // Not the first frame's angle: the camera is where the turn has brought it by then.
+    expect(stillFrame.azimuth).not.toBe(movie.captured[0].azimuth);
+    // The picture is the frame's own size.
+    const drawnOn = toPng.mock.calls[0][0];
+    expect([drawnOn.width, drawnOn.height]).toEqual([320, 180]);
+  });
+
+  it('gives the viewer back exactly as it found it, before the picture is written, and opens no encoder', async () => {
+    const fake = previewViewer();
+    const before = scene(fake);
+    const clusterLabelAfter = () => 'preview';
+    const { recording: one, encoder, writtenWhile } = still(fake, {
+      settings: settings({}, { trails: true }),
+      clusterLabelAfter,
+    });
+
+    await recordMovieStill(one, 10);
+
+    expect(scene(fake)).toEqual(before);
+    expect(fake.viewer.setLiveMarkerClusterLabel).toHaveBeenLastCalledWith(clusterLabelAfter);
+    expect(fake.log).toEqual(['beginCapture', 'endCapture']);
+    expect([...fake.trails.keys()]).toEqual(['preview-trail']);
+    expect(fake.viewer.updateTrail).toHaveBeenCalledWith('preview-trail', null, { visible: false });
+    // Compressing a picture takes time; the preview is the reader's again before it starts.
+    expect(writtenWhile).toEqual([{ capturing: false, log: ['beginCapture', 'endCapture'] }]);
+    expect(encoder.openEncoder).not.toHaveBeenCalled();
+    expect(encoder.calls).toEqual([]);
+  });
+
+  it('leaves out whoever the movie leaves out', async () => {
+    const fake = fakeViewer();
+    const everybody = fakeViewer();
+    await recordMovieStill(still(everybody).recording, 29);
+    const present = Object.keys(everybody.captured[0].markers);
+    expect(present.length).toBeGreaterThan(0);
+
+    await recordMovieStill(still(fake, { excluded: new Set(present) }).recording, 29);
+    expect(fake.captured[0].markers).toEqual({});
+  });
+
+  it('takes a moment past either end as the end', async () => {
+    const movie = fakeViewer();
+    await recordMovie(recording(movie, fakeEncoder()));
+    const { advance: _first, ...first } = movie.captured[0];
+    const { advance: _last, ...last } = movie.captured[29];
+
+    const late = fakeViewer();
+    await recordMovieStill(still(late).recording, 400);
+    const { advance: _late, ...lateFrame } = late.captured[0];
+    expect(lateFrame).toEqual(last);
+
+    const early = fakeViewer();
+    await recordMovieStill(still(early).recording, -3);
+    const { advance: _early, ...earlyFrame } = early.captured[0];
+    expect(earlyFrame).toEqual(first);
+  });
+
+  it('passes the viewer’s failure on after putting the preview back, and writes no picture', async () => {
+    const refused = previewViewer();
+    const before = scene(refused);
+    refused.viewer.beginCapture.mockImplementation(() => {
+      throw new Error('the container is not the shape of the frame');
+    });
+    const first = still(refused);
+    const refusal = await recordMovieStill(first.recording, 3).catch((e: unknown) => e);
+    expect((refusal as Error).message).toBe('the container is not the shape of the frame');
+    expect(refused.viewer.endCapture).not.toHaveBeenCalled();
+    expect(scene(refused)).toEqual(before);
+    expect(first.toPng).not.toHaveBeenCalled();
+
+    const failing = previewViewer();
+    const beforeFailing = scene(failing);
+    failing.viewer.captureFrame.mockImplementation(() => {
+      throw new Error('the drawing was lost');
+    });
+    const second = still(failing);
+    const failure = await recordMovieStill(second.recording, 3).catch((e: unknown) => e);
+    expect((failure as Error).message).toBe('the drawing was lost');
+    expect(failing.log).toEqual(['beginCapture', 'endCapture']);
+    expect(scene(failing)).toEqual(beforeFailing);
+    expect(second.toPng).not.toHaveBeenCalled();
+  });
+
+  it('reports a viewer that could not be put back rather than hand over a picture in silence', async () => {
+    const fake = previewViewer();
+    fake.viewer.endCapture.mockImplementation(() => {
+      throw new Error('disposed');
+    });
+    const one = still(fake);
+    const failure = await recordMovieStill(one.recording, 3).catch((e: unknown) => e);
+    expect((failure as Error).message).toBe('disposed');
+    // Everything after the failing step was still put back.
+    expect(fake.viewer.liveMarkerLabelSize).toBe(12);
+    expect(one.toPng).not.toHaveBeenCalled();
   });
 });

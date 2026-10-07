@@ -3025,6 +3025,23 @@
       "playPreview": "Play the preview",
       "stopPreview": "Stop the preview",
       "previewHint": "Drag the model to choose the view the movie starts from; the camera turns from there.",
+      "preview": "Preview of the movie",
+      "keysHint": "With the preview or the slider selected, Space plays and pauses; Home and End go to the start and the end.",
+      "saveStill": "Save this moment as a picture",
+      "stillFailed": "The picture could not be made.",
+      "presetsTitle": "Presets",
+      "presets": {
+        "chat": "For a chat",
+        "hd": "HD video"
+      },
+      "presetHelp": {
+        "chat": "A small GIF: 480 × 270, 10 frames a second, 15 seconds, medium quality.",
+        "hd": "A 1280 × 720 video at 30 frames a second, high quality: MP4 where this browser can write it, WebM where it cannot."
+      },
+      "presetsHelp": "A preset changes the file only — never who appears, the view or the captions.",
+      "presetHdUnavailable": "This browser cannot write a 1280 × 720 video, so nothing was changed.",
+      "reset": "Reset to defaults",
+      "resetHelp": "Puts every setting back to what a first opening shows. The trips and the people chosen stay as they are.",
       "privacy": "The movie shows the cave's survey and where the party was. Share it only with people who may see both.",
       "export": "Export {{format}}",
       "cancelExport": "Cancel export",
