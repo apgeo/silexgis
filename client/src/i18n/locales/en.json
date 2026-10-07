@@ -2385,6 +2385,9 @@
     "surveyStations": "Survey stations",
     "incidents": "Trips with an incident",
     "photographs": "Photographs",
+    "trackedTrips": "Tracked trips",
+    "watchHoursUnderground": "Hours underground, from tracking",
+    "watchNote": "The hours from tracking are a second count, taken from the entries and exits in the trips' tracking logs. They are not added to the hours underground above: where a trip has both, they are the same hours. Times somebody went that they cover: {{counted}}.",
     "orientation": {
       "rose": "Passage rose",
       "weighting": "Weighting",

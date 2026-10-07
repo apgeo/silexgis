@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { StatisticsSubject, TripStatistics } from '../../api/hooks.ts';
@@ -110,6 +110,45 @@ describe('TripStatisticsPanel', () => {
     expect(statisticsSpy).toHaveBeenCalledWith('expedition', 'subject-1');
     expect(screen.getByText('People')).toBeTruthy();
     expect(screen.getByText(/Counted over the trips you may read/)).toBeTruthy();
+  });
+
+  it('shows what the tracking logs say as a second source, beside the roster hours and not in them', () => {
+    show('cavingGroup', totals);
+
+    expect(within(screen.getByTestId('trip-statistics-trackedTrips')).getByText('4')).toBeTruthy();
+    const watch = screen.getByTestId('trip-statistics-watchHours');
+    expect(within(watch).getByText('Hours underground, from tracking')).toBeTruthy();
+    expect(within(watch).getByText('5.5 h')).toBeTruthy();
+
+    // The roster's own figure is exactly what it was: 750 minutes, not 750 + 330. A tile reading
+    // 18 h would be the two sources added, which counts the same hours twice.
+    expect(within(screen.getByTestId('trip-statistics-hours')).getByText('12.5 h')).toBeTruthy();
+    expect(screen.queryByText('18 h')).toBeNull();
+
+    // And the sentence that says so, with what the log's figure rests on.
+    const note = screen.getByTestId('trip-statistics-watch-note');
+    expect(note.textContent).toMatch(/second count/);
+    expect(note.textContent).toMatch(/not added/);
+    expect(note.textContent).toMatch(/cover: 6\./);
+  });
+
+  it('draws a dash, never 0 h, where a log has entries and no exit after any of them', () => {
+    show('cavingGroup', { ...totals, trackedTrips: 2, watchUndergroundMinutes: 0, watchTimedPersonTrips: 0 });
+
+    const watch = screen.getByTestId('trip-statistics-watchHours');
+    expect(within(watch).getByText('—')).toBeTruthy();
+    expect(within(watch).queryByText('0 h')).toBeNull();
+    // The trips were tracked all the same, and the sentence says the hours rest on nobody.
+    expect(within(screen.getByTestId('trip-statistics-trackedTrips')).getByText('2')).toBeTruthy();
+    expect(screen.getByTestId('trip-statistics-watch-note').textContent).toMatch(/cover: 0\./);
+  });
+
+  it('says nothing about tracking where no trip in scope was tracked', () => {
+    show('caver', { ...totals, trackedTrips: 0, watchUndergroundMinutes: 0, watchTimedPersonTrips: 0 });
+
+    expect(screen.queryByTestId('trip-statistics-watch-note')).toBeNull();
+    expect(within(screen.getByTestId('trip-statistics-trackedTrips')).getByText('0')).toBeTruthy();
+    expect(within(screen.getByTestId('trip-statistics-watchHours')).getByText('—')).toBeTruthy();
   });
 
   it('shows nothing at all when the subject may not be read', () => {

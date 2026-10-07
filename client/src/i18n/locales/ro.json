@@ -2385,6 +2385,9 @@
     "surveyStations": "Puncte topografice",
     "incidents": "Ture cu incident",
     "photographs": "Fotografii",
+    "trackedTrips": "Ture urmărite",
+    "watchHoursUnderground": "Ore în subteran, din urmărire",
+    "watchNote": "Orele din urmărire sunt o a doua numărătoare, luată din intrările și ieșirile din jurnalele de urmărire ale turelor. Nu se adună la orele în subteran de mai sus: unde o tură le are pe amândouă, sunt aceleași ore. Participări acoperite: {{counted}}.",
     "orientation": {
       "rose": "Roza direcțiilor galeriilor",
       "weighting": "Ponderare",

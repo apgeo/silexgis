@@ -52,7 +52,7 @@ export default function TripStatisticsPanel({ subject, id }: TripStatisticsPanel
     <div data-testid="trip-statistics">
       <Row gutter={[16, 16]}>
         {tilesFor(subject, data, t).map((tile) => (
-          <Col key={tile.key} xs={12} sm={8} md={6}>
+          <Col key={tile.key} xs={12} sm={8} md={6} data-testid={`trip-statistics-${tile.key}`}>
             <Statistic title={tile.label} value={tile.value} loading={isLoading} />
           </Col>
         ))}
@@ -63,6 +63,20 @@ export default function TripStatisticsPanel({ subject, id }: TripStatisticsPanel
       {data && data.timedPersonTrips < data.personTrips && (
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
           {t('statistics.hoursPartial', { counted: data.timedPersonTrips, total: data.personTrips })}
+        </Typography.Paragraph>
+      )}
+      {/* Said wherever a tracked trip is counted, whether or not its log came to any hours: the
+          two hours tiles stand a few centimetres apart and the first thing a reader does with two
+          figures in the same unit is add them. Where a trip has both a roster with times and a
+          log they are the same hours, so the sentence says outright that they are not summed —
+          and how many of the times somebody went the log's figure rests on. */}
+      {data && data.trackedTrips > 0 && (
+        <Typography.Paragraph
+          type="secondary"
+          style={{ marginBottom: 0 }}
+          data-testid="trip-statistics-watch-note"
+        >
+          {t('statistics.watchNote', { counted: data.watchTimedPersonTrips })}
         </Typography.Paragraph>
       )}
       {data?.earliestTripDate && data.latestTripDate && (
@@ -146,6 +160,22 @@ function tilesFor(
     // Counted over the pictures this reader may see, like everything beside it — the sentence
     // under the tiles covers this one too.
     { key: 'photographs', label: t('statistics.photographs'), value: count(data?.photographs) },
+    // What the tracking logs say, after everything the trips and their rosters say and under
+    // labels that name the source. The hours are never folded into the tile above: a log and a
+    // roster with times describe the same hours, and one figure made of both would count them
+    // twice wherever a trip has the two.
+    { key: 'trackedTrips', label: t('statistics.trackedTrips'), value: count(data?.trackedTrips) },
+    {
+      key: 'watchHours',
+      label: t('statistics.watchHoursUnderground'),
+      value:
+        // A dash, not "0 h", where no log holds an entry that an exit followed. A party whose
+        // exits were never written down did not spend no time underground — the log does not
+        // know how long, and nought is a duration.
+        data === undefined || data.watchTimedPersonTrips === 0
+          ? dash
+          : t('statistics.hours', { value: Math.round(data.watchUndergroundMinutes / 6) / 10 }),
+    },
   );
 
   return tiles;
