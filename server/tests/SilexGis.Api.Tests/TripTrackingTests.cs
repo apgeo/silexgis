@@ -1801,6 +1801,110 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         client.PutAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events/{eventId}", body);
 
     /// <summary>
+    /// The moment a watch was first started is kept when the watch is closed and started again.
+    /// </summary>
+    /// <remarks>
+    /// Starting a closed watch again exists for a party that turns out to be still underground,
+    /// and it overwrites the start it reports — at the one moment the true beginning matters,
+    /// because somebody is overdue. So the first start is a fact of its own: stamped once, sent on
+    /// the signed-in read beside the latest start, and moved by nothing afterwards. The latest
+    /// start is asserted to have moved in the same breath, so that the first one is shown to stay
+    /// put against a clock that demonstrably went on.
+    /// </remarks>
+    [Fact]
+    public async Task The_first_start_of_a_watch_is_kept_when_it_is_closed_and_started_again()
+    {
+        var (trip, _) = await CreateTripAsync("First start", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+
+        var firstStart = new DateTimeOffset(DateTimeOffset.UtcNow.Ticks / TimeSpan.TicksPerSecond * TimeSpan.TicksPerSecond, TimeSpan.Zero);
+        var clock = new TestTimeProvider(firstStart);
+        using var host = new SilexGisApiFactory(connectionString, HostSettings(), services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.AddSingleton<TimeProvider>(clock);
+        });
+
+        // Signed in afresh after every move of the clock: how long a sign-in lasts is measured on
+        // the same clock, and this test is not about that.
+        async Task<JsonElement> AtAsync(DateTimeOffset moment, object? write)
+        {
+            clock.Now = moment;
+            var coordinator = await AuthHelper.BearerClientAsync(host, ownerEmail);
+            if (write is not null)
+            {
+                var written = await PutConfigAsync(coordinator, trip, write);
+                written.StatusCode.ShouldBe(HttpStatusCode.OK, await written.Content.ReadAsStringAsync());
+            }
+            return await StateAsync(coordinator, trip);
+        }
+
+        var never = await AtAsync(firstStart, write: null);
+        TimeOf(never, "armedAt").ShouldBeNull();
+        TimeOf(never, "firstArmedAt").ShouldBeNull();
+
+        var started = await AtAsync(firstStart, new { state = "armed", surveyModelId = model });
+        TimeOf(started, "armedAt").ShouldBe(firstStart);
+        TimeOf(started, "firstArmedAt").ShouldBe(firstStart);
+
+        var closed = await AtAsync(firstStart.AddHours(4), new { state = "closed" });
+        TimeOf(closed, "firstArmedAt").ShouldBe(firstStart);
+
+        var again = await AtAsync(firstStart.AddHours(5), new { state = "armed" });
+        TimeOf(again, "armedAt").ShouldBe(firstStart.AddHours(5));
+        TimeOf(again, "firstArmedAt").ShouldBe(firstStart);
+        TimeOf(again, "closedAt").ShouldBeNull();
+
+        // And a third time, so that "kept" is not merely "kept once".
+        await AtAsync(firstStart.AddHours(6), new { state = "closed" });
+        var thirdTime = await AtAsync(firstStart.AddHours(7), new { state = "armed" });
+        TimeOf(thirdTime, "armedAt").ShouldBe(firstStart.AddHours(7));
+        TimeOf(thirdTime, "firstArmedAt").ShouldBe(firstStart);
+    }
+
+    /// <summary>
+    /// A watch that an import wrote already closed has never been started, and says so; the first
+    /// time somebody starts it is its first start.
+    /// </summary>
+    /// <remarks>
+    /// The row is written here as the import writes it — closed, with a closing moment and no
+    /// start — because that is the only way a watch comes to be closed without ever having run.
+    /// </remarks>
+    [Fact]
+    public async Task A_watch_written_closed_by_an_import_gets_its_first_start_when_it_is_first_started()
+    {
+        var (trip, _) = await CreateTripAsync("Imported closed", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.TripTrackings.Add(new TripTracking
+            {
+                TripLogId = trip,
+                State = TripTrackingState.Closed,
+                SurveyModelId = model,
+                CaveFeatureId = cave,
+                ClosedAt = DateTimeOffset.UtcNow.AddDays(-2),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var imported = await StateAsync(owner, trip);
+        imported.GetProperty("state").GetString().ShouldBe("closed");
+        TimeOf(imported, "armedAt").ShouldBeNull();
+        TimeOf(imported, "firstArmedAt").ShouldBeNull();
+
+        var before = DateTimeOffset.UtcNow.AddSeconds(-1);
+        (await PutConfigAsync(owner, trip, new { state = "armed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var started = await StateAsync(owner, trip);
+        TimeOf(started, "firstArmedAt").ShouldNotBeNull();
+        TimeOf(started, "firstArmedAt")!.Value.ShouldBeGreaterThan(before);
+        TimeOf(started, "firstArmedAt").ShouldBe(TimeOf(started, "armedAt"));
+    }
+
+    /// <summary>
     /// Writes a watch's state directly, for the one state no request moves a watch into. The state
     /// is a plain recorded fact with nothing derived from it, which is what makes writing it this
     /// way faithful — unlike protection, which goes through the service that maintains its derived

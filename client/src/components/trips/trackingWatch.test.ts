@@ -45,6 +45,7 @@ function participant(overrides: Partial<TrackingParticipant> = {}): TrackingPart
     name: null,
     quiet: false,
     outsideDeclaredParts: false,
+    ordinal: null,
     ...overrides,
   };
 }

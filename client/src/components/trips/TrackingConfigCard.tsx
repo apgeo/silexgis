@@ -251,6 +251,12 @@ export default function TrackingConfigCard({
   };
 
   const armed = tracking.state === 'armed';
+  // Started more than once: a watch closed and started again carries two different starts. Compared
+  // as instants rather than as text, so two spellings of one moment are not read as a restart.
+  const restarted =
+    tracking.firstArmedAt != null &&
+    tracking.armedAt != null &&
+    Date.parse(tracking.firstArmedAt) !== Date.parse(tracking.armedAt);
 
   /**
    * How big everything on this card is drawn. `large` is where the forty pixels come from — antd
@@ -515,8 +521,18 @@ export default function TrackingConfigCard({
             </Tag>
           )}
         </Descriptions.Item>
+        {/* A watch closed and started again reports two starts, and the earlier one is the one
+            that says how long the party has been underground. Shown only when they differ, so the
+            ordinary watch — started once — keeps its one line and its one label. */}
+        {restarted && (
+          <Descriptions.Item label={t('trips.tracking.firstArmedAt')}>
+            <span data-testid="trip-tracking-first-armed-at">{when(tracking.firstArmedAt)}</span>
+          </Descriptions.Item>
+        )}
         {tracking.armedAt && (
-          <Descriptions.Item label={t('trips.tracking.armedAt')}>
+          <Descriptions.Item
+            label={t(restarted ? 'trips.tracking.rearmedAt' : 'trips.tracking.armedAt')}
+          >
             {when(tracking.armedAt)}
           </Descriptions.Item>
         )}

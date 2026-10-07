@@ -51,6 +51,7 @@ function state(caverIds: string[], teams: TrackingState['teams'] = [], positions
     referenceStationName: null,
     depthFilter: [],
     armedAt: '2026-09-12T08:00:00Z',
+    firstArmedAt: '2026-09-12T08:00:00Z',
     closedAt: '2026-09-12T12:00:00Z',
     positionsWithheld,
     publishesRealNames: true,

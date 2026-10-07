@@ -214,7 +214,26 @@ public sealed record TrackingParticipantDto(
     /// published page carries it.
     /// </para>
     /// </remarks>
-    bool OutsideDeclaredParts);
+    bool OutsideDeclaredParts,
+    /// <summary>
+    /// The number this person holds in the trip's party — the "Caver 3" a published page prints
+    /// for somebody it does not name — or null for a person the trip never listed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Given once, when the trip first names somebody, and never changed: a change of job moves
+    /// nobody, and a person taken off the trip leaves a gap rather than renumbering the people
+    /// after them, so the numbers of a party need not run 1, 2, 3 without a break. Somebody since
+    /// taken off the roster still carries the number they held, which they get back if the trip
+    /// names them again.
+    /// </para>
+    /// <para>
+    /// It identifies nobody outside this trip and is the same number every published read of the
+    /// trip uses, which is what lets a coordinator on the telephone and a follower on the page
+    /// mean the same person by it.
+    /// </para>
+    /// </remarks>
+    int? Ordinal);
 
 public sealed record TrackingStateDto(
     TripTrackingState State,
@@ -240,7 +259,17 @@ public sealed record TrackingStateDto(
     bool SurveyModelMissing,
     string? ReferenceStationName,
     IReadOnlyList<string> DepthFilter,
+    /// <summary>
+    /// When the watch was last started. A watch closed and started again carries the later moment
+    /// here; <see cref="FirstArmedAt"/> keeps the earlier one.
+    /// </summary>
     DateTimeOffset? ArmedAt,
+    /// <summary>
+    /// When the watch was started for the very first time, or null when it never has been — which
+    /// includes a watch an import wrote already closed. Stamped once; starting a closed watch
+    /// again does not move it.
+    /// </summary>
+    DateTimeOffset? FirstArmedAt,
     DateTimeOffset? ClosedAt,
     /// <summary>True when at least one position existed but was withheld from this caller.</summary>
     bool PositionsWithheld,

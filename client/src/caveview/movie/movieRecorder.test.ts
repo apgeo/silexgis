@@ -49,6 +49,7 @@ function tracking(caverIds: string[]): TrackingState {
     referenceStationName: null,
     depthFilter: [],
     armedAt: ARMED,
+    firstArmedAt: ARMED,
     closedAt: CLOSED,
     positionsWithheld: false,
     publishesRealNames: true,

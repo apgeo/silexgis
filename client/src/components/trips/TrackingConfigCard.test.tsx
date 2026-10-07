@@ -85,6 +85,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
     referenceStationName: 'E0',
     depthFilter: ['main'],
     armedAt: '2026-09-12T06:00:00Z',
+    firstArmedAt: '2026-09-12T06:00:00Z',
     closedAt: null,
     positionsWithheld: false,
     publishesRealNames: true,
@@ -236,6 +237,32 @@ describe('TrackingConfigCard', () => {
     expect(confirmation).not.toHaveTextContent('stop being accepted');
   });
 
+  // A watch closed and started again has two starts, and the earlier is the one that says how long
+  // the party has been underground. The ordinary watch — started once — is asserted beside it, so
+  // that the second line is shown to appear because the starts differ and not always.
+  it('names the first start beside the latest one only for a watch that was started again', () => {
+    const once = show(state({ firstArmedAt: '2026-09-12T06:00:00Z' }));
+    const single = screen.getByTestId('trip-tracking-state');
+    expect(single).toHaveTextContent('Tracking started');
+    expect(single).not.toHaveTextContent('First started');
+    expect(screen.queryByTestId('trip-tracking-first-armed-at')).not.toBeInTheDocument();
+    once.unmount();
+
+    show(state({ firstArmedAt: '2026-09-12T01:00:00Z', armedAt: '2026-09-12T06:00:00Z' }));
+    const restarted = screen.getByTestId('trip-tracking-state');
+    expect(restarted).toHaveTextContent('First started');
+    expect(restarted).toHaveTextContent('Started again');
+    expect(restarted).not.toHaveTextContent('Tracking started');
+    expect(screen.getByTestId('trip-tracking-first-armed-at')).not.toBeEmptyDOMElement();
+  });
+
+  // The same moment spelled two ways is one start, not two.
+  it('does not read two spellings of one moment as a restart', () => {
+    show(state({ firstArmedAt: '2026-09-12T06:00:00+00:00', armedAt: '2026-09-12T06:00:00Z' }));
+
+    expect(screen.queryByTestId('trip-tracking-first-armed-at')).not.toBeInTheDocument();
+  });
+
   // Arming carries the chosen survey with it, so starting a watch is one act. Split in two, the
   // ordinary path would be a refusal — a watch armed against no survey is one the server rejects.
   it('arms the watch and the survey it was chosen with in one act', async () => {
@@ -318,6 +345,7 @@ describe('TrackingConfigCard', () => {
       name: null,
       quiet: false,
       outsideDeclaredParts: false,
+      ordinal: null,
     };
 
     const { unmount } = show(

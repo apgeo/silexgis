@@ -181,7 +181,8 @@ public class TripSoftDeleteGuardTests
             ["server/src/SilexGis.Api/Features/Import/ImportBatchEndpoints.cs"] =
                 (1, "an import's own page says which of its trips are deleted and can be put back"),
             ["server/src/SilexGis.Api/Features/Cavers/CaverEndpoints.cs"] =
-                (9, "a person is held in place by the rows of a deleted trip, and a merge has to move them"),
+                (11, "a person is held in place by the rows of a deleted trip, and a merge has to move them "
+                    + "— the roster, the answers, the reports, the captions and the party numbers"),
             ["server/src/SilexGis.Api/Features/Taxonomies/TripParticipantRoleEndpoints.cs"] =
                 (1, "a role held on a deleted trip's roster is still in use"),
             ["server/src/SilexGis.Api/Features/Permissions/AccessEntryMapping.cs"] =

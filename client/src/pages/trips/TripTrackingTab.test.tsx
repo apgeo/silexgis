@@ -150,6 +150,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
     referenceStationName: null,
     depthFilter: [],
     armedAt: '2026-09-12T06:00:00Z',
+    firstArmedAt: '2026-09-12T06:00:00Z',
     closedAt: null,
     positionsWithheld: false,
     // What the published page would call the party. The panel that mints a link words its notice
@@ -179,6 +180,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         name: null,
         quiet: false,
         outsideDeclaredParts: false,
+        ordinal: null,
       },
       {
         caverId: BOGDAN,
@@ -197,6 +199,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         name: null,
         quiet: false,
         outsideDeclaredParts: false,
+        ordinal: null,
       },
     ],
     ...overrides,
@@ -296,6 +299,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       }),
@@ -340,6 +344,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: CARMEN,
@@ -358,6 +363,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       }),
@@ -401,6 +407,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: BOGDAN,
@@ -421,6 +428,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       }),
@@ -881,6 +889,7 @@ describe('TripTrackingTab', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
           ],
         }),
@@ -1406,6 +1415,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: BOGDAN,
@@ -1424,6 +1434,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             // Nobody has said a single word about her. This is the row the whole change is for.
@@ -1443,6 +1454,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       });
@@ -1576,6 +1588,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: BOGDAN,
@@ -1596,6 +1609,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: CARMEN,
@@ -1614,6 +1628,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       });
@@ -1842,6 +1857,7 @@ describe('TripTrackingTab', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
           ],
         }),
@@ -1879,6 +1895,7 @@ describe('TripTrackingTab', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
             {
               caverId: BOGDAN,
@@ -1897,6 +1914,7 @@ describe('TripTrackingTab', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
           ],
         }),
@@ -2026,6 +2044,7 @@ describe('TripTrackingTab', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
           ],
         }),
@@ -2331,6 +2350,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       }),
@@ -2575,6 +2595,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: BOGDAN,
@@ -2595,6 +2616,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       });
@@ -2648,6 +2670,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
           ],
         }),
@@ -2697,6 +2720,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: BOGDAN,
@@ -2715,6 +2739,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       });
@@ -2802,6 +2827,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
           ],
         }),

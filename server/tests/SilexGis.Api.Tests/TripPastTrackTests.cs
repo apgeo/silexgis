@@ -499,11 +499,29 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
 
         var (_, token) = await PublishAsync(trip.Trip);
         var liveOrder = NumberedParty(await Json(anonymous.GetAsync(Live(token))));
-        liveOrder.Count.ShouldBe(4);
-        liveOrder.ShouldContain("1=Member 0");
+        liveOrder.ShouldBe(["1=Member 0", "2=Member 1", "3=Member 2", "4=Member 3"]);
+
+        // The roster is then put through what used to renumber it: the first person changes job —
+        // which rewrites their row — and one of the others, about whom nothing was reported (a
+        // running watch keeps anybody it has a report about), is taken off the trip. Nobody's
+        // number moves on either page, and both pages show the same gap.
+        var leaver = roster.Skip(1).First(caver => caver != trip.Cavers[0]);
+        var rewritten = await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{trip.Trip}", new
+        {
+            title = $"Four of them {Guid.NewGuid():N}"[..28],
+            tripDate = "2026-09-12",
+            participants = roster.Skip(1).Where(caver => caver != leaver)
+                .Select(caver => new { caverId = caver }).ToArray(),
+            proposers = new[] { new { caverId = roster[0] } },
+            visibility = "authenticated",
+        });
+        rewritten.StatusCode.ShouldBe(HttpStatusCode.OK, await rewritten.Content.ReadAsStringAsync());
+        var liveAfter = NumberedParty(await Json(anonymous.GetAsync(Live(token))));
+        liveAfter.Count.ShouldBe(3);
+        liveAfter.ShouldBe(liveOrder.Where((_, index) => index != roster.IndexOf(leaver)));
 
         await CloseAsync(trip.Trip, DateTimeOffset.UtcNow.AddDays(-5));
-        NumberedParty(await TrackAsync(token, trip.Trip)).ShouldBe(liveOrder);
+        NumberedParty(await TrackAsync(token, trip.Trip)).ShouldBe(liveAfter);
     }
 
     /// <summary>

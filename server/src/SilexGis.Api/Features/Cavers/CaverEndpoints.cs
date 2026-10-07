@@ -10,6 +10,7 @@ using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Profiles;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Api.Features.Cavers;
 
@@ -596,6 +597,16 @@ public static class CaverEndpoints
                 label.CaverId = target.Id;
             }
         }
+
+        // The number each of them holds in a trip's party folds too, by the rule its one writer
+        // owns: the survivor takes over a number only the duplicate held, and keeps the lower
+        // where both held one. Read past the deleted-trip filter like the rows above, and for the
+        // same reason — a trip put back afterwards must come back numbered as it was.
+        var sourceNumbers = await db.TripPartyNumbers.IgnoreQueryFilters()
+            .Where(n => n.CaverId == source.Id).ToListAsync(ct);
+        var targetNumbers = await db.TripPartyNumbers.IgnoreQueryFilters()
+            .Where(n => n.CaverId == target.Id).ToListAsync(ct);
+        TripPartyNumbers.Fold(sourceNumbers, targetNumbers, target.Id);
 
         var sourceMemberships = await db.CavingGroupMemberships.Where(m => m.CaverId == source.Id).ToListAsync(ct);
         var targetGroups = await db.CavingGroupMemberships

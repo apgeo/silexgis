@@ -133,3 +133,42 @@ public sealed class TripTrackingParticipantConfiguration : IEntityTypeConfigurat
         builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Cascade);
     }
 }
+
+public sealed class TripPartyNumberConfiguration : IEntityTypeConfiguration<TripPartyNumber>
+{
+    /// <summary>
+    /// The database name of the rule that one person holds one number on one trip. Named, and
+    /// named here, because a writer that loses a race is recognised by the constraint it broke.
+    /// </summary>
+    public const string OnePerPersonIndex = "ux_trip_party_numbers_trip_caver";
+
+    public void Configure(EntityTypeBuilder<TripPartyNumber> builder)
+    {
+        builder.ToTable("trip_party_numbers", table =>
+            table.HasCheckConstraint("ck_trip_party_numbers_number_from_one", "number >= 1"));
+
+        // The trip and the number are the row: a number is given once and never changes, which is
+        // what a key is, and it makes "no two people share a number on a trip" the table's own
+        // shape rather than a second index beside an invented id.
+        builder.HasKey(x => new { x.TripLogId, x.Number });
+        builder.Property(x => x.Number).ValueGeneratedNever();
+
+        // One number per person per trip. A number whose holder is gone has no person, and any
+        // number of those may stand on one trip — which is what an index over an empty value
+        // allows by itself.
+        builder.HasIndex(x => new { x.TripLogId, x.CaverId }, OnePerPersonIndex)
+            .IsUnique()
+            .HasDatabaseName(OnePerPersonIndex);
+        builder.HasIndex(x => x.CaverId, "ix_trip_party_numbers_caver_id")
+            .HasDatabaseName("ix_trip_party_numbers_caver_id");
+
+        builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // Hidden while its trip is deleted, like everything else a trip's tracking holds.
+        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null);
+        // Emptied, where the roster restricts and a caption goes with its person. The row holds
+        // nobody in place — whether somebody was on a trip is the roster's and the log's to say —
+        // but the number must outlive them, or the next person the trip names would be given it
+        // and a page already showing "Caver 3" would come to mean somebody else.
+        builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.SetNull);
+    }
+}

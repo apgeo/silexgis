@@ -25800,6 +25800,8 @@ export interface components {
             name: null | string;
             quiet: boolean;
             outsideDeclaredParts: boolean;
+            /** Format: int32 */
+            ordinal: null | number;
         };
         TrackingParticipantLabelDto: {
             /** Format: uuid */
@@ -25859,6 +25861,8 @@ export interface components {
             depthFilter: string[];
             /** Format: date-time */
             armedAt: null | string;
+            /** Format: date-time */
+            firstArmedAt: null | string;
             /** Format: date-time */
             closedAt: null | string;
             positionsWithheld: boolean;

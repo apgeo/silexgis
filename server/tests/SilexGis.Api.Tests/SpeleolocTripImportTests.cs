@@ -668,6 +668,12 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
             .Select(e => e.CaverId).ToListAsync();
         recorded.ShouldContain(people[0]);
         recorded.ShouldContain(people[1]);
+
+        // Everybody the import put on the trip holds a number in its party: a trip made by a
+        // confirmation is numbered by the same writer as one made on the form.
+        var numbered = await db.TripPartyNumbers.Where(n => n.TripLogId == trip)
+            .Select(n => n.CaverId).ToListAsync();
+        numbered.ShouldBe(roster.Distinct().Select(caver => (Guid?)caver), ignoreOrder: true);
     }
 
     /// <summary>

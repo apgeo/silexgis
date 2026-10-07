@@ -214,6 +214,44 @@ public sealed class DemoSeedIdempotencyTests : IAsyncLifetime, IClassFixture<Pos
     }
 
     /// <summary>
+    /// Everybody the demonstration data puts on a trip holds a number in that trip's party, and
+    /// seeding again gives nobody a second one.
+    /// </summary>
+    /// <remarks>
+    /// The seeder writes roster rows itself rather than through the service that saves a trip, so
+    /// it is one of the paths that has to remember to number its people. A read would not show a
+    /// path that forgot — it lists such a person anyway, after the numbered ones — which is why the
+    /// rows are counted here.
+    /// </remarks>
+    [Fact]
+    public async Task Everybody_on_a_seeded_trip_holds_one_number_in_its_party()
+    {
+        for (var run = 0; run < 2; run++)
+        {
+            await using var db = CreateContext();
+            await DemoSeeder.SeedAsync(db, Owner);
+        }
+
+        await using var read = CreateContext();
+        var tripIds = await read.TripLogs.Where(t => t.Title.StartsWith("Demo:")).Select(t => t.Id).ToListAsync();
+        tripIds.ShouldNotBeEmpty();
+
+        var named = await read.TripLogParticipants.Where(p => tripIds.Contains(p.TripLogId))
+            .Select(p => new { p.TripLogId, p.CaverId }).Distinct().ToListAsync();
+        var numbered = await read.TripPartyNumbers.Where(n => tripIds.Contains(n.TripLogId))
+            .Select(n => new { n.TripLogId, n.CaverId, n.Number }).ToListAsync();
+
+        named.Count.ShouldBeGreaterThan(tripIds.Count);
+        numbered.Select(n => (n.TripLogId, n.CaverId)).ShouldBe(
+            named.Select(p => (p.TripLogId, (Guid?)p.CaverId)), ignoreOrder: true);
+        // From one, without a gap, on a trip nobody has left.
+        foreach (var trip in numbered.GroupBy(n => n.TripLogId))
+        {
+            trip.Select(n => n.Number).Order().ShouldBe(Enumerable.Range(1, trip.Count()));
+        }
+    }
+
+    /// <summary>
     /// A database seeded before a section existed picks that section up on the next run.
     ///
     /// The trap is a section guarded on somebody else's evidence: a block that skips when the

@@ -1507,6 +1507,8 @@
       },
       "armedAt": "Urmărire începută",
       "closedAt": "Urmărire încheiată",
+      "firstArmedAt": "Începută prima dată",
+      "rearmedAt": "Începută din nou",
       "arm": "Pornește urmărirea",
       "rearm": "Pornește urmărirea din nou",
       "close": "Încheie urmărirea",

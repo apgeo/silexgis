@@ -630,6 +630,7 @@ public static class TripInvitationEndpoints
         var alreadyNamed = named.ToHashSet();
 
         var promoted = 0;
+        var newlyListed = new List<Guid>();
         foreach (var caverId in attending.Distinct().Where(id => !alreadyNamed.Contains(id)))
         {
             db.TripLogParticipants.Add(new TripLogParticipant
@@ -638,8 +639,14 @@ public static class TripInvitationEndpoints
                 RoleId = roles.Participant,
                 CaverId = caverId,
             });
+            newlyListed.Add(caverId);
             promoted++;
         }
+
+        // Their numbers in the party, from the one writer every roster write goes through. Somebody
+        // who put the trip forward and is now also listed as having gone already holds one and
+        // keeps it.
+        await TripPartyNumbers.AssignAsync(db, tripLogId, newlyListed, ct);
 
         // The act itself, on the trip's trail. The rows it wrote carry their own entries and point
         // back at the trip, but an act that wrote none writes nothing at all otherwise — and

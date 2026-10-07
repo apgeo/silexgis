@@ -560,6 +560,19 @@ public sealed class TripLogWriteService(
             .Distinct()
             .ToList();
 
+        // A number in the party for everybody the trip names after this write who holds none. In
+        // nearly every write that is the newcomers and nobody else. The people already named come
+        // first, in the order the roster first wrote them down, so that somebody an older path put
+        // on the roster without a number is given the one the reads have been showing for them
+        // rather than one behind tonight's arrivals. Somebody taken off keeps their row, and with
+        // it their number should the trip name them again.
+        var firstNamed = existing
+            .Where(row => staying.Contains(row.CaverId))
+            .GroupBy(row => row.CaverId)
+            .OrderBy(rows => rows.Min(row => row.Id))
+            .Select(rows => rows.Key);
+        await TripPartyNumbers.AssignAsync(db, tripId, firstNamed.Concat(newcomers), ct);
+
         // Only the newly listed people who hold an account: there is nobody to tell for the rest.
         return await db.Cavers
             .Where(c => newcomers.Contains(c.Id) && c.UserId != null)

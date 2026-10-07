@@ -602,7 +602,8 @@ public static class TripTrackingPublicationEndpoints
         //
         // One dictionary for every trip asked for: a name is a fact about the person, and the fold
         // looks up only the people on the roster of the trip it is folding.
-        var everybody = rosters.Values.SelectMany(roster => roster).Distinct().ToList();
+        var everybody = rosters.Values
+            .SelectMany(party => party.Roster).Select(place => place.CaverId).Distinct().ToList();
         var names = options.PublishRealNames
             ? await db.Cavers.AsNoTracking()
                 .Where(c => everybody.Contains(c.Id))
@@ -635,7 +636,7 @@ public static class TripTrackingPublicationEndpoints
             parties[id] = FoldParty(
                 [.. teams[id].Select(t => new PublicTripTeamDto(t.Id, t.Title))],
                 labels[id].ToDictionary(p => p.CaverId, p => p.DisplayLabel),
-                rosters.GetValueOrDefault(id) ?? [],
+                rosters.GetValueOrDefault(id)?.Roster ?? [],
                 names,
                 [.. events[id]],
                 openCaves,
@@ -649,17 +650,16 @@ public static class TripTrackingPublicationEndpoints
     /// shown of somebody is asked here, of the rows it is handed, through the function that owns it.
     /// </summary>
     private static PublicParty FoldParty(
-        IReadOnlyList<PublicTripTeamDto> teams, Dictionary<Guid, string> labels, List<Guid> roster,
+        IReadOnlyList<PublicTripTeamDto> teams, Dictionary<Guid, string> labels,
+        IReadOnlyList<TripPartyPlace> roster,
         Dictionary<Guid, string> names, List<TripPositionEvent> events, HashSet<Guid> openCaves,
         Guid? drawnOnSurveyModelId)
     {
         var byCaver = events.GroupBy(e => e.CaverId).ToDictionary(g => g.Key, g => g.ToList());
         var participants = new List<PublicTripParticipantDto>();
         var withheldAny = false;
-        var ordinal = 0;
-        foreach (var caverId in roster)
+        foreach (var (caverId, ordinal) in roster)
         {
-            ordinal++;
             byCaver.TryGetValue(caverId, out var own);
             var last = own?.Count > 0 ? own[^1] : null;
             var lastPositioned = own?.LastOrDefault(TrackingWithholding.HasPosition);
@@ -759,44 +759,81 @@ public static class TripTrackingPublicationEndpoints
     }
 
     /// <summary>
-    /// The party in the order a published page numbers them: one entry per person, ordered by the
-    /// roster row they were first written on, so their place in the list is their ordinal minus one.
+    /// A trip's party as every surface lists it: the people on its roster in order, each with the
+    /// number they are shown under, and every number the trip has given to anybody.
+    /// </summary>
+    /// <param name="Roster">The people the trip names now, in the order they are listed.</param>
+    /// <param name="Given">
+    /// Every number the trip has given, by person — including people since taken off the roster,
+    /// who keep theirs. A published read lists the roster and never looks here; the signed-in read
+    /// does, to say which number somebody the log still speaks of used to be shown under.
+    /// </param>
+    internal sealed record PartyOrder(
+        IReadOnlyList<TripPartyPlace> Roster, IReadOnlyDictionary<Guid, int> Given)
+    {
+        public static readonly PartyOrder Empty = new([], new Dictionary<Guid, int>());
+    }
+
+    /// <summary>
+    /// The party in the order a page numbers them: one entry per person on the roster, each with
+    /// the number they were given when the trip first named them.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Roster order, not caver id: the ordinal a follower sees is a number somebody could read back
-    /// over the phone, so it has to survive the roster gaining a name mid-trip. Ordering by the row
-    /// the person was first written on does that — a later arrival takes the next number and nobody
-    /// already on the page is renumbered.
+    /// <b>The number is stored, not counted.</b> It is a number somebody reads back over a
+    /// telephone and a published page keys its markers and its "follow this person" choice on, so
+    /// it has to survive everything a roster goes through mid-trip: a later arrival takes the next
+    /// number, a change of job moves nobody, and somebody taken off the trip leaves a gap where
+    /// they were instead of renumbering everyone after them. Counting roster rows could do the
+    /// first of those and neither of the others, because a row is rewritten when a job changes.
     /// </para>
     /// <para>
-    /// <b>One derivation, called by both public surfaces.</b> The live page and the past-track
-    /// playback number the same party, and a second copy of this is how "Caver 3" comes to mean two
-    /// different people on two pages about the same trip — with nothing on either page able to say
-    /// which of them is meant.
+    /// <b>One derivation, called by every surface that lists a party.</b> The live page and the
+    /// past-track playback number the same party, and a second copy of this is how "Caver 3" comes
+    /// to mean two different people on two pages about the same trip — with nothing on either page
+    /// able to say which of them is meant. Which person comes where, and what becomes of somebody
+    /// on the roster whom no writer numbered, is Domain's rule; this only reads the rows for it.
     /// </para>
     /// </remarks>
-    internal static async Task<List<Guid>> RosterOrderAsync(
+    internal static async Task<PartyOrder> RosterOrderAsync(
         SilexGisDbContext db, Guid tripLogId, CancellationToken ct) =>
-        (await RosterOrdersAsync(db, [tripLogId], ct)).GetValueOrDefault(tripLogId) ?? [];
+        (await RosterOrdersAsync(db, [tripLogId], ct)).GetValueOrDefault(tripLogId) ?? PartyOrder.Empty;
 
     /// <summary>
-    /// <see cref="RosterOrderAsync"/> for several trips in one read: the same derivation, grouped
-    /// by trip as well as by person. A trip with nobody on its roster has no entry.
+    /// <see cref="RosterOrderAsync"/> for several trips, in two reads however many trips are asked
+    /// for: the same derivation, dealt out by trip. A trip with nobody on its roster and no number
+    /// ever given has no entry.
     /// </summary>
-    internal static async Task<Dictionary<Guid, List<Guid>>> RosterOrdersAsync(
+    internal static async Task<Dictionary<Guid, PartyOrder>> RosterOrdersAsync(
         SilexGisDbContext db, IReadOnlyCollection<Guid> tripLogIds, CancellationToken ct)
     {
-        var rows = await db.TripLogParticipants.AsNoTracking()
-            .Where(p => tripLogIds.Contains(p.TripLogId))
-            .GroupBy(p => new { p.TripLogId, p.CaverId })
-            .Select(g => new { g.Key.TripLogId, g.Key.CaverId, FirstRowId = g.Min(p => p.Id) })
-            .ToListAsync(ct);
-        return rows
-            .GroupBy(r => r.TripLogId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.OrderBy(r => r.FirstRowId).Select(r => r.CaverId).ToList());
+        var rosters = (await db.TripLogParticipants.AsNoTracking()
+                .Where(p => tripLogIds.Contains(p.TripLogId))
+                .GroupBy(p => new { p.TripLogId, p.CaverId })
+                .Select(g => new { g.Key.TripLogId, g.Key.CaverId, FirstRowId = g.Min(p => p.Id) })
+                .ToListAsync(ct))
+            .ToLookup(r => r.TripLogId);
+        // Every number of these trips, held or not: the highest ever given is what a person
+        // without one is numbered onward from, and it may belong to nobody any more.
+        var numbers = (await db.TripPartyNumbers.AsNoTracking()
+                .Where(n => tripLogIds.Contains(n.TripLogId))
+                .Select(n => new { n.TripLogId, n.CaverId, n.Number })
+                .ToListAsync(ct))
+            .ToLookup(n => n.TripLogId);
+
+        var orders = new Dictionary<Guid, PartyOrder>();
+        foreach (var tripLogId in rosters.Select(g => g.Key).Concat(numbers.Select(g => g.Key)).Distinct())
+        {
+            var given = numbers[tripLogId]
+                .Where(n => n.CaverId is not null)
+                .ToDictionary(n => n.CaverId!.Value, n => n.Number);
+            var highest = numbers[tripLogId].Select(n => n.Number).DefaultIfEmpty(0).Max();
+            orders[tripLogId] = new PartyOrder(
+                TripPartyNumbering.Order(
+                    rosters[tripLogId].Select(r => (r.CaverId, r.FirstRowId)), given, highest),
+                given);
+        }
+        return orders;
     }
 
     /// <summary>

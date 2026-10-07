@@ -383,14 +383,17 @@ public static class TripPastTrackEndpoints
             .Where(p => p.TripLogId == trip.Id)
             .ToDictionaryAsync(p => p.CaverId, p => p.DisplayLabel, ct);
 
-        var roster = await TripTrackingPublicationEndpoints.RosterOrderAsync(db, trip.Id, ct);
+        // The party and its numbers, from the one derivation the live page numbers it by — so the
+        // person shown as "Caver 3" while the trip was followed is "Caver 3" in its playback.
+        var roster = (await TripTrackingPublicationEndpoints.RosterOrderAsync(db, trip.Id, ct)).Roster;
+        var rosterIds = roster.Select(place => place.CaverId).ToList();
 
         // Read off the roster where the installation publishes names at all, exactly as the live
         // page reads them — same source, same setting, same resolver below, so the two pages cannot
         // come to call the same person by two different names.
         var names = live.Value.PublishRealNames
             ? await db.Cavers.AsNoTracking()
-                .Where(c => roster.Contains(c.Id))
+                .Where(c => rosterIds.Contains(c.Id))
                 .Select(c => new { c.Id, c.FullName })
                 .ToDictionaryAsync(c => c.Id, c => c.FullName, ct)
             : [];
@@ -416,10 +419,8 @@ public static class TripPastTrackEndpoints
         var byCaver = rows.GroupBy(e => e.CaverId).ToDictionary(g => g.Key, g => g.ToList());
         var participants = new List<PublicPastTrackParticipantDto>();
         var withheldAny = false;
-        var ordinal = 0;
-        foreach (var caverId in roster)
+        foreach (var (caverId, ordinal) in roster)
         {
-            ordinal++;
             var own = byCaver.GetValueOrDefault(caverId) ?? [];
             // Every report about this person in order, including the ones that are not emitted:
             // the standing is Domain's answer over the whole prefix, and handing it a filtered

@@ -14,6 +14,7 @@ using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Metadata;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Infrastructure.Persistence;
 
@@ -992,6 +993,12 @@ public static class DemoSeeder
                 ExitTime = new TimeOnly(13, 15),
                 Note = "Turned back at the pitch head and waited at the entrance series.",
             });
+
+            // Their numbers in the party, from the writer every roster write goes through and in
+            // the order the rows above name them — so the demonstration data is numbered by the
+            // rule a real trip is, not by the fallback for a trip nobody numbered.
+            await TripPartyNumbers.AssignAsync(
+                db, trip.Id, [proposer, attendee, caverIds[(index + 2) % caverIds.Count]], ct);
 
             // Where the trip went, and what it did there. Several roles rather than one, so a
             // surface that answers over all of them can be told apart from one that only ever

@@ -177,7 +177,12 @@ public static class TripTrackingEndpoints
         // The people the trip names, in the order it first named each of them — asked of the same
         // function the published reads number the party by, so the table a coordinator reads and
         // the page a follower reads list the same people in the same order.
-        var rosterCavers = await TripTrackingPublicationEndpoints.RosterOrderAsync(db, tripLogId, ct);
+        var party = await TripTrackingPublicationEndpoints.RosterOrderAsync(db, tripLogId, ct);
+        var rosterCavers = party.Roster.Select(place => place.CaverId).ToList();
+        // The number each of them is shown under on a published page. For the roster it is the
+        // one that page prints; for somebody since taken off the trip it is the number they held,
+        // which the trip keeps for them — and nothing at all for a person the trip never listed.
+        var partyNumbers = party.Roster.ToDictionary(place => place.CaverId, place => place.Number);
         // What a published page calls each of them, where somebody chose. Shown here so the
         // panel that sets the labels can show what it set; nothing about the choice is
         // location data, so it follows the trip's own readability and nothing else.
@@ -371,7 +376,10 @@ public static class TripTrackingEndpoints
                 // On the branch the place itself is told on, and nowhere else: beside a withheld
                 // place the word would say that somebody is at a station, and that it is none of
                 // a set, to a reader who was refused both.
-                positionOpen && lastPositioned is not null && declaredParts.Outside(lastPositioned)));
+                positionOpen && lastPositioned is not null && declaredParts.Outside(lastPositioned),
+                partyNumbers.TryGetValue(caverId, out var number)
+                    ? number
+                    : party.Given.TryGetValue(caverId, out var held) ? held : (int?)null));
         }
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
@@ -385,6 +393,7 @@ public static class TripTrackingEndpoints
             configOpen ? tracking?.ReferenceStationName : null,
             configOpen ? tracking?.DepthFilter ?? [] : [],
             tracking?.ArmedAt,
+            tracking?.FirstArmedAt,
             tracking?.ClosedAt,
             withheldAny,
             // Said on every read of the trip rather than only when a link is minted: the panel that
@@ -562,6 +571,11 @@ public static class TripTrackingEndpoints
         if (current != TripTrackingState.Armed && target == TripTrackingState.Armed)
         {
             tracking.ArmedAt = stampedAt;
+            // The very first start, written here and nowhere else, and only while it is empty:
+            // starting a closed watch again moves the line above and must not move this one. A
+            // watch an import wrote already closed has never been started, so its first start is
+            // this one.
+            tracking.FirstArmedAt ??= stampedAt;
             tracking.ClosedAt = null;
         }
         if (current != TripTrackingState.Closed && target == TripTrackingState.Closed)

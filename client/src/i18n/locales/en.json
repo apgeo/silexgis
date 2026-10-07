@@ -1507,6 +1507,8 @@
       },
       "armedAt": "Tracking started",
       "closedAt": "Tracking closed",
+      "firstArmedAt": "First started",
+      "rearmedAt": "Started again",
       "arm": "Start tracking",
       "rearm": "Start tracking again",
       "close": "Close tracking",
