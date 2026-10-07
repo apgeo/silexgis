@@ -105,6 +105,13 @@ vi.mock('../../api/hooks.ts', async () => ({
   useSetTrackingParticipantLabel: () => ({ mutateAsync: setLabel, isPending: false }),
 }));
 
+// Saving a file is the browser's business; what this suite asks is which address was asked for.
+const saveFile = vi.fn();
+vi.mock('../../api/download.ts', async (original) => ({
+  ...(await original<typeof import('../../api/download.ts')>()),
+  downloadFile: (url: string) => saveFile(url),
+}));
+
 // The dialog that picks photographs off the trip's gallery has its own tests; what this suite asks
 // is what it is opened with, so it is recorded rather than driven.
 vi.mock('../../components/trips/TrackingPicturesDialog.tsx', () => ({
@@ -268,6 +275,7 @@ beforeEach(() => {
   });
   eventsQuery.mockReturnValue({ data: { items: [], page: 1, pageSize: 20, totalItems: 0 }, isPending: false });
   recordEvents.mockReset().mockResolvedValue([{}, {}]);
+  saveFile.mockReset().mockResolvedValue(undefined);
   depthReading.mockReset().mockReturnValue({ data: undefined, isFetching: false, error: null });
   depthReadings.mockReset().mockReturnValue(new Map());
   deleteEvent.mockReset().mockResolvedValue(undefined);
@@ -553,6 +561,30 @@ describe('TripTrackingTab', () => {
    * says. The pencil and the bin drawn there were two controls that could only fail, on rows whose
    * real way back is undoing the import.
    */
+  describe('the log as a sheet', () => {
+    it('is offered to somebody who can only read the trip, beside no import', async () => {
+      // The sheet is a copy of what this page lists, so reading the trip is what it takes; bringing
+      // a sheet in writes the log, and that button stays with whoever may write it.
+      show(false);
+
+      expect(screen.queryByTestId('trip-tracking-csv-open')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-export'));
+
+      await waitFor(() => expect(saveFile).toHaveBeenCalledOnce());
+      expect(saveFile).toHaveBeenCalledWith('/api/v1/trip-logs/trip-1/tracking/events/export');
+    });
+
+    it('stands beside the import for somebody who may write the log, and says when it failed', async () => {
+      saveFile.mockRejectedValue(new Error('offline'));
+      show();
+
+      expect(screen.getByTestId('trip-tracking-csv-open')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-export'));
+
+      expect(await screen.findByText('The operation failed. Please try again.')).toBeInTheDocument();
+    });
+  });
+
   describe('a log whose rows cannot be changed one at a time', () => {
     const importedRow = {
       id: 'event-1',

@@ -228,6 +228,17 @@ const statisticsSegments: Record<StatisticsSubject, string> = {
 };
 
 /**
+ * GET /api/v1/trip-logs/{id}/tracking/events/export — a trip's whole tracking log as a sheet.
+ *
+ * The sheet is the one the import reads, so it can be corrected in a spreadsheet and brought back.
+ * The server decides what is in it for this caller: a place the caller may not be told is left out
+ * of the file, and its row is marked so that the import refuses it.
+ */
+export function trackingLogExportUrl(tripLogId: string): string {
+  return `/api/v1/trip-logs/${encodeURIComponent(tripLogId)}/tracking/events/export`;
+}
+
+/**
  * GET /api/v1/stats/{subject}/{id}/export — the same figures the page shows, as a spreadsheet.
  *
  * The file is built from the same query the page asked, for the same caller, so a saved copy says

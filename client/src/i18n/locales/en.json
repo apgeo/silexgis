@@ -1907,6 +1907,10 @@
       "refusedBody": "{{reason}} Everything below is the last word this tab was given, and nothing will refresh it — open the trip again once that has been put right.",
       "refusedSignedOut": "You are no longer signed in, so this trip cannot be read again. Sign in and open it afresh.",
       "refusedUnknown": "The server would not answer for this trip. It may no longer be there, or no longer yours to read.",
+      "csvExport": {
+        "download": "Download the log (CSV)",
+        "hint": "The whole log as the sheet the import reads, oldest report first: correct it in a spreadsheet and import it again. A place you may not be told is left out, and its row is marked so that it cannot be imported."
+      },
       "csvImport": {
         "open": "Import a sheet",
         "title": "Import reports from a spreadsheet",
@@ -1971,6 +1975,8 @@
         "cameOutWords": "Words for coming out",
         "wentInPlaceholder": "went in, entered",
         "cameOutPlaceholder": "went out, exited",
+        "notedWords": "Words for a note",
+        "notedPlaceholder": "note",
         "stateWordsHelp": "Words separated by commas. Words written here replace the usual ones for that side, so write every word the sheet uses for it. Capitals and diacritics are ignored: ieșire and iesire are the same word.",
         "rowsRead": "Rows read",
         "creates": "New reports",

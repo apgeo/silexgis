@@ -1907,6 +1907,10 @@
       "refusedBody": "{{reason}} Tot ce este mai jos este ultima veste primită de această filă și nimic nu o va mai împrospăta — deschide tura din nou după ce se rezolvă.",
       "refusedSignedOut": "Nu mai ești autentificat, așa că această tură nu mai poate fi citită. Autentifică-te și deschide-o din nou.",
       "refusedUnknown": "Serverul nu a răspuns pentru această tură. S-ar putea să nu mai existe sau să nu mai poată fi citită de tine.",
+      "csvExport": {
+        "download": "Descarcă jurnalul (CSV)",
+        "hint": "Tot jurnalul, ca foaia pe care o citește importul, cu cel mai vechi raport primul: corecteaz-o într-o foaie de calcul și import-o din nou. Un loc care nu îți poate fi comunicat lipsește din ea, iar rândul lui este marcat ca să nu poată fi importat."
+      },
       "csvImport": {
         "open": "Importă o foaie",
         "title": "Importă rapoarte din foaie de calcul",
@@ -1971,6 +1975,8 @@
         "cameOutWords": "Cuvinte pentru ieșire",
         "wentInPlaceholder": "intrare, intrat",
         "cameOutPlaceholder": "ieșire, ieșit",
+        "notedWords": "Cuvinte pentru o notă",
+        "notedPlaceholder": "notă",
         "stateWordsHelp": "Cuvinte separate prin virgulă. Cuvintele scrise aici le înlocuiesc pe cele obișnuite pentru partea respectivă, așa că scrie toate cuvintele pe care foaia le folosește pentru ea. Majusculele și diacriticele nu contează: ieșire și iesire sunt același cuvânt.",
         "rowsRead": "Rânduri citite",
         "creates": "Rapoarte noi",

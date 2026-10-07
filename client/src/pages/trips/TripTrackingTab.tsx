@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import {
   DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
   EyeInvisibleOutlined,
   ImportOutlined,
@@ -26,6 +27,7 @@ import {
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isSettledRefusal } from '../../api/client.ts';
+import { downloadFile, trackingLogExportUrl } from '../../api/download.ts';
 import {
   useDeleteTrackingEvent,
   useRestoreTrackingEvent,
@@ -202,6 +204,7 @@ export default function TripTrackingTab({
   const [correcting, setCorrecting] = useState<TrackingEvent | null>(null);
   /** Whether the sheet-reading dialog is open. */
   const [importing, setImporting] = useState(false);
+  const [savingLog, setSavingLog] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   /** Whether the stacked party is ordered by silence rather than as the trip names it. */
   const [silenceFirst, setSilenceFirst] = useState(false);
@@ -1000,6 +1003,21 @@ export default function TripTrackingTab({
   /** A confirmation is two more things to press, and they are pressed by the same finger. */
   const confirmSizes = { okButtonProps: { size: controlSize }, cancelButtonProps: { size: controlSize } };
 
+  /**
+   * The whole log as a file. Fetched here and saved by the page, because the route is read with
+   * this account's token, which a plain link cannot carry.
+   */
+  const saveLog = async () => {
+    setSavingLog(true);
+    try {
+      await downloadFile(trackingLogExportUrl(trip.id));
+    } catch (failure) {
+      message.error(trackingProblemMessage(failure, t));
+    } finally {
+      setSavingLog(false);
+    }
+  };
+
   /** Puts back a report this tab has just taken off the log — what Undo on the notice does. */
   const onUndoDelete = async (eventId: string) => {
     try {
@@ -1673,16 +1691,32 @@ export default function TripTrackingTab({
               rows it becomes are read. Offered on a closed watch too — a sheet is usually typed up
               after everybody is out, and refusing it then would leave the one case it exists for
               unserved. */}
-          {canEdit && (
-            <Button
-              size={controlSize}
-              icon={<ImportOutlined />}
-              onClick={() => setImporting(true)}
-              data-testid="trip-tracking-csv-open"
-            >
-              {t('trips.tracking.csvImport.open')}
-            </Button>
-          )}
+          <Space wrap>
+            {/* For everybody who reads the trip, not only for whoever may write its log: the
+                sheet is a copy of what this page already lists, and the server leaves out of it
+                exactly what it leaves out of the list for this reader. */}
+            <Tooltip title={t('trips.tracking.csvExport.hint')}>
+              <Button
+                size={controlSize}
+                icon={<DownloadOutlined />}
+                loading={savingLog}
+                onClick={() => void saveLog()}
+                data-testid="trip-tracking-csv-export"
+              >
+                {t('trips.tracking.csvExport.download')}
+              </Button>
+            </Tooltip>
+            {canEdit && (
+              <Button
+                size={controlSize}
+                icon={<ImportOutlined />}
+                onClick={() => setImporting(true)}
+                data-testid="trip-tracking-csv-open"
+              >
+                {t('trips.tracking.csvImport.open')}
+              </Button>
+            )}
+          </Space>
         </Flex>
         {/* How a row is put right — and, on a log whose rows cannot be, why not and what does
             take them back. One or the other, never both: the paragraph describes two controls,

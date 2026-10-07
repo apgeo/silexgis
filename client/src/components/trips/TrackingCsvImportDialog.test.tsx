@@ -365,8 +365,12 @@ describe('TrackingCsvImportDialog', () => {
     fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
     await waitFor(() => expect(screen.getByTestId('trip-tracking-csv-commit')).toBeEnabled());
     expect(look.mock.calls[0][0].options.wentInWords).toBeNull();
+    expect(look.mock.calls[0][0].options.notedWords).toBeNull();
 
     fireEvent.click(screen.getByText('Column settings'));
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Words for a note' }), {
+      target: { value: 'mesaj, obs' },
+    });
     fireEvent.change(await screen.findByRole('textbox', { name: 'Words for going in' }), {
       target: { value: 'coborat' },
     });
@@ -378,6 +382,7 @@ describe('TrackingCsvImportDialog', () => {
     fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
     await waitFor(() => expect(look).toHaveBeenCalledTimes(2));
     expect(look.mock.calls[1][0].options.wentInWords).toEqual(['coborat']);
+    expect(look.mock.calls[1][0].options.notedWords).toEqual(['mesaj', 'obs']);
     await waitFor(() => expect(screen.getByTestId('trip-tracking-csv-commit')).toBeEnabled());
     fireEvent.click(screen.getByTestId('trip-tracking-csv-commit'));
     await waitFor(() => expect(send).toHaveBeenCalledOnce());
