@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
@@ -10,6 +11,7 @@ using SilexGis.Domain.Surveys;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Persistence.Configurations;
 
 namespace SilexGis.Api.Features.TripTracking;
 
@@ -474,8 +476,8 @@ public static class TripTrackingEndpoints
     }
 
     /// <summary>
-    /// The reports taken off one trip's log — the one place this slice reads past the model's
-    /// filter on reports.
+    /// The reports taken off one trip's log — one of the two places this slice reads past the
+    /// model's filter on reports; the other finds the reports of one act of reporting.
     /// </summary>
     /// <remarks>
     /// The model hides a removed report from every reader, together with the reports of a deleted
@@ -818,6 +820,19 @@ public static class TripTrackingEndpoints
             return ApiProblems.Conflict(TrackingProblemCodes.NotWritable, LogNotWritable);
         }
 
+        var caverIds = request.CaverIds!.Distinct().ToList();
+
+        // A send whose act is already on record is answered here and goes no further. After the
+        // two guards above, so a repeat is asked the same "may you write this log" as the send it
+        // repeats; before everything below, because a repeat must not be refused over what has
+        // changed since its act was written — a team dissolved, a survey replaced, a person taken
+        // off the roster. Those are reasons not to write, and a repeat writes nothing.
+        if (request.ClientKey is { } repeatedKey
+            && await ReplayAnswerAsync(db, access, protection, ctx!, tripLogId, repeatedKey, caverIds, ct) is { } repeated)
+        {
+            return TypedResults.Ok(repeated);
+        }
+
         var now = DateTimeOffset.UtcNow;
         // Brought to UTC on the way in rather than stored as sent: the column is an instant, and
         // the database refuses a value carrying any other offset outright, so a report written by
@@ -829,7 +844,6 @@ public static class TripTrackingEndpoints
             return ApiProblems.BadRequest(TrackingProblemCodes.RecordedInFuture, "A report cannot be about the future.");
         }
 
-        var caverIds = request.CaverIds!.Distinct().ToList();
         var participants = await db.TripLogParticipants.AsNoTracking()
             .Where(p => p.TripLogId == tripLogId && caverIds.Contains(p.CaverId))
             .Select(p => p.CaverId).Distinct().ToListAsync(ct);
@@ -870,7 +884,30 @@ public static class TripTrackingEndpoints
             });
         }
         db.TripPositionEvents.AddRange(created);
-        await db.SaveChangesAsync(ct);
+        if (request.ClientKey is { } actKey)
+        {
+            foreach (var row in created)
+            {
+                db.Entry(row).Property(TripPositionEvent.ClientKeyProperty).CurrentValue = actKey;
+            }
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (IsSameActRace(e))
+        {
+            // The same act arrived twice at once and the other send was written first: both
+            // looked, both found nothing, and the database let exactly one of them in. The rows
+            // are written in one transaction, so none of this send's are there. Everything this
+            // request meant to save is dropped — the reports and the history rows queued beside
+            // them — and it answers as any later repeat would, with what the other send wrote.
+            db.ChangeTracker.Clear();
+            var written = await ReplayAnswerAsync(
+                db, access, protection, ctx!, tripLogId, request.ClientKey!.Value, caverIds, ct);
+            return TypedResults.Ok(written ?? []);
+        }
 
         // The answer says what the next read of the log will say, this included. A report that
         // names a station got through the gate on placing anybody in the watch's cave, which is
@@ -884,6 +921,53 @@ public static class TripTrackingEndpoints
             placed.Placement))];
         return TypedResults.Ok(dtos);
     }
+
+    /// <summary>
+    /// Every report of one trip written by one act of reporting, the ones taken off the log
+    /// included — the second place this slice reads past the model's filter on reports.
+    /// </summary>
+    /// <remarks>
+    /// Past the filter because a report somebody removed still says its act was received: a
+    /// re-send that could not see it would write the act again and put back, by machine, what a
+    /// person took off on purpose. Asking past the filter lifts the deleted-trip half with it, so
+    /// that half is said again here.
+    /// </remarks>
+    private static IQueryable<TripPositionEvent> ReportsOfAct(SilexGisDbContext db, Guid tripLogId, Guid clientKey) =>
+        db.TripPositionEvents.IgnoreQueryFilters()
+            .Where(e => e.TripLogId == tripLogId
+                && EF.Property<Guid?>(e, TripPositionEvent.ClientKeyProperty) == clientKey
+                && e.TripLog.DeletedAt == null);
+
+    /// <summary>
+    /// What a send under <paramref name="clientKey"/> is answered with when its act is already on
+    /// record, or null when it is not and the send is to be written.
+    /// </summary>
+    /// <remarks>
+    /// Through the same per-row withholding as the log, and not as the first answer is built. The
+    /// first answer follows a write that has just passed the gate on placing anybody in the cave;
+    /// a repeat has passed nothing of the kind — the cave may have been protected since, or the
+    /// repeat may come from another account — so it is told what a read of the log would tell it.
+    /// </remarks>
+    private static async Task<IReadOnlyList<TrackingEventDto>?> ReplayAnswerAsync(
+        SilexGisDbContext db, IAccessService access, FeatureProtection protection, AccessContext ctx,
+        Guid tripLogId, Guid clientKey, IReadOnlyList<Guid> askedCaverIds, CancellationToken ct)
+    {
+        var stored = await ReportsOfAct(db, tripLogId, clientKey).AsNoTracking().ToListAsync(ct);
+        var answer = TripTrackingRules.ReplayAnswer(askedCaverIds, stored);
+        return answer is null ? null : await ShownToAsync(db, access, protection, ctx, tripLogId, answer, ct);
+    }
+
+    /// <summary>
+    /// Whether a save failed because another send of the same act was written first. Told apart
+    /// by the constraint's name, so that no other failure of a save is taken for a repeat and
+    /// answered as a success.
+    /// </summary>
+    private static bool IsSameActRace(DbUpdateException e) =>
+        e.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: TripPositionEventConfiguration.ClientKeyIndex,
+        };
 
     /// <summary>
     /// Where a report puts somebody: the survey it is measured against, the cave that protects it,

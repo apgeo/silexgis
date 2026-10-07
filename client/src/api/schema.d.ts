@@ -25867,6 +25867,8 @@ export interface components {
             note: null | string;
             /** Format: date-time */
             recordedAt: null | string;
+            /** Format: uuid */
+            clientKey: null | string;
         };
         TrackingParticipantDto: {
             /** Format: uuid */

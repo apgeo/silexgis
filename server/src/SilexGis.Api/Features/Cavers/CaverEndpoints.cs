@@ -571,6 +571,13 @@ public static class CaverEndpoints
         foreach (var report in sourceReports)
         {
             report.CaverId = target.Id;
+            // One act of reporting writes a row per person and may not hold two about the same
+            // one. Where both entries were named by the same act, moving the row as it is would
+            // make exactly that pair, and the fold would fail on the constraint. The row that
+            // moves therefore stops claiming its act; the survivor's own row of that act, if
+            // there is one, still does, so a late re-send is still recognised and still writes
+            // nothing.
+            db.Entry(report).Property(TripPositionEvent.ClientKeyProperty).CurrentValue = null;
         }
 
         // What a published trip page called the duplicate follows them, unless the survivor is

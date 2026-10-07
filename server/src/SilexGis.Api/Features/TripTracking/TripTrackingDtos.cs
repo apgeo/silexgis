@@ -508,6 +508,24 @@ public interface ITrackingReportFields
     DateTimeOffset? RecordedAt { get; }
 }
 
+/// <summary>
+/// One act of reporting: who it is about, what it says, and — optionally — the key of the act.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>The key is what lets a send be repeated safely.</b> A sender that never heard the answer
+/// cannot know whether its report was written; it mints <paramref name="ClientKey"/> once for the
+/// act and sends the same value again. The first send to arrive is written; every later one under
+/// the same key is answered with the reports of that act still on the log and writes nothing —
+/// success, not a refusal, because from where the sender stands the report it wanted is there.
+/// </para>
+/// <para>
+/// The key names the act, not its content: what a later send says is not compared with what the
+/// first one wrote, and two acts with the same content under different keys are two reports.
+/// Without a key every send is an act of its own, as it has always been. The key is taken in and
+/// never given out — no read of a report carries it.
+/// </para>
+/// </remarks>
 public sealed record TrackingEventRequest(
     IReadOnlyList<Guid>? CaverIds,
     TripPositionEventKind? Kind,
@@ -515,7 +533,8 @@ public sealed record TrackingEventRequest(
     decimal? DepthM,
     Guid? TeamId,
     string? Note,
-    DateTimeOffset? RecordedAt) : ITrackingReportFields;
+    DateTimeOffset? RecordedAt,
+    Guid? ClientKey) : ITrackingReportFields;
 
 /// <summary>
 /// A correction to one report already on the log.
@@ -578,6 +597,11 @@ public sealed class TrackingEventRequestValidator : AbstractValidator<TrackingEv
         RuleFor(x => x.CaverIds).NotEmpty();
         RuleFor(x => x.CaverIds!.Count).LessThanOrEqualTo(TripTrackingRules.MaxCaversPerWrite)
             .When(x => x.CaverIds is not null);
+        // No key is the ordinary send. The all-zero key is what a sender that forgot to mint one
+        // serialises, and every such sender would share it: taken as a key it would answer one
+        // person's report with another's and write nothing, so it is refused instead.
+        RuleFor(x => x.ClientKey).NotEqual((Guid?)Guid.Empty)
+            .WithMessage("The key of a report cannot be the empty key; leave it out or send a fresh one.");
 
         TrackingReportFieldRules.Apply(this);
     }

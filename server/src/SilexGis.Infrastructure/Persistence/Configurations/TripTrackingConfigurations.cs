@@ -66,7 +66,32 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         // Which trips reported against a survey model is asked from the model's side (which trips
         // a movie of that model can show); without this it reads every report of every trip.
         builder.HasIndex(x => x.SurveyModelId);
+
+        // The key of the act of reporting that wrote the row. A column of the model with no member
+        // on the class, so that nothing which reads a report can hand it out and the snapshot the
+        // history takes of a new row never holds it.
+        builder.Property<Guid?>(TripPositionEvent.ClientKeyProperty);
+        // What makes a second send of one act write nothing: the same act cannot hold two rows
+        // about the same person on the same trip. One act writes a row per person, so the key
+        // alone is not unique. Rows no keyed send wrote are outside the index altogether, which
+        // is what leaves two typed reports about one person at one instant possible — they are
+        // two acts. A report taken off the log stays inside it: a late re-send must not write
+        // again what somebody removed on purpose. Named, in the model and in the database,
+        // because the write that loses a race to its own duplicate recognises this constraint by
+        // its name.
+        builder.HasIndex(
+                [nameof(TripPositionEvent.TripLogId), TripPositionEvent.ClientKeyProperty, nameof(TripPositionEvent.CaverId)],
+                ClientKeyIndex)
+            .IsUnique()
+            .HasFilter("client_key IS NOT NULL")
+            .HasDatabaseName(ClientKeyIndex);
     }
+
+    /// <summary>
+    /// The database's name for the constraint that keeps one act of reporting from being written
+    /// twice — what a write that lost a race to its own duplicate is told it violated.
+    /// </summary>
+    public const string ClientKeyIndex = "ux_trip_position_events_client_key";
 }
 
 public sealed class TripTrackingConfiguration : IEntityTypeConfiguration<TripTracking>

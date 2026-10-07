@@ -8807,6 +8807,7 @@ export function useRecordTrackingEvents() {
       teamId = null,
       note = null,
       recordedAt = null,
+      clientKey = null,
     }: {
       tripLogId: string;
       caverIds: string[];
@@ -8817,11 +8818,17 @@ export function useRecordTrackingEvents() {
       note?: string | null;
       /** Null means now, on the server's clock — the ordinary case of a report made as it happens. */
       recordedAt?: string | null;
+      /**
+       * The key of this act of reporting, minted once by whoever may have to send it again. A send
+       * repeated under the same key is answered with what the first one wrote and writes nothing.
+       * Null is a send that is an act of its own, which is what every caller here makes today.
+       */
+      clientKey?: string | null;
     }) =>
       unwrap(
         api.POST('/api/v1/trip-logs/{tripLogId}/tracking/events', {
           params: { path: { tripLogId } },
-          body: { caverIds, kind, stationName, depthM, teamId, note, recordedAt },
+          body: { caverIds, kind, stationName, depthM, teamId, note, recordedAt, clientKey },
         }),
       ),
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),
