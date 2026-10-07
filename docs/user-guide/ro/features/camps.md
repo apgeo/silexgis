@@ -228,11 +228,29 @@ Două butoane în antet, ambele pentru cineva care poate gestiona permisiunile t
 
 **Partajează** ajunge mai departe: *„Partajarea unei tabere scrie câte o regulă pe fiecare tură
 adunată în ea, marcată ca fiind a taberei, astfel încât cel cu care este partajată poate citi ce
-a adunat tabăra."* Necesită dreptul de a gestiona permisiunile pe fiecare dintre aceste ture —
-dacă vreo tură refuză, nu se partajează nimic și vi se spune câte au refuzat, niciodată care.
-Dialogul arată câte dintre turele taberei acoperă fiecare partajare și spune când s-au alăturat
-ture de la ultima aplicare: aplicați-o din nou pentru a le acoperi sau retrageți-o pentru a o
-lua înapoi de pe toate turele deodată.
+a adunat tabăra."* Fiecare tură răspunde pentru ea însăși: tabăra este partajată pe fiecare
+tură ale cărei permisiuni le puteți gestiona, iar celelalte sunt **sărite și enumerate**, așa
+că o tabără care adună turele altui club este partajată imediat pentru ale dumneavoastră.
+
+După ce aplicați o partajare, dialogul spune ce a făcut — *„Ture partajate: 2. Ture sărite: 3.”* —
+și enumeră turele sărite:
+
+- o tură pe care o puteți citi este **numită**, cu ceea ce stă în cale: *„proprietarul ei
+  trebuie să vă lase să îi gestionați permisiunile”* sau *„ați cerut să dați mai mult decât
+  aveți dumneavoastră pe această tură”* (nu puteți da nimănui pe o tură mai mult decât aveți
+  acolo);
+- o tură pe care **nu** o puteți citi nu este numită — o tabără poate aduna o tură pe care
+  organizatorul ei nu o poate deschide — și este doar numărată: *„Ture sărite pe care nu le
+  puteți citi și care, de aceea, nu sunt numite aici: 1.”*
+
+Pe o tură sărită nu se scrie nimic. După ce proprietarul ei v-a lăsat să îi gestionați
+permisiunile, **Aplică din nou** o preia. Dacă nicio tură nu a putut fi partajată, nu se
+partajează nimic și vi se spune acest lucru.
+
+Dialogul arată și câte dintre turele taberei acoperă fiecare partajare. Mai puține decât toate
+înseamnă că unele ture s-au alăturat după ultima aplicare sau au fost sărite: aplicați din nou
+pentru a le acoperi pe cele pe care le puteți sau retrageți partajarea pentru a lua înapoi de
+pe toate turele ce a scris tabăra — și numai atât.
 
 ---
 
