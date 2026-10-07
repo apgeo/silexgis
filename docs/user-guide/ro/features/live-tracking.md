@@ -863,6 +863,23 @@ adresa deschisă din nou arată *„Nimic de arătat pentru acest link"* și nu 
 răspunde în continuare sunt lista și reluările din spatele ei — unei pagini care era deja
 deschisă când s-a încheiat linkul și unui site care citește el însuși adresele turei publicate.
 
+**Un link vechi și echipele de astăzi.** Același link arată și echipele urmărite acum în
+peșteră. Acolo unde o instalare a oprit un link vechi să mai facă asta, lăsând deschise turele
+trecute ale peșterii, o pagină care a primit turele trecute și căreia lista echipelor i-a fost
+refuzată definitiv spune *„Acest link nu mai arată cine este astăzi în peșteră"* în locul
+listei. O spune liniștit, ca pe un fapt despre link și nu ca pe o defecțiune: nu se mai
+încearcă nimic, iar turele trecute sunt în continuare acolo, pot fi citite și redate. Serverul
+nu dă niciun motiv pentru un refuz, așa că pagina spune asta doar pe această dovadă — turele
+trecute au răspuns, lista echipelor a fost refuzată definitiv — și numai când cele două
+răspunsuri țin de același moment: turele trecute citite după ce lista a fost refuzată sau cu
+cel mult câteva minute înainte, și nu înainte de ultimul răspuns al listei. O listă de ture
+trecute care doar a rămas pe pagină de mai devreme nu se pune, pentru că un link retras cât
+timp pagina este deschisă lasă în urmă exact asta; o asemenea pagină spune în continuare că
+linkul nu mai răspunde și spune lucrul mai liniștit doar dacă turele trecute sunt citite din
+nou și răspund. Nimic nu este citit doar ca să se afle. O listă care doar nu a putut fi citită
+acum păstrează textul care invită la o nouă încercare, iar acolo unde și turele trecute sunt
+refuzate pagina spune ce spune despre orice link care nu mai răspunde.
+
 **Ce predă o tură trecută.** În listă: numele ei, datele ei, tabăra din care a făcut parte, câți
 au fost în ea și când i-a fost închisă urmărirea. În reluare: echipa, rapoartele cu orele lor
 și ridicarea pe care au fost măsurate. **La publicarea unei ture nu se copiază nimic** —
@@ -954,7 +971,7 @@ un rând; nu deschide nimic.
 |---|---|---|
 | **Înlocuiește linkul** | Adresa veche încetează să răspundă pe loc, iar una nouă este arătată, **o singură dată**, într-o fereastră care se închide doar cu *Am copiat-o*. Aceeași expirare ca a celei vechi; tura rămâne printre turele trecute ale peșterii; nimeni nu este anunțat | Adresa veche este pierdută definitiv. La fel și o adresă închisă înainte de a fi copiată — înlocuiți linkul din nou |
 | **Retrage publicarea turei** | Retrage **toate** linkurile acelei ture într-o singură operație și spune câte | Tot ce urmează mai jos |
-| **Retrage tot ce este publicat** | Retrage toate linkurile instalării — toate turele, toate peșterile. Confirmarea spune câte linkuri mai sunt active și cere scrierea unui cuvânt înainte ca butonul să funcționeze | Tot ce urmează mai jos, pentru toate turele deodată |
+| **Retrage tot ce este publicat** | Retrage toate linkurile instalării — toate turele, toate peșterile. Confirmarea spune câte linkuri arată lista ca fiind încă active, spune că sunt retrase și linkurile **turelor șterse** și cere scrierea unui cuvânt înainte ca butonul să funcționeze | Tot ce urmează mai jos, pentru toate turele deodată |
 
 **Ce mai aduce cu sine retragerea unui link, fără să fie evident.** Pagina încetează să răspundă
 pentru oricine are adresa, pe această instalare și pe orice site care o arată într-un cadru. Iar
@@ -962,6 +979,22 @@ o tură încheiată al cărei ultim link a dispărut **iese din lista publică d
 peșterii ei** — pe care o arătau și linkurile altor ture. Un link retras nu mai poate fi pus la
 loc. O tură se publică din nou doar **pornindu-i iar urmărirea** și creând un link nou, tură cu
 tură, iar adresa nouă trebuie dată din nou tuturor celor care o aveau pe cea veche.
+
+**De ce „tot" poate retrage mai multe linkuri decât arată lista.** Lista lasă deoparte linkurile
+turelor șterse: nimeni nu le poate deschide cât timp tura lor este ștearsă. Dar o tură ștearsă
+poate fi restaurată, iar linkurile ei ar răspunde din nou odată cu ea, exact cum erau — așa că
+**Retrage tot ce este publicat** le retrage și pe acelea, iar unui administrator căruia i se
+spune că nu a mai rămas niciun link i se spune adevărul. Confirmarea o spune înainte de scrierea
+cuvântului. Când au fost retrase mai multe linkuri decât arăta lista, rezultatul dă ambele
+cifre — *Linkuri retrase* și *Linkuri arătate de această listă* — și motivul; prima este cea de
+încredere despre ce a fost retras. **Retrage publicarea turei** nu ajunge la o tură ștearsă:
+linkurile ei nu sunt în listă.
+
+**Butonul este oferit doar cât timp lista arată un link activ.** Când nu arată niciunul, este
+dezactivat — așa că, atunci când singurele linkuri rămase active sunt ale unor ture șterse,
+această pagină nu le poate retrage, iar ele răspund din nou dacă o asemenea tură este
+restaurată. O tură restaurată apare din nou în listă, unde **Retrage publicarea turei** îi
+retrage linkurile.
 
 De aceea nu există nici un comutator de **„pauză"**: o adresă care ar putea începe iar să
 răspundă nu este una despre care să se poată spune că a fost retrasă. Dacă scopul este ca turele
@@ -1044,6 +1077,7 @@ instalare](../../../INSTALL.md#when-a-published-page-or-the-article-showing-it-s
 | *„Acel link a fost deja retras, așa că nu mai este nimic de înlocuit. Publică tura din nou."* | L-a retras altcineva mai întâi — poate chiar acum o clipă, de pe alt ecran |
 | *„Nimic de arătat pentru acest link"* (pe pagina publică) | Retras, înlocuit, încheiat, sau peștera a fost protejată între timp |
 | *„Turele trecute nu sunt oferite prin acest link"* | Instalarea a oprit turele trecute |
+| *„Acest link nu mai arată cine este astăzi în peșteră"* (pe pagina publică) | Un link vechi: lista echipelor urmărite acum este refuzată definitiv, în timp ce turele trecute ale peșterii, citite cam în același moment, răspund în continuare. Nu este nimic de încercat din nou — turele trecute sunt tot acolo |
 
 ---
 

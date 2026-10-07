@@ -828,6 +828,22 @@ opened afresh shows *"Nothing to show for this link"* and offers no list. What s
 is the list and the replays behind it — to a page that was already open when the link ended,
 and to a website that reads the published-trip addresses itself.
 
+**An old link and today's parties.** The same link also lists the parties being followed in
+the cave now. Where an installation has stopped an old link from doing that while leaving the
+cave's past trips open, a page that was given the past trips and was refused the list of
+parties for good says *"This link no longer lists who is in the cave today"* where the list
+would be. It is said quietly, as a fact about the link and not as a failure: nothing is tried
+again, and the past trips are still there to read and play. The server gives no reason for a
+refusal, so the page says this only on that evidence — past trips answered, the list of
+parties refused for good — and only when the two answers belong to one moment: the past trips
+read after the list was refused or a few minutes before it at most, and not before the list
+last answered. A list of past trips that is merely still on the page from earlier does not
+count, because a link taken back while the page is open leaves exactly that behind; such a
+page goes on saying that the link has stopped answering, and says the quieter thing only if
+the past trips are read again and answer. Nothing is read just to find out. A list that merely
+could not be read just now keeps the wording that invites another try, and where the past
+trips are refused as well the page says what it says of any link that has stopped answering.
+
 **What a past trip hands over.** In the list: its name, its dates, the camp it belonged to, how
 many were on it, and when its watch was closed. In the replay: the party, the reports with
 their times, and the survey they were measured on. **Nothing is copied when a trip is
@@ -915,7 +931,7 @@ place of a link's address, so a line in the log can be matched with a row; it op
 |---|---|---|
 | **Replace link** | The old address stops answering at once and a fresh one is shown, **once**, in a window that closes only on *I have copied it*. Same expiry as the old one; the trip stays in its cave's past trips; nobody is told | The old address is gone for good. An address closed before it was copied is gone too — replace the link again |
 | **Unpublish this trip** | Takes back **every** link of that trip in one act, and says how many | Everything below |
-| **Unpublish everything** | Takes back every link of the installation — every trip, every cave. The confirmation states how many links are still standing and asks you to type a word before the button works | Everything below, for every trip at once |
+| **Unpublish everything** | Takes back every link of the installation — every trip, every cave. The confirmation states how many links the list shows as still standing, says that the links of **deleted trips** are taken back as well, and asks you to type a word before the button works | Everything below, for every trip at once |
 
 **What goes with taking a link back, and is not obvious.** The page stops answering for
 everybody holding the address, on this installation and on any website showing it in a frame.
@@ -923,6 +939,21 @@ And a finished trip whose last link is gone **leaves its cave's public list of p
 which other trips' links were showing too. There is no way to put a taken-back link back. A
 trip is published again only by **starting its watch again** and creating a new link, one trip
 at a time, and the new address has to be handed out afresh to everyone who had the old one.
+
+**Why "everything" can take back more links than the list shows.** The list leaves out the
+links of deleted trips: nobody can open them while their trip is deleted. But a deleted trip
+can be restored, and its links would answer again with it exactly as they stood — so
+**Unpublish everything** takes those back too, and an administrator told that every link is
+gone is told the truth. The confirmation says so before you type the word. When more links
+were taken back than the list showed, the result gives both figures — *Links taken back* and
+*Links this list showed* — and the reason; the first is the one to trust about what was
+withdrawn. **Unpublish this trip** does not reach a deleted trip: its links are not in the
+list.
+
+**The button is offered only while the list shows a standing link.** With none shown it is
+greyed out — so when the only links left standing belong to deleted trips, this page cannot
+take them back, and they answer again if such a trip is restored. A restored trip is back in
+the list, where **Unpublish this trip** takes its links back.
 
 That is also why there is **no "pause" switch**: an address that might start answering again
 is not one anybody can call withdrawn. If the aim is to stop showing past trips without
@@ -1001,6 +1032,7 @@ outside, what one link answers. The full table, with the reason word for each ca
 | *"That link has already been taken back, so there is nothing to replace. Publish the trip again instead."* | Somebody took it back first — possibly a moment ago, from another screen |
 | *"Nothing to show for this link"* (on the public page) | Taken back, replaced, ended, or the cave has been protected since |
 | *"Past trips are not offered through this link"* | The installation has switched past trips off |
+| *"This link no longer lists who is in the cave today"* (on the public page) | An old link: the list of parties being followed now is refused for good while the cave's past trips, read at about the same moment, still answer. There is nothing to try again — the past trips are still there |
 
 ---
 
