@@ -47,6 +47,7 @@ function state(caverIds: string[], teams: TrackingState['teams'] = [], positions
   return {
     state: 'closed',
     surveyModelId: MODEL,
+    caveFeatureId: null,
     surveyModelMissing: false,
     referenceStationName: null,
     depthFilter: [],

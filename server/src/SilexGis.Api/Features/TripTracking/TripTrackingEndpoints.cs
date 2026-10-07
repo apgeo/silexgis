@@ -392,6 +392,10 @@ public static class TripTrackingEndpoints
         return TypedResults.Ok(new TrackingStateDto(
             watchState,
             configOpen ? tracking?.SurveyModelId : null,
+            // Only beside a survey that is being told. Tied to the survey's presence as well as to
+            // the branch, so that a watch which names no survey — and so has nothing withheld, and
+            // nothing by which this caller's right to its cave was ever asked — says no cave.
+            configOpen && tracking?.SurveyModelId is not null ? tracking.CaveFeatureId : null,
             // Said only to a caller who is being told which model it is: to anyone else the id
             // arrives null anyway, and "the survey that watch was on has been deleted" is a fact
             // about a cave whose vocabulary they were just refused.

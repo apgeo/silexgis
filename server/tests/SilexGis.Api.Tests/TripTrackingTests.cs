@@ -224,6 +224,10 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         var (trip, cavers) = await CreateTripAsync("Protected", guests: 1, visibility: "authenticated");
         var cave = await CreateCaveAsync(locationProtected: true);
         var model = await SeedModelWithStationsAsync(cave);
+
+        // A watch that names no survey names no cave, to anybody.
+        (await StateAsync(owner, trip)).GetProperty("caveFeatureId").ValueKind.ShouldBe(JsonValueKind.Null);
+
         (await PutConfigAsync(owner, trip, new
         {
             state = "armed",
@@ -248,6 +252,9 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
             .ShouldNotBeNull("the placer gets the station and the hour it was reported at");
         mine.GetProperty("referenceStationName").GetString().ShouldBe("cave.ent.0");
         mine.GetProperty("depthFilter").GetArrayLength().ShouldBe(1);
+        // The cave the survey belongs to is told beside the survey, to the one who is told the survey.
+        mine.GetProperty("surveyModelId").GetGuid().ShouldBe(model);
+        mine.GetProperty("caveFeatureId").GetGuid().ShouldBe(cave);
 
         // Negative half: the reader may read the trip and still learns no station and no depth
         // — not from the fold, not from the event log, and not from the config either, whose
@@ -270,6 +277,8 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         folded.GetProperty("in").GetBoolean().ShouldBeTrue();
         theirs.GetProperty("referenceStationName").ValueKind.ShouldBe(JsonValueKind.Null);
         theirs.GetProperty("surveyModelId").ValueKind.ShouldBe(JsonValueKind.Null);
+        // Nor which cave the watch is in: withheld with the survey, on the same branch.
+        theirs.GetProperty("caveFeatureId").ValueKind.ShouldBe(JsonValueKind.Null);
         theirs.GetProperty("depthFilter").GetArrayLength().ShouldBe(0);
 
         var log = await BodyAsync(await reader.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events"));

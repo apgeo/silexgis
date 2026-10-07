@@ -239,6 +239,18 @@ public sealed record TrackingStateDto(
     TripTrackingState State,
     Guid? SurveyModelId,
     /// <summary>
+    /// The cave the watch's survey belongs to, or null wherever <see cref="SurveyModelId"/> is null.
+    /// </summary>
+    /// <remarks>
+    /// Sent so that a surface can point at the cave whose declared places the watch offers without
+    /// first fetching the survey to learn whose it is. It is told on exactly the branch the survey
+    /// is told on and nowhere else: a caller being told which survey a watch is on can already read
+    /// that survey, which names its cave, so this says nothing new to them — and a caller from whom
+    /// the survey is withheld is not told the cave either, because "this trip is being watched in
+    /// that cave" is the fact the withholding exists to keep.
+    /// </remarks>
+    Guid? CaveFeatureId,
+    /// <summary>
     /// True when the watch names a survey model this server no longer holds — somebody deleted it.
     /// </summary>
     /// <remarks>

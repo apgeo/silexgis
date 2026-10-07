@@ -45,6 +45,7 @@ function tracking(caverIds: string[]): TrackingState {
   return {
     state: 'closed',
     surveyModelId: MODEL,
+    caveFeatureId: null,
     surveyModelMissing: false,
     referenceStationName: null,
     depthFilter: [],

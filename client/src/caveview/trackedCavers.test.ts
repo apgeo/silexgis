@@ -48,6 +48,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
   return {
     state: 'armed',
     surveyModelId: MODEL,
+    caveFeatureId: null,
     surveyModelMissing: false,
     referenceStationName: null,
     depthFilter: [],

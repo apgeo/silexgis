@@ -25957,6 +25957,8 @@ export interface components {
             state: components["schemas"]["TripTrackingState"];
             /** Format: uuid */
             surveyModelId: null | string;
+            /** Format: uuid */
+            caveFeatureId: null | string;
             surveyModelMissing: boolean;
             referenceStationName: null | string;
             depthFilter: string[];

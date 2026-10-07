@@ -27,6 +27,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
   return {
     state: 'armed',
     surveyModelId: MODEL,
+    caveFeatureId: null,
     referenceStationName: null,
     depthFilter: [],
     armedAt: '2026-09-12T08:00:00Z',
