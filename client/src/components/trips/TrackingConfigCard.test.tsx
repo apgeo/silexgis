@@ -317,6 +317,7 @@ describe('TrackingConfigCard', () => {
       onRoster: true,
       name: null,
       quiet: false,
+      outsideDeclaredParts: false,
     };
 
     const { unmount } = show(

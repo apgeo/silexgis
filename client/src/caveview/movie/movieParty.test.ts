@@ -38,6 +38,7 @@ function participant(caverId: string): TrackingState['participants'][number] {
     onRoster: true,
     name: null,
     quiet: false,
+    outsideDeclaredParts: false,
   } as TrackingState['participants'][number];
 }
 

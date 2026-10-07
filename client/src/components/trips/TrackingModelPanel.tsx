@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CompressOutlined, ExpandOutlined, PushpinOutlined, VideoCameraOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Flex, Tabs, Typography } from 'antd';
+import { Alert, Button, Card, Flex, Switch, Tabs, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   surveyModelReadableByViewer,
@@ -14,6 +14,7 @@ import {
 } from '../../api/hooks.ts';
 import CaveViewPanel from '../caveview/CaveViewPanel.tsx';
 import LazyTrackingMovieDialog from '../caveview/movie/LazyTrackingMovieDialog.tsx';
+import type { DeclaredPartsView } from '../../caveview/declaredParts.ts';
 import type { CaveViewMediaEntry } from '../../caveview/loadCaveView.ts';
 import { partFromStation, pathOf, type PickedModelPart } from '../../caveview/modelParts.ts';
 import { trackedCaversFrom } from '../../caveview/trackedCavers.ts';
@@ -75,6 +76,13 @@ export interface TrackingModelPanelProps {
 
 /** The key of the one pane of the drawing strip that is not a declared map. */
 const TAB_3D = '3d';
+
+/**
+ * Whether the drawing can be narrowed to the declared parts: it has answered, it has a survey for
+ * every entry, and there is something outside them to take off.
+ */
+const declaredPartsUsable = (view: DeclaredPartsView | null) =>
+  view !== null && view.unmatched.length === 0 && view.hide.length > 0;
 
 /** Taller than a phone can spare, shorter than a desk screen would waste. */
 const HEIGHT = 460;
@@ -237,6 +245,17 @@ export default function TrackingModelPanel({
    * against another model's stations under that picture.
    */
   const [movieModelId, setMovieModelId] = useState<string | null>(null);
+  /**
+   * Whether the drawing is narrowed to the parts of the cave the watch declared, and what the
+   * drawing on screen makes of that declaration.
+   *
+   * <b>The second is the viewer's answer and is waited for.</b> Which surveys a file has is known
+   * only once it is parsed, so until the viewer has said, the switch cannot promise anything and
+   * is not offered as working. It is also why the choice is kept here and not remembered: it is
+   * a way of looking at this drawing for a moment, and it means nothing for the next survey.
+   */
+  const [onlyDeclared, setOnlyDeclared] = useState(false);
+  const [declaredView, setDeclaredView] = useState<DeclaredPartsView | null>(null);
   const movieTrips = useMemo(() => [tripLogId], [tripLogId]);
   const { data: model } = useSurveyModel(tracking.surveyModelId ?? undefined);
   // Rendered on every path out of this panel, so that the model going unready under an open dialog
@@ -631,6 +650,40 @@ export default function TrackingModelPanel({
             // the party is out, when somebody empties a memory card and turns the log into a report.
             onAttachHere={canEdit ? (moment) => setAttachingAt(moment) : undefined}
           />
+          {/* Offered only on a watch that declared something, and only on the drawing that has
+              surveys to hide. The switch says what it did rather than leaving an emptier picture
+              unexplained, and it refuses — in words — a declaration the drawing cannot follow:
+              taking half of one off the screen would hide passage the party said it was going to.
+              Whoever is reported outside the declared parts keeps their marker either way; that
+              is told on the table above, by the server, and not by what is drawn here. */}
+          {tracking.depthFilter.length > 0 && activeTab === TAB_3D && (
+            <Flex gap="small" align="center" wrap>
+              <Switch
+                size="small"
+                checked={onlyDeclared && declaredPartsUsable(declaredView)}
+                disabled={!declaredPartsUsable(declaredView)}
+                onChange={setOnlyDeclared}
+                aria-label={t('trips.tracking.declaredOnly')}
+                data-testid="trip-tracking-declared-only"
+              />
+              <Typography.Text>{t('trips.tracking.declaredOnly')}</Typography.Text>
+              <Typography.Text type="secondary" data-testid="trip-tracking-declared-only-note">
+                {declaredView === null
+                  ? t('trips.tracking.declaredOnlyWaiting')
+                  : declaredView.unmatched.length > 0
+                    ? t('trips.tracking.declaredOnlyUnmatched', {
+                        entries: declaredView.unmatched.join(', '),
+                      })
+                    : declaredView.hide.length === 0
+                      ? t('trips.tracking.declaredOnlyNothing')
+                      : onlyDeclared
+                        ? t('trips.tracking.declaredOnlyHidden', {
+                            surveys: declaredView.hide.length,
+                          })
+                        : t('trips.tracking.declaredOnlyHelp')}
+              </Typography.Text>
+            </Flex>
+          )}
           {/* <b>The press names a station and offers to record there; it does not open a dialog by
               itself.</b> Looking around a model means pressing things, and a form that appeared on
               every press would make the model unusable as a model — which is the same reasoning the
@@ -684,6 +737,9 @@ export default function TrackingModelPanel({
                     // Handed straight through, replay or no replay: what comes back names stations of the
                     // drawing, which is the one thing about this panel a scrubbed moment cannot change.
                     onUnplacedStationsChange={onUnplacedStationsChange}
+                    declaredParts={tracking.depthFilter}
+                    onlyDeclaredParts={onlyDeclared}
+                    onDeclaredPartsView={setDeclaredView}
                     // A leg or a splay names no single place to report from, so it clears the offer rather
                     // than leaving the last station standing under a press that meant something else.
                     onPartPick={

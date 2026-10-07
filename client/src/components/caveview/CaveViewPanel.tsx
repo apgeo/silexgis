@@ -22,6 +22,7 @@ import {
   pathOf,
   type PickedModelPart,
 } from '../../caveview/modelParts.ts';
+import { declaredPartsView, type DeclaredPartsView } from '../../caveview/declaredParts.ts';
 import { noStationsMissing, stationsNotOnModel } from '../../caveview/placedOnModel.ts';
 import { mediaForStation } from '../../caveview/stationMedia.ts';
 import {
@@ -142,6 +143,25 @@ export interface CaveViewPanelProps {
    * against a drawing nobody is looking at.
    */
   onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
+  /**
+   * The parts of the cave a tracking watch declared — starts of survey or station names — when
+   * the caller wants to know what this drawing makes of them. Absent or empty, nothing is asked.
+   */
+  declaredParts?: readonly string[];
+  /**
+   * Whether every survey that holds nothing declared is taken off the drawing.
+   *
+   * Acted on only when the drawing answers to every declared entry: narrowing the picture by half
+   * a declaration would hide passage the party said it was going to. Only the surveys this switch
+   * hid are shown again when it is turned off — whatever else was hidden stays hidden.
+   */
+  onlyDeclaredParts?: boolean;
+  /**
+   * Told what the loaded drawing makes of `declaredParts`: which surveys lie outside them and
+   * which entries it has no survey for. Null while there is no drawing to ask, and again as this
+   * panel goes off the screen.
+   */
+  onDeclaredPartsView?: (view: DeclaredPartsView | null) => void;
   /**
    * Told every station of the drawing once it is parsed — the index a station typeahead
    * offers, in the viewer's own spelling, the same one every anchor stores.
@@ -322,6 +342,9 @@ export default function CaveViewPanel({
   trackedCavers,
   markerMoveMs,
   onUnplacedStationsChange,
+  declaredParts,
+  onlyDeclaredParts = false,
+  onDeclaredPartsView,
   onStationsLoaded,
   toolbar = false,
   stationMedia,
@@ -859,6 +882,51 @@ export default function CaveViewPanel({
     onUnplacedRef.current?.(unplacedStations);
   }, [unplacedStations]);
   useEffect(() => () => onUnplacedRef.current?.(noStationsMissing), []);
+
+  // ---- Narrowing the drawing to the parts a watch declared ----
+  //
+  // Asked of the parsed survey each time there is one, because which surveys a drawing has is a
+  // fact about that file and a new viewer is built for every file. What this hid is remembered
+  // against the viewer it was hidden on: a viewer built since starts with everything drawn, so
+  // nothing recorded for an earlier one is shown "again" on it.
+  const onDeclaredViewRef = useRef(onDeclaredPartsView);
+  onDeclaredViewRef.current = onDeclaredPartsView;
+  const hiddenForDeclarationRef = useRef<{
+    viewer: CaveViewer;
+    refs: readonly (readonly string[])[];
+  } | null>(null);
+  useEffect(() => {
+    const viewer = viewerRef.current?.viewer;
+    if (status !== 'ready' || viewer === undefined) {
+      onDeclaredViewRef.current?.(null);
+      return;
+    }
+    const view =
+      declaredParts === undefined || declaredParts.length === 0
+        ? null
+        : declaredPartsView(viewer.getSurveyTree(), declaredParts);
+    onDeclaredViewRef.current?.(view);
+
+    const want = onlyDeclaredParts && view !== null && view.unmatched.length === 0 ? view.hide : [];
+    const before =
+      hiddenForDeclarationRef.current?.viewer === viewer ? hiddenForDeclarationRef.current.refs : [];
+    const keyOf = (ref: readonly string[]) => JSON.stringify(ref);
+    const wanted = new Set(want.map(keyOf));
+    const had = new Set(before.map(keyOf));
+    // Only what differs is touched: every call redraws the model.
+    for (const ref of before) {
+      if (!wanted.has(keyOf(ref))) {
+        viewer.setSectionVisible(ref, true);
+      }
+    }
+    for (const ref of want) {
+      if (!had.has(keyOf(ref))) {
+        viewer.setSectionVisible(ref, false);
+      }
+    }
+    hiddenForDeclarationRef.current = { viewer, refs: want };
+  }, [status, modelLoads, declaredParts, onlyDeclaredParts]);
+  useEffect(() => () => onDeclaredViewRef.current?.(null), []);
 
   // ---- Whether the markers say who they are ----
   //

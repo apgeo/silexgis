@@ -100,6 +100,7 @@ const PREVIEW: Preview = {
         note: 'la baza puitului',
         recordedAt: '2026-09-12T10:00:00Z',
         corrected: false,
+        outsideDeclaredParts: false,
         depthPlacement: null,
       },
       diagnostics: [],

@@ -765,18 +765,46 @@ export default function TripTrackingTab({
    * in scope to draw. What is refused above all is the obvious repair — filling the gap from the
    * last word — which is the very sentence this whole change exists to stop the table saying.
    */
+  /**
+   * The mark on a place that lies outside the parts of the cave the watch declared.
+   *
+   * <b>The server's word, drawn only beside a place that is itself on screen.</b> Whether a station
+   * is outside the declaration is decided where the stations and their survey names are, by the
+   * same test a reported depth is resolved with; nothing here compares a name with the list. It is
+   * asked for from the two branches below that draw a place and from nowhere else, so it cannot
+   * stand next to "withheld" or a dash. It is a warning colour and no more than that: somebody
+   * went somewhere the plan did not name, which the coordinator wants to see and which alarms
+   * nobody — nothing is sent because of it.
+   */
+  const outsideDeclaredTag = (outside: boolean, testId: string) =>
+    outside ? (
+      <Tooltip title={t('trips.tracking.outsideDeclaredPartsHelp')}>
+        <Tag color="warning" data-testid={testId}>
+          {t('trips.tracking.outsideDeclaredParts')}
+        </Tag>
+      </Tooltip>
+    ) : null;
+
   const positionOf = (
     participant: TrackingParticipant,
   ): { shown: ReactNode; placedAt: string | null } => {
     if (participant.stationName !== null || participant.depthM !== null) {
-      const shown = place(
-        participant.stationName,
-        participant.depthM,
-        gapOf({
-          stationName: participant.stationName,
-          askedDepthM: participant.depthM,
-          surveyModelId: participant.positionSurveyModelId,
-        }),
+      const shown = (
+        <>
+          {place(
+            participant.stationName,
+            participant.depthM,
+            gapOf({
+              stationName: participant.stationName,
+              askedDepthM: participant.depthM,
+              surveyModelId: participant.positionSurveyModelId,
+            }),
+          )}
+          {outsideDeclaredTag(
+            participant.outsideDeclaredParts,
+            `trip-tracking-outside-declared-${participant.caverId}`,
+          )}
+        </>
       );
       // Two questions in order, and they are not the same question. The first is which survey this
       // place was measured in, which two stored ids answer. The second is whether the drawing of
@@ -851,14 +879,19 @@ export default function TripTrackingTab({
    */
   const eventPlace = (row: TrackingEvent) => {
     if (row.stationName !== null || row.depthEnteredM !== null) {
-      return place(
-        row.stationName,
-        row.depthEnteredM,
-        gapOf({
-          stationName: row.stationName,
-          askedDepthM: row.depthEnteredM,
-          surveyModelId: row.surveyModelId,
-        }),
+      return (
+        <>
+          {place(
+            row.stationName,
+            row.depthEnteredM,
+            gapOf({
+              stationName: row.stationName,
+              askedDepthM: row.depthEnteredM,
+              surveyModelId: row.surveyModelId,
+            }),
+          )}
+          {outsideDeclaredTag(row.outsideDeclaredParts, `trip-tracking-event-outside-declared-${row.id}`)}
+        </>
       );
     }
     return row.kind === 'atStation' || row.kind === 'atDepth' ? withheldTag(true) : '—';

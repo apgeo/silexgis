@@ -66,6 +66,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         onRoster: true,
         name: null,
         quiet: false,
+        outsideDeclaredParts: false,
       },
     ],
     ...overrides,
@@ -374,6 +375,7 @@ describe('trackedCaversAt', () => {
           onRoster: true,
           name: null,
           quiet: false,
+          outsideDeclaredParts: false,
         },
       ],
     });

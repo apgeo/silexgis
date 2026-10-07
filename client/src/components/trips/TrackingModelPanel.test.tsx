@@ -84,6 +84,12 @@ interface GivenProps {
    * words — see the test that engages a replay and watches it keep flowing.
    */
   onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
+  /** The watch's declared parts, whether to draw only those, and where the drawing answers. */
+  declaredParts?: readonly string[];
+  onlyDeclaredParts?: boolean;
+  onDeclaredPartsView?: (
+    view: { hide: readonly (readonly string[])[]; unmatched: readonly string[] } | null,
+  ) => void;
   /** Which of the viewer's own controls this panel asks for — see the test that reads it. */
   toolbar?: boolean | { buttons?: readonly string[] };
   /**
@@ -238,6 +244,7 @@ function tracking(overrides: Partial<TrackingState> = {}): TrackingState {
         onRoster: true,
         name: null,
         quiet: false,
+        outsideDeclaredParts: false,
       },
     ],
     ...overrides,
@@ -746,6 +753,64 @@ describe('TrackingModelPanel', () => {
     act(() => given!.onUnplacedStationsChange?.(new Set(['p.g.7'])));
 
     expect([...(answers.at(-1) ?? [])]).toEqual(['p.g.7']);
+  });
+
+  describe('narrowing the drawing to where the party said it was going', () => {
+    const declaring = () => tracking({ depthFilter: ['p.g'] });
+    const openModel = () => fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+    it('offers nothing on a watch that declared no parts', () => {
+      show();
+      openModel();
+
+      expect(screen.queryByTestId('trip-tracking-declared-only')).not.toBeInTheDocument();
+      expect(given!.declaredParts).toEqual([]);
+    });
+
+    it('waits for the drawing, then narrows it when asked and says how much went', () => {
+      show(declaring());
+      openModel();
+
+      // The viewer is handed the declaration and has not answered: nothing can be promised yet.
+      expect(given!.declaredParts).toEqual(['p.g']);
+      expect(given!.onlyDeclaredParts).toBe(false);
+      expect(screen.getByTestId('trip-tracking-declared-only')).toBeDisabled();
+
+      act(() => given!.onDeclaredPartsView?.({ hide: [['p', 'side'], ['p', 'far']], unmatched: [] }));
+      const narrow = screen.getByTestId('trip-tracking-declared-only');
+      expect(narrow).toBeEnabled();
+      expect(narrow).toHaveAttribute('aria-checked', 'false');
+
+      fireEvent.click(narrow);
+
+      expect(given!.onlyDeclaredParts).toBe(true);
+      expect(screen.getByTestId('trip-tracking-declared-only')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('trip-tracking-declared-only-note')).toHaveTextContent(/hidden: 2/);
+
+      fireEvent.click(screen.getByTestId('trip-tracking-declared-only'));
+      expect(given!.onlyDeclaredParts).toBe(false);
+    });
+
+    it('refuses, naming the entry, a declaration the drawing has no survey for', () => {
+      show(tracking({ depthFilter: ['p.g', 'elsewhere.series'] }));
+      openModel();
+      act(() =>
+        given!.onDeclaredPartsView?.({ hide: [['p', 'side']], unmatched: ['elsewhere.series'] }),
+      );
+
+      expect(screen.getByTestId('trip-tracking-declared-only')).toBeDisabled();
+      expect(screen.getByTestId('trip-tracking-declared-only-note')).toHaveTextContent(
+        'elsewhere.series',
+      );
+    });
+
+    it('offers nothing to switch where every survey of the drawing is declared', () => {
+      show(declaring());
+      openModel();
+      act(() => given!.onDeclaredPartsView?.({ hide: [], unmatched: [] }));
+
+      expect(screen.getByTestId('trip-tracking-declared-only')).toBeDisabled();
+    });
   });
 
   /**

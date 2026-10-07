@@ -25485,6 +25485,7 @@ export interface components {
             /** Format: date-time */
             recordedAt: string;
             corrected: boolean;
+            outsideDeclaredParts: boolean;
             depthPlacement?: null | components["schemas"]["TrackingDepthPlacementOutcome"];
         };
         TrackingEventEditRequest: {
@@ -25532,6 +25533,7 @@ export interface components {
             onRoster: boolean;
             name: null | string;
             quiet: boolean;
+            outsideDeclaredParts: boolean;
         };
         TrackingParticipantLabelDto: {
             /** Format: uuid */

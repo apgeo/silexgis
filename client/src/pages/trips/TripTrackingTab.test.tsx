@@ -178,6 +178,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         onRoster: true,
         name: null,
         quiet: false,
+        outsideDeclaredParts: false,
       },
       {
         caverId: BOGDAN,
@@ -195,6 +196,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         onRoster: true,
         name: null,
         quiet: false,
+        outsideDeclaredParts: false,
       },
     ],
     ...overrides,
@@ -293,6 +295,7 @@ describe('TripTrackingTab', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       }),
@@ -336,6 +339,7 @@ describe('TripTrackingTab', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: CARMEN,
@@ -353,6 +357,7 @@ describe('TripTrackingTab', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       }),
@@ -395,6 +400,7 @@ describe('TripTrackingTab', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: BOGDAN,
@@ -414,6 +420,7 @@ describe('TripTrackingTab', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       }),
@@ -873,6 +880,7 @@ describe('TripTrackingTab', () => {
               onRoster: true,
               name: null,
               quiet: false,
+              outsideDeclaredParts: false,
             },
           ],
         }),
@@ -1397,6 +1405,7 @@ describe('TripTrackingTab', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: BOGDAN,
@@ -1414,6 +1423,7 @@ describe('TripTrackingTab', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             // Nobody has said a single word about her. This is the row the whole change is for.
@@ -1432,6 +1442,7 @@ describe('TripTrackingTab', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       });
@@ -1564,6 +1575,7 @@ describe('TripTrackingTab', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: BOGDAN,
@@ -1583,6 +1595,7 @@ describe('TripTrackingTab', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: CARMEN,
@@ -1600,6 +1613,7 @@ describe('TripTrackingTab', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       });
@@ -1827,6 +1841,7 @@ describe('TripTrackingTab', () => {
               onRoster: true,
               name: null,
               quiet: false,
+              outsideDeclaredParts: false,
             },
           ],
         }),
@@ -1863,6 +1878,7 @@ describe('TripTrackingTab', () => {
               onRoster: true,
               name: null,
               quiet: false,
+              outsideDeclaredParts: false,
             },
             {
               caverId: BOGDAN,
@@ -1880,6 +1896,7 @@ describe('TripTrackingTab', () => {
               onRoster: true,
               name: null,
               quiet: false,
+              outsideDeclaredParts: false,
             },
           ],
         }),
@@ -2008,6 +2025,7 @@ describe('TripTrackingTab', () => {
               onRoster: true,
               name: null,
               quiet: false,
+              outsideDeclaredParts: false,
             },
           ],
         }),
@@ -2312,6 +2330,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       }),
@@ -2555,6 +2574,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: BOGDAN,
@@ -2574,6 +2594,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       });
@@ -2626,6 +2647,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               onRoster: true,
               name: null,
               quiet: false,
+              outsideDeclaredParts: false,
             },
           ],
         }),
@@ -2674,6 +2696,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
           {
             caverId: BOGDAN,
@@ -2691,6 +2714,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             onRoster: true,
             name: null,
             quiet: false,
+            outsideDeclaredParts: false,
           },
         ],
       });
@@ -2777,6 +2801,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               onRoster: true,
               name: null,
               quiet: false,
+              outsideDeclaredParts: false,
             },
           ],
         }),
@@ -2851,6 +2876,7 @@ describe('TripTrackingTab, reaching the whole log', () => {
         note: `word ${number}`,
         recordedAt: new Date(Date.UTC(2026, 8, 12, 20, 0) - number * 60_000).toISOString(),
         corrected: false,
+        outsideDeclaredParts: false,
       };
     });
   }
@@ -3068,7 +3094,78 @@ describe('TripTrackingTab, reaching the whole log', () => {
       expect(screen.queryByTestId('trip-tracking-event-corrected-ev-1')).toBeNull();
       expect(screen.queryByTestId('trip-tracking-event-corrected-ev-3')).toBeNull();
     });
+
+    it(`marks a report made outside the declared parts, beside its place and nowhere else (${layout})`, () => {
+      narrow = layout === 'stacked';
+      const rows = logOf(3);
+      // The second names a station the read says is outside what the watch declared. The third
+      // carries the mark with no place beside it — which the server never sends, and which must
+      // draw nothing if it ever did: the word may only stand next to a place that is on screen.
+      Object.assign(rows[1], { kind: 'atStation', stationName: 'p.side.4', outsideDeclaredParts: true });
+      Object.assign(rows[2], { kind: 'atStation', outsideDeclaredParts: true });
+      serve(rows);
+      show();
+
+      expect(screen.getByTestId('trip-tracking-event-outside-declared-ev-2')).toHaveTextContent(
+        'Outside the declared parts',
+      );
+      expect(screen.queryByTestId('trip-tracking-event-outside-declared-ev-1')).toBeNull();
+      expect(screen.queryByTestId('trip-tracking-event-outside-declared-ev-3')).toBeNull();
+    });
   }
+});
+
+describe('TripTrackingTab, somebody reported outside the declared parts', () => {
+  afterEach(() => {
+    narrow = false;
+  });
+
+  for (const layout of ['columns', 'stacked'] as const) {
+    it(`marks the person the read marks, beside the place it is about (${layout})`, () => {
+      narrow = layout === 'stacked';
+      const [ana, bogdan] = state().participants;
+      trackingQuery.mockReturnValue({
+        data: state({
+          depthFilter: ['p.g'],
+          participants: [
+            { ...ana, stationName: 'p.side.4', depthM: null, outsideDeclaredParts: true },
+            // No place is shown for him, so nothing is said about one — whatever the read carries.
+            {
+              ...bogdan,
+              stationName: null,
+              depthM: null,
+              positionRecordedAt: null,
+              outsideDeclaredParts: true,
+            },
+          ],
+        }),
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show();
+
+      expect(screen.getByTestId(`trip-tracking-outside-declared-${ANA}`)).toHaveTextContent(
+        'Outside the declared parts',
+      );
+      expect(screen.queryByTestId(`trip-tracking-outside-declared-${BOGDAN}`)).toBeNull();
+    });
+  }
+
+  it('marks nobody the read does not mark, whatever is declared', () => {
+    trackingQuery.mockReturnValue({
+      data: state({ depthFilter: ['somewhere.else'] }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    show();
+
+    // The party is on screen; the comparison is the server's and nothing here repeats it.
+    expect(screen.getByTestId('trip-tracking-participants')).toBeTruthy();
+    expect(screen.queryByTestId(`trip-tracking-outside-declared-${ANA}`)).toBeNull();
+    expect(screen.queryByTestId(`trip-tracking-outside-declared-${BOGDAN}`)).toBeNull();
+  });
 });
 
 /**
