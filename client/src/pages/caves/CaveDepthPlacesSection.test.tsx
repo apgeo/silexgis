@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 
 const write = vi.fn();
 const remove = vi.fn();
@@ -249,6 +250,33 @@ describe('CaveDepthPlacesSection', () => {
 
     expect(await screen.findByText(/could not be withdrawn|nu a putut fi retrasă/)).toBeInTheDocument();
     expect(screen.queryByText(/That could not be saved|Nu s-a putut salva/)).toBeNull();
+  });
+
+  it('says why a station the survey gives no name cannot be declared, and only then', async () => {
+    // Two refusals of one save, side by side. The first has something to act on — choose a
+    // station that has a name — and "could not be saved" would hide it; the second is any other
+    // failure, which must not borrow the first one's explanation.
+    const declare = async (station: string) => {
+      fireEvent.click(screen.getByTestId('cave-depth-place-add'));
+      fireEvent.change(screen.getByTestId('cave-depth-place-depth'), { target: { value: '110' } });
+      fireEvent.change(screen.getByTestId('cave-depth-place-station'), { target: { value: station } });
+      fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+    };
+    render(
+      <App>
+        <CaveDepthPlacesSection caveId="cave-1" canEdit />
+      </App>,
+    );
+
+    write.mockRejectedValueOnce(new ApiError(400, 'cave_depth_place.station_nameless', 'server wording'));
+    await declare('#42');
+    expect(await screen.findByText(/has no name in the survey file/)).toBeInTheDocument();
+    expect(screen.queryByText('That could not be saved.')).toBeNull();
+    expect(screen.queryByText('server wording')).toBeNull();
+
+    write.mockRejectedValueOnce(new ApiError(500, 'something.nobody.wrote'));
+    fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+    expect(await screen.findByText('That could not be saved.')).toBeInTheDocument();
   });
 
   it('offers no controls at all without write access', () => {

@@ -157,6 +157,22 @@ describe('TrackingReportDialog', () => {
     );
   });
 
+  /**
+   * A pressed station the survey file gives no name, on a survey read before such stations took
+   * the drawing's label, is refused for a reason no retyping cures. The refusal says to read the
+   * survey again, and the station stays a statement — a field would invite a correction that
+   * cannot exist. The unknown-station case above is the other half: there the field appears.
+   */
+  it('tells the reader to read the survey again, and offers no field to retype the station in', async () => {
+    recordEvents.mockRejectedValueOnce(new ApiError(409, 'tracking.station_reading_outdated'));
+    show();
+    await accept();
+
+    expect(await screen.findByText(/Read the survey again/)).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('trip-tracking-dialog-station')).toBeNull();
+  });
+
   /** And once it is a field it carries the card's own rule, so an emptied one is refused. */
   it('refuses an emptied correction rather than sending a report about no station', async () => {
     recordEvents.mockRejectedValueOnce(new ApiError(400, 'tracking.station_unknown'));

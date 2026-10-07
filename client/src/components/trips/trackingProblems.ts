@@ -41,6 +41,10 @@ export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'tracking.model_other_cave': 'trips.tracking.problems.modelOtherCave',
   'tracking.reference_unknown': 'trips.tracking.problems.referenceUnknown',
   'tracking.station_unknown': 'trips.tracking.problems.stationUnknown',
+  // A pressed station the survey file gives no name, on a survey whose stored reading still holds
+  // it under a spelling the drawing does not use. Not the refusal above: that one is answered by
+  // choosing another station, this one by reading the survey again, and nothing typed would help.
+  'tracking.station_reading_outdated': 'trips.tracking.problems.stationReadingOutdated',
   'tracking.no_station_at_depth': 'trips.tracking.problems.noStationAtDepth',
   'tracking.caver_not_participant': 'trips.tracking.problems.caverNotParticipant',
   'tracking.recorded_in_future': 'trips.tracking.problems.recordedInFuture',

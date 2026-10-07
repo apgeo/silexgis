@@ -15,6 +15,7 @@ import {
   Typography,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { ApiError } from '../../api/client.ts';
 import {
   surveyModelCanPlaceACaver,
   useCaveDepthPlaces,
@@ -114,8 +115,15 @@ export default function CaveDepthPlacesSection({
         stationName: values.stationName.trim(),
         placeLabel: values.placeLabel.trim() || null,
       });
-    } catch {
-      message.error(t('caves.depthPlaces.saveFailed'));
+    } catch (error) {
+      // The one refusal with something to act on: the station named is known to the survey only
+      // by a number that the next export hands to another station. Everything else is a save
+      // that did not happen, and says so.
+      message.error(
+        error instanceof ApiError && error.code === 'cave_depth_place.station_nameless'
+          ? t('caves.depthPlaces.stationNameless')
+          : t('caves.depthPlaces.saveFailed'),
+      );
       return;
     }
 
