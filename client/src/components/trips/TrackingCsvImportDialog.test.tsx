@@ -68,9 +68,11 @@ const PREVIEW: Preview = {
       teamId: null,
       kind: 'atDepth',
       stationName: 'upper.2',
+      placeLabel: null,
       depthM: 96,
       note: null,
       replaces: false,
+      before: null,
       diagnostics: [],
     },
     {
@@ -83,9 +85,23 @@ const PREVIEW: Preview = {
       teamId: null,
       kind: 'atDepth',
       stationName: 'upper.2',
+      placeLabel: null,
       depthM: 96,
       note: null,
       replaces: true,
+      before: {
+        id: 'event-1',
+        caverId: 'caver-2',
+        teamId: null,
+        kind: 'atStation',
+        surveyModelId: 'model-1',
+        stationName: 'deep.3',
+        depthEnteredM: null,
+        note: 'la baza puitului',
+        recordedAt: '2026-09-12T10:00:00Z',
+        corrected: false,
+        depthPlacement: null,
+      },
       diagnostics: [],
     },
   ],
@@ -93,6 +109,7 @@ const PREVIEW: Preview = {
   refused: [],
   timeZone: null,
   day: null,
+  planDigest: 'a'.repeat(64),
 };
 
 /**
@@ -113,7 +130,13 @@ beforeEach(() => {
   narrow = false;
   save.mockReset().mockResolvedValue(undefined);
   look.mockReset().mockResolvedValue(PREVIEW);
-  send.mockReset().mockResolvedValue({ created: 1, updated: 1, skipped: 0, refused: [] });
+  send.mockReset().mockResolvedValue({
+    created: 1,
+    updated: 1,
+    unchanged: 0,
+    skipped: 0,
+    refused: [],
+  });
 });
 afterEach(cleanup);
 
@@ -135,10 +158,21 @@ afterEach(() => {
   expect(deprecations).toEqual([]);
 });
 
+const TEAMS = [
+  { id: 'team-1', title: 'Echipa 1' },
+  { id: 'team-2', title: 'Echipa 2' },
+];
+
 function open(tripDay: string | null = '2026-09-12') {
   render(
     <App>
-      <TrackingCsvImportDialog tripLogId="trip-1" tripDay={tripDay} open onClose={() => {}} />
+      <TrackingCsvImportDialog
+        tripLogId="trip-1"
+        tripDay={tripDay}
+        teams={TEAMS}
+        open
+        onClose={() => {}}
+      />
     </App>,
   );
 }
@@ -232,6 +266,94 @@ describe('TrackingCsvImportDialog', () => {
     expect(send.mock.calls[0][0].replaceExisting).toBe(true);
   });
 
+  /**
+   * The write is a second reading of the sheet, made later and against the trip as it is by then.
+   *
+   * What ties it to the table the reviewer ticked is the name the first reading gave for what it
+   * would write. So the name goes back with every import; and when the server answers that the
+   * trip moved in between, nothing was written, and the screen has to show the new reading and say
+   * why it is looking at one — a table that silently reshuffled under a pressed button would read
+   * as the import having happened.
+   */
+  describe('an import means the reading it was ticked on', () => {
+    it('sends back the name the preview gave for what it would write', async () => {
+      open();
+      await drop('x');
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
+      await waitFor(() => expect(screen.getByTestId('trip-tracking-csv-commit')).toBeEnabled());
+
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-commit'));
+
+      await waitFor(() => expect(send).toHaveBeenCalledOnce());
+      expect(send.mock.calls[0][0].planDigest).toBe(PREVIEW.planDigest);
+    });
+
+    it('reads the sheet again and says why when the trip changed under the preview', async () => {
+      const onClose = vi.fn();
+      render(
+        <App>
+          <TrackingCsvImportDialog tripLogId="trip-1" open onClose={onClose} />
+        </App>,
+      );
+      await drop('x');
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
+      await waitFor(() => expect(screen.getByTestId('trip-tracking-csv-replace')).toBeInTheDocument());
+      // Not there for a reading the reviewer asked for themselves.
+      expect(screen.queryByTestId('trip-tracking-csv-plan-changed')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-replace'));
+
+      send.mockRejectedValueOnce(new ApiError(409, 'tracking_csv.plan_changed'));
+      look.mockResolvedValue({ ...PREVIEW, planDigest: 'b'.repeat(64) });
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-commit'));
+
+      const notice = await screen.findByTestId('trip-tracking-csv-plan-changed');
+      expect(notice).toHaveTextContent('Nothing was imported.');
+      expect(notice).toHaveTextContent('The sheet has been read again');
+      expect(look).toHaveBeenCalledTimes(2);
+      expect(onClose).not.toHaveBeenCalled();
+      // The leave to overwrite was given for the rows of the first reading.
+      expect(screen.getByTestId('trip-tracking-csv-replace')).not.toBeChecked();
+
+      // Importing now is importing the second reading, under its own name.
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-commit'));
+      await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+      expect(send.mock.calls[1][0].planDigest).toBe('b'.repeat(64));
+      expect(send.mock.calls[1][0].replaceExisting).toBe(false);
+      await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    });
+
+    it('drops the notice once the reviewer reads the sheet themselves', async () => {
+      open();
+      await drop('x');
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
+      await waitFor(() => expect(screen.getByTestId('trip-tracking-csv-commit')).toBeEnabled());
+      send.mockRejectedValueOnce(new ApiError(409, 'tracking_csv.plan_changed'));
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-commit'));
+      await screen.findByTestId('trip-tracking-csv-plan-changed');
+
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
+
+      await waitFor(() => expect(look).toHaveBeenCalledTimes(3));
+      await waitFor(() =>
+        expect(screen.queryByTestId('trip-tracking-csv-plan-changed')).not.toBeInTheDocument(),
+      );
+    });
+
+    it('says how many reports already were as the sheet says', async () => {
+      send.mockResolvedValue({ created: 0, updated: 1, unchanged: 5, skipped: 0, refused: [] });
+      open();
+      await drop('x');
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
+      await waitFor(() => expect(screen.getByTestId('trip-tracking-csv-commit')).toBeEnabled());
+
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-commit'));
+
+      expect(
+        await screen.findByText('0 recorded, 1 corrected, 5 already as the sheet says, 0 left out.'),
+      ).toBeInTheDocument();
+    });
+  });
+
   it('disarms Import when a setting changes after the read, until the sheet is read again', async () => {
     // A preview is a page of exactly what committing would do under the settings it was read with.
     // The commit reads the sheet again under the current ones — so a word added for "went in" after
@@ -300,6 +422,147 @@ describe('TrackingCsvImportDialog', () => {
     fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
     await waitFor(() => expect(screen.getByTestId('trip-tracking-csv-replace')).toBeInTheDocument());
     expect(screen.getByTestId('trip-tracking-csv-replace')).not.toBeChecked();
+  });
+
+  it('says a sheet is a desk task before any file is chosen', () => {
+    open();
+
+    expect(screen.getByTestId('trip-tracking-csv-desk-task')).toHaveTextContent(/desk task/);
+    expect(screen.getByTestId('trip-tracking-csv-desk-task')).toHaveTextContent(/report form/);
+  });
+
+  it('prints a place the sheet named with the station it became', async () => {
+    look.mockResolvedValue({
+      ...PREVIEW,
+      replaces: 0,
+      rows: [{ ...PREVIEW.rows[0], placeLabel: 'Meandru', stationName: 'p8.98' }],
+    });
+    open();
+    await drop('x');
+    await readIt();
+
+    const rows = within(screen.getByTestId('trip-tracking-csv-rows'));
+    expect(rows.getByText('Meandru → p8.98')).toBeInTheDocument();
+  });
+
+  it('shows what a row would replace beside what it would leave, and nothing of the kind on a new row', async () => {
+    open();
+    await drop('x');
+    await readIt();
+
+    // The report as the log holds it, and the report as the sheet would leave it, said alike.
+    expect(screen.getByTestId('trip-tracking-csv-row-before-3')).toHaveTextContent(
+      'In the log now: At a station · deep.3 · “la baza puitului”',
+    );
+    // This sheet has no note column, so the import leaves the note typed by hand standing — and
+    // the line says it stands, where a bare place would read as the note erased.
+    expect(screen.getByTestId('trip-tracking-csv-row-after-3')).toHaveTextContent(
+      'After the import: At a depth · upper.2, 96 m · “la baza puitului”',
+    );
+    // A row that adds a report has no before, so it is shown as it always was.
+    expect(screen.queryByTestId('trip-tracking-csv-row-change-2')).not.toBeInTheDocument();
+  });
+
+  it('shows a note erased where the sheet has a note column and left the cell empty', async () => {
+    // The twin of the case above: the same row and the same stored report, from a sheet that
+    // carries notes. An empty cell under that column says the report has none, and that is written.
+    look.mockResolvedValue({
+      ...PREVIEW,
+      header: [...PREVIEW.header, 'Nota'],
+      resolvedColumns: { ...PREVIEW.resolvedColumns, Note: 'Nota' },
+    });
+    open();
+    await drop('x');
+    await readIt();
+
+    expect(screen.getByTestId('trip-tracking-csv-row-before-3')).toHaveTextContent(
+      'In the log now: At a station · deep.3 · “la baza puitului”',
+    );
+    const after = screen.getByTestId('trip-tracking-csv-row-after-3');
+    expect(after).toHaveTextContent('After the import: At a depth · upper.2, 96 m');
+    expect(after).not.toHaveTextContent('la baza puitului');
+  });
+
+  it('counts a details column as carrying the note', async () => {
+    look.mockResolvedValue({
+      ...PREVIEW,
+      resolvedColumns: { ...PREVIEW.resolvedColumns, Details: 'Detalii' },
+      rows: [PREVIEW.rows[0], { ...PREVIEW.rows[1], note: 'apa mare' }],
+    });
+    open();
+    await drop('x');
+    await readIt();
+
+    expect(screen.getByTestId('trip-tracking-csv-row-after-3')).toHaveTextContent(
+      'After the import: At a depth · upper.2, 96 m · “apa mare”',
+    );
+  });
+
+  it('names the team a replaced report has and the team the import would leave it with', async () => {
+    const stored = { ...PREVIEW.rows[1], before: { ...PREVIEW.rows[1].before!, teamId: 'team-1' } };
+
+    // No team column: the report keeps its team, and both lines name it.
+    look.mockResolvedValue({ ...PREVIEW, rows: [PREVIEW.rows[0], stored] });
+    open();
+    await drop('x');
+    await readIt();
+    expect(screen.getByTestId('trip-tracking-csv-row-before-3')).toHaveTextContent(
+      'In the log now: At a station · deep.3 · Echipa 1 · “la baza puitului”',
+    );
+    expect(screen.getByTestId('trip-tracking-csv-row-after-3')).toHaveTextContent(
+      'After the import: At a depth · upper.2, 96 m · Echipa 1 · “la baza puitului”',
+    );
+
+    // A team column with the cell empty or not understood: the team is taken away, and said so.
+    const withTeams = { ...PREVIEW.resolvedColumns, Team: 'Echipa' };
+    look.mockResolvedValue({ ...PREVIEW, resolvedColumns: withTeams, rows: [PREVIEW.rows[0], stored] });
+    await drop('y');
+    await readIt(2);
+    expect(screen.getByTestId('trip-tracking-csv-row-after-3')).toHaveTextContent(
+      'After the import: At a depth · upper.2, 96 m · No team · “la baza puitului”',
+    );
+
+    // And one naming another team moves the report to it.
+    look.mockResolvedValue({
+      ...PREVIEW,
+      resolvedColumns: withTeams,
+      rows: [PREVIEW.rows[0], { ...stored, teamId: 'team-2' }],
+    });
+    await drop('z');
+    await readIt(3);
+    expect(screen.getByTestId('trip-tracking-csv-row-before-3')).toHaveTextContent('Echipa 1');
+    expect(screen.getByTestId('trip-tracking-csv-row-after-3')).toHaveTextContent(
+      'After the import: At a depth · upper.2, 96 m · Echipa 2 · “la baza puitului”',
+    );
+  });
+
+  it('says a replaced report\'s place is not shown rather than leaving it blank', async () => {
+    // What the server sends somebody who may write the log and may not be told where the cave is:
+    // the report, its kind and its note, with the station, the depth and the survey taken out.
+    const withheld = {
+      ...PREVIEW.rows[1].before!,
+      surveyModelId: null,
+      stationName: null,
+      depthEnteredM: null,
+    };
+    look.mockResolvedValue({
+      ...PREVIEW,
+      creates: 0,
+      // A sheet with a note column and the cell left empty, so the note is erased and the line
+      // after the import is the standing alone.
+      resolvedColumns: { ...PREVIEW.resolvedColumns, Note: 'Nota' },
+      rows: [{ ...PREVIEW.rows[1], kind: 'exited', stationName: null, depthM: null, before: withheld }],
+    });
+    open();
+    await drop('x');
+    await readIt();
+
+    const before = screen.getByTestId('trip-tracking-csv-row-before-3');
+    expect(before).toHaveTextContent('At a station · Not shown to you · “la baza puitului”');
+    expect(before).not.toHaveTextContent('deep.3');
+    expect(screen.getByTestId('trip-tracking-csv-row-after-3')).toHaveTextContent(
+      /^After the import: Came out$/,
+    );
   });
 
   it('offers nothing to overwrite when the sheet would change nothing', async () => {

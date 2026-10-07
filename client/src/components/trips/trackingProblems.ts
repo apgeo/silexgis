@@ -25,6 +25,12 @@ export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   // A sheet read in a zone this server does not carry. Reached by a browser whose zone list is
   // newer or older than the server's; the way out is another name for the same clock.
   'tracking_csv.zone_unknown': 'trips.tracking.problems.csvZoneUnknown',
+  // A sheet committed after the trip changed under its preview: the server read it again for the
+  // write and would no longer have written what the reviewer was shown, so it wrote nothing.
+  'tracking_csv.plan_changed': 'trips.tracking.problems.csvPlanChanged',
+  // A sheet with no readable row at all for a reason about the file — times of day and no day to
+  // put them on, most often. The preview shows the same thing as a finding above the table.
+  'tracking_csv.sheet_unreadable': 'trips.tracking.problems.csvSheetUnreadable',
   'tracking.state_invalid': 'trips.tracking.problems.stateInvalid',
   'tracking.model_missing': 'trips.tracking.problems.modelMissing',
   'tracking.model_unavailable': 'trips.tracking.problems.modelUnavailable',

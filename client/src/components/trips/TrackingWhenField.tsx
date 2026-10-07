@@ -96,6 +96,19 @@ interface Props {
    * neither, which is a defect this application has met once already and named on the element.
    */
   idPrefix: string;
+  /**
+   * Whether the moment has to be named, because "now" cannot be the answer.
+   *
+   * <b>Set where the watch is over.</b> Everything this field offers by default measures back from
+   * the instant of the press, and leaving it empty hands the question to the server's clock — all
+   * of which is right while a party is underground and all of which is wrong once it is out. A
+   * call forgotten on Saturday and written up on Monday would land on Monday: the replay stretches
+   * two days past the trip, and an "entered" typed that way reads as somebody underground on a
+   * trip that finished. So here the quick answers are not drawn at all — each of them would be a
+   * wrong moment one press away — and an empty field is refused on this side, with a sentence
+   * saying what is wanted, rather than stamped.
+   */
+  required?: boolean;
 }
 
 /**
@@ -120,7 +133,13 @@ interface Props {
  * question and nothing else, and a row of five at the width of a phone is a row that has to be
  * allowed to wrap under the control it answers for.
  */
-export default function TrackingWhenField({ size, coarse, idPrefix, confined = false }: Props) {
+export default function TrackingWhenField({
+  size,
+  coarse,
+  idPrefix,
+  confined = false,
+  required = false,
+}: Props) {
   const { t } = useTranslation();
   // Read from the surrounding form rather than passed in, so the two cards that draw this cannot
   // hand it a form other than the one the field is registered on.
@@ -141,22 +160,27 @@ export default function TrackingWhenField({ size, coarse, idPrefix, confined = f
     <Form.Item
       name="recordedAt"
       label={t('trips.tracking.reportAt')}
+      rules={required ? [{ required: true, message: t('trips.tracking.reportWhenRequired') }] : []}
       extra={
-        <>
-          <Flex gap="small" wrap className="tracking-report-when-quick">
-            {quick(0, t('trips.tracking.reportAtNow'), `${idPrefix}-when-now`)}
-            {OFFSETS_MINUTES.map((minutes) =>
-              quick(
-                minutes,
-                minutes < 60
-                  ? t('trips.tracking.reportAtMinutesAgo', { minutes })
-                  : t('trips.tracking.reportAtHoursAgo', { hours: minutes / 60 }),
-                `${idPrefix}-when-${minutes}`,
-              ),
-            )}
-          </Flex>
-          {t('trips.tracking.reportAtHelp')}
-        </>
+        required ? (
+          t('trips.tracking.reportAtHelpAfterClose')
+        ) : (
+          <>
+            <Flex gap="small" wrap className="tracking-report-when-quick">
+              {quick(0, t('trips.tracking.reportAtNow'), `${idPrefix}-when-now`)}
+              {OFFSETS_MINUTES.map((minutes) =>
+                quick(
+                  minutes,
+                  minutes < 60
+                    ? t('trips.tracking.reportAtMinutesAgo', { minutes })
+                    : t('trips.tracking.reportAtHoursAgo', { hours: minutes / 60 }),
+                  `${idPrefix}-when-${minutes}`,
+                ),
+              )}
+            </Flex>
+            {t('trips.tracking.reportAtHelp')}
+          </>
+        )
       }
     >
       {/* <b>Named so the panel can be made to fit a phone.</b> It is drawn in a portal at the end of
@@ -168,6 +192,9 @@ export default function TrackingWhenField({ size, coarse, idPrefix, confined = f
           that cannot go back a month is a picker that cannot do the one job it is here for. */}
       <DatePicker
         showTime
+        // The picker's own footer has a "Now" of its own, and on a finished trip that is the same
+        // wrong answer as the button that is not drawn above.
+        showNow={!required}
         style={{ width: '100%' }}
         classNames={{
           popup: {

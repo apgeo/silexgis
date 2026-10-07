@@ -26,12 +26,20 @@ const CAVERS = [
   { caverId: 'caver-2', name: 'Bogdan' },
 ];
 
-function show(props: { station?: string; defaultCaverIds?: string[]; teams?: { id: string; title: string }[] } = {}) {
+function show(
+  props: {
+    station?: string;
+    defaultCaverIds?: string[];
+    teams?: { id: string; title: string }[];
+    state?: 'off' | 'armed' | 'closed';
+  } = {},
+) {
   return render(
     <App>
       <TrackingReportDialog
         open
         tripLogId="trip-1"
+        state={props.state ?? 'armed'}
         station={props.station ?? 'p.g.42'}
         cavers={CAVERS}
         teams={props.teams ?? []}
@@ -339,5 +347,60 @@ describe('TrackingReportDialog', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/**
+ * What the dialog asks about "when", in each state of the watch — the card's rule, held here too
+ * because a pressed station is a second way to the same report and must not be the way round it.
+ */
+describe('TrackingReportDialog, the moment in each state of the watch', () => {
+  it('draws nothing for a watch that was never started', () => {
+    show({ state: 'off' });
+
+    expect(screen.queryByTestId('trip-tracking-dialog-kind')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Record for/ })).toBeNull();
+  });
+
+  it('leaves the moment optional and the quick answers on while the watch is running', async () => {
+    show({ state: 'armed' });
+
+    expect(screen.queryByTestId('trip-tracking-dialog-record-after')).toBeNull();
+    expect(screen.getByTestId('trip-tracking-dialog-when-now')).toBeInTheDocument();
+
+    await accept();
+    expect(recordEvents).toHaveBeenCalledTimes(1);
+    expect(recordEvents.mock.calls[0][0]).toMatchObject({ kind: 'atStation', recordedAt: null });
+  });
+
+  it('asks a closed watch for the moment, with no "now" to answer with, and sends nothing without it', async () => {
+    show({ state: 'closed' });
+
+    expect(screen.getByTestId('trip-tracking-dialog-record-after')).toHaveTextContent(
+      'being written up afterwards',
+    );
+    expect(screen.queryByTestId('trip-tracking-dialog-when-now')).toBeNull();
+    expect(screen.queryByTestId('trip-tracking-dialog-when-30')).toBeNull();
+
+    await accept();
+    expect(recordEvents).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Say when this was said/)).toBeInTheDocument();
+  });
+
+  it('sends a closed watch\u2019s report at the moment that was named', async () => {
+    show({ state: 'closed' });
+    const field = screen.getByTestId('trip-tracking-dialog-recorded-at');
+    fireEvent.mouseDown(field);
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: '2026-09-12 12:40:00' } });
+    fireEvent.keyDown(field, { key: 'Enter', code: 'Enter' });
+
+    await accept();
+
+    await waitFor(() => expect(recordEvents).toHaveBeenCalledTimes(1));
+    expect((recordEvents.mock.calls[0][0] as { recordedAt: string }).recordedAt).toBe(
+      new Date(2026, 8, 12, 12, 40, 0).toISOString(),
+    );
   });
 });

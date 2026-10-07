@@ -37,12 +37,12 @@ vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: () => coar
 
 const { default: TrackingReportForm } = await import('./TrackingReportForm.tsx');
 
-function show() {
+function show(state: 'off' | 'armed' | 'closed' = 'armed') {
   return render(
     <App>
       <TrackingReportForm
         tripLogId="trip-1"
-        writable
+        state={state}
         caverIds={['caver-1']}
         teams={[]}
         onRecorded={vi.fn()}
@@ -161,7 +161,7 @@ describe('TrackingReportForm, reporting a declared place', () => {
       <App>
         <TrackingReportForm
           tripLogId="trip-1"
-          writable={false}
+          state="off"
           caverIds={['caver-1']}
           teams={[]}
           onRecorded={vi.fn()}
@@ -176,7 +176,7 @@ describe('TrackingReportForm, reporting a declared place', () => {
       <App>
         <TrackingReportForm
           tripLogId="trip-1"
-          writable
+          state="armed"
           caverIds={['caver-1']}
           teams={[]}
           onRecorded={vi.fn()}
@@ -722,5 +722,116 @@ describe('TrackingReportForm, a depth the survey could not be asked about', () =
 
     await waitFor(() => expect(depthReading).toHaveBeenCalledWith(120));
     expect(screen.queryByTestId('trip-tracking-depth-checking')).toBeNull();
+  });
+});
+
+/**
+ * What the card asks about "when", in each of the three states a watch can be in.
+ *
+ * <b>The closed one is the reason this is asked of the state rather than of a yes or no.</b> A
+ * finished trip is written up afterwards, and while the card took only "may this log be written"
+ * it went on offering "now" there and stamping an empty moment with the server's clock: a call
+ * forgotten on Saturday and typed on Monday landed on Monday, the replay ran two days past the
+ * trip, and an "entered" typed that way read as somebody underground on a trip that was over.
+ * Each case below is stated beside the one it differs from.
+ */
+describe('TrackingReportForm, the moment in each state of the watch', () => {
+  /** Types a moment into "when it was said" and accepts it, the way the keyboard does. */
+  function nameTheMoment(text: string) {
+    const field = screen.getByTestId('trip-tracking-recorded-at');
+    fireEvent.mouseDown(field);
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: text } });
+    fireEvent.keyDown(field, { key: 'Enter', code: 'Enter' });
+  }
+
+  it('offers no card on a watch that was never started', () => {
+    show('off');
+
+    expect(screen.getByTestId('trip-tracking-not-armed')).toBeInTheDocument();
+    expect(screen.queryByTestId('trip-tracking-record')).toBeNull();
+    expect(screen.queryByTestId('trip-tracking-record-after')).toBeNull();
+  });
+
+  it('leaves the moment optional and the quick answers on while the watch is running', async () => {
+    show('armed');
+
+    expect(screen.queryByTestId('trip-tracking-record-after')).toBeNull();
+    expect(screen.getByTestId('trip-tracking-when-now')).toBeInTheDocument();
+    expect(screen.getByTestId('trip-tracking-when-15')).toBeInTheDocument();
+
+    // An empty moment is the server's clock, which is right while it is happening — for a
+    // report and for marking somebody out alike.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('trip-tracking-record'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('trip-tracking-mark-out'));
+    });
+    expect(recordEvents).toHaveBeenCalledTimes(2);
+    expect(recordEvents.mock.calls[0][0]).toMatchObject({ kind: 'entered', recordedAt: null });
+    expect(recordEvents.mock.calls[1][0]).toMatchObject({ kind: 'exited', recordedAt: null });
+  });
+
+  it('says a closed watch is being written up afterwards, and offers no "now" to answer with', () => {
+    show('closed');
+
+    expect(screen.getByTestId('trip-tracking-record-after')).toHaveTextContent(
+      'being written up afterwards',
+    );
+    // The card is still there — a closed log is written — and what is gone is every answer that
+    // measures back from this minute.
+    expect(screen.getByTestId('trip-tracking-record')).toBeInTheDocument();
+    expect(screen.getByTestId('trip-tracking-recorded-at')).toBeInTheDocument();
+    expect(screen.queryByTestId('trip-tracking-when-now')).toBeNull();
+    for (const minutes of [5, 15, 30, 60, 120]) {
+      expect(screen.queryByTestId(`trip-tracking-when-${minutes}`)).toBeNull();
+    }
+  });
+
+  it('sends nothing from a closed watch until the moment has been named', async () => {
+    show('closed');
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('trip-tracking-record'));
+    });
+    expect(recordEvents).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Say when this was said/)).toBeInTheDocument();
+
+    // Marking out is the one control that never read the form, so it is held to the same rule
+    // by name rather than assumed to be.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('trip-tracking-mark-out'));
+    });
+    expect(recordEvents).not.toHaveBeenCalled();
+  });
+
+  it('marks somebody out of a closed watch at the moment that was named', async () => {
+    show('closed');
+    nameTheMoment('2026-09-12 16:30:00');
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('trip-tracking-mark-out'));
+    });
+
+    await waitFor(() => expect(recordEvents).toHaveBeenCalledTimes(1));
+    const body = recordEvents.mock.calls[0][0] as { kind: string; recordedAt: string | null };
+    expect(body.kind).toBe('exited');
+    // The instant typed, in the reader's own zone — whatever zone this suite runs in.
+    expect(body.recordedAt).toBe(new Date(2026, 8, 12, 16, 30, 0).toISOString());
+  });
+
+  it('records a report on a closed watch at the moment that was named', async () => {
+    show('closed');
+    nameTheMoment('2026-09-12 11:05:00');
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('trip-tracking-record'));
+    });
+
+    await waitFor(() => expect(recordEvents).toHaveBeenCalledTimes(1));
+    expect((recordEvents.mock.calls[0][0] as { recordedAt: string }).recordedAt).toBe(
+      new Date(2026, 8, 12, 11, 5, 0).toISOString(),
+    );
   });
 });

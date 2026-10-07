@@ -35,7 +35,7 @@ const pictureDialogProps = vi.fn();
 vi.mock('../../api/hooks.ts', async () => ({
   TRACKING_EVENT_KINDS: ['entered', 'atStation', 'atDepth', 'note', 'exited'],
   useTripTracking: () => trackingQuery(),
-  useTripTrackingEvents: () => eventsQuery(),
+  useTripTrackingEvents: (...asked: unknown[]) => eventsQuery(...asked),
   useRecordTrackingEvents: () => ({ mutateAsync: recordEvents, isPending: false }),
   useTrackingDepthReading: () => depthReading(),
   // Nothing declared, which is every cave until somebody declares something — so the place
@@ -115,9 +115,15 @@ vi.mock('../../components/trips/TrackingPicturesDialog.tsx', () => ({
  * and let a test drive it.
  */
 let answerUnplaced: ((stations: ReadonlySet<string>) => void) | undefined;
+/** The reports the panel was last handed — which have to stay the newest page of the whole log. */
+let panelEvents: readonly { id: string }[] | undefined;
 vi.mock('../../components/trips/TrackingModelPanel.tsx', () => ({
-  default: (props: { onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void }) => {
+  default: (props: {
+    onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
+    events?: readonly { id: string }[];
+  }) => {
     answerUnplaced = props.onUnplacedStationsChange;
+    panelEvents = props.events;
     return <div data-testid="trip-tracking-model-panel" />;
   },
 }));
@@ -243,6 +249,7 @@ beforeEach(() => {
   coarse = false;
   narrow = false;
   answerUnplaced = undefined;
+  panelEvents = undefined;
   setTracking.mockReset().mockResolvedValue(state());
   setLabel.mockReset().mockResolvedValue({ caverId: ANA, label: null });
 });
@@ -2738,4 +2745,252 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
       );
     });
   });
+});
+
+/**
+ * Reaching a report that is not among the newest twenty, which is where a wrong one usually is by
+ * the time anybody notices it.
+ *
+ * <b>The log is corrected from its rows, so a row that cannot be reached cannot be corrected.</b>
+ * The table used to show the twenty most recent reports and nothing else: a party of six reporting
+ * through a long day passes that before lunch, and the report read back wrongly at nine was then
+ * on no screen at all. What is held here is that every page can be walked to, that the log can be
+ * narrowed to the one person a correction is about — and that neither act changes what the rest of
+ * this tab reads, because the survey panel and the photographs card take their bearings from the
+ * newest page.
+ */
+describe('TripTrackingTab, reaching the whole log', () => {
+  /** A log of this many reports, newest first: Ana's on the odd numbers, Bogdan's on the even. */
+  function logOf(count: number) {
+    return Array.from({ length: count }, (_unused, index) => {
+      const number = index + 1;
+      return {
+        id: `ev-${number}`,
+        caverId: number % 2 === 1 ? ANA : BOGDAN,
+        teamId: null,
+        kind: 'note',
+        surveyModelId: null,
+        stationName: null,
+        depthEnteredM: null,
+        note: `word ${number}`,
+        recordedAt: new Date(Date.UTC(2026, 8, 12, 20, 0) - number * 60_000).toISOString(),
+        corrected: false,
+      };
+    });
+  }
+
+  /**
+   * Answers each read the way the server does: by the person and the page it was asked for. A read
+   * that is switched off answers nothing, so a table showing rows off one is caught.
+   */
+  function serve(rows: ReturnType<typeof logOf>) {
+    eventsQuery.mockImplementation(
+      (
+        _tripLogId: string,
+        params: { caverId?: string; page?: number; pageSize?: number } = {},
+        enabled = true,
+      ) => {
+        if (!enabled) {
+          return { data: undefined, isPending: true, error: null };
+        }
+        const page = params.page ?? 1;
+        const pageSize = params.pageSize ?? 50;
+        const matching = rows.filter((row) => !params.caverId || row.caverId === params.caverId);
+        return {
+          data: {
+            items: matching.slice((page - 1) * pageSize, page * pageSize),
+            page,
+            pageSize,
+            totalItems: matching.length,
+          },
+          isPending: false,
+          error: null,
+        };
+      },
+    );
+  }
+
+  const table = () => within(screen.getByTestId('trip-tracking-events'));
+  /** What the table's own read was last asked for — the second of the two reads. */
+  const lastAsked = () =>
+    eventsQuery.mock.calls
+      .filter(([, , enabled]) => enabled === true)
+      .map(([, params]) => params)
+      .at(-1);
+
+  async function narrowTo(name: string) {
+    const chooser = screen.getByTestId('trip-tracking-events-caver');
+    fireEvent.mouseDown(chooser.querySelector('.ant-select-selector') ?? chooser);
+    await act(async () => {
+      fireEvent.click(document.querySelector(`.ant-select-item-option[title="${name}"]`)!);
+    });
+  }
+
+  it('walks to an older page across, and leaves the newest page with everything else that reads it', () => {
+    serve(logOf(45));
+    show();
+
+    expect(table().getByText('word 1')).toBeTruthy();
+    expect(table().queryByText('word 21')).toBeNull();
+    // On the newest page the table has no read of its own: one request, not two.
+    expect(lastAsked()).toBeUndefined();
+
+    fireEvent.click(document.querySelector('.ant-pagination-item-2')!);
+
+    expect(lastAsked()).toEqual({ pageSize: 20, page: 2 });
+    expect(table().getByText('word 21')).toBeTruthy();
+    expect(table().queryByText('word 1')).toBeNull();
+    // The first read is still asked exactly as it was, and is still what the survey panel holds.
+    const firstReads = eventsQuery.mock.calls.filter(([, , enabled]) => enabled === undefined);
+    expect(firstReads.length).toBeGreaterThan(0);
+    expect(firstReads.every(([, params]) => JSON.stringify(params) === '{"pageSize":20}')).toBe(true);
+    expect(panelEvents?.[0]?.id).toBe('ev-1');
+    expect(panelEvents).toHaveLength(20);
+
+    fireEvent.click(document.querySelector('.ant-pagination-item-3')!);
+    expect(table().getByText('word 45')).toBeTruthy();
+    expect(table().getAllByText(/^word /)).toHaveLength(5);
+  });
+
+  it('walks back through the stacked log a page at a time, saying where it is', () => {
+    narrow = true;
+    serve(logOf(45));
+    show();
+
+    expect(screen.getByTestId('trip-tracking-events-shown')).toHaveTextContent(
+      'Reports shown: 1–20 of 45',
+    );
+    // Nowhere newer to go from the newest page.
+    expect(screen.queryByTestId('trip-tracking-events-newer')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-events-older'));
+    expect(table().getByText('word 21')).toBeTruthy();
+    expect(screen.getByTestId('trip-tracking-events-shown')).toHaveTextContent(
+      'Reports shown: 21–40 of 45',
+    );
+
+    fireEvent.click(screen.getByTestId('trip-tracking-events-older'));
+    expect(table().getByText('word 45')).toBeTruthy();
+    expect(screen.getByTestId('trip-tracking-events-shown')).toHaveTextContent(
+      'Reports shown: 41–45 of 45',
+    );
+    // And nowhere older from the oldest.
+    expect(screen.queryByTestId('trip-tracking-events-older')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-events-newer'));
+    expect(table().getByText('word 21')).toBeTruthy();
+  });
+
+  for (const layout of ['wide', 'stacked'] as const) {
+    it(`offers no way to older reports on a log that fits on one page (${layout})`, () => {
+      narrow = layout === 'stacked';
+      serve(logOf(20));
+      show();
+
+      expect(table().getByText('word 20')).toBeTruthy();
+      expect(screen.queryByTestId('trip-tracking-events-older')).toBeNull();
+      expect(screen.queryByTestId('trip-tracking-events-shown')).toBeNull();
+      expect(document.querySelector('.ant-pagination-item-2')).toBeNull();
+    });
+  }
+
+  it('narrows the log to one person, from that person’s newest report', async () => {
+    serve(logOf(45));
+    show();
+    fireEvent.click(document.querySelector('.ant-pagination-item-2')!);
+
+    await narrowTo('Bogdan Ilie');
+
+    // Back to the first page: page two of everybody is not page two of one person.
+    expect(lastAsked()).toEqual({ pageSize: 20, page: 1, caverId: BOGDAN });
+    expect(table().getByText('word 2')).toBeTruthy();
+    expect(table().queryByText('word 1')).toBeNull();
+    expect(table().queryByText('word 21')).toBeNull();
+    // Twenty-two of the forty-five are his, so there is a second page of them and no third.
+    expect(document.querySelector('.ant-pagination-item-2')).not.toBeNull();
+    expect(document.querySelector('.ant-pagination-item-3')).toBeNull();
+    // What the survey panel reads is still everybody's newest page.
+    expect(panelEvents?.[0]?.id).toBe('ev-1');
+  });
+
+  it('says a person has no reports rather than that the log is empty, and keeps the way back', async () => {
+    serve(logOf(45));
+    show();
+
+    await narrowTo('Carmen Radu');
+
+    expect(table().getByText('Nothing has been reported about this person.')).toBeTruthy();
+    expect(screen.queryByText('Nothing has been reported yet.')).toBeNull();
+    // The control that emptied the table is still there to un-empty it.
+    expect(screen.getByTestId('trip-tracking-events-caver')).toBeTruthy();
+  });
+
+  it('offers somebody with two jobs on the trip once', () => {
+    // The roster is a row per person per job: the leader who also surveys is two rows and one
+    // person, and two options under one value is a person listed twice.
+    serve(logOf(45));
+    show(
+      true,
+      trip({
+        participants: [
+          { caverId: ANA, name: 'Ana Popescu' },
+          { caverId: BOGDAN, name: 'Bogdan Ilie' },
+          { caverId: ANA, name: 'Ana Popescu' },
+        ],
+      } as unknown as Partial<TripLogInfo>),
+    );
+
+    const chooser = screen.getByTestId('trip-tracking-events-caver');
+    fireEvent.mouseDown(chooser.querySelector('.ant-select-selector') ?? chooser);
+
+    expect(document.querySelectorAll('.ant-select-item-option[title="Ana Popescu"]')).toHaveLength(1);
+    expect(document.querySelectorAll('.ant-select-item-option[title="Bogdan Ilie"]')).toHaveLength(1);
+  });
+
+  it('does not offer to narrow a log that holds nothing', () => {
+    serve([]);
+    show();
+
+    expect(screen.queryByTestId('trip-tracking-events-caver')).toBeNull();
+    expect(table().getByText('Nothing has been reported yet.')).toBeTruthy();
+  });
+
+  it('steps back when the page it is on has emptied under it', () => {
+    narrow = true;
+    const rows = logOf(41);
+    serve(rows);
+    const { rerender } = show();
+    fireEvent.click(screen.getByTestId('trip-tracking-events-older'));
+    fireEvent.click(screen.getByTestId('trip-tracking-events-older'));
+    expect(table().getByText('word 41')).toBeTruthy();
+
+    // The one report on the third page is deleted — by this reader or by another coordinator —
+    // and the next read of that page comes back holding nothing.
+    serve(rows.slice(0, 40));
+    rerender(
+      <App>
+        <TripTrackingTab trip={trip()} canEdit />
+      </App>,
+    );
+
+    expect(table().getByText('word 40')).toBeTruthy();
+    expect(screen.queryByText('Nothing has been reported yet.')).toBeNull();
+    expect(screen.getByTestId('trip-tracking-events-shown')).toHaveTextContent(
+      'Reports shown: 21–40 of 40',
+    );
+  });
+
+  for (const layout of ['wide', 'stacked'] as const) {
+    it(`marks the report that was corrected, and only that one (${layout})`, () => {
+      narrow = layout === 'stacked';
+      const rows = logOf(3);
+      rows[1].corrected = true;
+      serve(rows);
+      show();
+
+      expect(screen.getByTestId('trip-tracking-event-corrected-ev-2')).toHaveTextContent('Corrected');
+      expect(screen.queryByTestId('trip-tracking-event-corrected-ev-1')).toBeNull();
+      expect(screen.queryByTestId('trip-tracking-event-corrected-ev-3')).toBeNull();
+    });
+  }
 });

@@ -8338,9 +8338,9 @@ export function useTripTrackings(tripLogIds: readonly string[]) {
 /**
  * The trip's reports, newest first.
  *
- * The log is append-only and a correction is a deletion followed by a fresh report, so this is
- * both the history and the only way a wrong report is taken back. Position fields are withheld
- * here under exactly the same rule as on the state read.
+ * One page of them, optionally one person's: a wrong report is corrected in place or deleted
+ * from the row it is read on, so being able to reach every page is what makes every report
+ * correctable. Position fields are withheld here under exactly the same rule as on the state read.
  *
  * Kept fresh on the same condition as the folded state, and deliberately from the same cache entry
  * rather than from a flag this caller passes: two coordinators with the tab open is the designed
@@ -8839,6 +8839,7 @@ export function useTrackingCsvCommit() {
       options = null,
       replaceExisting = false,
       lines = null,
+      planDigest = null,
     }: {
       tripLogId: string;
       text: string;
@@ -8846,11 +8847,17 @@ export function useTrackingCsvCommit() {
       replaceExisting?: boolean;
       /** The physical lines to commit, or null for every importable one. */
       lines?: number[] | null;
+      /**
+       * The name the preview gave for what importing would write. The server reads the sheet again
+       * for the write and refuses (`tracking_csv.plan_changed`) when that reading would no longer
+       * write what the preview named; left out, the sheet is committed as it reads by then.
+       */
+      planDigest?: string | null;
     }) =>
       unwrap(
         api.POST('/api/v1/trip-logs/{tripLogId}/tracking/csv-import/commit', {
           params: { path: { tripLogId } },
-          body: { text, options, replaceExisting, lines },
+          body: { text, options, replaceExisting, lines, planDigest },
         }),
       ),
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),

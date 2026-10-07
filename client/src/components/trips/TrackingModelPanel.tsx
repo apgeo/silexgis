@@ -715,6 +715,7 @@ export default function TrackingModelPanel({
             <TrackingReportDialog
               open={recording !== null}
               tripLogId={tripLogId}
+              state={tracking.state}
               station={recording}
               cavers={dialogCavers}
               teams={tracking.teams}

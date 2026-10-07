@@ -15,6 +15,7 @@ import {
   Checkbox,
   Flex,
   Popconfirm,
+  Select,
   Skeleton,
   Space,
   Table,
@@ -71,7 +72,10 @@ import { useIsMobile } from '../../hooks/useIsMobile.ts';
 // same position, and two roundings of one gap would have them disagreeing about it.
 import './TripTrackingTab.css';
 
-/** How many reports the log shows without being asked for more. */
+/**
+ * How many reports one page of the log holds. The newest page is what the tab opens on and keeps
+ * reading; the older ones are asked for a page at a time, by whoever wants them.
+ */
 const RECENT_EVENTS = 20;
 
 /**
@@ -128,6 +132,47 @@ export default function TripTrackingTab({
   const narrow = useIsMobile();
   const { data, isPending, isFetching, error, refetch } = useTripTracking(trip.id);
   const events = useTripTrackingEvents(trip.id, { pageSize: RECENT_EVENTS });
+  /**
+   * Which part of the log the table under the report card is showing: whose reports, and how far
+   * back.
+   *
+   * <b>A second read, and never a change to the first.</b> The newest page above is not only the
+   * table's opening rows: the survey panel reads when somebody went in off it, the photographs
+   * card opens at its latest moment, and the notice about a log that cannot be corrected asks it
+   * whether the log holds anything. Narrow that read to one person, or walk it to page three, and
+   * all of those start answering about a slice somebody happened to be looking at. So the table
+   * asks for its own page only once it has left the newest one, and everything else goes on
+   * reading the newest whatever the table shows.
+   *
+   * A page at a time in both layouts, rather than a list that grows: the log is re-read every half
+   * minute while a party is underground, and each depth on screen is measured against the survey,
+   * so what is on screen is what is paid for — on a phone, in a valley, most of all.
+   */
+  const [logView, setLogView] = useState<{ caverId: string | null; page: number }>({
+    caverId: null,
+    page: 1,
+  });
+  const logIsNewest = logView.caverId === null && logView.page === 1;
+  const reached = useTripTrackingEvents(
+    trip.id,
+    {
+      pageSize: RECENT_EVENTS,
+      page: logView.page,
+      ...(logView.caverId === null ? {} : { caverId: logView.caverId }),
+    },
+    !logIsNewest,
+  );
+  const log = logIsNewest ? events : reached;
+  const logTotal = log.data?.totalItems ?? 0;
+  const logLastPage = Math.max(1, Math.ceil(logTotal / RECENT_EVENTS));
+  // A page can empty under whoever is on it — the last report on it deleted, by them or by a
+  // second coordinator. The answer then says how many reports there are, and the table steps back
+  // to the last page that holds any rather than standing on an empty one that says "nothing has
+  // been reported". Only on an answer for the page actually asked for: the rows kept on screen
+  // while the next page loads are the previous page's, and their count is about that one.
+  if (log.data !== undefined && !log.isPlaceholderData && logView.page > logLastPage) {
+    setLogView({ ...logView, page: logLastPage });
+  }
   const deleteEvent = useDeleteTrackingEvent();
   const [correcting, setCorrecting] = useState<TrackingEvent | null>(null);
   /** Whether the sheet-reading dialog is open. */
@@ -208,14 +253,16 @@ export default function TripTrackingTab({
           typed.add(participant.depthM);
         }
       }
-      for (const row of events.data?.items ?? []) {
+      // The rows the table is showing, which are the newest page until somebody walks back or
+      // narrows the log — an older row's depth is as much a claim about a station as a new one's.
+      for (const row of log.data?.items ?? []) {
         if (row.depthEnteredM !== null && row.surveyModelId === watchModelId) {
           typed.add(row.depthEnteredM);
         }
       }
     }
     return [...typed].sort((a, b) => a - b);
-  }, [data?.surveyModelId, data?.participants, events.data?.items]);
+  }, [data?.surveyModelId, data?.participants, log.data?.items]);
 
   /**
    * What each of those depths means, asked of the server that resolves them.
@@ -316,10 +363,13 @@ export default function TripTrackingTab({
   const rowsWritable = canEdit && trackingLogWritable(data.state);
   const rowsTakePictures = canEdit && data.armedAt !== null;
   const rowsHaveControls = rowsWritable || rowsTakePictures;
+  // Asked of the newest page of the whole log, not of what the table is showing: whether the log
+  // holds anything is not changed by narrowing it to somebody nobody has reported.
   const logReadOnly = canEdit && !rowsWritable && (events.data?.items.length ?? 0) > 0;
 
   /**
-   * The latest moment anybody was reported at, off the page of reports this tab is holding.
+   * The latest moment anybody was reported at, off the newest page of the log — which this tab
+   * goes on holding whatever page or person the table below has been turned to.
    *
    * The largest rather than the first: reports are listed by the moment they were <em>said</em>,
    * which a coordinator can backdate, and only the largest is the latest whatever the page's order
@@ -737,6 +787,24 @@ export default function TripTrackingTab({
     }
     return row.kind === 'atStation' || row.kind === 'atDepth' ? withheldTag(true) : '—';
   };
+
+  /**
+   * The mark on a report that no longer reads as it was first written down.
+   *
+   * <b>Beside the moment, because that is what the mark qualifies.</b> A log is what somebody said
+   * at a moment, and a row that was put right afterwards is still the best account there is of that
+   * moment — but a reader comparing this log with their own notes, or with what a family was shown
+   * yesterday, is owed knowing that it is not the first one. A word rather than an icon: it is read
+   * on a phone, where nothing hovers.
+   */
+  const correctedMark = (row: TrackingEvent) =>
+    row.corrected ? (
+      <Tooltip title={t('trips.tracking.eventCorrectedMarkHelp')}>
+        <Tag data-testid={`trip-tracking-event-corrected-${row.id}`}>
+          {t('trips.tracking.eventCorrectedMark')}
+        </Tag>
+      </Tooltip>
+    ) : null;
 
   const teamOf = (teamId: string | null) =>
     teamId && teamTitles.has(teamId) ? <Tag>{teamTitles.get(teamId)}</Tag> : '—';
@@ -1265,7 +1333,10 @@ export default function TripTrackingTab({
           // Offered on a closed watch as well as a running one: a finished trip is written up
           // afterwards, and the server takes a report on a closed log exactly as it takes a
           // correction or a removal there. Only a watch nobody started is refused.
-          writable={trackingLogWritable(data.state)}
+          //
+          // The state itself rather than a yes or no, because a closed watch changes what the
+          // card asks: a report written up afterwards has to say when it was made.
+          state={data.state}
           caverIds={[...selected]}
           teams={data.teams}
           onRecorded={() => setSelected(new Set())}
@@ -1313,7 +1384,7 @@ export default function TripTrackingTab({
             participants table showing cavers at stations — a failure to learn something drawn as
             a fact about the world, on the one surface that is the record of what came in over the
             radio. The rows already held are kept on screen; what is said about them changes. */}
-        {events.error != null && (
+        {log.error != null && (
           <Alert
             type="error"
             showIcon
@@ -1322,21 +1393,63 @@ export default function TripTrackingTab({
             data-testid="trip-tracking-events-unavailable"
           />
         )}
+        {/* Whose reports. Drawn once the log holds something, and kept while it is narrowed even
+            if that person turns out to have none — the control that emptied the table has to stay
+            on screen to un-empty it. The roster is the list because that is who a coordinator
+            thinks of the log as being about; a wrong report is nearly always "the one about
+            Maria around two", and paging through everybody to find it is the slow way. */}
+        {((events.data?.totalItems ?? 0) > 0 || logView.caverId !== null) && (
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            size={controlSize}
+            style={{ minWidth: 240, maxWidth: '100%', marginBottom: 8 }}
+            placeholder={t('trips.tracking.eventsFilterEverybody')}
+            aria-label={t('trips.tracking.eventsFilterCaver')}
+            value={logView.caverId}
+            // Always back to the newest page: page three of everybody's reports is not page three
+            // of one person's.
+            onChange={(caverId: string | null | undefined) =>
+              setLogView({ caverId: caverId ?? null, page: 1 })
+            }
+            // One option per person: the trip's roster holds a row per person per job, so
+            // somebody who leads and also surveys would otherwise be offered twice under one
+            // value. The map of names is already one entry per person.
+            options={[...names].map(([caverId, name]) => ({ value: caverId, label: name }))}
+            data-testid="trip-tracking-events-caver"
+          />
+        )}
         <Table<TrackingEvent>
           rowKey="id"
           size="small"
-          loading={events.isPending}
-          pagination={false}
+          loading={log.isPending}
+          // Pages across where there is room for the library's own pager; stacked, the two plain
+          // buttons under the table do the same walk at a size a finger can hit.
+          pagination={
+            narrow
+              ? false
+              : {
+                  current: logView.page,
+                  pageSize: RECENT_EVENTS,
+                  total: logTotal,
+                  showSizeChanger: false,
+                  hideOnSinglePage: true,
+                  onChange: (page) => setLogView({ ...logView, page }),
+                }
+          }
           showHeader={!narrow}
           scroll={narrow ? undefined : { x: 'max-content' }}
           className={`tracking-table${narrow ? ' tracking-table-stacked' : ''}`}
-          dataSource={events.data?.items ?? []}
+          dataSource={log.data?.items ?? []}
           data-testid="trip-tracking-events"
           locale={{
             emptyText:
-              events.error != null
+              log.error != null
                 ? t('trips.tracking.eventsUnavailable')
-                : t('trips.tracking.eventsNone'),
+                : logView.caverId !== null
+                  ? t('trips.tracking.eventsNoneForCaver')
+                  : t('trips.tracking.eventsNone'),
           }}
           columns={
             narrow
@@ -1348,6 +1461,7 @@ export default function TripTrackingTab({
                       <div className="tracking-stacked">
                         <div className="tracking-stacked-head">
                           <Typography.Text strong>{when(row.recordedAt)}</Typography.Text>
+                          {correctedMark(row)}
                           {/* On the row it corrects rather than in a column of its own. That
                               column was the last of six, so on a phone it began 457px past the
                               right edge of a scroller 364px wide — the only way to take a wrong
@@ -1373,7 +1487,12 @@ export default function TripTrackingTab({
                   {
                     title: t('trips.tracking.columnLastRecordedAt'),
                     dataIndex: 'recordedAt',
-                    render: (value: string) => when(value),
+                    render: (value: string, row) => (
+                      <Flex gap={6} align="center" wrap>
+                        {when(value)}
+                        {correctedMark(row)}
+                      </Flex>
+                    ),
                   },
                   {
                     title: t('trips.tracking.columnCaver'),
@@ -1417,6 +1536,39 @@ export default function TripTrackingTab({
                 ]
           }
         />
+        {/* The stacked layout's way back through the log. Drawn only where there is somewhere to
+            go: a log that fits on one page has neither button and no count. */}
+        {narrow && logTotal > RECENT_EVENTS && (
+          <Flex gap={8} align="center" justify="space-between" wrap style={{ marginTop: 8 }}>
+            <Typography.Text type="secondary" data-testid="trip-tracking-events-shown">
+              {t('trips.tracking.eventsShown', {
+                from: (logView.page - 1) * RECENT_EVENTS + 1,
+                to: Math.min(logView.page * RECENT_EVENTS, logTotal),
+                total: logTotal,
+              })}
+            </Typography.Text>
+            <Flex gap={8} wrap>
+              {logView.page > 1 && (
+                <Button
+                  size={controlSize}
+                  onClick={() => setLogView({ ...logView, page: logView.page - 1 })}
+                  data-testid="trip-tracking-events-newer"
+                >
+                  {t('trips.tracking.eventsNewer')}
+                </Button>
+              )}
+              {logView.page < logLastPage && (
+                <Button
+                  size={controlSize}
+                  onClick={() => setLogView({ ...logView, page: logView.page + 1 })}
+                  data-testid="trip-tracking-events-older"
+                >
+                  {t('trips.tracking.eventsOlder')}
+                </Button>
+              )}
+            </Flex>
+          </Flex>
+        )}
       </div>
 
       {/* The trip's photographs, under the log they belong beside and outside the survey panel
@@ -1442,7 +1594,7 @@ export default function TripTrackingTab({
       )}
 
       {/* One dialog for every row, opened by the row being corrected rather than mounted per row:
-          the log shows fifty reports and fifty mounted modals is fifty forms to keep in step. It
+          a page of the log is twenty reports and twenty mounted modals is twenty forms to keep in step. It
           fills itself from whichever report was pressed. */}
       {canEdit && (
         <TrackingEventEditDialog
@@ -1460,6 +1612,7 @@ export default function TripTrackingTab({
           open
           tripLogId={trip.id}
           tripDay={trip.tripDate}
+          teams={data?.teams ?? []}
           onClose={() => setImporting(false)}
         />
       )}

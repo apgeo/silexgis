@@ -25371,6 +25371,8 @@ export interface components {
             /** Format: int32 */
             updated: number;
             /** Format: int32 */
+            unchanged: number;
+            /** Format: int32 */
             skipped: number;
             refused: components["schemas"]["TrackingCsvDiagnosticDto"][];
         };
@@ -25379,6 +25381,7 @@ export interface components {
             options: null | components["schemas"]["TrackingCsvImportOptionsDto"];
             replaceExisting: boolean;
             lines: null | number[];
+            planDigest?: null | string;
         };
         TrackingCsvDiagnosticDto: {
             severity: string;
@@ -25430,6 +25433,7 @@ export interface components {
             timeZone: null | string;
             /** Format: date */
             day: null | string;
+            planDigest: string;
         };
         TrackingCsvPreviewRowDto: {
             /** Format: int32 */
@@ -25445,10 +25449,12 @@ export interface components {
             teamId: null | string;
             kind: components["schemas"]["TripPositionEventKind"];
             stationName: null | string;
+            placeLabel: null | string;
             /** Format: double */
             depthM: null | number;
             note: null | string;
             replaces: boolean;
+            before: null | components["schemas"]["TrackingEventDto"];
             diagnostics: components["schemas"]["TrackingCsvDiagnosticDto"][];
         };
         TrackingDepthCandidateDto: {
@@ -25478,6 +25484,7 @@ export interface components {
             note: null | string;
             /** Format: date-time */
             recordedAt: string;
+            corrected: boolean;
             depthPlacement?: null | components["schemas"]["TrackingDepthPlacementOutcome"];
         };
         TrackingEventEditRequest: {
