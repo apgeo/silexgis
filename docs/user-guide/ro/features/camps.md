@@ -148,10 +148,15 @@ pentru un interval de zile**:
 | **Cine** | Începeți să scrieți și alegeți pe cineva din lista de speologi — sau scrieți numele cuiva care nu este în ea |
 | **Rol** | *Membru*, dacă nu spuneți altfel |
 | **Zilele** | Prima și ultima zi în care a fost acolo; pentru o singură zi, alegeți-o de două ori. Pornește de la întreaga tabără |
+| **Încă acolo** | Bifați pentru cineva care nu a plecat încă: șederea are atunci o primă zi și nicio ultimă zi, iar lista o arată ca *„din 14.07.2026, încă acolo”*. Debifați și dați ultima zi după ce a plecat |
 | **Notă** | *A sosit mai târziu, a plecat mai devreme, s-a întors…* |
 
 Cine a gătit și a și cartat are **două șederi**, la fel și cine a plecat și s-a întors. Nimic
 nu împiedică șederile să se suprapună.
+
+O ședere fără ultima zi înseamnă întotdeauna **încă acolo** — nu este niciodată felul în care
+se consemnează o singură zi. Lista și raportul taberei o spun amândouă în cuvinte, arată o
+singură dată pentru o singură zi și ambele date pentru o ședere mai lungă.
 
 **Numirea cuiva nou.** Un nume pe care îl scrieți în loc să îl alegeți *„se salvează ca nume:
 înseamnă persoana pe care lista de speologi o are deja exact sub acest nume, iar dacă nu este
