@@ -556,4 +556,26 @@ public class TrackingCsvPlannerTests
         plan.Reports.SelectMany(r => r.Diagnostics)
             .ShouldNotContain(d => d.Problem == TrackingCsvProblem.ClockRunsBackwards);
     }
+
+    [Fact]
+    public void A_row_whose_state_says_note_is_planned_as_a_note_and_claims_no_station()
+    {
+        // No model, and a depth beside the word: the word wins, so nothing is resolved and the
+        // watch having lost its survey costs the row nothing. The row below it is the same depth
+        // without the word, refused for wanting the survey — which is what shows it was missing.
+        var subject = Subject() with { HasModel = false, Stations = [] };
+
+        var plan = PlanOf(
+            "12.09.2026 09:00,105,,,Ion Popescu,Echipa 1,,nota\r\n"
+            + "12.09.2026 10:00,105,,,Ion Popescu,,,", subject);
+
+        var note = plan.Reports.ShouldHaveSingleItem();
+        note.Line.ShouldBe(2);
+        note.Kind.ShouldBe(TripPositionEventKind.Note);
+        note.Note.ShouldBeNull();
+        note.ViewerStationName.ShouldBeNull();
+        note.DepthM.ShouldBeNull();
+        note.TeamId.ShouldBe(TeamOne);
+        plan.Refused.ShouldHaveSingleItem().Problem.ShouldBe(TrackingCsvProblem.ModelMissing);
+    }
 }

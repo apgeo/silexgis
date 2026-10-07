@@ -56,7 +56,7 @@ public sealed record TrackingCsvOptions
     public IReadOnlySet<string> SkipTokens { get; init; } =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "-", "--", "n/a", "na", "?" };
 
-    /// <summary>The words this sheet writes "went in" and "came out" in.</summary>
+    /// <summary>The words this sheet writes "went in", "came out" and "a note" in.</summary>
     public TrackingCsvStateWords StateWords { get; init; } = TrackingCsvStateWords.Default;
 
     /// <summary>A bound on the width of a sheet, so a mangled file is refused rather than folded.</summary>

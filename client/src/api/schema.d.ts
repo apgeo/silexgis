@@ -2546,6 +2546,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{tripLogId}/tracking/events/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The whole log as a sheet the import reads back, oldest report first, with every place this caller may not be told left out. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/trips/{token}": {
         parameters: {
             query?: never;
@@ -25917,6 +25953,7 @@ export interface components {
             timeZone?: null | string;
             /** Format: date */
             day?: null | string;
+            notedWords?: null | string[];
         };
         TrackingCsvImportRequest: {
             text: null | string;

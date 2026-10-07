@@ -756,4 +756,43 @@ public class TrackingCsvParserTests
     /// <summary>A three-column sheet: moment, depth, caver. Header supplied, rows given.</summary>
     private static TrackingCsvParseResult Parse(string rows) =>
         TrackingCsvParser.Parse("Data si ora,Adancime,Speologi\r\n" + rows + "\r\n");
+
+    [Fact]
+    public void A_row_whose_state_says_note_is_a_note_even_with_nothing_written_in_it()
+    {
+        // The second row is the one the word exists for: with no word it says nothing about
+        // anybody and is refused, which the third row shows is still what happens.
+        var result = TrackingCsvParser.Parse(
+            "Data si ora,Adancime,Statie,Loc,Speologi,Echipa,Nota,Stare\r\n"
+            + "12.09.2026 09:00,,,,Ion Popescu,,apa in crestere,nota\r\n"
+            + "12.09.2026 09:10,,,,Ion Popescu,,,nota\r\n"
+            + "12.09.2026 09:20,,,,Ion Popescu,,,\r\n");
+
+        result.Rows.Count.ShouldBe(3);
+        result.Rows[0].Kind.ShouldBe(TripPositionEventKind.Note);
+        result.Rows[0].Note.ShouldBe("apa in crestere");
+        result.Rows[0].Diagnostics.ShouldBeEmpty();
+        result.Rows[1].Kind.ShouldBe(TripPositionEventKind.Note);
+        result.Rows[1].Note.ShouldBeNull();
+        result.Rows[1].Importable.ShouldBeTrue();
+        result.Rows[2].Importable.ShouldBeFalse();
+        result.Rows[2].Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.NoPlaceAndNoState);
+    }
+
+    [Fact]
+    public void A_row_marked_as_having_its_place_kept_back_is_refused_note_or_no_note()
+    {
+        // With a note beside it, which is the case that matters: without the mark this row would
+        // read as a note, and a re-import that replaces would write that note over a position.
+        var result = TrackingCsvParser.Parse(
+            "Data si ora,Adancime,Statie,Loc,Speologi,Echipa,Nota,Stare\r\n"
+            + $"12.09.2026 09:00,,,,Ion Popescu,,la baza puitului,{TrackingCsvStateWords.Withheld}\r\n"
+            + "12.09.2026 09:10,,,,Ion Popescu,,la baza puitului,\r\n");
+
+        result.Rows[0].Importable.ShouldBeFalse();
+        result.Rows[0].Diagnostics.Select(d => d.Problem).ShouldBe(
+            [TrackingCsvProblem.StateWordUnknown, TrackingCsvProblem.NoPlaceAndNoState]);
+        result.Rows[1].Importable.ShouldBeTrue();
+        result.Rows[1].Kind.ShouldBe(TripPositionEventKind.Note);
+    }
 }

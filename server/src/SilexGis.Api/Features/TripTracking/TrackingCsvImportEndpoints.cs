@@ -48,8 +48,12 @@ public static class TrackingCsvImportEndpoints
     /// both of them coming out — so the shape of an entry row and of an exit row is visible rather
     /// than described.
     /// </remarks>
-    private const string SampleCsv =
-        "Data si ora,Adancime,Statie,Loc,Speologi,Echipa,Nota,Stare\r\n"
+    /// <remarks>
+    /// Its first line is the one a log written out as a sheet begins with, taken from the same
+    /// place, so the sample and an exported log cannot come to describe two layouts.
+    /// </remarks>
+    private static readonly string SampleCsv =
+        TrackingCsvWriter.HeaderLine
         + "12.09.2026 08:15,0,,,\"Ion Popescu; Maria Pop\",Echipa 1,intrat in pestera,intrare\r\n"
         + "12.09.2026 09:40,96,,,\"Ion Popescu; Maria Pop\",Echipa 1,,\r\n"
         + "12.09.2026 10:05,,,Meandru,Maria Pop,Echipa 1,apa mare in meandru,\r\n"
@@ -73,6 +77,10 @@ public static class TrackingCsvImportEndpoints
             .WithSummary("The column roles a tracking sheet can carry, and the header spellings each one is detected under.");
         fields.MapGet("/template", GetTemplate)
             .WithSummary("A sample sheet with invented rows, in the spellings this installation detects.");
+
+        api.MapGet("/trip-logs/{tripLogId:guid}/tracking/events/export", ExportAsync)
+            .WithTags("TripTracking")
+            .WithSummary("The whole log as a sheet the import reads back, oldest report first, with every place this caller may not be told left out.");
 
         return api;
     }
@@ -110,6 +118,80 @@ public static class TrackingCsvImportEndpoints
 
     /// <summary>What the sample sheet is saved as. Named once, because a test asserts it.</summary>
     public const string TemplateFileName = "tracking-reports-sample.csv";
+
+    // ---- the log as a sheet ---------------------------------------------------------------
+
+    /// <summary>The trip's whole log, written as the sheet the import reads.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A file leaves the installation, so what goes into it is decided here and nowhere
+    /// later.</b> It is gated by reading the trip, exactly as the log's list is, and each report
+    /// passes through the same per-row rule the list answers by: a place this caller may not be
+    /// told is not in the bytes. Such a row is still written — that somebody reported at that
+    /// moment, and what they said, is the trip's — with its place marked as kept back, in a way
+    /// the import refuses, so that the sheet brought back cannot write "nowhere" over the place
+    /// the log holds.
+    /// </para>
+    /// <para>
+    /// <b>People are named as this caller is shown them</b> on every other signed-in screen, by
+    /// the one rule that decides it, and not by the roster's own entry: a file is not a way to
+    /// read a name the screen does not show. The import matches the roster's entry, so where an
+    /// account goes by another label the row comes back refused as naming nobody on the trip —
+    /// loudly, and without writing anything.
+    /// </para>
+    /// <para>
+    /// <b>Named by the trip's id and the day it was taken</b>, never by the trip's title or its
+    /// cave: a file's name is read by everything the file passes through.
+    /// </para>
+    /// <para>
+    /// Oldest first, which is the order a coordinator's own sheet is kept in, with the same
+    /// tie-break the list uses so that two reports stamped with one instant keep their order from
+    /// one download to the next.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<FileContentHttpResult, ProblemHttpResult>> ExportAsync(
+        Guid tripLogId, SilexGisDbContext db, IAccessService access, FeatureProtection protection,
+        IAccessContextAccessor accessAccessor, IUserContextAccessor userAccessor, CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null) return ApiProblems.NotFound("trip_log.not_found");
+        var trip = await TripTrackingEndpoints.ReadableTripAsync(db, access, ctx, tripLogId, ct);
+        if (trip is null) return ApiProblems.NotFound("trip_log.not_found");
+
+        var events = await db.TripPositionEvents.AsNoTracking()
+            .Where(e => e.TripLogId == tripLogId)
+            .OrderBy(e => e.RecordedAt).ThenBy(e => e.CreatedAt).ThenBy(e => e.Id)
+            .ToListAsync(ct);
+        var openCaves = await TrackingWithholding.OpenCavesOfAsync(db, access, protection, ctx, events, ct);
+        var names = await CaverDirectory.ResolveLabelsAsync(
+            db, await userAccessor.GetAsync(ct), events.Select(e => e.CaverId), ct);
+        var teamIds = events.Where(e => e.TeamId is not null).Select(e => e.TeamId!.Value).Distinct().ToList();
+        var teams = teamIds.Count == 0
+            ? []
+            : await db.TripTeams.AsNoTracking()
+                .Where(t => teamIds.Contains(t.Id))
+                .ToDictionaryAsync(t => t.Id, t => t.Title, ct);
+
+        var sheet = TrackingCsvWriter.Write(events.Select(e =>
+        {
+            // The place comes from the one rule that turns a stored report into what a caller
+            // reads, not from the stored row: what it leaves null is what this file leaves out.
+            var shown = TrackingWithholding.Shown(e, openCaves);
+            return new TrackingCsvExportRow(
+                shown.RecordedAt,
+                names.GetValueOrDefault(e.CaverId) ?? string.Empty,
+                e.TeamId is { } team ? teams.GetValueOrDefault(team) : null,
+                shown.Kind,
+                shown.StationName,
+                shown.DepthEnteredM,
+                shown.Note);
+        }));
+
+        return TypedResults.File(
+            Encoding.UTF8.GetBytes("\uFEFF" + sheet),
+            "text/csv; charset=utf-8",
+            $"tracking-log-{tripLogId.ToString("N")[..8]}-{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
 
     // ---- preview ------------------------------------------------------------------------
 
@@ -585,7 +667,8 @@ public static class TrackingCsvImportEndpoints
         // Named words replace the shipped list rather than adding to it, and each side is replaced
         // on its own: a club that writes "down" for going in may still write "iesire" for coming
         // out, and a caller naming one list has said nothing about the other.
-        if (dto.WentInWords is { Count: > 0 } || dto.CameOutWords is { Count: > 0 })
+        if (dto.WentInWords is { Count: > 0 } || dto.CameOutWords is { Count: > 0 }
+            || dto.NotedWords is { Count: > 0 })
         {
             var shipped = TrackingCsvStateWords.Default;
             options = options with
@@ -594,6 +677,7 @@ public static class TrackingCsvImportEndpoints
                 {
                     WentIn = dto.WentInWords is { Count: > 0 } wentIn ? wentIn : shipped.WentIn,
                     CameOut = dto.CameOutWords is { Count: > 0 } cameOut ? cameOut : shipped.CameOut,
+                    Noted = dto.NotedWords is { Count: > 0 } noted ? noted : shipped.Noted,
                 },
             };
         }

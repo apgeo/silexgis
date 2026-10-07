@@ -32,7 +32,8 @@ public sealed record TrackingCsvImportOptionsDto(
     IReadOnlyList<string>? WentInWords,
     IReadOnlyList<string>? CameOutWords,
     string? TimeZone = null,
-    DateOnly? Day = null);
+    DateOnly? Day = null,
+    IReadOnlyList<string>? NotedWords = null);
 
 /// <summary>A sheet to read, and how to read it.</summary>
 public sealed record TrackingCsvImportRequest(
@@ -71,6 +72,7 @@ public sealed class TrackingCsvImportOptionsDtoValidator : AbstractValidator<Tra
         RuleForEach(x => x.Columns!.Values).NotEmpty().MaximumLength(200).When(x => x.Columns is not null);
         RuleForEach(x => x.WentInWords!).NotEmpty().MaximumLength(100).When(x => x.WentInWords is not null);
         RuleForEach(x => x.CameOutWords!).NotEmpty().MaximumLength(100).When(x => x.CameOutWords is not null);
+        RuleForEach(x => x.NotedWords!).NotEmpty().MaximumLength(100).When(x => x.NotedWords is not null);
         // A bound only. Whether the name is a zone at all is answered where the sheet is read, by
         // the one rule that also resolves it, and refused there under a code of its own — a
         // second description of a zone name here would be a second rule to keep in step.

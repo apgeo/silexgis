@@ -4,7 +4,7 @@ using SilexGis.Domain.Entities;
 namespace SilexGis.Domain.Import.TrackingCsv;
 
 /// <summary>
-/// The words a sheet writes "went in" and "came out" in.
+/// The words a sheet writes "went in", "came out" and "a note" in.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -33,11 +33,32 @@ public sealed record TrackingCsvStateWords
     /// <summary>Words meaning the person came out of it.</summary>
     public IReadOnlyList<string> CameOut { get; init; } = ["iesire", "ieșire", "ieșit", "iesit", "went out", "out", "exited"];
 
+    /// <summary>Words meaning the row is a note about the person and claims no place and no standing.</summary>
+    /// <remarks>
+    /// A row with a note and nothing else has always been read as a note, so a sheet typed by hand
+    /// needs none of these. They exist for the two rows that reading cannot express: a note report
+    /// that carries no text at all, and one whose text is a mark this reader takes for an empty
+    /// cell. A log written out as a sheet holds both, and has to come back as what it was.
+    /// </remarks>
+    public IReadOnlyList<string> Noted { get; init; } = ["nota", "notă", "note", "observatie", "observație"];
+
+    /// <summary>
+    /// What a sheet written out of a log puts in the state column of a row whose place was kept
+    /// back from whoever took the sheet.
+    /// </summary>
+    /// <remarks>
+    /// Never a standing and never a note, whatever the lists above are replaced with: such a row
+    /// is a report that has a place the sheet does not say, and reading it as anything at all
+    /// would, on a re-import that replaces, write "nowhere" over the place the log holds. It is
+    /// reported as a word nobody listed and the row is sent back.
+    /// </remarks>
+    public const string Withheld = "retinut";
+
     /// <summary>The defaults: Romanian and English, which are the languages this application speaks.</summary>
     public static TrackingCsvStateWords Default { get; } = new();
 
     /// <summary>
-    /// The standing a state column's text names, or null when it names neither.
+    /// What a state column's text says the row is, or null when it is no listed word.
     /// </summary>
     /// <remarks>
     /// Null is an ordinary answer and not a fault: most rows of a tracking sheet are places inside
@@ -58,6 +79,11 @@ public sealed record TrackingCsvStateWords
         // equality on the folded word rather than containment, and the order then decides nothing.
         // It is written out because a later reader reaching for `Contains` would make "went out"
         // match the in-list.
+        if (folded == TripImportNames.Key(Withheld))
+        {
+            return null;
+        }
+
         if (CameOut.Any(word => TripImportNames.Key(word) == folded))
         {
             return TripPositionEventKind.Exited;
@@ -66,6 +92,11 @@ public sealed record TrackingCsvStateWords
         if (WentIn.Any(word => TripImportNames.Key(word) == folded))
         {
             return TripPositionEventKind.Entered;
+        }
+
+        if (Noted.Any(word => TripImportNames.Key(word) == folded))
+        {
+            return TripPositionEventKind.Note;
         }
 
         return null;
