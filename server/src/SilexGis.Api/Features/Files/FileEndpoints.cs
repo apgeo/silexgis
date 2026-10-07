@@ -1136,12 +1136,27 @@ public static class FileEndpoints
         // route browsers reach ambiently can have.
         await accessHistory.RecordAsync(id, grant.UserId, ct);
 
+        // What the download is called is the mint's decision too. A name is still sent where the
+        // upload's own is withheld, because it is the name that makes the answer an attachment:
+        // these are bytes somebody uploaded, and without it a browser sent to this address would
+        // render them under the application's own origin instead of saving them.
         return TypedResults.PhysicalFile(
             fileStore.GetAbsolutePath(file.StoragePath),
             contentType: file.MimeType,
-            fileDownloadName: file.OriginalName,
+            fileDownloadName: grant.Naming == FileNaming.Withheld ? NamelessDownloadName : file.OriginalName,
             enableRangeProcessing: true);
     }
+
+    /// <summary>
+    /// What a download is called when the address it was fetched from withholds the upload's name.
+    /// </summary>
+    /// <remarks>
+    /// One fixed word for every such file, with no extension: an extension would be cut from the
+    /// upload's own name, and the part of a file name after its last dot is whatever its uploader
+    /// typed there. Nothing that fetches these addresses reads the name — a viewer is told the
+    /// format beside the address it is handed.
+    /// </remarks>
+    private const string NamelessDownloadName = "download";
 
     private static async Task<Results<PhysicalFileHttpResult, ProblemHttpResult>> ThumbnailAsync(
         Guid id,

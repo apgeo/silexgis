@@ -1514,8 +1514,17 @@ public static class TripTrackingPublicationEndpoints
     /// model, which is only useful as its own bytes — see the picture mint below for why nothing
     /// else on this surface gets this reach.
     /// </summary>
+    /// <remarks>
+    /// <b>The bytes and not the name they were uploaded under.</b> A survey file is called whatever
+    /// its surveyor called it, which as a rule is the cave, and this envelope says nothing about
+    /// which cave or which survey it draws. The delivery route would otherwise announce the
+    /// upload's name in the header that names a download — to a stranger, on the one answer of
+    /// this surface nobody reads the headers of. Signed into the token like the reach beside it,
+    /// so the route that redeems it has nothing to decide.
+    /// </remarks>
     private static string FileUrl(IFileAccessTokenService tokens, Guid fileId) =>
-        $"/api/v1/files/{fileId}/content?token={Uri.EscapeDataString(tokens.CreateToken(fileId, FileDelivery.Full))}";
+        $"/api/v1/files/{fileId}/content?token="
+        + Uri.EscapeDataString(tokens.CreateToken(fileId, FileDelivery.Full, naming: FileNaming.Withheld));
 
     /// <summary>
     /// A rendering of one image file, and never the upload it was drawn from.

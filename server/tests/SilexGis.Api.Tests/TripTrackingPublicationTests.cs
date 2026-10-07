@@ -327,6 +327,57 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     }
 
     /// <summary>
+    /// The drawing a stranger downloads says nothing about the upload it came from: not what
+    /// somebody called the file, and not the number the file store keeps it under.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A survey file is named by whoever uploaded it, and surveyors name files after caves. The
+    /// published envelope is built to carry no cave or survey identity, so a download that
+    /// announced <c>filename=…</c> would hand over, in a header nobody looks at, the one thing the
+    /// body was kept clear of.
+    /// </para>
+    /// <para>
+    /// <b>The same file fetched by a signed-in member keeps its name</b> — that is the half that
+    /// shows the first assertion is about the published address and not about a route that has
+    /// simply stopped naming anything. A member downloading a survey to work on it needs the file
+    /// to arrive called what it is called.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_published_drawing_arrives_without_the_uploads_name_and_a_members_download_keeps_it()
+    {
+        var trip = await TrackedTripAsync("Nameless", locationProtected: false);
+        var (_, token) = await PublishAsync(trip.Trip);
+        var fileId = await FileIdOfModelAsync(trip.Model);
+
+        var modelUrl = (await FollowAsync(token)).GetProperty("model").GetProperty("modelUrl").GetString()!;
+        using var published = await anonymous.GetAsync(modelUrl);
+        published.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await published.Content.ReadAsByteArrayAsync()).ShouldBe(
+            new byte[] { 1, 2, 3, 4 }, "the bytes are the survey's own, or this proves nothing about delivering it");
+
+        // Every header of the answer, read as text: the name could travel in more than one of
+        // them, and in more than one spelling of the same header.
+        var headers = string.Join(
+            '\n',
+            published.Headers.Concat(published.Content.Headers)
+                .Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"));
+        headers.ShouldNotContain("publication", Case.Insensitive);
+        headers.ShouldNotContain(fileId.ToString("D"), Case.Insensitive);
+        headers.ShouldNotContain(fileId.ToString("N"), Case.Insensitive);
+        // Still a download and not a page: these are bytes somebody uploaded, and a browser sent
+        // to this address must save them rather than render them under the application's origin.
+        published.Content.Headers.ContentDisposition.ShouldNotBeNull().DispositionType.ShouldBe("attachment");
+
+        var own = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{trip.Model}");
+        using var members = await owner.GetAsync(own.GetProperty("modelUrl").GetString()!);
+        members.StatusCode.ShouldBe(HttpStatusCode.OK);
+        members.Content.Headers.ContentDisposition.ShouldNotBeNull()
+            .FileName.ShouldNotBeNull().Trim('"').ShouldBe("publication.3d");
+    }
+
+    /// <summary>
     /// Revoked, unknown, malformed and oversized tokens are one answer, and the live link beside
     /// them is the half that says the answer means something.
     /// </summary>
