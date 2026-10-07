@@ -239,6 +239,20 @@ export function tripStatisticsExportUrl(subject: StatisticsSubject, id: string):
 }
 
 /**
+ * The format a write-up is downloaded in.
+ *
+ * A Word document is what the server writes and is always there. A PDF is that same document
+ * laid out by a service an installation may or may not run, so it is offered only where the
+ * installation says it can make one — and asking for it elsewhere is refused, not ignored.
+ */
+export type ReportFormat = 'docx' | 'pdf';
+
+/** The format as a download's query carries it: nothing at all for the document every download was. */
+function formatQuery(format?: ReportFormat): ReportFormat | undefined {
+  return format === 'pdf' ? 'pdf' : undefined;
+}
+
+/**
  * GET /api/v1/trip-logs/{id}/report — one trip written up as a document.
  *
  * The server builds it from the same reading of the trip this caller's report page was drawn
@@ -246,8 +260,11 @@ export function tripStatisticsExportUrl(subject: StatisticsSubject, id: string):
  * reader's list, the pictures are that reader's pictures, and the account of what went wrong is
  * in it only when that reader may change the trip.
  */
-export function tripReportUrl(id: string, templateId?: string): string {
-  return buildUrl(`/api/v1/trip-logs/${encodeURIComponent(id)}/report`, { templateId });
+export function tripReportUrl(id: string, templateId?: string, format?: ReportFormat): string {
+  return buildUrl(`/api/v1/trip-logs/${encodeURIComponent(id)}/report`, {
+    templateId,
+    format: formatQuery(format),
+  });
 }
 
 /**
@@ -258,8 +275,15 @@ export function tripReportUrl(id: string, templateId?: string): string {
  * says where the trip went. It is its own route because it takes a file, and the plain one stays
  * a plain request for everything that has no picture to send.
  */
-export function tripReportDownloadUrl(id: string, templateId?: string): string {
-  return buildUrl(`/api/v1/trip-logs/${encodeURIComponent(id)}/report/download`, { templateId });
+export function tripReportDownloadUrl(
+  id: string,
+  templateId?: string,
+  format?: ReportFormat,
+): string {
+  return buildUrl(`/api/v1/trip-logs/${encodeURIComponent(id)}/report/download`, {
+    templateId,
+    format: formatQuery(format),
+  });
 }
 
 /** The name of the form part the picture travels in. The server reads this one and no other. */
@@ -273,8 +297,38 @@ export const TRIP_REPORT_MAP_PART = 'map';
  * in it are the ones that reader may open, the people are the ones they may be told of, and no
  * cave in it is placed — the caves the camp's trips named are named and never positioned.
  */
-export function expeditionReportUrl(id: string, templateId?: string): string {
-  return buildUrl(`/api/v1/expeditions/${encodeURIComponent(id)}/report`, { templateId });
+export function expeditionReportUrl(id: string, templateId?: string, format?: ReportFormat): string {
+  return buildUrl(`/api/v1/expeditions/${encodeURIComponent(id)}/report`, {
+    templateId,
+    format: formatQuery(format),
+  });
+}
+
+/**
+ * The refusals a write-up asked for as a PDF can meet that are about the PDF and not about the
+ * write-up, by the wording a page should show for each; undefined for any other failure.
+ *
+ * Told apart because the remedy differs. A service that did not answer may answer next time; one
+ * that could not lay the document out will not; and an installation that runs none should not
+ * have been asked — the page reads that in advance, so meeting it here means the installation
+ * changed under an open page. In every case the Word document is still there to be had.
+ */
+export function reportPdfRefusal(
+  error: unknown,
+): 'trips.report.pdfNoAnswer' | 'trips.report.pdfRefused' | 'trips.report.pdfUnavailable' | undefined {
+  if (!(error instanceof DownloadError)) {
+    return undefined;
+  }
+  switch (error.code) {
+    case 'report.pdf_no_answer':
+      return 'trips.report.pdfNoAnswer';
+    case 'report.pdf_refused':
+      return 'trips.report.pdfRefused';
+    case 'report.pdf_unavailable':
+      return 'trips.report.pdfUnavailable';
+    default:
+      return undefined;
+  }
 }
 
 /**

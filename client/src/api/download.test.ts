@@ -2,7 +2,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../auth/auth.tsx', () => ({ userManager: { getUser: () => Promise.resolve(null) } }));
-const { downloadFileForm, saveBlob } = await import('./download.ts');
+const {
+  DownloadError,
+  downloadFileForm,
+  expeditionReportUrl,
+  reportPdfRefusal,
+  saveBlob,
+  tripReportDownloadUrl,
+  tripReportUrl,
+} = await import('./download.ts');
 
 afterEach(() => {
   vi.useRealTimers();
@@ -86,5 +94,37 @@ describe('downloadFileForm', () => {
       status: 400,
       code: 'trip_report.map_too_large',
     });
+  });
+});
+
+describe('a write-up’s download address', () => {
+  it('names a format only when a PDF is asked for, so the plain request stays what it was', () => {
+    expect(tripReportUrl('t1')).toBe('/api/v1/trip-logs/t1/report?');
+    expect(tripReportUrl('t1', 'layout-7', 'docx')).toBe('/api/v1/trip-logs/t1/report?templateId=layout-7');
+    expect(tripReportUrl('t1', 'layout-7', 'pdf')).toBe(
+      '/api/v1/trip-logs/t1/report?templateId=layout-7&format=pdf',
+    );
+    expect(tripReportDownloadUrl('t1', undefined, 'pdf')).toBe(
+      '/api/v1/trip-logs/t1/report/download?format=pdf',
+    );
+    expect(expeditionReportUrl('c1')).toBe('/api/v1/expeditions/c1/report?');
+    expect(expeditionReportUrl('c1', undefined, 'pdf')).toBe('/api/v1/expeditions/c1/report?format=pdf');
+  });
+});
+
+describe('reportPdfRefusal', () => {
+  it('words each refusal that is about the PDF, and no other failure', () => {
+    expect(reportPdfRefusal(new DownloadError(503, { code: 'report.pdf_no_answer' }))).toBe(
+      'trips.report.pdfNoAnswer',
+    );
+    expect(reportPdfRefusal(new DownloadError(503, { code: 'report.pdf_refused' }))).toBe(
+      'trips.report.pdfRefused',
+    );
+    expect(reportPdfRefusal(new DownloadError(409, { code: 'report.pdf_unavailable' }))).toBe(
+      'trips.report.pdfUnavailable',
+    );
+    // The write-up itself refused, or something that is not a refusal at all: not this one's to word.
+    expect(reportPdfRefusal(new DownloadError(404, { code: 'trip_log.not_found' }))).toBeUndefined();
+    expect(reportPdfRefusal(new Error('offline'))).toBeUndefined();
   });
 });

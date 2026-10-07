@@ -209,6 +209,10 @@ club that does not want it takes that line out of its camp layout.
 
 - **Download document** saves it as a Word document, in the standard layout or in one your club
   keeps under **Configuration → Report layouts**.
+- **Download PDF** gives the same document as a PDF. It is there only where your installation
+  runs its document converter; where it is not, **Print** and *Save as PDF* in the browser is
+  the way. Nothing is kept of the PDF on the server, and the copy saved to the camp is always
+  the Word document.
 - **Save to the camp** files the document on the camp's *Files* tab. The copy saved there can
   be opened by everybody who may read the camp, so it is built from what any account may see of
   its trips — including what each trip wrote: a trip's text is in the saved copy only as any

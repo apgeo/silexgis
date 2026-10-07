@@ -216,6 +216,10 @@ rândul `accounts` din model; un club care nu o dorește scoate acel rând din m
 
 - **Descarcă documentul** îl salvează ca document Word, în modelul standard sau într-unul pe
   care clubul îl ține la **Configurare → Modele de raport**.
+- **Descarcă PDF** dă același document ca PDF. Apare doar acolo unde instalarea rulează
+  convertorul de documente; unde lipsește, **Tipărește** și *Salvează ca PDF* din browser este
+  calea. Nimic din PDF nu se păstrează pe server, iar copia salvată la tabără este întotdeauna
+  documentul Word.
 - **Salvează la tabără** depune documentul pe fila *Fișiere* a taberei. Copia salvată acolo poate
   fi deschisă de toți cei care pot citi tabăra, așa că este construită din ce poate vedea orice
   cont din turele ei — inclusiv ce a scris fiecare tură: textul unei ture este în copia salvată

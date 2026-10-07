@@ -466,7 +466,11 @@ feature and walkthroughs of whole jobs.
   a line under it saying whose view it is and when. The sketch is still written out in words
   beside it. The copy filed against the trip never carries that map: it shows what one reader may
   see, and a filed copy is opened by everybody who may read the trip. There is no public address
-  for a report: it is downloaded by somebody signed in who may read the trip.
+  for a report: it is downloaded by somebody signed in who may read the trip. Where the
+  installation runs its optional document converter, the same write-up — a trip's or a camp's,
+  map included — can be downloaded **as a PDF**: the Word document is passed through the
+  converter inside the request and nothing is stored. Without the converter the button is not
+  offered, and the page's print view is the way to a PDF.
   A club can write **its own layout** for the document: download the standard one, which is a short
   text file that explains itself in its own comments, edit it, upload it, and choose it. A layout can
   only ask for things the reader was already given, and a line whose contents turn out to be empty

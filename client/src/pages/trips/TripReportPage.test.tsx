@@ -4,6 +4,7 @@ import { App } from 'antd';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { DownloadError } from '../../api/download.ts';
 import type { TripLogInfo } from '../../api/hooks.ts';
 
 const ANA = '11111111-2222-3333-4444-555555555555';
@@ -23,11 +24,12 @@ const fieldDataSchema = JSON.stringify({
   },
 });
 
-const { tripSpy, photosSpy, downloadSpy, keepSpy } = vi.hoisted(() => ({
+const { tripSpy, photosSpy, downloadSpy, keepSpy, fileConfigSpy } = vi.hoisted(() => ({
   tripSpy: vi.fn(),
   photosSpy: vi.fn(),
   downloadSpy: vi.fn(),
   keepSpy: vi.fn(),
+  fileConfigSpy: vi.fn(),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
@@ -62,6 +64,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useCave: () => ({ data: { id: CAVE, name: 'Peștera Mare' } }),
   useReportTemplates: () => ({ data: [] }),
   useEffectiveAccess: () => ({ data: undefined }),
+  useFileConfig: () => fileConfigSpy(),
   // Somebody who may change the trip, so that both ways of producing a document are on the page.
   useCan: () => true,
   useKeepTripReport: () => ({ mutate: keepSpy, isPending: false }),
@@ -173,6 +176,8 @@ function show(subject: TripLogInfo, photos: unknown[] = []) {
 beforeEach(() => {
   downloadSpy.mockReset().mockResolvedValue('with-map');
   keepSpy.mockReset();
+  // The ordinary installation: no service that lays a document out as a PDF.
+  fileConfigSpy.mockReset().mockReturnValue({ data: { conversionAvailable: false } });
 });
 
 afterEach(cleanup);
@@ -337,6 +342,58 @@ describe('TripReportPage', () => {
     fireEvent.click(screen.getByTestId('trip-report-download'));
 
     expect(await screen.findByText('The document could not be produced.')).toBeTruthy();
+  });
+
+  /**
+   * A PDF of the write-up exists only where the installation runs the service that makes one,
+   * and the installation says so of itself. Where it does not — or has not answered yet — the
+   * choice is not on the page: a button that can only be refused is worse than no button.
+   */
+  it('offers the write-up as a PDF only where the installation says it can make one', () => {
+    show(trip());
+    expect(screen.getByTestId('trip-report-download')).toBeTruthy();
+    expect(screen.queryByTestId('trip-report-download-pdf')).toBeNull();
+
+    cleanup();
+    fileConfigSpy.mockReturnValue({ data: undefined });
+    show(trip());
+    expect(screen.queryByTestId('trip-report-download-pdf')).toBeNull();
+
+    cleanup();
+    fileConfigSpy.mockReturnValue({ data: { conversionAvailable: true } });
+    show(trip());
+    expect(screen.getByTestId('trip-report-download-pdf').textContent).toContain('Download PDF');
+  });
+
+  it('asks for the same trip, in the same layout, as a PDF — and as a document when that is what was pressed', () => {
+    fileConfigSpy.mockReturnValue({ data: { conversionAvailable: true } });
+    const subject = trip();
+    show(subject);
+
+    fireEvent.click(screen.getByTestId('trip-report-download-pdf'));
+    expect(downloadSpy.mock.calls[0]).toEqual([subject, undefined, 'pdf']);
+
+    fireEvent.click(screen.getByTestId('trip-report-download'));
+    expect(downloadSpy.mock.calls[1]).toEqual([subject, undefined, 'docx']);
+  });
+
+  /**
+   * A refusal that is about the PDF is said as that, because its remedy is on the page — the
+   * Word document — and "the document could not be produced" would send its reader away.
+   */
+  it.each([
+    ['report.pdf_no_answer', 'did not answer in time'],
+    ['report.pdf_refused', 'could not lay this write-up out'],
+    ['report.pdf_unavailable', 'no longer offers a PDF'],
+  ])('says what happened when the PDF is refused as %s', async (code, words) => {
+    fileConfigSpy.mockReturnValue({ data: { conversionAvailable: true } });
+    downloadSpy.mockRejectedValue(new DownloadError(503, { code }));
+    show(trip());
+
+    fireEvent.click(screen.getByTestId('trip-report-download-pdf'));
+
+    expect((await screen.findByText(words, { exact: false })).textContent).toContain(words);
+    expect(screen.queryByText('The document could not be produced.')).toBeNull();
   });
 
   /**

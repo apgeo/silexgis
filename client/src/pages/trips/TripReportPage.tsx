@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeftOutlined, FileWordOutlined, PrinterOutlined, SaveOutlined } from '@ant-design/icons';
+import {
+  ArrowLeftOutlined,
+  FilePdfOutlined,
+  FileWordOutlined,
+  PrinterOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import {
   App,
   Alert,
@@ -25,6 +31,7 @@ import {
   useCavers,
   useCavingGroups,
   useEffectiveAccess,
+  useFileConfig,
   useKeepTripReport,
   usePhotos,
   useTripLog,
@@ -53,6 +60,7 @@ import {
 } from '../../components/trips/useTripReportDownload.ts';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import '../../components/trips/TripReport.css';
+import { reportPdfRefusal, type ReportFormat } from '../../api/download.ts';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
 import { formatPosition, shapeLabelKey, tripGeometrySummary } from '../../components/trips/tripGeometrySummary.ts';
@@ -160,6 +168,11 @@ export default function TripReportPage() {
   const canKeep = held ? held.has('write') : domainFallback;
   const [templateId, setTemplateId] = useState<string | undefined>(undefined);
   const report = useTripReportDownload();
+  // Whether this installation can lay a write-up out as a PDF is a fact about the installation,
+  // read from what it says about itself. Where it cannot, the choice is not offered: a button
+  // that can only be refused is worse than no button, and printing to PDF is still on this page.
+  const { data: fileConfig } = useFileConfig();
+  const pdfOffered = fileConfig?.conversionAvailable === true;
   const keepReport = useKeepTripReport();
   const { message } = App.useApp();
   // The pictures come the way the gallery gets them, through the photographs request, which
@@ -212,6 +225,27 @@ export default function TripReportPage() {
   const meeting = tripGeometrySummary(trip.meetingGeom);
   const photos = photosQuery.data?.items ?? [];
 
+  /**
+   * Downloads the write-up in one format and tells the reader only what the file would not.
+   *
+   * A refusal that is about the PDF — the converter did not answer, or could not lay this one
+   * out — is said in those words, because the remedy is on this page: the Word document.
+   */
+  const downloadAs = (format: ReportFormat) => {
+    report
+      .download(trip, templateId, format)
+      .then((outcome) => {
+        const notice = DOWNLOAD_NOTICES[outcome];
+        if (notice) {
+          void message[notice.level](t(notice.key));
+        }
+      })
+      .catch(
+        (error: unknown) =>
+          void message.error(t(reportPdfRefusal(error) ?? 'trips.report.documentFailed')),
+      );
+  };
+
   /** The values a section actually holds, in the order its purpose declares them. */
   const written = (section: TripSectionKey) =>
     writtenSectionRows(trip[section], schemas[section], cavers, t);
@@ -249,22 +283,25 @@ export default function TripReportPage() {
               every later reader of the trip, and the map shows what this one may see. */}
           <Button
             icon={<FileWordOutlined />}
-            loading={report.downloading}
+            loading={report.downloadingFormat === 'docx'}
+            disabled={report.downloading && report.downloadingFormat !== 'docx'}
             data-testid="trip-report-download"
-            onClick={() => {
-              report
-                .download(trip, templateId)
-                .then((outcome) => {
-                  const notice = DOWNLOAD_NOTICES[outcome];
-                  if (notice) {
-                    void message[notice.level](t(notice.key));
-                  }
-                })
-                .catch(() => void message.error(t('trips.report.documentFailed')));
-            }}
+            onClick={() => downloadAs('docx')}
           >
             {t('trips.report.download')}
           </Button>
+          {/* The same document, map and all, laid out by the installation's converter. */}
+          {pdfOffered && (
+            <Button
+              icon={<FilePdfOutlined />}
+              loading={report.downloadingFormat === 'pdf'}
+              disabled={report.downloading && report.downloadingFormat !== 'pdf'}
+              data-testid="trip-report-download-pdf"
+              onClick={() => downloadAs('pdf')}
+            >
+              {t('trips.report.downloadPdf')}
+            </Button>
+          )}
           {canKeep && (
             /* Said before the button rather than after it: what is filed against the trip is
                readable by everybody who may read the trip, so the server builds that copy for
