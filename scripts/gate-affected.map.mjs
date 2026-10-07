@@ -29,6 +29,7 @@ export const groups = {
     'TrustedProxyTests', 'TripTrackingOptionsTests',
     'CredentialUrlScrubberTests', 'PublishedLinksAdminTests', 'PublishedLinkWithdrawalTests',
     'PublishedSurveyBoundsTests', 'PublicTripDiagnosticsTests',
+    'OptionsDocumentationTests', 'PerMinuteLimitTests', 'ProxyHopsCheckTests', 'StartupSettingsTests',
     'TripOrganizingGroupGuardTests', 'TripsOfTheCallerTests',
     'EnumBindingTests', 'TripPurgeTests', 'TripTrackImportTests', 'TripWriteShapeTests',
     'TripReportMapTests',
@@ -146,8 +147,9 @@ export const groups = {
   ],
   users: [
     'AuthFlowTests', 'CredentialRevocationTests', 'EmailVerificationTests', 'ExternalAuthTests',
-    'MfaAndRateLimitTests', 'ProfileVisibilityTests', 'TestLoginTests', 'TrustedProxyTests',
-    'TwoFactorChannelTests', 'UserAdministrationTests',
+    'MfaAndRateLimitTests', 'PerMinuteLimitTests', 'ProfileVisibilityTests', 'ProxyHopsCheckTests',
+    'StartupSettingsTests', 'TestLoginTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
+    'UserAdministrationTests',
   ],
   resLinks: [
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
@@ -174,7 +176,7 @@ export const groups = {
   about: ['ApiSmokeTests', 'TestModeTests'],
   audit: ['AccessHistoryTests', 'HistoryTests'],
   admin: ['AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests', 'SeededGroupUpgradeTests'],
-  settings: ['AccountSettingsTests', 'TerrainOptionsTests', 'UiDefaultsTests'],
+  settings: ['AccountSettingsTests', 'OptionsDocumentationTests', 'TerrainOptionsTests', 'UiDefaultsTests'],
   messaging: [
     'AdminMessagingTests', 'CavingGroupAnnouncementPaidCapTests', 'NotificationDeliveryTests',
     'SmsNotificationChannelTests',

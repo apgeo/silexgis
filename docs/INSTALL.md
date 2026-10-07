@@ -181,7 +181,28 @@ address (a CDN, a proxy on another machine) must also be named under
 private ranges rather than adding to it, so name the range your Docker network speaks from as well
 (usually inside `172.16.0.0/12` — `docker network inspect` says which — for example
 `SILEXGIS__Proxy__TrustedNetworks__1=172.16.0.0/12`). The bundled Caddy
-overlay needs none of this, because it sets the hop count itself. Allow request bodies at least as large as
+overlay needs none of this, because it sets the hop count itself.
+
+**A website that fetches published pages for its readers** — a relay on the club's own site, so
+that its article can show a trip from the article's own address — is, to this server, one caller:
+every reader of that site shares one request budget, and a busy evening spends it for all of
+them. That stays so unless three things are all true. The relay sends each reader's address on in
+`X-Forwarded-For`. The relay's network is named under `SILEXGIS__Proxy__TrustedNetworks__…`,
+together with the private range, as above. And the relay is counted: in front of the HTTPS overlay
+that makes three — the relay, Caddy, the bundled nginx. The overlay sets the count itself, to two,
+and what it sets wins over a line in `.env`, so the three is written where the two is: the
+`SILEXGIS__Proxy__Hops` line of `deploy/docker-compose.tls.yml`, or a Compose override file of
+your own. Caddy has to be told to trust the relay as well (`trusted_proxies` in the global options
+of `deploy/Caddyfile`), because it otherwise discards a forwarded address it is handed.
+
+**When the count looks wrong, the application says so.** If the address a request ends up counted
+under is itself one of your proxies, or a private address, while forwarded addresses were left
+unread behind it, a warning is written to the API log — at most once an hour — naming that address
+and the setting to look at. It is worded as a possibility, because somebody on your own network
+whose software writes the header produces the same picture, and it changes nothing about how
+requests are counted.
+
+Allow request bodies at least as large as
 `SILEXGIS__Files__MaxUploadBytes` (512 MB by default) — nginx's `client_max_body_size` and
 IIS's `maxAllowedContentLength` both default well below that, and an upload refused at the
 proxy fails with an error the application never sees and cannot explain.
@@ -1194,6 +1215,27 @@ cave, and track against the new one. Positions recorded before the upgrade keep 
 written with; the tracking log is append-only by design, and a correction is made by deleting a
 report and entering it again.
 
+### Upgrading across the release that checks the published-trip settings at start
+
+Seven settings that used to be taken as written are now checked while the application starts,
+and a value that cannot mean anything **stops it**, with a line in the API log that names the
+setting and says how to write what was probably meant:
+
+- `SILEXGIS__TripTracking__ShareLifetime` — zero or less;
+- `SILEXGIS__TripTracking__ShareGraceAfterClose` — negative (`00:00:00` is allowed);
+- `SILEXGIS__TripPastTracks__Retention` — zero or less (unset is "no limit");
+- the four per-minute limits, `SILEXGIS__Auth__RateLimitPerMinute`,
+  `SILEXGIS__Qr__RateLimitPerMinute`, `SILEXGIS__TripTracking__PublicRateLimitPerMinute` and
+  `SILEXGIS__CalendarFeed__RateLimitPerMinute` — zero or less.
+
+An installation that never set them, or set them sensibly, sees no difference. One that had such
+a value was already not working — links that stopped answering at the midnight their trip ended
+or before it, an archive that emptied itself at that same midnight, a server error on every
+sign-in — without
+anything saying why; after this upgrade its API
+container does not come up until the line is corrected. `docker compose logs api` shows the
+message.
+
 ## External login providers
 
 Sign-in with Google, GitHub, or any OpenID Connect provider is optional and off by default —
@@ -1214,6 +1256,15 @@ Register this redirect URI with the provider (using the `Name` value):
 account is created on first sign-in only when the provider block sets `__AllowCreate=true`
 and the email is verified by the provider. To hide the password form entirely once a provider
 is configured, set `SILEXGIS__Auth__ExternalOnly=true`.
+
+A block may carry four more lines, each optional:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SILEXGIS__Auth__ExternalProviders__0__Authority` | — | the issuer's address. Required for `oidc`; for `google` it replaces the built-in issuer; ignored for `github` |
+| `SILEXGIS__Auth__ExternalProviders__0__Scopes__0`, then `__1`, … | *(none)* | scopes to ask the provider for beyond the usual ones (`openid`, `profile` and `email` for OpenID Connect), one per line |
+| `SILEXGIS__Auth__ExternalProviders__0__AllowCreate` | `false` | create a local account at somebody's first sign-in through this provider when none is linked and none has the same address. Needs an address the provider has verified. Off, the account has to exist already, or the person links the provider from their own account settings |
+| `SILEXGIS__Auth__ExternalProviders__0__RequireHttpsMetadata` | `true` | whether the provider's own description of itself must be fetched over HTTPS. Set `false` only for an OpenID Connect provider you host yourself and reach over plain HTTP on a network you trust |
 
 See `deploy/.env.example` for GitHub and generic-OIDC examples.
 
@@ -1396,9 +1447,11 @@ the reasoning beside each one.
 | `SILEXGIS__Db__ConnectionString` | — | PostgreSQL connection string |
 | `SILEXGIS__Db__AutoMigrate` | `true` | run migrations on start |
 | `SILEXGIS__PublicUrl` | `http://localhost:8080` | public URL (sign-in redirects derive from it) |
-| `SILEXGIS__Admin__Email` / `__Password` | — | first-run administrator |
+| `SILEXGIS__Admin__Email` | — | first-run administrator: the address it signs in with. The packaged stack sets it from `SILEXGIS_ADMIN_EMAIL` in `.env` |
+| `SILEXGIS__Admin__Password` | — | first-run administrator: its password. The packaged stack sets it from `SILEXGIS_ADMIN_PASSWORD` in `.env` |
 | `SILEXGIS__Auth__OpenRegistration` | `false` | allow self-registration |
 | `SILEXGIS__Auth__ExternalOnly` | `false` | hide the password form when providers exist |
+| `SILEXGIS__Auth__AdditionalRedirectUris__0`, then `__1`, `__2`, … | *(none)* | further addresses a sign-in may return to, each written whole — `https://www.club.example.org/auth/callback`. The one under `SILEXGIS__PublicUrl` is registered by itself; an installation also served under a second name needs that name's address listed here, or signing in through it is refused as an invalid redirect |
 | `SILEXGIS__Auth__RateLimitPerMinute` | `60` | sign-in, password-reset and token requests one IP address may make per minute. Raise it for an installation whose users share an outbound address |
 | `SILEXGIS__Qr__RateLimitPerMinute` | `60` | requests to the printed-cave-code landing address one IP address may make per minute. Its own window rather than the sign-in one, so that a group scanning labels at a cave entrance from behind a single connection cannot spend everyone else's sign-in allowance. **This is abuse and cost control, not a confidentiality control** — a printed code is short and reproducible outside this server, so its space is exhaustible at any rate a person would tolerate; what makes that pointless is that a code which resolves discloses only this installation's own name |
 | `SILEXGIS__Proxy__Hops` | `1` | how many reverse proxies stand between a caller and the application, **exactly**. The three per-address limits above and below find the caller by walking `X-Forwarded-For` back this many hops. The packaged stack has one (its web front); the HTTPS overlay has two and sets `2` itself; your own proxy in front of the web service makes two, and you set it — see "Your own proxy" under [Enabling HTTPS](#enabling-https). Too low, and every caller counts as your proxy and shares one allowance; too high, and a caller can write an address of their own into the header |
@@ -1410,12 +1463,12 @@ the reasoning beside each one.
 | `SILEXGIS__Sync__UploadRowsMax` | `500` | the most rows one upload batch from a phone may carry. A batch is applied as a unit, so this bounds what a single failed or repeated request costs. Values outside 1 to 5000 are brought back inside that range |
 | `SILEXGIS__Sync__DuplicateRadiusMeters` | `50` | how close something already in the registry has to be to a row a phone just created before the answer mentions it. Reporting only — it never refuses a row. `0` turns the report off; values above 5000 are brought back to 5000. The same figure a file import uses, because how close two entrances can be before they are probably one is a property of the karst rather than of the channel |
 | `SILEXGIS__TripTracking__PublishRealNames` | `true` | whether a **published** trip names the party for real. On by default, and the one setting here that defaults to showing something: a club publishes a trip so that families and friends can watch a party come out, and a page that will not say which person is still underground does not answer the question it was opened for. Set it to `false` and every published page in this installation goes back to naming nobody — each person appears as their place in the party ("Caver 2") and the page says nothing else about who they are. It applies as each page is read rather than being stored on a share, so it moves links already handed out in both directions: turning it off closes the disclosure on every live link with nothing to re-issue, and turning it on — which is what upgrading from a build before this setting existed does — opens it on links minted when the page named nobody. An installation with follow links in circulation should decide in the same step as the upgrade; see "Upgrading across the release that names the party on published trips" above. Two things it does not decide. An administrator can give one person a name of their own for a trip's page, and that name is what the page shows whichever way this is set — which is how somebody who does not want to appear is kept off a public page without the club turning names off for everybody. And a cave whose coordinates are protected still cannot be published at all, whatever this says. Note that where a club has also allowed its own website to embed the page, that site is told the party the same way |
-| `SILEXGIS__TripTracking__ShareLifetime` | `14.00:00:00` | how long a follow link goes on working, counted from the end of the trip's last day rather than from when the link was made — so one number means the same for an afternoon and for a three-week camp. A backstop: closing the watch ends a link long before this on nearly every trip, and this covers the watch nobody closes. Lengthen it for a long expedition. Written `d.hh:mm:ss` |
-| `SILEXGIS__TripTracking__ShareGraceAfterClose` | `2.00:00:00` | how long a published page keeps answering after the watch is closed, so the people who followed the party can read that everybody is out. Never past the lifetime above. After it, the trip leaves the "being followed now" list and appears among the cave's past trips |
+| `SILEXGIS__TripTracking__ShareLifetime` | `14.00:00:00` | how long a follow link goes on working, counted from the end of the trip's last day rather than from when the link was made — so one number means the same for an afternoon and for a three-week camp. A backstop: closing the watch ends a link long before this on nearly every trip, and this covers the watch nobody closes. Lengthen it for a long expedition. Written `d.hh:mm:ss`. **Checked at start**: zero or less stops the application with a message naming this setting, because links would otherwise stop at the very midnight their trip ends, or before it, and read "not found" to a family still waiting. There is no value for "never" — write a long period |
+| `SILEXGIS__TripTracking__ShareGraceAfterClose` | `2.00:00:00` | how long a published page keeps answering after the watch is closed, so the people who followed the party can read that everybody is out. Never past the lifetime above. After it, the trip leaves the "being followed now" list and appears among the cave's past trips. `00:00:00` is allowed and ends the page the moment the watch is closed; a negative value stops the application at start |
 | `SILEXGIS__TripTracking__FollowedListSize` | `20` | how many trips of the same cave the "being followed now" list on a published page carries. Held to `50` whatever is set here. The page says whether there are more and never how many, because how much a club is doing at this moment is itself something the page should not announce |
-| `SILEXGIS__TripTracking__PublicRateLimitPerMinute` | `120` | requests one address may make per minute, across all four published-trip addresses together. They answer visitors with no account and live in articles that crawlers read, so this is **cost control, not a secret** — the link cannot be guessed — and setting it low only stops your own club reading a page at once. Raise it if many readers share one connection |
+| `SILEXGIS__TripTracking__PublicRateLimitPerMinute` | `120` | requests one address may make per minute, across all four published-trip addresses together. They answer visitors with no account and live in articles that crawlers read, so this is **cost control, not a secret** — the link cannot be guessed — and setting it low only stops your own club reading a page at once. Raise it if many readers share one connection. **Checked at start**, like the other three per-minute limits in this table: zero or less stops the application with a message naming the setting. There is no value for "no limit" — write a large number |
 | `SILEXGIS__TripPastTracks__Enabled` | `true` | whether a published link also opens its cave's **past trips** — the finished trips of that cave somebody published — as a list to pick from and a replay. `false` makes the past-trip addresses answer exactly what an unknown link answers, for every link ever handed out, and also stops a link whose own trip is over from listing who is in the cave now. A link whose own party is still underground is unaffected |
-| `SILEXGIS__TripPastTracks__Retention` | *(unset: no limit)* | how long a finished trip stays among its cave's past trips, counted from the end of its last day, as `d.hh:mm:ss` (`365.00:00:00` is a year). Unset keeps a club's published history readable indefinitely; setting it also ends, after that time, an old link's view of who is in the cave now |
+| `SILEXGIS__TripPastTracks__Retention` | *(unset: no limit)* | how long a finished trip stays among its cave's past trips, counted from the end of its last day, as `d.hh:mm:ss` (`365.00:00:00` is a year). Unset keeps a club's published history readable indefinitely; setting it also ends, after that time, an old link's view of who is in the cave now. **Checked at start**: zero or less stops the application — leave it unset for no limit, and use `SILEXGIS__TripPastTracks__Enabled=false` to switch past trips off |
 | `SILEXGIS__TripPastTracks__ListSize` | `50` | how many past trips one list carries, newest first. Held to `200` whatever is set here, so a link in an article is never the cheapest way to read a club's whole register; the page says there are older ones and never how many |
 | `SILEXGIS__SpeleoLocDev__Allow` | `false` | permits `seed-speleoloc-dev` on a host that is not in development. That command creates a login, so it is refused without this |
 | `SILEXGIS__SpeleoLocDev__MemberPassword` | `dev-member-pass-1` | the password `member@dev.local` is created with. The default is printed in this guide, so set your own if you allow the command at all |
@@ -1430,6 +1483,8 @@ the reasoning beside each one.
 | `SILEXGIS__Security__SmsTwoFactorEnabled` | `false` | allow texted codes as a second factor |
 | `SILEXGIS__Security__TwoFactorCodeLifetimeMinutes` | `5` | how long a delivered code stays valid |
 | `SILEXGIS__Protection__RevealProtectedAssociations` | `false` | show a caller without exact-location rights that a document is attached to a position-protected cave. The document itself is served either way; only the pairing is affected, and switching this on never reveals a position — a photo carrying its own capture point stays unpaired regardless |
+| `SILEXGIS__Access__LocationGridMeters` | `5000` | the size, in metres, of the grid a protected cave's position is coarsened to for somebody who may not see where it is exactly. A smaller number gives more of the position away to everybody at once, so lower it only as a decision, never as tuning |
+| `SILEXGIS__Spatial__WorkingSrid` | `32635` (UTM zone 35 north on WGS 84) | the EPSG code of the projected coordinate system distances in metres are computed in — how deep a passage lies under the surface, how close two caves come. Set the UTM zone your area lies in (`32634` for western Romania). **Checked at start**: a code that cannot be resolved stops the application with a message naming this setting |
 | `SILEXGIS__Protection__CalendarFeedEnabled` | `false` | let members create secret calendar addresses that a phone or desktop calendar polls without signing in. A feed carries only the titles, dates and links of what that member is on — never a place or a position — and is read through the member's own permissions on every poll. Switching it off again stops every address already handed out. Also editable in **Admin → Messaging → Location protection** |
 | `SILEXGIS__CalendarFeed__RateLimitPerMinute` | `20` | polls one calendar address may make per minute. Keyed on the address, not the caller, because calendar services poll from shared addresses; a calendar application polls every few minutes, so the default is far above any real use |
 | `SILEXGIS__Notifications__PollSeconds` | `15` | how often queued notifications are sent; **0 switches sending off entirely, and queued messages keep accumulating** |
@@ -1443,10 +1498,14 @@ the reasoning beside each one.
 | `SILEXGIS__Announcements__PaidChannelsEnabled` | `false` | whether an announcement to a caving group may go out by a channel that charges for every message. Off, so an installation opts into spending money rather than inheriting it — and while it is off such a channel is not merely hidden: no member can choose it, no preference for it resolves to anything, and no outbound copy on it is created. Also editable in **Admin → Messaging → Notifications**; what is saved there replaces this value. The charging channel is the **text message**, so switching this on can put real messages on a real bill: it additionally needs the `SILEXGIS__Sms__*` settings (or **Admin → Messaging → SMS**) pointing at a working gateway, and only an announcement to a caving group may use it. A member is texted only if they have confirmed a telephone number on their own security page |
 | `SILEXGIS__Announcements__DailyPaidMessageCap` | `100` | how much this installation will send in a day on a charging channel before it refuses, counted in the **segments** a gateway bills for rather than in messages — one Romanian diacritic makes a message cost two of them, so this buys a Romanian installation about half as many messages as an English one. Counted over what is already committed today, including copies still waiting to go out, because money committed is money spent. An announcement that has been accepted and not yet handed out is charged what its wording was weighed at when it was accepted — the club's own name in it, in whichever language costs most — so a long club name is projected as the expensive thing it is; anything else queued without being weighed is charged a floor of two segments apiece until it is sent. Values of zero or less are ignored in favour of the default — the switch above is how an installation sends none. Also editable in **Admin → Messaging → Notifications** |
 | `SILEXGIS__About__InstanceName` | `SilexGIS` | name used in the messages this installation sends |
+| `SILEXGIS__About__SourceUrl` | `https://github.com/apgeo/silexgis` | where the source code of what this installation runs can be had; the **About** page links to it. An installation running a modified copy must point this at its own source — that is what section 13 of the licence asks of whoever offers a modified version over a network |
 | `SILEXGIS__Auth__DefaultPermissionGroups` | *(empty)* | comma-separated permission-group slugs (e.g. `editors`) every new account joins at registration or first external sign-in |
 | `SILEXGIS__Map__CenterlineDetailZoom` | `18` | zoom at which cave centerlines switch from passage outlines to full survey detail |
 | `SILEXGIS__Map__CenterlineMaxPaths` | `25000` | line budget per centerline request; over it, outlines are served instead |
 | `SILEXGIS__Map__CenterlineMaxPathsLimit` | `100000` | the most a member may raise that line budget to for the browser they are using, under **Settings › Advanced** or in the map's layer list; a request for more is answered as this many. Set it equal to the default to let nobody raise it; a default set above it is held to it |
+| `SILEXGIS__Map__CenterlineGateZoom` | `12` | below this zoom a cave whose line work is heavier than the next setting is not drawn at all, and the map says it was withheld — a whole district on screen is not the view to draw one very large survey in |
+| `SILEXGIS__Map__CenterlineGatePaths` | `20000` | how many lines make a cave's line work too heavy for such an overview |
+| `SILEXGIS__Map__CenterlineSimplifyPixels` | `1.0` | how much line work is thinned for the zoom it is drawn at, in screen pixels: detail smaller than this is dropped. It thins ordinary imported lines and does almost nothing to a survey made of single shots |
 | `SILEXGIS__Terrain__Url` | *(empty)* | where the baked elevation tiles are served from, e.g. `/terrain/`. Empty means the 3D view draws a smooth globe, which needs nothing installed. **Set, it wins over anything built inside the application** — a build chosen as the current one is ignored while this has a value, deliberately, so an installation that already had terrain does not change under it. Leave it empty if you intend to use builds. See [Terrain](#terrain-optional) |
 | `SILEXGIS__Terrain__HeightDatum` | `Orthometric` | what the tile heights are measured from: `Orthometric` (above sea level) or `Ellipsoidal` (converted when baked). Wrong here puts every cave about 40 m off its hillside |
 | `SILEXGIS__Terrain__GeoidHeightM` | `0` | the local geoid undulation in metres, used **only** with `Ellipsoidal`. +39 to +45 over Romanian karst |
