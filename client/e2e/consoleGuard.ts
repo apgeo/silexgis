@@ -216,6 +216,27 @@ export async function ownContext(
   return context;
 }
 
+/**
+ * A browser that has never chosen a language here — somebody opening a link they were sent, on a
+ * machine that has not seen this installation before.
+ *
+ * The one context in the suite that does not read English, for the one question the others
+ * cannot ask: what does the application open in when nobody has said? Every other context has
+ * the choice recorded before its first page exists, so a spec using them proves what follows a
+ * choice and never what precedes one. Watched exactly as `ownContext` is; nothing in it can be
+ * found by an English label until the page under test has been told to speak English.
+ *
+ * The caller closes it.
+ */
+export async function firstVisitContext(
+  browser: Browser,
+  options?: Parameters<Browser['newContext']>[0],
+): Promise<BrowserContext> {
+  const context = await browser.newContext(options);
+  watchForRunningTest?.(context);
+  return context;
+}
+
 export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
   /**
    * The browser reads English, because the specs are written in it.

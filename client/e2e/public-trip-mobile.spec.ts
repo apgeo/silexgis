@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { join } from 'node:path';
 import { expect, type Page } from '@playwright/test';
-import { test } from './consoleGuard.ts';
+import { CHOICE_KEY } from '../src/i18n/languageStorage.ts';
+import { PUBLIC_CHOICE_KEY } from '../src/pages/public/publicLanguageStorage.ts';
+import { firstVisitContext, test } from './consoleGuard.ts';
 
 /**
  * A published trip on the device it is actually opened on.
@@ -254,6 +256,127 @@ test.describe('following a published trip on a phone', () => {
     await page.getByTestId('caveview-tracking-toggle').tap();
     await page.getByTestId('caveview-caver-1').tap();
     await expect(page.getByTestId('caveview-caver-card')).toContainText('Ana');
+  });
+});
+
+/**
+ * The language a published trip is read in.
+ *
+ * The readers of this page are not members and did not choose anything: a family in another
+ * country is sent the same link as the club's own. The installation opens in Romanian, and that
+ * is what a link that says nothing opens in; a link may say otherwise, and so may the reader, by
+ * a button that is on the page in the language it offers.
+ */
+test.describe('the language of a published trip', () => {
+  test('changes at the button, which says so to the browser and in the address', async ({ page }) => {
+    await servePublishedTrip(page, envelope());
+    await page.setViewportSize(NARROWEST);
+    await page.goto(`/shared/trips/${TOKEN}`);
+
+    // This suite's browsers have chosen English, and an address that names no language leaves a
+    // choice already made alone.
+    const state = page.getByTestId('public-trip-state-armed');
+    await expect(state).toHaveText('Underground now');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+
+    // The invitation is written in the language it leads to, and marked as that language — a
+    // screen reader would otherwise say a Romanian word in an English voice.
+    const button = page.getByTestId('public-trip-language');
+    await expect(button).toHaveText('Română');
+    await expect(button).toHaveAttribute('lang', 'ro');
+    await button.tap();
+
+    await expect(state).toHaveText('În peșteră acum');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ro');
+    await expect(button).toHaveText('English');
+    // In the address, so that the page sent on from here opens the way it was being read — and
+    // put there in place of the address before it: a language is not somewhere to go back to.
+    expect(new URL(page.url()).searchParams.get('lang')).toBe('ro');
+    expect(new URL(page.url()).pathname).toBe(`/shared/trips/${TOKEN}`);
+    // Pressing is the reader choosing, and it is remembered in this browser — for published
+    // trips. The record the signed-in application keeps of its own language is not this page's
+    // to write: it still says what this suite's browsers chose there.
+    const stored = (key: string) => page.evaluate((name) => window.localStorage.getItem(name), key);
+    expect(await stored(PUBLIC_CHOICE_KEY)).toBe('ro');
+    expect(await stored(CHOICE_KEY)).toBe('en');
+
+    // So the link opened again, naming no language, opens the way this reader left it — although
+    // the application itself reads English in this browser.
+    await page.goto(`/shared/trips/${TOKEN}`);
+    await expect(state).toHaveText('În peșteră acum');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ro');
+
+    // And an address that names a language wins over what was pressed here before: whoever wrote
+    // the link wrote it for readers of that language. Nothing pressed, nothing rewritten.
+    await page.goto(`/shared/trips/${TOKEN}?lang=en`);
+    await expect(state).toHaveText('Underground now');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    expect(await stored(PUBLIC_CHOICE_KEY)).toBe('ro');
+  });
+
+  test('is Romanian for a first visit by a link that names none, on the page and in the frame', async ({
+    browser,
+  }) => {
+    // A browser that has never been here: no language recorded, which no other context in this
+    // suite can say of itself.
+    const visitor = await firstVisitContext(browser, { viewport: NARROWEST });
+    try {
+      const page = await visitor.newPage();
+      await servePublishedTrip(page, envelope());
+
+      await page.goto(`/shared/trips/${TOKEN}`);
+      const state = page.getByTestId('public-trip-state-armed');
+      await expect(state).toHaveText('În peșteră acum');
+      await expect(page.locator('html')).toHaveAttribute('lang', 'ro');
+      await expect(page.getByTestId('public-trip-language')).toHaveText('English');
+
+      // The same link with a language on it, in the same browser. Nothing was pressed, so
+      // nothing is remembered: the language was the link's author's choice and not this
+      // reader's, and it lasts for the visit.
+      await page.goto(`/shared/trips/${TOKEN}?lang=en`);
+      await expect(state).toHaveText('Underground now');
+      await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+      expect(await page.evaluate((key) => window.localStorage.getItem(key), CHOICE_KEY)).toBeNull();
+      // An address that names a language this application does not speak names none.
+      await page.goto(`/shared/trips/${TOKEN}?lang=de`);
+      await expect(state).toHaveText('În peșteră acum');
+
+      // The frame a club pastes into an article answers the same way, and carries the button in
+      // the two letters a narrow box has room for.
+      await page.goto(`/shared/trips/${TOKEN}/embed`);
+      await expect(page.getByText('Nu există nicio ridicare topografică de arătat')).toBeVisible();
+      await expect(page.locator('html')).toHaveAttribute('lang', 'ro');
+      await expect(page.getByTestId('public-trip-language')).toHaveText('EN');
+      await page.goto(`/shared/trips/${TOKEN}/embed?lang=en`);
+      await expect(page.getByText('There is no survey drawing to show for this trip.')).toBeVisible();
+      await expect(page.getByTestId('public-trip-language')).toHaveText('RO');
+
+      // Last, this reader presses the button — in the one browser of the suite where nothing
+      // puts a language back between pages, so what is read below is what the press left.
+      const stored = (key: string) => page.evaluate((name) => window.localStorage.getItem(name), key);
+      await page.goto(`/shared/trips/${TOKEN}`);
+      await expect(state).toHaveText('În peșteră acum');
+      await page.getByTestId('public-trip-language').tap();
+      await expect(state).toHaveText('Underground now');
+      expect(await stored(PUBLIC_CHOICE_KEY)).toBe('en');
+      // The signed-in application was told nothing: it would still open in Romanian here, and an
+      // account signing in on this machine is still given its own language.
+      expect(await stored(CHOICE_KEY)).toBeNull();
+
+      // An address naming the other language wins over the press, and leaves it standing…
+      await page.goto(`/shared/trips/${TOKEN}?lang=ro`);
+      await expect(state).toHaveText('În peșteră acum');
+      await expect(page.locator('html')).toHaveAttribute('lang', 'ro');
+      expect(await stored(PUBLIC_CHOICE_KEY)).toBe('en');
+      // …so the link that names none opens the way the reader chose, page and frame alike.
+      await page.goto(`/shared/trips/${TOKEN}`);
+      await expect(state).toHaveText('Underground now');
+      await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+      await page.goto(`/shared/trips/${TOKEN}/embed`);
+      await expect(page.getByText('There is no survey drawing to show for this trip.')).toBeVisible();
+    } finally {
+      await visitor.close();
+    }
   });
 });
 
