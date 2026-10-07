@@ -353,16 +353,47 @@ public sealed class FeatureWriteService(
         return stamp;
     }
 
-    /// <summary>Restores the rows stamped by one soft deletion (children deleted earlier stay deleted).</summary>
-    public async Task RestoreAsync(Guid featureId, CancellationToken ct = default)
+    /// <summary>
+    /// Restores the rows stamped by one soft deletion (children deleted earlier stay deleted),
+    /// and answers how many rows came back. Does nothing to a feature that is not deleted.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Refused while anything containing the feature is deleted.</b> Deleting stamps a whole
+    /// subtree, so nothing live ever sits under something deleted, and reads lean on that: a row
+    /// inherits its audience from the rows containing it, and the read filter leaves a deleted
+    /// container out of that chain. A row put back beneath one would be reachable by its own
+    /// address and inherit from nothing. Guarded here rather than in the route that calls this,
+    /// so that a later caller inherits the refusal instead of having to remember it.
+    /// </para>
+    /// <para>
+    /// The write lands at once and its audit rows ride the caller's save, as the delete's do. A
+    /// caller that needs the two to stand or fall together — or that wants to look again, after
+    /// the write, at whether a container was deleted in the same instant
+    /// (<see cref="HasDeletedContainerAsync"/>) — opens a transaction around both.
+    /// </para>
+    /// <para>
+    /// The rows that come back are marked as written now. A device that keeps a copy of the
+    /// archive was sent their removal, and reads onwards from the moment of the last change it
+    /// holds: left with the write time they had before the delete, the restored rows would sit
+    /// behind that moment for ever and the device would never be handed them again.
+    /// </para>
+    /// </remarks>
+    public async Task<int> RestoreAsync(Guid featureId, CancellationToken ct = default)
     {
-        var stamp = await db.Features.IgnoreQueryFilters()
+        var target = await db.Features.IgnoreQueryFilters()
             .Where(f => f.Id == featureId)
-            .Select(f => f.DeletedAt)
+            .Select(f => new { f.DeletedAt, f.Kind })
             .FirstAsync(ct);
-        if (stamp is null)
+        if (target.DeletedAt is not { } stamp)
         {
-            return;
+            return 0;
+        }
+
+        if (await HasDeletedContainerAsync(featureId, ct))
+        {
+            throw new FeatureWriteException(FeatureDeletionRules.ContainerDeletedCode,
+                ["something containing this feature is deleted, and has to be restored first"]);
         }
 
         var subtree = await SubtreeIdsAsync(featureId, ct);
@@ -370,9 +401,12 @@ public sealed class FeatureWriteService(
             .Where(f => subtree.Contains(f.Id) && f.DeletedAt == stamp)
             .Select(f => new { f.Id, f.Kind })
             .ToListAsync(ct);
+        var now = DateTimeOffset.UtcNow;
         await db.Features.IgnoreQueryFilters()
             .Where(f => subtree.Contains(f.Id) && f.DeletedAt == stamp)
-            .ExecuteUpdateAsync(s => s.SetProperty(f => f.DeletedAt, (DateTimeOffset?)null), ct);
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(f => f.DeletedAt, (DateTimeOffset?)null).SetProperty(f => f.UpdatedAt, now),
+                ct);
 
         db.Set<AuditEntry>().AddRange(restored.Select(f => new AuditEntry
         {
@@ -382,6 +416,52 @@ public sealed class FeatureWriteService(
             EntityId = f.Id.ToString(),
             Changes = /*lang=json,strict*/ """{"DeletedAt":{"old":"deleted","new":null}}""",
         }));
+
+        if (target.Kind == FeatureKind.CaveEntrance)
+        {
+            await RejoinCaveAsync(featureId, ct);
+        }
+
+        return restored.Count;
+    }
+
+    /// <summary>
+    /// Whether anything containing the feature — over every containment path — is deleted.
+    /// </summary>
+    public async Task<bool> HasDeletedContainerAsync(Guid featureId, CancellationToken ct = default)
+    {
+        var containers = await db.FeatureAncestors
+            .Where(a => a.FeatureId == featureId && a.AncestorId != featureId)
+            .Select(a => a.AncestorId)
+            .ToListAsync(ct);
+        return containers.Count > 0
+            && await db.Features.IgnoreQueryFilters()
+                .AnyAsync(f => containers.Contains(f.Id) && f.DeletedAt != null, ct);
+    }
+
+    /// <summary>
+    /// Puts an entrance that was deleted on its own back among its cave's entrances.
+    /// </summary>
+    /// <remarks>
+    /// Deleting a cave's main entrance hands the role to another one and leaves the flag on the
+    /// row that went, where nothing could see it. Back among the others it would make two mains
+    /// of one cave, and which of them anchored the cave on the map would be an accident of row
+    /// order. The entrance that took over keeps the role: it is what the cave has been drawn at
+    /// since, and somebody restoring an entrance is not thereby asking to move the cave. An
+    /// entrance that comes back to a cave with no main one left keeps its flag, or is given the
+    /// role by the mirror's own rule.
+    /// </remarks>
+    private async Task RejoinCaveAsync(Guid entranceFeatureId, CancellationToken ct)
+    {
+        var entrance = db.CaveEntrances.Local.FirstOrDefault(e => e.Id == entranceFeatureId)
+            ?? await db.CaveEntrances.IgnoreQueryFilters().FirstAsync(e => e.Id == entranceFeatureId, ct);
+        var entrances = await EntrancesOfCaveAsync(entrance.CaveFeatureId, ct);
+        if (entrance.IsMain && entrances.Any(e => e.Id != entranceFeatureId && e.IsMain))
+        {
+            entrance.IsMain = false;
+        }
+
+        await SyncCaveMirrorAsync(entrance.CaveFeatureId, ct);
     }
 
     /// <summary>
