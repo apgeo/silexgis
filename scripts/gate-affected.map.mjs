@@ -114,6 +114,8 @@ export const groups = {
     'ClosestApproachTests', 'FeatureFilterCompilerTests', 'FeatureHierarchyTests',
     'FeatureIntegrityTests', 'FeatureLinkTests', 'FeatureTests', 'GeoJsonGeometryTests',
     'PolygonMorphometryTests', 'StructureComparisonTests',
+    // The restore routes and the rule they keep live in the feature slice itself.
+    'FeatureRestoreTests',
   ],
   featureSets: ['FeatureIntegrityTests', 'FeatureTests'],
   featureShares: ['FeatureShareTests'],
