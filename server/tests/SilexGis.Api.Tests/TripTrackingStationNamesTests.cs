@@ -278,6 +278,18 @@ public sealed class TripTrackingStationNamesTests : IAsyncLifetime, IDisposable,
             eventId = row.Id;
         }
 
+        // What a page is told about such a trip, which is all it has to decide by. The watch reads
+        // as off and never started — a trip with no tracking row answers exactly as one whose row
+        // is off — while the log lists the row. So a page that offers its controls by the first
+        // and reads its rows from the second can tell this log from one it may change, and need
+        // not offer a correction that can only be refused.
+        var told = await BodyAsync(await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking"));
+        told.GetProperty("state").GetString().ShouldBe("off");
+        told.GetProperty("armedAt").ValueKind.ShouldBe(JsonValueKind.Null);
+        (await BodyAsync(await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events")))
+            .GetProperty("items").EnumerateArray().Select(e => e.GetProperty("id").GetGuid())
+            .ShouldBe([eventId]);
+
         var corrected = await owner.PutAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events/{eventId}",
             new { kind = "note", note = "corrected" });
         corrected.StatusCode.ShouldBe(HttpStatusCode.Conflict);
@@ -288,6 +300,9 @@ public sealed class TripTrackingStationNamesTests : IAsyncLifetime, IDisposable,
         (await BodyAsync(removed)).GetProperty("code").GetString().ShouldBe("tracking.not_writable");
 
         (await ArmAsync(trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        // The same read is what says the controls now work: it changes with the rule, not beside it.
+        (await BodyAsync(await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking")))
+            .GetProperty("state").GetString().ShouldBe("armed");
         (await owner.DeleteAsync($"/api/v1/trip-logs/{trip}/tracking/events/{eventId}"))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
