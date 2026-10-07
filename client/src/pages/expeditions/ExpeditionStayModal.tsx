@@ -81,6 +81,7 @@ export default function ExpeditionStayModal({
   const { data: roles } = useExpeditionRosterRoles();
   const createStay = useCreateExpeditionRosterEntry(expeditionId);
   const updateStay = useUpdateExpeditionRosterEntry(expeditionId);
+  const saving = createStay.isPending || updateStay.isPending;
 
   useEffect(() => {
     if (open) {
@@ -176,7 +177,17 @@ export default function ExpeditionStayModal({
       open={open}
       onCancel={onClose}
       onOk={() => void onOk()}
-      confirmLoading={createStay.isPending || updateStay.isPending}
+      confirmLoading={saving}
+      // Not to be put away while a save is on its way — by the cross, by Cancel, by Escape or
+      // by a press outside it. The page keeps one dialog for every stay on the roster, and what
+      // a save does when it is answered it does to the dialog as it then stands: put away and
+      // opened again on another stay in the meantime, that one would be closed under whoever
+      // was typing in it by the first save's answer, or told that a person it never named is
+      // gone. The wait is the write and the roster read back after it.
+      closable={!saving}
+      keyboard={!saving}
+      mask={{ closable: !saving }}
+      cancelButtonProps={{ disabled: saving }}
       destroyOnHidden
     >
       <Typography.Paragraph type="secondary">{t('expeditions.stay.hint')}</Typography.Paragraph>

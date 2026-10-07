@@ -18,6 +18,8 @@ import type {
 
 const createStay = vi.fn();
 const updateStay = vi.fn();
+// Whether a save is on its way, as the two writes report it to whoever is drawing them.
+const onItsWay = { create: false, update: false };
 
 const roles: ExpeditionRosterRole[] = [
   { id: 4, code: 'member', name: 'Member', description: null, sortOrder: 1, isSeeded: true },
@@ -26,8 +28,14 @@ const roles: ExpeditionRosterRole[] = [
 
 vi.mock('../../api/hooks.ts', () => ({
   useExpeditionRosterRoles: () => ({ data: roles }),
-  useCreateExpeditionRosterEntry: () => ({ mutateAsync: createStay, isPending: false }),
-  useUpdateExpeditionRosterEntry: () => ({ mutateAsync: updateStay, isPending: false }),
+  useCreateExpeditionRosterEntry: () => ({
+    mutateAsync: createStay,
+    isPending: onItsWay.create,
+  }),
+  useUpdateExpeditionRosterEntry: () => ({
+    mutateAsync: updateStay,
+    isPending: onItsWay.update,
+  }),
   useCavers: () => ({ data: [{ id: 'caver-ana', name: 'Ana Pop', cavingGroups: [] }] }),
 }));
 
@@ -296,4 +304,61 @@ describe('correcting a stay', () => {
     expect(screen.queryByText(/no longer in the list of cavers/)).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
   });
+});
+
+describe('a stay whose save is on its way', () => {
+  beforeEach(() => {
+    onItsWay.create = false;
+    onItsWay.update = false;
+  });
+  afterEach(() => {
+    cleanup();
+    onItsWay.create = false;
+    onItsWay.update = false;
+  });
+
+  /** Every way there is of putting the dialog away without saving, tried one after another. */
+  function dismissed(onClose: () => void): number {
+    const closed = vi.mocked(onClose);
+    const before = closed.mock.calls.length;
+    const cross = document.querySelector<HTMLElement>('.ant-modal-close');
+    if (cross) {
+      fireEvent.click(cross);
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', keyCode: 27, which: 27 });
+    const outside = document.querySelector<HTMLElement>('.ant-modal-wrap')!;
+    fireEvent.mouseDown(outside);
+    fireEvent.mouseUp(outside);
+    fireEvent.click(outside);
+    return closed.mock.calls.length - before;
+  }
+
+  it('is put away by the cross, Cancel, Escape and a press outside it while nothing is', () => {
+    // The other half of the case below, and what makes it mean something: each of the four is
+    // a way out of this dialog as it is drawn here, so finding none of them answered there is
+    // the dialog refusing them and not this test failing to reach them.
+    const onClose = vi.fn();
+    show(stay(), { onClose });
+
+    expect(dismissed(onClose)).toBe(4);
+  });
+
+  it.each(['create', 'update'] as const)(
+    'cannot be put away while the %s is on its way',
+    (write) => {
+      // The dialog is one, shared by every stay on the tab, and what a save does when it is
+      // answered it does to the dialog as it then stands. Put away and opened again on another
+      // stay in the meantime, that one would be closed under whoever was typing in it by the
+      // first one's answer.
+      onItsWay[write] = true;
+      const onClose = vi.fn();
+      show(write === 'create' ? null : stay(), { onClose });
+
+      expect(document.querySelector('.ant-modal-close')).toBeNull();
+      const cancel = screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement;
+      expect(cancel.disabled).toBe(true);
+      expect(dismissed(onClose)).toBe(0);
+    },
+  );
 });
