@@ -16,6 +16,10 @@ let answer: {
   refetch?: () => unknown;
   /** When the last read that succeeded arrived, as the query reports it. */
   dataUpdatedAt?: number;
+  /** The failure of an attempt that is still being retried, as the query reports it. */
+  failureReason?: unknown;
+  /** True while the browser holds the read back because it knows it has no connection. */
+  isPaused?: boolean;
 } = {
   data: undefined,
   isPending: true,
@@ -390,6 +394,52 @@ describe('a trip followed by somebody with no account', () => {
     expect(refetch).toHaveBeenCalledOnce();
   });
 
+  it('says the same when a first read was never sent because the phone knows it is offline', () => {
+    // Nothing failed — the browser held the read back — so the query still calls it pending, and
+    // drawn as pending it is a spinner for as long as the car park has no signal.
+    answer = { data: undefined, isPending: true, error: null, isPaused: true };
+    render(<PublicTripPage />);
+
+    expect(screen.getByTestId('public-trip-unreachable')).toHaveTextContent(
+      'The trip could not be read just now',
+    );
+    expect(screen.queryByTestId('public-trip-not-found')).toBeNull();
+
+    // The twin: a first read that is simply in flight is still a page that is loading.
+    cleanup();
+    answer = { data: undefined, isPending: true, error: null, isPaused: false };
+    render(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-unreachable')).toBeNull();
+  });
+
+  it('says the same while a first read waits out a pause the server asked for', () => {
+    // Refused for being asked too often, with a time to come back: the read is held for that
+    // long before it is made again, and the query calls all of it pending.
+    const refetch = vi.fn();
+    answer = {
+      data: undefined,
+      isPending: true,
+      error: null,
+      failureReason: new ApiError(429, undefined, undefined, undefined, 60_000),
+      refetch,
+    };
+    render(<PublicTripPage />);
+
+    expect(screen.getByTestId('public-trip-unreachable')).toHaveTextContent(
+      'The trip could not be read just now',
+    );
+    expect(screen.queryByTestId('public-trip-not-found')).toBeNull();
+    fireEvent.click(screen.getByTestId('public-trip-retry'));
+    expect(refetch).toHaveBeenCalledOnce();
+
+    // The twin: an attempt being retried on this page's own short pacing is a blip, and is
+    // still a page that is loading.
+    cleanup();
+    answer = { data: undefined, isPending: true, error: null, failureReason: new ApiError(503) };
+    render(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-unreachable')).toBeNull();
+  });
+
   it('treats a server that is coming back like a dropped connection, not like a refusal', () => {
     answer = { data: undefined, isPending: false, error: new ApiError(503) };
     render(<PublicTripPage />);
@@ -637,6 +687,42 @@ describe('a followed page left open', () => {
     pass(2);
 
     expect(screen.getByTestId('public-trip-updated')).toHaveTextContent('Page updated 2 minutes ago');
+  });
+
+  it('says it has stopped refreshing while a read is held back or told to wait, though none has failed', () => {
+    followed();
+    const view = render(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-stale')).toBeNull();
+
+    // A phone that knows it is offline: the read is not sent, so nothing fails.
+    answer = { ...answer, isPaused: true };
+    view.rerender(<PublicTripPage />);
+    pass(20);
+    const held = screen.getByTestId('public-trip-stale');
+    expect(held).toHaveTextContent('This page has stopped refreshing');
+    expect(held).toHaveTextContent('20 minutes ago');
+    expect(screen.getByTestId('public-trip-caver-1')).toHaveTextContent('p.g.7');
+    expect(screen.queryByTestId('public-trip-ended')).toBeNull();
+
+    // The connection is back and a read lands: the notice goes by itself.
+    answer = { ...answer, isPaused: false, dataUpdatedAt: Date.now() };
+    view.rerender(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-stale')).toBeNull();
+
+    // The server asked to be left alone for a while: the read is waiting, not failed.
+    answer = {
+      ...answer,
+      failureReason: new ApiError(429, undefined, undefined, undefined, 30_000),
+    };
+    view.rerender(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-stale')).toHaveTextContent(
+      'This page has stopped refreshing',
+    );
+
+    // The twin: an ordinary retry, seconds long, is not worth a warning.
+    answer = { ...answer, failureReason: new ApiError(503) };
+    view.rerender(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-stale')).toBeNull();
   });
 
   it('measures from the read that last succeeded once a later one fails, and says how stale it is', () => {

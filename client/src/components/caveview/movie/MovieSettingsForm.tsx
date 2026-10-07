@@ -36,6 +36,7 @@ import {
   type MovieViewLayer,
 } from '../../../caveview/movie/movieSettings.ts';
 import { GIF_FRAME_RATES } from '../../../caveview/movie/encode/movieEncoder.ts';
+import { MOVIE_PRESETS, type MoviePresetId } from '../../../caveview/movie/moviePresets.ts';
 import {
   MOVIE_ASPECTS,
   MOVIE_CAVER_LABELS,
@@ -86,6 +87,13 @@ export interface MovieSettingsFormProps {
   onViewAgain: (() => void) | null;
   /** The file's frame count and estimated size, shown under the output settings. */
   summary: ReactNode;
+  /**
+   * Sets the file up for a purpose. Asked of the dialog rather than done here, since one preset has
+   * to ask the browser which video it can write before it changes anything.
+   */
+  onPreset: (preset: MoviePresetId) => void;
+  /** Puts every setting back to what a first opening shows. */
+  onReset: () => void;
 }
 
 function Row({ label, help, children }: { label: ReactNode; help?: ReactNode; children: ReactNode }) {
@@ -184,6 +192,8 @@ export default function MovieSettingsForm({
   trips,
   summary,
   onViewAgain,
+  onPreset,
+  onReset,
 }: MovieSettingsFormProps) {
   const { t, i18n } = useTranslation();
   const formatNumber = (value: number, digits: number) =>
@@ -602,6 +612,23 @@ export default function MovieSettingsForm({
         </Typography.Text>
       )}
       {view.HUD && <Alert type="warning" showIcon title={t('caveview.movie.hudWarning')} />}
+      {/* Offered only over terrain the survey's file carries, which is whole once the model has
+          loaded. The flat plane the viewer lays under a survey that names its coordinate system is
+          not offered: it is tiles asked for again as the camera moves, and would still be arriving
+          in a movie that turns. */}
+      <Row
+        label={t('caveview.movie.terrain')}
+        help={modelLoaded && !terrain ? t('caveview.movie.terrainNoneHelp') : t('caveview.movie.terrainHelp')}
+      >
+        <Switch
+          disabled={disabled || !terrain}
+          // A choice remembered from another model is not shown as made on one that cannot draw it.
+          checked={terrain && view.terrain}
+          onChange={(shown) => patch('view', { terrain: shown })}
+          data-testid="movie-terrain"
+          aria-label={t('caveview.movie.terrain')}
+        />
+      </Row>
       <Row
         label={t('caveview.movie.shading')}
         help={modelLoaded && !terrain ? t('caveview.movie.shadingTerrainHelp') : undefined}
@@ -701,6 +728,16 @@ export default function MovieSettingsForm({
           onChange={(clock) => patch('captions', { clock })}
         />
       </Row>
+      <Row label={t('caveview.movie.captionSpeed')} help={t('caveview.movie.captionSpeedHelp')}>
+        <Switch
+          // The figure is part of the clock's caption, so with the clock off there is nothing to switch.
+          disabled={disabled || !captions.clock}
+          checked={captions.speed}
+          onChange={(speed) => patch('captions', { speed })}
+          data-testid="movie-caption-speed"
+          aria-label={t('caveview.movie.captionSpeed')}
+        />
+      </Row>
       <Row label={t('caveview.movie.captionLegend')}>
         <Switch
           aria-label={t('caveview.movie.captionLegend')}
@@ -749,6 +786,45 @@ export default function MovieSettingsForm({
     // the buttons but leave the selects and sliders looking as if they could be changed.
     <ConfigProvider componentDisabled={disabled}>
       <div className="movie-settings" data-testid="movie-settings">
+        {/* Above the groups, since a preset is where a reader in a hurry starts and stops. Each
+            button's own `disabled` is said outright: it overrides the form's while an export runs. */}
+        <div className="movie-presets" role="group" aria-label={t('caveview.movie.presetsTitle')}>
+          <Typography.Text type="secondary">{t('caveview.movie.presetsTitle')}</Typography.Text>
+          <Flex gap="small" wrap>
+            {MOVIE_PRESETS.map((preset) => (
+              <Button
+                key={preset}
+                size="small"
+                disabled={disabled}
+                title={t(`caveview.movie.presetHelp.${preset}`)}
+                onClick={() => onPreset(preset)}
+                data-testid={`movie-preset-${preset}`}
+              >
+                {t(`caveview.movie.presets.${preset}`)}
+              </Button>
+            ))}
+          </Flex>
+          <Typography.Text type="secondary" className="movie-setting-help">
+            {t('caveview.movie.presetsHelp')}
+          </Typography.Text>
+        </div>
+        {/* Outside the presets, and under words of its own: a preset is promised to change the file
+            only, and this puts the captions, the labels and the view back as well. */}
+        <div className="movie-reset">
+          <Button
+            size="small"
+            type="text"
+            disabled={disabled}
+            title={t('caveview.movie.resetHelp')}
+            onClick={onReset}
+            data-testid="movie-reset"
+          >
+            {t('caveview.movie.reset')}
+          </Button>
+          <Typography.Text type="secondary" className="movie-setting-help" data-testid="movie-reset-help">
+            {t('caveview.movie.resetHelp')}
+          </Typography.Text>
+        </div>
         <Collapse
           size="small"
           defaultActiveKey={['trips', 'output']}

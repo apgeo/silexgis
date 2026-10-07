@@ -117,6 +117,30 @@ public static class TripTrackingRules
     };
 
     /// <summary>
+    /// Whether a watch is running now and has been for longer than <paramref name="longerThan"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Nothing closes a watch but a person, on purpose: "the party is out" is a fact somebody has
+    /// to state, and a watch closed by a timer would move a party that is overdue — which is
+    /// exactly a party that departed from its plan — off the page that follows it. The other side
+    /// of that choice is that a watch somebody forgot runs for ever, so the people who answer for
+    /// an installation need to be able to find the ones that have run suspiciously long. This is
+    /// the one reading of "long" they are found by.
+    /// </para>
+    /// <para>
+    /// Measured from the moment the watch was last started, not from the trip's dates: the dates
+    /// are a plan, and a watch started again for a party still underground is long-running from
+    /// when it was started again. A watch that is not running is never long-running, however long
+    /// it once ran; one recorded as running with no moment it started at cannot be measured and is
+    /// not counted.
+    /// </para>
+    /// </remarks>
+    public static bool ArmedForLongerThan(
+        TripTrackingState state, DateTimeOffset? armedAt, DateTimeOffset now, TimeSpan longerThan) =>
+        state == TripTrackingState.Armed && armedAt is { } since && now - since > longerThan;
+
+    /// <summary>
     /// Whether a position recorded against <paramref name="recordedOn"/> may be drawn on the model
     /// <paramref name="modelInUse"/>.
     /// </summary>
@@ -206,6 +230,83 @@ public static class TripTrackingRules
     /// </remarks>
     public static bool MayWriteLog(TripTrackingState state) =>
         state is TripTrackingState.Armed or TripTrackingState.Closed;
+
+    /// <summary>
+    /// Whether somebody may be taken off a trip's roster altogether, given the state of the trip's
+    /// watch and whether its log holds a report about them.
+    /// </summary>
+    /// <param name="state">
+    /// The state the trip's watch is in now; a trip that never had a watch is
+    /// <see cref="TripTrackingState.Off"/>.
+    /// </param>
+    /// <param name="hasReports">Whether the watch's log holds at least one report about them.</param>
+    /// <remarks>
+    /// <para>
+    /// <b>Refused in exactly one case: the watch is running and the person has been reported.</b>
+    /// A running watch is read to answer who is still inside, and the roster is what its published
+    /// page counts the party from. Somebody who went in and then disappears from the list is the
+    /// one error such a page cannot afford — the count of people underground drops by one with
+    /// nobody having come out — and it is reached by an ordinary act: the trip's form sends the
+    /// whole roster back, so a form that was opened before the person was added, or an edit made
+    /// for another reason, removes them without anybody having decided to.
+    /// </para>
+    /// <para>
+    /// <b>Allowed once the watch has closed, and on a trip that never had one.</b> A finished trip
+    /// is a record somebody is writing up, and its list of people has to stay correctable: a guest
+    /// entered under the wrong trip is taken off it. The reports about them remain in the log, and
+    /// the watch's own read goes on listing everybody its log speaks of, so nothing recorded is
+    /// lost from sight by the removal.
+    /// </para>
+    /// <para>
+    /// <b>Somebody nobody has reported on may leave at any time</b>, a running watch included:
+    /// there is nothing about them for the watch to lose, and a party that changes at the entrance
+    /// is the commonest roster edit there is.
+    /// </para>
+    /// <para>
+    /// <b>What this does not promise: that a running watch never speaks of somebody off the
+    /// roster.</b> It refuses the ordinary way there, a roster edit, and two others remain. A
+    /// watch that was closed, had a reported person taken off, and is then started again is
+    /// running with that person off its list; and the answer here is given from what the caller
+    /// read a moment earlier, with nothing holding the log still until the roster is saved, so a
+    /// first report recorded in that moment lands after the departure it should have refused.
+    /// Every reader of a watch therefore still has to cope with a reported person who is not on
+    /// the roster — the watch's own read lists them and says so — and must not take this rule as
+    /// leave to assume otherwise.
+    /// </para>
+    /// <para>
+    /// <b>This is asked about leaving the trip, never about leaving a job on it.</b> One person can
+    /// hold several jobs on a trip, each its own roster row; giving one up, or exchanging one for
+    /// another, leaves them on the trip and is not a departure. The caller decides who is leaving
+    /// by comparing people, not rows, and asks this only of those named in no job afterwards.
+    /// </para>
+    /// </remarks>
+    public static bool MayLeaveRoster(TripTrackingState state, bool hasReports) =>
+        !(state == TripTrackingState.Armed && hasReports);
+
+    /// <summary>
+    /// Whether a stored report has been changed since it was first written down.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read off the row's own two stamps, which one clock writes together when the row is first
+    /// saved and of which only the second moves afterwards — and only when a save actually changed
+    /// something, so a correction that altered nothing, or a sheet imported twice over the same
+    /// rows, leaves a report reading as it was written.
+    /// </para>
+    /// <para>
+    /// <b>A yes or a no, and deliberately not the two moments.</b> A log is what somebody said at a
+    /// moment, and a reader of it is owed knowing that a row no longer says what was first taken
+    /// down. When it was typed and by whom is the audit timeline's to say, to those who may read
+    /// that; putting the stamps beside the report would publish a second, coarser history to
+    /// everybody who reads the trip.
+    /// </para>
+    /// <para>
+    /// Anything that rewrites the row counts, not only the correction dialog: a sheet that replaced
+    /// it, and folding one roster entry into another, which changes whom the report is about.
+    /// </para>
+    /// </remarks>
+    public static bool ChangedSinceWritten(DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        updatedAt > createdAt;
 
     /// <summary>
     /// Where one member of the party stands, folded from every report about them.
@@ -321,4 +422,51 @@ public static class TripTrackingRules
         }
         return standing;
     }
+
+    /// <summary>
+    /// Whether somebody on a running watch has gone unreported for longer than the installation's
+    /// threshold: underground by the log, and no word of any kind since.
+    /// </summary>
+    /// <param name="state">Where the watch itself stands. Only a running watch has quiet people.</param>
+    /// <param name="standing">What <see cref="StandingOf"/> made of the person's reports.</param>
+    /// <param name="lastHeardAt">The moment of their latest report of any kind, or null.</param>
+    /// <param name="now">The moment the question is asked at.</param>
+    /// <param name="quietAfter">
+    /// How long a silence has to last before it is marked. Zero switches the mark off, and so does
+    /// anything below zero: a threshold nobody could have meant marks nobody, which is the reading
+    /// that cannot cry wolf.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// <b>It is a mark on a screen and nothing else.</b> It is derived at the moment of reading and
+    /// stored nowhere; nothing is sent, raised or stood down because of it. A watch records what
+    /// it is told and watches no clock on anybody's behalf — whether a silence matters is for the
+    /// person reading the screen, who knows whether the party was expected to be out of reach.
+    /// </para>
+    /// <para>
+    /// <b>Only somebody underground can be quiet.</b> Somebody out has been accounted for and has
+    /// nothing further to report; somebody never heard from already has a state of their own that
+    /// says exactly that, and a second mark on them would say the same thing twice in a louder
+    /// voice. And once the watch is closed nobody is expected to report at all, so the silence
+    /// that follows a closed watch is the ordinary one.
+    /// </para>
+    /// <para>
+    /// <b>Any word resets it, a note included.</b> The question is how long it has been since
+    /// anything was heard about this person, not since they last moved: "radio contact, all well"
+    /// names no place and is precisely the report that ends a silence.
+    /// </para>
+    /// <para>
+    /// Strictly longer than the threshold, so a report made exactly that long ago is not yet
+    /// quiet; and a last word dated after <paramref name="now"/> — a clock a little ahead — is a
+    /// silence of no length.
+    /// </para>
+    /// </remarks>
+    public static bool IsQuiet(
+        TripTrackingState state, TripStanding standing, DateTimeOffset? lastHeardAt,
+        DateTimeOffset now, TimeSpan quietAfter) =>
+        quietAfter > TimeSpan.Zero
+        && state == TripTrackingState.Armed
+        && standing == TripStanding.Underground
+        && lastHeardAt is { } heard
+        && now - heard > quietAfter;
 }

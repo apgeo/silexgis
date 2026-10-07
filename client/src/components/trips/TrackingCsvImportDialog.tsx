@@ -32,6 +32,7 @@ import {
   type TrackingCsvPreview,
   type TrackingCsvPreviewRow,
 } from '../../api/hooks.ts';
+import { ApiError } from '../../api/client.ts';
 import { downloadFile } from '../../api/download.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
 import {
@@ -61,6 +62,13 @@ interface Props {
    * is sent only once the reviewer has been shown that field and read the sheet again.
    */
   tripDay?: string | null;
+  /**
+   * The trip's teams, so that a report's team can be named where a row would replace one.
+   *
+   * A replacement writes the team where the sheet has a team column, an empty cell included, so
+   * the team is part of what the reviewer is agreeing to change.
+   */
+  teams?: readonly { id: string; title: string }[];
   open: boolean;
   onClose: () => void;
 }
@@ -109,7 +117,13 @@ type DateOrderChoice = 'auto' | 'dayFirst' | 'monthFirst';
  * question about the width, so it is the width that decides; how big a control has to be is the
  * pointer's question and the library answers it on its own here.
  */
-export default function TrackingCsvImportDialog({ tripLogId, tripDay, open, onClose }: Props) {
+export default function TrackingCsvImportDialog({
+  tripLogId,
+  tripDay,
+  teams,
+  open,
+  onClose,
+}: Props) {
   const { t, i18n } = useTranslation();
   const narrow = useIsMobile();
   // Only the ticks on the preview's rows ask this: a bare checkbox is sixteen pixels under any
@@ -169,6 +183,15 @@ export default function TrackingCsvImportDialog({ tripLogId, tripDay, open, onCl
   const [wentIn, setWentIn] = useState('');
   const [cameOut, setCameOut] = useState('');
   const [preview, setPreview] = useState<TrackingCsvPreview | null>(null);
+  /**
+   * Whether the table on screen is a second reading, made because the first could not be imported.
+   *
+   * The server reads the sheet again for the write, against the trip as it is by then. Where that
+   * would no longer write what was read here it writes nothing and says so, and the sheet is read
+   * again at once — which would otherwise look like a button that did nothing but shuffle the
+   * table. Kept until the reviewer reads the sheet themselves or it is imported.
+   */
+  const [readAgainAfterChange, setReadAgainAfterChange] = useState(false);
   /**
    * The lines of the sheet the reviewer has left ticked, every one of them after each read.
    *
@@ -335,6 +358,7 @@ export default function TrackingCsvImportDialog({ tripLogId, tripDay, open, onCl
     setDelimiter('auto');
     setDateOrder('auto');
     setPreview(null);
+    setReadAgainAfterChange(false);
     setChosenLines(new Set());
     setHeader([]);
     setReplaceExisting(false);
@@ -344,9 +368,10 @@ export default function TrackingCsvImportDialog({ tripLogId, tripDay, open, onCl
     onClose();
   };
 
-  const look = async () => {
+  const look = async ({ afterChange = false }: { afterChange?: boolean } = {}) => {
     try {
       const page = await read.mutateAsync({ tripLogId, text, options });
+      setReadAgainAfterChange(afterChange);
       setHeader(page.header);
       // Every line ticked afresh on each read: a new reading is a new set of rows, and a line left
       // unticked under the last one may now mean something else entirely.
@@ -375,16 +400,30 @@ export default function TrackingCsvImportDialog({ tripLogId, tripDay, open, onCl
         // Always named, never left to mean "all": the lines the reviewer saw ticked are exactly the
         // lines committed, whatever the sheet turns out to hold when it is read again for the write.
         lines: [...chosenLines].sort((a, b) => a - b),
+        // And the reading they were ticked on: the table is one reading of the sheet against the
+        // trip, and the write is another, made later.
+        planDigest: preview?.planDigest ?? null,
       });
       message.success(
         t('trips.tracking.csvImport.done', {
           created: done.created,
           updated: done.updated,
+          unchanged: done.unchanged,
           skipped: done.skipped,
         }),
       );
       close();
     } catch (error) {
+      if (error instanceof ApiError && error.code === 'tracking_csv.plan_changed') {
+        // Nothing was written. The table no longer describes what importing would do, so it goes,
+        // and so does the leave to overwrite — it was given for the rows of that reading, and the
+        // new one may replace reports the last one would have added. Read again straight away
+        // rather than left for the reviewer to ask for: the only way on is through a new reading.
+        setPreview(null);
+        setReplaceExisting(false);
+        await look({ afterChange: true });
+        return;
+      }
       message.error(trackingProblemMessage(error, t));
     }
   };
@@ -487,11 +526,112 @@ export default function TrackingCsvImportDialog({ tripLogId, tripDay, open, onCl
       )}
     </Flex>
   );
+  /**
+   * Where a row puts somebody, in the sheet's words and the log's.
+   *
+   * A place the sheet named is shown with the station it became, because the two are in different
+   * vocabularies — the club's name for the place and the survey's name for the station — and a
+   * reviewer shown only the station cannot tell whether the name they wrote was understood.
+   */
   const placeOf = (row: TrackingCsvPreviewRow) =>
-    row.stationName ??
-    (row.depthM !== null && row.depthM !== undefined
-      ? t('caves.depthPlaces.metres', { depth: row.depthM })
-      : t(`trips.tracking.kinds.${row.kind}`));
+    row.stationName && row.placeLabel
+      ? t('trips.tracking.csvImport.placeNamed', {
+          label: row.placeLabel,
+          station: row.stationName,
+        })
+      : (row.stationName ??
+        (row.depthM !== null && row.depthM !== undefined
+          ? t('caves.depthPlaces.metres', { depth: row.depthM })
+          : t(`trips.tracking.kinds.${row.kind}`)));
+  /**
+   * One report in a line: what kind it is, where, and what was noted.
+   *
+   * The report in the log and the report the sheet would leave there are both said through this,
+   * so the two lines of a row that replaces something differ only where the reports do.
+   *
+   * A report that claims a place and arrives with none is one whose place this account may not be
+   * told: the server takes it out rather than the page hiding it. That is said in so many words —
+   * a blank there would read as a report that never had a place, and the reviewer is about to
+   * overwrite it.
+   */
+  const reportInWords = (report: {
+    kind: TrackingCsvPreviewRow['kind'];
+    place: string | null;
+    depthM: number | string | null | undefined;
+    team: string | null;
+    note: string | null | undefined;
+  }) => {
+    const claimsPlace = report.kind === 'atStation' || report.kind === 'atDepth';
+    const depth =
+      report.depthM !== null && report.depthM !== undefined
+        ? t('caves.depthPlaces.metres', { depth: report.depthM })
+        : null;
+    const where = claimsPlace
+      ? [report.place, depth].filter((part) => part !== null).join(', ') ||
+        t('trips.tracking.positionWithheld')
+      : null;
+    return [
+      t(`trips.tracking.kinds.${report.kind}`),
+      where,
+      report.team,
+      report.note ? t('trips.tracking.csvImport.noteQuoted', { note: report.note }) : null,
+    ]
+      .filter((part) => part !== null)
+      .join(' · ');
+  };
+  /**
+   * The place of a row — and, for a row that replaces a report, the report as it stands beside the
+   * report as it would be left.
+   *
+   * "Replaces" alone asks the reviewer to take the overwrite on trust; the two lines are what they
+   * are agreeing to.
+   */
+  const placeAndChangeOf = (row: TrackingCsvPreviewRow) => {
+    const before = row.before;
+    if (!row.replaces || !before) return placeOf(row);
+    // What the import would leave, not what the sheet says: a replacement writes the team and the
+    // note only where the sheet has a column for them, so without one the report keeps its own —
+    // and the line has to show it kept, or a note left standing reads exactly like a note erased.
+    const columns = preview?.resolvedColumns ?? {};
+    const teamAfter = 'Team' in columns ? (row.teamId ?? null) : (before.teamId ?? null);
+    const noteAfter = 'Note' in columns || 'Details' in columns ? row.note : before.note;
+    // A team is named on both lines or on neither: where only one of the two reports has one, the
+    // other says so, because a team taken away is a change like any other.
+    const teamInWords = (teamId: string | null) =>
+      teamId !== null
+        ? (teams?.find((team) => team.id === teamId)?.title ?? t('trips.tracking.reportTeam'))
+        : (before.teamId ?? null) !== null || teamAfter !== null
+          ? t('trips.tracking.reportTeamNone')
+          : null;
+    return (
+      <Flex vertical gap={2} data-testid={`trip-tracking-csv-row-change-${row.line}`}>
+        <span data-testid={`trip-tracking-csv-row-before-${row.line}`}>
+          <Typography.Text type="secondary">
+            {t('trips.tracking.csvImport.beforeLabel')}
+          </Typography.Text>{' '}
+          {reportInWords({
+            kind: before.kind,
+            place: before.stationName ?? null,
+            depthM: before.depthEnteredM,
+            team: teamInWords(before.teamId ?? null),
+            note: before.note,
+          })}
+        </span>
+        <span data-testid={`trip-tracking-csv-row-after-${row.line}`}>
+          <Typography.Text type="secondary">
+            {t('trips.tracking.csvImport.afterLabel')}
+          </Typography.Text>{' '}
+          {reportInWords({
+            kind: row.kind,
+            place: row.stationName ? placeOf(row) : null,
+            depthM: row.depthM,
+            team: teamInWords(teamAfter),
+            note: noteAfter,
+          })}
+        </span>
+      </Flex>
+    );
+  };
   // What the reader noticed about this row, beside the row: a word it did not know, a place it
   // dropped, a team the trip lacks. Worded, never named, and coloured where the finding changed
   // what the row means.
@@ -590,8 +730,9 @@ export default function TrackingCsvImportDialog({ tripLogId, tripDay, open, onCl
               type="primary"
               onClick={() => void send()}
               loading={commit.isPending}
-              // Never sent with no lines: an empty list is how the server is told "every line", so a
-              // reviewer who unticked everything must find Import out of reach, not a full import.
+              // Out of reach with nothing ticked. The server reads an empty list as "none" and would
+              // write nothing, so a press here could only be answered with a success that did
+              // nothing — and a reviewer who unticked everything has nothing to import.
               disabled={!preview || chosenRows.length === 0}
               data-testid="trip-tracking-csv-commit"
             >
@@ -603,6 +744,11 @@ export default function TrackingCsvImportDialog({ tripLogId, tripDay, open, onCl
     >
       <Typography.Paragraph type="secondary">
         {t('trips.tracking.csvImport.help')}
+      </Typography.Paragraph>
+      {/* Said before a file is chosen: somebody on a telephone with a party underground should
+          learn here, not three steps in, that this is the slow way to file one report. */}
+      <Typography.Paragraph type="secondary" data-testid="trip-tracking-csv-desk-task">
+        {t('trips.tracking.csvImport.deskTask')}
       </Typography.Paragraph>
 
       <Segmented<SheetSource>
@@ -906,6 +1052,16 @@ export default function TrackingCsvImportDialog({ tripLogId, tripDay, open, onCl
 
       {preview && (
         <>
+          {readAgainAfterChange && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginTop: 8 }}
+              data-testid="trip-tracking-csv-plan-changed"
+              title={t('trips.tracking.csvImport.planChangedTitle')}
+              description={t('trips.tracking.problems.csvPlanChanged')}
+            />
+          )}
           <Flex gap={24} wrap style={{ marginTop: 8, marginBottom: 12 }}>
             <Statistic
               title={t('trips.tracking.csvImport.rowsRead')}
@@ -1044,7 +1200,7 @@ export default function TrackingCsvImportDialog({ tripLogId, tripDay, open, onCl
                           <div className="tracking-csv-stacked-facts">
                             {fact(t('trips.tracking.csvImport.moment'), momentOf(row))}
                             {fact(t('trips.tracking.csvImport.caver'), caverOf(row))}
-                            {fact(t('trips.tracking.csvImport.place'), placeOf(row))}
+                            {fact(t('trips.tracking.csvImport.place'), placeAndChangeOf(row))}
                             {fact(t('trips.tracking.csvImport.findings'), findingsOf(row))}
                           </div>
                         </div>
@@ -1069,7 +1225,7 @@ export default function TrackingCsvImportDialog({ tripLogId, tripDay, open, onCl
                     {
                       title: t('trips.tracking.csvImport.place'),
                       key: 'place',
-                      render: (_: unknown, row: TrackingCsvPreviewRow) => placeOf(row),
+                      render: (_: unknown, row: TrackingCsvPreviewRow) => placeAndChangeOf(row),
                     },
                     {
                       title: t('trips.tracking.csvImport.findings'),

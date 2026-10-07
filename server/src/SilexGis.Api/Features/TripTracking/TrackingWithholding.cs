@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -156,4 +157,54 @@ internal static class TrackingWithholding
     /// </summary>
     internal static bool PositionOpen(TripPositionEvent e, HashSet<Guid> openCaves) =>
         !HasPosition(e) || (e.CaveFeatureId is not null && openCaves.Contains(e.CaveFeatureId.Value));
+
+    /// <summary>
+    /// The caves these stored reports were placed in that this caller may see positions in.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the rows' own anchors and not of the watch's present survey: a log can span
+    /// surveys, and a report stays anchored to the cave it was placed in after the watch has moved.
+    /// </remarks>
+    internal static Task<HashSet<Guid>> OpenCavesOfAsync(
+        SilexGisDbContext db, IAccessService access, FeatureProtection protection, AccessContext? ctx,
+        IEnumerable<TripPositionEvent> rows, CancellationToken ct) =>
+        OpenCaveIdsAsync(
+            db, access, protection, ctx,
+            [.. rows.Where(e => e.CaveFeatureId is not null).Select(e => e.CaveFeatureId!.Value).Distinct()],
+            ct);
+
+    /// <summary>
+    /// A stored report as this caller may be shown it: whole, or with its place taken out.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one place a stored report is turned into what a signed-in caller reads. The log's list
+    /// and the sheet import's "what is there now" both answer through it, so a station the list
+    /// withholds from somebody cannot reach them as the "before" of a row they are about to
+    /// replace. What is taken out is the place and only the place — the station, the depth and the
+    /// survey it was read on; that the report exists, what kind it is, its note and its moment are
+    /// the trip's, and the caller reads the trip.
+    /// </para>
+    /// <para>
+    /// How a depth became its station is not carried: a stored report does not keep it.
+    /// </para>
+    /// <para>
+    /// Whether the place lies outside the parts the watch declared is said on the same branch as
+    /// the place and never beside one taken out. A caller that does not pass the comparison — the
+    /// sheet import's "what is there now" — says nothing of it, which reads as "not marked".
+    /// </para>
+    /// </remarks>
+    internal static TrackingEventDto Shown(
+        TripPositionEvent e, HashSet<Guid> openCaves, TrackingDeclaredParts? declaredParts = null)
+    {
+        var open = PositionOpen(e, openCaves);
+        return new TrackingEventDto(
+            e.Id, e.CaverId, e.TeamId, e.Kind,
+            open ? e.SurveyModelId : null,
+            open ? e.ViewerStationName : null,
+            open ? e.DepthEnteredM : null,
+            e.Note, e.RecordedAt,
+            TripTrackingRules.ChangedSinceWritten(e.CreatedAt, e.UpdatedAt),
+            open && declaredParts is not null && declaredParts.Outside(e));
+    }
 }

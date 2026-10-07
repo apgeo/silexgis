@@ -41,6 +41,12 @@ interface Props {
    * offered at all — then a pin press means nothing and is not pretended to.
    */
   onPickStation?: (station: string) => void;
+  /**
+   * How long ago a moment on a person's card was, worded by the owner and passed to the list
+   * unchanged — the same answer the 3D pane beside this one is given, so the two drawings of one
+   * party word one silence the same way. Absent, the card prints clock readings.
+   */
+  momentInWords?: (iso: string) => string | null;
 }
 
 /**
@@ -68,6 +74,7 @@ export default function RasterMapTrackingPane({
   height,
   cavers,
   onPickStation,
+  momentInWords,
 }: Props) {
   const { t, i18n } = useTranslation();
   // The same defaults the 3D pane opens with: names on, times asked for. Per pane rather
@@ -181,6 +188,7 @@ export default function RasterMapTrackingPane({
             shown={shownPlace}
             onShow={setShownPlace}
             drawing="map"
+            momentInWords={momentInWords}
           />
         )}
       </div>

@@ -30,8 +30,11 @@ function Harness({
   cavers,
   unplacedStations,
   drawing,
+  momentInWords,
 }: {
   cavers: readonly TrackedCaver[];
+  /** How the owning page words a moment as a gap; absent on a surface that prints the clock. */
+  momentInWords?: (iso: string) => string | null;
   /** What the viewer answered about this model — the panel's own answer, handed straight down. */
   unplacedStations?: ReadonlySet<string>;
   /** Which drawing the list stands beside; the wording for an unplaced station follows it. */
@@ -57,6 +60,7 @@ function Harness({
         setShown(place);
       }}
       drawing={drawing}
+      momentInWords={momentInWords}
     />
   );
 }
@@ -409,6 +413,88 @@ describe('CaveViewTrackingOverlay', () => {
     );
     fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
     expect(screen.getByTestId('caveview-caver-card-position-at')).not.toHaveTextContent('—');
+  });
+
+  /**
+   * On a surface that words its moments as gaps, the card prints the gap and keeps the clock.
+   *
+   * The coordinator's table says "3 hours ago" beside this card; printed as a date and an hour,
+   * the same silence had to be subtracted in the reader's head, on the full-screen surface. The
+   * words are the owning page's — handed in, so the card can neither round differently nor read a
+   * clock of its own — and the clock reading stays reachable as the title, for whoever has to
+   * write the hour down.
+   */
+  it('words the position and the last word as gaps, with the clock as their title', () => {
+    const worded: string[] = [];
+    render(
+      <Harness
+        cavers={[
+          caver({
+            lastRecordedAt: '2026-09-12T11:55:00Z',
+            positionAt: '2026-09-12T09:00:00Z',
+          }),
+        ]}
+        momentInWords={(iso) => {
+          worded.push(iso);
+          return iso === '2026-09-12T09:00:00Z' ? '3 hours ago' : '5 minutes ago';
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+
+    const positionAt = screen.getByTestId('caveview-caver-card-position-at');
+    expect(positionAt.textContent).toBe('3 hours ago');
+    expect(positionAt.getAttribute('title')).toBe(
+      new Date('2026-09-12T09:00:00Z').toLocaleString(i18n.language),
+    );
+    const lastHeard = screen.getByTestId('caveview-caver-card-last-heard');
+    expect(lastHeard.textContent).toBe('5 minutes ago');
+    expect(lastHeard.getAttribute('title')).toBe(
+      new Date('2026-09-12T11:55:00Z').toLocaleString(i18n.language),
+    );
+    // Each of the two moments was put to the page's rule as itself: neither is worded from the
+    // other, which is the mistake the two rows exist to prevent.
+    expect(new Set(worded)).toEqual(new Set(['2026-09-12T09:00:00Z', '2026-09-12T11:55:00Z']));
+  });
+
+  /** A moment nobody reported gets neither words nor a clock: a dash, and no title to hover. */
+  it('prints a dash with no title where there is no moment to word', () => {
+    const momentInWords = vi.fn(() => 'some time ago');
+    render(
+      <Harness
+        cavers={[
+          caver({
+            position: { kind: 'withheld', certain: true },
+            lastRecordedAt: null,
+            positionAt: '2026-09-12T09:00:00Z',
+          }),
+        ]}
+        momentInWords={momentInWords}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+
+    // The position's moment is on the row and is still not worded: the place was withheld, and a
+    // gap beside "withheld" would date a place this reader was not told.
+    const positionAt = screen.getByTestId('caveview-caver-card-position-at');
+    expect(positionAt.textContent).toBe('—');
+    expect(positionAt.hasAttribute('title')).toBe(false);
+    const lastHeard = screen.getByTestId('caveview-caver-card-last-heard');
+    expect(lastHeard.textContent).toBe('—');
+    expect(lastHeard.hasAttribute('title')).toBe(false);
+    expect(momentInWords).not.toHaveBeenCalled();
+  });
+
+  /** A surface that hands in no wording keeps the clock reading on screen and adds no title. */
+  it('keeps the clock reading on a surface that words nothing', () => {
+    render(<Harness cavers={[caver({ lastRecordedAt: '2026-09-12T11:55:00Z' })]} />);
+    fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+
+    const lastHeard = screen.getByTestId('caveview-caver-card-last-heard');
+    expect(lastHeard.textContent).toBe(
+      new Date('2026-09-12T11:55:00Z').toLocaleString(i18n.language),
+    );
+    expect(lastHeard.hasAttribute('title')).toBe(false);
   });
 
   it('says why a position is missing where there is room to say it', () => {

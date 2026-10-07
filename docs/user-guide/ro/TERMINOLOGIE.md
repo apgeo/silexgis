@@ -146,6 +146,14 @@ odată cu ea — și apoi paginile.
 | Import a sheet | Importă o foaie |
 | What this cave's depths mean | Ce înseamnă adâncimile acestei peșteri |
 | Declare a depth | Declară o adâncime |
+| Where the party said it was going | Unde a spus echipa că merge |
+| Outside the declared parts | În afara părților declarate |
+| Show only the declared parts | Arată doar părțile declarate |
+| No longer on the roster | Nu mai este pe listă |
+| Last heard | Ultima veste |
+| No word for over N h | Nicio veste de peste N h |
+| Longest silence first | Cea mai lungă tăcere întâi |
+| Planned out by / N h late | Ieșire plănuită până la / întârziere de N h |
 | Publish this trip | Publică această tură |
 | Follow link | Link de urmărire |
 | Caption (on the public page) | Etichetă |
@@ -166,11 +174,33 @@ odată cu ea — și apoi paginile.
 | Withheld / Opens nothing (a link's status) | Reținut / Nu deschide nimic |
 | Protected cave nearby? | Peșteră protejată în apropiere? |
 | Log code | Cod în jurnal |
+| Tracking started (the column) | Urmărire pornită la |
+| Days running | Zile de la pornire |
+| Tracking running longer than (days) | Urmărire pornită de mai mult de (zile) |
+| Tracking tab (the link on a row) | Fila Urmărire |
 | Make a movie | Fă un film |
 | Export GIF / Cancel export | Exportă GIF / Anulează exportul |
 | Caver labels | Etichetele speologilor |
 | Captions (of a movie) | Texte |
 | Stop and close / Keep going | Oprește și închide / Continuă exportul |
+| Presets (of a movie) | Presetări |
+| For a chat / HD video | Pentru chat / Video HD |
+| Reset to defaults | Revino la valorile implicite |
+| Who appears | Cine apare |
+| Time-lapse figure | Factor de accelerare |
+| Terrain over the cave | Relieful de deasupra peșterii |
+| Save this moment as a picture | Salvează acest moment ca imagine |
+| Also in this cave now | Tot în această peșteră, acum |
+| Watch (another party of the cave) | Vezi echipa |
+| Watching (the row of the party on screen) | Pe ecran acum |
+| Back to this link's trip | Înapoi la tura acestui link |
+| This link's trip | Tura acestui link |
+| Camp: … (on a row of a list) | Tabără: … |
+| Other trips of this cave | Alte ture din această peșteră |
+
+A vedea o altă echipă din peșteră nu este „urmărire": „urmărire" rămâne numele supravegherii
+unei ture. Butonul este **Vezi echipa**, rândul ales este marcat **Pe ecran acum**, iar în text
+verbul este *a privi* („privești o altă echipă", „echipa pe care o priveai").
 
 ## Alte
 

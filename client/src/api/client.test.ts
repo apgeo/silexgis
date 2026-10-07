@@ -5,6 +5,9 @@ import {
   ApiError,
   isSettledRefusal,
   lastReadETag,
+  RETRY_AFTER_CEILING_MS,
+  retryAfterOf,
+  retryDelay,
   retryQuery,
   sendsTheReadingLanguage,
   threadsVersions,
@@ -154,5 +157,71 @@ describe('the version an answer carries', () => {
     });
     expect(lastReadETag('/api/v1/trip-logs/t-act')).toBe('"6"');
     expect(lastReadETag('/api/v1/trip-logs/t-act/invitations/promote')).toBeUndefined();
+  });
+});
+
+/** A refusal as it arrives, said only in the one header this rule reads. */
+const refusedWith = (retryAfter?: string) =>
+  new Response(null, {
+    status: 429,
+    headers: retryAfter === undefined ? {} : { 'Retry-After': retryAfter },
+  });
+
+/**
+ * <b>A server that says when to come back is taken at its word.</b> A read refused for being
+ * asked too often is retried, and retried on this client's own short pacing it spends three more
+ * requests of the allowance it was just told is used up. So the wait the response names is
+ * carried on the error and is the wait the retry rule uses — and where the response names none,
+ * nothing about the pacing changes.
+ */
+describe('the wait a refusal names', () => {
+  it('is read as whole seconds, the way a rate limiter writes it', () => {
+    expect(retryAfterOf(refusedWith('30'))).toBe(30_000);
+    expect(retryAfterOf(refusedWith(' 7 '))).toBe(7_000);
+    expect(retryAfterOf(refusedWith('0'))).toBe(0);
+  });
+
+  it('is read as a date, the way a proxy in front of a server under maintenance writes it', () => {
+    const now = Date.parse('2026-09-14T12:00:00Z');
+    expect(retryAfterOf(refusedWith('Mon, 14 Sep 2026 12:00:45 GMT'), now)).toBe(45_000);
+    // A date already behind the clock means "now", never a negative wait.
+    expect(retryAfterOf(refusedWith('Mon, 14 Sep 2026 11:59:00 GMT'), now)).toBe(0);
+  });
+
+  it('is no wait at all where the header is absent or cannot be read', () => {
+    // The twin of the two above: a value this could not read must fall back to the ordinary
+    // pacing exactly as an absent header does, and never become a wait of zero or of NaN.
+    expect(retryAfterOf(refusedWith())).toBeUndefined();
+    for (const written of ['', 'soon', '-5', '1.5', '30 seconds']) {
+      expect(retryAfterOf(refusedWith(written))).toBeUndefined();
+    }
+    // A reply that did not come from a browser's transport may carry no header list at all.
+    expect(retryAfterOf({})).toBeUndefined();
+  });
+
+  it('is never longer than a screen can reasonably be left waiting', () => {
+    const now = Date.parse('2026-09-14T12:00:00Z');
+    expect(retryAfterOf(refusedWith('86400'))).toBe(RETRY_AFTER_CEILING_MS);
+    expect(retryAfterOf(refusedWith('Tue, 15 Sep 2026 12:00:00 GMT'), now)).toBe(
+      RETRY_AFTER_CEILING_MS,
+    );
+  });
+
+  it('is the wait before every further attempt, however many have failed', () => {
+    const told = new ApiError(429, undefined, undefined, undefined, 30_000);
+    expect(retryDelay(0, told)).toBe(30_000);
+    expect(retryDelay(1, told)).toBe(30_000);
+    expect(retryDelay(2, told)).toBe(30_000);
+    // Told to come straight back is still an answer, and not the absence of one.
+    expect(retryDelay(0, new ApiError(503, undefined, undefined, undefined, 0))).toBe(0);
+  });
+
+  it('leaves the ordinary pacing alone where nothing was named', () => {
+    // A second, two, four — the wait every read in the application had before this rule, and
+    // still has for a refusal without the header, a server fault and a request that never landed.
+    for (const error of [new ApiError(429), new ApiError(503), new TypeError('Failed to fetch')]) {
+      expect([0, 1, 2].map((attempt) => retryDelay(attempt, error))).toEqual([1000, 2000, 4000]);
+    }
+    expect(retryDelay(10, new ApiError(503))).toBe(30_000);
   });
 });

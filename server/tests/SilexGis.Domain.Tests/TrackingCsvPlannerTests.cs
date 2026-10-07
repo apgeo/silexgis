@@ -47,7 +47,7 @@ public class TrackingCsvPlannerTests
         var parsed = TrackingCsvParser.Parse(
             "Data si ora,Adancime,Statie,Loc,Speologi,Echipa,Nota,Stare\r\n" + rows + "\r\n");
         parsed.Readable.ShouldBeTrue();
-        return TrackingCsvPlanner.Plan(parsed.Rows, subject ?? Subject());
+        return TrackingCsvPlanner.Plan(parsed, subject ?? Subject());
     }
 
     [Fact]
@@ -194,6 +194,37 @@ public class TrackingCsvPlannerTests
         plan.Reports[0].Kind.ShouldBe(TripPositionEventKind.AtDepth);
         plan.Reports[0].ViewerStationName.ShouldBe("2");
         plan.Reports[0].DepthM.ShouldBe(96m);
+    }
+
+    /// <summary>
+    /// The name the sheet wrote travels with the station it became, and only where it was what
+    /// decided the station.
+    /// </summary>
+    [Fact]
+    public void The_place_as_the_sheet_named_it_is_kept_beside_the_station_only_where_it_decided_it()
+    {
+        var subject = Subject([new(96m, "2", "Meandru")]);
+
+        // Written in the sheet's own case, which is what a reviewer recognises as theirs.
+        var named = PlanOf("12.09.2026 09:00,,,meandru,Ion Popescu,,,", subject);
+        named.Reports[0].ViewerStationName.ShouldBe("2");
+        named.Reports[0].PlaceLabel.ShouldBe("meandru");
+
+        // A depth that lands on the same declared station was not a name the sheet wrote.
+        var byDepth = PlanOf("12.09.2026 09:00,96,,,Ion Popescu,,,", subject);
+        byDepth.Reports[0].ViewerStationName.ShouldBe("2");
+        byDepth.Reports[0].PlaceLabel.ShouldBeNull();
+
+        // A station named outright wins over the place beside it, so the label decided nothing.
+        var byStation = PlanOf("12.09.2026 09:00,,3,Meandru,Ion Popescu,,,", subject);
+        byStation.Reports[0].ViewerStationName.ShouldBe("3");
+        byStation.Reports[0].PlaceLabel.ShouldBeNull();
+
+        // Coming out claims no station, so a place on that row is not shown as resolving to nothing.
+        var out_ = PlanOf("12.09.2026 09:00,,,Meandru,Ion Popescu,,,iesire", subject);
+        out_.Reports[0].Kind.ShouldBe(TripPositionEventKind.Exited);
+        out_.Reports[0].ViewerStationName.ShouldBeNull();
+        out_.Reports[0].PlaceLabel.ShouldBeNull();
     }
 
     [Fact]
@@ -365,7 +396,7 @@ public class TrackingCsvPlannerTests
             TrackingCsvOptions.Default with { Day = new DateOnly(2026, 9, 12) });
         parsed.Readable.ShouldBeTrue();
 
-        var plan = TrackingCsvPlanner.Plan(parsed.Rows, Subject());
+        var plan = TrackingCsvPlanner.Plan(parsed, Subject());
 
         plan.Refused.ShouldBeEmpty();
         plan.Reports.Count.ShouldBe(6);
@@ -397,7 +428,7 @@ public class TrackingCsvPlannerTests
             TrackingCsvOptions.Default with { Day = new DateOnly(2026, 9, 12) });
         parsed.Readable.ShouldBeTrue();
 
-        var plan = TrackingCsvPlanner.Plan(parsed.Rows, Subject());
+        var plan = TrackingCsvPlanner.Plan(parsed, Subject());
 
         plan.Refused.ShouldBeEmpty();
         plan.Reports.Count.ShouldBe(5);
@@ -426,11 +457,91 @@ public class TrackingCsvPlannerTests
             + "10:00,Maria Pop,intrare\r\n",
             TrackingCsvOptions.Default with { Day = new DateOnly(2026, 9, 12) });
 
-        var plan = TrackingCsvPlanner.Plan(parsed.Rows, Subject() with { Now = now });
+        var plan = TrackingCsvPlanner.Plan(parsed, Subject() with { Now = now });
 
         plan.Refused.ShouldContain(d => d.Problem == TrackingCsvProblem.MomentInFuture && d.Line == 3);
         plan.Reports.Select(r => r.Line).ShouldBe([2, 4]);
         plan.Reports.SelectMany(r => r.Diagnostics).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_row_that_is_only_a_note_becomes_a_note_about_each_person_on_it()
+    {
+        var plan = PlanOf("12.09.2026 09:00,,,,\"Ion Popescu; Maria Pop\",Echipa 1,apa in crestere,");
+
+        plan.Refused.ShouldBeEmpty();
+        plan.Reports.Select(r => r.CaverId).ShouldBe([Ion, Maria]);
+        plan.Reports.ShouldAllBe(r =>
+            r.Kind == TripPositionEventKind.Note
+            && r.Note == "apa in crestere"
+            && r.ViewerStationName == null
+            && r.DepthM == null
+            && r.TeamId == TeamOne);
+    }
+
+    [Fact]
+    public void A_note_needs_no_model_at_all_while_a_place_beside_it_on_the_sheet_still_does()
+    {
+        // What somebody said on the telephone does not depend on a survey, so a note imports
+        // into a watch whose survey has gone — beside a row of the same sheet that claims a
+        // place and is refused for wanting one, which is what shows the watch really had none.
+        var subject = Subject() with { HasModel = false, Stations = [] };
+
+        var plan = PlanOf(
+            "12.09.2026 09:00,,,,Ion Popescu,,apa in crestere,\r\n"
+            + "12.09.2026 10:00,105,,,Ion Popescu,,,", subject);
+
+        var note = plan.Reports.ShouldHaveSingleItem();
+        note.Line.ShouldBe(2);
+        note.Kind.ShouldBe(TripPositionEventKind.Note);
+        note.Note.ShouldBe("apa in crestere");
+        note.ViewerStationName.ShouldBeNull();
+        note.DepthM.ShouldBeNull();
+
+        var refusal = plan.Refused.ShouldHaveSingleItem();
+        refusal.Line.ShouldBe(3);
+        refusal.Problem.ShouldBe(TrackingCsvProblem.ModelMissing);
+    }
+
+    [Fact]
+    public void A_whole_name_in_either_order_and_an_initial_with_a_surname_are_the_same_person()
+    {
+        var plan = PlanOf(
+            "12.09.2026 09:00,100,,,Popescu Ion,,,\r\n"
+            + "12.09.2026 10:00,100,,,I. Popescu,,,\r\n"
+            + "12.09.2026 11:00,100,,,Pop Maria,,,");
+
+        plan.Refused.ShouldBeEmpty();
+        plan.Reports.Select(r => r.CaverId).ShouldBe([Ion, Ion, Maria]);
+        plan.Reports.Select(r => r.MatchedBy).ShouldBe(
+        [
+            CaverNameLadder.Rung.FullNameAnyOrder,
+            CaverNameLadder.Rung.InitialAndSurname,
+            CaverNameLadder.Rung.FullNameAnyOrder,
+        ]);
+        // What the sheet wrote is kept beside who it was taken for, so a reviewer sees both.
+        plan.Reports[1].CaverWritten.ShouldBe("I. Popescu");
+        plan.Reports[1].CaverMatched.ShouldBe("Ion Popescu");
+    }
+
+    [Fact]
+    public void An_initial_and_a_surname_two_people_answer_to_is_refused_and_names_them_both()
+    {
+        var subject = Subject() with
+        {
+            Roster = [(Ion, "Ion Popescu"), (Mihai, "Ioana Popescu"), (Maria, "Maria Pop")],
+        };
+
+        var plan = PlanOf(
+            "12.09.2026 09:00,100,,,I. Popescu,,,\r\n"
+            + "12.09.2026 10:00,100,,,M. Pop,,,", subject);
+
+        // The one that can only be one person is imported beside it.
+        plan.Reports.ShouldHaveSingleItem().CaverId.ShouldBe(Maria);
+        var refusal = plan.Refused.ShouldHaveSingleItem();
+        refusal.Problem.ShouldBe(TrackingCsvProblem.CaverAmbiguous);
+        refusal.Line.ShouldBe(2);
+        refusal.Detail.ShouldBe("I. Popescu: Ion Popescu, Ioana Popescu");
     }
 
     [Fact]

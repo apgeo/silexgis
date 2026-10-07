@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { CaretRightOutlined, PauseOutlined, VideoCameraOutlined } from '@ant-design/icons';
+import {
+  CameraOutlined,
+  CaretRightOutlined,
+  DownOutlined,
+  PauseOutlined,
+  RightOutlined,
+  VideoCameraOutlined,
+} from '@ant-design/icons';
 import { Alert, App, Button, Checkbox, Flex, Modal, Progress, Slider, Spin, Typography } from 'antd';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { saveBlob } from '../../../api/download.ts';
 import { useCave, useSurveyModel, useSurveyModelTrackedTrips, type TrackedTrip } from '../../../api/hooks.ts';
@@ -28,8 +35,21 @@ import {
   movieGifCalibrationFrom,
   normaliseMovieGifCalibration,
 } from '../../../caveview/movie/movieOutput.ts';
-import { movieParty, type MovieParty } from '../../../caveview/movie/movieParty.ts';
-import { isMovieAbort, recordMovie, type MovieProgress } from '../../../caveview/movie/movieRecorder.ts';
+import {
+  movieMarkerId,
+  movieMarkerIsOfTrip,
+  movieParty,
+  type MovieParty,
+  type MovieTripData,
+} from '../../../caveview/movie/movieParty.ts';
+import { moviePresetOutput, withMovieOutput, type MoviePresetId } from '../../../caveview/movie/moviePresets.ts';
+import {
+  isMovieAbort,
+  recordMovie,
+  recordMovieStill,
+  MovieStillUnwrittenError,
+  type MovieProgress,
+} from '../../../caveview/movie/movieRecorder.ts';
 import {
   DEFAULT_MOVIE_SETTINGS,
   movieSettingsNeedRewriting,
@@ -43,6 +63,7 @@ import {
   movieFrameCount,
   movieFrames,
   movieSpansAt,
+  movieSpansShowing,
   movieTripIsLive,
   type MovieTimeline,
   type MovieTripSpan,
@@ -84,6 +105,12 @@ const SettingsForm = memo(MovieSettingsForm);
  * runs they ask whether to stop it, and the answers that need no thought — Escape again, or
  * Enter on the button the question opens on — keep it going. A click beside the dialog does
  * nothing at all.
+ *
+ * <b>The preview takes a few keys of its own, and only where nothing else wants them.</b> With the
+ * preview or the moment slider in focus, Space plays and pauses and Home and End go to the two ends
+ * of the movie. On a button Space presses that button, and in a text box it types a space, as it
+ * must — so the keys are read where the preview's column hears them and passed over whenever the
+ * key was pressed on a control of that kind.
  *
  * <b>A copy of what the reader could see.</b> Everything in the movie was sent to this reader under
  * their own rights; the file outlives that check, so the dialog says so, and the settings start
@@ -200,6 +227,19 @@ export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onC
   );
 }
 
+/** What could not be made, and why, as the reader is told it. */
+interface Failure {
+  what: 'movie' | 'still';
+  /** Null where the heading says all there is to say. */
+  detail: string | null;
+}
+
+/**
+ * The controls a key belongs to before it belongs to the preview: Space on a button presses it, in a
+ * text box it types, and on a link it follows it.
+ */
+const TAKES_ITS_OWN_KEYS = 'button, a[href], input, textarea, select, [contenteditable="true"]';
+
 interface ExportRun {
   /** The name the file is saved under, fixed when the export starts. */
   name: string;
@@ -209,6 +249,9 @@ interface ExportRun {
 }
 
 const PREVIEW_TRAIL_PREFIX = 'movie-preview:';
+
+/** Nobody left out: what every movie starts with. */
+const NOBODY: ReadonlySet<string> = new Set();
 
 /**
  * Past this many pixels rendered — frames times the frame's area — a video export is warned about
@@ -232,6 +275,21 @@ function timelineOf(spans: readonly MovieTripSpan[], timeline: MovieSettings['ti
         mode: timeline.mode,
         quietGapMs: timeline.shortenQuiet ? timeline.quietGapMin * 60_000 : null,
       });
+}
+
+/**
+ * The spans the movie's clock is built from: the trips' own, cut only at the reports of the people
+ * who appear. One function for the preview and the export, so the file is paced as the preview was.
+ */
+function spansShowing(
+  spans: readonly MovieTripSpan[],
+  trips: readonly MovieTripData[],
+  surveyModelId: string,
+  excluded: ReadonlySet<string>,
+): readonly MovieTripSpan[] {
+  return excluded.size === 0
+    ? spans
+    : movieSpansShowing(spans, trips, surveyModelId, (tripLogId, caverId) => !excluded.has(movieMarkerId(tripLogId, caverId)));
 }
 
 /** The settings without a written title, which belongs to one movie and is never remembered. */
@@ -318,6 +376,43 @@ function MovieDialogBody({
     },
     [remember],
   );
+  // ---- presets, and putting everything back ----
+  // Read through refs: one preset asks the browser what it can write before it changes anything,
+  // and its answer must be applied to the settings as they are when it arrives. The handlers stay
+  // the same functions throughout, which is what keeps the form from being drawn again for them.
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const recordingRef = useRef(false);
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+  const applyPreset = useCallback(
+    (preset: MoviePresetId) => {
+      void moviePresetOutput(preset).then((output) => {
+        // An export started, or the dialog closed, while the browser was being asked: nothing may
+        // change under the one, and there is nothing to change after the other.
+        if (!aliveRef.current || recordingRef.current) {
+          return;
+        }
+        if (output === null) {
+          message.warning(t('caveview.movie.presetHdUnavailable'));
+          return;
+        }
+        // Only the file's own settings: who is shown, the view and the captions are what the
+        // reader chose to disclose, and a preset has no say in them.
+        changeSettings(withMovieOutput(settingsRef.current, output));
+      });
+    },
+    [changeSettings, message, t],
+  );
+  // Every setting, the written title included. The trips ticked and the people left out are not
+  // settings and stay: somebody unticked on purpose must not come back because the frame size was
+  // put back to its default.
+  const resetSettings = useCallback(() => changeSettings(DEFAULT_MOVIE_SETTINGS), [changeSettings]);
   const [tripIds, setTripIds] = useState<readonly string[]>(initialTripIds);
   // What the GIFs made in this browser came to, which the size estimated for the next one goes by.
   const storedGifCalibration = useUiPrefsStore((state) => state.movieGifCalibration);
@@ -341,11 +436,13 @@ function MovieDialogBody({
   );
   const [run, setRun] = useState<ExportRun | null>(null);
   const recording = run !== null;
+  recordingRef.current = recording;
   // The logs of trips still under way are read again as their watch answers, except under an
   // export: the frames being recorded, and the captions drawn over the preview meanwhile, are of
   // the movie as it was when the export began.
   const movie = useMovieTrips(surveyModelId, chosenIds, windowEnd, recording);
-  const timeline = useMemo(() => timelineOf(movie.spans, settings.timeline), [movie.spans, settings.timeline]);
+  // (The movie's clock is worked out below, once it is known who appears: it is cut at the reports
+  // of the people shown, and of nobody else.)
   // Each trip still under way says on its row how many reports have come in since the dialog
   // opened: the party goes on while it stands open, and the reader should see that the movie they
   // are about to make is of more than the one they opened.
@@ -353,10 +450,51 @@ function MovieDialogBody({
   // An export of a trip under way reads its log again first; when that read cannot reach the log's
   // end the export is held back, in the words every unreadable log is refused in.
   const [liveLogFailed, setLiveLogFailed] = useState(false);
+  // ---- who appears ----
+  // The markers the reader left out of this movie. Held here and nowhere else — not with the
+  // remembered settings, not in the address, not in any storage: a list of the people somebody
+  // chose to leave out, kept after the movie was made, would be a record about those people.
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(NOBODY);
+  const showCaver = useCallback((tripLogId: string, caverId: string, shown: boolean) => {
+    const id = movieMarkerId(tripLogId, caverId);
+    setExcluded((before) => {
+      if (before.has(id) !== shown) {
+        return before;
+      }
+      const next = new Set(before);
+      if (shown) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
   const chooseTrips = useCallback((ids: readonly string[]) => {
     setLiveLogFailed(false);
     setTripIds(ids);
+    // A trip taken out of the movie takes its choice of people with it: ticked again, it starts
+    // with everybody, as every trip does.
+    setExcluded((before) => {
+      const kept = [...before].filter((marker) => ids.some((id) => movieMarkerIsOfTrip(marker, id)));
+      return kept.length === before.size ? before : new Set(kept);
+    });
   }, []);
+  const timeline = useMemo(
+    () => timelineOf(spansShowing(movie.spans, movie.trips, surveyModelId, excluded), settings.timeline),
+    [movie.spans, movie.trips, surveyModelId, excluded, settings.timeline],
+  );
+  // Each ready trip's roster as the picker lists it, by the names the trip's own page gives.
+  const rosters = useMemo(
+    () =>
+      new Map(
+        movie.trips.map((trip) => [
+          trip.tripLogId,
+          trip.tracking.participants.map((person) => ({ caverId: person.caverId, name: trip.nameOf(person.caverId) })),
+        ]),
+      ),
+    [movie.trips],
+  );
   const frames = useMemo(() => (timeline === null ? null : movieFrames(timeline, settings)), [timeline, settings]);
   const frameCount = movieFrameCount(settings).count;
   const frameSize = movieSize(settings);
@@ -434,7 +572,7 @@ function MovieDialogBody({
   }, []);
   const [position, setPosition] = useState(0);
   const index = frames === null ? 0 : Math.min(position, frames.count - 1);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
 
   const partyRef = useRef<MovieParty | null>(null);
   const drawnRef = useRef(new Map<string, DrawnMarker>());
@@ -540,6 +678,7 @@ function MovieDialogBody({
         : movieParty(movie.trips, timeline.instants(frames.frame(index).position), surveyModelId, {
             settings,
             ...words,
+            excluded,
           });
     partyRef.current = party;
     drawnRef.current = syncLiveMarkers(viewer, drawnRef.current, party?.markers ?? new Map(), {
@@ -578,7 +717,7 @@ function MovieDialogBody({
           context,
           canvas.width,
           canvas.height,
-          movieCaptionsAt(settings, title, party, timeline.clock(frame.position), frame.progress, words),
+          movieCaptionsAt(settings, title, party, timeline, frame, words),
         );
       }
     }
@@ -592,6 +731,7 @@ function MovieDialogBody({
     surveyModelId,
     settings,
     words,
+    excluded,
     title,
     playing,
     clusterLabel,
@@ -618,14 +758,15 @@ function MovieDialogBody({
     const party = movieParty(movie.trips, timeline.instants(frame.position), surveyModelId, {
       settings,
       ...words,
+      excluded,
     });
     drawMovieCaptions(
       context,
       canvas.width,
       canvas.height,
-      movieCaptionsAt(settings, title, party, timeline.clock(frame.position), frame.progress, words),
+      movieCaptionsAt(settings, title, party, timeline, frame, words),
     );
-  }, [recording, recordedFrame, timeline, frames, movie.trips, surveyModelId, settings, words, title]);
+  }, [recording, recordedFrame, timeline, frames, movie.trips, surveyModelId, settings, words, excluded, title]);
 
   // ---- what the file will be called ----
   // Its name is shown before the export, not only said afterwards: with the title caption on it
@@ -699,7 +840,10 @@ function MovieDialogBody({
         // whatever is previewed afterwards, is the movie that was made.
         const now = Date.now();
         const spans = movieSpansAt(trips, now, surveyModelId);
-        recorded = (spans === null ? null : timelineOf(spans, settings.timeline)) ?? timeline;
+        recorded =
+          (spans === null
+            ? null
+            : timelineOf(spansShowing(spans, trips, surveyModelId, excluded), settings.timeline)) ?? timeline;
         setWindowEnd((before) => Math.max(before, now));
       }
       const file = await recordMovie({
@@ -707,6 +851,7 @@ function MovieDialogBody({
         constants: handle.cv2,
         settings,
         trips,
+        excluded,
         timeline: recorded,
         surveyModelId,
         title,
@@ -729,7 +874,7 @@ function MovieDialogBody({
       }
     } catch (error) {
       if (!isMovieAbort(error)) {
-        setFailure(error instanceof Error ? error.message : String(error));
+        setFailure({ what: 'movie', detail: error instanceof Error ? error.message : String(error) });
       }
     } finally {
       if (abortRef.current === controller) {
@@ -739,6 +884,60 @@ function MovieDialogBody({
     }
   };
   const cancelExport = () => abortRef.current?.abort();
+
+  // ---- a still picture of the moment the preview shows ----
+  const [stillBusy, setStillBusy] = useState(false);
+  const saveStill = async () => {
+    const handle = handleRef.current;
+    if (handle === null || timeline === null || movie.trips.length === 0 || recording || stillBusy) {
+      return;
+    }
+    // Playing turns the camera; the picture is taken from where the movie starts, turned as far as
+    // the movie has turned by this moment, exactly as the export's frame of it is.
+    stopPlaying();
+    setFailure(null);
+    // Named as the movie is, by the one rule there is for it, so a picture and the movie it was
+    // taken from sort together and neither says more than the title caption does.
+    const name = movieExportName(
+      settings.captions,
+      movie.trips.map((trip) => trip.title),
+      place,
+      localIsoDate(),
+      'png',
+    );
+    setStillBusy(true);
+    try {
+      // The viewer is taken and handed back before this first waits for anything, so nothing the
+      // dialog draws can come between the two; what is waited for is the picture being compressed.
+      const picture = await recordMovieStill(
+        {
+          viewer: handle.viewer,
+          constants: handle.cv2,
+          settings,
+          trips: movie.trips,
+          excluded,
+          timeline,
+          surveyModelId,
+          title,
+          words,
+          clusterLabelAfter: clusterLabel,
+        },
+        index,
+      );
+      saveBlob(picture, name);
+      message.success(t('caveview.movie.saved', { name }));
+    } catch (error) {
+      // A browser that composed the picture and gave no file of it is said in the reader's own
+      // language by the heading alone; only what nobody foresaw is quoted as it came.
+      setFailure({
+        what: 'still',
+        detail:
+          error instanceof MovieStillUnwrittenError ? null : error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setStillBusy(false);
+    }
+  };
 
   // ---- what the file will be ----
   const estimate = movieFileSizeEstimate(settings, frameCount, gifCalibration);
@@ -783,6 +982,9 @@ function MovieDialogBody({
         tripsFailed={movie.failed}
         logFailed={movie.logFailed}
         newReports={newReports}
+        rosters={rosters}
+        excluded={excluded}
+        onShowCaver={showCaver}
         disabled={recording}
         onChange={chooseTrips}
       />
@@ -796,6 +998,9 @@ function MovieDialogBody({
       movie.failed,
       movie.logFailed,
       newReports,
+      rosters,
+      excluded,
+      showCaver,
       recording,
       chooseTrips,
     ],
@@ -821,15 +1026,50 @@ function MovieDialogBody({
             : movie.trips.length === 0
               ? t('trips.tracking.replay.nothingToReplay')
               : null;
-  const canExport =
+  // What a frame of the movie can be drawn from — the same for one frame as for all of them, so a
+  // still is held back by exactly what holds an export back, short of the format it is written in.
+  const canDraw =
     previewReady
     && listReady
     && timeline !== null
     && movie.trips.length > 0
     && !readFailed
-    && formatWritable
     && !recording
     && !movie.loading;
+  const canExport = canDraw && formatWritable;
+  const canPlay = frames !== null && previewReady && !recording;
+
+  // ---- the preview's own keys ----
+  const onPreviewKey = (event: KeyboardEvent<HTMLElement>) => {
+    // Nothing while an export runs — the preview is the recorder's then — and nothing with a
+    // modifier held, which is the browser's or the system's shortcut.
+    if (!canPlay || frames === null || event.altKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (target.closest(TAKES_ITS_OWN_KEYS) !== null) {
+      return;
+    }
+    if (event.key === ' ') {
+      // Or the page behind would scroll, as it does for Space pressed on anything that is not a control.
+      event.preventDefault();
+      // A key held down repeats; play would start and stop many times a second.
+      if (!event.repeat) {
+        if (playRef.current === null) {
+          startPlaying();
+        } else {
+          stopPlaying();
+        }
+      }
+      return;
+    }
+    // The slider's handle goes to its own ends on these two by itself.
+    if ((event.key === 'Home' || event.key === 'End') && target.getAttribute('role') !== 'slider') {
+      event.preventDefault();
+      stopPlaying();
+      setPosition(event.key === 'Home' ? 0 : frames.count - 1);
+    }
+  };
 
   // While an export runs, the slider and the moment beside it follow the frame being recorded, as the
   // preview and its captions do.
@@ -842,33 +1082,58 @@ function MovieDialogBody({
   return (
     <div className="movie-dialog">
       <div className="movie-dialog-body">
-        <Flex vertical gap="small" className="movie-dialog-preview">
-          <MoviePreviewHost
-            surveyModelId={surveyModelId}
-            frame={frameSize}
-            view={settings.view}
-            cavers={settings.cavers}
-            maxHeight="max(200px, min(calc(100vh - 400px), 640px))"
-            onReady={onPreviewReady}
-            recording={recording}
-            viewRequest={viewRequest}
-            overlay={
-              <canvas
-                ref={captionsRef}
-                width={frameSize.width}
-                height={frameSize.height}
-                className="movie-preview-captions"
-                aria-hidden
-              />
-            }
-          />
+        <Flex vertical gap="small" className="movie-dialog-preview" onKeyDown={onPreviewKey}>
+          {/* The preview can be given the focus, by Tab or by a click on it, so that its keys have
+              somewhere to be pressed: a canvas takes no focus of its own. The click is answered
+              here, in so many words, and on the press's way down, before the viewer has it: the
+              viewer cancels every press on its drawing so that a drag turns the model, and a
+              cancelled press moves no focus — left to the browser, the keys went on going to
+              whichever button was pressed last. */}
+          <div
+            className="movie-dialog-preview-keys"
+            onPointerDownCapture={(event) => event.currentTarget.focus({ preventScroll: true })}
+            role="group"
+            tabIndex={0}
+            aria-label={t('caveview.movie.preview')}
+            aria-description={t('caveview.movie.keysHint')}
+            data-testid="movie-preview-keys"
+          >
+            <MoviePreviewHost
+              surveyModelId={surveyModelId}
+              frame={frameSize}
+              view={settings.view}
+              cavers={settings.cavers}
+              maxHeight="max(200px, min(calc(100vh - 400px), 640px))"
+              onReady={onPreviewReady}
+              recording={recording}
+              viewRequest={viewRequest}
+              overlay={
+                <canvas
+                  ref={captionsRef}
+                  width={frameSize.width}
+                  height={frameSize.height}
+                  className="movie-preview-captions"
+                  aria-hidden
+                />
+              }
+            />
+          </div>
           <Flex gap="small" align="center">
             <Button
               icon={playing ? <PauseOutlined /> : <CaretRightOutlined />}
               onClick={playing ? stopPlaying : startPlaying}
-              disabled={frames === null || !previewReady || recording}
+              disabled={!canPlay}
               aria-label={playing ? t('caveview.movie.stopPreview') : t('caveview.movie.playPreview')}
               data-testid="movie-play"
+            />
+            <Button
+              icon={<CameraOutlined />}
+              onClick={() => void saveStill()}
+              disabled={!canDraw || stillBusy}
+              loading={stillBusy}
+              aria-label={t('caveview.movie.saveStill')}
+              title={t('caveview.movie.saveStill')}
+              data-testid="movie-still"
             />
             {/* The slider hands neither a test id nor a label to anything it draws: the handle is
                 named through its own prop, and the id goes on a box around it. */}
@@ -896,6 +1161,11 @@ function MovieDialogBody({
             </Typography.Text>
           </Flex>
           <Typography.Text type="secondary">{blocker ?? t('caveview.movie.previewHint')}</Typography.Text>
+          {blocker === null && (
+            <Typography.Text type="secondary" className="movie-setting-help" data-testid="movie-keys-hint">
+              {t('caveview.movie.keysHint')}
+            </Typography.Text>
+          )}
         </Flex>
         <div className="movie-dialog-settings">
           <SettingsForm
@@ -910,6 +1180,8 @@ function MovieDialogBody({
             summary={summary}
             onViewAgain={previewReady ? viewAgain : null}
             trips={tripPicker}
+            onPreset={applyPreset}
+            onReset={resetSettings}
           />
         </div>
       </div>
@@ -935,9 +1207,9 @@ function MovieDialogBody({
             type="error"
             showIcon
             closable={{ onClose: () => setFailure(null) }}
-            title={t('caveview.movie.exportFailed')}
-            description={failure}
-            data-testid="movie-export-failed"
+            title={t(failure.what === 'still' ? 'caveview.movie.stillFailed' : 'caveview.movie.exportFailed')}
+            description={failure.detail ?? undefined}
+            data-testid={failure.what === 'still' ? 'movie-still-failed' : 'movie-export-failed'}
           />
         )}
         {run !== null && <ExportProgress run={run} />}
@@ -1026,6 +1298,10 @@ function ExportProgress({ run }: { run: ExportRun }) {
  * whose reports cover no stretch of time, is listed and cannot be ticked, saying why; a ticked trip
  * that could not be read says so under its name, and can be unticked. A ticked trip still under way
  * says so, with how many reports have come in since the dialog first read it.
+ *
+ * Under each ticked trip that has been read is its roster, folded away, to untick the people this
+ * movie should not show. Everybody starts ticked. The line it is folded under says how many of the
+ * roster appear, so a movie with somebody left out says so without the list being opened.
  */
 function MovieTripPicker({
   tracked,
@@ -1036,6 +1312,9 @@ function MovieTripPicker({
   tripsFailed,
   logFailed,
   newReports,
+  rosters,
+  excluded,
+  onShowCaver,
   disabled,
   onChange,
 }: {
@@ -1048,10 +1327,17 @@ function MovieTripPicker({
   logFailed: readonly string[];
   /** Each trip of the movie that is still under way, with the reports arrived since it was first read. */
   newReports: ReadonlyMap<string, number>;
+  /** The roster of each trip that has been read, by trip. */
+  rosters: ReadonlyMap<string, readonly { caverId: string; name: string }[]>;
+  /** The markers left out of the movie, by the id a caver's marker has in a movie. */
+  excluded: ReadonlySet<string>;
+  onShowCaver: (tripLogId: string, caverId: string, shown: boolean) => void;
   disabled: boolean;
   onChange: (ids: readonly string[]) => void;
 }) {
   const { t, i18n } = useTranslation();
+  // Which trips' rosters are unfolded: how the list is looked at, not something about the movie.
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(NOBODY);
   if (listFailed) {
     return <Alert type="error" showIcon title={t('caveview.movie.trackedLoadError')} />;
   }
@@ -1067,6 +1353,8 @@ function MovieTripPicker({
       {tracked.map((trip) => {
         const nothing = trip.armedAt === null || empty.includes(trip.tripLogId);
         const checked = chosen.includes(trip.tripLogId);
+        const roster = rosters.get(trip.tripLogId) ?? [];
+        const open = unfolded.has(trip.tripLogId);
         const help = logFailed.includes(trip.tripLogId)
           ? t('trips.tracking.replay.logUnavailable')
           : tripsFailed.includes(trip.tripLogId)
@@ -1109,6 +1397,48 @@ function MovieTripPicker({
                 )}
               </Flex>
             </Checkbox>
+            {checked && roster.length > 0 && (
+              <div className="movie-trip-cavers" data-testid={`movie-trip-cavers-${trip.tripLogId}`}>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={open ? <DownOutlined /> : <RightOutlined />}
+                  aria-expanded={open}
+                  onClick={() =>
+                    setUnfolded((before) => {
+                      const next = new Set(before);
+                      if (!next.delete(trip.tripLogId)) {
+                        next.add(trip.tripLogId);
+                      }
+                      return next;
+                    })
+                  }
+                  data-testid={`movie-trip-cavers-toggle-${trip.tripLogId}`}
+                >
+                  {t('caveview.movie.whoAppears', {
+                    shown: roster.filter((person) => !excluded.has(movieMarkerId(trip.tripLogId, person.caverId))).length,
+                    total: roster.length,
+                  })}
+                </Button>
+                {open && (
+                  <Flex vertical gap={2} className="movie-trip-cavers-list">
+                    <Typography.Text type="secondary" className="movie-setting-help">
+                      {t('caveview.movie.whoAppearsHelp')}
+                    </Typography.Text>
+                    {roster.map((person) => (
+                      <Checkbox
+                        key={person.caverId}
+                        checked={!excluded.has(movieMarkerId(trip.tripLogId, person.caverId))}
+                        onChange={(event) => onShowCaver(trip.tripLogId, person.caverId, event.target.checked)}
+                        data-testid={`movie-caver-${trip.tripLogId}-${person.caverId}`}
+                      >
+                        {person.name}
+                      </Checkbox>
+                    ))}
+                  </Flex>
+                )}
+              </div>
+            )}
           </div>
         );
       })}

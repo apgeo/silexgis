@@ -509,6 +509,16 @@ public sealed class TripLogWriteService(
         // can answer whether a person is new to the trip.
         var alreadyNamed = existing.Select(x => x.CaverId).ToHashSet();
 
+        // Who this write would take off the trip altogether — people, not rows. Somebody who gives
+        // up one job and keeps or takes another is still named afterwards and is not among them,
+        // which is what keeps a change of job from ever being read as a departure.
+        var staying = desired.Keys.Select(key => key.CaverId).ToHashSet();
+        var leaving = alreadyNamed.Where(caverId => !staying.Contains(caverId)).ToList();
+        if (leaving.Count > 0)
+        {
+            await RefuseALeaverTheWatchSpeaksOfAsync(tripId, leaving, ct);
+        }
+
         foreach (var participant in existing)
         {
             if (desired.Remove((participant.RoleId, participant.CaverId), out var write))
@@ -546,6 +556,57 @@ public sealed class TripLogWriteService(
             .Where(c => newcomers.Contains(c.Id) && c.UserId != null)
             .Select(c => c.UserId!.Value)
             .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Refuses a roster write that would take somebody off a trip whose running watch has reports
+    /// about them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The request's two lists are the whole roster, so leaving somebody out of them removes that
+    /// person — and the trip's form does it without anybody deciding to, when it was opened before
+    /// they were added or when a row is deleted by a slip. On a trip being followed that takes a
+    /// person who went in off every count of who is still inside, the published one included.
+    /// Whether a departure is allowed is the tracking rules' to say; this only gathers the two
+    /// facts they ask for.
+    /// </para>
+    /// <para>
+    /// The refusal names nobody. Who it is about is on the caller's own screen — the people they
+    /// just left out — and a message quoting a name would put a person's name into logs and error
+    /// reports that have no business holding one.
+    /// </para>
+    /// <para>
+    /// Read through the ordinary sets, so a watch this caller's data no longer reaches refuses
+    /// nothing, and asked only when the write removes somebody: creating a trip, and every save
+    /// that keeps its people, costs no query here.
+    /// </para>
+    /// <para>
+    /// <b>A check, not a lock.</b> The two facts are read here and the roster rows are removed at
+    /// the caller's save, with nothing held in between; a first report about a leaver recorded in
+    /// that interval is not seen. Closing that needs one lock taken both here and where reports
+    /// are recorded, held to the caller's commit — which is the caller's unit of work, not this
+    /// service's. Until then this stops the slip it was written for, the form that sends back a
+    /// roster missing somebody, and the watch's read copes with what it cannot stop.
+    /// </para>
+    /// </remarks>
+    private async Task RefuseALeaverTheWatchSpeaksOfAsync(
+        Guid tripId, List<Guid> leaving, CancellationToken ct)
+    {
+        var watch = await db.TripTrackings.AsNoTracking()
+            .Where(t => t.TripLogId == tripId)
+            .Select(t => (TripTrackingState?)t.State)
+            .FirstOrDefaultAsync(ct) ?? TripTrackingState.Off;
+        var reported = await db.TripPositionEvents.AsNoTracking()
+            .AnyAsync(e => e.TripLogId == tripId && leaving.Contains(e.CaverId), ct);
+
+        if (!TripTrackingRules.MayLeaveRoster(watch, reported))
+        {
+            throw new TripWriteException(
+                "trip_log.participant_tracked",
+                "Somebody this would take off the trip has reports on its tracking, which is still running. "
+                + "Close the tracking first, or keep them on the trip.");
+        }
     }
 
     private static string? Trimmed(string? value)

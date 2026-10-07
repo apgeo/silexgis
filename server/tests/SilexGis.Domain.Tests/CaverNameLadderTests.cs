@@ -115,6 +115,124 @@ public class CaverNameLadderTests
     }
 
     [Fact]
+    public void A_whole_name_written_surname_first_finds_its_person()
+    {
+        // A register is kept surname first and a roster given name first. Both are the whole
+        // name, and the rung says which of the two found the person so a reviewer can be shown
+        // that the order was not the roster's.
+        var hit = Match("Popescu Ion").ShouldHaveSingleItem();
+        hit.Key.ShouldBe(1);
+        hit.By.ShouldBe(CaverNameLadder.Rung.FullNameAnyOrder);
+
+        Match("Radulescu Stefan").ShouldHaveSingleItem().Key.ShouldBe(4);
+
+        (int Key, string? Name)[] threeWords = [(7, "Ana Maria Pop"), (8, "Ana Pop")];
+        var reordered = CaverNameLadder.Match("Pop Ana Maria", threeWords).ShouldHaveSingleItem();
+        reordered.Key.ShouldBe(7);
+        reordered.By.ShouldBe(CaverNameLadder.Rung.FullNameAnyOrder);
+    }
+
+    [Fact]
+    public void A_name_in_the_rosters_own_order_is_never_widened_to_the_same_words_in_another()
+    {
+        // Two people whose names are each other's mirror. Each is found by their own spelling and
+        // by nothing else: the any-order rung would answer both, and it is not reached, because
+        // the narrower one already answered. The stop rule, seen from the new rung's side.
+        (int Key, string? Name)[] mirrored = [(1, "Ion Popescu"), (5, "Popescu Ion")];
+
+        var first = CaverNameLadder.Match("Ion Popescu", mirrored).ShouldHaveSingleItem();
+        first.Key.ShouldBe(1);
+        first.By.ShouldBe(CaverNameLadder.Rung.FullName);
+
+        CaverNameLadder.Match("Popescu Ion", mirrored).ShouldHaveSingleItem().Key.ShouldBe(5);
+    }
+
+    [Fact]
+    public void A_reordered_name_several_people_answer_to_is_ambiguous_and_is_not_resolved()
+    {
+        // Neither person spells their name this way, and both are made of exactly these words.
+        (int Key, string? Name)[] roster = [(7, "Ana Maria Pop"), (8, "Maria Ana Pop")];
+
+        var hits = CaverNameLadder.Match("Pop Ana Maria", roster);
+
+        hits.Select(h => h.Key).ShouldBe([7, 8], ignoreOrder: true);
+        hits.ShouldAllBe(h => h.By == CaverNameLadder.Rung.FullNameAnyOrder);
+
+        // Beside it, the case that does answer: written as one of them writes it, it is that one.
+        CaverNameLadder.Match("Maria Ana Pop", roster).ShouldHaveSingleItem().Key.ShouldBe(8);
+    }
+
+    [Fact]
+    public void A_reordered_name_that_answers_with_several_is_not_passed_over_for_a_looser_rung()
+    {
+        // Contrived on purpose, to hold the stop rule where the new rung meets the old ones. Two
+        // roster rows were typed as an initial and a name, and the sheet writes "Ion P.". Read as
+        // a whole name in another order it is both of them; read as a given name and an initial
+        // it would be Ion Popescu alone. The whole-name reading comes first and answers with two,
+        // so the walk stops there — falling through would turn "two people answer to this" into a
+        // confident match on a third.
+        (int Key, string? Name)[] roster = [(1, "Ion Popescu"), (10, "P. Ion"), (11, "P Ion")];
+
+        var hits = CaverNameLadder.Match("Ion P.", roster);
+
+        hits.Select(h => h.Key).ShouldBe([10, 11], ignoreOrder: true);
+        hits.ShouldAllBe(h => h.By == CaverNameLadder.Rung.FullNameAnyOrder);
+
+        // Without the two rows that made it ambiguous, the initial rung is reached and answers.
+        (int Key, string? Name)[] plain = [(1, "Ion Popescu")];
+        var hit = CaverNameLadder.Match("Ion P.", plain).ShouldHaveSingleItem();
+        hit.Key.ShouldBe(1);
+        hit.By.ShouldBe(CaverNameLadder.Rung.GivenNameAndInitial);
+    }
+
+    [Fact]
+    public void An_initial_and_a_surname_finds_the_one_person_it_can_mean()
+    {
+        // Two Ions, one Popescu: the surname is what makes it one person here, as the initial
+        // does on the rung this mirrors.
+        var hit = Match("I. Popescu").ShouldHaveSingleItem();
+        hit.Key.ShouldBe(1);
+        hit.By.ShouldBe(CaverNameLadder.Rung.InitialAndSurname);
+
+        // The same written name three ways: without the stop, without the space, in capitals.
+        Match("I Popescu").ShouldHaveSingleItem().Key.ShouldBe(1);
+        Match("I.Popescu").ShouldHaveSingleItem().Key.ShouldBe(1);
+        Match("S. RADULESCU").ShouldHaveSingleItem().Key.ShouldBe(4);
+    }
+
+    [Fact]
+    public void An_initial_and_a_surname_several_people_answer_to_is_ambiguous_and_is_not_resolved()
+    {
+        // Ion and Ioana Popescu both sign "I. Popescu". The answer is both, for somebody to
+        // settle; a third Popescu whose given name starts otherwise is not among them, which is
+        // what shows the initial was read at all.
+        (int Key, string? Name)[] roster =
+        [
+            (1, "Ion Popescu"),
+            (6, "Ioana Popescu"),
+            (9, "Maria Popescu"),
+        ];
+
+        var hits = CaverNameLadder.Match("I. Popescu", roster);
+
+        hits.Select(h => h.Key).ShouldBe([1, 6], ignoreOrder: true);
+        hits.ShouldAllBe(h => h.By == CaverNameLadder.Rung.InitialAndSurname);
+
+        CaverNameLadder.Match("M. Popescu", roster).ShouldHaveSingleItem().Key.ShouldBe(9);
+    }
+
+    [Fact]
+    public void An_initial_narrows_a_surname_down_and_never_stands_in_for_one()
+    {
+        // The surname has to be the whole of it: "I. Pop" is somebody called Pop, and there is
+        // nobody by that name here. Two initials are no name at all.
+        Match("I. Pop").ShouldBeEmpty();
+        Match("I. P.").ShouldBeEmpty();
+        // And the initial has to fit: there is a Georgescu, and her given name is Ana.
+        Match("I. Georgescu").ShouldBeEmpty();
+    }
+
+    [Fact]
     public void Nothing_written_is_nobody_rather_than_everybody()
     {
         Match("").ShouldBeEmpty();
