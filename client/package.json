@@ -14,6 +14,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "e2e": "node ../scripts/e2e.mjs",
+    "e2e:fast": "node ../scripts/e2e.mjs --mode fast",
     "format": "prettier --write src",
     "generate:api": "node scripts/generate-api.mjs",
     "preview": "vite preview",

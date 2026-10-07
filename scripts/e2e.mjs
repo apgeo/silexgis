@@ -6,6 +6,21 @@
 //   node scripts/e2e.mjs smoke trips         # only these spec files
 //   node scripts/e2e.mjs --keep              # leave the stack up afterwards
 //   node scripts/e2e.mjs --project=desktop   # one Playwright project
+//   node scripts/e2e.mjs --mode fast         # the quick look: desktop only, no 3D scenes
+//
+// --mode fast (or SILEXGIS_TEST_MODE=fast) is the form for a look taken while work is in
+// progress. It leaves out the three phone projects and the few specs that draw a 3D scene, which
+// this machine renders in software — a large share of a run's time for a small share of what
+// most changes touch. It is less coverage, not the same coverage sooner, and the run's first and
+// last lines say what did not run; a spec named on the command line runs whatever the mode.
+// What it leaves out, and why, is in e2e-mode.mjs. Without it the run is the whole suite.
+//
+//   node scripts/e2e.mjs --affected master   # only the specs that answer for the change
+//
+// --affected <base> runs the specs the working tree's changes against <base> select — and the
+// smoke spec, always — by the map in e2e-affected.map.mjs. A change wider than the map is not run
+// under this name: the runner says why and exits 10, and the whole suite is the command without
+// the option. It combines with --mode fast, which is the quickest look there is.
 //
 // Why this exists. Every piece of the browser leg was already here — the browsers are
 // installed, the specs are written, the config knows how to start Vite — and it was still
@@ -32,6 +47,8 @@ import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
 import { pruneDependencyCaches } from './dependency-caches.mjs';
+import { selectionFor } from './e2e-affected.mjs';
+import { describeFast, fastRun, modeOf, suiteOf } from './e2e-mode.mjs';
 import {
   ATTEMPTS,
   canBeJudged,
@@ -111,7 +128,47 @@ const reuse = process.env.SILEXGIS_E2E_REUSE === '1';
 // the run reported one pass where three were asked for, which reads as a settled answer
 // rather than as a dropped argument. Passing the rest through means `-g`, `--repeat-each`,
 // `--headed`, `--project` and anything Playwright grows later all work without being listed.
-const passthrough = args.filter((a) => a !== '--keep');
+let passthrough = args.filter((a) => a !== '--keep');
+
+// The fast form, when asked for: fewer projects and fewer specs, worked out before anything is
+// started so that a request it cannot meet costs nobody a database and a build.
+let fastLeftOut = null;
+try {
+  const { mode, rest } = modeOf(passthrough);
+  passthrough = rest;
+  const { specs, phoneOnly } = suiteOf(clientDir, join);
+
+  const affectedAt = passthrough.indexOf('--affected');
+  if (affectedAt !== -1) {
+    const base = passthrough[affectedAt + 1];
+    if (!base || base.startsWith('-')) throw new Error('--affected takes the ref to compare with, as in --affected master');
+    passthrough.splice(affectedAt, 2);
+    const selection = selectionFor(base, join(clientDir, 'e2e'));
+    console.log(`against ${selection.base}: ${selection.changed} changed files`);
+    for (const reason of selection.reasons) console.log(`  - ${reason}`);
+    if (selection.whole) {
+      console.log('The whole suite is not run under this name: run it without --affected.');
+      process.exit(10);
+    }
+    // The fast form has one project, and a phone spec has no test in it.
+    const isPhoneOnly = (name) => phoneOnly.some((pattern) => pattern.test(name));
+    const selected = selection.specs.filter((name) => mode !== 'fast' || !isPhoneOnly(name));
+    console.log(`${selected.length} specs answer for it: ${selected.join(', ')}`);
+    const dropped = selection.specs.filter((name) => !selected.includes(name));
+    if (dropped.length > 0) console.log(`not run in the fast form (phone specs): ${dropped.join(', ')}`);
+    passthrough = [...passthrough, ...selected.map((name) => `e2e/${name}`)];
+  }
+
+  if (mode === 'fast') {
+    const fast = fastRun(passthrough, specs, phoneOnly);
+    if (fast.refusal) throw new Error(fast.refusal);
+    passthrough = fast.argv;
+    fastLeftOut = fast.leftOut;
+  }
+} catch (error) {
+  console.error(`e2e: ${error.message}`);
+  process.exit(1);
+}
 
 const apiEnv = {
   ...process.env,
@@ -338,11 +395,14 @@ try {
   }
 
   step('Running the browser leg');
+  if (fastLeftOut) console.log(describeFast(fastLeftOut));
   const first = browserRun(passthrough, 'test-results');
   exitCode = first.status;
   if (first.status !== 0 && canBeJudged(passthrough)) {
     exitCode = judged(first);
   }
+  // Last, where a verdict is read: a pass in this form is not the suite's.
+  if (fastLeftOut) console.log(`\n${describeFast(fastLeftOut)}`);
 } catch (error) {
   console.error(`\n${error.message}`);
 } finally {

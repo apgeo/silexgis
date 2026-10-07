@@ -170,6 +170,15 @@ only in fast mode is one test leaving something in the application for the next,
 reading rather than dismissing. `gate-sharded.mjs --affected master` runs just the classes a
 change selects, in either mode.
 
+The browser suite has a quick form of its own, for a look at work in progress.
+`node scripts/e2e.mjs --mode fast` (or `npm run e2e:fast` in `client/`) runs the desktop project
+only, leaves out the specs that draw a 3D scene, and spreads the tests of a file over the workers
+instead of running them one after another: thirteen minutes instead of twenty with eight workers.
+`node scripts/e2e.mjs --affected master` runs only the specs that answer for a change, and the
+smoke spec — typically a few minutes — by the map in `scripts/e2e-affected.map.mjs`; it combines
+with `--mode fast`. Neither is the suite's verdict: the run's last line says what was left out,
+and the whole suite is the command without them.
+
 ## License
 
 AGPL-3.0-or-later — see [LICENSE](LICENSE). Third-party bundled components are listed in
