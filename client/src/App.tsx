@@ -24,6 +24,7 @@ const CaveListPage = lazy(() => import('./pages/caves/CaveListPage.tsx'));
 const CaveFormPage = lazy(() => import('./pages/caves/CaveFormPage.tsx'));
 const CaveDetailPage = lazy(() => import('./pages/caves/CaveDetailPage.tsx'));
 const FeatureListPage = lazy(() => import('./pages/features/FeatureListPage.tsx'));
+const DeletedFeaturesPage = lazy(() => import('./pages/features/DeletedFeaturesPage.tsx'));
 const FeatureDetailPage = lazy(() => import('./pages/features/FeatureDetailPage.tsx'));
 const SharedFeaturePage = lazy(() => import('./pages/SharedFeaturePage.tsx'));
 const GeodataPage = lazy(() => import('./pages/geodata/GeodataPage.tsx'));
@@ -161,6 +162,7 @@ export const routes: RouteObject[] = [
           { path: '/caves/:id', element: <Loadable><CaveDetailPage /></Loadable> },
           { path: '/caves/:id/edit', element: <Loadable><CaveFormPage /></Loadable> },
           { path: '/features', element: <Loadable><FeatureListPage /></Loadable> },
+          { path: '/features/deleted', element: <Loadable><DeletedFeaturesPage /></Loadable> },
           { path: '/features/:id', element: <Loadable><FeatureDetailPage /></Loadable> },
           { path: '/geodata', element: <Loadable><GeodataPage /></Loadable> },
           { path: '/geodata/:geofileId/import', element: <Loadable><ImportWorkspacePage /></Loadable> },

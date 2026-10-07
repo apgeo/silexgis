@@ -6666,7 +6666,7 @@ export interface paths {
             };
         };
         post?: never;
-        /** Soft-deletes a feature and its containment subtree (Delete permission). */
+        /** Soft-deletes a feature and its containment subtree (Delete permission). Nothing is removed: the deletion can be undone from the list of deleted features. */
         delete: {
             parameters: {
                 query?: never;
@@ -6687,6 +6687,83 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The deletions of caves, entrances and surface features the caller may undo, most recent first: one row per deletion, with what went with it. Carries no position. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfDeletedFeatureDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Puts a deleted cave, entrance or surface feature back with everything that was deleted along with it (the right to read it and to delete it), and answers the feature with its version. Refused while something containing it is deleted. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureEnvelopeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -20704,6 +20781,20 @@ export interface components {
             /** Format: date-time */
             expiresAt: null | string;
         };
+        DeletedFeatureDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FeatureKind"];
+            featureTypeCode: null | string;
+            name: null | string;
+            /** Format: date-time */
+            deletedAt: string;
+            /** Format: int32 */
+            entranceCount: number;
+            /** Format: int32 */
+            otherCount: number;
+            parents: components["schemas"]["FeatureBreadcrumbDto"][];
+        };
         DeletedPhotoDto: {
             /** Format: uuid */
             documentId: string;
@@ -22858,6 +22949,15 @@ export interface components {
         };
         PagedResultOfCaveListItemDto: {
             items: components["schemas"]["CaveListItemDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfDeletedFeatureDto: {
+            items: components["schemas"]["DeletedFeatureDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */

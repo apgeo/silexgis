@@ -375,3 +375,35 @@ describe('CaveDetailPage permissions address', () => {
     expect(screen.getByTestId('location-search').textContent).toBe('');
   });
 });
+
+/**
+ * A delete takes the cave's entrances with it and removes nothing. The confirmation is where
+ * somebody about to press it needs to read both halves, and where it can be put back from.
+ */
+describe('CaveDetailPage delete confirmations', () => {
+  it('says before a cave is deleted that it can be restored with its entrances', async () => {
+    entrances = [];
+    can = true;
+    show();
+
+    fireEvent.click(screen.getByTestId('cave-delete'));
+
+    const dialog = await screen.findByRole('tooltip');
+    expect(dialog.textContent).toContain('Delete this cave?');
+    expect(dialog.textContent).toContain(
+      'Its entrances go with it. Nothing is removed: it can be restored, with them, from Deleted caves and features.',
+    );
+  });
+
+  it('says before an entrance is deleted that it can be restored', async () => {
+    entrances = [entrance('a', 25.5, 45.6, false)];
+    can = true;
+    show();
+
+    fireEvent.click(within(row('Entrance a')).getAllByRole('button').at(-1)!);
+
+    const dialog = await screen.findByRole('tooltip');
+    expect(dialog.textContent).toContain('Delete this entrance?');
+    expect(dialog.textContent).toContain('It can be restored from Deleted caves and features.');
+  });
+});

@@ -103,4 +103,12 @@ describe('the addresses this application hands out', () => {
     expect(matched).toBeTruthy();
     expect(matched?.at(-1)?.route.path).toBe('/trip-logs/deleted');
   });
+
+  // And once more for features: swallowed by the route for one feature, the list of deleted
+  // caves and features would open as a page saying no feature is called "deleted".
+  it('include the deleted caves and features page the listings send people to', () => {
+    const matched = matchRoutes(routes, '/features/deleted');
+    expect(matched).toBeTruthy();
+    expect(matched?.at(-1)?.route.path).toBe('/features/deleted');
+  });
 });

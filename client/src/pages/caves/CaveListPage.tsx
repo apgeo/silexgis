@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DownloadOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, DownloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { App, Button, Dropdown, Flex, Input, Select, Table, Tag, Typography } from 'antd';
 import type { TablePaginationConfig } from 'antd';
 import type { SorterResult } from 'antd/es/table/interface';
@@ -11,6 +11,7 @@ import {
   useCan,
   useCaveTypes,
   useCaves,
+  useCreateDoor,
   useTags,
   type CaveListItem,
   type CaveListParams,
@@ -55,6 +56,16 @@ export default function CaveListPage() {
   const { data: tags } = useTags('');
 
   const canCreate = useCan('features', 'create');
+  // Whoever could have deleted a cave is shown where one is put back from. An owner deletes
+  // their own cave by owning it, which no capability spells as "delete" — so being able to
+  // create one, which is what makes an owner, opens the door too; and that is asked of the
+  // create door rather than of the right over caves as such, because somebody who records
+  // caves only for their caving group owns those caves like anybody else. The page behind the
+  // door is answered row by row from what its reader may restore; this only decides whether
+  // the door is worth showing.
+  const canDelete = useCan('features', 'delete');
+  const { canCreate: mayOwn } = useCreateDoor('features');
+  const canRestore = mayOwn || canDelete;
   const typeName = (id: number) => caveTypes?.find((x) => x.id === id)?.name ?? '';
 
   // Exports honor the current filters (not the current page — the server streams all rows).
@@ -151,6 +162,15 @@ export default function CaveListPage() {
           >
             <Button icon={<DownloadOutlined />}>{t('common.export')}</Button>
           </Dropdown>
+          {canRestore && (
+            <Button
+              icon={<DeleteOutlined />}
+              data-testid="cave-list-deleted"
+              onClick={() => navigate('/features/deleted')}
+            >
+              {t('features.deleted.link')}
+            </Button>
+          )}
           {canCreate && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/caves/new')}>
               {t('caves.newCave')}

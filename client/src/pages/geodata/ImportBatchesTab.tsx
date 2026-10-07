@@ -19,8 +19,9 @@ import { formatDays } from '../../components/trips/tripRestoreWindow.ts';
  *
  * Reverting deletes everything the confirmation created, as one unit — for the case where the
  * mapping was wrong and nobody noticed until the map looked odd. Nothing is removed by it: a
- * trip it deleted is on the list of deleted trips and can be put back from there, and the
- * confirmation and the lines of an undone batch both say so.
+ * trip it deleted is on the list of deleted trips, a cave or feature on the list of deleted
+ * caves and features, each can be put back from there, and the confirmation and the lines of an
+ * undone batch both say so.
  */
 export default function ImportBatchesTab() {
   const { t, i18n } = useTranslation();
@@ -49,6 +50,15 @@ export default function ImportBatchesTab() {
           period: formatDays(tripConfig.deletedRetentionDays, i18n.resolvedLanguage),
         });
   };
+
+  /**
+   * What the confirmation says an undo leaves recoverable. The caves and features first, since
+   * every source can create those; the trips after, for the sources that create any.
+   */
+  const restorable = (source: ImportBatch['source']): string =>
+    [t('vectorImport.revertFeaturesRestorable'), tripsRestorable(source)]
+      .filter((sentence) => sentence !== undefined)
+      .join(' ');
 
   /**
    * What to call a batch in the file column. A batch that never had a file must not claim its
@@ -161,7 +171,7 @@ export default function ImportBatchesTab() {
                 row.canRevert && (
                   <Popconfirm
                     title={t('vectorImport.revertConfirm', { count: row.createdCount })}
-                    description={tripsRestorable(row.source)}
+                    description={restorable(row.source)}
                     onConfirm={() => void onRevert(row.id)}
                     okButtonProps={{ danger: true }}
                   >
@@ -207,13 +217,22 @@ export default function ImportBatchesTab() {
                   tripDeleted?: boolean;
                 },
               ) => {
-                if (row.featureId) {
+                // A deleted cave or feature answers as not found at its own address, as a deleted
+                // trip does, so the line does not link there either: it says the object is
+                // deleted and sends the reader to where it can be put back.
+                if (row.featureId && row.featureDeleted) {
                   return (
-                    <Flex gap={8} align="center">
-                      <Link to={`/features/${row.featureId}`}>{name ?? t('vectorImport.unnamed')}</Link>
-                      {row.featureDeleted && <Tag>{t('vectorImport.deletedTag')}</Tag>}
+                    <Flex gap={8} align="center" wrap>
+                      <Typography.Text>{name ?? t('vectorImport.unnamed')}</Typography.Text>
+                      <Tag>{t('vectorImport.deletedTag')}</Tag>
+                      <Link to="/features/deleted" data-testid="import-batch-feature-restore">
+                        {t('vectorImport.featureDeletedRestore')}
+                      </Link>
                     </Flex>
                   );
+                }
+                if (row.featureId) {
+                  return <Link to={`/features/${row.featureId}`}>{name ?? t('vectorImport.unnamed')}</Link>;
                 }
                 // A deleted trip answers as not found at its own address, so the line does not
                 // link there: it says the trip is deleted and sends the reader to where it can

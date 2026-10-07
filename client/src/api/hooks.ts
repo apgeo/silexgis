@@ -172,6 +172,7 @@ export const queryKeys = {
   nominatim: (q: string) => ['nominatim', q] as const,
   features: (params: FeatureListParams) => ['features', 'list', params] as const,
   feature: (id: string) => ['features', 'detail', id] as const,
+  deletedFeatures: (page: number) => ['features', 'deleted', page] as const,
   featureParents: (id: string) => ['features', id, 'parents'] as const,
   featureChildren: (id: string, params: FeatureChildrenParams) => ['features', id, 'children', params] as const,
   featureLinks: (id: string) => ['features', id, 'links'] as const,
@@ -2683,6 +2684,59 @@ export function useDeleteFeature() {
     mutationFn: (id: string) =>
       unwrapVoid(api.DELETE('/api/v1/features/{id}', { params: { path: { id } } })),
     onSuccess: (_, id) => void invalidateAfterDelete(queryClient, ['features'], id),
+  });
+}
+
+export type DeletedFeature = components['schemas']['DeletedFeatureDto'];
+
+/**
+ * The deletions of caves, entrances and surface features this caller may undo, most recent
+ * first: one row for each deletion, with a count of what went with it. Which those are is decided
+ * on the server row by row — the right that deletes is the right that restores — so an account
+ * that may delete nothing is answered with an empty list rather than refused.
+ */
+export function useDeletedFeatures(page = 1, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.deletedFeatures(page),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/features/deleted', { params: { query: { page, pageSize: 50 } } })),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/**
+ * Puts a deleted cave, entrance or surface feature back, with everything deleted along with it.
+ *
+ * The answer is the feature as its own address now answers it, so it is taken as that reading.
+ * Everything else that can show a feature is read again: the lists it returns to and the deleted
+ * list it has just left, a cave's entrances, the trips that name it — a trip stops naming a
+ * deleted cave and names it again once it is back — and an import's own page, which says which
+ * of the objects it created are deleted.
+ *
+ * A refusal is news about the list the button was on — somebody else put it back, or what
+ * contains it was deleted meanwhile — so the deleted list is read again then as well, rather
+ * than left offering a row that can only be refused a second time.
+ */
+export function useRestoreFeature() {
+  const queryClient = useQueryClient();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/api/v1/features/{id}/restore', { params: { path: { id } } })),
+    onSuccess: (envelope, id) => {
+      queryClient.setQueryData(queryKeys.feature(id), envelope);
+      void queryClient.invalidateQueries({
+        queryKey: ['features'],
+        // The feature itself was just taken from the answer.
+        predicate: ({ queryKey }) => !(queryKey[1] === 'detail' && queryKey[2] === id),
+      });
+      for (const scope of ['caves', 'entrances', 'trip-logs', 'import-batches']) {
+        void queryClient.invalidateQueries({ queryKey: [scope] });
+      }
+      invalidateHistory();
+    },
+    onError: () => void queryClient.invalidateQueries({ queryKey: ['features', 'deleted'] }),
   });
 }
 
