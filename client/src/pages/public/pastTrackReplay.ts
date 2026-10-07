@@ -98,15 +98,46 @@ export function pastReplayWindow(track: PublicPastTrack): ReplayWindow | null {
  * handle — the same service the coordinator's replay gives with its note arrows, over the thing
  * this surface actually has. A published track carries no notes by design; what it carries is
  * reports, and those are what somebody scrubbing a trip is looking for.
+ *
+ * <b>Given somebody to follow, it lists that party's own reports and nobody else's.</b> A reader
+ * keeping up with the survey team on a trip of four teams is stepping through a rail where three
+ * reports in four move nobody they are watching: the arrow is pressed, the clock changes and the
+ * drawing does not. Nobody followed — the argument left out, or null — is every report of the trip,
+ * exactly as before the argument existed.
+ *
+ * <b>Whose report a team's is, is decided as the fold decides it</b>: a report belongs to the last
+ * team any report of that person named, so one naming no team is the report of whatever team they
+ * were in at the time. The group on no team is therefore each person's reports <em>before</em> any
+ * of theirs named a team, and stops there — somebody who joined the survey team at noon is not
+ * stepped through as "not in a team" in the afternoon, when the drawing has them in a team.
+ *
+ * <b>An empty list is an answer</b>: the follow names somebody this trip does not hold, or a party
+ * of whom nothing was ever reported. What to step through then is the caller's decision, and it is
+ * not made here by quietly handing back everybody's.
  */
-export function pastReportMoments(track: PublicPastTrack): number[] {
+export function pastReportMoments(track: PublicPastTrack, followed?: PastFollow | null): number[] {
   const moments = new Set<number>();
   for (const participant of track.participants) {
+    if (followed?.kind === 'caver' && String(participant.ordinal) !== followed.id) {
+      continue;
+    }
+    let teamId: string | null = null;
     for (const fix of participant.track) {
+      // A report whose instant will not parse is left out whole, team and all, before anything
+      // else is read off it — the order the fold of a moment keeps. Read the other way round, a
+      // team named only by such a report would be carried forward here and not there, and the
+      // arrows would step to moments at which the drawing has the person in another team.
       const at = instantOf(fix.recordedAt);
-      if (at !== null) {
-        moments.add(at);
+      if (at === null) {
+        continue;
       }
+      if (fix.teamId !== null) {
+        teamId = fix.teamId;
+      }
+      if (followed?.kind === 'team' && teamId !== followed.id) {
+        continue;
+      }
+      moments.add(at);
     }
   }
   return [...moments].sort((left, right) => left - right);
