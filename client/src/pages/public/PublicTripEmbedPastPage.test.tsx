@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
@@ -27,7 +27,7 @@ const TRIP_2019 = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 let live: { data?: PublicTripEnvelope; isPending: boolean; error: unknown };
 let list: { data?: PublicPastTripList; isPending: boolean; isError: boolean; error?: unknown };
-let trackAnswer: { data?: PublicPastTrack; isPending: boolean; isError: boolean };
+let trackAnswer: { data?: PublicPastTrack; isPending: boolean; isError: boolean; error?: unknown };
 let listReads = 0;
 let liveReads = 0;
 /** What the list of parties being followed now answers once it is asked. */
@@ -61,13 +61,19 @@ vi.mock('../../api/hooks.ts', () => ({
 // The frame's address, which is where an article says what language it is written in.
 let address = new URLSearchParams();
 const setAddress = vi.fn();
+/** The link the frame is opened under, which a test can change under a frame already drawn. */
+let linkToken = 'follow-token';
 vi.mock('react-router-dom', () => ({
-  useParams: () => ({ token: 'follow-token' }),
+  useParams: () => ({ token: linkToken }),
   useSearchParams: () => [address, setAddress],
 }));
 // Whether a finger is driving the frame. False by default — the desk this suite is read on.
 let coarse = false;
 vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: () => coarse }));
+// Whether the frame has room for a past trip's whole strip. False by default: the frame this
+// suite is mostly about is the 260px one in a phone's article, which keeps one line.
+let roomy = false;
+vi.mock('./publicEmbedRoom.ts', () => ({ useRoomyFrame: () => roomy }));
 
 let given: Record<string, unknown> | undefined;
 vi.mock('../../components/caveview/CaveViewPanel.tsx', () => ({
@@ -240,7 +246,9 @@ beforeEach(() => {
   given = undefined;
   sheetPane = undefined;
   coarse = false;
+  roomy = false;
   address = new URLSearchParams();
+  linkToken = 'follow-token';
 });
 
 afterEach(cleanup);
@@ -311,12 +319,113 @@ describe('the archive inside a framed viewer', () => {
     fireEvent.click(screen.getByTestId('public-past-open'));
     fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
 
-    expect(screen.getByTestId('public-past-banner')).toHaveTextContent(
-      'You are looking at a past trip',
-    );
+    // On the frame's one line: that it is the past, and which trip.
+    expect(screen.getByTestId('public-past-banner')).toHaveTextContent('Past trip');
+    expect(screen.getByTestId('public-past-banner')).toHaveTextContent('the 2019 push');
     expect(((given?.trackedCavers ?? []) as { name: string }[]).map((caver) => caver.name)).toEqual(
       ['Mircea', 'Ileana'],
     );
+  });
+
+  it('keeps one line while a past trip plays, and the rest of the transport in the sheet behind it', () => {
+    render(<PublicTripEmbedPage />);
+    fireEvent.click(screen.getByTestId('public-past-open'));
+    fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
+
+    // The line: the clock, play and the way back — one of each in the whole frame.
+    const line = within(screen.getByTestId('public-past-bar'));
+    for (const id of ['public-past-clock', 'public-past-play', 'public-past-back']) {
+      expect(line.getByTestId(id)).toBeInTheDocument();
+      expect(screen.getAllByTestId(id)).toHaveLength(1);
+    }
+    for (const id of [
+      'public-past-speed',
+      'public-past-report-next',
+      'public-past-follow',
+      'public-past-scrub',
+    ]) {
+      expect(line.queryByTestId(id)).toBeNull();
+    }
+
+    // The sheet, opened from the line's last button: named for what it now holds, with the rest
+    // of the transport above the lists — so another trip can be picked without leaving this one.
+    fireEvent.click(screen.getByTestId('public-past-controls-open'));
+    const sheet = within(screen.getByTestId('public-past-drawer'));
+    expect(
+      screen.getByText('Replay controls and other trips', { selector: '.ant-drawer-title' }),
+    ).toBeInTheDocument();
+    for (const id of [
+      'public-past-speed',
+      'public-past-report-previous',
+      'public-past-report-next',
+      'public-past-follow',
+      'public-past-scrub',
+    ]) {
+      expect(sheet.getByTestId(id)).toBeInTheDocument();
+      expect(screen.getAllByTestId(id)).toHaveLength(1);
+    }
+    expect(sheet.getByTestId('public-past-statement-what')).toHaveTextContent('the 2019 push');
+    // The cave's other trips are under the controls, behind a press of their own.
+    expect(sheet.queryByTestId(`public-past-trip-${TRIP_2019}`)).toBeNull();
+    fireEvent.click(sheet.getByTestId('public-past-lists-open'));
+    expect(sheet.getByTestId(`public-past-trip-${TRIP_2019}`)).toBeInTheDocument();
+    // The controls are still above them: the sheet grew, it did not change into something else.
+    expect(sheet.getByTestId('public-past-scrub')).toBeInTheDocument();
+    expect(sheet.queryByTestId('public-past-lists-open')).toBeNull();
+  });
+
+  it('reads neither of the cave’s lists for a reader who opens the sheet to move the replay', () => {
+    // The rail, the speed, the steps and whom to follow are controls of the trip already in hand.
+    // Reaching for one must not ask the server who else is underground, nor list them unasked.
+    const { parent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+    expect(liveReads).toBe(0);
+    expect(listReads).toBe(0);
+
+    fireEvent.click(screen.getByTestId('public-past-controls-open'));
+    const sheet = within(screen.getByTestId('public-past-drawer'));
+    fireEvent.click(sheet.getByTestId('public-past-report-next'));
+    fireEvent.click(sheet.getByTestId('public-past-report-previous'));
+
+    expect(liveReads).toBe(0);
+    expect(listReads).toBe(0);
+    expect(sheet.queryByTestId('public-live')).toBeNull();
+    expect(sheet.queryByTestId('public-past-list')).toBeNull();
+
+    // Both are read on the press that asks for them, and not before.
+    fireEvent.click(sheet.getByTestId('public-past-lists-open'));
+    expect(liveReads).toBeGreaterThan(0);
+    expect(listReads).toBeGreaterThan(0);
+  });
+
+  it('shuts a sheet opened for the controls when the replay it controlled is left, rather than turning it into the lists', () => {
+    const { parent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+    fireEvent.click(screen.getByTestId('public-past-controls-open'));
+    expect(screen.getByTestId('public-past-sheet')).toBeInTheDocument();
+
+    // The article's own way back, pressed while the sheet stands open.
+    deliver(parent, 'https://club.example.org', focus('trip', 'live'));
+
+    expect(screen.queryByTestId('public-past-sheet')).toBeNull();
+    expect(liveReads).toBe(0);
+    expect(listReads).toBe(0);
+  });
+
+  it('offers no replay controls in the sheet while the party of now is on screen', () => {
+    render(<PublicTripEmbedPage />);
+    fireEvent.click(screen.getByTestId('public-past-open'));
+
+    expect(
+      screen.getByText('Past trips in this cave', { selector: '.ant-drawer-title' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('public-past-sheet')).toBeNull();
+    expect(screen.queryByTestId('public-past-scrub')).toBeNull();
+    expect(screen.queryByTestId('public-past-controls-open')).toBeNull();
   });
 
   it('hands the drawing the replay’s own marker timing, and the live party none', () => {
@@ -463,11 +572,17 @@ describe('the frame’s buttons under a finger', () => {
 });
 
 describe('a frame whose own address names a moment of a past trip', () => {
-  const clockShows = (iso: string) =>
+  // Read off the rail, which holds the moment to the millisecond — and stands in the frame's
+  // sheet, so the sheet is opened for it the first time it is asked.
+  const clockShows = (iso: string) => {
+    if (screen.queryByTestId('public-past-scrub') === null) {
+      fireEvent.click(screen.getByTestId('public-past-controls-open'));
+    }
     expect(screen.getByTestId('public-past-scrub').querySelector('[role="slider"]')).toHaveAttribute(
       'aria-valuenow',
       String(Date.parse(iso)),
     );
+  };
 
   it('opens that trip at that moment and sets it playing, as the full page does', () => {
     address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T09:30:00Z&play=1`);
@@ -527,6 +642,8 @@ describe('an article driving the cave’s past through the frame', () => {
 
     deliver(parent, 'https://club.example.org', focus('team', TEAM_B, { trip: TRIP_2019 }));
 
+    // Who is being followed is said in the sheet, behind the frame's one line.
+    fireEvent.click(screen.getByTestId('public-past-controls-open'));
     expect(screen.getByTestId('public-past-banner-following')).toHaveTextContent('Survey');
     // And the camera goes where that team was, rather than being left at the model's opening view.
     expect(given?.focusRequest).toEqual({ kind: 'station', ref: 'far.end.2' });
@@ -967,6 +1084,148 @@ describe('an article driving the cave’s past through the frame', () => {
     }
   });
 
+  it('listens to its article through one subscription, however far the replay’s clock moves', () => {
+    const subscribed = vi.spyOn(window, 'addEventListener');
+    try {
+      const { parent, sent } = fakeParent();
+      render(<PublicTripEmbedPage />);
+      const listeners = () => subscribed.mock.calls.filter(([type]) => type === 'message').length;
+      deliver(parent, 'https://club.example.org', hello);
+      deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+      expect(listeners()).toBe(1);
+      const answersBefore = focused(sent).length;
+
+      // Ten moments across the trip, the party at each being the party of that moment: nobody
+      // placed before nine, Mircea from nine, Ileana from ten. Every one of them is a new view, and
+      // a listener that closed over the view was taken down and stood up for each.
+      for (let step = 0; step < 10; step++) {
+        const moment = new Date(Date.parse('2019-07-06T08:15:00Z') + step * 20 * 60_000).toISOString();
+        deliver(parent, 'https://club.example.org', focus('moment', moment));
+      }
+
+      // Every one of the ten was heard and answered, and the party did change under the listener:
+      // the last thing the article was told is the seventh of them, where Ileana joins Mircea on
+      // the drawing —
+      expect(focused(sent).length).toBe(answersBefore + 10);
+      expect(readies(sent).at(-1)?.past).toMatchObject({ at: '2019-07-06T10:15:00.000Z' });
+      expect(
+        ((readies(sent).at(-1)?.party ?? []) as { station: string | null }[]).map(
+          (person) => person.station,
+        ),
+      ).toEqual(['p.g.7', 'far.end.2']);
+      // — by the listener that was there at the start.
+      expect(listeners()).toBe(1);
+    } finally {
+      subscribed.mockRestore();
+    }
+  });
+
+  it('answers from the party as it stands now, though the listener is the one subscribed at the start', () => {
+    // The other half of subscribing once: what the one listener decides against must not be the
+    // party of the render it was subscribed in.
+    const { parent } = fakeParent();
+    const { rerender } = render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('caver', '1'));
+    expect(given?.focusRequest).toMatchObject({ kind: 'station', ref: 'today.1' });
+
+    // A minute's read moves Ana.
+    const moved = envelope();
+    moved.participants[0].stationName = 'today.2';
+    live = { data: moved, isPending: false, error: null };
+    rerender(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', focus('caver', '1'));
+
+    expect(given?.focusRequest).toMatchObject({ kind: 'station', ref: 'today.2' });
+  });
+
+  it('tells the article that the server refused a past trip, once, by its id and beside a `past` left absent', () => {
+    trackAnswer = {
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new ApiError(404, 'trip_tracking.share.not_found'),
+    };
+    const { parent, sent } = fakeParent();
+    const { rerender } = render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    // The party now, loaded, and no word of the past: what the article starts from.
+    expect(readies(sent).at(-1)).toMatchObject({ loaded: true });
+    expect(readies(sent).at(-1)?.past).toBeUndefined();
+    expect(readies(sent).at(-1)?.pastUnreadable).toBeUndefined();
+
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+
+    // Nothing is on screen, so nothing is loaded and nobody is announced — which alone is word for
+    // word what a frame still waiting says. The member is what tells the two apart.
+    const announced = readies(sent).at(-1);
+    expect(announced?.pastUnreadable).toEqual({ tripLogId: TRIP_2019 });
+    expect(announced?.loaded).toBe(false);
+    expect(announced?.party).toEqual([]);
+    // `past` means a replay with a name and a moment, and a listener pasted years ago reads both
+    // off it without asking: for a trip there is nothing of, it stays absent as it always was.
+    expect(announced?.past).toBeUndefined();
+
+    // Said once, not on every render that follows.
+    rerender(<PublicTripEmbedPage />);
+    rerender(<PublicTripEmbedPage />);
+    const refusals = () => readies(sent).filter((said) => said.pastUnreadable !== undefined);
+    expect(refusals()).toHaveLength(1);
+
+    // And gone from the next announcement once the frame is back on the party now.
+    deliver(parent, 'https://club.example.org', focus('trip', 'live'));
+    expect(readies(sent).at(-1)).toMatchObject({ loaded: true });
+    expect(readies(sent).at(-1)?.past).toBeUndefined();
+    expect(readies(sent).at(-1)?.pastUnreadable).toBeUndefined();
+    expect(refusals()).toHaveLength(1);
+  });
+
+  it('does not tell the article a trip cannot be played because a read did not land', () => {
+    // A phone that lost its signal as the link was pressed, a server fault, a request asked to
+    // wait: the frame has learned nothing about the trip and reads again by itself when its
+    // reader returns. Told "cannot be played" on that evidence, the article would print it beside
+    // a frame that then plays the trip.
+    for (const error of [
+      new ApiError(503, 'unavailable'),
+      new ApiError(429, 'rate_limited'),
+      new TypeError('Failed to fetch'),
+    ]) {
+      trackAnswer = { data: undefined, isPending: false, isError: true, error };
+      const { parent, sent } = fakeParent();
+      const { rerender, unmount } = render(<PublicTripEmbedPage />);
+      deliver(parent, 'https://club.example.org', hello);
+      deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+
+      // What a frame still waiting says, and nothing more — while the frame's own line tells the
+      // reader in front of it that the trip could not be read.
+      const announced = readies(sent).at(-1);
+      expect(announced?.loaded).toBe(false);
+      expect(announced?.past).toBeUndefined();
+      expect(announced?.pastUnreadable).toBeUndefined();
+      expect(screen.getByTestId('public-past-track-failed')).toBeInTheDocument();
+
+      // The read made again on the reader's return lands, and the trip is announced as any other.
+      trackAnswer = { data: pastTrack(), isPending: false, isError: false };
+      rerender(<PublicTripEmbedPage />);
+      expect(readies(sent).at(-1)).toMatchObject({ loaded: true, past: { tripLogId: TRIP_2019 } });
+      expect(readies(sent).filter((said) => said.pastUnreadable !== undefined)).toHaveLength(0);
+      unmount();
+    }
+  });
+
+  it('says nothing of the kind about a past trip that was read', () => {
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+
+    const announced = readies(sent).at(-1);
+    expect(announced?.loaded).toBe(true);
+    expect(announced?.past).toMatchObject({ tripLogId: TRIP_2019 });
+    expect(announced?.pastUnreadable).toBeUndefined();
+  });
+
   it('says a team nobody has placed is nowhere, rather than claiming it was found', () => {
     live = {
       data: envelope({
@@ -996,5 +1255,126 @@ describe('an article driving the cave’s past through the frame', () => {
     deliver(parent, 'https://club.example.org', focus('team', TEAM_A));
 
     expect(focused(sent).at(-1)).toMatchObject({ target: { kind: 'team' }, found: false });
+  });
+});
+
+describe('a second published link opened in the same frame', () => {
+  it('does not show the first link’s replay, and stops announcing it', () => {
+    const { parent, sent } = fakeParent();
+    const { rerender } = render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    fireEvent.click(screen.getByTestId('public-past-open'));
+    fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
+    // The replay that must not be carried over really is on screen under the first link.
+    expect(screen.getByTestId('public-trip-embed').className).toContain('embed-past');
+    expect(readies(sent).at(-1)?.past).toMatchObject({ tripLogId: TRIP_2019 });
+
+    linkToken = 'second-link';
+    rerender(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('public-trip-embed').className).not.toContain('embed-past');
+    expect(screen.queryByTestId('public-past-bar')).toBeNull();
+    expect(screen.getByTestId('public-past-open')).toBeTruthy();
+    expect(((given?.trackedCavers ?? []) as { name: string }[]).map((caver) => caver.name)).toEqual([
+      'Ana',
+    ]);
+    expect(readies(sent).at(-1)?.past).toBeUndefined();
+  });
+
+  it('opens the past trip its own address names, at that address’s moment', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T09:30:00Z`);
+    const { parent, sent } = fakeParent();
+    const { rerender } = render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    // The first link's reader — or its article — winds the clock on.
+    deliver(parent, 'https://club.example.org', focus('moment', '2019-07-06T10:30:00Z'));
+    expect(readies(sent).at(-1)?.past).toMatchObject({ at: '2019-07-06T10:30:00.000Z' });
+
+    linkToken = 'second-link';
+    rerender(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('public-trip-embed').className).toContain('embed-past');
+    expect(readies(sent).at(-1)?.past).toMatchObject({
+      tripLogId: TRIP_2019,
+      at: '2019-07-06T09:30:00.000Z',
+    });
+  });
+});
+
+describe('a past trip in a frame with room for its whole strip', () => {
+  beforeEach(() => {
+    roomy = true;
+  });
+
+  it('keeps the rail, the speed, the steps and whom to follow on screen, with no sheet to open for them', () => {
+    const { parent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+
+    const strip = within(screen.getByTestId('public-past-bar'));
+    for (const id of [
+      'public-past-play',
+      'public-past-clock',
+      'public-past-back',
+      'public-past-speed',
+      'public-past-report-previous',
+      'public-past-report-next',
+      'public-past-follow',
+      'public-past-scrub',
+    ]) {
+      expect(strip.getByTestId(id), id).toBeInTheDocument();
+      expect(screen.getAllByTestId(id), id).toHaveLength(1);
+    }
+    expect(screen.queryByTestId('public-past-controls-open')).toBeNull();
+    expect(screen.queryByTestId('public-past-sheet')).toBeNull();
+    expect(screen.getByTestId('public-trip-embed').className).toContain('embed-past');
+    // Stepping from the strip asks the server for nothing.
+    fireEvent.click(strip.getByTestId('public-past-report-next'));
+    expect(liveReads).toBe(0);
+    expect(listReads).toBe(0);
+  });
+
+  it('opens the cave’s lists from the strip, in a sheet that holds no second set of controls', () => {
+    const { parent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+
+    fireEvent.click(screen.getByTestId('public-past-lists-open'));
+
+    const sheet = within(screen.getByTestId('public-past-drawer'));
+    expect(
+      screen.getByText('Past trips in this cave', { selector: '.ant-drawer-title' }),
+    ).toBeInTheDocument();
+    expect(sheet.getByTestId(`public-past-trip-${TRIP_2019}`)).toBeInTheDocument();
+    expect(sheet.queryByTestId('public-past-sheet')).toBeNull();
+    expect(screen.getAllByTestId('public-past-scrub')).toHaveLength(1);
+    expect(liveReads).toBeGreaterThan(0);
+    expect(listReads).toBeGreaterThan(0);
+  });
+
+  it('becomes the one line, and the line the whole strip, as the frame’s box changes', () => {
+    const { parent } = fakeParent();
+    const { rerender } = render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+    expect(screen.queryByTestId('public-past-controls-open')).toBeNull();
+
+    // A phone turned upright under the article.
+    roomy = false;
+    rerender(<PublicTripEmbedPage />);
+    expect(screen.getByTestId('public-past-controls-open')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('public-past-controls-open'));
+    expect(screen.getByTestId('public-past-sheet')).toBeInTheDocument();
+
+    // And turned back: the controls are on the strip again, and the sheet that held them is shut
+    // rather than left open as a list nobody asked for.
+    roomy = true;
+    rerender(<PublicTripEmbedPage />);
+    expect(screen.queryByTestId('public-past-sheet')).toBeNull();
+    expect(screen.getAllByTestId('public-past-scrub')).toHaveLength(1);
+    expect(liveReads).toBe(0);
+    expect(listReads).toBe(0);
   });
 });

@@ -53,8 +53,11 @@ function playback(moments: readonly number[], overrides: Partial<PastTripPlaybac
     track: track(),
     loading: false,
     failed: false,
+    refused: false,
     span,
     moments,
+    // Nobody followed, unless a case says who.
+    followedMoments: [] as readonly number[],
     at: span.from,
     setAt: () => {},
     envelope: null,
@@ -126,6 +129,156 @@ describe('a record the response could not carry whole', () => {
 
     expect(screen.queryByTestId('public-past-truncated')).toBeNull();
     expect(screen.getByTestId('public-past-banner')).toBeTruthy();
+  });
+});
+
+/**
+ * The two arrows that step from one report to the next.
+ *
+ * <b>They step through the reports of whoever is followed, and say so.</b> A trip of several
+ * teams reports far more often than any one of them does; with the camera on one team, an arrow
+ * that stops at every report of the trip mostly stops where nothing the reader is watching moved.
+ */
+describe('the arrows that step between reports', () => {
+  const TEAM = '22222222-2222-2222-2222-222222222222';
+  const minutes = everyMinute(20);
+  // The followed party reported at three of the trip's twenty moments.
+  const theirs = [minutes[2], minutes[9], minutes[15]];
+  const surveyed = (title: string) => track({ teams: [{ id: TEAM, title }] });
+  const stepping = (overrides: Partial<PastTripPlayback> = {}, layout?: 'page' | 'sheet') => {
+    const scrubTo = vi.fn();
+    const base = playback(minutes);
+    render(
+      <PublicPastBar
+        playback={{ ...base, transport: { ...base.transport, scrubTo }, ...overrides }}
+        liveState="closed"
+        cavers={[]}
+        layout={layout}
+      />,
+    );
+    return {
+      scrubTo,
+      previous: screen.getByTestId('public-past-report-previous'),
+      next: screen.getByTestId('public-past-report-next'),
+    };
+  };
+
+  it('step through everybody’s while nobody is followed', () => {
+    const { scrubTo, previous, next } = stepping({ at: minutes[5] });
+
+    fireEvent.click(next);
+    expect(scrubTo).toHaveBeenLastCalledWith(minutes[6]);
+    fireEvent.click(previous);
+    expect(scrubTo).toHaveBeenLastCalledWith(minutes[4]);
+    expect(previous).toHaveAccessibleName('Previous report');
+    expect(next).toHaveAccessibleName('Next report');
+  });
+
+  it('step through the followed party’s own reports, passing over everybody else’s', () => {
+    const { scrubTo, previous, next } = stepping({
+      track: surveyed('Survey'),
+      follow: { kind: 'team', id: TEAM },
+      followedMoments: theirs,
+      at: minutes[5],
+    });
+
+    fireEvent.click(next);
+    expect(scrubTo).toHaveBeenLastCalledWith(minutes[9]);
+    fireEvent.click(previous);
+    expect(scrubTo).toHaveBeenLastCalledWith(minutes[2]);
+    // Whose reports, in the name a screen reader says and in the hover text a mouse shows.
+    expect(previous).toHaveAccessibleName('Previous report about Survey');
+    expect(next).toHaveAccessibleName('Next report about Survey');
+    expect(next).toHaveAttribute('title', 'Next report about Survey');
+  });
+
+  it('stop at the followed party’s last report, though the trip went on reporting', () => {
+    const { scrubTo, previous, next } = stepping({
+      track: surveyed('Survey'),
+      follow: { kind: 'team', id: TEAM },
+      followedMoments: theirs,
+      at: minutes[15],
+    });
+
+    expect(next).toBeDisabled();
+    expect(previous).toBeEnabled();
+    fireEvent.click(next);
+    expect(scrubTo).not.toHaveBeenCalled();
+  });
+
+  it('leave the rail’s marks everybody’s, whoever is followed', () => {
+    stepping({
+      track: surveyed('Survey'),
+      follow: { kind: 'team', id: TEAM },
+      followedMoments: theirs,
+    });
+
+    expect(marks()).toBe(20);
+  });
+
+  it('step through everybody’s for a followed party of whom the trip holds no report', () => {
+    // A link naming a place in the party beyond the roster's end. Narrowed to that party's
+    // reports — none — both arrows would be dead on a trip of twenty.
+    const { scrubTo, previous, next } = stepping({
+      follow: { kind: 'caver', id: '99' },
+      followedMoments: [],
+      at: minutes[5],
+    });
+
+    fireEvent.click(next);
+    expect(scrubTo).toHaveBeenLastCalledWith(minutes[6]);
+    expect(next).toHaveAccessibleName('Next report');
+    expect(previous).toHaveAccessibleName('Previous report');
+  });
+
+  it('say "the party being followed" for a followed team the trip has no name for', () => {
+    // A team saved with an empty title has reports and nothing to be called by: the strip's line
+    // about whom it keeps up with is silent for it, and the arrows still must not claim to step
+    // through every report.
+    const { scrubTo, previous, next } = stepping({
+      track: surveyed(''),
+      follow: { kind: 'team', id: TEAM },
+      followedMoments: theirs,
+      at: minutes[5],
+    });
+
+    fireEvent.click(next);
+    expect(scrubTo).toHaveBeenLastCalledWith(minutes[9]);
+    expect(next).toHaveAccessibleName('Next report about the party being followed');
+    expect(previous).toHaveAccessibleName('Previous report about the party being followed');
+  });
+
+  it('do the same from the sheet a frame keeps them in', () => {
+    const { scrubTo, next } = stepping(
+      {
+        track: surveyed('Survey'),
+        follow: { kind: 'team', id: TEAM },
+        followedMoments: theirs,
+        at: minutes[5],
+      },
+      'sheet',
+    );
+
+    fireEvent.click(next);
+    expect(scrubTo).toHaveBeenLastCalledWith(minutes[9]);
+    expect(next).toHaveAccessibleName('Next report about Survey');
+  });
+
+  it('are named in Romanian with the same words in the same places', async () => {
+    const { default: i18n } = await import('../../i18n');
+    await i18n.changeLanguage('ro');
+    try {
+      const { next, previous } = stepping({
+        track: surveyed('Topo'),
+        follow: { kind: 'team', id: TEAM },
+        followedMoments: theirs,
+        at: minutes[5],
+      });
+      expect(next).toHaveAccessibleName('Raportul următor despre Topo');
+      expect(previous).toHaveAccessibleName('Raportul anterior despre Topo');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 });
 
@@ -237,7 +390,7 @@ describe('the clock, where there is only room for a time of day', () => {
         })}
         liveState="closed"
         cavers={[]}
-        compact
+        layout="line"
       />,
     );
 
@@ -247,7 +400,12 @@ describe('the clock, where there is only room for a time of day', () => {
 
   it('keeps to the time of day on a trip that fits inside one', () => {
     render(
-      <PublicPastBar playback={playback(everyMinute(3))} liveState="closed" cavers={[]} compact />,
+      <PublicPastBar
+        playback={playback(everyMinute(3))}
+        liveState="closed"
+        cavers={[]}
+        layout="line"
+      />,
     );
 
     expect(clock()).not.toMatch(/Jul/);
@@ -433,18 +591,22 @@ describe('copying a link to the moment on the clock', () => {
     expect(screen.queryByTestId('public-past-links')).toBeNull();
     unmount();
 
-    render(
-      <PublicPastBar
-        playback={playback(everyMinute(20))}
-        liveState="closed"
-        cavers={[]}
-        momentAddress={address}
-        compact
-      />,
-    );
-    expect(screen.getByTestId('public-past-play')).toBeInTheDocument();
-    expect(screen.queryByTestId('public-past-links')).toBeNull();
-    expect(screen.queryByRole('status')).toBeNull();
+    // Neither half of the frame's strip, even handed an address: the line has no room and the
+    // sheet is not the page.
+    for (const layout of ['line', 'sheet'] as const) {
+      const drawn = render(
+        <PublicPastBar
+          playback={playback(everyMinute(20))}
+          liveState="closed"
+          cavers={[]}
+          momentAddress={address}
+          layout={layout}
+        />,
+      );
+      expect(screen.queryByTestId('public-past-links')).toBeNull();
+      expect(screen.queryByRole('status')).toBeNull();
+      drawn.unmount();
+    }
   });
 
   it('draws them as buttons, never as links the page would be navigated by', () => {
@@ -484,17 +646,291 @@ describe('the camp a past trip was part of', () => {
     expect(screen.queryByTestId('public-past-banner-camp')).toBeNull();
   });
 
-  it('is left out of a frame, whose strip is as tall as the drawing it stands over', () => {
+  it('is left off the one line a frame keeps, and said in the sheet behind it', () => {
+    const line = render(
+      <PublicPastBar
+        playback={playback(everyMinute(20), { track: track({ expedition: camp }) })}
+        liveState="closed"
+        cavers={[]}
+        layout="line"
+      />,
+    );
+    expect(screen.getByTestId('public-past-banner-what')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-past-banner-camp')).toBeNull();
+    line.unmount();
+
     render(
       <PublicPastBar
         playback={playback(everyMinute(20), { track: track({ expedition: camp }) })}
         liveState="closed"
         cavers={[]}
-        compact
+        layout="sheet"
+      />,
+    );
+    expect(screen.getByTestId('public-past-banner-camp')).toHaveTextContent('Camp: Summer camp 2019');
+  });
+});
+
+/**
+ * The strip in the frame inside somebody's article: one line, and a sheet behind it.
+ *
+ * <b>Two halves of one strip, and no control in both.</b> The frame draws them in the same
+ * document at the same time, so anything drawn twice is two play buttons a reader can press and
+ * two clocks that have to agree — and anything drawn in neither is a control the frame lost.
+ */
+describe('the strip in a frame, as one line and the sheet behind it', () => {
+  /** Every control of the transport, by the name a reader and a test find it by. */
+  const TRANSPORT = [
+    'public-past-play',
+    'public-past-clock',
+    'public-past-back',
+    'public-past-speed',
+    'public-past-report-previous',
+    'public-past-report-next',
+    'public-past-follow',
+    'public-past-scrub',
+  ];
+  const ON_THE_LINE = ['public-past-play', 'public-past-clock', 'public-past-back'];
+
+  const both = (overrides: Partial<PastTripPlayback> = {}, liveState: 'armed' | 'closed' = 'armed') =>
+    render(
+      <>
+        <PublicPastBar
+          playback={playback(everyMinute(20), overrides)}
+          liveState={liveState}
+          cavers={[]}
+          layout="line"
+          onMore={() => {}}
+        />
+        <PublicPastBar
+          playback={playback(everyMinute(20), overrides)}
+          liveState={liveState}
+          cavers={[]}
+          layout="sheet"
+        />
+      </>,
+    );
+
+  it('draws every control of the transport exactly once between them, the line keeping three', () => {
+    both();
+
+    for (const id of TRANSPORT) {
+      expect(screen.getAllByTestId(id), id).toHaveLength(1);
+    }
+    const line = within(screen.getByTestId('public-past-bar'));
+    const sheet = within(screen.getByTestId('public-past-sheet'));
+    for (const id of TRANSPORT) {
+      const onTheLine = ON_THE_LINE.includes(id);
+      expect(line.queryAllByTestId(id), `${id} on the line`).toHaveLength(onTheLine ? 1 : 0);
+      expect(sheet.queryAllByTestId(id), `${id} in the sheet`).toHaveLength(onTheLine ? 0 : 1);
+    }
+  });
+
+  it('says on the line that this is the past and which trip, and in full in the sheet', () => {
+    both();
+
+    const said = screen.getByTestId('public-past-banner');
+    expect(screen.getByTestId('public-past-bar')).toContainElement(said);
+    expect(said).toHaveTextContent('Past trip');
+    expect(said).toHaveTextContent('the 2019 push');
+    // The name may be cut short by the line's width, so the whole of it is also its hover text.
+    expect(screen.getByTestId('public-past-banner-what')).toHaveAttribute(
+      'title',
+      expect.stringContaining('Peștera Demo Mare, the 2019 push'),
+    );
+    expect(screen.getByTestId('public-past-statement-what')).toHaveTextContent(
+      'Nobody is being followed here',
+    );
+  });
+
+  it('words the way back in one word, under the name that says where it goes', () => {
+    const underground = both({}, 'armed');
+    expect(screen.getByTestId('public-past-back')).toHaveTextContent(/^Now$/);
+    expect(screen.getByTestId('public-past-back')).toHaveAccessibleName('Back to the party now');
+    // A party to go back to is what "now" means: said in the sheet only where there is none.
+    expect(screen.queryByTestId('public-past-no-live')).toBeNull();
+    underground.unmount();
+
+    both({}, 'closed');
+    expect(screen.getByTestId('public-past-back')).toHaveTextContent(/^Back$/);
+    expect(screen.getByTestId('public-past-back')).toHaveAccessibleName("Back to this link's trip");
+    expect(screen.getByTestId('public-past-sheet')).toContainElement(
+      screen.getByTestId('public-past-no-live'),
+    );
+  });
+
+  it('opens the sheet from the line, and offers no such button where there is no sheet', () => {
+    const opened = vi.fn();
+    const withSheet = render(
+      <PublicPastBar
+        playback={playback(everyMinute(20))}
+        liveState="armed"
+        cavers={[]}
+        layout="line"
+        onMore={opened}
+      />,
+    );
+    const more = screen.getByTestId('public-past-controls-open');
+    expect(more).toHaveAccessibleName('Replay controls and other trips');
+    fireEvent.click(more);
+    expect(opened).toHaveBeenCalledTimes(1);
+    withSheet.unmount();
+
+    render(
+      <PublicPastBar playback={playback(everyMinute(20))} liveState="armed" cavers={[]} layout="line" />,
+    );
+    expect(screen.getByTestId('public-past-play')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-past-controls-open')).toBeNull();
+  });
+
+  it('says a trip could not be read on the line, once, with the reason in the sheet', () => {
+    both({ track: undefined, failed: true, span: null, moments: [], at: null });
+
+    expect(screen.getAllByTestId('public-past-track-failed')).toHaveLength(1);
+    expect(screen.getByTestId('public-past-bar')).toHaveTextContent('This trip could not be read');
+    expect(screen.getByTestId('public-past-bar')).not.toHaveTextContent(/Reading this trip/);
+    expect(screen.getByTestId('public-past-track-failed-why')).toHaveTextContent(
+      'may no longer be published',
+    );
+    // No transport for a trip there is nothing of — and still the way back, and the way to the
+    // sheet, which is where another trip is picked.
+    expect(screen.queryByTestId('public-past-play')).toBeNull();
+    expect(screen.queryByTestId('public-past-scrub')).toBeNull();
+    expect(screen.getByTestId('public-past-back')).toBeInTheDocument();
+    expect(screen.getByTestId('public-past-controls-open')).toBeInTheDocument();
+  });
+
+  it('says on the line itself that the record was cut short, and in full in the sheet', () => {
+    // A reader who presses play on the line watches the clock stop at the last report that
+    // arrived. With the sheet shut, the line is all there is to say why.
+    both({ track: track({ trackTruncated: true }) });
+
+    const onTheLine = screen.getByTestId('public-past-truncated');
+    expect(screen.getByTestId('public-past-bar')).toContainElement(onTheLine);
+    expect(onTheLine).toHaveTextContent('The record ends before the trip did');
+    // The sentence in full is the mark's hover text, and stands in the sheet under a name of its
+    // own — the two are in one document while the sheet is open.
+    expect(onTheLine).toHaveAttribute('title', expect.stringContaining('the party went on after'));
+    expect(screen.getByTestId('public-past-sheet')).toContainElement(
+      screen.getByTestId('public-past-statement-truncated'),
+    );
+    expect(screen.getByTestId('public-past-statement-truncated')).toHaveTextContent(
+      'the party went on after that moment',
+    );
+  });
+
+  it('says nothing of the kind on the line of a record that arrived whole', () => {
+    both();
+
+    expect(screen.queryByTestId('public-past-truncated')).toBeNull();
+    expect(screen.queryByTestId('public-past-statement-truncated')).toBeNull();
+  });
+
+  it('keeps who is being followed, and the way to stop, in the sheet', () => {
+    const TEAM = '22222222-2222-2222-2222-222222222222';
+    both({
+      track: track({ teams: [{ id: TEAM, title: 'Survey' }] }),
+      follow: { kind: 'team', id: TEAM },
+    });
+
+    const sheet = screen.getByTestId('public-past-sheet');
+    expect(sheet).toContainElement(screen.getByTestId('public-past-banner-following'));
+    expect(screen.getByTestId('public-past-banner-following')).toHaveTextContent('Survey');
+    expect(sheet).toContainElement(screen.getByTestId('public-past-unfollow'));
+  });
+});
+
+describe('the strip in a frame with room for the whole of it', () => {
+  const TRANSPORT = [
+    'public-past-play',
+    'public-past-clock',
+    'public-past-back',
+    'public-past-speed',
+    'public-past-report-previous',
+    'public-past-report-next',
+    'public-past-follow',
+    'public-past-scrub',
+  ];
+
+  it('draws the statement and every control of the transport at once, with nothing behind a press', () => {
+    render(
+      <PublicPastBar
+        playback={playback(everyMinute(20), { track: track({ trackTruncated: true }) })}
+        liveState="armed"
+        cavers={[]}
+        layout="frame"
+        onMore={() => {}}
       />,
     );
 
-    expect(screen.getByTestId('public-past-banner-what')).toBeInTheDocument();
-    expect(screen.queryByTestId('public-past-banner-camp')).toBeNull();
+    const strip = within(screen.getByTestId('public-past-bar'));
+    for (const id of TRANSPORT) {
+      expect(strip.getAllByTestId(id), id).toHaveLength(1);
+    }
+    expect(screen.queryByTestId('public-past-controls-open')).toBeNull();
+    expect(screen.getByTestId('public-past-banner')).toHaveTextContent(
+      'You are looking at a past trip',
+    );
+    expect(screen.getByTestId('public-past-banner-what')).toHaveTextContent('the 2019 push');
+    // The way back is worded in full, as on the page: there is room for it.
+    expect(screen.getByTestId('public-past-back')).toHaveTextContent('Back to the party now');
+    // And the statement that the record was cut short is the whole sentence, in the statement.
+    expect(screen.getByTestId('public-past-banner')).toContainElement(
+      screen.getByTestId('public-past-truncated'),
+    );
+    expect(screen.getByTestId('public-past-truncated')).toHaveTextContent(
+      'the party went on after that moment',
+    );
+  });
+
+  it('offers the cave’s lists beside the way back, and only where there is a sheet to open', () => {
+    const opened = vi.fn();
+    const withSheet = render(
+      <PublicPastBar
+        playback={playback(everyMinute(20))}
+        liveState="armed"
+        cavers={[]}
+        layout="frame"
+        onMore={opened}
+      />,
+    );
+    const lists = screen.getByTestId('public-past-lists-open');
+    expect(lists).toHaveAccessibleName('Past trips in this cave');
+    fireEvent.click(lists);
+    expect(opened).toHaveBeenCalledTimes(1);
+    withSheet.unmount();
+
+    render(
+      <PublicPastBar playback={playback(everyMinute(20))} liveState="armed" cavers={[]} layout="frame" />,
+    );
+    expect(screen.queryByTestId('public-past-lists-open')).toBeNull();
+    // Nor on the page, which has a section of its own for them.
+    cleanup();
+    render(
+      <PublicPastBar playback={playback(everyMinute(20))} liveState="armed" cavers={[]} onMore={opened} />,
+    );
+    expect(screen.queryByTestId('public-past-lists-open')).toBeNull();
+  });
+
+  it('keeps the way to another trip beside a trip that could not be read', () => {
+    render(
+      <PublicPastBar
+        playback={playback(everyMinute(3), {
+          track: undefined,
+          failed: true,
+          span: null,
+          moments: [],
+          at: null,
+        })}
+        liveState="armed"
+        cavers={[]}
+        layout="frame"
+        onMore={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId('public-past-track-failed')).toBeInTheDocument();
+    expect(screen.getByTestId('public-past-back')).toBeInTheDocument();
+    expect(screen.getByTestId('public-past-lists-open')).toBeInTheDocument();
   });
 });

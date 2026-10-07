@@ -56,10 +56,11 @@ vi.mock('../../api/hooks.ts', () => ({
   useSurveyModel: () => ({ data: undefined, isPending: false, error: null }),
   usePublicPastTrips: (_token: string | undefined, enabled: boolean) =>
     enabled ? archive : { data: undefined, isPending: false, isError: false },
-  usePublicLiveTrips: (_token: string | undefined, enabled: boolean) => {
+  usePublicLiveTrips: (token: string | undefined, enabled: boolean) => {
     liveAsked = enabled;
     if (enabled) {
       liveReads++;
+      liveAskedUnder.push(token);
     }
     return enabled ? liveList : { data: undefined, isPending: false, isError: false };
   },
@@ -67,11 +68,17 @@ vi.mock('../../api/hooks.ts', () => ({
     tripLogId === undefined ? { data: undefined, isPending: false, isError: false } : trackAnswer,
 }));
 // The frame reads its own address — for its language, and for a past trip named in it.
+/** The link the frame is opened under, which a test can change under a frame already drawn. */
+let linkToken = 'follow-token';
+/** Every link the list of parties was asked for under, while it was being asked for. */
+let liveAskedUnder: (string | undefined)[] = [];
 vi.mock('react-router-dom', () => ({
-  useParams: () => ({ token: 'follow-token' }),
+  useParams: () => ({ token: linkToken }),
   useSearchParams: () => [new URLSearchParams(), vi.fn()],
 }));
 vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: () => false }));
+// The 260px frame of a phone's article, which keeps a past trip's strip to one line.
+vi.mock('./publicEmbedRoom.ts', () => ({ useRoomyFrame: () => false }));
 
 /** The viewer, faked at its contract: what it is handed is the whole of what the frame owes it. */
 let given: Record<string, unknown> | undefined;
@@ -286,6 +293,8 @@ beforeEach(() => {
   };
   liveAsked = false;
   liveReads = 0;
+  liveAskedUnder = [];
+  linkToken = 'follow-token';
   given = undefined;
   viewersBuilt = 0;
 });
@@ -667,5 +676,39 @@ describe('what a framed viewer tells its article while another party is watched'
     expect(drawn()).toEqual(['Ana']);
     expect(lastReady(sent).watching).toBeUndefined();
     expect(lastReady(sent).past).toBeUndefined();
+  });
+});
+
+describe('a second published link opened in the same frame, while another party was being watched', () => {
+  it('starts on its own party, tells the article so, and reads nobody else’s list under it', () => {
+    const { parent, sent } = fakeParent();
+    const { rerender } = render(<PublicTripEmbedPage />);
+    deliver(parent, HOST, hello);
+    watch(OTHER);
+    expect(drawn()).toEqual(['Mircea', 'Ileana', 'Radu']);
+    expect(lastReady(sent).watching).toMatchObject({ tripLogId: OTHER });
+
+    linkToken = 'second-link';
+    rerender(<PublicTripEmbedPage />);
+
+    expect(drawn()).toEqual(['Ana']);
+    expect(screen.queryByTestId('public-watch-line')).toBeNull();
+    expect(screen.queryByTestId('public-watch-ended')).toBeNull();
+    expect(screen.getByTestId('public-trip-embed')).not.toHaveClass('public-trip-embed-watch');
+    expect(lastReady(sent).watching).toBeUndefined();
+    expect(liveAsked).toBe(false);
+    expect(liveAskedUnder).not.toContain('second-link');
+  });
+
+  it('shuts a sheet left open under the first link, so its lists are not read under the second', () => {
+    const { rerender } = render(<PublicTripEmbedPage />);
+    openSheet();
+    expect(sheetIsOpen()).toBe(true);
+
+    linkToken = 'second-link';
+    rerender(<PublicTripEmbedPage />);
+
+    expect(sheetIsOpen()).toBe(false);
+    expect(liveAskedUnder).not.toContain('second-link');
   });
 });

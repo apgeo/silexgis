@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { isSettledRefusal } from '../../api/client.ts';
 import { usePublicPastTrack, type PublicPastTrack, type PublicTripEnvelope } from '../../api/hooks.ts';
 import { instantOf } from './publicTripParty.ts';
 import {
@@ -39,12 +40,35 @@ export interface PastTripPlayback {
   /** The track as read, or undefined while it is in flight or could not be read. */
   track: PublicPastTrack | undefined;
   loading: boolean;
-  /** Set when the chosen trip could not be read: gone, withdrawn, or past its retention. */
+  /**
+   * Set when the chosen trip could not be read, for whatever reason: gone, withdrawn, past its
+   * retention — or a connection that dropped, a server that answered with a fault.
+   */
   failed: boolean;
+  /**
+   * Set when the server itself refused the chosen trip: it is not this cave's, is no longer
+   * published, or has outlived what the installation keeps.
+   *
+   * <b>The narrower of the two, and the only one that is a statement about the trip.</b> A read
+   * that failed because a phone lost its signal says nothing about the trip, and it is made again
+   * by itself when the reader returns to the tab — so whoever tells a third party that a trip
+   * cannot be played tells them on this and never on {@link failed}.
+   */
+  refused: boolean;
   /** The stretch being played, or null when this trip has nothing to play. */
   span: ReplayWindow | null;
-  /** Every instant a report was made, for stepping between them. */
+  /** Every instant a report was made, by anybody: what the rail marks, and what is stepped
+   *  through while nobody is followed. */
   moments: readonly number[];
+  /**
+   * The instants the followed team or caver was reported at, for stepping through theirs alone.
+   *
+   * Empty while nobody is followed — and empty, too, for a follow of whom this trip holds no report
+   * (a link naming a team of another trip, somebody on the roster nobody ever reported). Whoever
+   * draws the steps falls back to {@link moments} then: two arrows that are both dead, on a trip
+   * full of reports, would be a control that stopped working because of whom the camera is on.
+   */
+  followedMoments: readonly number[];
   /** The moment on the clock, or null before one has been settled on. */
   at: number | null;
   setAt(at: number): void;
@@ -129,7 +153,33 @@ export function usePastTripPlayback(token: string | undefined): PastTripPlayback
   // there is made twice with side effects each time.
   const tripRef = useRef<string | null>(null);
 
-  const query = usePublicPastTrack(token, tripLogId ?? undefined);
+  /**
+   * A replay belongs to the link it was opened under, and goes when that link does.
+   *
+   * <b>The page is one component across two links.</b> Moving from one published link to another
+   * inside one tab — the browser's Back and Forward between two of them, a link on a club's own
+   * page — changes the token and keeps everything held here: the trip id of the first link would
+   * be asked of the second, and where the two links are of one cave it would be answered, so the
+   * second link's page opened on the first link's replay with nothing in its address saying so.
+   *
+   * Forgotten while rendering rather than in an effect, so no render under the new link is ever
+   * committed with the old link's trip — and so that whoever reads the new address afterwards, in
+   * an effect, opens what <em>it</em> names onto a playback that is already empty.
+   */
+  const [heldFor, setHeldFor] = useState(token);
+  if (heldFor !== token) {
+    setHeldFor(token);
+    tripRef.current = null;
+    setTripLogId(null);
+    setFollowState(null);
+    setAt(null);
+    setPendingAt(null);
+    setPendingPlay(false);
+  }
+
+  // Not even the render that notices the change asks the new link for the old link's trip: that
+  // render is thrown away, but what it asks for is still a question put under the wrong link.
+  const query = usePublicPastTrack(token, (heldFor === token ? tripLogId : null) ?? undefined);
   const track = query.data;
   const failed = tripLogId !== null && query.isError;
 
@@ -153,6 +203,12 @@ export function usePastTripPlayback(token: string | undefined): PastTripPlayback
 
   const span = useMemo(() => (track === undefined ? null : pastReplayWindow(track)), [track]);
   const moments = useMemo(() => (track === undefined ? [] : pastReportMoments(track)), [track]);
+  // Derived once per trip and per choice of whom to follow, never per tick: the strip reads it on
+  // every one of the five renders a second a playing replay makes.
+  const followedMoments = useMemo(
+    () => (track === undefined || follow === null ? [] : pastReportMoments(track, follow)),
+    [track, follow],
+  );
 
   /**
    * Where a replay opens.
@@ -318,8 +374,10 @@ export function usePastTripPlayback(token: string | undefined): PastTripPlayback
     track,
     loading: tripLogId !== null && query.isPending,
     failed,
+    refused: failed && isSettledRefusal(query.error),
     span,
     moments,
+    followedMoments,
     at,
     setAt,
     envelope,
