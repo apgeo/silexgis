@@ -3,11 +3,12 @@ import { App } from 'antd';
 import { useEffect } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { SurveyModelInfo, TrackingEvent, TrackingState, TripParticipant } from '../../api/hooks.ts';
 import type { PickedModelPart } from '../../caveview/modelParts.ts';
 import type { TrackingMovieDialogProps } from '../caveview/movie/TrackingMovieDialog.tsx';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
+import { positionAgeOf } from './trackingWatch.ts';
 
 const ANA = 'caver-ana';
 const BOGDAN = 'caver-bogdan';
@@ -90,6 +91,8 @@ interface GivenProps {
   onDeclaredPartsView?: (
     view: { hide: readonly (readonly string[])[]; unmatched: readonly string[] } | null,
   ) => void;
+  /** How the card over the model words a moment, or absent where it prints the clock. */
+  trackedMomentInWords?: (iso: string) => string | null;
   /** Which of the viewer's own controls this panel asks for — see the test that reads it. */
   toolbar?: boolean | { buttons?: readonly string[] };
   /**
@@ -144,6 +147,7 @@ interface FakeSheetPaneProps {
   active: boolean;
   cavers: readonly TrackedCaver[];
   onPickStation?: (station: string) => void;
+  momentInWords?: (iso: string) => string | null;
 }
 /** The latest props each mounted sheet pane was given, by declaration link id. */
 const sheetPanes = new Map<string, FakeSheetPaneProps>();
@@ -315,6 +319,7 @@ function show(
     canEdit?: boolean;
     selectedCaverIds?: string[];
     onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
+    now?: number;
   } = {},
 ) {
   return render(
@@ -330,6 +335,7 @@ function show(
         selectedCaverIds={props.selectedCaverIds ?? [ANA]}
         onRecorded={onRecorded}
         onUnplacedStationsChange={props.onUnplacedStationsChange}
+        now={props.now}
       />
     </App>,
   );
@@ -718,6 +724,44 @@ describe('TrackingModelPanel', () => {
     fireEvent.click(screen.getByTestId('trip-tracking-replay-leave'));
 
     expect(given!.trackedCavers).toEqual(live);
+  });
+
+  /**
+   * The card over the model words a silence as the table above it does, from the page's instant.
+   *
+   * The table says "3 hours ago" and the card used to print a date and an hour for the reader to
+   * subtract from: two surfaces of one watch wording one silence differently. The panel hands the
+   * viewer the wording, measured from the instant the page gave it and through the watch's own
+   * module, so the two cannot round apart.
+   *
+   * And only over the watch as it stands. A replay is a past moment on screen, and a gap measured
+   * from now would date it by a clock it is not showing — so there the viewer is handed nothing
+   * and the card keeps its clock readings; leaving the replay hands the wording back.
+   */
+  it('hands the viewer the page\'s wording of a silence, and withholds it from a replay', () => {
+    log = [entered(ANA, '2026-09-12T06:10:00Z')];
+    const now = Date.parse('2026-09-12T12:00:00Z');
+    show(tracking(), [entered(ANA, '2026-09-12T06:10:00Z')], { now });
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+    expect(given!.trackedMomentInWords?.('2026-09-12T09:00:00Z')).toBe(
+      positionAgeOf('2026-09-12T09:00:00Z', now, i18n.language),
+    );
+    expect(given!.trackedMomentInWords?.('2026-09-12T09:00:00Z')).toMatch(/3 hours ago/);
+
+    fireEvent.click(screen.getByTestId('trip-tracking-replay-open'));
+    expect(given!.trackedMomentInWords).toBeUndefined();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-replay-leave'));
+    expect(given!.trackedMomentInWords).toBeDefined();
+  });
+
+  /** A page that hands down no instant gets the clock readings the card always printed. */
+  it('hands the viewer no wording when the page gave no instant', () => {
+    show();
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+    expect(given!.trackedMomentInWords).toBeUndefined();
   });
 
   /**

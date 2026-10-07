@@ -111,6 +111,15 @@ export interface CaveViewPanelProps {
    */
   trackedCavers?: readonly TrackedCaver[];
   /**
+   * How long ago a moment on a tracked person's card was, worded by the caller — passed straight
+   * to the list over the model, which then prints the gap and keeps the clock reading as a title.
+   *
+   * The panel reads no clock and rounds nothing: a page that words its moments as gaps does so by
+   * one rule and from one instant per render, and it is that page which answers here. Absent,
+   * the card prints clock readings, which is what every surface without such a page wants.
+   */
+  trackedMomentInWords?: (iso: string) => string | null;
+  /**
    * How long a marker takes to move to its next station, in milliseconds; 0 places it.
    *
    * <b>A replay decides this, the live watch does not.</b> The viewer's own slide is right for a
@@ -340,6 +349,7 @@ export default function CaveViewPanel({
   onPartPick,
   surveyModelId,
   trackedCavers,
+  trackedMomentInWords,
   markerMoveMs,
   onUnplacedStationsChange,
   declaredParts,
@@ -1271,6 +1281,7 @@ export default function CaveViewPanel({
           shown={shownPlace}
           onShow={setShownPlace}
           raised={toolbarWanted && toolbarPlacement === 'bottom'}
+          momentInWords={trackedMomentInWords}
         />
       )}
       {openedPictures !== null

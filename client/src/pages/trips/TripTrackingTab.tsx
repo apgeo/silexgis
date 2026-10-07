@@ -190,6 +190,8 @@ export default function TripTrackingTab({
   /** Whether the sheet-reading dialog is open. */
   const [importing, setImporting] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  /** Whether the stacked party is ordered by silence rather than as the trip names it. */
+  const [silenceFirst, setSilenceFirst] = useState(false);
   /** Whose caption on the published page is being set, or null while nobody's is. */
   const [naming, setNaming] = useState<TrackingParticipant | null>(null);
   /**
@@ -1389,6 +1391,22 @@ export default function TripTrackingTab({
             364px container — and because nothing clips it the whole page gains that width, so
             reading where somebody is and pressing Save became two views of the page 334px apart.
             Narrow, there is no sideways overflow to keep, because nothing stands side by side. */}
+        {/* <b>The stacked layout's way to the longest silence.</b> Wide, the Last heard heading
+            sorts; stacked, there is no heading to press — the rows carry their own labels — so
+            the one ordering this table offers would have existed on a desk and not on the phone
+            somebody holds at the entrance, which is where "who have we not heard from" is asked.
+            Said as a control of the page's own, like the selection above, and for the same
+            reason. Not offered for a party of one, where there is nothing to put in order. */}
+        {narrow && data.participants.length > 1 && (
+          <Checkbox
+            className="tracking-select-all"
+            checked={silenceFirst}
+            onChange={(event) => setSilenceFirst(event.target.checked)}
+            data-testid="trip-tracking-silence-first"
+          >
+            {t('trips.tracking.silenceFirst')}
+          </Checkbox>
+        )}
         <Table<TrackingParticipant>
           rowKey="caverId"
           size="small"
@@ -1396,7 +1414,14 @@ export default function TripTrackingTab({
           showHeader={!narrow}
           scroll={narrow ? undefined : { x: 'max-content' }}
           className={`tracking-table${narrow ? ' tracking-table-stacked' : ''}`}
-          dataSource={data.participants}
+          // Ordered here only where the heading cannot do it. By the same comparison the heading
+          // uses, on a copy: the read's own order is the trip's, and everything else on this page
+          // goes on reading it.
+          dataSource={
+            narrow && silenceFirst
+              ? [...data.participants].sort(byLastHeard)
+              : data.participants
+          }
           data-testid="trip-tracking-participants"
           locale={{ emptyText: t('trips.tracking.participantsNone') }}
           rowSelection={
@@ -1531,6 +1556,9 @@ export default function TripTrackingTab({
         // too. Answered empty while the model is closed, which is what keeps this table from
         // marking a row against a drawing nobody has opened.
         onUnplacedStationsChange={setUnplacedStations}
+        // The page's one instant, so the card over the model and the row above it for the same
+        // person word one silence the same way.
+        now={now}
       />
 
       {canEdit && (

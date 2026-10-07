@@ -1543,6 +1543,7 @@
       "markOut": "Marchează {{count}} ca ieșiți",
       "selectNobody": "Bifează întâi oamenii despre care este raportul — se înregistrează un singur raport pentru toți deodată.",
       "selectEverybody": "Selectează pe toți ({{count}})",
+      "silenceFirst": "Cea mai lungă tăcere întâi",
       "recorded": "Înregistrat pentru {{count}}.",
       "notArmedTitle": "Urmărirea nu a fost pornită pentru această tură",
       "notArmedBody": "Un raport numește un loc pe o ridicare, iar o urmărire care nu a fost pornită niciodată nu are pe ce ridicare să-l așeze. Pornește urmărirea mai sus: tot ce se raportează de atunci rămâne în jurnal, iar jurnalul poate fi completat și după ce urmărirea este închisă.",

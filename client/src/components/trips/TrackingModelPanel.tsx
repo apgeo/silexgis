@@ -35,7 +35,7 @@ import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import TrackingPicturesDialog from './TrackingPicturesDialog.tsx';
 import TrackingReplayBar from './TrackingReplayBar.tsx';
 import TrackingReportDialog from './TrackingReportDialog.tsx';
-import { trackingLogWritable } from './trackingWatch.ts';
+import { positionAgeOf, trackingLogWritable } from './trackingWatch.ts';
 
 export interface TrackingModelPanelProps {
   /** Whose watch this is — the replay reads the trip's whole log for itself. */
@@ -72,6 +72,16 @@ export interface TrackingModelPanelProps {
    * replay changes nothing about it.
    */
   onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
+  /**
+   * The instant every gap on the page is measured from — the page's one ticker, handed down.
+   *
+   * With it, the card over the model words a silence as the table above does ("3 h ago", the
+   * clock reading as its title) instead of printing a date for the reader to subtract from. Taken
+   * from the page rather than read here, so that the card and the row for the same person are
+   * measured from the same instant and cannot be drawn a unit apart. Absent, the card prints
+   * clock readings.
+   */
+  now?: number;
 }
 
 /** The key of the one pane of the drawing strip that is not a declared map. */
@@ -216,8 +226,9 @@ export default function TrackingModelPanel({
   selectedCaverIds,
   onRecorded,
   onUnplacedStationsChange,
+  now,
 }: TrackingModelPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const narrow = useIsMobile();
   // The controls this panel owns are pressed, and how big they have to be depends on what is
   // pressing them and on nothing else — the same rule, and the same hook, as the replay strip
@@ -531,6 +542,18 @@ export default function TrackingModelPanel({
   }
 
   const shown = replaying && replayCavers !== null ? replayCavers : cavers;
+  /**
+   * How the card over either drawing words a moment, or undefined where it prints the clock.
+   *
+   * Gaps only over the watch as it stands. A replay shows the party at a moment somebody scrubbed
+   * back to, and "ago" measured from the present says nothing true about that moment, so there
+   * the card keeps its clock readings. Worded through the watch's own module, which is the one
+   * door to the rounding rule the table above and the followed page share.
+   */
+  const momentInWords =
+    now === undefined || replaying
+      ? undefined
+      : (iso: string) => positionAgeOf(iso, now, i18n.language);
   const controlSize: 'large' | 'small' = coarse ? 'large' : 'small';
   /**
    * Whether pressing a station is worth offering at all.
@@ -734,6 +757,7 @@ export default function TrackingModelPanel({
                     height={modelHeight(narrow, large)}
                     surveyModelId={model.id}
                     trackedCavers={shown}
+                    trackedMomentInWords={momentInWords}
                     // Handed straight through, replay or no replay: what comes back names stations of the
                     // drawing, which is the one thing about this panel a scrubbed moment cannot change.
                     onUnplacedStationsChange={onUnplacedStationsChange}
@@ -777,6 +801,7 @@ export default function TrackingModelPanel({
                     // the party they are both showing.
                     cavers={shown}
                     onPickStation={canRecord ? pickStation : undefined}
+                    momentInWords={momentInWords}
                   />
                 ),
               })),

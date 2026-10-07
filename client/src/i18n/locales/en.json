@@ -1543,6 +1543,7 @@
       "markOut": "Mark {{count}} out",
       "selectNobody": "Tick the people this report is about first — one report is recorded for all of them at once.",
       "selectEverybody": "Select everybody ({{count}})",
+      "silenceFirst": "Longest silence first",
       "recorded": "Recorded for {{count}}.",
       "notArmedTitle": "Tracking has not been started for this trip",
       "notArmedBody": "A report names a place on a survey, and a watch that was never started has no survey to place it on. Start tracking above: everything reported from then on is kept on the log, and the log can still be written up after the watch is closed.",

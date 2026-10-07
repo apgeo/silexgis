@@ -3441,5 +3441,44 @@ describe('TripTrackingTab, a long silence and a late return', () => {
     expect(sorters[0]).toHaveTextContent('Last heard');
     fireEvent.click(sorters[0]);
     expect(order()).toEqual([ANA, BOGDAN]);
+    // The heading is the wide layout's control; the page's own is for where there is none.
+    expect(screen.queryByTestId('trip-tracking-silence-first')).toBeNull();
+  });
+
+  /**
+   * The stacked layout has no heading to press, and the same ordering is still reachable.
+   *
+   * A phone at the entrance is where "who have we not heard from" is asked, and the heading that
+   * sorts exists only where the columns stand side by side. So the stacked table gets a control
+   * of the page's own, ordering by the same comparison — the longest silence first, somebody
+   * never heard from above everybody — and it gives the trip's own order back when unticked.
+   */
+  it('orders the stacked party by the last word from a control of its own', () => {
+    narrow = true;
+    const [ana, bogdan] = state().participants;
+    withAnaQuiet({
+      participants: [
+        { ...bogdan, lastRecordedAt: '2026-09-12T18:30:00Z' },
+        { ...ana, lastRecordedAt: '2026-09-12T07:00:00Z' },
+      ],
+    });
+    show();
+
+    const table = screen.getByTestId('trip-tracking-participants');
+    const order = () =>
+      Array.from(table.querySelectorAll('tr[data-row-key]'), (row) =>
+        row.getAttribute('data-row-key'),
+      );
+    // No heading at all in this layout, so nothing in the table sorts.
+    expect(table.querySelectorAll('th.ant-table-column-has-sorters')).toHaveLength(0);
+    expect(order()).toEqual([BOGDAN, ANA]);
+
+    const control = screen.getByTestId('trip-tracking-silence-first');
+    expect(control.closest('label')).toHaveTextContent('Longest silence first');
+    fireEvent.click(control);
+    expect(order()).toEqual([ANA, BOGDAN]);
+
+    fireEvent.click(control);
+    expect(order()).toEqual([BOGDAN, ANA]);
   });
 });
