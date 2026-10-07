@@ -571,6 +571,27 @@ tabelului sunt ale întregii instalări, lista poate fi restrânsă la o singur�
 majoritatea coloanelor se pot ordona. Apăsați **Reîncarcă** înainte de a acționa pe o
 listă care a stat deschisă o vreme.
 
+**Urmăriri lăsate pornite.** Urmărirea unei ture nu este încheiată decât de un om — aplicația nu
+hotărăște niciodată singură că o echipă a ieșit. Reversul este că o urmărire uitată rămâne
+pornită la nesfârșit: echipa rămâne pe pagina publicată ca fiind încă în subteran, iar după ce
+linkul expiră tura nu mai este în nicio listă publică, nici printre cele urmărite, nici printre
+turele trecute. Coloana **Urmărire pornită la** arată când a fost pornită ultima dată urmărirea
+fiecărei ture și, cât timp este pornită, de câte zile; un rând a cărui urmărire este încă
+pornită în spatele unui link expirat spune acest lucru. **Urmărire pornită de mai mult de
+(zile)** restrânge lista la asemenea rânduri: scrieți un număr de zile prea mare pentru felul
+de ture pe care le face clubul (`0` păstrează tot ce are urmărirea pornită). Numărul este al
+dumneavoastră de fiecare dată și nu este păstrat nicăieri. **Fila Urmărire** de pe rând deschide
+tura, acolo unde se află **Încheie urmărirea** — de pe această pagină nu se încheie nimic și
+nimic nu se încheie de la sine.
+
+**De unde vă vede serverul.** Sub numere, pagina scrie adresa de la care cererea dumneavoastră
+a ajuns la server. Ar trebui să fie a dumneavoastră. Dacă este, în schimb, adresa unui proxy
+aflat în fața instalării, instalării i s-au declarat prea puține proxy-uri: toți cititorii din
+spatele acelui proxy sunt numărați ca unul singur și împart același buget de cereri, așa că
+paginile publicate încep să refuze cititori într-o seară aglomerată. Rândul doar arată
+problema; remediul este numărul de proxy-uri din [ghidul de
+instalare](../../../INSTALL.md#enabling-https).
+
 **Pagina nu arată niciodată o adresă.** Se păstrează doar o amprentă a fiecărui link, așa că nu
 este nimic de arătat. Coloana **Cod în jurnal** este codul scurt pe care jurnalul de cereri al
 serverului îl scrie în locul adresei unui link, ca o linie din jurnal să poată fi potrivită cu

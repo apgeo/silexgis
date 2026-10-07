@@ -554,6 +554,25 @@ by — the list cannot say *Followed now* about an address that answers nothing.
 above the table are of the whole installation, the list can be narrowed to one status, and
 most columns sort. Press **Refresh** before acting on a list that has been open for a while.
 
+**Tracking left running.** Nothing closes a trip's tracking but a person — the application
+never decides by itself that a party is out. The other side of that is that tracking somebody
+forgot runs for ever: the party stays on its published page as still underground, and once the
+link has run out the trip is in no public list at all, neither followed nor among the past
+trips. The **Tracking started** column says when each trip's tracking was last started and,
+while it is running, for how many days; a row whose tracking is still running behind a link
+that has run out says so. **Tracking running longer than (days)** narrows the list to such
+rows: type a number of days that is too long for the kind of trip your club does (`0` keeps
+everything whose tracking is running at all). The number is yours each time and is stored
+nowhere. **Tracking tab** on the row opens the trip where **Close tracking** is — nothing is
+closed from this page, and nothing closes by itself.
+
+**Where the server sees you from.** Under the counts the page prints the address your request
+reached the server from. It should be your own. If it is instead the address of a reverse
+proxy standing in front of the installation, the installation has been told about too few
+proxies: every reader behind that proxy is counted as one and shares one request budget, so
+published pages start refusing readers on a busy evening. The line only shows it; the cure is
+the proxy count in the [install guide](../../INSTALL.md#enabling-https).
+
 **The page never shows an address.** Only a fingerprint of each link is kept, so there is
 nothing to show. The **Log code** column is the short code the server's request log writes in
 place of a link's address, so a line in the log can be matched with a row; it opens nothing.

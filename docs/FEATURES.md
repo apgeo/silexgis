@@ -423,7 +423,12 @@ feature and walkthroughs of whole jobs.
   back only by starting its watch again. A survey file can draw more than its own cave, so a
   publication is **flagged, never refused**, when a protected cave's position lies inside the
   area the survey's stations span — a check by position that cannot see inside the file, names
-  no cave, and tells a publisher nothing about a cave they may not place.
+  no cave, and tells a publisher nothing about a cave they may not place. Tracking that
+  nobody closed is not closed for them: the page says when each trip's tracking was started and
+  for how many days it has run, narrows to those running longer than a number of days the
+  reader chooses, and leads to the trip where closing it is done. It also prints the address
+  the server counted the reader's own request under, which is how a reverse-proxy count that
+  is too low — otherwise silent — is seen.
 - **A tracked trip becomes a movie you can send** — from the trip's tracking tab, or from a survey
   on the cave's page, a signed-in member makes a short film of the party moving through the
   survey: one trip or several, on one calendar or side by side, the model turning or still. It is

@@ -183,6 +183,21 @@ private ranges rather than adding to it, so name the range your Docker network s
 `SILEXGIS__Proxy__TrustedNetworks__1=172.16.0.0/12`). The bundled Caddy
 overlay needs none of this, because it sets the hop count itself.
 
+**To see whether the count is right**, sign in as a full administrator from outside and open
+**Administration → Published trips**: under the counts the page prints the address the server
+counted that very request under. It should be the address you are browsing from. If it is the
+address of a reverse proxy of yours — one that adds the caller's address to `X-Forwarded-For`
+itself — the count is one too low (or the proxy's network is not named), and the application
+also says so in its log, at most once an hour. The line reports and changes nothing.
+
+**Raise the count only for a proxy that writes that header.** A private address there is not
+always a proxy. A gateway that passes connections on under its own address and adds nothing to
+`X-Forwarded-For` — the gateway address of a Docker network (`172.18.0.1` and its like), which
+is what some Docker setups show for every outside caller — is not a hop, and no count fixes it:
+that is a matter of how Docker publishes the port. Counting it anyway makes the application read
+one entry further back in the header, and that entry is whatever the caller chose to send — every
+caller could then pick the address the sign-in and published-page limits count them under.
+
 **A website that fetches published pages for its readers** — a relay on the club's own site, so
 that its article can show a trip from the article's own address — is, to this server, one caller:
 every reader of that site shares one request budget, and a busy evening spends it for all of
@@ -199,8 +214,9 @@ of `deploy/Caddyfile`), because it otherwise discards a forwarded address it is 
 under is itself one of your proxies, or a private address, while forwarded addresses were left
 unread behind it, a warning is written to the API log — at most once an hour — naming that address
 and the setting to look at. It is worded as a possibility, because somebody on your own network
-whose software writes the header produces the same picture, and it changes nothing about how
-requests are counted.
+whose software writes the header produces the same picture, and so does a gateway that forwards
+connections without writing the header — for which the count must **not** be raised, as said
+above. It changes nothing about how requests are counted.
 
 Allow request bodies at least as large as
 `SILEXGIS__Files__MaxUploadBytes` (512 MB by default) — nginx's `client_max_body_size` and

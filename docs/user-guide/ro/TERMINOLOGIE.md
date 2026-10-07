@@ -165,6 +165,10 @@ odată cu ea — și apoi paginile.
 | Withheld / Opens nothing (a link's status) | Reținut / Nu deschide nimic |
 | Protected cave nearby? | Peșteră protejată în apropiere? |
 | Log code | Cod în jurnal |
+| Tracking started (the column) | Urmărire pornită la |
+| Days running | Zile de la pornire |
+| Tracking running longer than (days) | Urmărire pornită de mai mult de (zile) |
+| Tracking tab (the link on a row) | Fila Urmărire |
 | Make a movie | Fă un film |
 | Export GIF / Cancel export | Exportă GIF / Anulează exportul |
 | Caver labels | Etichetele speologilor |
