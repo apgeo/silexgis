@@ -34,6 +34,7 @@ export const specs = {
     'cave-attachments.spec.ts', 'cave-grant-link.spec.ts', 'cave-levels.spec.ts', 'cave-morphometry.spec.ts',
     'cave-statistics.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
     'overburden-profile.spec.ts', 'survey-sources.spec.ts', 'qr-landing.spec.ts',
+    'feature-restore.spec.ts',
   ],
   cavingGroups: ['announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts'],
   checklists: ['checklists.spec.ts'],
@@ -48,7 +49,9 @@ export const specs = {
   featureShares: [],
   files: ['uploads.spec.ts', 'documents.spec.ts', 'gallery.spec.ts', 'cave-attachments.spec.ts'],
   filters: ['trip-list.spec.ts', 'trip-map.spec.ts', 'registry-statistics.spec.ts'],
-  geoFeatures: ['doline-morphometry.spec.ts', 'vector-import.spec.ts', 'photo-import.spec.ts'],
+  geoFeatures: [
+    'doline-morphometry.spec.ts', 'vector-import.spec.ts', 'photo-import.spec.ts', 'feature-restore.spec.ts',
+  ],
   geofiles: ['vector-import.spec.ts'],
   georeferencedMaps: [
     'rastermap.spec.ts', 'rastermap-authoring.spec.ts', 'rastermap-public.spec.ts',
