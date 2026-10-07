@@ -937,7 +937,18 @@ public static class TripLogEndpoints
         // A cave named onto a trip after people were asked onto it is the same pairing arriving in
         // the other order, and the people who can open it are told the same way.
         await TripCaveAccessNotifier.CavesAddedAsync(db, access, user, trip, outcome.AddedCaveIds, ct);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (TripPartyNumbers.LostTheRace(e))
+        {
+            // Two saves of this trip each named somebody new at the same moment. Both passed the
+            // precondition, which is read and compared with nothing held, and both reached for the
+            // same next party number; the table let one of them in. Nothing of this save was
+            // written, so it is refused as the conflict it is and the caller reloads and repeats.
+            return ApiProblems.Conflict(TripPartyNumbers.LostRaceCode, TripPartyNumbers.LostRaceMessage);
+        }
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
         // The version this write produced: what the next write must carry, handed over here so

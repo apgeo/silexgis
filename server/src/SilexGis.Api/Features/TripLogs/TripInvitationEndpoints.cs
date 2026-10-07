@@ -672,7 +672,17 @@ public static class TripInvitationEndpoints
                 }),
         });
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (TripPartyNumbers.LostTheRace(e))
+        {
+            // A save of the trip, or a second press of this button, numbered the party at the
+            // same moment and was written first. Nothing of this act was written; asked again it
+            // reads who is named now and adds only whoever is still missing.
+            return ApiProblems.Conflict(TripPartyNumbers.LostRaceCode, TripPartyNumbers.LostRaceMessage);
+        }
 
         // The trip's own row is stamped so its version moves. The list of people this just wrote
         // is reconciled whole by the trip's write path — everybody not named in that request is

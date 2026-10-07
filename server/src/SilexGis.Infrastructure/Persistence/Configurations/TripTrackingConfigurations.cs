@@ -175,6 +175,13 @@ public sealed class TripPartyNumberConfiguration : IEntityTypeConfiguration<Trip
     /// </summary>
     public const string OnePerPersonIndex = "ux_trip_party_numbers_trip_caver";
 
+    /// <summary>
+    /// The database name of the table's key — the rule that one number is given once on one trip.
+    /// Named here for the same reason: two writers that reach for the same next number are told
+    /// apart from every other failed save by this name.
+    /// </summary>
+    public const string KeyName = "pk_trip_party_numbers";
+
     public void Configure(EntityTypeBuilder<TripPartyNumber> builder)
     {
         builder.ToTable("trip_party_numbers", table =>
@@ -183,7 +190,7 @@ public sealed class TripPartyNumberConfiguration : IEntityTypeConfiguration<Trip
         // The trip and the number are the row: a number is given once and never changes, which is
         // what a key is, and it makes "no two people share a number on a trip" the table's own
         // shape rather than a second index beside an invented id.
-        builder.HasKey(x => new { x.TripLogId, x.Number });
+        builder.HasKey(x => new { x.TripLogId, x.Number }).HasName(KeyName);
         builder.Property(x => x.Number).ValueGeneratedNever();
 
         // One number per person per trip. A number whose holder is gone has no person, and any

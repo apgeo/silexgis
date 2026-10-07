@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Persistence.Configurations;
 
 namespace SilexGis.Infrastructure.Trips;
 
@@ -23,11 +25,40 @@ namespace SilexGis.Infrastructure.Trips;
 /// the same unit of work as the roster rows they answer for, and the caller decides where that
 /// unit ends. Two writers naming new people on one trip at the same instant would both reach for
 /// the same next number, and the second to save is refused by the table's key rather than being
-/// allowed to share it.
+/// allowed to share it. Nothing is held between the read and the save to prevent that; the caller
+/// that saves asks <see cref="LostTheRace"/> of a failed save and answers the loser with
+/// <see cref="LostRaceCode"/>, whose remedy is to read the trip again and repeat the write.
 /// </para>
 /// </remarks>
 public static class TripPartyNumbers
 {
+    /// <summary>
+    /// The stable code a write is refused with when another write numbered the same trip's party
+    /// first.
+    /// </summary>
+    public const string LostRaceCode = "trip_log.concurrent_roster_write";
+
+    /// <summary>What the loser of that race is told. It names nobody and no number.</summary>
+    public const string LostRaceMessage =
+        "Somebody else changed who is on this trip at the same moment. Reload the trip and save again.";
+
+    /// <summary>
+    /// Whether a save failed because another write gave out this trip's next party number, or
+    /// numbered the same person, first.
+    /// </summary>
+    /// <remarks>
+    /// Told apart by the names of the two rules of the numbers' table and by nothing looser, so
+    /// that no other failure of a save is taken for a race and answered as something a retry
+    /// cures. The whole unit of work failed with it — the roster rows included — so the loser has
+    /// written nothing and may simply repeat the write against what the winner left.
+    /// </remarks>
+    public static bool LostTheRace(DbUpdateException e) =>
+        e.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: TripPartyNumberConfiguration.KeyName or TripPartyNumberConfiguration.OnePerPersonIndex,
+        };
+
     /// <summary>
     /// Gives a number to each of these people who holds none on this trip, in the order given, each
     /// one past the highest the trip has ever given. People who already hold one are left alone.
