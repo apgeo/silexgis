@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, type Page } from '@playwright/test';
 import { CHOICE_KEY } from '../src/i18n/languageStorage.ts';
+import { tryAsPerson } from './arrange.ts';
 import { ownContext, test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
@@ -609,5 +610,232 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
     ).toEqual([]);
   } finally {
     await anonymous.close();
+  }
+});
+
+test('a visitor watches another party of the cave on the survey of the link they hold, and is told when that party leaves the list', async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const stamp = Date.now();
+  const caveName = `E2E Two Parties Cave ${stamp}`;
+  await login(page);
+  const made: { trips: string[]; caves: string[] } = { trips: [], caves: [] };
+
+  const anonymous = await ownContext(browser);
+  try {
+    // ---- One cave, one survey, and two parties in it at once, each followed and published ----
+    await page.goto('/caves/new');
+    await page.getByLabel('Name', { exact: true }).fill(caveName);
+    await page.getByLabel('Type', { exact: true }).click();
+    await page.locator('.ant-select-item-option').first().click();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
+    const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];
+    expect(caveId, 'the cave page names the cave in its address').toBeTruthy();
+    made.caves.push(caveId!);
+
+    const auth = await bearerToken(page);
+    const uploaded = await page.request.post(`/api/v1/caves/${caveId}/survey-models`, {
+      headers: { Authorization: `Bearer ${auth}` },
+      multipart: {
+        file: {
+          name: 'P8_Master.3d',
+          mimeType: 'application/octet-stream',
+          buffer: readFileSync('e2e/fixtures/P8_Master.3d'),
+        },
+      },
+    });
+    expect(uploaded.status(), await uploaded.text()).toBe(201);
+    const modelId = ((await uploaded.json()) as { id: string }).id;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const report = (
+      tripId: string,
+      caverIds: string[],
+      kind: string,
+      stationName: string | null = null,
+    ) =>
+      apiJson(page, auth, 'POST', `/api/v1/trip-logs/${tripId}/tracking/events`, {
+        caverIds,
+        kind,
+        stationName,
+        depthM: null,
+        teamId: null,
+        note: null,
+        recordedAt: null,
+      });
+    const followed = async (title: string, names: string[]) => {
+      const trip = await makeTrip(page, auth, caveId!, title, names, today);
+      made.trips.push(trip.id);
+      await setWatch(page, auth, trip.id, {
+        state: 'armed',
+        surveyModelId: modelId,
+        referenceStationName: null,
+        depthFilter: [],
+      });
+      const share = (await apiJson(
+        page,
+        auth,
+        'POST',
+        `/api/v1/trip-logs/${trip.id}/tracking/shares`,
+      )) as { id: string; token: string };
+      expect(share.token).toBeTruthy();
+      const caver = (name: string) => trip.participants.find((row) => row.name === name)!.caverId;
+      return { id: trip.id, token: share.token, caver };
+    };
+
+    // The party of the link the visitor holds: one person, at one station.
+    const ownTitle = `E2E the family's party ${stamp}`;
+    const own = await followed(ownTitle, ['E2E Carmen']);
+    await report(own.id, [own.caver('E2E Carmen')], 'entered');
+    await report(own.id, [own.caver('E2E Carmen')], 'atStation', STATION_A);
+
+    // The cave's other party: one person placed elsewhere on the same survey, one already out.
+    const otherTitle = `E2E the survey party ${stamp}`;
+    const other = await followed(otherTitle, ['E2E Sorin', 'E2E Dana']);
+    await report(other.id, [other.caver('E2E Sorin'), other.caver('E2E Dana')], 'entered');
+    await report(other.id, [other.caver('E2E Sorin')], 'atStation', STATION_B);
+    await report(other.id, [other.caver('E2E Dana')], 'exited');
+
+    // ---- The visitor: a browser holding one link, and a clock that can be moved on ----
+    const pub = await anonymous.newPage();
+    // Before the page exists: a timer the page set on the real clock could not be moved on later.
+    await pub.clock.install();
+    /** Every read of the published surface this browser makes, by path. */
+    const publicReads: string[] = [];
+    pub.on('request', (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path.startsWith('/api/v1/public/trips/')) publicReads.push(path);
+    });
+    const ownBase = `/api/v1/public/trips/${own.token}`;
+
+    await pub.goto(`/shared/trips/${own.token}`);
+    await expect(pub.getByTestId('public-trip-title')).toHaveText(ownTitle, { timeout: 30_000 });
+    const party = pub.getByTestId('public-trip-party');
+    await expect(party).toContainText('E2E Carmen');
+    // The drawing has been built before anything is pressed, so that "no new drawing" below is a
+    // statement about the press and not about a viewer that had not started yet.
+    const container = pub.getByTestId('caveview-container');
+    await expect(container.locator('canvas').first()).toBeAttached({ timeout: 30_000 });
+    await expect(pub.getByTestId('caveview-loading')).toHaveCount(0, { timeout: 30_000 });
+
+    // Nobody else is named, and the server has not been asked who else there is, until the
+    // reader opens the list.
+    await expect(pub.getByTestId('public-live')).toBeHidden();
+    await expect(pub.getByText(otherTitle)).toHaveCount(0);
+    expect(publicReads.filter((path) => path === `${ownBase}/live`)).toEqual([]);
+
+    // ---- The list, opened ----
+    await pub.getByTestId('public-trip-live-section').click();
+    const otherRow = pub.getByTestId(`public-live-trip-${other.id}`);
+    await expect(otherRow).toBeVisible({ timeout: 20_000 });
+    await expect(otherRow).toContainText(otherTitle);
+    const standings = pub.getByTestId(`public-live-standings-${other.id}`);
+    await expect(standings).toContainText('Underground: 1');
+    await expect(standings).toContainText('Out: 1');
+    await expect(pub.getByTestId(`public-live-own-${own.id}`)).toHaveText("This link's trip");
+    await expect(pub.getByTestId(`public-live-watch-${own.id}`)).toHaveCount(0);
+
+    // ---- Watching the other party ----
+    await container.locator('canvas').evaluateAll((canvases) => {
+      for (const canvas of canvases) (canvas as HTMLCanvasElement).dataset.seenBefore = '';
+    });
+    await pub.getByTestId(`public-live-watch-${other.id}`).click();
+    await expect(pub.getByTestId('public-watch-banner')).toContainText(
+      'You are watching another party of this cave',
+      { timeout: 20_000 },
+    );
+    await expect(pub.getByTestId('public-watch-banner')).toBeInViewport();
+    await expect(pub.getByTestId('public-watch-banner-what')).toContainText(otherTitle);
+    await expect(pub.getByTestId('public-trip-title')).toHaveText(otherTitle);
+    await expect(party).toContainText('E2E Sorin');
+    await expect(party).toContainText(STATION_B);
+    await expect(party).toContainText('E2E Dana');
+    await expect(party).not.toContainText('E2E Carmen');
+    await expect(pub.getByTestId(`public-live-watching-${other.id}`)).toHaveText('Watching');
+    // The tab and the address stay the link's own: a copy of this address opens the trip the
+    // link was published for, never the party the reader happened to be looking at.
+    expect(await pub.title()).toBe(ownTitle);
+    expect(new URL(pub.url()).search).toBe('');
+    // The other party is drawn on the drawing already on screen: the one built for this link is
+    // still there and no other was built beside it.
+    await expect(container.locator('canvas[data-seen-before]').first()).toBeAttached();
+    await expect(container.locator('canvas:not([data-seen-before])')).toHaveCount(0);
+    // And everything this browser has read of the published surface is this link's own: the
+    // other party's link was never needed, and nothing of the cave's past was asked for.
+    expect(publicReads.length).toBeGreaterThan(0);
+    expect(publicReads.filter((path) => !path.startsWith(ownBase))).toEqual([]);
+    expect(publicReads.filter((path) => path.startsWith(`${ownBase}/past`))).toEqual([]);
+
+    // ---- And back ----
+    await pub.getByTestId('public-watch-back').click();
+    await expect(pub.getByTestId('public-watch-banner')).toHaveCount(0);
+    await expect(pub.getByTestId('public-trip-title')).toHaveText(ownTitle);
+    await expect(party).toContainText('E2E Carmen');
+    await expect(party).not.toContainText('E2E Sorin');
+    await expect(pub.getByTestId('public-watch-ended')).toHaveCount(0);
+
+    // ---- The same inside the frame a club pastes, through its sheet ----
+    await pub.goto(`/shared/trips/${own.token}/embed`);
+    const frame = pub.getByTestId('public-trip-embed');
+    await expect(frame).toBeVisible({ timeout: 30_000 });
+    await pub.getByTestId('public-past-open').click();
+    const framedWatch = pub.getByTestId(`public-live-watch-${other.id}`);
+    await expect(framedWatch).toBeVisible({ timeout: 20_000 });
+    await framedWatch.click();
+    await expect(pub.getByTestId('public-watch-line')).toContainText(otherTitle, {
+      timeout: 20_000,
+    });
+    await expect(frame).toHaveClass(/public-trip-embed-watch/);
+    // The sheet got out of the way of the drawing the reader asked to see.
+    await expect(framedWatch).toBeHidden();
+    await pub.getByTestId('public-watch-back').click();
+    await expect(pub.getByTestId('public-watch-line')).toHaveCount(0);
+    await expect(frame).not.toHaveClass(/public-trip-embed-watch/);
+
+    // ---- A watched party that leaves the list ----
+    //
+    // The other party's watch is closed while the visitor is looking at it. This run's server
+    // keeps a closed watch readable for no time at all, so the party leaves the list at once;
+    // the page learns of it at its next read of the list, which the clock is moved on to.
+    await pub.goto(`/shared/trips/${own.token}`);
+    await expect(pub.getByTestId('public-trip-title')).toHaveText(ownTitle, { timeout: 30_000 });
+    await pub.getByTestId('public-trip-live-section').click();
+    await pub.getByTestId(`public-live-watch-${other.id}`).click();
+    await expect(pub.getByTestId('public-trip-title')).toHaveText(otherTitle, { timeout: 20_000 });
+
+    await setWatch(page, auth, other.id, { state: 'closed' });
+    const ended = pub.getByTestId('public-watch-ended');
+    await expect(async () => {
+      if (!(await ended.isVisible())) {
+        // Shorter than the minute between two reads of the list, so no step carries the page
+        // past a read and the next one unobserved.
+        await pub.clock.fastForward(30_000);
+      }
+      expect(
+        await ended.isVisible(),
+        'the page did not say that the watched party had left the list',
+      ).toBe(true);
+    }).toPass({ timeout: 120_000 });
+    // Said by name, and the page is the link's own trip again under its own title — never a
+    // silent swap of whom the reader is looking at.
+    await expect(ended).toContainText(otherTitle);
+    await expect(pub.getByTestId('public-watch-banner')).toHaveCount(0);
+    await expect(pub.getByTestId('public-trip-title')).toHaveText(ownTitle);
+    await expect(party).toContainText('E2E Carmen');
+    await expect(party).not.toContainText('E2E Sorin');
+    // The list itself no longer offers that party, and still carries the link's own.
+    await expect(pub.getByTestId(`public-live-own-${own.id}`)).toHaveCount(1);
+    await expect(pub.getByTestId(`public-live-trip-${other.id}`)).toHaveCount(0);
+  } finally {
+    await anonymous.close();
+    for (const tripId of made.trips) {
+      await tryAsPerson(page, 'DELETE', `/api/v1/trip-logs/${tripId}`);
+    }
+    for (const caveId of made.caves) {
+      await tryAsPerson(page, 'DELETE', `/api/v1/caves/${caveId}`);
+    }
   }
 });
