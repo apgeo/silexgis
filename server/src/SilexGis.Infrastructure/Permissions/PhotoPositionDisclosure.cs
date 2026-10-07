@@ -88,9 +88,17 @@ public sealed class PhotoPositionDisclosure(SilexGisDbContext db, FeatureProtect
         // trips join the chain of anything attached to the camp, and the places those trips name
         // protect it just as they would if it hung on the trip itself. Fail-closed: every member
         // trip counts, because nothing about the photograph says which of them it came from.
+        //
+        // A deleted member trip counts too, which is why this reads past the filter that hides
+        // its place in the camp. Deleting a trip is something a person can take back, and the
+        // camera was where it was either way: read through the filter, a picture filed under the
+        // camp would hand over its position for as long as the one trip that guarded it happened
+        // to be deleted, and withhold it again on the day the trip was put back. A picture hung on
+        // the trip itself is already held this way, because the places a trip names are read
+        // from its links, which nothing hides.
         var campTrips = campIds.Count == 0
             ? []
-            : await db.ExpeditionTrips.AsNoTracking()
+            : await db.ExpeditionTrips.AsNoTracking().IgnoreQueryFilters()
                 .Where(x => campIds.Contains(x.ExpeditionId))
                 .Select(x => new { x.ExpeditionId, x.TripLogId })
                 .ToListAsync(ct);

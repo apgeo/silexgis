@@ -32,6 +32,12 @@ public class TripTrackingParticipant : ITimestamped, IAuditable, IAuditChild
 
     public Guid TripLogId { get; set; }
 
+    /// <summary>
+    /// The trip this row belongs to. Present so the model can hide the row while its trip is
+    /// deleted; nothing reads the trip through it, and it is not loaded unless asked for.
+    /// </summary>
+    public TripLog TripLog { get; set; } = null!;
+
     public Guid CaverId { get; set; }
 
     /// <summary>How followers see this person. Never empty — clearing it deletes the row.</summary>

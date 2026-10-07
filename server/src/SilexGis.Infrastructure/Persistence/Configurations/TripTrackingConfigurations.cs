@@ -13,8 +13,10 @@ public sealed class TripTeamConfiguration : IEntityTypeConfiguration<TripTeam>
         builder.ToTable("trip_teams");
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.Title).HasMaxLength(200);
-        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(x => x.TripLogId);
+        // Hidden while its trip is deleted, like everything else a trip's tracking holds.
+        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null);
     }
 }
 
@@ -34,7 +36,11 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         builder.Property(x => x.DepthEnteredM).HasPrecision(7, 1);
         builder.Property(x => x.Note).HasMaxLength(2000);
 
-        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // Where a party was is read from the model's side and from a person's side as well as
+        // from the trip's, so the reports of a deleted trip are hidden here rather than by every
+        // reader remembering to ask the trip first.
+        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null);
         // Being tracked is a fact about the person; it blocks deleting the person, like the roster.
         builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<TripTeam>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.SetNull);
@@ -64,7 +70,10 @@ public sealed class TripTrackingConfiguration : IEntityTypeConfiguration<TripTra
         builder.Property(x => x.State).HasConversion<short>().HasDefaultValue(TripTrackingState.Off);
         builder.Property(x => x.ReferenceStationName).HasMaxLength(400);
         builder.Property(x => x.DepthFilter).HasColumnType("text[]");
-        builder.HasOne<TripLog>().WithOne().HasForeignKey<TripTracking>(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.TripLog).WithOne().HasForeignKey<TripTracking>(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // A deleted trip has no watch: it is followed by nobody, counted among no cave's parties,
+        // and guards no survey against being removed.
+        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null);
         // Bare column, no foreign key, for the reason the event rows carry one: a watch whose model
         // was deleted must read as a watch whose model was deleted, and a self-blanking reference
         // turns it into a watch that reads as never having had one — the same null a withheld
@@ -89,7 +98,12 @@ public sealed class TripTrackingShareConfiguration : IEntityTypeConfiguration<Tr
         builder.HasIndex(x => x.TokenHash).IsUnique();
         builder.HasIndex(x => x.TripLogId);
 
-        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // The load-bearing one. A published address is resolved by looking its token up here, with
+        // nobody signed in to ask anything else of — so a link whose trip is deleted has to be a
+        // link that is not found, by the same lookup that fails for a token nobody ever minted.
+        // That is what makes a deleted trip's address answer exactly as an invented one does.
+        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null);
         // Who published the trip is part of what the link is, and cannot be removed out from
         // under the record — the same stance every other share link takes.
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
@@ -108,7 +122,9 @@ public sealed class TripTrackingParticipantConfiguration : IEntityTypeConfigurat
         builder.HasIndex(x => new { x.TripLogId, x.CaverId }).IsUnique();
         builder.Property(x => x.DisplayLabel).HasMaxLength(200);
 
-        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // Hidden while its trip is deleted, like everything else a trip's tracking holds.
+        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null);
         // Cascade, where the roster and the position log both restrict, and the difference is
         // what the row holds. Those record that a person was somewhere — a fact worth blocking a
         // delete for. This records how one page captioned them, which means nothing once the

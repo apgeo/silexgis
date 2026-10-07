@@ -13,6 +13,12 @@ public class TripTeam : ITimestamped, IAuditable, IAuditChild
 
     public Guid TripLogId { get; set; }
 
+    /// <summary>
+    /// The trip this row belongs to. Present so the model can hide the row while its trip is
+    /// deleted; nothing reads the trip through it, and it is not loaded unless asked for.
+    /// </summary>
+    public TripLog TripLog { get; set; } = null!;
+
     public required string Title { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

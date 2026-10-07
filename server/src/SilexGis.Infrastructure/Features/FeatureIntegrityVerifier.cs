@@ -368,7 +368,10 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
             }
         }
 
-        await CheckAsync(AttachedEntityType.TripLog, db.TripLogs.Select(x => x.Id));
+        // Deleted trips included. A deleted trip keeps every file, tag and link it had, so that
+        // putting it back is exact; read through the filter that hides it, each of those rows
+        // would be reported as pointing at nothing, every night, for as long as the trip waited.
+        await CheckAsync(AttachedEntityType.TripLog, db.TripLogs.IgnoreQueryFilters().Select(x => x.Id));
         await CheckAsync(AttachedEntityType.CavingGroup, db.CavingGroups.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.Geofile, db.Geofiles.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.GeoreferencedMap, db.GeoreferencedMaps.Select(x => x.Id));

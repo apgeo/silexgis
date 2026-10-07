@@ -75,6 +75,13 @@ public class TripInvitation : ITimestamped, IAuditable, IAuditChild
     public Guid? TripLogId { get; set; }
 
     /// <summary>
+    /// The trip being answered about, when there is one. Present so the model can hide the answer
+    /// while its trip is deleted; nothing reads the trip through it, and it is not loaded unless
+    /// asked for.
+    /// </summary>
+    public TripLog? TripLog { get; set; }
+
+    /// <summary>
     /// The calendar event being answered about, or null when the answer is about a trip.
     /// </summary>
     /// <remarks>

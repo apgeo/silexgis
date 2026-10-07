@@ -158,9 +158,25 @@ public sealed class TripTypeWriteService(SilexGisDbContext db, ITypedPropertiesV
             throw new TripWriteException(SeededImmutableCode, "Shipped trip types cannot be deleted.");
         }
 
-        if (await db.TripLogs.AnyAsync(t => t.TripTypeId == id, ct))
+        // Deleted trips count. A deleted trip keeps its purpose so that putting it back is exact,
+        // and the foreign key that holds a purpose in place does not know the trip is hidden:
+        // asked through the filter, this would answer "nothing uses it" and the delete below
+        // would fail on the constraint this check exists to speak for. Which kind of trip is in
+        // the way decides only the sentence, because the remedy differs — a deleted trip cannot
+        // be retyped until it is put back.
+        var holders = await db.TripLogs.IgnoreQueryFilters()
+            .Where(t => t.TripTypeId == id)
+            .Select(t => t.DeletedAt != null)
+            .Distinct()
+            .ToListAsync(ct);
+        if (holders.Count > 0)
         {
-            throw new TripWriteException(InUseCode, "Trips still use this trip type; retype them first.");
+            throw new TripWriteException(
+                InUseCode,
+                holders.Contains(false)
+                    ? "Trips still use this trip type; retype them first."
+                    : "Deleted trips that can still be restored use this trip type; restore and "
+                        + "retype them, or wait until they are removed for good.");
         }
 
         // The published history is the purpose's own bookkeeping and goes with it; the database

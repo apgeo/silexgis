@@ -200,9 +200,24 @@ public static class TripParticipantRoleEndpoints
 
         // The database refuses this too (the foreign key restricts), but a request deserves a
         // stable code and a remedy rather than a constraint violation.
-        if (await db.TripLogParticipants.AnyAsync(p => p.RoleId == id, ct))
+        //
+        // Deleted trips count. A deleted trip keeps its roster so that putting it back is exact,
+        // and the foreign key does not know the trip is hidden: asked through the filter, this
+        // would answer "nobody holds it" and the delete below would fail on the constraint. Which
+        // kind of trip is in the way decides only the sentence, because the remedy differs.
+        var holders = await db.TripLogParticipants.IgnoreQueryFilters()
+            .Where(p => p.RoleId == id)
+            .Select(p => p.TripLog.DeletedAt != null)
+            .Distinct()
+            .ToListAsync(ct);
+        if (holders.Count > 0)
         {
-            return ApiProblems.Conflict(InUseCode, "People are still recorded in this role; re-role them first.");
+            return ApiProblems.Conflict(
+                InUseCode,
+                holders.Contains(false)
+                    ? "People are still recorded in this role; re-role them first."
+                    : "People are recorded in this role on deleted trips that can still be restored; "
+                        + "restore and re-role them, or wait until those trips are removed for good.");
         }
 
         db.TripParticipantRoles.Remove(row);

@@ -262,11 +262,47 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
     /// </remarks>
     public DateTimeOffset? PublishedAt { get; set; }
 
+    /// <summary>
+    /// When the trip was deleted, or null while it is live.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Deleting a trip marks it and removes nothing. A trip is reached from a dozen directions at
+    /// once — its roster, the caves it names, the camp that gathered it, the files and tags hung
+    /// on it, the rules that say who may read it — and the person deleting it is looking at one
+    /// page. Marking it takes it out of every one of those at once, which is what they asked for;
+    /// keeping every row is what lets the mistake be taken back exactly, with nothing to
+    /// reassemble. The rows go later, in one pass, when the window for changing one's mind has
+    /// run out.
+    /// </para>
+    /// <para>
+    /// Every read filters on this, by a rule of the model rather than a habit of each query: a
+    /// listing, a count or a map that forgot would show a trip the application has already told
+    /// somebody is gone. The rows that hang off a trip by its key carry the same rule, so a
+    /// roster or an answer read on its own cannot outlive the trip it belongs to either.
+    /// </para>
+    /// <para>
+    /// Never consulted when deciding who may read a trip. A deleted trip is not a trip fewer
+    /// people may read; it is one nobody reads until it is put back, and who may put it back is
+    /// answered by the same rules that said who could delete it — which is why nothing about
+    /// them is touched by the delete.
+    /// </para>
+    /// </remarks>
+    public DateTimeOffset? DeletedAt { get; set; }
+
+    /// <summary>
+    /// Who deleted it. Attribution only: it is what a list of deleted trips shows beside each
+    /// row, and it decides nothing — the right to restore is the right to delete, asked afresh.
+    /// </summary>
+    public Guid? DeletedByUserId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
 
     public string AuditId => Id.ToString();
+
+    public bool IsDeleted => DeletedAt is not null;
 }
 
 /// <summary>
@@ -304,6 +340,12 @@ public class TripLogParticipant : IAuditable, IAuditChild
     public long Id { get; set; }
 
     public Guid TripLogId { get; set; }
+
+    /// <summary>
+    /// The trip this row belongs to. Present so the model can hide the row while its trip is
+    /// deleted; nothing reads the trip through it, and it is not loaded unless asked for.
+    /// </summary>
+    public TripLog TripLog { get; set; } = null!;
 
     /// <summary>What they did on the trip, from the club-extensible role vocabulary.</summary>
     public long RoleId { get; set; }

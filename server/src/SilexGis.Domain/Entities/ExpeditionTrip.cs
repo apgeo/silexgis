@@ -26,6 +26,12 @@ public class ExpeditionTrip : ITimestamped, IAuditable, IAuditChild
     public Guid TripLogId { get; set; }
 
     /// <summary>
+    /// The trip this row belongs to. Present so the model can hide the row while its trip is
+    /// deleted; nothing reads the trip through it, and it is not loaded unless asked for.
+    /// </summary>
+    public TripLog TripLog { get; set; } = null!;
+
+    /// <summary>
     /// When the trip was put in this camp. Kept as a fact of its own rather than read off the
     /// row's audit timestamps: a later act that asks "which trips were in the camp when sharing
     /// was last applied" is asking about the joining, and a row touched for any other reason

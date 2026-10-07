@@ -31,6 +31,12 @@ public class TripTrackingShare : ITimestamped, IAuditable, IAuditChild
 
     public Guid TripLogId { get; set; }
 
+    /// <summary>
+    /// The trip this row belongs to. Present so the model can hide the row while its trip is
+    /// deleted; nothing reads the trip through it, and it is not loaded unless asked for.
+    /// </summary>
+    public TripLog TripLog { get; set; } = null!;
+
     /// <summary>SHA-256 of the URL token, base64url. The plaintext token is never stored.</summary>
     public required string TokenHash { get; set; }
 

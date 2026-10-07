@@ -35,7 +35,6 @@ public static class ConcurrencySql
         new Dictionary<VersionedTable, string>
         {
             [VersionedTable.Features] = "features",
-            [VersionedTable.TripLogs] = "trip_logs",
             [VersionedTable.Geofiles] = "geofiles",
             [VersionedTable.GeoreferencedMaps] = "georeferenced_maps",
             [VersionedTable.MapViews] = "map_views",
@@ -45,12 +44,24 @@ public static class ConcurrencySql
             [VersionedTable.Events] = "events",
         };
 
+    /// <summary>
+    /// A trip's version, as a statement of its own rather than a row in the table of names: a
+    /// deleted trip is kept in this table, hidden from every read the model makes, and a
+    /// statement written by hand passes through none of that. So it says so itself — a deleted
+    /// trip has no version to hand out and none to compare a precondition against, which is the
+    /// same answer a trip that never existed gives.
+    /// </summary>
+    private const string LiveTripLogVersion =
+        "SELECT xmin::text::bigint FROM trip_logs WHERE id = @id AND deleted_at IS NULL";
+
     /// <summary>Current row version, or null when the row does not exist.</summary>
     public static async Task<long?> VersionAsync(
         SilexGisDbContext db, VersionedTable table, Guid id, CancellationToken ct)
     {
         // xid has no direct integer cast; text round-trip is the documented conversion.
-        var sql = $"SELECT xmin::text::bigint FROM {Tables[table]} WHERE id = @id";
+        var sql = table == VersionedTable.TripLogs
+            ? LiveTripLogVersion
+            : $"SELECT xmin::text::bigint FROM {Tables[table]} WHERE id = @id";
         return await db.Database.GetDbConnection().QuerySingleOrDefaultAsync<long?>(
             new CommandDefinition(sql, new { id }, cancellationToken: ct));
     }

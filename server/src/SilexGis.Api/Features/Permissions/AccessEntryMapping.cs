@@ -203,9 +203,15 @@ public static class AccessEntryMapping
             // let them through on exactly that ownership. The remaining kinds a rule may be
             // anchored on here — a stored file, a club, a ruleset, a feature set — carry no
             // owner and no audience column, so an id really is all there is to say.
+            //
+            // A trip is read past the filter that hides deleted ones, as a document is above and
+            // for the same reason: deleting a trip leaves every rule on it standing, so that
+            // putting it back is exact, and whoever wrote such a rule has to be able to take it
+            // back before the trip returns with it. Reading nothing here would hide the trip's
+            // owner from this check and refuse them their own rule.
             var columns = entry.Domain switch
             {
-                AccessDomain.TripLogs => await AccessColumnsAsync(db.TripLogs, objectId, ct),
+                AccessDomain.TripLogs => await AccessColumnsAsync(db.TripLogs.IgnoreQueryFilters(), objectId, ct),
                 AccessDomain.Geofiles => await AccessColumnsAsync(db.Geofiles, objectId, ct),
                 AccessDomain.GeoreferencedMaps => await AccessColumnsAsync(db.GeoreferencedMaps, objectId, ct),
                 AccessDomain.MapViews => await AccessColumnsAsync(db.MapViews, objectId, ct),

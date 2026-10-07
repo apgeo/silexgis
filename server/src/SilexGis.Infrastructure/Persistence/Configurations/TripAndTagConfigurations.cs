@@ -14,6 +14,22 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
         builder.ToTable("trip_logs");
         builder.Property(x => x.Id).ValueGeneratedNever();
 
+        // A deleted trip is gone from every query that does not deliberately ask for it.
+        //
+        // As a rule of the model rather than a condition each read remembers, because a trip is
+        // read from more places than anybody can keep in their head — the list and its counts,
+        // the map, the calendar and its feed, a camp, a cave's links, statistics, search, the
+        // overdue check, and every address somebody published — and the one that forgot would
+        // show a trip the application has already told somebody is gone. The few places that
+        // must see through it — the list of deleted trips, putting one back, the pass that
+        // removes them for good, and the housekeeping that moves or checks rows a deleted trip
+        // still holds — say IgnoreQueryFilters, which is a decision visible at the call site
+        // rather than an omission.
+        //
+        // Text SQL does not pass through this. A statement that names this table by hand states
+        // the condition itself.
+        builder.HasQueryFilter(x => x.DeletedAt == null);
+
         builder.Property(x => x.Title).HasMaxLength(255);
         builder.Property(x => x.WeatherConditions).HasMaxLength(300);
         builder.Property(x => x.LocationText).HasMaxLength(300);
@@ -75,6 +91,15 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
         // two values, so an index over them selects most of the table and the planner ignores it.
         builder.HasIndex(x => x.TripTypeId);
         builder.HasIndex(x => x.State);
+
+        // The pass that removes deleted trips reads by this and nothing else, and almost every
+        // row is null: a filtered index over the deleted ones stays small however many trips an
+        // installation holds.
+        builder.HasIndex(x => x.DeletedAt).HasFilter("deleted_at is not null");
+        // Attribution, so an account that goes leaves the deletion standing and takes only the
+        // name off it.
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.DeletedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 
@@ -86,7 +111,14 @@ public sealed class TripLogParticipantConfiguration : IEntityTypeConfiguration<T
         // A sentence about one person's part in the trip, not a second report: bounded here so an
         // over-long note is a plain refusal rather than a database error several layers down.
         builder.Property(x => x.Note).HasMaxLength(500);
-        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // The roster of a deleted trip is hidden with it. This table is read on its own — who has
+        // been where, how many trips somebody was on, who a notice concerns — and none of those
+        // reads passes through the trip row, so the trip's own filter would not reach them. The
+        // rows stay: a restored trip gets its roster back because it never lost it. What has to
+        // see them meanwhile is whatever moves or guards a person across every trip they are
+        // named on, and that says IgnoreQueryFilters.
+        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null);
         // Restrict, not cascade: removing someone from the roster must not quietly rewrite the
         // history of the trips they were on. Merging their duplicate entry is the way out.
         builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Restrict);
@@ -122,7 +154,18 @@ public sealed class TripInvitationConfiguration : IEntityTypeConfiguration<TripI
         // Stored as its number, which is what makes "invited and silent" a value with a column
         // behind it rather than a null standing in for two different facts.
         builder.Property(x => x.Response).HasConversion<short>();
-        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // An answer about a deleted trip is hidden with the trip, for the reason its roster is.
+        // An answer about a club event names no trip and is never hidden by this.
+        //
+        // The condition says the trip must be there, and that is the half that does the work.
+        // The key may be empty, so the trip is reached by a join that keeps the row whether or
+        // not it finds anything — and what it joins to is the trips a reader may see, the trip's
+        // own filter having already taken the deleted ones out. A deleted trip is therefore not
+        // found, every column read through it is empty, and "its trip is not deleted" on its own
+        // is true of exactly the rows it was written to hide. The rows keyed by a trip that
+        // cannot be empty need no such care: their join drops a row whose trip is not found.
+        builder.HasQueryFilter(x => x.TripLogId == null || (x.TripLog != null && x.TripLog.DeletedAt == null));
         // The second subject, with its own foreign key and the same cascade: an event that is
         // deleted takes the answers about it with it, exactly as a trip does.
         builder.HasOne<Event>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);

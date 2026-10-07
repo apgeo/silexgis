@@ -271,8 +271,10 @@ public static class ExpeditionSharingEndpoints
         var rows = await db.AccessEntries.AsNoTracking()
             .Where(e => e.GrantedViaExpeditionId == expeditionId && e.SubjectKind != null)
             .ToListAsync(ct);
-        var memberTrips = await db.ExpeditionTrips.AsNoTracking()
-            .CountAsync(m => m.ExpeditionId == expeditionId, ct);
+        var memberTrips = (await db.ExpeditionTrips.AsNoTracking()
+            .Where(m => m.ExpeditionId == expeditionId)
+            .Select(m => m.TripLogId)
+            .ToListAsync(ct)).ToHashSet();
 
         var userIds = rows.Where(x => x.SubjectKind == AccessSubjectKind.User)
             .Select(x => x.SubjectId!.Value).Distinct().ToList();
@@ -295,11 +297,15 @@ public static class ExpeditionSharingEndpoints
                     : cavingGroupNames.GetValueOrDefault(g.Key.Item2),
                 g.Key.Item3,
                 g.Key.Item4,
-                g.Select(e => e.ScopeId).Distinct().Count()))
+                // Counted over the trips the camp has now. A deleted trip keeps the rules a
+                // camp wrote onto it, so that putting it back is exact, but it is in no camp
+                // while it is deleted — and counting its rows would let a rule read as covering
+                // more trips than the camp holds.
+                g.Select(e => e.ScopeId).Distinct().Count(id => id is { } tripId && memberTrips.Contains(tripId))))
             .OrderBy(r => r.SubjectKind).ThenBy(r => r.SubjectName ?? string.Empty, StringComparer.Ordinal)
             .ToList();
 
-        return new ExpeditionSharingDto(memberTrips, rules);
+        return new ExpeditionSharingDto(memberTrips.Count, rules);
     }
 
     /// <summary>

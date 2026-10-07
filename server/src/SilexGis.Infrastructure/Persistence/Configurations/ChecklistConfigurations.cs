@@ -68,8 +68,10 @@ public sealed class TripChecklistTickConfiguration : IEntityTypeConfiguration<Tr
         // answers and a count that says three of two.
         builder.HasKey(x => new { x.TripLogId, x.ItemId });
 
-        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId)
+        builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId)
             .OnDelete(DeleteBehavior.Cascade);
+        // What a party settled on a deleted trip is hidden with the trip and comes back with it.
+        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null);
 
         // Referenced by list and line together against the key those two make on the line, so the
         // list recorded here cannot disagree with the list the line is actually on. A line taken

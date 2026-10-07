@@ -243,7 +243,7 @@ public static class ResLinkEndpoints
         // shapes can never collide; anything of neither shape addresses nothing.
         if (Guid.TryParse(idOrCode, out var id))
         {
-            var byId = await db.ResLinks.AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
+            var byId = await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
             return byId is null
                 ? ApiProblems.NotFound(NotFoundCode)
                 : TypedResults.Ok((await ProjectAsync(
@@ -251,7 +251,7 @@ public static class ResLinkEndpoints
         }
 
         var byCode = ResLinkRules.IsShortCode(idOrCode)
-            ? await db.ResLinks.AsNoTracking().FirstOrDefaultAsync(l => l.ShortCode == idOrCode, ct)
+            ? await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.ShortCode == idOrCode, ct)
             : null;
         return byCode is null
             ? ApiProblems.NotFound(CodeUnresolvedCode)
@@ -277,7 +277,7 @@ public static class ResLinkEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var link = await db.ResLinks.FirstOrDefaultAsync(l => l.Id == id, ct);
+        var link = await Standing(db).FirstOrDefaultAsync(l => l.Id == id, ct);
         if (link is null)
         {
             return ApiProblems.NotFound(NotFoundCode);
@@ -364,7 +364,7 @@ public static class ResLinkEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var link = await db.ResLinks.FirstOrDefaultAsync(l => l.Id == id, ct);
+        var link = await Standing(db).FirstOrDefaultAsync(l => l.Id == id, ct);
         if (link is null)
         {
             return ApiProblems.NotFound(NotFoundCode);
@@ -409,7 +409,7 @@ public static class ResLinkEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var link = await db.ResLinks.AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
+        var link = await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
         if (link is null)
         {
             return ApiProblems.NotFound(NotFoundCode);
@@ -627,7 +627,7 @@ public static class ResLinkEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var link = await db.ResLinks.AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
+        var link = await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
         if (link is null)
         {
             return ApiProblems.NotFound(NotFoundCode);
@@ -695,7 +695,7 @@ public static class ResLinkEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var link = await db.ResLinks.AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
+        var link = await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
         if (link is null)
         {
             return ApiProblems.NotFound(NotFoundCode);
@@ -824,7 +824,7 @@ public static class ResLinkEndpoints
         var incident = parsedType is { } pairType
             ? db.ResLinkMembers.AsNoTracking().Where(m => m.EntityType == pairType && m.EntityId == id)
             : db.ResLinkMembers.AsNoTracking().Where(m => m.FeatureId == id);
-        var incidentLinks = db.ResLinks.AsNoTracking()
+        var incidentLinks = Standing(db).AsNoTracking()
             .Where(l => incident.Any(m => m.ResLinkId == l.Id));
 
         // The relation filter narrows the one query both paging arms below are built from,
@@ -984,6 +984,22 @@ public static class ResLinkEndpoints
     }
 
     // ---- shared pieces --------------------------------------------------------------
+
+    /// <summary>
+    /// The links that stand, which is every link but the ones that cannot mean anything without
+    /// a trip that is deleted.
+    /// </summary>
+    /// <remarks>
+    /// Deleting a trip removes nothing, so that putting it back is exact: its links stay in
+    /// storage with their members. What they must not do meanwhile is read as links. A trip's
+    /// role link without its trip is a relation between the caves it named that nobody ever
+    /// asserted, and it would sit on each of those caves' panels until the trip was removed for
+    /// good. So every route here that finds a link finds it through this, reads and writes
+    /// alike, and such a link answers as one that is not there — which is what it becomes if the
+    /// trip is never restored, by the same rule, asked in the same place.
+    /// </remarks>
+    private static IQueryable<ResLink> Standing(SilexGisDbContext db) =>
+        db.ResLinks.Where(TripLinkFate.Not(TripLinkFate.EndsWithout(db, TripLinkFate.OfNoLiveTrip(db))));
 
     /// <summary>
     /// Whether this caller may edit or delete one link, at write time. The rule itself
@@ -1153,7 +1169,11 @@ public static class ResLinkEndpoints
         }
 
         var linkIds = links.Select(l => l.Id).ToList();
+        // A membership naming a deleted trip is kept, so that restoring the trip restores it,
+        // and is not shown: the trip answers everywhere as one that does not exist, and a bare
+        // row saying "something here is withheld" would be this panel saying that it does.
         var members = await db.ResLinkMembers.AsNoTracking()
+            .Where(TripLinkFate.Not(TripLinkFate.OfNoLiveTrip(db)))
             .Where(m => linkIds.Contains(m.ResLinkId))
             .OrderBy(m => m.SortOrder)
             .ThenBy(m => m.CreatedAt)

@@ -272,7 +272,13 @@ public static class CaverEndpoints
 
         // Checked here rather than left to the foreign key, so the answer is a reason and a
         // remedy instead of a constraint violation: a duplicate entry is merged, not deleted.
-        if (await db.TripLogParticipants.AnyAsync(p => p.CaverId == id, ct))
+        //
+        // Deleted trips count, here and in the tracking check below. A deleted trip keeps its
+        // roster so that putting it back is exact, and the foreign key that holds a person in
+        // place does not know the trip is hidden: asked through the filter, this would answer
+        // "named on nothing" and the delete would fail on the constraint this check exists to
+        // speak for.
+        if (await db.TripLogParticipants.IgnoreQueryFilters().AnyAsync(p => p.CaverId == id, ct))
         {
             return ApiProblems.BadRequest(
                 "caver.referenced_by_trips",
@@ -294,7 +300,7 @@ public static class CaverEndpoints
         // Tracking history outlives the roster — a trip edit can drop somebody from the
         // participant list while their position reports stay — so it blocks the delete on
         // its own, not only through the roster check above.
-        if (await db.TripPositionEvents.AnyAsync(e => e.CaverId == id, ct))
+        if (await db.TripPositionEvents.IgnoreQueryFilters().AnyAsync(e => e.CaverId == id, ct))
         {
             return ApiProblems.BadRequest(
                 "caver.referenced_by_trips",
@@ -478,8 +484,15 @@ public static class CaverEndpoints
                 "caver.merge_two_accounts", "Both entries have an account. Detach one before merging.");
         }
 
-        var sourceTrips = await db.TripLogParticipants.Where(p => p.CaverId == source.Id).ToListAsync(ct);
-        var targetSlots = await db.TripLogParticipants
+        // Everything the duplicate holds on a trip moves with it, deleted trips included — here
+        // and for the answers, the tracking reports and the captions below. A deleted trip keeps
+        // its rows so that putting it back is exact, and a merge that could not see them would
+        // leave them naming an entry this same request then removes: the roster and the reports
+        // would refuse that removal, and the answers and captions would be taken by it without a
+        // word, so the trip somebody later restored would have lost a person it never dropped.
+        var sourceTrips = await db.TripLogParticipants.IgnoreQueryFilters()
+            .Where(p => p.CaverId == source.Id).ToListAsync(ct);
+        var targetSlots = await db.TripLogParticipants.IgnoreQueryFilters()
             .Where(p => p.CaverId == target.Id)
             .Select(p => new { p.TripLogId, p.RoleId })
             .ToListAsync(ct);
@@ -514,8 +527,9 @@ public static class CaverEndpoints
         // held about a trip or about a club event, so a comparison that looked only at the trip
         // would read every one of the survivor's event answers as the same row as every one of
         // the other entry's, and delete answers nobody gave twice.
-        var sourceAnswers = await db.TripInvitations.Where(x => x.CaverId == source.Id).ToListAsync(ct);
-        var targetAnswered = await db.TripInvitations
+        var sourceAnswers = await db.TripInvitations.IgnoreQueryFilters()
+            .Where(x => x.CaverId == source.Id).ToListAsync(ct);
+        var targetAnswered = await db.TripInvitations.IgnoreQueryFilters()
             .Where(x => x.CaverId == target.Id)
             .Select(x => new { x.TripLogId, x.EventId })
             .ToListAsync(ct);
@@ -551,7 +565,8 @@ public static class CaverEndpoints
         // dated fact about where the person was, two entries' reports interleave into one
         // timeline, and there is no uniqueness to collide with. Dropping any of them would
         // erase the safety record the log exists to keep.
-        var sourceReports = await db.TripPositionEvents.Where(e => e.CaverId == source.Id).ToListAsync(ct);
+        var sourceReports = await db.TripPositionEvents.IgnoreQueryFilters()
+            .Where(e => e.CaverId == source.Id).ToListAsync(ct);
         foreach (var report in sourceReports)
         {
             report.CaverId = target.Id;
@@ -563,8 +578,9 @@ public static class CaverEndpoints
         // Moved rather than left to the foreign key: the row would otherwise go with the
         // duplicate, and silently un-naming somebody a page has been showing by name for two
         // days is a worse answer than either choice above.
-        var sourceLabels = await db.TripTrackingParticipants.Where(p => p.CaverId == source.Id).ToListAsync(ct);
-        var targetLabelTrips = await db.TripTrackingParticipants
+        var sourceLabels = await db.TripTrackingParticipants.IgnoreQueryFilters()
+            .Where(p => p.CaverId == source.Id).ToListAsync(ct);
+        var targetLabelTrips = await db.TripTrackingParticipants.IgnoreQueryFilters()
             .Where(p => p.CaverId == target.Id)
             .Select(p => p.TripLogId)
             .ToListAsync(ct);

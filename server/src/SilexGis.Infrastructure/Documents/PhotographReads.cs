@@ -100,7 +100,10 @@ public static class PhotographReads
     {
         ArgumentNullException.ThrowIfNull(db);
 
-        return photographs.Where(d => db.Attachments.Any(a =>
+        // The trip has to be one that is there. A deleted trip keeps the pins that held its
+        // pictures, so that putting it back is exact, and a narrowing that read the pins alone
+        // would go on listing the pictures of a trip that answers everywhere else as not found.
+        return photographs.Where(d => db.TripLogs.Any(t => t.Id == tripId) && db.Attachments.Any(a =>
             a.EntityType == AttachedEntityType.TripLog
             && a.EntityId == tripId
             && db.StoredFiles.Any(f => f.Id == a.FileId

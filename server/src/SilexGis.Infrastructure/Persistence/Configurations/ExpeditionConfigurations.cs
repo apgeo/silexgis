@@ -58,8 +58,14 @@ public sealed class ExpeditionTripConfiguration : IEntityTypeConfiguration<Exped
         // camp with it. Neither ever reaches through to the other row.
         builder.HasOne<Expedition>().WithMany().HasForeignKey(x => x.ExpeditionId)
             .OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId)
+        builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // A deleted trip is in no camp as far as any reader is concerned — the camp's list, its
+        // map, its roll-up and its count of members all read this table, and a camp that went on
+        // counting a trip nobody can open would disagree with its own page. The row stays, so a
+        // restored trip is back in the camp it was in without anybody putting it there again.
+        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null);
     }
 }
 
