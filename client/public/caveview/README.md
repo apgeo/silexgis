@@ -3,8 +3,8 @@
 Source: https://github.com/apgeo/CaveView.js — this project's fork of
 https://github.com/aardgoose/CaveView.js (MIT license, see `LICENSE` in this directory).
 
-Vendored build: distribution version **2.9.0-slx.15**, built from the fork's `silexgis`
-branch at commit `5647a5fd` — the upstream **2.9.0 release tag** plus the fork's changes
+Vendored build: distribution version **2.9.0-slx.16**, built from the fork's `silexgis`
+branch at commit `02abcae5` — the upstream **2.9.0 release tag** plus the fork's changes
 (each also kept on its own dev-based `feature/*` branch so upstream can take them): the
 dispose-handler typo fix, the `crsLookup` configuration option the app uses to resolve
 coordinate systems locally instead of via epsg.io, a navigation and hover API
@@ -181,7 +181,67 @@ The fork's test went from 38 assertions to 49 with these — four of the new one
 slx.14 already had and nothing checked (a framing's signal given before a focus started in the
 same turn, a later real fullscreen taking over from a refused one, `dispose()` taking the class
 off, `dispose()` aborting the request of a load): 42 pass and 7 fail against the slx.14 bundle,
-and all 49 pass against this one.
+and all 49 pass against slx.15's.
+
+**What slx.16 adds over slx.15** — what looking at two surveys of one cave together asks of the
+viewer, each of them something a host has to ask for, and four defects met on the way. A viewer
+loaded and driven as before behaves as before.
+
+- **A file can be given a name of its own in the survey tree, and a colour.** The viewer reads
+  several files into one tree, and nothing in it said which file a survey came from: a `.3d` file
+  names its surveys by their paths from the top, so two exports of one cave shared every survey
+  and a station of either answered to the same path; a `.lox` file's own top survey was dropped
+  and its surveys hung beside everybody else's. `loadCave()` and `loadCaves()` now take, in place
+  of a file's name or a `File`, a description — `{ name, label, color }` or `{ file, label, color }`.
+  With a label the file's surveys, stations and legs are those of a survey of that name: every
+  path in a `.3d` is extended by it, and a `.lox` keeps its top survey under it. The colour is what
+  that survey is drawn in under the by-survey shading, with everything in it, and
+  `getSectionColor(ref)` answers the colour any survey is drawn in there — given or chosen — so a
+  key beside the model never repeats how the viewer chooses. A label that is empty or has a full
+  stop in it is refused as the load is asked for. A Compass `.plt` takes no label.
+- **A survey of the tree can be hidden and shown again** — `setSectionVisible(ref, visible)`,
+  `showAllSections(ref?)`, `getHiddenSections()`, and a `change` event named `hiddenSections`. Until
+  now the choice was by kind (legs, splays, stations, walls), by selecting one survey and greying
+  the rest, or by cutting the model down to one for good. Everything drawn by survey follows: legs
+  of every kind, through the attribute of the line geometry that already left out legs within
+  walls; stations and their labels; entrances, rebuilt so that a marker standing for several counts
+  only those left; walls and scraps. A hidden station or leg is not found by the pointer, and what
+  is hidden is forgotten when another model is loaded.
+- **The view can be read, set, and heard changing** — `getViewpoint()` and `setViewpoint(view)`,
+  and a `viewpoint` event. A view is the camera's two angles, a zoom that is 1 where the plan of
+  the model just fits its container, the point looked at as an offset from the model's centre in
+  heights of the container at that zoom, and the projection — units that mean the same for another
+  model in a container of another size, which is what lets a second viewer be looked at from where
+  the reader turns the first. The event is dispatched for every change the host did not make
+  itself: the pointer, the keys, a move the viewer animates, an auto rotation, a change of
+  projection. `setViewpoint()`, `setCameraAngles()` and `setView()` dispatch none, so two viewers
+  kept in step from each other's events do not answer one another for ever.
+- **`getSectionBounds(ref)`** — the least box holding a survey's stations, in the coordinates the
+  survey was made in. For a labelled file that is the file's extent, which is how a host tells two
+  files that coincide from one made about a point of its own and one in a national grid.
+- **Files are drawn in the order they are given.** Each file added its legs as it finished being
+  read, so where two files lay over one another, which was seen depended on which arrived last —
+  a different one from load to load once each waits on a coordinate system to be looked up. The
+  later file of the list is now always the one drawn over the earlier.
+- **`CaveViewUI.loadCaves()` works.** It called a static method with `new` and threw on every call.
+- **A viewer cleared or disposed with workers at work gives their turns back.** The workers at work
+  are counted for the whole page, across every viewer on it; one ended early never reported back,
+  so each model replaced while terrain was being fetched took turns from every viewer for good.
+- **A disposed user interface leaves nothing in the container.** It rebuilt its side panel as it was
+  disposed, and left that behind. This application builds a viewer for each file in an element it
+  keeps, so the tabs and panels of every viewer it had let go of lay under the one in use.
+
+Two viewers on one page were what the viewer's reference already promised and this application
+already had (a movie's preview over the model behind it); the last three defects are what looking
+for state shared between them turned up. Besides the bundle only `plyLoaderWorker.js` differs from
+slx.15's — it carries the file reader, which now also takes a described file; the other three
+workers, the stylesheet, the logo and the catalogue are byte-identical.
+
+The fork's test went from 49 assertions to 71 with these, on a third page holding two viewers.
+Against the slx.15 bundle the 48 assertions of the first two pages pass and the third page stops
+at its first step, which calls a method that bundle does not have; all 71 pass against this one.
+One of the new assertions was also run against a build without its fix: with the first of two
+coinciding files held back so that it is read last, that build draws it over the second.
 
 Not taken: moving the `.3d` and `.lox` readers onto the worker path the `.ply` reader uses. They
 write into a shared survey graph (stations shared by identity between legs, a tree with methods,
@@ -200,11 +260,11 @@ CaveView.js is not published on npm; it ships as a prebuilt browser bundle. This
 directory contains the runtime subset the app needs, under a directory named by the
 distribution version:
 
-- `v2.9.0-slx.15/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
-- `v2.9.0-slx.15/js/workers/` — web workers the bundle spawns at runtime (paths resolved
+- `v2.9.0-slx.16/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
+- `v2.9.0-slx.16/js/workers/` — web workers the bundle spawns at runtime (paths resolved
   against the viewer's `home` option, which the app points at this directory)
-- `v2.9.0-slx.15/css/caveview.css`, `v2.9.0-slx.15/images/logo.svg` — runtime assets
-- `v2.9.0-slx.15/lib/lang-ro.json` — the Romanian catalogue, fetched when the interface is Romanian
+- `v2.9.0-slx.16/css/caveview.css`, `v2.9.0-slx.16/images/logo.svg` — runtime assets
+- `v2.9.0-slx.16/lib/lang-ro.json` — the Romanian catalogue, fetched when the interface is Romanian
 
 The version directory exists for cache correctness: these URLs are fetched outside the
 app bundle's hashed-asset pipeline, so a new build must arrive under new URLs or
@@ -225,7 +285,8 @@ after. (Earlier `2.9.0-slx.*` directories were removed rather than kept: none re
 browser can be holding it.) Do not edit the vendored files in place.
 
 `v2.9.0-slx.12/` is kept beside the current one under that rule: it is the build the last release
-loads, so it is the one a browser can still be holding. `v2.9.0-slx.13/` went with slx.14 without
+loads, so it is the one a browser can still be holding. `v2.9.0-slx.15/` went with slx.16 without
+being kept, because it never reached an installation either; `v2.9.0-slx.13/` went with slx.14 without
 being kept, because it never reached an installation, and `v2.9.0-slx.14/` went with slx.15 the
 same way, replaced on the branch it was vendored on before that branch was merged;
 `v2.9.0-slx.9/` went with slx.13 (it had
@@ -236,12 +297,13 @@ any further change to the fork — a fix found while vendoring included — is a
 version and a new directory. slx.12 was rebuilt in its own directory once, from `563b763b` to
 `5f14d910`, before it reached a release; that was the last time.
 
-**This build was verified to reproduce.** `v2.9.0-slx.15/js/CaveView2.min.js` (SHA-256
-`0baf1d80911199e054e85e065ce8f821bd108f930f7d595414e82a91f2b8b387`) is byte-identical to a
-fresh `npm ci && npm run build` of commit `5647a5fd` in a clean clone of the fork, made
-separately from the build it was copied from — as is every other file that build writes; the
-workers, the stylesheet and the logo are byte-identical to slx.12's, and the catalogue to the
-fork's tracked file (slx.14's bundle, `7b6b4024…`, reproduced the same way from `4ff3ecbd`,
-slx.13's, `31a2d6cd…`, from `f4c94bb2`, and slx.12's, `b12cb7da…`, from `5f14d910`). (An earlier build, from `ed0322e5`, was checked the same way against the bundle
+**This build was verified to reproduce.** `v2.9.0-slx.16/js/CaveView2.min.js` (SHA-256
+`c38f5f5157669cb82a3d6093cab0a8431bc09d844c53b521eccfd1c2d16d7382`) is byte-identical to a
+fresh `npm ci && npm run build` of commit `02abcae5` in a clean clone of the fork, made
+separately from the build it was copied from — as is every other file vendored here: the four
+workers, the stylesheet and the logo, and the catalogue, which is the fork's tracked file
+(slx.15's bundle, `0baf1d80…`, reproduced the same way from `5647a5fd`, slx.14's, `7b6b4024…`,
+from `4ff3ecbd`, slx.13's, `31a2d6cd…`, from `f4c94bb2`, and slx.12's, `b12cb7da…`, from
+`5f14d910`). (An earlier build, from `ed0322e5`, was checked the same way against the bundle
 serving the club's public pages.) That is worth re-checking on the next upgrade: it is the
 cheapest evidence that the vendored bytes are the fork's source and not a local accident.

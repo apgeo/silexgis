@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { readFileSync } from 'node:fs';
 import { expect, type Page } from '@playwright/test';
 import { ownContext, test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
@@ -144,6 +145,24 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
   }[];
   const modelId = models[0].id;
 
+  // ---- A later survey of the same cave, which the party underground now is followed on ----
+  // The earlier trip keeps the survey it was made on, so every pick of the past and every way back
+  // hands the viewer another file — what a visitor meets wherever a cave has been surveyed again
+  // since. The burst further down depends on it: one file under a freshly signed address is not a
+  // reason to build a viewer, and a burst between two addresses of one file would build none.
+  const laterUpload = await page.request.post(`/api/v1/caves/${caveId}/survey-models`, {
+    headers: { Authorization: `Bearer ${auth}` },
+    multipart: {
+      file: {
+        name: 'P8_Master later.3d',
+        mimeType: 'application/octet-stream',
+        buffer: readFileSync('e2e/fixtures/P8_Master.3d'),
+      },
+    },
+  });
+  expect(laterUpload.status(), await laterUpload.text()).toBe(201);
+  const laterModelId = ((await laterUpload.json()) as { id: string }).id;
+
   // ---- The earlier trip: tracked, reported, closed, published ----
   const pastTitle = `E2E the morning push ${stamp}`;
   const today = new Date().toISOString().slice(0, 10);
@@ -215,7 +234,7 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
   const carmen = live.participants[0].caverId;
   await setWatch(page, auth, live.id, {
     state: 'armed',
-    surveyModelId: modelId,
+    surveyModelId: laterModelId,
     referenceStationName: null,
     depthFilter: [],
   });

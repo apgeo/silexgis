@@ -35,6 +35,11 @@ import {
   subscribeLibraryPhotoLoadStates,
   type LibraryPhotoLoadStates,
 } from '../../map/libraryPhotoLayer.ts';
+import {
+  CENTERLINE_MIN_PATHS,
+  CENTERLINE_PATHS_STEP,
+  CENTERLINE_ZOOM_RANGE,
+} from '../../map/centerlineLimits.ts';
 import { ENTRANCE_LAYER_ID } from '../../map/entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from '../../map/featureLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID } from '../../map/heatmapLayer.ts';
@@ -490,8 +495,10 @@ export default function LayerPanel({
               <span>{t('map.centerlineDetailZoom')}</span>
               <InputNumber
                 size="small"
-                min={0}
-                max={24}
+                min={CENTERLINE_ZOOM_RANGE.min}
+                max={CENTERLINE_ZOOM_RANGE.max}
+                precision={0}
+                aria-label={t('map.centerlineDetailZoom')}
                 value={centerlineDetailZoom}
                 placeholder={String(mapConfig?.centerlineDetailZoom ?? '')}
                 onChange={(value) =>
@@ -505,9 +512,11 @@ export default function LayerPanel({
               <span>{t('map.centerlineMaxPaths')}</span>
               <InputNumber
                 size="small"
-                min={0}
+                min={CENTERLINE_MIN_PATHS}
                 max={mapConfig?.centerlineMaxPathsLimit}
-                step={5000}
+                step={CENTERLINE_PATHS_STEP}
+                precision={0}
+                aria-label={t('map.centerlineMaxPaths')}
                 value={centerlineMaxPaths}
                 placeholder={String(mapConfig?.centerlineMaxPaths ?? '')}
                 onChange={(value) =>

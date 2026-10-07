@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { ResLink, SurveyModelInfo } from '../../api/hooks.ts';
 import type { PickedModelPart } from '../../caveview/modelParts.ts';
+import type { SurveyCompareOffer } from '../../caveview/surveyCompare.ts';
 import SurveyModelViewerModal from './SurveyModelViewerModal.tsx';
 
 /**
@@ -20,9 +21,11 @@ vi.mock('./CaveViewPanel.tsx', () => ({
   default: function FakeCaveViewPanel({
     onPartPick,
     onStationsLoaded,
+    compare,
   }: {
     onPartPick?: (part: PickedModelPart) => void;
     onStationsLoaded?: (stations: readonly string[]) => void;
+    compare?: SurveyCompareOffer;
   }) {
     useEffect(() => {
       panelLifecycle.mounts += 1;
@@ -35,7 +38,10 @@ vi.mock('./CaveViewPanel.tsx', () => ({
       onStationsLoaded?.(['p.g.7', 'p.g.8', 'cave.deep.3']);
     }, [onStationsLoaded]);
     return (
-      <div data-testid="fake-caveview">
+      <div
+        data-testid="fake-caveview"
+        data-compare-with={compare?.others.map((other) => other.id).join(',') ?? ''}
+      >
         the 3D scene
         <button
           data-testid="fake-press-station"
@@ -104,6 +110,16 @@ vi.mock('../../caveview/useStationMedia.ts', () => ({
   useStationMedia: () => new Map(),
 }));
 
+// The cave's list of surveys is read from the server; here it is a dial, like the links above.
+let compareAnswer: SurveyCompareOffer | undefined;
+let comparedModel: string | undefined;
+vi.mock('../../caveview/useCompareOffer.ts', () => ({
+  useCompareOffer: (model: { id: string } | null | undefined) => {
+    comparedModel = model?.id;
+    return compareAnswer;
+  },
+}));
+
 const MODEL = {
   id: 'model-1',
   name: 'P8_Master',
@@ -163,6 +179,8 @@ beforeEach(() => {
   panelLifecycle.mounts = 0;
   panelLifecycle.unmounts = 0;
   linksAnswer = undefined;
+  compareAnswer = undefined;
+  comparedModel = undefined;
 });
 
 afterEach(() => {
@@ -253,6 +271,25 @@ describe('SurveyModelViewerModal', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Profile sheet/ }));
     expect(screen.getByTestId('fake-map-pane-link-b')).toHaveAttribute('data-active', 'true');
     expect(screen.getByTestId('fake-map-pane-link-a')).toHaveAttribute('data-active', 'false');
+  });
+});
+
+describe('comparing the model with another survey of its cave', () => {
+  it('asks what this model can be compared with, and hands the panel the answer', () => {
+    compareAnswer = {
+      current: { id: MODEL.id, name: 'P8_Master', fileUrl: 'http://files.local/model', fileName: 'P8_Master.3d' },
+      others: [{ id: 'model-2', name: 'P8 resurvey', fileUrl: 'http://files.local/other', fileName: 'P8 resurvey.3d' }],
+    };
+    show();
+
+    expect(comparedModel).toBe(MODEL.id);
+    expect(screen.getByTestId('fake-caveview')).toHaveAttribute('data-compare-with', 'model-2');
+  });
+
+  it('offers nothing where the cave has no other survey to compare with', () => {
+    show();
+
+    expect(screen.getByTestId('fake-caveview')).toHaveAttribute('data-compare-with', '');
   });
 });
 

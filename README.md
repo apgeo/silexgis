@@ -160,6 +160,16 @@ with a database server of its own, which brings it under an hour on a workstatio
 whole suite, in either form, needs its `--full` flag, on purpose. The specs that need a photo
 library beside the application bring their own: `scripts/e2e-photo-libraries.mjs`.
 
+The integration suite runs in one of two test modes. `precise`, the default, builds the
+application for every test. `--mode fast` on `gate-lock.mjs run` or `gate-sharded.mjs` (or
+`SILEXGIS_TEST_MODE=fast`) lets the tests of a class take turns on one running application: the
+same 2,632 tests in ten minutes instead of forty-seven on that workstation. It
+proves less — a test no longer starts from a newly started application — so a fast run that
+passes is recorded as `green-fast`, never `green`. Iterate fast, land on precise; a failure seen
+only in fast mode is one test leaving something in the application for the next, and is worth
+reading rather than dismissing. `gate-sharded.mjs --affected master` runs just the classes a
+change selects, in either mode.
+
 ## License
 
 AGPL-3.0-or-later — see [LICENSE](LICENSE). Third-party bundled components are listed in

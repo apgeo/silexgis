@@ -15,6 +15,7 @@ import {
   type CaveListParams,
 } from '../../api/hooks.ts';
 import CaveViewPanel from '../../components/caveview/CaveViewPanel.tsx';
+import { useCompareOffer } from '../../caveview/useCompareOffer.ts';
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
 import SelectionPanel from '../../components/map/SelectionPanel.tsx';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
@@ -192,6 +193,9 @@ function Viewer3dPanel() {
   // can read is decided in one place, because this window is not the only thing that asks.
   const followedModel = models?.find(surveyModelReadableByViewer);
   const model = pinnedModelId ? pinnedModel : followedModel;
+  // The same cave's other line plots. A comparison begun in this window stays in this window: it
+  // is a way of looking at what is here, and the window it was opened from is looking at its own.
+  const compare = useCompareOffer(model);
 
   // Clicking an entrance label in the 3D scene pans the main window's map there.
   // Survey labels and DB entrance names only sometimes agree, so fall back to the
@@ -231,6 +235,7 @@ function Viewer3dPanel() {
             // Named so this window can answer a link that points at a station of *this* model,
             // and decline one that points at another cave's.
             surveyModelId={model.id}
+            compare={compare}
           />
         </div>
       ) : (
