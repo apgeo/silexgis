@@ -234,6 +234,14 @@ function movieStage(
       }
       viewer.beginCapture({ width, height });
       capturing = true;
+      // The preview slides its markers under the real clock while it plays, and a capture takes a
+      // slide under way over where it had got to. Whoever the first thing drawn leaves where the
+      // preview had them is not moved by it, and would be drawn between two stations, at a place
+      // decided by the moment the button was pressed. Placing every marker again where it was
+      // going ends its slide there; what is drawn next then starts from people standing still.
+      for (const marker of markersBefore) {
+        viewer.moveLiveMarker(marker.id, marker.ref, { ...markerOptions(marker), duration: 0 });
+      }
       // A capture is drawn at the frame's own size, so a label of so many frame pixels is that many
       // device pixels of the drawing — no scaling here, which is what keeps it from being scaled twice.
       restoreLabels = applyMovieMarkerLabels(viewer, settings.cavers, 1);
@@ -450,16 +458,37 @@ export async function recordMovieStill(recording: MovieStillRecording, index: nu
   return toPng(canvas);
 }
 
+/**
+ * The browser composed the picture and then gave no PNG of it. A kind of its own so that whoever
+ * shows the failure can say it in the reader's language: this message is for a log.
+ */
+export class MovieStillUnwrittenError extends Error {
+  constructor() {
+    super('The picture could not be written: the browser gave no PNG.');
+    this.name = 'MovieStillUnwrittenError';
+  }
+}
+
 function canvasPng(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (blob === null) {
-        reject(new Error('The picture could not be written: the browser gave no PNG.'));
+        reject(new MovieStillUnwrittenError());
       } else {
         resolve(blob);
       }
     }, 'image/png');
   });
+}
+
+/** A marker's own label and colour, as options: only what it had, since an option handed over as
+ * undefined is not the same as one left out. */
+function markerOptions(marker: CaveViewLiveMarker): Pick<CaveViewLiveMarker, 'label' | 'sublabel' | 'color'> {
+  return {
+    label: marker.label,
+    ...(marker.sublabel === undefined ? {} : { sublabel: marker.sublabel }),
+    ...(marker.color === undefined ? {} : { color: marker.color }),
+  };
 }
 
 /** The markers, trails and group labels of the preview, as they stood before the recording. */
@@ -485,12 +514,7 @@ function putBackScene(
     }
   }
   for (const marker of markersBefore) {
-    // Only what the marker had: an option handed over as undefined is not the same as one left out.
-    const options = {
-      label: marker.label,
-      ...(marker.sublabel === undefined ? {} : { sublabel: marker.sublabel }),
-      ...(marker.color === undefined ? {} : { color: marker.color }),
-    };
+    const options = markerOptions(marker);
     if (drawn.has(marker.id)) {
       viewer.moveLiveMarker(marker.id, marker.ref, { ...options, duration: 0 });
     } else {

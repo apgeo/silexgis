@@ -138,6 +138,42 @@ describe('drawMovieCaptions', () => {
     expect(title.length).toBeLessThan(100);
   });
 
+  describe('the time-lapse figure after the clock', () => {
+    /** A context in which every character is `charPx` wide, so what fits is known exactly. */
+    const measured = (charPx: number) => {
+      const made = recordingContext();
+      Object.assign(made.ctx, { measureText: (text: string) => ({ width: Array.from(text).length * charPx }) });
+      return made;
+    };
+    const clock = '12 Sep 2026, 10:30';
+    const clockSpeed = `${clock} · ×240`;
+    const only = { title: null, legend: [], note: null, progress: null };
+    // 320 × 180 at size 1: margin 5, pad 3, so the clock has 160 − 5 − 6 = 149 px.
+
+    it('is written whole where the clock and it both fit', () => {
+      const { ctx, fillText } = measured(5); // 25 characters: 125 px
+      drawMovieCaptions(ctx, 320, 180, captions({ ...only, clock, clockSpeed }));
+      expect(fillText.mock.calls.map((call) => call[0])).toEqual([clockSpeed]);
+    });
+
+    it('is left out, never cut, where the two do not fit and the clock alone does', () => {
+      const { ctx, fillText } = measured(7); // the clock is 126 px, with the figure 175 px
+      drawMovieCaptions(ctx, 320, 180, captions({ ...only, clock, clockSpeed }));
+      expect(fillText.mock.calls.map((call) => call[0])).toEqual([clock]);
+    });
+
+    it('leaves a clock that does not fit by itself cut exactly as it is without the figure', () => {
+      const without = measured(10);
+      drawMovieCaptions(without.ctx, 320, 180, captions({ ...only, clock, clockSpeed: null }));
+      const withFigure = measured(10);
+      drawMovieCaptions(withFigure.ctx, 320, 180, captions({ ...only, clock, clockSpeed }));
+      const drawn = withFigure.fillText.mock.calls.map((call) => call[0] as string);
+      expect(drawn).toEqual(without.fillText.mock.calls.map((call) => call[0]));
+      expect(drawn[0].endsWith('…')).toBe(true);
+      expect(drawn[0]).not.toContain('×');
+    });
+  });
+
   it('wraps a long note into at most three lines', () => {
     const { ctx, fillText } = recordingContext();
     drawMovieCaptions(ctx, 320, 180, captions({ title: null, clock: null, legend: [], note: 'word '.repeat(200) }));
@@ -237,14 +273,27 @@ describe('the time-lapse figure in the clock caption', () => {
     ...output,
     captions: { ...DEFAULT_MOVIE_SETTINGS.captions, ...captions },
   });
-  const clockOf = (settings: MovieSettings, mode: 'calendar' | 'together' = 'together', position = HOUR) =>
-    movieCaptionsAt(settings, null, party, twoHours(mode), { position, progress: 0.5 }, words).clock;
+  const captionsOf = (settings: MovieSettings, mode: 'calendar' | 'together' = 'together', position = HOUR) =>
+    movieCaptionsAt(settings, null, party, twoHours(mode), { position, progress: 0.5 }, words);
+  /** What the clock caption reads where there is room for all of it. */
+  const clockOf = (settings: MovieSettings, mode: 'calendar' | 'together' = 'together', position = HOUR) => {
+    const drawn = captionsOf(settings, mode, position);
+    return drawn.clockSpeed ?? drawn.clock;
+  };
 
   it('follows the clock, on by default', () => {
     expect(DEFAULT_MOVIE_SETTINGS.captions.speed).toBe(true);
     expect(clockOf(chosen())).toBe('Elapsed 1:00 · ×240');
     const calendar = clockOf(chosen(), 'calendar')!;
     expect(calendar).toMatch(/2026.* · ×240$/u);
+  });
+
+  it('is carried beside the clock rather than in it, so the clock can stand alone where the two do not fit', () => {
+    const both = captionsOf(chosen());
+    expect(both.clock).toBe('Elapsed 1:00');
+    expect(both.clockSpeed).toBe('Elapsed 1:00 · ×240');
+    expect(captionsOf(chosen({ speed: false })).clockSpeed).toBeNull();
+    expect(captionsOf(chosen({ clock: false, speed: true })).clockSpeed).toBeNull();
   });
 
   it('is left off when its switch is, and the clock stands as it was', () => {
@@ -269,8 +318,8 @@ describe('the time-lapse figure in the clock caption', () => {
   it('is written in Romanian around the same figure, with the Romanian decimal mark', () => {
     const t = i18n.getFixedT('ro');
     expect(movieClockWithSpeed('Timp scurs 1:30', 2.54, t, 'ro')).toBe('Timp scurs 1:30 · ×2,5');
-    expect(movieClockWithSpeed('Timp scurs 1:30', 1, t, 'ro')).toBe('Timp scurs 1:30');
-    expect(movieClockWithSpeed('Timp scurs 1:30', null, t, 'ro')).toBe('Timp scurs 1:30');
+    expect(movieClockWithSpeed('Timp scurs 1:30', 1, t, 'ro')).toBeNull();
+    expect(movieClockWithSpeed('Timp scurs 1:30', null, t, 'ro')).toBeNull();
   });
 });
 

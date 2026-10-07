@@ -44,12 +44,54 @@ export function movieTripSpan(
   if (window === null) {
     return null;
   }
-  const moments = events
+  return { tripLogId, window, moments: reportMoments(events, surveyModelId) };
+}
+
+/** The instants of the reports a movie of this model replays, ascending. */
+function reportMoments(
+  events: readonly Pick<TrackingEvent, 'recordedAt' | 'surveyModelId'>[],
+  surveyModelId: string,
+): number[] {
+  return events
     .filter((event) => event.surveyModelId === null || event.surveyModelId === surveyModelId)
     .map((event) => Date.parse(event.recordedAt))
     .filter((at) => Number.isFinite(at))
     .sort((left, right) => left - right);
-  return { tripLogId, window, moments };
+}
+
+/**
+ * The spans of a movie that shows only some of its trips' people: each trip's stretch as it was,
+ * and for its moments only the reports of somebody who appears.
+ *
+ * <b>A person left out of a movie must not pace it.</b> With quiet stretches shortened, the clock
+ * slows down around every report and jumps across the hours between them. Cut at the reports of
+ * somebody who is not shown, the file would dwell on a moment at which nobody in the picture did
+ * anything — and that moment is the time of a report by the person who was taken out. The stretch
+ * a trip covers is not touched: it is the trip's, whoever is shown of it.
+ *
+ * A span whose trip is not among `trips` is handed back as it is.
+ *
+ * @param appears whether a caver of a trip is shown in the movie.
+ */
+export function movieSpansShowing(
+  spans: readonly MovieTripSpan[],
+  trips: readonly {
+    tripLogId: string;
+    events: readonly Pick<TrackingEvent, 'recordedAt' | 'surveyModelId' | 'caverId'>[];
+  }[],
+  surveyModelId: string,
+  appears: (tripLogId: string, caverId: string) => boolean,
+): MovieTripSpan[] {
+  return spans.map((span) => {
+    const trip = trips.find((candidate) => candidate.tripLogId === span.tripLogId);
+    if (trip === undefined) {
+      return span;
+    }
+    const shown = trip.events.filter((event) => appears(trip.tripLogId, event.caverId));
+    return shown.length === trip.events.length
+      ? span
+      : { ...span, moments: reportMoments(shown, surveyModelId) };
+  });
 }
 
 /** Whether a trip's watch is still running: started and not ended, so its replay has no end of its own. */

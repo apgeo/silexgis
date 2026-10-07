@@ -21,6 +21,13 @@ import { movieSpeedFactor, type MovieClock, type MovieFrame, type MovieTimeline 
 export interface MovieCaptions {
   title: string | null;
   clock: string | null;
+  /**
+   * The clock with the time-lapse figure after it — the whole text, "… · ×240" — or null when no
+   * figure applies. It is drawn in place of `clock` only when all of it fits the room the clock has:
+   * a figure cut short is a different figure ("×2…" for ×240), so where the two do not fit the clock
+   * stands alone, exactly as it would without the figure.
+   */
+  clockSpeed?: string | null;
   legend: MovieLegendEntry[];
   /**
    * The line that stands in for the legend entries a frame has no room for, given how many were
@@ -169,7 +176,13 @@ export function drawMovieCaptions(
   let clockWidth = 0;
   if (captions.clock !== null && captions.clock.length > 0) {
     ctx.font = `${fontPx}px ${FONT_FAMILY}`;
-    const text = fitted(ctx, captions.clock, width / 2 - margin - 2 * pad);
+    const room = width / 2 - margin - 2 * pad;
+    const withSpeed = captions.clockSpeed ?? null;
+    // The figure is all or nothing: it is written only where the clock and it both fit whole.
+    const text =
+      withSpeed !== null && withSpeed.length > 0 && ctx.measureText(withSpeed).width <= room
+        ? withSpeed
+        : fitted(ctx, captions.clock, room);
     clockWidth = ctx.measureText(text).width + 2 * pad;
     const x = width - margin - clockWidth;
     plate(ctx, x, margin, clockWidth, lineHeight);
@@ -307,13 +320,18 @@ export function movieSpeedText(factor: number | null, language: string): string 
 }
 
 /**
- * The clock caption with the time-lapse factor after it, when there is one to write: "… · ×240".
- * The factor is never drawn by itself — it qualifies the clock, and beside nothing it is a bare
- * number — so this takes the clock's own text and hands it back unchanged when no factor applies.
+ * The clock caption with the time-lapse factor after it — "… · ×240" — or null when there is no
+ * factor to write. The factor is never drawn by itself: it qualifies the clock, and beside nothing
+ * it is a bare number, so the only form it has is the clock's own text with it appended.
  */
-export function movieClockWithSpeed(clock: string, factor: number | null, t: TFunction, language: string): string {
+export function movieClockWithSpeed(
+  clock: string,
+  factor: number | null,
+  t: TFunction,
+  language: string,
+): string | null {
   const speed = movieSpeedText(factor, language);
-  return speed === null ? clock : t('caveview.movie.clockSpeed', { clock, factor: speed });
+  return speed === null ? null : t('caveview.movie.clockSpeed', { clock, factor: speed });
 }
 
 /**
@@ -372,11 +390,13 @@ export function movieCaptionsAt(
   const clock = movieClockText(timeline.clock(frame.position), words.t, words.language);
   return {
     title,
-    clock: !captions.clock
-      ? null
-      : captions.speed
+    clock: captions.clock ? clock : null,
+    // Kept apart from the clock until it is drawn: whether the figure is written depends on the
+    // room the frame has for it, which only the drawing knows.
+    clockSpeed:
+      captions.clock && captions.speed
         ? movieClockWithSpeed(clock, movieSpeedFactor(timeline, settings), words.t, words.language)
-        : clock,
+        : null,
     legend: captions.legend ? party.legend : [],
     legendMore: (hidden) => words.t('caveview.movie.legendMore', { count: hidden }),
     progress: captions.progress ? progress : null,

@@ -13,7 +13,7 @@ import type {
   CaveViewTrailOptions,
 } from '../loadCaveView.ts';
 import type { MovieEncoder, MovieEncoderOptions } from './encode/movieEncoder.ts';
-import type { MovieTripData } from './movieParty.ts';
+import { movieParty, type MovieTripData } from './movieParty.ts';
 import {
   isMovieAbort,
   movieSampleFrames,
@@ -146,6 +146,15 @@ function fakeViewer() {
   const captured: Captured[] = [];
   /** Each move, with how many frames had been captured when it was made. */
   const moves: { id: string; duration: number | undefined; at: number }[] = [];
+  /**
+   * Who is part-way through a slide, with the milliseconds each has left. As in the viewer: a move
+   * of some duration to another station starts one, a move of none ends it where it was going, and
+   * a capture runs it on only by what its frame asks for — a capture session does not finish a
+   * slide that was under way when it opened.
+   */
+  const flights = new Map<string, number>();
+  /** Who was part-way through a slide in each captured frame. */
+  const flying: string[][] = [];
   let angles = { azimuth: 0.3, polar: 0.7 };
   let capturing = false;
   const layers = {
@@ -196,6 +205,11 @@ function fakeViewer() {
       if (options.azimuth !== undefined) angles = { ...angles, azimuth: options.azimuth };
       if (options.polar !== undefined) angles = { ...angles, polar: options.polar };
       const { into, ...rest } = options;
+      for (const [id, left] of flights) {
+        if (left - (options.advance ?? 0) <= 0) flights.delete(id);
+        else flights.set(id, left - (options.advance ?? 0));
+      }
+      flying.push([...flights.keys()]);
       captured.push({
         ...rest,
         drawnInto: into !== undefined,
@@ -226,12 +240,19 @@ function fakeViewer() {
       const marker = markers.get(id);
       if (marker === undefined) return null;
       moves.push({ id, duration: options.duration, at: captured.length });
+      // Without a duration of its own a move takes the viewer's, which is not none.
+      const duration = options.duration ?? 1000;
+      if (duration > 0 && String(marker.ref) !== String(ref)) flights.set(id, duration);
+      else flights.delete(id);
       marker.ref = ref;
       if (options.label !== undefined) marker.label = options.label;
       if (options.color !== undefined) marker.color = options.color;
       return { ...marker };
     }),
-    removeLiveMarker: vi.fn((id: string) => markers.delete(id)),
+    removeLiveMarker: vi.fn((id: string) => {
+      flights.delete(id);
+      return markers.delete(id);
+    }),
     getLiveMarkers: () => [...markers.values()].map((marker) => ({ ...marker })),
     setLiveMarkerClusterLabel: vi.fn(
       (_label: ((markers: readonly CaveViewLiveMarker[]) => CaveViewLabelText | null) | null) => {},
@@ -251,7 +272,7 @@ function fakeViewer() {
     removeTrail: vi.fn((id: string) => trails.delete(id)),
     getTrails: () => [...trails.values()].map((trail) => ({ ...trail })),
   };
-  return { viewer, markers, trails, log, captured, moves };
+  return { viewer, markers, trails, log, captured, moves, flights, flying };
 }
 
 /** What a viewer is showing, for comparing before and after a recording. */
@@ -275,6 +296,28 @@ function previewViewer() {
   fake.viewer.addLiveMarker('someone-else', 'p.4', { label: 'X', sublabel: 'y', color: '#654321' });
   fake.viewer.addTrail('preview-trail', ['p.1', 'p.9'], { color: '#abcdef' });
   vi.clearAllMocks();
+  return fake;
+}
+
+/**
+ * A viewer whose preview has just played up to a point of the timeline: everybody the movie has
+ * there is on the viewer with the very station, label and colour the movie gives them — so a
+ * recording of that moment finds nothing to change — and is still sliding in to that station.
+ */
+function playingPreview(position: number) {
+  const fake = fakeViewer();
+  const party = movieParty([TRIP], TIMELINE.instants(position), MODEL, {
+    settings: settings(),
+    t: i18n.t,
+    language: 'en',
+    today: 'never',
+    excluded: new Set(),
+  });
+  for (const [id, marker] of party.markers) {
+    const given = { label: marker.label, color: marker.color };
+    fake.viewer.addLiveMarker(id, 'p.0', given);
+    fake.viewer.moveLiveMarker(id, marker.station, { ...given, duration: 1000 });
+  }
   return fake;
 }
 
@@ -431,6 +474,15 @@ describe('recordMovie', () => {
     expect(without.captured.map((frame) => frame.markers['trip-1:ana'])).toEqual(
       everybody.captured.map((frame) => frame.markers['trip-1:ana']),
     );
+  });
+
+  it('starts from people standing still, whatever slide the preview had under way', async () => {
+    const playing = playingPreview(0);
+    expect([...playing.flights.keys()]).toHaveLength(2);
+    await recordMovie(recording(playing, fakeEncoder()));
+    // The first frame leaves everybody where the preview had them, so it moves nobody itself.
+    expect(playing.captured[0].markers).toEqual({ 'trip-1:ana': 'p.1', 'trip-1:bogdan': 'p.1' });
+    expect(playing.flying[0]).toEqual([]);
   });
 
   it('samples a palette from frames spread over the movie before the first frame, then starts from the first', async () => {
@@ -657,6 +709,24 @@ describe('recordMovieStill', () => {
     // The picture is the frame's own size.
     const drawnOn = toPng.mock.calls[0][0];
     expect([drawnOn.width, drawnOn.height]).toEqual([320, 180]);
+  });
+
+  it('has nobody part-way through a slide, though the preview was playing when it was taken', async () => {
+    const fake = playingPreview(TIMELINE.length);
+    const shown = { 'trip-1:ana': 'p.2', 'trip-1:bogdan': 'p.3' };
+    expect([...fake.flights.keys()].sort()).toEqual(Object.keys(shown));
+    fake.viewer.moveLiveMarker.mockClear();
+    fake.moves.length = 0;
+
+    await recordMovieStill(still(fake).recording, 29);
+
+    expect(fake.captured[0].markers).toEqual(shown);
+    expect(fake.flying).toEqual([[]]);
+    // Ended by placing each of them before the frame was captured — not by running time on.
+    expect(fake.captured[0].advance).toBe(0);
+    expect(fake.moves.filter((move) => move.at === 0 && move.duration === 0).map((move) => move.id).sort()).toEqual(
+      Object.keys(shown),
+    );
   });
 
   it('gives the viewer back exactly as it found it, before the picture is written, and opens no encoder', async () => {

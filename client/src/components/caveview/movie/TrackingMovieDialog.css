@@ -26,8 +26,24 @@
 }
 
 /* The preview as something the focus can be on, so that its keys have a place to be pressed. The
-   ring is drawn inside the box: outside it, the room's own overflow would cut it off. */
+   ring is drawn inside the box — outside it, the room's own overflow would cut it off — and on a
+   layer of its own over the drawing: the preview's box and the viewer's canvas are positioned, so
+   they paint over an outline of this element itself, and a preview that fills its room hid the
+   ring on all four sides. The layer takes no pointer, so the model under it still turns. */
+.movie-dialog-preview-keys {
+  position: relative;
+}
+
 .movie-dialog-preview-keys:focus-visible {
+  outline: none;
+}
+
+.movie-dialog-preview-keys:focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
   outline: 2px solid var(--ant-color-primary, #1677ff);
   outline-offset: -2px;
 }
@@ -38,6 +54,11 @@
 
 /* The presets, above the groups they set the first of. */
 .movie-presets {
+  margin-bottom: 8px;
+}
+
+/* Putting every setting back is not a preset, and stands apart from them, under its own words. */
+.movie-reset {
   margin-bottom: 8px;
 }
 

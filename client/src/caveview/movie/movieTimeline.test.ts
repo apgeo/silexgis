@@ -7,6 +7,7 @@ import {
   movieFrames,
   movieNewReports,
   movieSpansAt,
+  movieSpansShowing,
   movieSpeedFactor,
   movieTripIsLive,
   movieTripSpan,
@@ -226,6 +227,40 @@ describe('movieTripSpan', () => {
     // trip's span against the wrong trip: there is no list.
     const never = { tripLogId: 'never', tracking: { armedAt: null, closedAt: null }, events: [] };
     expect(movieSpansAt([live, never, done], T0 + 5 * HOUR, 'model-1')).toBeNull();
+  });
+
+  it('paces a movie by the reports of the people who appear, and of nobody else', () => {
+    const by = (caverId: string, ms: number, surveyModelId: string | null = 'model-1') => ({
+      ...report(ms, surveyModelId),
+      caverId,
+    });
+    const tracking = { armedAt: at(T0), closedAt: at(T0 + 8 * HOUR) };
+    // Ana reports at the start and the end; Bogdan alone in the middle, and once on another survey.
+    const events = [by('ana', T0), by('bogdan', T0 + 4 * HOUR), by('bogdan', T0 + 5 * HOUR, 'model-2'), by('ana', T0 + 8 * HOUR)];
+    const trips = [{ tripLogId: 'trip-a', tracking, events }];
+    const spans = movieSpansAt(trips, T0 + 9 * HOUR, 'model-1')!;
+    expect(spans[0].moments).toEqual([T0, T0 + 4 * HOUR, T0 + 8 * HOUR]);
+
+    // Everybody appears: the very spans, untouched.
+    expect(movieSpansShowing(spans, trips, 'model-1', () => true)).toEqual(spans);
+    expect(movieSpansShowing(spans, trips, 'model-1', () => true)[0]).toBe(spans[0]);
+
+    const without = movieSpansShowing(spans, trips, 'model-1', (trip, caver) => !(trip === 'trip-a' && caver === 'bogdan'));
+    expect(without).toEqual([{ tripLogId: 'trip-a', window: spans[0].window, moments: [T0, T0 + 8 * HOUR] }]);
+
+    // And so the movie does not stop at the moment somebody it does not show was reported: with
+    // him the clock dwells around the fourth hour, without him it goes straight across.
+    const quiet = { mode: 'calendar' as const, quietGapMs: 30 * MIN };
+    const withHim = buildMovieTimeline(spans, quiet)!;
+    const withoutHim = buildMovieTimeline(without, quiet)!;
+    expect(withHim.length).toBeGreaterThan(withoutHim.length);
+    const shownAt = (timeline: typeof withHim) =>
+      Array.from({ length: 201 }, (_, step) => timeline.instants((step / 200) * timeline.length)[0]);
+    const near = (instant: number) => Math.abs(instant - (T0 + 4 * HOUR)) < 10 * MIN;
+    expect(shownAt(withHim).filter(near).length).toBeGreaterThan(shownAt(withoutHim).filter(near).length + 10);
+
+    // A span of a trip that is not among the trips given is handed back as it is.
+    expect(movieSpansShowing(spans, [], 'model-1', () => false)).toEqual(spans);
   });
 
   it('counts the reports that have arrived by which they are, not by the time they carry', () => {

@@ -803,19 +803,26 @@ export default function MovieSettingsForm({
                 {t(`caveview.movie.presets.${preset}`)}
               </Button>
             ))}
-            <Button
-              size="small"
-              type="text"
-              disabled={disabled}
-              title={t('caveview.movie.resetHelp')}
-              onClick={onReset}
-              data-testid="movie-reset"
-            >
-              {t('caveview.movie.reset')}
-            </Button>
           </Flex>
           <Typography.Text type="secondary" className="movie-setting-help">
             {t('caveview.movie.presetsHelp')}
+          </Typography.Text>
+        </div>
+        {/* Outside the presets, and under words of its own: a preset is promised to change the file
+            only, and this puts the captions, the labels and the view back as well. */}
+        <div className="movie-reset">
+          <Button
+            size="small"
+            type="text"
+            disabled={disabled}
+            title={t('caveview.movie.resetHelp')}
+            onClick={onReset}
+            data-testid="movie-reset"
+          >
+            {t('caveview.movie.reset')}
+          </Button>
+          <Typography.Text type="secondary" className="movie-setting-help" data-testid="movie-reset-help">
+            {t('caveview.movie.resetHelp')}
           </Typography.Text>
         </div>
         <Collapse

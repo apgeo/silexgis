@@ -3041,7 +3041,7 @@
       "presetsHelp": "O presetare schimbă doar fișierul — niciodată cine apare, vederea sau textele.",
       "presetHdUnavailable": "Acest browser nu poate scrie un video de 1280 × 720, așa că nu s-a schimbat nimic.",
       "reset": "Revino la valorile implicite",
-      "resetHelp": "Readuce fiecare setare la ce arată o primă deschidere. Turele și persoanele alese rămân cum sunt.",
+      "resetHelp": "Readuce fiecare setare la ce arată o primă deschidere — textele, etichetele și vederea, nu doar fișierul, așa că titlul scris pe imagine și fișierul numit după el revin. Turele și persoanele alese rămân cum sunt.",
       "privacy": "Filmul arată topografia peșterii și unde a fost echipa. Trimite-l doar celor care au voie să le vadă pe amândouă.",
       "export": "Exportă {{format}}",
       "cancelExport": "Anulează exportul",

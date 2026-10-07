@@ -457,6 +457,22 @@ describe('movieParty — somebody left out of the movie', () => {
     expect(party.markers.get('trip-1:caver-bogdan')!.label).toBe('Bogdan');
   });
 
+  it('does not caption a note of somebody who is on the log and no longer on the roster', () => {
+    // Bogdan spoke, and was taken off the trip afterwards: his reports stay, and the list of who
+    // appears has no box for him.
+    const one = trip('trip-1', 'One', state([ANA]), [
+      event({ caverId: ANA, kind: 'note', surveyModelId: null, note: 'All well', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ caverId: BOGDAN, kind: 'note', surveyModelId: null, note: 'Turning back', recordedAt: '2026-09-12T11:00:00Z' }),
+    ]);
+    expect(partyOf([one], settings({}, { note: true })).note).toBe('Ana: All well');
+    expect(partyOf([one], settings({ labels: 'off' }, { note: true })).note).toBe('All well');
+    // Nobody on the roster has said anything: nothing, rather than his words.
+    const alone = trip('trip-1', 'One', state([ANA]), [
+      event({ caverId: BOGDAN, kind: 'note', surveyModelId: null, note: 'Turning back', recordedAt: '2026-09-12T11:00:00Z' }),
+    ]);
+    expect(partyOf([alone], settings({}, { note: true })).note).toBeNull();
+  });
+
   it('does not caption a note they spoke: the one in force is the latest said by somebody shown', () => {
     const one = trip('trip-1', 'One', state([ANA, BOGDAN]), [
       event({ caverId: ANA, kind: 'note', surveyModelId: null, note: 'All well', recordedAt: '2026-09-12T09:00:00Z' }),

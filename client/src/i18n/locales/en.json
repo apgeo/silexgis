@@ -3041,7 +3041,7 @@
       "presetsHelp": "A preset changes the file only — never who appears, the view or the captions.",
       "presetHdUnavailable": "This browser cannot write a 1280 × 720 video, so nothing was changed.",
       "reset": "Reset to defaults",
-      "resetHelp": "Puts every setting back to what a first opening shows. The trips and the people chosen stay as they are.",
+      "resetHelp": "Puts every setting back to what a first opening shows — the captions, the labels and the view as well as the file, so the title caption and the file named after it come back. The trips and the people chosen stay as they are.",
       "privacy": "The movie shows the cave's survey and where the party was. Share it only with people who may see both.",
       "export": "Export {{format}}",
       "cancelExport": "Cancel export",

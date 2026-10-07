@@ -40,12 +40,14 @@ import {
   movieMarkerIsOfTrip,
   movieParty,
   type MovieParty,
+  type MovieTripData,
 } from '../../../caveview/movie/movieParty.ts';
 import { moviePresetOutput, withMovieOutput, type MoviePresetId } from '../../../caveview/movie/moviePresets.ts';
 import {
   isMovieAbort,
   recordMovie,
   recordMovieStill,
+  MovieStillUnwrittenError,
   type MovieProgress,
 } from '../../../caveview/movie/movieRecorder.ts';
 import {
@@ -61,6 +63,7 @@ import {
   movieFrameCount,
   movieFrames,
   movieSpansAt,
+  movieSpansShowing,
   movieTripIsLive,
   type MovieTimeline,
   type MovieTripSpan,
@@ -227,7 +230,8 @@ export default function TrackingMovieDialog({ surveyModelId, initialTripIds, onC
 /** What could not be made, and why, as the reader is told it. */
 interface Failure {
   what: 'movie' | 'still';
-  detail: string;
+  /** Null where the heading says all there is to say. */
+  detail: string | null;
 }
 
 /**
@@ -271,6 +275,21 @@ function timelineOf(spans: readonly MovieTripSpan[], timeline: MovieSettings['ti
         mode: timeline.mode,
         quietGapMs: timeline.shortenQuiet ? timeline.quietGapMin * 60_000 : null,
       });
+}
+
+/**
+ * The spans the movie's clock is built from: the trips' own, cut only at the reports of the people
+ * who appear. One function for the preview and the export, so the file is paced as the preview was.
+ */
+function spansShowing(
+  spans: readonly MovieTripSpan[],
+  trips: readonly MovieTripData[],
+  surveyModelId: string,
+  excluded: ReadonlySet<string>,
+): readonly MovieTripSpan[] {
+  return excluded.size === 0
+    ? spans
+    : movieSpansShowing(spans, trips, surveyModelId, (tripLogId, caverId) => !excluded.has(movieMarkerId(tripLogId, caverId)));
 }
 
 /** The settings without a written title, which belongs to one movie and is never remembered. */
@@ -422,7 +441,8 @@ function MovieDialogBody({
   // export: the frames being recorded, and the captions drawn over the preview meanwhile, are of
   // the movie as it was when the export began.
   const movie = useMovieTrips(surveyModelId, chosenIds, windowEnd, recording);
-  const timeline = useMemo(() => timelineOf(movie.spans, settings.timeline), [movie.spans, settings.timeline]);
+  // (The movie's clock is worked out below, once it is known who appears: it is cut at the reports
+  // of the people shown, and of nobody else.)
   // Each trip still under way says on its row how many reports have come in since the dialog
   // opened: the party goes on while it stands open, and the reader should see that the movie they
   // are about to make is of more than the one they opened.
@@ -460,6 +480,10 @@ function MovieDialogBody({
       return kept.length === before.size ? before : new Set(kept);
     });
   }, []);
+  const timeline = useMemo(
+    () => timelineOf(spansShowing(movie.spans, movie.trips, surveyModelId, excluded), settings.timeline),
+    [movie.spans, movie.trips, surveyModelId, excluded, settings.timeline],
+  );
   // Each ready trip's roster as the picker lists it, by the names the trip's own page gives.
   const rosters = useMemo(
     () =>
@@ -816,7 +840,10 @@ function MovieDialogBody({
         // whatever is previewed afterwards, is the movie that was made.
         const now = Date.now();
         const spans = movieSpansAt(trips, now, surveyModelId);
-        recorded = (spans === null ? null : timelineOf(spans, settings.timeline)) ?? timeline;
+        recorded =
+          (spans === null
+            ? null
+            : timelineOf(spansShowing(spans, trips, surveyModelId, excluded), settings.timeline)) ?? timeline;
         setWindowEnd((before) => Math.max(before, now));
       }
       const file = await recordMovie({
@@ -900,7 +927,13 @@ function MovieDialogBody({
       saveBlob(picture, name);
       message.success(t('caveview.movie.saved', { name }));
     } catch (error) {
-      setFailure({ what: 'still', detail: error instanceof Error ? error.message : String(error) });
+      // A browser that composed the picture and gave no file of it is said in the reader's own
+      // language by the heading alone; only what nobody foresaw is quoted as it came.
+      setFailure({
+        what: 'still',
+        detail:
+          error instanceof MovieStillUnwrittenError ? null : error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setStillBusy(false);
     }
@@ -1051,9 +1084,14 @@ function MovieDialogBody({
       <div className="movie-dialog-body">
         <Flex vertical gap="small" className="movie-dialog-preview" onKeyDown={onPreviewKey}>
           {/* The preview can be given the focus, by Tab or by a click on it, so that its keys have
-              somewhere to be pressed: a canvas takes no focus of its own. */}
+              somewhere to be pressed: a canvas takes no focus of its own. The click is answered
+              here, in so many words, and on the press's way down, before the viewer has it: the
+              viewer cancels every press on its drawing so that a drag turns the model, and a
+              cancelled press moves no focus — left to the browser, the keys went on going to
+              whichever button was pressed last. */}
           <div
             className="movie-dialog-preview-keys"
+            onPointerDownCapture={(event) => event.currentTarget.focus({ preventScroll: true })}
             role="group"
             tabIndex={0}
             aria-label={t('caveview.movie.preview')}
@@ -1170,7 +1208,7 @@ function MovieDialogBody({
             showIcon
             closable={{ onClose: () => setFailure(null) }}
             title={t(failure.what === 'still' ? 'caveview.movie.stillFailed' : 'caveview.movie.exportFailed')}
-            description={failure.detail}
+            description={failure.detail ?? undefined}
             data-testid={failure.what === 'still' ? 'movie-still-failed' : 'movie-export-failed'}
           />
         )}

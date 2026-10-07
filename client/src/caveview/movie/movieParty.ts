@@ -150,6 +150,14 @@ export function movieParty(
   const excluded = options.excluded ?? NOBODY;
   const shown = (trip: MovieTripData, caverId: string): boolean =>
     excluded.size === 0 || !excluded.has(movieMarkerId(trip.tripLogId, caverId));
+  // Whose words a caption may carry: somebody shown who is on the trip's roster. A report stays on
+  // the log after its caver is taken off the trip, but such a person can have no marker and is in
+  // nobody's list to untick, so the movie could quote them and offer no way to leave them out.
+  const rosters = new Map(
+    trips.map((trip) => [trip.tripLogId, new Set(trip.tracking.participants.map((person) => person.caverId))]),
+  );
+  const quoted = (trip: MovieTripData, caverId: string): boolean =>
+    shown(trip, caverId) && rosters.get(trip.tripLogId)!.has(caverId);
   const colourBy =
     settings.cavers.colourBy === 'auto'
       ? trips.length > 1 ? 'trip' : 'team'
@@ -287,7 +295,7 @@ export function movieParty(
     clusterLabel,
     trails,
     legend,
-    note: settings.captions.note ? noteInForce(trips, instants, labelMode, nameOf, shown, t) : null,
+    note: settings.captions.note ? noteInForce(trips, instants, labelMode, nameOf, quoted, t) : null,
   };
 }
 
@@ -301,14 +309,16 @@ export function movieParty(
  *
  * A note spoken by somebody the movie does not show is passed over as if it had not been said: the
  * one in force is the latest said by anybody who is shown. Captioned, it would put a person's words
- * — and, with labels on, their name — into a movie they were taken out of.
+ * — and, with labels on, their name — into a movie they were taken out of. Somebody whose reports
+ * are on the log but who is no longer on the trip's roster is such a person too: the movie cannot
+ * show them, and the reader is given no box to untick them by.
  */
 function noteInForce(
   trips: readonly MovieTripData[],
   instants: readonly number[],
   labelMode: MovieSettings['cavers']['labels'],
   nameOf: (caverId: string, fallback: string) => string,
-  shown: (trip: MovieTripData, caverId: string) => boolean,
+  quoted: (trip: MovieTripData, caverId: string) => boolean,
   t: TFunction,
 ): string | null {
   let best: { age: number; text: string } | null = null;
@@ -318,7 +328,7 @@ function noteInForce(
       continue;
     }
     const note = noteAt(
-      replayNotes(trip.events, { from: Number.NEGATIVE_INFINITY, to: at }).filter((said) => shown(trip, said.caverId)),
+      replayNotes(trip.events, { from: Number.NEGATIVE_INFINITY, to: at }).filter((said) => quoted(trip, said.caverId)),
       at,
     );
     if (note === null) {

@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TrackedTrip, TrackingEvent, TrackingState } from '../../../api/hooks.ts';
 import type { MovieFormatSupport } from '../../../caveview/movie/encode/movieEncoder.ts';
 import type { MovieTripData } from '../../../caveview/movie/movieParty.ts';
-import type { MovieRecording, MovieStillRecording } from '../../../caveview/movie/movieRecorder.ts';
+import {
+  MovieStillUnwrittenError,
+  type MovieRecording,
+  type MovieStillRecording,
+} from '../../../caveview/movie/movieRecorder.ts';
 import type { MovieTripSpan } from '../../../caveview/movie/movieTimeline.ts';
 import { movieSlug } from '../../../caveview/movie/movieOutput.ts';
 import { DEFAULT_MOVIE_SETTINGS, normaliseMovieSettings } from '../../../caveview/movie/movieSettings.ts';
@@ -1686,6 +1690,44 @@ describe('who appears in the movie', () => {
     expect(viewer.addLiveMarker).toHaveBeenLastCalledWith('trip-a:caver-2', 'p8.2', expect.anything());
   });
 
+  it('paces the preview and the file by the reports of the people who appear', async () => {
+    // Ana is reported at the start and the end of the trip, Bogdan alone half-way through.
+    const made = tripOfTwo('trip-a', 'Alpha');
+    const MIDDLE = new Date((Date.parse(ARMED) + Date.parse(CLOSED)) / 2).toISOString();
+    const [ana, bogdan] = made.trip.events;
+    const events = [ana, { ...bogdan, recordedAt: MIDDLE }, { ...ana, id: 'trip-a-event-last', recordedAt: CLOSED }];
+    const moments = events.map((event) => Date.parse(event.recordedAt));
+    reads.movie = ready({ trip: { ...made.trip, events }, span: { ...made.span, moments } });
+    recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
+    recordMovieStill.mockResolvedValue(new Blob(['png'], { type: 'image/png' }));
+    open(['trip-a']);
+
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByTestId('movie-cancel')).not.toBeInTheDocument());
+    const withHim = recordMovie.mock.calls[0][0].timeline;
+
+    unfold('trip-a');
+    fireEvent.click(caverBox('trip-a', 'Bogdan Ionescu'));
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId('movie-cancel')).not.toBeInTheDocument());
+    const withoutHim = recordMovie.mock.calls[1][0].timeline;
+
+    // Quiet stretches are shortened by default: with him the clock stops around the middle of the
+    // trip, without him nothing in the file marks the moment he was reported.
+    expect(withoutHim.length).toBeLessThan(withHim.length);
+    // A picture is of the same movie as the file.
+    const still = screen.getByTestId('movie-still');
+    await waitFor(() => expect(still).not.toBeDisabled());
+    fireEvent.click(still);
+    await waitFor(() => expect(recordMovieStill).toHaveBeenCalledTimes(1));
+    expect(recordMovieStill.mock.calls[0][0].timeline.length).toBe(withoutHim.length);
+  });
+
   it('keeps the choice for this dialog only: not with the remembered settings, not in storage, not in the address', async () => {
     reads.movie = ready(tripOfTwo('trip-a', 'Alpha'));
     const address = window.location.href;
@@ -1872,6 +1914,25 @@ describe('a still picture of the preview', () => {
     await waitFor(() => expect(still).not.toBeDisabled());
   });
 
+  it('says a picture the browser gave no file of in the reader’s language, with no English under it', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovieStill.mockRejectedValue(new MovieStillUnwrittenError());
+    await i18n.changeLanguage('ro');
+    try {
+      open(['trip-a']);
+      const still = await screen.findByTestId('movie-still');
+      await waitFor(() => expect(still).not.toBeDisabled());
+      fireEvent.click(still);
+
+      const alert = await screen.findByTestId('movie-still-failed');
+      expect(alert).toHaveTextContent('Imaginea nu a putut fi făcută.');
+      expect(alert).not.toHaveTextContent('picture');
+      expect(alert).not.toHaveTextContent('PNG');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
   it('is held back by what holds an export back, and is not offered while one runs', async () => {
     // A chosen trip that could not be read: a picture quietly missing it would be believed too.
     reads.movie = { ...ready(movieTrip('trip-a', 'Alpha')), failed: ['trip-b'] };
@@ -1929,8 +1990,14 @@ describe('the presets', () => {
     const presets = screen.getByRole('group', { name: 'Presets' });
     expect(within(presets).getByRole('button', { name: 'For a chat' })).toHaveAttribute('title', expect.stringContaining('480 × 270'));
     expect(within(presets).getByRole('button', { name: 'HD video' })).toHaveAttribute('title', expect.stringContaining('1280 × 720'));
-    expect(within(presets).getByRole('button', { name: 'Reset to defaults' })).toBeInTheDocument();
     expect(presets).toHaveTextContent('never who appears, the view or the captions');
+    // Putting everything back is not one of them: it stands outside the group that promises to
+    // change the file only, and says in so many words that the captions come back with it.
+    const reset = screen.getByRole('button', { name: 'Reset to defaults' });
+    expect(presets).not.toContainElement(reset);
+    expect(presets.compareDocumentPosition(reset) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId('movie-reset-help')).toHaveTextContent('the captions, the labels and the view as well as the file');
+    expect(screen.getByTestId('movie-reset-help')).toHaveTextContent('the title caption and the file named after it come back');
     // Above the groups: before the first of them in the document.
     const firstGroup = screen.getByText('Trips');
     expect(presets.compareDocumentPosition(firstGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -2063,6 +2130,16 @@ describe('the preview’s own keys', () => {
     expect(play).toHaveAccessibleName('Stop the preview');
     expect(leftAlone(keys, { key: ' ' })).toBe(false);
     expect(play).toHaveAccessibleName('Play the preview');
+  });
+
+  it('takes the focus when it is pressed, whatever the viewer does with the press', async () => {
+    const { play, keys } = await opened();
+    play.focus();
+    expect(play).toHaveFocus();
+    // The viewer cancels every press on its drawing, and a cancelled press moves no focus by
+    // itself: the preview takes it in so many words.
+    fireEvent.pointerDown(screen.getByTestId('movie-preview'));
+    expect(keys).toHaveFocus();
   });
 
   it('plays and pauses on Space from the moment slider as well', async () => {
