@@ -182,11 +182,11 @@ public sealed class TripTrackingOptions
     /// </para>
     /// <para>
     /// <b>That is the only mistake this absorbs.</b> A value that is not a duration at all
-    /// (<c>3h</c>) never gets here: the configuration binder refuses it when these options are
-    /// first read, and goes on refusing on every read — which fails every request that reads this
-    /// class, the published-trip routes among them, exactly as an unreadable link lifetime or
-    /// grace window above does. And a bare number is a number of days, so <c>3</c> is three days
-    /// and in practice the mark switched off. The accepted form is <c>[d.]hh:mm:ss</c>.
+    /// (<c>3h</c>) never gets here: it cannot be read, and the application refuses to start on
+    /// it, naming the setting — as it does for an unreadable link lifetime, grace window or period
+    /// after a lapse above (see <see cref="TripTrackingOptionsValidator.RefuseUnreadablePeriods"/>).
+    /// And a bare number is a number of days, so <c>3</c> is three days and in practice the mark
+    /// switched off. The accepted form is <c>[d.]hh:mm:ss</c>.
     /// </para>
     /// </remarks>
     public TimeSpan EffectiveQuietAfter => QuietAfter > TimeSpan.Zero ? QuietAfter : TimeSpan.Zero;

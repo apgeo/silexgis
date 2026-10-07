@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace SilexGis.Api.Features.TripTracking;
@@ -67,6 +68,66 @@ public sealed class TripTrackingOptionsValidator : IValidateOptions<TripTracking
         }
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+    }
+
+    /// <summary>
+    /// The periods of these settings, each with the type it is read as — the ones that can be
+    /// written in a way that is no period at all.
+    /// </summary>
+    private static readonly (string Property, Type ReadAs)[] Periods =
+    [
+        (nameof(TripTrackingOptions.ShareLifetime), typeof(TimeSpan)),
+        (nameof(TripTrackingOptions.ShareGraceAfterClose), typeof(TimeSpan)),
+        (nameof(TripTrackingOptions.SiblingWindowAfterLapse), typeof(TimeSpan?)),
+        (nameof(TripTrackingOptions.QuietAfter), typeof(TimeSpan)),
+    ];
+
+    /// <summary>
+    /// Refuses a period that cannot be read as one (<c>3h</c>), naming the setting the way it is
+    /// typed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why this is not one more rule in the check above.</b> That check is handed settings
+    /// that have already been read. A value that is no period never gets that far: reading it is
+    /// what fails, with a message that names a configuration path and a type and says nothing an
+    /// operator can act on — and it fails again wherever the settings are next read, which is on
+    /// the tracking routes and on every published page. So this runs before the settings are
+    /// read, as part of making them, and the start-up check that forces them to be made turns it
+    /// into a refused start with every unreadable period named at once.
+    /// </para>
+    /// <para>
+    /// Whether a value can be read is decided by reading it, with the reader the settings
+    /// themselves are read by, rather than by a second opinion here about what a period looks
+    /// like: the two could only ever disagree. A setting nobody wrote is not looked at.
+    /// </para>
+    /// </remarks>
+    public static void RefuseUnreadablePeriods(IConfiguration configuration)
+    {
+        var failures = new List<string>();
+        foreach (var (property, readAs) in Periods)
+        {
+            var written = configuration.GetSection($"{TripTrackingOptions.SectionName}:{property}");
+            if (written.Value is null) continue;
+            try
+            {
+                _ = written.Get(readAs);
+            }
+            catch (InvalidOperationException)
+            {
+                failures.Add(
+                    $"{Setting(property)} cannot be read as a period of time; got \"{written.Value}\". It is "
+                    + "written days.hours:minutes:seconds — 03:00:00 is three hours, 1.12:00:00 a day and a "
+                    + "half. A bare number is read as that many days, and a letter for the unit (3h, 90m) is "
+                    + "not understood.");
+            }
+        }
+
+        if (failures.Count > 0)
+        {
+            throw new OptionsValidationException(
+                Microsoft.Extensions.Options.Options.DefaultName, typeof(TripTrackingOptions), failures);
+        }
     }
 
     private static string Setting(string property) =>

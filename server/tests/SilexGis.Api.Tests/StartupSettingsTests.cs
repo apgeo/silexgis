@@ -46,6 +46,10 @@ public sealed class StartupSettingsTests : IClassFixture<PostgresFixture>
     [InlineData("TripTracking:ShareLifetime", "00:00:00", "00:06:00", "SILEXGIS__TripTracking__ShareLifetime")]
     [InlineData("TripTracking:ShareGraceAfterClose", "-00:00:01", "00:00:00", "SILEXGIS__TripTracking__ShareGraceAfterClose")]
     [InlineData("TripPastTracks:Retention", "00:00:00", "30.00:00:00", "SILEXGIS__TripPastTracks__Retention")]
+    // Not a wrong period but no period at all: read before the settings are, or the reader's own
+    // failure — which names a configuration path, never the variable — is all anybody is told.
+    [InlineData("TripTracking:QuietAfter", "3h", "00:45:00", "SILEXGIS__TripTracking__QuietAfter")]
+    [InlineData("TripTracking:ShareLifetime", "two weeks", "14.00:00:00", "SILEXGIS__TripTracking__ShareLifetime")]
     [InlineData("TripTracking:PublicRateLimitPerMinute", "0", "3", "SILEXGIS__TripTracking__PublicRateLimitPerMinute")]
     [InlineData("Auth:RateLimitPerMinute", "0", "200", "SILEXGIS__Auth__RateLimitPerMinute")]
     [InlineData("Qr:RateLimitPerMinute", "-1", "6", "SILEXGIS__Qr__RateLimitPerMinute")]

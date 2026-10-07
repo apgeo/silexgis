@@ -224,10 +224,9 @@ public class TripTrackingOptionsTests
     /// <remarks>
     /// Three sentences of documentation rest on this and nothing else asserted them: the form is
     /// <c>[d.]hh:mm:ss</c>, a bare number is a number of days, and a value that is no duration is
-    /// refused when the options are read — every time they are read, since a failed read is not
-    /// kept. The last is the one an operator needs told, because the options are read by the
-    /// published-trip routes too. If the binding is ever made forgiving, this is the test that
-    /// says the documentation has to change with it.
+    /// refused under the setting's own name. That a real application asks this while it starts is
+    /// asserted where applications are started; what is asserted here is what is said, and that
+    /// the refusal is the named one rather than the reader's own, which names a path and a type.
     /// </remarks>
     [Fact]
     public void The_quiet_threshold_is_read_from_configuration_as_the_documentation_says()
@@ -237,21 +236,61 @@ public class TripTrackingOptionsTests
         Read("3").Value.QuietAfter.ShouldBe(TimeSpan.FromDays(3));
 
         var unreadable = Read("3h");
-        Should.Throw<InvalidOperationException>(() => unreadable.Value);
-        Should.Throw<InvalidOperationException>(() => unreadable.Value);
+        var refusal = Should.Throw<OptionsValidationException>(() => unreadable.Value);
+        refusal.Message.ShouldContain("SILEXGIS__TripTracking__QuietAfter");
+        refusal.Message.ShouldContain("\"3h\"");
+        refusal.Message.ShouldContain("03:00:00");
+        refusal.Message.ShouldNotContain("ShareLifetime");
     }
 
+    /// <summary>
+    /// Every period of these settings is refused when it cannot be read, each under its own name,
+    /// and all of them in one refusal; a readable neighbour of each is let through, so the check
+    /// cannot pass by refusing everything.
+    /// </summary>
+    [Theory]
+    [InlineData("ShareLifetime", "two weeks", "14.00:00:00")]
+    [InlineData("ShareGraceAfterClose", "2d", "2.00:00:00")]
+    [InlineData("SiblingWindowAfterLapse", "90 days", "90.00:00:00")]
+    [InlineData("QuietAfter", "3h", "03:00:00")]
+    public void A_period_that_cannot_be_read_is_refused_under_its_own_name(
+        string property, string unreadable, string readable)
+    {
+        var refusal = Should.Throw<OptionsValidationException>(
+            () => TripTrackingOptionsValidator.RefuseUnreadablePeriods(Written((property, unreadable))));
+        refusal.Message.ShouldContain($"SILEXGIS__TripTracking__{property}");
+        refusal.Message.ShouldContain($"\"{unreadable}\"");
+
+        Should.NotThrow(() => TripTrackingOptionsValidator.RefuseUnreadablePeriods(Written((property, readable))));
+    }
+
+    [Fact]
+    public void Two_unreadable_periods_are_both_named_and_settings_nobody_wrote_are_not_looked_at()
+    {
+        Should.NotThrow(() => TripTrackingOptionsValidator.RefuseUnreadablePeriods(Written()));
+
+        var refusal = Should.Throw<OptionsValidationException>(
+            () => TripTrackingOptionsValidator.RefuseUnreadablePeriods(
+                Written(("QuietAfter", "3h"), ("ShareLifetime", "fortnight"), ("ShareGraceAfterClose", "2.00:00:00"))));
+        refusal.Message.ShouldContain("SILEXGIS__TripTracking__QuietAfter");
+        refusal.Message.ShouldContain("SILEXGIS__TripTracking__ShareLifetime");
+        refusal.Message.ShouldNotContain("ShareGraceAfterClose");
+    }
+
+    private static IConfiguration Written(params (string Property, string Value)[] settings) =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(settings.ToDictionary(
+                s => $"{TripTrackingOptions.SectionName}:{s.Property}", s => (string?)s.Value))
+            .Build();
+
+    /// <summary>The settings as an application makes them: the unreadable refused first, then read.</summary>
     private static IOptions<TripTrackingOptions> Read(string quietAfter)
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [$"{TripTrackingOptions.SectionName}:QuietAfter"] = quietAfter,
-            })
-            .Build();
         var services = new ServiceCollection();
-        services.AddSingleton<IConfiguration>(configuration);
-        services.AddOptions<TripTrackingOptions>().BindConfiguration(TripTrackingOptions.SectionName);
+        services.AddSingleton(Written(("QuietAfter", quietAfter)));
+        services.AddOptions<TripTrackingOptions>()
+            .Configure<IConfiguration>((_, configuration) => TripTrackingOptionsValidator.RefuseUnreadablePeriods(configuration))
+            .BindConfiguration(TripTrackingOptions.SectionName);
         return services.BuildServiceProvider().GetRequiredService<IOptions<TripTrackingOptions>>();
     }
 

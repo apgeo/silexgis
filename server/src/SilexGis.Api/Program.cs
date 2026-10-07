@@ -202,6 +202,10 @@ try
     // alike, so a lifetime of zero or less would not fail anywhere — links would simply read
     // "not found" to the people they were handed to, at or before the midnight their trip ends.
     builder.Services.AddOptions<TripTrackingOptions>()
+        // Before the binding, and it has to be: a period written as no period at all (3h) fails
+        // the binding itself, with a message naming a configuration path, and the check after it
+        // is never reached. Asked first, it is refused under the name the operator typed.
+        .Configure<IConfiguration>((_, configuration) => TripTrackingOptionsValidator.RefuseUnreadablePeriods(configuration))
         .BindConfiguration(TripTrackingOptions.SectionName)
         .ValidateOnStart();
     builder.Services.AddSingleton<IValidateOptions<TripTrackingOptions>, TripTrackingOptionsValidator>();
