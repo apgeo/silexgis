@@ -136,6 +136,58 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable, IClassFixture
     }
 
     [Fact]
+    public async Task An_edit_of_a_link_is_what_the_next_read_answers()
+    {
+        // The answer to an edit is drawn from the object the handler holds, so it repeats what
+        // was asked for whether or not anything reached the database. Only a read made
+        // afterwards, by a request of its own, says what the edit left behind — which is why
+        // every assertion here is made on one.
+        var caveA = await CreateCaveAsync(owner, "Edited Cave A", "authenticated");
+        var caveB = await CreateCaveAsync(owner, "Edited Cave B", "authenticated");
+        var contains = await RelationIdAsync("contains");
+        var relatedTo = await RelationIdAsync("related-to");
+
+        var created = await owner.PostAsJsonAsync("/api/v1/reslinks", new
+        {
+            relationTypeId = contains,
+            description = "First wording.",
+            members = new[] { Member("feature", caveA, isMain: true), Member("feature", caveB, sortOrder: 1) },
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var linkId = (await ReadJsonAsync(created)).GetProperty("id").GetGuid();
+
+        // The words and the relation change in one act, and the marker comes off with it.
+        (await owner.PatchAsJsonAsync($"/api/v1/reslinks/{linkId}", new
+        {
+            description = "Second wording.",
+            relationTypeId = relatedTo,
+            mainMemberId = (Guid?)null,
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var reread = await GetLinkAsync(linkId);
+        reread.GetProperty("description").GetString().ShouldBe("Second wording.");
+        reread.GetProperty("relationType").GetProperty("code").GetString().ShouldBe("related-to");
+        (await MainTargetIdsAsync(linkId)).ShouldBeEmpty();
+
+        // Somebody else reads the same thing: the edit is the link's, not its editor's.
+        var asAnother = await ReadJsonAsync(await editor2.GetAsync($"/api/v1/reslinks/{linkId}"));
+        asAnother.GetProperty("description").GetString().ShouldBe("Second wording.");
+        asAnother.GetProperty("relationType").GetProperty("code").GetString().ShouldBe("related-to");
+
+        // Clearing both is an edit like any other, and is kept like any other.
+        (await owner.PatchAsJsonAsync($"/api/v1/reslinks/{linkId}", new
+        {
+            description = (string?)null,
+            relationTypeId = (long?)null,
+            mainMemberId = (Guid?)null,
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var cleared = await GetLinkAsync(linkId);
+        cleared.GetProperty("description").ValueKind.ShouldBe(JsonValueKind.Null);
+        cleared.GetProperty("relationType").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
     public async Task Every_reslink_endpoint_requires_a_signed_in_caller()
     {
         using var anonymous = factory.CreateClient();
