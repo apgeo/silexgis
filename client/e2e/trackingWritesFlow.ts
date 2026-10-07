@@ -89,6 +89,7 @@ interface Report {
   note: string | null;
   recordedAt: string;
   corrected: boolean;
+  outsideDeclaredParts: boolean;
 }
 
 export async function correctImportAndReportByPlace(page: Page) {
@@ -136,7 +137,9 @@ export async function correctImportAndReportByPlace(page: Page) {
     caverId: null, newCaverName: name, roleId: null, entryTime: null, exitTime: null, note: null,
   });
   const tripDate = new Date().toISOString().slice(0, 10);
-  const trip = (await apiJson(page, token, 'POST', '/api/v1/trip-logs', {
+  // Kept, because the roster is written whole: the same trip is sent again further down with one
+  // person left out, and everything else about it has to be what was saved here.
+  const tripBody = {
     title: `E2E tracking writes ${stamp}`,
     tripTypeId: null,
     tripDate,
@@ -149,7 +152,11 @@ export async function correctImportAndReportByPlace(page: Page) {
     depthReachedM: null, lengthSurveyedM: null, surveyStations: null, ropeMetres: null,
     hadIncident: false, fieldData: null, logistics: null, safety: null,
     maxParticipants: null, meetingGeom: null,
-  })) as { id: string; participants: { caverId: string; name: string }[] };
+  };
+  const trip = (await apiJson(page, token, 'POST', '/api/v1/trip-logs', tripBody)) as {
+    id: string;
+    participants: { caverId: string; name: string }[];
+  };
   const ion = trip.participants.find((p) => p.name === ION)!.caverId;
   const maria = trip.participants.find((p) => p.name === MARIA)!.caverId;
 
@@ -193,6 +200,50 @@ export async function correctImportAndReportByPlace(page: Page) {
   await page.waitForURL((url) => url.pathname === `/trip-logs/${trip.id}`, { timeout: 60_000 });
   const log = page.getByTestId('trip-tracking-events');
   await expect(log).toContainText('E2E Maria went in', { timeout: 30_000 });
+
+  // ---- Somebody just heard from is not marked as silent ----
+  // The count is on screen, so the mark is in force on this watch and has a threshold; it counts
+  // nobody, and neither person carries the tag. Asserted together: a tag that is absent because
+  // the mark is switched off would prove nothing about a fresh report.
+  const party = page.getByTestId('trip-tracking-participants');
+  await expect(page.getByTestId('trip-tracking-count-quiet')).toHaveAttribute('data-quiet', '0');
+  await expect(page.getByTestId('trip-tracking-standing-underground')).toHaveCount(2);
+  await expect(page.getByTestId(`trip-tracking-quiet-${ion}`)).toHaveCount(0);
+  await expect(page.getByTestId(`trip-tracking-quiet-${maria}`)).toHaveCount(0);
+
+  // ---- Nobody the log speaks of is taken off a running watch ----
+  // The trip's form sends its two lists as the whole roster, so this is what a save with Maria's
+  // row deleted sends. She has gone in and the watch is running: the write is refused by name,
+  // and she is still on the trip and on the watch.
+  const asRostered = (caverId: string) => ({
+    caverId, newCaverName: null, roleId: null, entryTime: null, exitTime: null, note: null,
+  });
+  const tripRead = await page.request.fetch(`/api/v1/trip-logs/${trip.id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(tripRead.ok()).toBeTruthy();
+  const tripTag = tripRead.headers()['etag'];
+  const leaving = await page.request.fetch(`/api/v1/trip-logs/${trip.id}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, ...(tripTag ? { 'If-Match': tripTag } : {}) },
+    data: { ...tripBody, participants: [asRostered(ion)] },
+  });
+  expect(leaving.status()).toBe(400);
+  expect(((await leaving.json()) as { code?: string }).code).toBe('trip_log.participant_tracked');
+  // The same write with both people kept is taken, so what was refused was the departure and
+  // not the shape of the request.
+  await apiJson(
+    page,
+    token,
+    'PUT',
+    `/api/v1/trip-logs/${trip.id}`,
+    { ...tripBody, participants: [asRostered(ion), asRostered(maria)] },
+    tripTag ? { 'If-Match': tripTag } : {},
+  );
+  await page.reload();
+  await expect(log).toContainText('E2E Maria went in', { timeout: 30_000 });
+  await expect(party.getByRole('row', { name: new RegExp(MARIA) })).toBeVisible();
+  await expect(page.getByTestId(`trip-tracking-off-roster-${maria}`)).toHaveCount(0);
 
   // ---- Correcting a report in place ----
   const correction = page.getByRole('dialog', { name: 'Correct this report' });
