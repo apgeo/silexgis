@@ -76,23 +76,32 @@ export default function CaverNameField({
         // Keyed by the person, never by their name. Two people can be written down under one
         // name, and a list keyed by the text hands back the same one of them whichever row is
         // pressed — so one of the two could not be chosen at all, with nothing to say so.
-        options={answered.map((caver) => ({
-          value: caver.id,
-          name: caver.name,
-          title: caver.name,
-          label: (
-            <Flex vertical>
-              <span>{caver.name}</span>
-              {/* The clubs somebody belongs to, where they belong to any: the one thing on a
-                  directory entry that tells two people of one name apart at a glance. */}
-              {caver.cavingGroups.length > 0 && (
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {caver.cavingGroups.map((group) => group.name).join(' · ')}
-                </Typography.Text>
-              )}
-            </Flex>
-          ),
-        }))}
+        options={answered.map((caver) => {
+          // The clubs somebody belongs to, where they belong to any: the one thing on a
+          // directory entry that tells two people of one name apart at a glance.
+          const clubs = caver.cavingGroups.map((group) => group.name).join(' · ');
+          return {
+            value: caver.id,
+            name: caver.name,
+            title: caver.name,
+            // What a screen reader calls the choice. The list reads a choice out by its value
+            // unless it is given a name to use, and the value here is the person's identifier —
+            // so without this, moving through the list would read out a string of hex digits
+            // for each person. Said with the clubs, because whoever cannot see the second line
+            // of the row needs it just as much to tell two people of one name apart.
+            'aria-label': clubs ? `${caver.name}, ${clubs}` : caver.name,
+            label: (
+              <Flex vertical>
+                <span>{caver.name}</span>
+                {clubs && (
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {clubs}
+                  </Typography.Text>
+                )}
+              </Flex>
+            ),
+          };
+        })}
         // The server has already done the matching. Filtering its answer again by the letters
         // typed would hide exactly the rows it found by ignoring an accent.
         filterOption={false}

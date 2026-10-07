@@ -135,6 +135,32 @@ describe('saying who, in one text box', () => {
     expect(written()).toEqual({ caverId: 'caver-older', newCaverName: null });
   });
 
+  it('reads a choice out as the person, never as the identifier it is keyed by', () => {
+    // The list hands assistive technology a row of its own for the choices in reach, and fills
+    // it with the choice's key unless told what to call it. Keyed by the person, that row would
+    // be read out as an identifier — so each choice says who it is, with the clubs that tell
+    // two people of one name apart, exactly as the row on screen does.
+    caversSpy.mockReturnValue({
+      data: [
+        person('caver-older', 'Ion Popescu', ['Silex Brașov', 'Speo Cluj']),
+        person('caver-newer', 'Ion Popescu'),
+      ],
+    });
+    render(<Harness />);
+    type('Ion');
+
+    const readOut = () =>
+      Array.from(document.querySelectorAll('[role="option"]')).map((option) =>
+        option.getAttribute('aria-label'),
+      );
+    expect(readOut()).toEqual(['Ion Popescu, Silex Brașov · Speo Cluj']);
+
+    // One step down the list brings the second choice into reach, who belongs to no club: the
+    // name, and nothing after it.
+    fireEvent.keyDown(box(), { key: 'ArrowDown', keyCode: 40, which: 40 });
+    expect(readOut()).toEqual(['Ion Popescu, Silex Brașov · Speo Cluj', 'Ion Popescu']);
+  });
+
   it('means whoever the new text names once somebody chosen is typed over', () => {
     render(<Harness />);
     type('Ana');
