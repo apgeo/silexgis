@@ -29,7 +29,7 @@ jobs:
       # The survey-format readers live in a submodule. Without this the checkout lacks a project
       # file the solution names, and the build fails at restore with a message about a missing
       # path rather than about a missing checkout step.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: actions/setup-dotnet@v4
@@ -55,7 +55,7 @@ jobs:
       run:
         working-directory: client
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           # 24, not 22: @terrestris/react-geo declares node >=24, and below it the two
@@ -102,7 +102,7 @@ jobs:
           --health-timeout 3s
           --health-retries 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: actions/setup-dotnet@v4
@@ -143,7 +143,7 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: actions/setup-dotnet@v4
@@ -168,7 +168,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [server, client]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Build deployment images
