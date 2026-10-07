@@ -54,7 +54,10 @@ Un element poate avea **părinți** — lucrurile care îl conțin — și **ele
   pe acela.
 - **Conținerea moștenește protecția locației în jos.** Protejați zona și tot ce este înăuntru
   este protejat odată cu ea.
-- **Ștergerea unui element șterge ce conține.** Confirmarea o spune.
+- **Ștergerea unui element șterge ce conține.** Confirmarea o spune — și spune că nu se elimină
+  nimic: întreaga ștergere poate fi anulată din
+  [Peșteri și elemente șterse](caves-and-entrances.md#peșteri-și-elemente-șterse), la care se
+  ajunge din butonul de deasupra listei.
 
 Editați părinții din pagina elementului: *Editează părinții → Adaugă părinte…*, căutând elemente
 după nume.

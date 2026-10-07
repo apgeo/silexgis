@@ -37,6 +37,7 @@ odată cu ea — și apoi paginile.
 | Events | Evenimente |
 | Trip logs | Jurnale de tură |
 | Deleted trips | Ture șterse |
+| Deleted caves and features | Peșteri și elemente șterse |
 | Restore (a deleted trip) | Restaurează |
 | Checklists | Liste de verificare |
 | Camps | Tabere |

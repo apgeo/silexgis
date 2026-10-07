@@ -175,10 +175,50 @@ hand over the position the file is withholding.
 
 ---
 
-## Deleting
+## Deleting and restoring
 
 **Delete this cave?** — and note that on features generally, *contained features are deleted
-with it*. Everything is recorded in the [history and audit trail](history-and-audit.md).
+with it*: a cave takes its entrances and its survey lines. The confirmation says what is about to
+happen: **nothing is removed, and it can be restored from Deleted caves and features.** Deleting
+a single entrance from the cave's page says the same. Everything is recorded in the
+[history and audit trail](history-and-audit.md).
+
+A deleted cave is **gone from everywhere at once** — the list, the map, search, the trips that
+named it — and its own address answers as though it had never existed, to its owner too.
+
+### Deleted caves and features
+
+**Caves → Deleted caves and features** (the same button is on the **Features** list) shows the
+deletions **you may undo**, most recent first.
+
+| Column | What it shows |
+|---|---|
+| **Name** | What was deleted, and under it where it sat — an entrance is told apart by its cave |
+| **Kind** | Cave, Entrance, or the feature's type |
+| **Deleted** | When |
+| **Deleted with it** | What went along — *1 entrance*, *2 entrances, 3 other objects* |
+
+- **One row is one deletion, not one object.** A cave deleted with two entrances is one row that
+  says *2 entrances*; restoring it brings all three back. An entrance you had deleted *before*
+  deleting its cave is a deletion of its own: it is listed once the cave is back, and stays
+  deleted until you restore it too.
+- **Whoever may delete something may restore it.** The list is worked out row by row from that
+  rule, so somebody who may delete nothing sees an empty one. An entrance can also be restored by
+  whoever may edit its cave, since that is who can delete it from the cave's page.
+- **The list never says where anything is.** It carries no coordinates at all, and a restored
+  cave opens showing exactly the position you could see before — approximate if it was
+  approximate for you. You are not shown, or counted, anything you could not read before it was
+  deleted.
+- **Restore** asks first, brings the cave or feature back with everything deleted along with it,
+  and opens it. A **trip that named the cave names it again.**
+- Something **inside a deleted cave or area cannot be restored on its own** — the page says what
+  to restore first.
+- A restored cave whose **name was reused meanwhile** simply stands beside its namesake: names
+  are not unique.
+- A **survey line** is not restored on its own. It returns with its cave when the two were
+  deleted together.
+- Deleted caves and features are **kept until somebody restores them**; nothing removes them
+  after a number of days.
 
 ---
 

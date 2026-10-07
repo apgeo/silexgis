@@ -218,6 +218,14 @@ feature and walkthroughs of whole jobs.
   in a camp. Whoever may delete a trip may restore it, and the confirmation says for how long — 30
   days unless the installation chose otherwise — after which the trip is removed for good.
   Undoing an import of trips deletes them the same way, so each can be restored on its own.
+- **A deleted cave, entrance or surface feature can be put back** — deleting one removes nothing
+  either. A cave goes with its entrances, an area with what it contains, and the list of
+  **deleted caves and features** shows each such deletion as one row that says what went with
+  it; restoring it brings all of it back, and a trip that named the cave names it again. Whoever
+  may delete something may restore it. The list holds no positions at all, and a restored cave
+  opens showing only the position its reader could see before. Something deleted before the cave
+  or area containing it was is restored after that is back; undoing an import deletes its caves
+  and features the same way, so each can be restored on its own.
 - **What it all adds up to** — a person, a cave and a club each get their totals: trips, hours
   underground, metres surveyed, first visits, how many people, how many trips had an incident. Every
   one of them is counted **over the trips you may read**, and the screen says so, because two people
