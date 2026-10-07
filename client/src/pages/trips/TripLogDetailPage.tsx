@@ -183,7 +183,7 @@ export default function TripLogDetailPage() {
   const mayDelete = useCan('tripLogs', 'delete');
   const canRestore = mayCreate || mayDelete;
   // What this installation does with a deleted trip, asked so the confirmation can say it.
-  const { data: tripConfig } = useTripLogConfig();
+  const { data: tripConfig, isLoading: retentionOutstanding } = useTripLogConfig();
   const held = effective ? parseAccessActions(effective.actions) : null;
   const [editing, setEditing] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
@@ -349,12 +349,24 @@ export default function TripLogDetailPage() {
                 </Button>
               )}
               {canDelete && (
+                // Not offered while the answer about restoring is still on its way. A confirmation
+                // opened before it would gain its second sentence a moment later, and gaining it
+                // widens the box and carries its buttons sideways — measured, 271 pixels — so a
+                // press already aimed at OK lands on nothing and the trip is still there. Once the
+                // asking is over the delete is offered whatever came of it: with the sentence, or
+                // without one where the installation could not be asked.
                 <Popconfirm
                   title={t('trips.deleteConfirm')}
                   description={restoreHint}
+                  disabled={retentionOutstanding}
                   onConfirm={() => void onDelete()}
                 >
-                  <Button danger icon={<DeleteOutlined />} data-testid="trip-delete">
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    disabled={retentionOutstanding}
+                    data-testid="trip-delete"
+                  >
                     {t('features.delete')}
                   </Button>
                 </Popconfirm>

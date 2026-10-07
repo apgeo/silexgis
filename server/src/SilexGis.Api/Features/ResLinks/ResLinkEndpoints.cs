@@ -997,6 +997,11 @@ public static class ResLinkEndpoints
     /// good. So every route here that finds a link finds it through this, reads and writes
     /// alike, and such a link answers as one that is not there — which is what it becomes if the
     /// trip is never restored, by the same rule, asked in the same place.
+    ///
+    /// Tracked or not is each caller's to say, and the two that edit what they find say
+    /// nothing, which means tracked. That holds only while nothing composed into this states
+    /// an option of its own: one written inside a subquery is taken for the whole query, and a
+    /// link read through it would be edited, saved and answered without being written.
     /// </remarks>
     private static IQueryable<ResLink> Standing(SilexGisDbContext db) =>
         db.ResLinks.Where(TripLinkFate.Not(TripLinkFate.EndsWithout(db, TripLinkFate.OfNoLiveTrip(db))));

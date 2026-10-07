@@ -624,8 +624,14 @@ test('trip log with participants, tags and the audit trail', async ({ page }) =>
   // Cleanup: delete the trip from its detail page.
   await gotoRoute(page, '/trip-logs');
   await page.getByText(title).click();
-  await page.getByRole('button', { name: /Delete/ }).click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  // The trip's page first, and then its own delete by its own name. The list this click leaves
+  // carries a "Deleted trips" button, which is a button whose name contains "Delete" and which
+  // is still on screen for the moment the trip's page takes to arrive: reached for by a pattern,
+  // it is the one that gets pressed, and the run stands on the list of deleted trips waiting
+  // for a confirmation nobody asked.
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('trip-delete').click();
+  await page.getByRole('tooltip').getByRole('button', { name: 'OK', exact: true }).click();
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
   // Back on the list, the deleted trip's row is gone (scope to a table cell — the title also
   // lingered briefly in the detail heading/timeline during the post-delete navigation).

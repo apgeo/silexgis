@@ -535,14 +535,19 @@ test('a trip log takes part in links from its own page', async ({ page }) => {
   await expect(card.getByText('Falia Demo')).toBeVisible();
 
   // Deleting the link leaves the feature it named alone; deleting the trip then takes the
-  // run's only remaining row with it.
+  // run's only remaining row off every list. (A deleted trip is kept, so that it can be
+  // restored; with its one link already gone it holds nothing a later run could meet.)
   await deleteLinkRow(page, 'Falia Demo');
   await featureRow(page, 'Falia Demo');
 
   await page.goto('/trip-logs');
   await page.getByText(title).click();
-  await page.getByRole('button', { name: /Delete/ }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  // The trip's page first, and then its own delete by its own name: the list this click leaves
+  // has a "Deleted trips" button, still on screen while the trip's page arrives, and a pattern
+  // that matches any button named for deleting presses that one instead.
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('trip-delete').click();
+  await page.getByRole('tooltip').getByRole('button', { name: 'OK' }).click();
   await accepted(page, 'Deleted.');
 });
 
