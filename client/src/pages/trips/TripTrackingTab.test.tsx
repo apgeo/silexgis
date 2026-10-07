@@ -477,6 +477,144 @@ describe('TripTrackingTab', () => {
   });
 
   /**
+   * A recording imported onto a trip that already existed leaves positions on its log and its
+   * watch off — and on an off watch the server refuses a correction and a removal whatever the row
+   * says. The pencil and the bin drawn there were two controls that could only fail, on rows whose
+   * real way back is undoing the import.
+   */
+  describe('a log whose rows cannot be changed one at a time', () => {
+    const importedRow = {
+      id: 'event-1',
+      caverId: ANA,
+      teamId: null,
+      kind: 'atStation',
+      surveyModelId: null,
+      stationName: 'P12',
+      depthEnteredM: null,
+      note: null,
+      recordedAt: '2026-09-12T07:00:00Z',
+    };
+    const controls = [
+      'trip-tracking-event-edit-event-1',
+      'trip-tracking-event-delete-event-1',
+      'trip-tracking-event-picture-event-1',
+    ];
+    const correctionRule = /A report written down wrongly is corrected in place/;
+
+    function watch(overrides: Partial<TrackingState>) {
+      trackingQuery.mockReturnValue({
+        data: state(overrides),
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+    }
+
+    function logOf(items: unknown[]) {
+      eventsQuery.mockReturnValue({
+        data: { items, page: 1, pageSize: 20, totalItems: items.length },
+        isPending: false,
+      });
+    }
+
+    for (const layout of ['wide', 'stacked'] as const) {
+      it(`offers neither control and says why, where the watch was never started (${layout})`, () => {
+        narrow = layout === 'stacked';
+        logOf([importedRow]);
+
+        // The same row on a running watch first: the controls this case says are withheld are
+        // the ones drawn here, so their absence below is the gate and not a missing fixture.
+        const { unmount } = show();
+        for (const id of controls) {
+          expect(screen.getByTestId(id)).toBeTruthy();
+        }
+        expect(screen.queryByTestId('trip-tracking-log-readonly')).toBeNull();
+        expect(screen.getByText(correctionRule)).toBeTruthy();
+        unmount();
+
+        watch({ state: 'off', armedAt: null });
+        show();
+
+        // The row itself is still read: what is withheld is the controls, never the log.
+        expect(
+          within(screen.getByTestId('trip-tracking-events')).getByText('Ana Popescu'),
+        ).toBeTruthy();
+        for (const id of controls) {
+          expect(screen.queryByTestId(id)).toBeNull();
+        }
+        const notice = screen.getByTestId('trip-tracking-log-readonly');
+        expect(notice).toHaveTextContent('came from an import');
+        expect(notice).toHaveTextContent('undoing that import under Geodata → Imports');
+        // And the paragraph describing the two controls goes with them.
+        expect(screen.queryByText(correctionRule)).toBeNull();
+      });
+    }
+
+    it('draws no empty column where no control applies', () => {
+      logOf([importedRow]);
+      const { unmount } = show();
+      const withControls = screen
+        .getByTestId('trip-tracking-events')
+        .querySelectorAll('thead th').length;
+      unmount();
+
+      watch({ state: 'off', armedAt: null });
+      show();
+      expect(
+        screen.getByTestId('trip-tracking-events').querySelectorAll('thead th').length,
+      ).toBe(withControls - 1);
+    });
+
+    // The notice explains rows. An off watch with an empty log is simply a trip nobody has
+    // started following, and the card above already says so.
+    it('says nothing of an import on a log that holds no rows', () => {
+      watch({ state: 'off', armedAt: null });
+      show();
+
+      expect(screen.queryByTestId('trip-tracking-log-readonly')).toBeNull();
+      expect(screen.getByText(correctionRule)).toBeTruthy();
+    });
+
+    // Somebody who may not edit the trip was never offered the controls, so their absence needs
+    // no explaining to them.
+    it('explains nothing to a reader who was never offered the controls', () => {
+      watch({ state: 'off', armedAt: null });
+      logOf([importedRow]);
+
+      // The same watch and the same row for somebody who may edit first: the notice this case
+      // says is withheld is drawn here, so its absence below is the permission and not the
+      // fixture.
+      const { unmount } = show();
+      expect(screen.getByTestId('trip-tracking-log-readonly')).toBeTruthy();
+      unmount();
+
+      show(false);
+
+      // The row is on the screen: what follows is about a drawn log, not an empty page.
+      expect(
+        within(screen.getByTestId('trip-tracking-events')).getByText('Ana Popescu'),
+      ).toBeTruthy();
+      expect(screen.queryByTestId('trip-tracking-log-readonly')).toBeNull();
+      for (const id of controls) {
+        expect(screen.queryByTestId(id)).toBeNull();
+      }
+    });
+
+    // A recording that created its trip writes the watch already closed: its log is writable, and
+    // the trip was still never followed, so it has no moment to hang a photograph on.
+    it('corrects and deletes on a watch written closed, and offers no photograph there', () => {
+      watch({ state: 'closed', armedAt: null, closedAt: '2026-09-12T18:00:00Z' });
+      logOf([importedRow]);
+      show();
+
+      expect(screen.getByTestId('trip-tracking-event-edit-event-1')).toBeTruthy();
+      expect(screen.getByTestId('trip-tracking-event-delete-event-1')).toBeTruthy();
+      expect(screen.queryByTestId('trip-tracking-event-picture-event-1')).toBeNull();
+      expect(screen.queryByTestId('trip-tracking-log-readonly')).toBeNull();
+    });
+  });
+
+  /**
    * A party that reached a station reached it together, at one moment. One request per person
    * would put that moment on the log several times with nothing tying the rows together, and the
    * log is what a rescue reads.
