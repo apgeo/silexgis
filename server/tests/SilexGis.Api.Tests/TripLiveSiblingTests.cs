@@ -150,6 +150,60 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
+    /// A deleted trip is in neither list of its cave, and is back in both when it is restored.
+    /// </summary>
+    /// <remarks>
+    /// Both lists are about trips other than the one the address was minted for, so nothing that
+    /// shuts a deleted trip's own address says anything of them: a deleted trip leaves these lists
+    /// because the trip, its watch and its links are hidden together by the model, and for no rule
+    /// written here. Asked through the address of a trip that stays, which goes on answering
+    /// throughout — what changes is only who is beside it. Restoring puts both back with nothing
+    /// published again, because deleting took nothing away.
+    /// </remarks>
+    [Fact]
+    public async Task A_deleted_trip_leaves_the_live_list_and_the_archive_of_its_cave_and_is_back_in_both_once_restored()
+    {
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var mine = await PublishedTripAsync("Mine", cave, model);
+        var beside = await PublishedTripAsync("Underground beside it", cave, model, station: "cave.deep.3");
+        var finished = await PublishedTripAsync("Out last week", cave, model);
+        await CloseAsync(finished.Trip, DateTimeOffset.UtcNow.AddDays(-5));
+        var playback = $"{PastList(mine.Token)}/{finished.Trip}";
+
+        async Task ShouldListBothAsync()
+        {
+            ListedIds(await LiveListAsync(mine.Token)).ShouldBe([mine.Trip, beside.Trip], ignoreOrder: true);
+            ListedIds(await Json(anonymous.GetAsync(PastList(mine.Token)))).ShouldBe([finished.Trip]);
+            (await Json(anonymous.GetAsync(playback))).GetProperty("tripLogId").GetGuid().ShouldBe(finished.Trip);
+        }
+
+        // Before: the party beside this one is live, the finished trip is in the archive and plays
+        // back. Without this half the lists below would be short for any reason at all.
+        await ShouldListBothAsync();
+
+        foreach (var trip in new[] { beside.Trip, finished.Trip })
+        {
+            (await owner.DeleteAsync($"/api/v1/trip-logs/{trip}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        }
+
+        // Deleted: neither is listed, the playback answers as it does for a trip that is not
+        // there, and the address they were asked through is as it was.
+        ListedIds(await LiveListAsync(mine.Token)).ShouldBe([mine.Trip]);
+        ListedIds(await Json(anonymous.GetAsync(PastList(mine.Token)))).ShouldBeEmpty();
+        (await anonymous.GetAsync(playback)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await Json(anonymous.GetAsync(Follow(mine.Token)))).GetProperty("tripLogId").GetGuid().ShouldBe(mine.Trip);
+
+        foreach (var trip in new[] { beside.Trip, finished.Trip })
+        {
+            (await owner.PostAsync($"/api/v1/trip-logs/{trip}/restore", null))
+                .StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        await ShouldListBothAsync();
+    }
+
+    /// <summary>
     /// The grace window after a watch closes belongs to this list, not the archive — and the trip
     /// says which case it is, so a page never draws somebody as underground who came out.
     /// </summary>
