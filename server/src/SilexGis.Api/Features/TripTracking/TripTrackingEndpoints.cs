@@ -1191,6 +1191,14 @@ public static class TripTrackingEndpoints
     /// already taken off accepts that: two deliberate acts stand between a mis-tap and the loss of
     /// what may be the only record of where somebody was.
     /// </para>
+    /// <para>
+    /// <b>Destroying a report also forgets that its act was received.</b> A report taken off the
+    /// log still carries the key of the send that wrote it, which is how a late repeat of that
+    /// send is recognised and writes nothing. Once every report of an act has been destroyed
+    /// nothing carries the key any more, and a repeat arriving after that is a first send as far
+    /// as the log can tell: it is written. Taking a report off is therefore the act that keeps a
+    /// repeat out; destroying it is for a report nobody will send again.
+    /// </para>
     /// </remarks>
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteEventAsync(
         Guid tripLogId, Guid eventId, bool? permanent, SilexGisDbContext db, IAccessService access,
@@ -1257,6 +1265,18 @@ public static class TripTrackingEndpoints
     /// withholding — whoever puts a report back has not passed the gate on placing anybody in the
     /// cave, as whoever recorded it had.
     /// </para>
+    /// <para>
+    /// <b>One thing is asked again, and only while the watch is running: that the person is still
+    /// on the trip's roster.</b> Recording a report asks it, and a roster save refuses to take
+    /// somebody off a running watch that has reports about them — but that refusal reads the log
+    /// as everybody reads it, without the reports taken off, so somebody whose only reports were
+    /// removed may leave. Putting one of those back would then make exactly the state both rules
+    /// exist to keep out: a running watch that places somebody underground whom the trip, and the
+    /// page published from its roster, no longer lists. So it is refused with the answer recording
+    /// one gets, and the remedy is the same: name them on the trip again first. A closed watch
+    /// asks nothing — its roster may be corrected freely and its log is a record, not a count of
+    /// who is still inside.
+    /// </para>
     /// </remarks>
     private static async Task<Results<Ok<TrackingEventDto>, ProblemHttpResult>> RestoreEventAsync(
         Guid tripLogId, Guid eventId, SilexGisDbContext db, IAccessService access, FeatureProtection protection,
@@ -1284,6 +1304,15 @@ public static class TripTrackingEndpoints
         }
         else
         {
+            if (tracking.State == TripTrackingState.Armed
+                && !await db.TripLogParticipants.AsNoTracking()
+                    .AnyAsync(p => p.TripLogId == tripLogId && p.CaverId == row.CaverId, ct))
+            {
+                return ApiProblems.BadRequest(TrackingProblemCodes.CaverNotParticipant,
+                    "This report is about somebody who is no longer on the trip's roster. "
+                    + "Name them on the trip again first, or close the tracking.");
+            }
+
             row.RemovedAt = null;
             row.RemovedByUserId = null;
             await SaveKeepingChangedMomentAsync(

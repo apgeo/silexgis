@@ -605,9 +605,10 @@ public sealed class TripLogWriteService(
     /// </para>
     /// <para>
     /// A report taken off the log speaks of nobody. The model hides it from this read as from
-    /// every other, so somebody whose only reports were taken off may leave a running watch; a
-    /// report put back afterwards is then about somebody off the roster, which the watch's own
-    /// read already shows and flags, exactly as it does once a watch has closed.
+    /// every other, so somebody whose only reports were taken off may leave a running watch. The
+    /// other half of that is kept where a report is put back: while the watch is running, one
+    /// about somebody who has since left the roster is refused there, so the two together still
+    /// keep a running watch from speaking of a person its trip no longer lists.
     /// </para>
     /// <para>
     /// <b>A check, not a lock.</b> The two facts are read here and the roster rows are removed at

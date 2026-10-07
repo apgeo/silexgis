@@ -525,6 +525,12 @@ public interface ITrackingReportFields
 /// Without a key every send is an act of its own, as it has always been. The key is taken in and
 /// never given out — no read of a report carries it.
 /// </para>
+/// <para>
+/// <b>How long an act is remembered.</b> For as long as any report it wrote exists, on the log or
+/// taken off it: a repeat of an act whose reports were all removed is still answered — with an
+/// empty list — and writes nothing. A report destroyed for good takes its key with it, so once
+/// every report of an act has been destroyed a repeat of that act is written as a first send.
+/// </para>
 /// </remarks>
 public sealed record TrackingEventRequest(
     IReadOnlyList<Guid>? CaverIds,
