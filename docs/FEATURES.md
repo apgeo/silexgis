@@ -397,6 +397,13 @@ feature and walkthroughs of whole jobs.
   The sheet may be a file or rows pasted from a phone's spreadsheet, may keep the date and the
   time in one column or two — or times alone, for a sheet kept in a day — and may be read on a
   named time zone's clocks, summer and winter time included, instead of exactly as written.
+  A row that would replace a report shows the report as it stands beside the report as it would
+  be left, a replacement changes only what the sheet has a column for, and the import writes
+  what the preview showed or nothing: if the trip changed in between, the sheet is read again
+  instead. The same sheet imported twice writes nothing the second time. The log itself is
+  paged and can be narrowed to one person, a report that was changed after it was written is
+  marked **Corrected**, and a report added once tracking is closed has to say when it was made
+  rather than being stamped with the hour it was typed.
   A trip can then be **published** with a link: anybody holding it, with no account, sees the
   party on the survey, refreshed while they are underground. The page is written for a reader who
   has never followed a trip: it says that a place is where somebody was last *reported* and not a

@@ -70,7 +70,8 @@ The **Record a report** card:
 
 3. Optionally a **Team** and a **Note**.
 4. **When it was said** — left empty, the report is stamped now. Fill it in for word relayed
-   out some time after it was said. A report can never be about the future.
+   out some time after it was said. A report can never be about the future. Once tracking is
+   closed the field has to be filled in (*Writing a report up after the trip*, below).
 5. **Record for N selected.** **Mark N out** is the shortcut for the call everybody waits for.
 
 **A depth is a number, not yet a place.** *"The sign makes no difference: −120 and 120 are both
@@ -83,6 +84,16 @@ puts it some metres away — in which case check the number or the cave's declar
 
 **From the drawing.** **Show the model** opens the survey with everybody on it; press a station
 and choose **Record here** to report at exactly that station.
+
+**Writing a report up after the trip.** Once tracking is closed the card says so — *"This
+trip's tracking is closed — a report added now is being written up afterwards"* — and **When it
+was said** is no longer optional. The quick answers (*Now*, *15 min ago*…) are not offered, and
+a report sent with the field empty is held back with *"Say when this was said."* A call
+forgotten on Saturday and typed in on Monday would otherwise be filed on Monday: the replay
+would run two days past the trip, and a *Went in* typed that way would read as somebody
+underground on a trip that was over. **Mark N out** asks for the moment as well, and so does
+**Record here** on the drawing. Nothing else about a closed log changes — it takes reports as
+before — and for a whole trip's worth of them a spreadsheet (below) is the quicker way.
 
 ## The party on the survey
 
@@ -119,6 +130,20 @@ Each row of **Reports** offers two controls, and they mean different things:
   for good.
 
 Both work on a **closed** watch as well as a running one.
+
+**Reaching the report.** **Reports** shows twenty at a time, the most recent first, and the
+whole log is behind it: the page numbers under the table, or on a phone **Show older reports**
+and **Show newer reports**, with a line saying where you are (*Reports shown: 21–40 of 57*).
+The wrong report is nearly always one person's, so the chooser above the table — it reads
+**Everybody's reports** — narrows the log to the person you pick from the trip's roster;
+clearing it brings everybody's back. Narrowing always starts again from that person's most
+recent reports.
+
+**Corrected.** A report that no longer reads as it was first written down carries the word
+**Corrected** beside its moment. It appears after **Correct**, after a sheet that overwrote the
+report (below), and after the roster entry it is about was merged into another. A correction
+that changed nothing leaves no mark. The word says *that* the report was changed — not when,
+and not by whom — and it is shown on this log only: nothing on a published page carries it.
 
 **Some imported positions cannot be corrected one by one.** A SpeleoLoc recording imported onto
 a trip that already existed puts its positions on that trip's log and leaves its tracking as it
@@ -164,7 +189,12 @@ carries the cave's own protection.
 ## Importing a spreadsheet of reports
 
 What a coordinator often actually keeps is a sheet: a line per phone call, with a time, who it
-was about, how deep they were and a note. **Import a sheet**, beside the reports:
+was about, how deep they were and a note. **Import a sheet**, beside the reports.
+
+**A sheet is a desk task.** It is for writing a trip up from notes: read whole, checked row by
+row, then written in one go. For a report that comes in while the party is underground, use the
+report form — it takes one report at a time and overwrites nothing. A watch that has not been
+started takes no sheet: reading one says so at once, as importing it would.
 
 1. **Download a sample sheet** — a template this installation reads without any settings.
 2. **Choose a CSV file, or drop one here** — or switch to **Pasted rows** and paste the rows
@@ -174,12 +204,21 @@ was about, how deep they were and a note. **Import a sheet**, beside the reports
    settle which number is the day, and sets the **Sheet's time zone**.
 3. **Read it.** Reading writes nothing: what comes back is exactly what importing would do,
    row by row — **New**, **Replaces**, or refused — with **Findings** beside each row. Above the
-   rows the dialog states how the times and dates were read.
+   rows the dialog states how the times and dates were read. A place the sheet named is shown
+   with the station it became (*Meandru → p8.98*), so you can see the name was understood. A row
+   marked **Replaces** shows two lines: **In the log now** — the report as it stands — and
+   **After the import**. Where the place of the report in the log is one you may not be told,
+   it reads *Not shown to you* rather than being left blank.
 4. **Column settings** — point a field at a header only where the detection got it wrong. The
    **Words for going in** and **Words for coming out** replace the usual lists for that side.
 5. **Untick** any row you do not want (a line naming several people is taken or left out
    whole), tick **Overwrite what the log already holds at these moments** if you mean to, and
    **Import**.
+
+When it is done, one line says what happened, in four counts: **recorded** — new reports;
+**corrected** — reports the log already held that the sheet changed; **already as the sheet
+says** — reports the sheet was allowed to overwrite and had nothing to change in; and **left
+out** — rows you unticked, and rows the log already holds where overwriting was not ticked.
 
 **Where the moment is written.** Three layouts are read, and which one a sheet uses is worked
 out from its header row: one column carrying the date and the time together (`Data si ora`, as
@@ -194,6 +233,9 @@ made for the whole sheet, each time it is read; nothing about it is remembered o
 | Rule | Why |
 |---|---|
 | **A report is filed under the person and the moment** | A corrected sheet imported again corrects the rows it corrected instead of doubling them |
+| **Overwriting changes only what the sheet has a column for** | Where the log already holds the report, where the person was is always written; the team only if the sheet has a team column, and the note only if it has a note or a details column — an empty cell under such a column clears it. A sheet of times and depths leaves a note typed by hand standing. Reports that already say what the sheet says are not written again, and are counted apart as *already as the sheet says* |
+| **Import does what the table showed, or nothing** | The sheet is read again when you press **Import**. If the trip changed in between — somebody typed a report at one of the sheet's moments or corrected one the sheet would replace, a team or a participant changed, a place was declared in the cave, the watch was put on another survey — nothing is written, the sheet is read again and the dialog says so: check the rows, tick the overwrite again if you still mean to, and press **Import** |
+| **The same sheet imported a second time writes nothing** | Every one of its rows is found on the log already. Without the overwrite tick they are all *left out*; with it, each is compared with the report the log holds and, saying the same, is counted as *already as the sheet says* — no report is added, none is rewritten, and none becomes **Corrected**. So a sheet you are still adding to can be imported again as often as you like: only its new rows and its changed ones are written |
 | **A time written without a zone is read as UTC, exactly as written — unless you name the sheet's time zone** | A sheet's 14:30 becomes 14:30 UTC, shown in your own zone. Choose **Sheet's time zone** under **File settings** — your own zone is offered by name and any other can be searched — and 14:30 is read on that zone's clocks, summer and winter time included; the preview says which zone was used and shows each row on its clocks. A cell that writes its own offset (`2026-09-12T14:30+03:00`) is read as it says under either choice |
 | **A sheet already imported is not corrected by importing it again in another zone** | A report is filed under the person and the moment, and the zone changes every moment — so the second import adds rows beside the first instead of replacing them. Delete the earlier rows first |
 | **An hour the clocks skipped is refused; an hour they showed twice is read as the first of the two** | When the clocks go forward an hour never exists, and a row written in it is refused. When they go back an hour happens twice: the earlier one is taken and the row says so — write the offset in the cell if the later one was meant |
@@ -202,6 +244,7 @@ made for the whole sheet, each time it is read; nothing about it is remembered o
 | **The date and the time may be in two separate columns** | They are joined and read as one moment, under the same rules as a single column. A row that leaves its date blank is refused — the date is not carried down from the row above |
 | **Names are matched against this trip's roster only** | Full name, then given name and initial ("Ion P."), then given name. A name matching nobody, or two people, is refused rather than guessed |
 | **A row's place: station, then declared place, then depth** | Going in and coming out claim no station |
+| **A row with a note and no place is a note — if the place cells are empty** | A call that said "water rising" and no place is a report all the same. A depth that is not a number (*96 cm*) or a standing word neither list knows is not an empty cell: that row is refused, with the cell named, rather than filed as its note — correct the cell, or add the word under **Column settings** |
 | **Two rows for the same person at the same moment are one report** | The last one wins, and both lines say so |
 | **A note longer than a report may carry is refused** | 2000 characters, note and details together — that row, not the sheet |
 | **A moment the log already holds twice for that person is refused** | Which of the two the row would correct is not the importer's to guess |
@@ -660,7 +703,9 @@ outside, what one link answers. The full table, with the reason word for each ca
 | *"That survey belongs to a different cave…"* | A running watch stays in its cave — close it first |
 | *"No station matches that depth under this trip's filter…"* | Widen **Only these parts of the survey**, or report a station |
 | *"A report cannot be about the future."* | Check the time on it |
+| *"Say when this was said. The tracking is closed, so the report cannot be stamped with the present time."* | A report added to a closed watch is being written up afterwards: fill in **When it was said** with the moment it was made during the trip |
 | *"This trip has no watch to import reports onto."* | Choose a survey and save the tracking setup first |
+| *"Nothing was imported. The trip or its log changed after this sheet was read…"* (headed *The trip changed while this sheet was being checked*) | Between your reading the sheet and pressing **Import**, something the import depends on changed — somebody recorded a report at one of the sheet's moments, a team or a participant was changed, a place was declared in the cave — so the sheet no longer matches what you were shown. Nothing was written and the sheet has been read again: check the rows, tick the overwrite again if you still mean it, and press **Import** |
 | *"Publishing this trip hands over its cave's survey drawing, and that takes the right to share the cave."* | Ask whoever looks after the cave |
 | *"This trip's cave has protected coordinates, so the trip cannot be published at all."* | Deliberate — the drawing is the cave's position |
 | *"That link has already been taken back, so there is nothing to replace. Publish the trip again instead."* | Somebody took it back first — possibly a moment ago, from another screen |

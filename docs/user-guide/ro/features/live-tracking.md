@@ -73,7 +73,9 @@ Cardul **Înregistrează un raport**:
 
 3. Opțional o **Echipă** și o **Notă**.
 4. **Când s-a spus** — lăsat gol, raportul este marcat acum. Completați-l pentru un mesaj
-   transmis mai târziu decât a fost spus. Un raport nu poate fi niciodată despre viitor.
+   transmis mai târziu decât a fost spus. Un raport nu poate fi niciodată despre viitor. După
+   ce urmărirea a fost încheiată, câmpul trebuie completat (*Scrierea unui raport după tură*,
+   mai jos).
 5. **Înregistrează pentru N selectați.** **Marchează N ca ieșiți** este scurtătura pentru apelul
    pe care îl așteaptă toată lumea.
 
@@ -88,6 +90,16 @@ distanță — caz în care verificați numărul sau declarația peșterii.
 
 **Din desen.** **Arată modelul** deschide ridicarea cu toți pe ea; apăsați o stație și alegeți
 **Înregistrează aici** ca să raportați exact la acea stație.
+
+**Scrierea unui raport după tură.** După ce urmărirea a fost încheiată, cardul o spune —
+*„Urmărirea acestei ture este încheiată — un raport adăugat acum este completat ulterior"* — iar
+**Când s-a spus** nu mai este opțional. Răspunsurile rapide (*Acum*, *acum 15 min*…) nu mai
+sunt oferite, iar un raport trimis cu câmpul gol este oprit cu *„Spune când s-a spus."* Un apel
+uitat sâmbătă și introdus luni ar fi altfel trecut luni: reluarea s-ar întinde cu două zile
+peste tură, iar un *A intrat* introdus așa ar arăta pe cineva în subteran într-o tură deja
+terminată. **Marchează N ca ieșiți** cere și el momentul, la fel și **Înregistrează aici** de pe
+desen. Nimic altceva nu se schimbă la un jurnal încheiat — primește rapoarte ca înainte — iar
+pentru rapoartele unei ture întregi o foaie de calcul (mai jos) este calea mai rapidă.
 
 ## Echipa pe ridicare
 
@@ -124,6 +136,22 @@ Fiecare rând din **Rapoarte** oferă două comenzi, și ele înseamnă lucruri 
   jurnal definitiv.
 
 Amândouă funcționează atât pe o urmărire **încheiată**, cât și pe una pornită.
+
+**Cum ajungeți la raport.** **Rapoarte** arată câte douăzeci, cele mai recente întâi, iar în
+spatele lor este tot jurnalul: numerele de pagină de sub tabel sau, pe telefon, **Arată
+rapoartele mai vechi** și **Arată rapoartele mai noi**, cu o linie care spune unde sunteți
+(*Rapoarte afișate: 21–40 din 57*). Raportul greșit este aproape întotdeauna al unei singure
+persoane, așa că selectorul de deasupra tabelului — pe el scrie **Rapoartele tuturor** —
+restrânge jurnalul la persoana pe care o alegeți din lista turei; golirea lui aduce înapoi
+rapoartele tuturor. Restrângerea pornește de fiecare dată de la cele mai recente rapoarte ale
+acelei persoane.
+
+**Corectat.** Un raport care nu mai arată așa cum a fost notat prima dată poartă cuvântul
+**Corectat** lângă momentul lui. Apare după **Corectează**, după o foaie care a suprascris
+raportul (mai jos) și după ce fișa persoanei despre care este a fost contopită cu alta. O
+corectură care nu a schimbat nimic nu lasă niciun semn. Cuvântul spune *că* raportul a fost
+modificat — nu când și nu de către cine — și este arătat doar în acest jurnal: nimic de pe o
+pagină publicată nu îl poartă.
 
 **Unele poziții importate nu pot fi corectate una câte una.** O înregistrare SpeleoLoc importată
 pe o tură care exista deja își pune pozițiile în jurnalul acelei ture și îi lasă urmărirea cum
@@ -170,7 +198,13 @@ poartă protecția peșterii.
 ## Importul unei foi de rapoarte
 
 Ceea ce ține de fapt adesea un coordonator este o foaie: un rând per apel telefonic, cu ora,
-despre cine era, cât de adânc era și o notă. **Importă o foaie**, lângă rapoarte:
+despre cine era, cât de adânc era și o notă. **Importă o foaie**, lângă rapoarte.
+
+**Foaia este o treabă de birou.** Servește la trecerea unei ture în jurnal după notițe: este
+citită întreagă, verificată rând cu rând și apoi scrisă dintr-odată. Pentru un raport care
+sosește cât timp echipa este în subteran, folosiți formularul de raport — primește câte un
+raport și nu suprascrie nimic. O urmărire care nu a fost pornită nu primește nicio foaie:
+citirea o spune de îndată, la fel cum ar spune-o importul.
 
 1. **Descarcă o foaie exemplu** — un șablon pe care această instalare îl citește fără nicio
    setare.
@@ -182,13 +216,23 @@ despre cine era, cât de adânc era și o notă. **Importă o foaie**, lângă r
    după al cui ceas au fost scrise orele.
 3. **Citește.** Citirea nu scrie nimic: ce primiți înapoi este exact ce ar face importul, rând
    cu rând — **Nou**, **Înlocuiește** sau refuzat — cu **Observații** lângă fiecare rând.
-   Deasupra rândurilor, dialogul spune cum au fost citite orele și datele.
+   Deasupra rândurilor, dialogul spune cum au fost citite orele și datele. Un loc numit în foaie
+   este arătat împreună cu stația care i-a corespuns (*Meandru → p8.98*), ca să vedeți că numele
+   a fost înțeles. Un rând marcat **Înlocuiește** arată două linii: **Acum în jurnal** —
+   raportul așa cum este — și **După import**. Acolo unde locul raportului din jurnal nu vă
+   poate fi comunicat, scrie *Nu îți este arătată*, în loc să rămână gol.
 4. **Setări coloane** — indicați un câmp către o coloană doar acolo unde detecția a greșit.
    **Cuvinte pentru intrare** și **Cuvinte pentru ieșire** le înlocuiesc pe cele obișnuite pentru
    partea respectivă.
 5. **Debifați** rândurile pe care nu le vreți (un rând al foii care numește mai multe persoane
    este luat sau lăsat deoparte întreg), bifați **Suprascrie ce are deja jurnalul la aceste
    momente** dacă asta vreți, și **Importă**.
+
+La sfârșit, o linie spune ce s-a întâmplat, în patru numere: **înregistrate** — rapoarte noi;
+**corectate** — rapoarte pe care jurnalul le avea deja și pe care foaia le-a schimbat; **deja
+așa cum spune foaia** — rapoarte pe care foaia avea voie să le suprascrie și la care nu a avut
+nimic de schimbat; și **omise** — rândurile debifate și rândurile pe care jurnalul le are deja,
+acolo unde suprascrierea nu a fost bifată.
 
 **Unde este scris momentul.** Sunt citite trei așezări, iar pe care o folosește o foaie se
 deduce din rândul capetelor de coloană: o singură coloană cu data și ora împreună (`Data si ora`,
@@ -203,6 +247,9 @@ Alegerea se face pentru toată foaia, la fiecare citire; nimic din ea nu se păs
 | Regulă | De ce |
 |---|---|
 | **Un raport este identificat prin persoană și moment** | O foaie corectată, importată din nou, schimbă rândurile corectate în loc să le dubleze |
+| **Suprascrierea schimbă doar ce are coloană în foaie** | Acolo unde jurnalul are deja raportul, locul în care era persoana este scris întotdeauna; echipa doar dacă foaia are coloană de echipă, iar nota doar dacă are coloană de notă sau de detalii — o celulă goală sub o asemenea coloană o șterge. O foaie cu ore și adâncimi lasă neatinsă o notă introdusă de mână. Rapoartele care spun deja ce spune foaia nu sunt scrise din nou și sunt numărate separat, ca *deja așa cum spune foaia* |
+| **Importul face ce arăta tabelul, sau nimic** | Foaia este citită din nou când apăsați **Importă**. Dacă tura s-a schimbat între timp — cineva a introdus un raport la unul dintre momentele foii sau a corectat unul pe care foaia l-ar înlocui, o echipă sau un participant s-a schimbat, un loc a fost declarat în peșteră, urmărirea a fost mutată pe altă ridicare — nu se scrie nimic, foaia este citită din nou și dialogul o spune: verificați rândurile, bifați din nou suprascrierea dacă încă o vreți și apăsați **Importă** |
+| **Aceeași foaie importată a doua oară nu scrie nimic** | Fiecare rând al ei se găsește deja în jurnal. Fără bifa de suprascriere, toate sunt *omise*; cu ea, fiecare este comparat cu raportul din jurnal și, spunând același lucru, este numărat ca *deja așa cum spune foaia* — niciun raport nu este adăugat, niciunul nu este rescris și niciunul nu devine **Corectat**. Așa că o foaie la care încă adăugați rânduri poate fi importată din nou ori de câte ori vreți: sunt scrise doar rândurile ei noi și cele schimbate |
 | **O oră scrisă fără fus orar este citită ca UTC, exact cum a fost scrisă — dacă nu numiți fusul orar al foii** | 14:30 din foaie devine 14:30 UTC, arătat în fusul dumneavoastră. Alegeți **Fusul orar al foii** la **Setări fișier** — fusul dumneavoastră este oferit pe nume, iar oricare altul poate fi căutat — și 14:30 este citit după ceasul acelui fus, cu ora de vară și de iarnă cu tot; previzualizarea spune ce fus s-a folosit și arată fiecare rând după ceasul lui. O celulă care își scrie singură decalajul (`2026-09-12T14:30+03:00`) este citită cum spune, oricare ar fi alegerea |
 | **O foaie deja importată nu se corectează importând-o din nou în alt fus orar** | Un raport este identificat prin persoană și moment, iar fusul schimbă fiecare moment — așa că al doilea import adaugă rânduri lângă primele în loc să le înlocuiască. Ștergeți întâi rândurile de dinainte |
 | **O oră peste care ceasurile au sărit este refuzată; una pe care au arătat-o de două ori este citită ca prima dintre cele două** | Când ceasurile se dau înainte, o oră nu există deloc, iar un rând scris în ea este refuzat. Când se dau înapoi, o oră are loc de două ori: se ia prima, iar rândul o spune — scrieți decalajul în celulă dacă era vorba de a doua |
@@ -211,6 +258,7 @@ Alegerea se face pentru toată foaia, la fiecare citire; nimic din ea nu se păs
 | **Data și ora pot sta în două coloane separate** | Sunt unite și citite ca un singur moment, după aceleași reguli ca o singură coloană. Un rând care lasă data goală este refuzat — data nu se preia de pe rândul de deasupra |
 | **Numele sunt potrivite doar cu lista acestei ture** | Numele întreg, apoi prenumele și inițiala („Ion P."), apoi prenumele. Un nume care nu corespunde nimănui, sau corespunde la doi oameni, este refuzat, nu ghicit |
 | **Locul unui rând: stația, apoi locul declarat, apoi adâncimea** | Intrarea și ieșirea nu revendică nicio stație |
+| **Un rând cu o notă și fără loc este o notă — dacă celulele de loc sunt goale** | Un apel care a spus „crește apa” și niciun loc este tot un raport. O adâncime care nu este un număr (*96 cm*) sau un cuvânt de stare pe care nu îl știe niciuna dintre liste nu este o celulă goală: rândul este refuzat, cu celula numită, în loc să fie trecut ca notă — corectați celula sau adăugați cuvântul la **Setări coloane** |
 | **Două rânduri pentru aceeași persoană la același moment sunt un singur raport** | Ultimul câștigă, iar amândouă rândurile o spun |
 | **O notă mai lungă decât poate purta un raport este refuzată** | 2000 de caractere, nota și detaliile împreună — acel rând, nu toată foaia |
 | **Un moment pe care jurnalul îl are deja de două ori pentru acea persoană este refuzat** | Nu este treaba importului să ghicească pe care dintre cele două îl corectează rândul |
@@ -684,7 +732,9 @@ instalare](../../../INSTALL.md#when-a-published-page-or-the-article-showing-it-s
 | *„Acea ridicare aparține altei peșteri…"* | O urmărire pornită rămâne în peștera ei — închideți-o întâi |
 | *„Nicio stație nu corespunde acelei adâncimi sub filtrul acestei ture…"* | Lărgiți **Doar aceste părți ale ridicării** sau raportați o stație |
 | *„Un raport nu poate fi despre viitor."* | Verificați ora de pe el |
+| *„Spune când s-a spus. Urmărirea este încheiată, așa că raportul nu poate fi marcat cu ora de acum."* | Un raport adăugat pe o urmărire încheiată este completat ulterior: treceți la **Când s-a spus** momentul în care a fost făcut, în timpul turei |
 | *„Această tură nu are nicio urmărire pe care să fie importate rapoarte."* | Alegeți o ridicare și salvați întâi configurarea urmăririi |
+| *„Nu s-a importat nimic. Tura sau jurnalul ei s-au schimbat după ce foaia a fost citită…"* (cu titlul *Tura s-a schimbat cât timp era verificată foaia*) | Între citirea foii și apăsarea pe **Importă** s-a schimbat ceva de care depinde importul — cineva a înregistrat un raport la unul dintre momentele foii, o echipă sau un participant a fost modificat, un loc a fost declarat în peșteră — așa că foaia nu mai corespunde cu ce vi s-a arătat. Nu s-a scris nimic, iar foaia a fost citită din nou: verificați rândurile, bifați din nou suprascrierea dacă încă o vreți și apăsați **Importă** |
 | *„Publicarea acestei ture predă ridicarea topografică a peșterii, iar asta cere dreptul de a partaja peștera."* | Întrebați-l pe cel care se ocupă de peșteră |
 | *„Peștera acestei ture are coordonate protejate, așa că tura nu poate fi publicată deloc."* | Intenționat — desenul este poziția peșterii |
 | *„Acel link a fost deja retras, așa că nu mai este nimic de înlocuit. Publică tura din nou."* | L-a retras altcineva mai întâi — poate chiar acum o clipă, de pe alt ecran |
