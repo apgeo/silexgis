@@ -6030,6 +6030,22 @@
     "anyStatus": "Any status",
     "empty": "Nothing has been published on this installation.",
     "emptyFiltered": "No link has this status.",
+    "emptyLongRunning": "No published trip's tracking has been running that long.",
+    "emptyBoth": "No link has this status and tracking running that long.",
+    "seenFrom": "This request reached the server from:",
+    "seenFromExplain": "If that is your own address, the reverse-proxy settings are right. If it is the address of a reverse proxy in front of this installation — one that adds each caller's address to X-Forwarded-For itself — the stated number of proxies is too low: every reader behind that proxy is counted as one and shares one request budget, so published pages start refusing readers when it is busy. The installation guide says how to set SILEXGIS__Proxy__Hops. If it is instead a gateway that only passes connections on and writes no such header (the gateway address of a Docker network, for example), do not raise the number: no count fixes that, and counting it would let a caller choose the address they are counted under.",
+    "seenFromUnknown": "The server could not tell which address this request came from.",
+    "longRunning": {
+      "label": "Tracking running longer than (days)",
+      "any": "Any"
+    },
+    "watch": {
+      "running": "Days running: {{days}}",
+      "runningLapsed": "Tracking is still running, but this link has run out.",
+      "closed": "Closed {{when}}",
+      "open": "Tracking tab",
+      "unknown": "Not recorded"
+    },
     "unavailable": "The list of published links could not be read.",
     "failed": "That could not be completed. Refresh the list to see which links still stand.",
     "irreversible": "This cannot be undone.",
@@ -6061,6 +6077,8 @@
       "publishedBy": "Published by",
       "createdAt": "Published",
       "expiresAt": "Runs out",
+      "watchArmedAt": "Tracking started",
+      "watchArmedAtHelp": "When this trip's tracking was last started. Nothing closes tracking but a person, so tracking that has been running far longer than its trip was most likely forgotten: the party stays on the published page as still underground or, once the link has run out, is in no public list at all. Close it from the trip's Tracking tab.",
       "handle": "Log code",
       "handleHelp": "The short code the request log writes in place of a link's address, so a line in the log can be matched with a row here. It opens nothing."
     },

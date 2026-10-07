@@ -14275,12 +14275,13 @@ export interface paths {
         };
         /**
          * Every published trip link of the installation, with what each does for its holder right now.
-         * @description For full administrators. One row per link, revoked ones included; a link whose trip or watch is gone is not listed, and opens nothing. status narrows to one status, spelled as the answers spell it; sort is one of createdAt (the default, newest first), expiresAt, tripDate, tripTitle, status; descending reverses a named order. Every status is decided at the one instant the answer names, by the rules the published pages are served by. No token is carried: a link is named by a short prefix of its stored hash, the same handle the request log writes.
+         * @description For full administrators. One row per link, revoked ones included; a link whose trip or watch is gone is not listed, and opens nothing. status narrows to one status, spelled as the answers spell it; sort is one of createdAt (the default, newest first), expiresAt, tripDate, tripTitle, status, watchArmedAt; descending reverses a named order. armedLongerThanDays keeps only links whose watch is running and was started more than that many days ago — nothing closes a watch but a person, so this is how a forgotten one is found. Every status is decided at the one instant the answer names, by the rules the published pages are served by. seenFrom is the address this request was counted under once the stated reverse proxies were walked past: the reader's own when the proxy settings are right. No token is carried: a link is named by a short prefix of its stored hash, the same handle the request log writes.
          */
         get: {
             parameters: {
                 query?: {
                     status?: string;
+                    armedLongerThanDays?: number;
                     sort?: string;
                     descending?: boolean;
                     page?: number;
@@ -23843,6 +23844,8 @@ export interface components {
             cave: null | components["schemas"]["PublishedLinkCaveDto"];
             watchState: components["schemas"]["TripTrackingState"];
             /** Format: date-time */
+            watchArmedAt: null | string;
+            /** Format: date-time */
             watchClosedAt: null | string;
             /** Format: uuid */
             createdBy: string;
@@ -23869,6 +23872,7 @@ export interface components {
             counts: components["schemas"]["PublishedLinkStatusCountDto"][];
             publishesRealNames: boolean;
             archiveEnabled: boolean;
+            seenFrom: null | string;
         };
         /** @enum {unknown} */
         PublishedLinkStatus: "followable" | "inGrace" | "inArchive" | "withheld" | "lapsed" | "revoked";

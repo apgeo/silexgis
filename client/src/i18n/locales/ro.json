@@ -6030,6 +6030,22 @@
     "anyStatus": "Orice stare",
     "empty": "Pe această instalare nu a fost publicat nimic.",
     "emptyFiltered": "Niciun link nu are această stare.",
+    "emptyLongRunning": "Nicio tură publicată nu are urmărirea pornită de atât timp.",
+    "emptyBoth": "Niciun link nu are această stare și urmărirea pornită de atât timp.",
+    "seenFrom": "Această cerere a ajuns la server de la:",
+    "seenFromExplain": "Dacă este adresa ta, setările pentru proxy sunt corecte. Dacă este adresa unui reverse proxy aflat în fața acestei instalări — unul care adaugă el însuși adresa fiecărui apelant în X-Forwarded-For — numărul declarat de proxy-uri este prea mic: toți cititorii din spatele acelui proxy sunt numărați ca unul singur și împart același buget de cereri, așa că paginile publicate încep să refuze cititori când este aglomerat. Ghidul de instalare arată cum se setează SILEXGIS__Proxy__Hops. Dacă este în schimb un gateway care doar transmite conexiunile mai departe și nu scrie acest antet (de exemplu adresa de gateway a unei rețele Docker), nu mări numărul: nicio valoare nu rezolvă asta, iar numărarea lui ar permite unui apelant să își aleagă adresa sub care este numărat.",
+    "seenFromUnknown": "Serverul nu a putut stabili de la ce adresă a venit această cerere.",
+    "longRunning": {
+      "label": "Urmărire pornită de mai mult de (zile)",
+      "any": "Oricât"
+    },
+    "watch": {
+      "running": "Zile de la pornire: {{days}}",
+      "runningLapsed": "Urmărirea este încă pornită, dar acest link a expirat.",
+      "closed": "Încheiată la {{when}}",
+      "open": "Fila Urmărire",
+      "unknown": "Neînregistrat"
+    },
     "unavailable": "Lista linkurilor publicate nu a putut fi citită.",
     "failed": "Operația nu a putut fi dusă la capăt. Reîncarcă lista ca să vezi ce linkuri mai sunt active.",
     "irreversible": "Această operație nu poate fi anulată.",
@@ -6061,6 +6077,8 @@
       "publishedBy": "Publicat de",
       "createdAt": "Publicat la",
       "expiresAt": "Expiră la",
+      "watchArmedAt": "Urmărire pornită la",
+      "watchArmedAtHelp": "Când a fost pornită ultima dată urmărirea acestei ture. Urmărirea nu este încheiată decât de un om, așa că una pornită de mult mai mult timp decât a durat tura a fost, cel mai probabil, uitată: echipa rămâne pe pagina publicată ca fiind încă în subteran sau, după ce linkul a expirat, nu mai este în nicio listă publică. Încheie-o din fila Urmărire a turei.",
       "handle": "Cod în jurnal",
       "handleHelp": "Codul scurt pe care jurnalul de cereri îl scrie în locul adresei unui link, ca o linie din jurnal să poată fi potrivită cu un rând de aici. Nu deschide nimic."
     },

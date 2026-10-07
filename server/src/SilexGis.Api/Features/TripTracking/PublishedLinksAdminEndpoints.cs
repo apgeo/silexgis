@@ -72,8 +72,13 @@ public static class PublishedLinksAdminEndpoints
                 "For full administrators. One row per link, revoked ones included; a link whose trip or "
                 + "watch is gone is not listed, and opens nothing. status narrows to one status, spelled as "
                 + "the answers spell it; sort is one of createdAt (the default, newest first), expiresAt, "
-                + "tripDate, tripTitle, status; descending reverses a named order. Every status is decided "
+                + "tripDate, tripTitle, status, watchArmedAt; descending reverses a named order. "
+                + "armedLongerThanDays keeps only links whose watch is running and was started more than "
+                + "that many days ago — nothing closes a watch but a person, so this is how a forgotten one "
+                + "is found. Every status is decided "
                 + "at the one instant the answer names, by the rules the published pages are served by. "
+                + "seenFrom is the address this request was counted under once the stated reverse proxies "
+                + "were walked past: the reader's own when the proxy settings are right. "
                 + "No token is carried: a link is named by a short prefix of its stored hash, the same "
                 + "handle the request log writes.");
 
@@ -264,12 +269,14 @@ public static class PublishedLinksAdminEndpoints
         DateOnly TripDate,
         DateOnly? TripDateEnd,
         TripTrackingState WatchState,
+        DateTimeOffset? WatchArmedAt,
         DateTimeOffset? WatchClosedAt,
         Guid? CaveFeatureId,
         Guid? SurveyModelId);
 
     private static async Task<Results<Ok<PublishedLinksDto>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         [AsParameters] PublishedLinksQuery query,
+        HttpContext http,
         SilexGisDbContext db,
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
@@ -346,6 +353,7 @@ public static class PublishedLinksAdminEndpoints
                 log.TripDate,
                 log.TripDateEnd,
                 watch.State,
+                watch.ArmedAt,
                 watch.ClosedAt,
                 watch.CaveFeatureId,
                 watch.SurveyModelId)).ToListAsync(ct);
@@ -397,6 +405,16 @@ public static class PublishedLinksAdminEndpoints
 
         var matching = wanted is { } only ? judged.Where(j => j.Status == only) : judged;
 
+        // The watches left running. Asked of the watch, not of the link's status, on purpose: a
+        // forgotten watch is found whether its link still follows the party or ran out long ago —
+        // and the second kind, which is in no public list at all, is the one nobody notices.
+        if (query.ArmedLongerThanDays is { } days)
+        {
+            var longerThan = TimeSpan.FromDays(days);
+            matching = matching.Where(j => TripTrackingRules.ArmedForLongerThan(
+                j.Row.WatchState, j.Row.WatchArmedAt, now, longerThan));
+        }
+
         // The link's id breaks every tie, in the direction asked: ids are time-ordered, and a page
         // boundary that fell between two links equal on the sort key would otherwise be free to
         // show one of them twice and the other never.
@@ -407,6 +425,7 @@ public static class PublishedLinksAdminEndpoints
             PublishedLinkSort.TripTitle => Ordered(
                 matching, j => j.Row.TripTitle, descending, StringComparer.OrdinalIgnoreCase),
             PublishedLinkSort.Status => Ordered(matching, j => j.Status, descending),
+            PublishedLinkSort.WatchArmedAt => Ordered(matching, j => j.Row.WatchArmedAt, descending),
             _ => Ordered(matching, j => j.Row.CreatedAt, descending),
         };
         var ordered = (descending ? keyed.ThenByDescending(j => j.Row.Id) : keyed.ThenBy(j => j.Row.Id)).ToList();
@@ -456,6 +475,7 @@ public static class PublishedLinksAdminEndpoints
                     ? new PublishedLinkCaveDto(cave, caveNames.GetValueOrDefault(cave))
                     : null,
                 j.Row.WatchState,
+                j.Row.WatchArmedAt,
                 j.Row.WatchClosedAt,
                 j.Row.CreatedBy,
                 labels.GetValueOrDefault(j.Row.CreatedBy),
@@ -476,8 +496,28 @@ public static class PublishedLinksAdminEndpoints
             now,
             counts,
             live.Value.PublishRealNames,
-            archiveEnabled));
+            archiveEnabled,
+            SeenFrom(http)));
     }
+
+    /// <summary>
+    /// The address this request was counted under, as a reader would write it.
+    /// </summary>
+    /// <remarks>
+    /// Read off the connection after the forwarded-headers walk, which is exactly where the
+    /// per-address request limits read it — so what the page shows is what they count by, and a
+    /// reader who sees their proxy's address here has found out that everybody behind that proxy
+    /// is counted as one. Nothing is worked out a second way and nothing is corrected. An IPv4
+    /// caller that reached a dual-stack listener is written in its IPv4 form, because that is the
+    /// form the person looking at this knows their address in.
+    /// </remarks>
+    private static string? SeenFrom(HttpContext http) =>
+        http.Connection.RemoteIpAddress switch
+        {
+            null => null,
+            { IsIPv4MappedToIPv6: true } mapped => mapped.MapToIPv4().ToString(),
+            var address => address.ToString(),
+        };
 
     /// <summary>Whether a link in this status hands anything to its holder, the survey included.</summary>
     private static bool OpensSomething(PublishedLinkStatus status) =>

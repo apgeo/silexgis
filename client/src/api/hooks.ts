@@ -9217,10 +9217,22 @@ export type PublishedLinkStatus = components['schemas']['PublishedLinkStatus'];
 export type PublishedLinksWithdrawn = components['schemas']['PublishedLinksWithdrawnDto'];
 
 /** What the list of published links may be ordered by, spelled as the server reads it. */
-export type PublishedLinkSort = 'createdAt' | 'expiresAt' | 'tripDate' | 'tripTitle' | 'status';
+export type PublishedLinkSort =
+  | 'createdAt'
+  | 'expiresAt'
+  | 'tripDate'
+  | 'tripTitle'
+  | 'status'
+  | 'watchArmedAt';
 
 export interface PublishedLinksParams {
   status?: PublishedLinkStatus;
+  /**
+   * Keeps only links whose tracking is running and was started more than this many days ago.
+   * Sent with each question and stored nowhere: how long is too long is the reader's call. The
+   * server refuses a negative number and one over ten years.
+   */
+  armedLongerThanDays?: number;
   sort?: PublishedLinkSort;
   descending?: boolean;
   page: number;

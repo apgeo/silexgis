@@ -117,6 +117,30 @@ public static class TripTrackingRules
     };
 
     /// <summary>
+    /// Whether a watch is running now and has been for longer than <paramref name="longerThan"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Nothing closes a watch but a person, on purpose: "the party is out" is a fact somebody has
+    /// to state, and a watch closed by a timer would move a party that is overdue — which is
+    /// exactly a party that departed from its plan — off the page that follows it. The other side
+    /// of that choice is that a watch somebody forgot runs for ever, so the people who answer for
+    /// an installation need to be able to find the ones that have run suspiciously long. This is
+    /// the one reading of "long" they are found by.
+    /// </para>
+    /// <para>
+    /// Measured from the moment the watch was last started, not from the trip's dates: the dates
+    /// are a plan, and a watch started again for a party still underground is long-running from
+    /// when it was started again. A watch that is not running is never long-running, however long
+    /// it once ran; one recorded as running with no moment it started at cannot be measured and is
+    /// not counted.
+    /// </para>
+    /// </remarks>
+    public static bool ArmedForLongerThan(
+        TripTrackingState state, DateTimeOffset? armedAt, DateTimeOffset now, TimeSpan longerThan) =>
+        state == TripTrackingState.Armed && armedAt is { } since && now - since > longerThan;
+
+    /// <summary>
     /// Whether a position recorded against <paramref name="recordedOn"/> may be drawn on the model
     /// <paramref name="modelInUse"/>.
     /// </summary>

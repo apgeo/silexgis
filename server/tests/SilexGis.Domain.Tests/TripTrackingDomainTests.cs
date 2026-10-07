@@ -154,6 +154,35 @@ public class TripTrackingDomainTests
         TripTrackingRules.MayTransition(TripTrackingState.Closed, TripTrackingState.Off).ShouldBeFalse();
     }
 
+    [Fact]
+    public void A_watch_is_long_running_only_while_it_runs_and_only_past_the_stretch_asked()
+    {
+        var now = new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
+        var week = TimeSpan.FromDays(7);
+
+        // Started eight days ago and never closed: found. Started six days ago: not yet.
+        TripTrackingRules.ArmedForLongerThan(TripTrackingState.Armed, now.AddDays(-8), now, week).ShouldBeTrue();
+        TripTrackingRules.ArmedForLongerThan(TripTrackingState.Armed, now.AddDays(-6), now, week).ShouldBeFalse();
+
+        // "Longer than" is strict: at exactly the stretch it has not yet run longer than it.
+        TripTrackingRules.ArmedForLongerThan(TripTrackingState.Armed, now.AddDays(-7), now, week).ShouldBeFalse();
+        TripTrackingRules.ArmedForLongerThan(
+            TripTrackingState.Armed, now.AddDays(-7).AddSeconds(-1), now, week).ShouldBeTrue();
+
+        // A stretch of nothing finds every watch that is running.
+        TripTrackingRules.ArmedForLongerThan(
+            TripTrackingState.Armed, now.AddMinutes(-1), now, TimeSpan.Zero).ShouldBeTrue();
+
+        // A watch somebody closed is not running, however long ago it was started; neither is
+        // one that was never started. The same dates that were found above are not found here.
+        TripTrackingRules.ArmedForLongerThan(TripTrackingState.Closed, now.AddDays(-8), now, week).ShouldBeFalse();
+        TripTrackingRules.ArmedForLongerThan(TripTrackingState.Off, now.AddDays(-8), now, week).ShouldBeFalse();
+        TripTrackingRules.ArmedForLongerThan(TripTrackingState.Off, null, now, week).ShouldBeFalse();
+
+        // Running with no recorded start cannot be measured, and is not guessed at.
+        TripTrackingRules.ArmedForLongerThan(TripTrackingState.Armed, null, now, week).ShouldBeFalse();
+    }
+
     // ---- where one member of the party stands --------------------------------------------
     //
     // StandingOf is pure, takes a plain sequence and is the one home both tracking reads ask.
