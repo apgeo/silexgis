@@ -34,7 +34,7 @@ namespace SilexGis.Api.Tests;
 /// names a cave once per link, so a trip that named a cave twice is one trip. Neither mistake fails
 /// a build. Both make a club's page report more people underground than were there.
 /// </summary>
-public sealed class TripStatisticsTests : IAsyncLifetime, IClassFixture<PostgresFixture>
+public sealed class TripStatisticsTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 
@@ -75,6 +75,17 @@ public sealed class TripStatisticsTests : IAsyncLifetime, IClassFixture<Postgres
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
+
+    // The application each test stands up is let go when the test ends. Without this every one of
+    // the class's tests left a running application behind, its background workers with it, until
+    // the whole test process ended — and those workers poll a job table other tests share.
+    public void Dispose()
+    {
+        owner?.Dispose();
+        reader?.Dispose();
+        anonymous?.Dispose();
+        factory.Dispose();
+    }
 
     [Fact]
     public async Task Statistics_are_refused_to_a_caller_who_is_not_signed_in()
