@@ -95,7 +95,7 @@ describe('drawMovieCaptions', () => {
 
   it('names the legend entries it left out in the reader’s language', () => {
     const party = { legend: [], note: null };
-    const made = movieCaptionsAt(DEFAULT_MOVIE_SETTINGS, null, party, { kind: 'elapsed', ms: 0 }, 0, {
+    const made = movieCaptionsAt(DEFAULT_MOVIE_SETTINGS, null, party, { kind: 'elapsed', ms: 0, totalMs: 0 }, 0, {
       t: i18n.t.bind(i18n),
       language: 'en',
     });
@@ -136,8 +136,31 @@ describe('drawMovieCaptions', () => {
 });
 
 describe('movieClockText', () => {
-  it('reads elapsed time as hours and minutes', () => {
-    expect(movieClockText({ kind: 'elapsed', ms: (2 * 60 + 5) * 60_000 + 59_000 }, i18n.t, 'en')).toBe('Elapsed 2:05');
+  const HOUR = 3_600_000;
+  const elapsed = (ms: number, totalMs: number) => movieClockText({ kind: 'elapsed', ms, totalMs }, i18n.t, 'en');
+
+  it('reads elapsed time as hours and minutes when the movie’s clock runs to an hour or more', () => {
+    expect(elapsed((2 * 60 + 5) * 60_000 + 59_000, 3 * HOUR)).toBe('Elapsed 2:05');
+    // Exactly an hour is already counted in hours, and reads 1:00 at its end rather than 60:00.
+    expect(elapsed(HOUR, HOUR)).toBe('Elapsed 1:00');
+  });
+
+  it('reads elapsed time as minutes and seconds when all of it is under an hour', () => {
+    expect(elapsed(12 * 60_000 + 34_900, 40 * 60_000)).toBe('Elapsed 12:34');
+    expect(elapsed(0, 40 * 60_000)).toBe('Elapsed 0:00');
+    expect(elapsed(59_999, HOUR - 1)).toBe('Elapsed 0:59');
+    expect(elapsed(HOUR - 1, HOUR - 1)).toBe('Elapsed 59:59');
+  });
+
+  it('keeps one unit for the whole of a movie: its first minutes are not counted in seconds when it runs past an hour', () => {
+    expect(elapsed(5 * 60_000 + 30_000, 2 * HOUR)).toBe('Elapsed 0:05');
+    expect(elapsed(5 * 60_000 + 30_000, HOUR - 1)).toBe('Elapsed 5:30');
+  });
+
+  it('says the same thing in Romanian, around the same figures', () => {
+    expect(movieClockText({ kind: 'elapsed', ms: 90_000, totalMs: 10 * 60_000 }, i18n.getFixedT('ro'), 'ro')).toBe(
+      'Timp scurs 1:30',
+    );
   });
 
   it('reads a calendar moment in the reader’s language, with no coordinate or altitude in it', () => {

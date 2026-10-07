@@ -58,8 +58,16 @@ export interface MovieTimeline {
   /** The instant each trip is replayed at, in the order the trips were given, at a position on the timeline (0..length). */
   instants(position: number): number[];
   /** What the clock caption says at a position. */
-  clock(position: number): { kind: 'calendar'; at: number } | { kind: 'elapsed'; ms: number };
+  clock(position: number): MovieClock;
 }
+
+/**
+ * What a movie's clock shows at one of its moments: the instant being replayed, or — trips played
+ * side by side — how long they have been under way. An elapsed clock also says how far it will run
+ * in all, `totalMs`, which is the longest trip's real length whatever was shortened on the way:
+ * that decides the unit the whole movie's clock is written in, so it does not change mid-movie.
+ */
+export type MovieClock = { kind: 'calendar'; at: number } | { kind: 'elapsed'; ms: number; totalMs: number };
 
 /**
  * One piece of the map from the timeline to the axis being replayed: `[start, start + span)` of the
@@ -176,7 +184,7 @@ export function buildMovieTimeline(
       // instants outside its own window, so neither mode clamps.
       return trips.map((trip) => trip.window.from + elapsed);
     },
-    clock: (position) => ({ kind: 'elapsed', ms: axisAt(pieces, position) }),
+    clock: (position) => ({ kind: 'elapsed', ms: axisAt(pieces, position), totalMs: longest }),
   };
 }
 

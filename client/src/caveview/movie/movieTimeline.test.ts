@@ -87,7 +87,8 @@ describe('buildMovieTimeline — together', () => {
     expect(timeline.instants(30 * MIN)).toEqual([T0 + 30 * MIN, dayTwo + 30 * MIN]);
     // The shorter trip's instant runs on past its own end, keeping the shared clock.
     expect(timeline.instants(2 * HOUR)).toEqual([T0 + 2 * HOUR, dayTwo + 2 * HOUR]);
-    expect(timeline.clock(45 * MIN)).toEqual({ kind: 'elapsed', ms: 45 * MIN });
+    // The clock also says how far it will run: the longest trip's length.
+    expect(timeline.clock(45 * MIN)).toEqual({ kind: 'elapsed', ms: 45 * MIN, totalMs: 2 * HOUR });
   });
 
   it('shortens quiet stretches on the elapsed axis, counting every trip’s reports', () => {
@@ -101,7 +102,10 @@ describe('buildMovieTimeline — together', () => {
     )!;
     // Anchors at 0, 10 min, 2 h and 3 h of elapsed time: 10 + 30 + 30 minutes.
     expect(timeline.length).toBe(70 * MIN);
-    expect(timeline.clock(70 * MIN)).toEqual({ kind: 'elapsed', ms: 3 * HOUR });
+    // How far the clock runs is the real time under way, not the shortened length it is played in:
+    // a clock that reaches three hours is written in hours however quickly it gets there.
+    expect(timeline.clock(70 * MIN)).toEqual({ kind: 'elapsed', ms: 3 * HOUR, totalMs: 3 * HOUR });
+    expect(timeline.clock(0)).toEqual({ kind: 'elapsed', ms: 0, totalMs: 3 * HOUR });
   });
 });
 
