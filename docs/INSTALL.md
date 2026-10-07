@@ -473,6 +473,25 @@ copied at all. A document takes the default background when that one is marked, 
 background in the file; with none, or when the tiles do not arrive, the map is drawn on a plain ground and
 says so under itself.
 
+**An administrator can decide otherwise, without editing the file.** The file's `inDocuments` is the
+answer a new installation starts with. **Administration → Messaging → Maps in documents** lists every
+background this installation publishes with one switch each, and an account that may change the
+installation's settings can switch any of them on or off there — a source whose terms you have since
+read, or a shipped one you would rather keep out of your documents. What is decided there:
+
+- is kept **beside** the file's answer, not over it: restarting, upgrading or editing the file never
+  overwrites it, and *Use the shipped answer* takes the decision back to whatever the file says now;
+- takes effect at once for every write-up downloaded from then on, with no restart;
+- leaves the file's answer in force for every background nobody has decided about, so a correction to
+  the shipped file still reaches those;
+- is recorded in the audit trail with who made it.
+
+The two conditions above are not waived by the switch: a source with no `attribution` cannot be switched
+on, and one that does not send the cross-origin header yields a map with no background however it is
+marked. Switching a background on is the installation saying that the source's terms allow its tiles
+to be copied into a file — the page says so above the first switch, and shows the group each source is
+filed under, including the one for sources used against their terms.
+
 **Backgrounds you should decide about.** Google's map, satellite, hybrid and terrain tiles are in the
 file, and they are currently **switched on**. They work, and you will find them in every collection of
 layer definitions passed around — but using them this way is not something Google's terms permit.

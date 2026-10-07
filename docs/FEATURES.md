@@ -471,7 +471,9 @@ feature and walkthroughs of whole jobs.
   copy you download carries **a map of the trip** — its sketch, where its party met, and the caves
   it names that you may place — drawn by your own browser out of what the page had already been
   given, over one of the installation's map backgrounds that may be copied into a document, with
-  a line under it saying whose view it is and when. The sketch is still written out in words
+  a line under it saying whose view it is and when. Which backgrounds those are is an
+  administrator's setting, one switch each, starting from what the installation shipped with and
+  kept across restarts. The sketch is still written out in words
   beside it. The copy filed against the trip never carries that map: it shows what one reader may
   see, and a filed copy is opened by everybody who may read the trip. There is no public address
   for a report: it is downloaded by somebody signed in who may read the trip.

@@ -74,6 +74,34 @@ peșteră anume.
 
 Pornirea lui **nu dezvăluie niciodată o poziție**: urmărirea linkului tot dă vederea protejată.
 
+## Hărți în documente
+
+Fila **Hărți în documente** hotărăște **ce fundaluri de hartă pot fi copiate într-un document**.
+[Raportul descărcat](../features/trips.md) al unei ture conține o hartă a turei desenată peste un
+singur fundal: cel implicit, dacă este pornit aici, altfel primul care este.
+
+Fiecare fundal pe care îl publică această instalare apare cu **un comutator**.
+
+| Coloană | Ce arată |
+|---|---|
+| **Fundal** | Sursa, grupul în care o așază catalogul și mențiunea de drepturi scrisă sub imagine |
+| **În documente** | Comutatorul |
+| **Livrat** | Cu ce a venit instalarea — și *Hotărât aici* acolo unde un administrator a ales altfel, cu **Folosește răspunsul livrat** pentru a reveni asupra hotărârii |
+
+- **Pornirea unui fundal este o afirmație despre termenii lui.** Afișarea unei hărți pe ecran și
+  punerea ei într-un fișier care apoi este trimis și tipărit sunt utilizări diferite, iar fiecare
+  furnizor o hotărăște separat pe a doua. Porniți o sursă doar după ce i-ați citit termenii; de
+  aceea este arătat grupul în care este așezată.
+- O hotărâre are efect **imediat** și se **păstrează la reporniri și actualizări**. Răspunsul
+  livrat se aplică în continuare fiecărui fundal despre care nu a hotărât nimeni.
+- O sursă **fără mențiune de drepturi** nu poate fi pornită: nu ar fi nimic de scris sub imagine.
+- Cu **nimic pornit**, raportul își primește totuși harta — desenată pe un fond simplu, lucru pe
+  care imaginea îl spune sub ea. Pagina avertizează când este cazul.
+- Fiecare hotărâre este consemnată în [istoricul de modificări](../features/history-and-audit.md).
+
+Ce fundaluri există și adresele lor rămân în fișierul-catalog al instalării — vedeți ghidul de
+instalare.
+
 ---
 
 ## Texte mesaje
