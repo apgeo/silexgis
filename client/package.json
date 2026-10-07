@@ -51,7 +51,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "dependency-cruiser": "^18.0.0",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.1.1",
     "less": "^4.6.7",
     "openapi-typescript": "^7.13.0",
     "oxlint": "^1.71.0",
