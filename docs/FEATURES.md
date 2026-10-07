@@ -397,7 +397,13 @@ feature and walkthroughs of whole jobs.
   alarm; that is the callout's job. A cave can declare what its depths mean — that 96 m is the
   Meander, at this station — so a depth phoned out lands on the station people mean rather than
   on whichever one arithmetic finds nearest, and the report card warns when a depth sits far from
-  the station it will land on. A report written down wrongly is corrected in place, keeping
+  the station it will land on. Wherever a station is typed — declaring a place, reporting,
+  correcting — the survey's own station names are offered as the name is typed, and a declared
+  place whose station the survey no longer has is marked rather than silently passed over. A
+  watch moved to a corrected survey part-way through a trip leaves its earlier reports marked
+  **On another survey** in the log, and the model panel can show them on the survey they were
+  made on — for looking only: nothing is recorded while another survey is on screen. A report
+  written down wrongly is corrected in place, keeping
   everything pinned to it, and a finished trip's log stays open for the write-up. A report
   deleted from the log is kept: it can be put back exactly as it was — by **Undo** on the
   notice, or later from **Removed reports** under the log — and is destroyed only by a second,

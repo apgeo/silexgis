@@ -167,6 +167,22 @@ every survey of it is declared. Turning it off brings back exactly what it hid.
 **Back to live** returns. Photographs can be hung on **a moment** of the trip (*Photographs of
 this moment*) rather than on a report, so correcting or deleting a report never loses them.
 
+**Look at the reports on** — a chooser above the model, offered only on a trip whose reports were
+not all recorded on one survey: the watch was moved to a corrected survey part-way through, say,
+and the earlier reports name stations of the one it left. It lists the watch's own survey and
+every other survey a report of this trip was recorded on that is still on the server and that
+you may open; two surveys of one name are told apart by the day each was added. Choose another
+one and the markers, the replay, the station photographs and the map sheets are those of the
+reports recorded on *it* — somebody whose last place is on the watch's survey is then the one
+listed as *On another survey*.
+
+**While another survey is on screen the panel records nothing, and says so**: pressing a station
+offers no report, and no photograph can be hung on a moment. A report is always measured against
+the survey the watch uses, so a station pressed on an earlier survey would be looked up, by name,
+in the wrong one. Choose the watch's survey again — or hide the model, which always reopens on
+it — to record. A survey deleted since, or one of a cave whose location is withheld from you, is
+not on the list; the reports made on it stay marked in the table, in words.
+
 **Make a movie**, on the same panel, saves the replay as a file — a GIF or a video of the party
 moving through the survey, of this trip or of several. See
 [A movie of a tracked trip](tracking-movie.md).
@@ -182,6 +198,16 @@ Each row of **Reports** offers two controls, and they mean different things:
   person cannot be changed: a report about somebody else is a different report, so delete this
   one and record that one. The dialog says plainly that this changes what the log says
   happened — the replay and the published page follow it.
+
+  The dialog's title says whose report it is and of when — *Correct the report about Ana of
+  12 May, 14:05* — so the row pressed is the row being changed. **The place is asked with the
+  same block as the report card**: the cave's declared places to choose from, a station whose
+  names are offered as you type, or a depth with **Which station is that?** under it. A depth
+  that is far from the station it lands on is warned about **as soon as the dialog opens**,
+  without the number being touched — a report recorded past that warning still carries it.
+  A moment earlier than the start of the watch brings *This moment is before the watch was
+  started*, with the hour the watch began: it is a warning and not a bar, and the correction
+  is saved as written — check the day and the hour first.
 - **Delete this report** — only for a report that should not be there at all. It comes off the
   log, and off everything drawn from the log: the party table, the survey, a replay, a
   published page. **It is not destroyed** — see *Putting a deleted report back* below.
@@ -220,6 +246,14 @@ report (below), and after the roster entry it is about was merged into another. 
 that changed nothing leaves no mark. The word says *that* the report was changed — not when,
 and not by whom — and it is shown on this log only: nothing on a published page carries it.
 
+**On another survey.** In **Reports**, a place carries this grey tag when it was recorded on a
+survey the watch has since stopped using — the watch was moved to another survey after that
+report, or the survey it was measured in has been deleted. Nothing is wrong with the report: it
+is what was said at the time. The tag is there because the same station name can be another
+place on the survey in use. It is the quiet twin of the amber tag in the table of people, which
+says the same thing about where somebody is *now*. To see such a report where it was made, open
+the model and use **Look at the reports on** (above).
+
 **Some imported positions cannot be corrected one by one.** A SpeleoLoc recording imported onto
 a trip that already existed puts its positions on that trip's log and leaves its tracking as it
 was — an import does not start a watch on somebody else's trip. Where tracking was never
@@ -243,8 +277,12 @@ section **What this cave's depths mean** → **Declare a depth**:
 | Field | |
 |---|---|
 | **Depth** | The depth being declared. Kept to one decimal; the sign is ignored |
-| **Station** | Which station that depth is, spelled the way the survey spells it |
+| **Station** | Which station that depth is. As you type, the stations of the cave's current survey whose names begin that way are offered under the box — capitals and accents do not matter — and choosing one fills in the survey's own spelling. Any name is still taken: the list is a help, not a rule |
 | **Place name** | Optional — the name people use for it ("Meander") |
+
+The list under **Station** offers nothing where the cave has no survey that has been read yet,
+or where the cave's exact location is withheld from you; the box is then a plain text box. When
+there are more names than it shows, its last line says how many — type more of the name.
 
 - **One declaration per depth.** Declaring a depth again replaces what it said. Editing a
   declaration to a different depth writes the new one and then withdraws the old.
@@ -254,6 +292,21 @@ section **What this cave's depths mean** → **Declare a depth**:
   and the tab says which of the two happened.
 - **A place name becomes something to report by.** The report card offers the declared places
   by name, shallowest first; choosing one reports its depth, which lands on the declared station.
+  Where the cave has declared none the card says so — *This cave has declared no places, so a
+  place is reported as a station or as a depth* — with a link, **Declare them on the cave's
+  page**, that opens this card. The correction dialog says the same.
+- **Not in the current survey.** A declared place carries this amber tag when the survey marked
+  as the cave's **current** one has no station of that name — a mistyped name, or a survey
+  exported again with its stations renamed and then **made the current one**. The declaration
+  is not followed there: a report of that depth lands on the nearest station instead. Correct
+  the station's name (the list offers the current survey's), or check which survey is the cave's
+  current one. **A survey that has only been uploaded is not judged here**: uploading does not
+  take the mark from the survey that has it, so a corrected file shows no tags until it is made
+  current — and no tags then is not a sign the declarations suit it. A watch pointed at another
+  survey says so itself: the report card judges each place against the survey the watch uses,
+  in its list of places — *Meander — station not in this survey*. No tag is not a promise
+  either way: where the current survey has not been read (even if another upload has), or the
+  cave's location is withheld from you, nothing is said.
 - **Withdraw** removes a declaration. Reports already recorded keep the station they were given.
 
 Declaring needs the right to write to the cave. A declared station is a position, so the list

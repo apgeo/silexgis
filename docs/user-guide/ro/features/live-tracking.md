@@ -177,6 +177,23 @@ ascuns.
 întoarce. Fotografiile pot fi puse pe **un moment** al turei (*Fotografii de la acest moment*),
 nu pe un raport, așa că o corectură sau o ștergere de raport nu le pierde niciodată.
 
+**Vezi rapoartele pe** — un selector deasupra modelului, oferit doar la o tură ale cărei rapoarte
+nu au fost înregistrate toate pe aceeași ridicare: urmărirea a fost mutată, de pildă, pe o
+ridicare corectată în timpul turei, iar rapoartele de dinainte numesc stații ale celei părăsite.
+Selectorul arată ridicarea urmăririi și fiecare altă ridicare pe care s-a înregistrat un raport
+al acestei ture, dacă mai este pe server și o puteți deschide; două ridicări cu același nume se
+deosebesc prin ziua în care a fost adăugată fiecare. Alegeți alta și marcajele, reluarea,
+fotografiile de la stații și hărțile sunt cele ale rapoartelor înregistrate pe *ea* — cine are
+ultimul loc pe ridicarea urmăririi apare atunci cu *Pe altă ridicare*.
+
+**Cât timp pe ecran este altă ridicare, panoul nu înregistrează nimic, și o spune**: apăsarea
+unei stații nu oferă niciun raport și nicio fotografie nu poate fi pusă pe un moment. Un raport
+este măsurat întotdeauna față de ridicarea folosită de urmărire, așa că o stație apăsată pe o
+ridicare mai veche ar fi căutată, după nume, în cea greșită. Alegeți din nou ridicarea urmăririi
+— sau ascundeți modelul, care se redeschide mereu pe ea — ca să înregistrați. O ridicare ștearsă
+între timp, sau una a unei peșteri a cărei locație vă este ascunsă, nu apare în listă; rapoartele
+făcute pe ea rămân marcate în tabel, în cuvinte.
+
 **Fă un film**, pe același panou, salvează reluarea ca fișier — un GIF sau un video cu echipa
 mișcându-se prin ridicare, al acestei ture sau al mai multora. Vedeți
 [Un film al unei ture urmărite](tracking-movie.md).
@@ -192,6 +209,17 @@ Fiecare rând din **Rapoarte** oferă două comenzi, și ele înseamnă lucruri 
   schimba: un raport despre altcineva este alt raport, așa că îl ștergeți pe acesta și îl
   înregistrați pe celălalt. Dialogul spune limpede că asta schimbă ce spune jurnalul că s-a
   întâmplat — reluarea și pagina publicată îl urmează.
+
+  Titlul dialogului spune al cui este raportul și de când — *Corectează raportul despre Ana din
+  12 mai, 14:05* — astfel încât rândul apăsat este rândul schimbat. **Locul este cerut cu același
+  bloc ca pe cardul de raport**: locurile declarate ale peșterii din care să alegeți, o stație
+  ale cărei nume sunt oferite pe măsură ce scrieți, sau o adâncime cu **Ce stație înseamnă?**
+  dedesubt. O adâncime aflată departe de stația pe care ajunge este semnalată **imediat ce se
+  deschide dialogul**, fără ca numărul să fie atins — un raport înregistrat peste acel
+  avertisment îl poartă în continuare. Un moment mai devreme decât pornirea urmăririi aduce
+  *Acest moment este înainte de pornirea urmăririi*, cu ora la care a început urmărirea: este un
+  avertisment, nu o piedică, iar corectura se salvează așa cum a fost scrisă — verificați întâi
+  ziua și ora.
 - **Șterge acest raport** — doar pentru un raport care nu ar trebui să existe deloc. Iese din
   jurnal și din tot ce se desenează din jurnal: tabelul echipei, ridicarea, o reluare, o pagină
   publicată. **Nu este distrus** — vedeți mai jos *Punerea înapoi a unui raport șters*.
@@ -230,6 +258,14 @@ corectură care nu a schimbat nimic nu lasă niciun semn. Cuvântul spune *că* 
 modificat — nu când și nu de către cine — și este arătat doar în acest jurnal: nimic de pe o
 pagină publicată nu îl poartă.
 
+**Pe altă ridicare.** În **Rapoarte**, un loc poartă această etichetă gri când a fost înregistrat
+pe o ridicare pe care urmărirea nu o mai folosește — urmărirea a fost mutată pe altă ridicare
+după acel raport, sau ridicarea în care a fost măsurat a fost ștearsă. Raportul nu are nimic
+greșit: este ce s-a spus atunci. Eticheta există pentru că același nume de stație poate fi alt
+loc pe ridicarea în vigoare. Este perechea discretă a etichetei portocalii din tabelul
+oamenilor, care spune același lucru despre unde se află cineva *acum*. Ca să vedeți un astfel de
+raport acolo unde a fost făcut, deschideți modelul și folosiți **Vezi rapoartele pe** (mai sus).
+
 **Unele poziții importate nu pot fi corectate una câte una.** O înregistrare SpeleoLoc importată
 pe o tură care exista deja își pune pozițiile în jurnalul acelei ture și îi lasă urmărirea cum
 era — un import nu pornește urmărirea turei altcuiva. Acolo unde urmărirea nu a fost pornită
@@ -253,8 +289,12 @@ nu poate spune pe care o au în minte oamenii prin „96 de metri". Clubul poate
 | Câmp | |
 |---|---|
 | **Adâncime** | Adâncimea declarată. Se păstrează cu o zecimală; semnul este ignorat |
-| **Stație** | Ce stație este acea adâncime, scrisă așa cum o scrie ridicarea |
+| **Stație** | Ce stație este acea adâncime. Pe măsură ce scrieți, sub casetă sunt oferite stațiile ridicării curente a peșterii ale căror nume încep așa — majusculele și diacriticele nu contează — iar alegerea uneia completează scrierea ridicării. Orice nume este primit în continuare: lista este un ajutor, nu o regulă |
 | **Numele locului** | Opțional — numele folosit de oameni („Meandrul") |
+
+Lista de sub **Stație** nu oferă nimic acolo unde peștera nu are încă nicio ridicare citită sau
+unde locația exactă a peșterii vă este ascunsă; caseta este atunci una simplă de text. Când sunt
+mai multe nume decât arată, ultimul rând spune câte — scrieți mai mult din nume.
 
 - **O singură declarație pe adâncime.** O adâncime declarată din nou înlocuiește ce spunea.
   Modificarea unei declarații la altă adâncime o scrie pe cea nouă și apoi o retrage pe cea veche.
@@ -264,7 +304,23 @@ nu poate spune pe care o au în minte oamenii prin „96 de metri". Clubul poate
   plasată prin măsurare, iar fila spune care dintre cele două s-a întâmplat.
 - **Un nume de loc devine ceva prin care se poate raporta.** Cardul de raport oferă locurile
   declarate pe nume, de la cel mai puțin adânc; alegerea unuia raportează adâncimea lui, care
-  ajunge pe stația declarată.
+  ajunge pe stația declarată. Unde peștera nu a declarat niciunul, cardul o spune — *Această
+  peșteră nu a declarat niciun loc, așa că un loc se raportează ca stație sau ca adâncime* — cu
+  o legătură, **Declară-le pe pagina peșterii**, care deschide acest card. Dialogul de corectare
+  spune același lucru.
+- **Nu este în ridicarea curentă.** Un loc declarat poartă această etichetă portocalie când
+  ridicarea marcată drept cea **curentă** a peșterii nu are nicio stație cu acel nume — un nume
+  scris greșit, sau o ridicare exportată din nou cu stațiile redenumite și apoi **făcută cea
+  curentă**. Declarația nu este urmată acolo: un raport la acea adâncime ajunge pe stația cea mai
+  apropiată. Corectați numele stației (lista le oferă pe cele ale ridicării curente) sau
+  verificați care ridicare este cea curentă a peșterii. **O ridicare doar încărcată nu este
+  judecată aici**: încărcarea nu ia marcajul de la ridicarea care îl are, așa că un fișier
+  corectat nu arată nicio etichetă până nu este făcut curent — iar lipsa etichetelor până atunci
+  nu arată că declarațiile i se potrivesc. O urmărire îndreptată spre altă ridicare o spune ea
+  însăși: cardul de raport judecă fiecare loc față de ridicarea folosită de urmărire, în lista
+  lui de locuri — *Meandrul — stația nu este în această ridicare*. Lipsa etichetei nu este o
+  promisiune, nici într-un sens, nici în celălalt: unde ridicarea curentă nu a fost citită (chiar
+  dacă o altă încărcare a fost), sau locația peșterii vă este ascunsă, nu se spune nimic.
 - **Retrage** scoate o declarație. Rapoartele deja înregistrate păstrează stația primită.
 
 Declararea cere dreptul de scriere pe peșteră. O stație declarată este o poziție, așa că lista
