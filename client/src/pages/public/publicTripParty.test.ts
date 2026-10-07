@@ -13,6 +13,7 @@ import {
   positionAgeInWords,
   sinceInWords,
   standingOf,
+  tripsByCamp,
 } from './publicTripParty.ts';
 
 const TEAM_A = '11111111-1111-1111-1111-111111111111';
@@ -330,5 +331,54 @@ describe('since when a trip has been followed', () => {
     expect(
       followedSpanInWords({ armedAt: start, closedAt: iso(local(14, 7)) }, local(14, 20), 'en'),
     ).toBeNull();
+  });
+});
+
+const CAMP_2026 = { id: '44444444-4444-4444-4444-444444444444', name: 'Summer camp' };
+const CAMP_2019 = { id: '55555555-5555-5555-5555-555555555555', name: 'Summer camp' };
+const trip = (id: string, expedition: { id: string; name: string } | null) => ({ id, expedition });
+
+/**
+ * A cave's trips gathered by camp. The order is the server's and the matching is by identifier:
+ * a list a club reads as its own history must not be rearranged, and must not fold two camps
+ * into one because somebody gave them the same name.
+ */
+describe('a cave\'s trips arranged by camp', () => {
+  it('gathers each camp\'s trips in the order they arrived, with the trips of no camp last', () => {
+    const groups = tripsByCamp([
+      trip('a', CAMP_2026),
+      trip('b', null),
+      trip('c', CAMP_2019),
+      trip('d', CAMP_2026),
+      trip('e', null),
+    ]);
+
+    expect(groups.map((group) => [group.camp?.id ?? null, group.trips.map((one) => one.id)])).toEqual([
+      [CAMP_2026.id, ['a', 'd']],
+      [CAMP_2019.id, ['c']],
+      [null, ['b', 'e']],
+    ]);
+  });
+
+  it('keeps two camps of one name apart', () => {
+    const groups = tripsByCamp([trip('a', CAMP_2026), trip('b', CAMP_2019)]);
+
+    expect(groups).toHaveLength(2);
+    expect(groups.map((group) => group.camp?.name)).toEqual(['Summer camp', 'Summer camp']);
+  });
+
+  it('is one unnamed group where no trip names a camp, and nothing where there are no trips', () => {
+    // What a caller draws as the plain list: no camp anywhere means no arrangement to show. A row
+    // that arrives without the member at all is the same thing as one that says null.
+    const arrived: { id: string; expedition?: { id: string; name: string } | null }[] = [
+      trip('a', null),
+      { id: 'b' },
+    ];
+    const groups = tripsByCamp(arrived);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].camp).toBeNull();
+    expect(groups[0].trips.map((one) => one.id)).toEqual(['a', 'b']);
+
+    expect(tripsByCamp([])).toEqual([]);
   });
 });

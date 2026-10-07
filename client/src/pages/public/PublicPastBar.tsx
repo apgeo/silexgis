@@ -275,6 +275,15 @@ export default function PublicPastBar({
                 ? t('publicTrip.past.unknownTrip')
                 : t('publicTrip.past.bannerLoading')}
           </div>
+          {/* Which camp the trip was part of, where the server names one — the same words the
+              list it was picked from gathers it under, so a reader who arrived by a link and
+              never saw that list is told as much as one who pressed a row. Left out of a frame:
+              there the strip's height is the drawing's, and the list a press away says it. */}
+          {!compact && track?.expedition != null && (
+            <div className="public-past-banner-camp" data-testid="public-past-banner-camp">
+              {t('publicTrip.camp', { name: track.expedition.name })}
+            </div>
+          )}
           {/* Said only where it is true, and never as the reason the view is in the past: a reader
               can follow nobody and still be looking at a past trip. */}
           {followName !== null && (
