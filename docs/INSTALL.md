@@ -396,6 +396,23 @@ Notes worth knowing before you turn it on:
   `SILEXGIS__Conversion__Enabled` from `.env`, or uploads keep queuing conversions for a
   service that is no longer there.
 
+**The same converter also gives write-ups a PDF.** A trip's or a camp's write-up is a Word
+document that SilexGIS writes itself. With the converter running, the write-up page gains a
+**Download PDF** button beside *Download document*: the Word document is built exactly as
+before, handed to the converter inside the request, and the PDF comes back to the person who
+asked. Nothing is stored — not the PDF, not a copy on the converter — and the copy *saved to*
+a trip or a camp stays a Word document, which is the one a club edits afterwards. Without the
+converter the button is simply not offered, and the browser's own **Print → Save as PDF** on
+the write-up page remains the way to a PDF.
+
+Somebody waiting for a download is not kept as long as a background conversion is: the wait is
+`SILEXGIS__Reports__PdfTimeoutSeconds` (60 by default, separate from
+`SILEXGIS__Conversion__TimeoutSeconds`). A converter that does not answer in that time is
+reported to the reader as *not answering* — try again, or take the Word document — which is a
+different message from an installation that has none. No fonts are added to the application
+for this: the page is laid out by the converter, with the fonts in the converter's image, so a
+write-up in a script that image has no font for prints with the converter's fallback.
+
 ## Map backgrounds
 
 The maps behind your caves — OpenStreetMap, topographic maps, aerial imagery, hiking-route overlays — are
@@ -1462,6 +1479,7 @@ the reasoning beside each one.
 | `SILEXGIS__MapLayers__ApiKeys__<name>` | — | the access key a catalogue entry names, e.g. `SILEXGIS__MapLayers__ApiKeys__Thunderforest`. An entry whose key is not set is **not offered at all**, rather than offered and broken: a tile address still carrying the placeholder answers 401 for every tile, which on screen looks exactly like a source that is down |
 | `SILEXGIS__Reports__MaxMapBytes` | `5242880` (5 MB) | the largest picture of a map a trip's write-up takes when it is downloaded. The page sends one of a few hundred kilobytes (a megabyte or two over photographic imagery); a larger one is refused and the document is downloaded without it. The picture is held for the one answer it came with and stored nowhere. If a reverse proxy sits in front, its body-size cap has to allow this plus about a megabyte |
 | `SILEXGIS__Reports__MaxMapPixels` | `8000000` | the most pixels that picture may hold, width times height. Separate from the size in bytes because a picture is held decoded while it is redrawn, and a file of a few kilobytes can declare a size that would take gigabytes; the declared size is read first and anything over this is refused undecoded |
+| `SILEXGIS__Reports__PdfTimeoutSeconds` | `60` | how long somebody who asked for a write-up as a PDF is kept waiting for the document converter (see *Showing Word and Excel files*). Only meaningful where the converter is deployed; without one no PDF is offered. Shorter than `SILEXGIS__Conversion__TimeoutSeconds` on purpose — that one is for background work on long uploads, this one is for a person watching a button. Values outside 1 to 300 seconds are brought back inside that range |
 | `SILEXGIS__Map__MaxPoints` | `10000` | the most points one map layer request answers with. Raise it if you import GPS recordings of tens of thousands of points and want to see all of them at once; the cost is the browser's memory and drawing time, not the server's |
 | `SILEXGIS__ExpeditionMap__MaxPoints` | `2000` | the most cave entrances one camp's map answers with. Past it the map says it was cut short — a yes or no, never how many, because the number would say how many caves the camp reached |
 | `SILEXGIS__TripList__MaxExportedTrips` | `2000` | the most trips one spreadsheet export holds. Past it the file says so on its first lines, so a file that stopped at the limit cannot be mistaken for one that ended |

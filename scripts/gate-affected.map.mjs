@@ -36,6 +36,9 @@ export const groups = {
     // what leaves and returns with it, who may put it back, and what the rest of the
     // application does about the rows it still holds.
     'TripSoftDeleteTests', 'TripRestoreTests', 'TripSoftDeleteHousekeepingTests',
+    // A write-up asked for as a PDF: the generated document passed through the optional
+    // conversion service, and each way of not getting one.
+    'WriteUpPdfTests',
   ],
   events: [
     'EventAccessDomainTests', 'EventAuthoringTests', 'EventInvitationTests',
@@ -50,6 +53,7 @@ export const groups = {
     'ExpeditionRosterEntityTests',
     'ExpeditionRosterRoleVocabularyTests', 'ExpeditionRosterTests',
     'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
+    'WriteUpPdfTests',
   ],
   documents: [
     'ContentMetadataTests', 'DemoPdfTests', 'DocumentAccessApiTests',
@@ -65,6 +69,8 @@ export const groups = {
     // A picture a caller hands a write-up is read and redrawn beside the document writer; the
     // first is that reader on its own, the second the route that passes it a real upload.
     'SuppliedPictureTests', 'TripReportMapTests',
+    // The write-up's own caller of the conversion service sits beside the document writer.
+    'WriteUpPdfTests',
   ],
   photos: [
     'AlbumAndPublicGalleryTests', 'ExpeditionPhotographTests', 'PhotoBytesProtectionTests',

@@ -66,7 +66,8 @@ internal static class ExpeditionReportEndpoints
             .WithSummary(
                 "The camp written up as one document, in the layout named or the club's chosen "
                 + "one. Built from what this caller may read: a trip they may not open contributes "
-                + "nothing to it.");
+                + "nothing to it. 'format=pdf' asks for it as a PDF, which an installation "
+                + "without the document converter refuses.");
         camps.MapPost("/report", KeepAsync)
             .WithSummary(
                 "Files the write-up against the camp, superseding the last one this route "
@@ -77,9 +78,15 @@ internal static class ExpeditionReportEndpoints
     }
 
     /// <summary>The write-up as a file the caller keeps.</summary>
+    /// <param name="format">
+    /// The format it is wanted in: nothing, or <c>docx</c>, for the document this application
+    /// writes; <c>pdf</c> for that same document laid out by the installation's conversion
+    /// service, where it runs one.
+    /// </param>
     public static async Task<Results<FileContentHttpResult, ProblemHttpResult>> DownloadAsync(
         Guid id,
         Guid? templateId,
+        string? format,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -87,15 +94,22 @@ internal static class ExpeditionReportEndpoints
         FeatureProtection protection,
         ThumbnailService thumbnails,
         IDocumentWriter writer,
+        WriteUpPdfConverter pdf,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(pdf);
         var ctx = await accessAccessor.GetAsync(ct);
         var built = await BuildAsync(
-            id, templateId, db, access, ctx, ctx, userAccessor, protection, thumbnails, writer, ct);
-        return built.Problem is { } problem
-            ? problem
-            : TypedResults.File(built.Bytes!, writer.ContentType, built.FileName!);
+            id, templateId, db, access, ctx, ctx, userAccessor, protection, thumbnails, writer,
+            () => ReportDownloads.RefusalBeforeBuilding(format, pdf),
+            ct);
+        if (built.Problem is { } problem)
+        {
+            return problem;
+        }
+
+        return await ReportDownloads.AnswerAsync(built.Bytes!, built.FileName!, format, writer, pdf, ct);
     }
 
     /// <summary>
@@ -117,6 +131,7 @@ internal static class ExpeditionReportEndpoints
     public static async Task<Results<Ok<ExpeditionReportSavedDto>, ProblemHttpResult>> KeepAsync(
         Guid id,
         Guid? templateId,
+        string? format,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -151,9 +166,18 @@ internal static class ExpeditionReportEndpoints
             return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
+        // The filed copy is the word-processor document and nothing else: it is the one a club
+        // edits afterwards, and it must not depend on a service an installation may switch
+        // off. Asked only of somebody who could have filed the write-up at all.
+        if (ReportDownloads.RefusalWhenFiling(format) is { } formatRefused)
+        {
+            return formatRefused;
+        }
+
         var everyReader = await AccessContextResolver.ResolveForAnyAccountAsync(db, ct);
         var built = await BuildAsync(
-            id, templateId, db, access, ctx, everyReader, userAccessor, protection, thumbnails, writer, ct);
+            id, templateId, db, access, ctx, everyReader, userAccessor, protection, thumbnails, writer,
+            null, ct);
         if (built.Problem is { } problem)
         {
             return problem;
@@ -220,6 +244,12 @@ internal static class ExpeditionReportEndpoints
     /// which trips are in it, which caves are named, who is listed, which photographs go in — is put
     /// to this one context and to nothing else.
     /// </param>
+    /// <param name="formatRefusal">
+    /// What is already known to be refused about the format the caller asked for, or null on a
+    /// route that takes none. Asked only once the camp has been found readable and its layout
+    /// found, so nobody learns from the format what the plain download would not tell them, and
+    /// before anything is gathered, so a request that cannot be answered costs nothing.
+    /// </param>
     private static async Task<BuiltReport> BuildAsync(
         Guid id,
         Guid? templateId,
@@ -231,6 +261,7 @@ internal static class ExpeditionReportEndpoints
         FeatureProtection protection,
         ThumbnailService thumbnails,
         IDocumentWriter writer,
+        Func<ProblemHttpResult?>? formatRefusal,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -251,6 +282,11 @@ internal static class ExpeditionReportEndpoints
         if (body is null)
         {
             return new BuiltReport(null, null, ApiProblems.NotFound(ReportTemplateReads.NotFoundCode));
+        }
+
+        if (formatRefusal?.Invoke() is { } unwanted)
+        {
+            return new BuiltReport(null, null, unwanted);
         }
 
         // Read here rather than trusted: a layout is checked when it is stored, and one that has

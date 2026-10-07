@@ -102,6 +102,12 @@ public sealed record FileDto(
 /// Archives this installation can expand server-side. Empty would mean the feature is off;
 /// it is what the upload dialog offers "expand this" for.
 /// </param>
+/// <param name="ConversionAvailable">
+/// Whether this installation runs the optional service that lays an office document out as a
+/// portable one. A standing fact about the installation, false on most small ones, and said
+/// here so a page can leave out a choice that could only be refused — a generated write-up
+/// offered as a PDF, for one — rather than offer it and apologise.
+/// </param>
 public sealed record FileConfigDto(
     long MaxUploadBytes,
     long? RemainingBytes,
@@ -111,7 +117,8 @@ public sealed record FileConfigDto(
     IReadOnlyList<string> RefusedExtensions,
     int ChunkBytes,
     long ResumableThresholdBytes,
-    IReadOnlyList<string> ArchiveExtensions);
+    IReadOnlyList<string> ArchiveExtensions,
+    bool ConversionAvailable);
 
 /// <summary>
 /// Whether content with this hash is already here, as far as this caller is concerned.

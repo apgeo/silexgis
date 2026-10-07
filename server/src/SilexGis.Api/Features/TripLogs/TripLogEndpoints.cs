@@ -146,7 +146,8 @@ public static class TripLogEndpoints
         trips.MapGet("/{id:guid}/report", TripReportEndpoints.DownloadAsync)
             .WithSummary(
                 "The trip written up as a document, built from this caller's own reading of the "
-                + "trip — the same one the page shows.");
+                + "trip — the same one the page shows. 'format=pdf' asks for it as a PDF, which "
+                + "an installation without the document converter refuses.");
         TripReportEndpoints.MapDownloadWithMap(trips);
         trips.MapPost("/{id:guid}/report", TripReportEndpoints.KeepAsync)
             .WithSummary(

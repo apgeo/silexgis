@@ -115,9 +115,16 @@ internal static class TripReportEndpoints
     /// <summary>
     /// The write-up as a file the caller keeps.
     /// </summary>
+    /// <param name="format">
+    /// The format it is wanted in: nothing, or <c>docx</c>, for the document this application
+    /// writes; <c>pdf</c> for that same document laid out by the installation's conversion
+    /// service, where it runs one. A word, never a number — read by name like every other
+    /// closed vocabulary on a query string.
+    /// </param>
     public static async Task<Results<FileContentHttpResult, ProblemHttpResult>> DownloadAsync(
         Guid id,
         Guid? templateId,
+        string? format,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -125,14 +132,20 @@ internal static class TripReportEndpoints
         FeatureProtection protection,
         ThumbnailService thumbnails,
         IDocumentWriter writer,
+        WriteUpPdfConverter pdf,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var built = await BuildAsync(
-            id, templateId, db, access, ctx, ctx, userAccessor, protection, thumbnails, writer, null, ct);
-        return built.Problem is { } problem
-            ? problem
-            : TypedResults.File(built.Bytes!, writer.ContentType, built.FileName!);
+            id, templateId, db, access, ctx, ctx, userAccessor, protection, thumbnails, writer, null,
+            () => ReportDownloads.RefusalBeforeBuilding(format, pdf),
+            ct);
+        if (built.Problem is { } problem)
+        {
+            return problem;
+        }
+
+        return await ReportDownloads.AnswerAsync(built.Bytes!, built.FileName!, format, writer, pdf, ct);
     }
 
     /// <summary>
@@ -163,8 +176,9 @@ internal static class TripReportEndpoints
                 "Multipart, with one optional part named 'map': a PNG or JPEG the caller's own "
                 + "browser drew out of what the trip's page was already given. The picture is "
                 + "checked, redrawn here and placed in this one answer; it is stored nowhere. "
-                + "Without the part the answer is the plain download's. The layout is chosen "
-                + "by the same query parameter the plain download takes.");
+                + "Without the part the answer is the plain download's. The layout and the "
+                + "format are chosen by the same query parameters the plain download takes; "
+                + "asked for as a PDF, the picture goes in before the document is converted.");
     }
 
     /// <summary>
@@ -188,6 +202,7 @@ internal static class TripReportEndpoints
     public static async Task<Results<FileContentHttpResult, ProblemHttpResult>> DownloadWithMapAsync(
         Guid id,
         Guid? templateId,
+        string? format,
         HttpRequest request,
         SilexGisDbContext db,
         IAccessService access,
@@ -196,6 +211,7 @@ internal static class TripReportEndpoints
         FeatureProtection protection,
         ThumbnailService thumbnails,
         IDocumentWriter writer,
+        WriteUpPdfConverter pdf,
         IOptions<ReportOptions> options,
         CancellationToken ct)
     {
@@ -203,10 +219,16 @@ internal static class TripReportEndpoints
         var built = await BuildAsync(
             id, templateId, db, access, ctx, ctx, userAccessor, protection, thumbnails, writer,
             () => ReadMapAsync(request, options.Value, ct),
+            () => ReportDownloads.RefusalBeforeBuilding(format, pdf),
             ct);
-        return built.Problem is { } problem
-            ? problem
-            : TypedResults.File(built.Bytes!, writer.ContentType, built.FileName!);
+        if (built.Problem is { } problem)
+        {
+            return problem;
+        }
+
+        // The picture is already in the document by now, so a portable copy carries it exactly
+        // as the word-processor copy does: one document, converted whole.
+        return await ReportDownloads.AnswerAsync(built.Bytes!, built.FileName!, format, writer, pdf, ct);
     }
 
     /// <summary>
@@ -240,6 +262,7 @@ internal static class TripReportEndpoints
     public static async Task<Results<Ok<TripReportSavedDto>, ProblemHttpResult>> KeepAsync(
         Guid id,
         Guid? templateId,
+        string? format,
         HttpRequest request,
         SilexGisDbContext db,
         IAccessService access,
@@ -280,6 +303,14 @@ internal static class TripReportEndpoints
             return pictureRefused;
         }
 
+        // The filed copy is the word-processor document and nothing else: it is the one a club
+        // edits afterwards, and it must not depend on a service an installation may switch
+        // off. A request naming another format is told so rather than filed as this one.
+        if (ReportDownloads.RefusalWhenFiling(format) is { } formatRefused)
+        {
+            return formatRefused;
+        }
+
         // The reading the filed copy is built from: one that belongs to no account in particular,
         // so nothing in the file is there because of who happened to press the button. The trip
         // itself was read above, as this caller — a filed copy of a trip they may read is not a
@@ -288,7 +319,7 @@ internal static class TripReportEndpoints
         // No picture, and no way to pass one: this is the copy every reader of the trip opens.
         var built = await BuildAsync(
             id, templateId, db, access, ctx, everyReader, userAccessor, protection, thumbnails, writer,
-            null, ct);
+            null, null, ct);
         if (built.Problem is { } problem)
         {
             return problem;
@@ -520,6 +551,13 @@ internal static class TripReportEndpoints
     /// who is refused the document is told that and nothing about what they sent with the
     /// request.
     /// </param>
+    /// <param name="formatRefusal">
+    /// What is already known to be refused about the format the caller asked for, or null on a
+    /// route that takes none. Asked at the same point and for the same reason: after the trip
+    /// has been found readable, so nobody learns from the format what they could not learn from
+    /// the plain download; and before anything is gathered, so a request that cannot be
+    /// answered costs nothing.
+    /// </param>
     private static async Task<BuiltReport> BuildAsync(
         Guid id,
         Guid? templateId,
@@ -532,6 +570,7 @@ internal static class TripReportEndpoints
         ThumbnailService thumbnails,
         IDocumentWriter writer,
         Func<Task<MapReading>>? readMap,
+        Func<ProblemHttpResult?>? formatRefusal,
         CancellationToken ct)
     {
         // A picture shows what its sender may see, so it may only ever go into a document that
@@ -571,6 +610,11 @@ internal static class TripReportEndpoints
         var parts = read.Ok
             ? read.Parts
             : ReportTemplateFormat.Parse(ReportTemplateFormat.Default, ReportTemplateKind.Trip).Parts;
+
+        if (formatRefusal?.Invoke() is { } unwanted)
+        {
+            return new BuiltReport(null, null, unwanted);
+        }
 
         TripReportMap? map = null;
         if (readMap is not null)
