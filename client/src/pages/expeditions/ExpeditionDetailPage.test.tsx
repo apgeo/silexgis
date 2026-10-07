@@ -51,6 +51,10 @@ vi.mock('./ExpeditionStateControl.tsx', () => ({
 vi.mock('./ExpeditionTripsTab.tsx', () => ({
   default: () => <div>the trips gathered into the camp</div>,
 }));
+vi.mock('./ExpeditionWatchTab.tsx', () => ({
+  default: ({ active }: { active: boolean }) =>
+    active ? <div>who is underground on the camp's trips</div> : <div>the head count, unseen</div>,
+}));
 vi.mock('./ExpeditionFilesTab.tsx', () => ({
   default: () => <div>what is filed against the camp</div>,
 }));
@@ -152,6 +156,27 @@ describe('the camp page', () => {
     cleanup();
     renderPage(`/expeditions/${CAMP}?tab=photos`);
     expect(screen.getByText('the pictures of the camp')).toBeTruthy();
+  });
+
+  it('offers the head count directly after the trips, and tells it when it is the one shown', () => {
+    renderPage(`/expeditions/${CAMP}?tab=watch`);
+
+    // Told that it is on screen, which is what it asks the server by: a section that stays
+    // mounted behind another must not go on reading a head count every half minute.
+    expect(screen.getByText("who is underground on the camp's trips")).toBeTruthy();
+    expect(screen.queryByText('the head count, unseen')).toBeNull();
+
+    const tabs = screen.getAllByRole('tab').map((tab) => tab.textContent);
+    expect(tabs.slice(0, 2)).toEqual(['Trips', 'Who is underground']);
+  });
+
+  it('tells the head count it has gone behind another section when the reader moves on', () => {
+    renderPage(`/expeditions/${CAMP}?tab=watch`);
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+
+    // Still mounted — the strip keeps a pane once it has been opened — and told so.
+    expect(screen.getByText('the head count, unseen')).toBeTruthy();
+    expect(screen.queryByText("who is underground on the camp's trips")).toBeNull();
   });
 
   it('falls back to its own tab when the address names one it does not have', () => {

@@ -2106,6 +2106,7 @@
     "dates": "Days",
     "cavingGroup": "Organising club",
     "tabTrips": "Trips",
+    "tabWatch": "Who is underground",
     "tabMap": "Map",
     "tabLeads": "Leads",
     "tabRoster": "Who was there",
@@ -2143,6 +2144,18 @@
     "mapTruncated": "This camp names more cave entrances than one map can carry, so not every entrance is drawn.",
     "noTripsVisible": "No trips in this camp that you may read.",
     "tripsTruncated": "Showing {{shown}} of {{total}} trips.",
+    "watch": {
+      "intro": "Who is underground on this camp's trips, as each trip's own tracking tells it — counted over the trips you may read. It records what was reported: it watches no clock and raises no alarm.",
+      "empty": "No trip of this camp is being tracked, and none had its tracking closed recently — or none you may read. A trip appears here once tracking is started on its Tracking tab, and stays for a while after tracking is closed.",
+      "unavailable": "The head count could not be read.",
+      "truncated": "This camp has more tracked trips than this list shows. Trips being tracked now come first; the ones left off are those whose tracking was closed longest ago.",
+      "expectedReturn": "Expected back",
+      "neverHeard": "no word yet",
+      "closedAt": "Closed",
+      "partyEmpty": "Nobody is on this trip's list.",
+      "unnamed": "Unnamed person",
+      "openTracking": "Open this trip's tracking"
+    },
     "albums": "Albums about this camp",
     "noAlbums": "No albums about this camp yet.",
     "rosterRoleValues": {

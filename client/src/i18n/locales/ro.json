@@ -2106,6 +2106,7 @@
     "dates": "Zilele",
     "cavingGroup": "Club organizator",
     "tabTrips": "Ture",
+    "tabWatch": "Cine e în peșteră",
     "tabMap": "Hartă",
     "tabLeads": "Continuări",
     "tabRoster": "Cine a fost",
@@ -2143,6 +2144,18 @@
     "mapTruncated": "Această tabără numește mai multe intrări de peșteră decât poate purta o hartă, așa că nu toate intrările sunt desenate.",
     "noTripsVisible": "Nicio tură din această tabără pe care să o puteți citi.",
     "tripsTruncated": "Se afișează {{shown}} din {{total}} ture.",
+    "watch": {
+      "intro": "Cine este în peșteră în turele acestei tabere, așa cum o spune urmărirea fiecărei ture — numărat peste turele pe care le puteți citi. Înregistrează ce s-a raportat: nu urmărește niciun ceas și nu dă nicio alarmă.",
+      "empty": "Nicio tură a acestei tabere nu este în urmărire și niciuna nu a avut urmărirea încheiată de curând — sau niciuna pe care să o puteți citi. O tură apare aici după ce urmărirea este pornită din fila ei Urmărire și rămâne o vreme după ce urmărirea este încheiată.",
+      "unavailable": "Numărătoarea nu a putut fi citită.",
+      "truncated": "Tabăra are mai multe ture urmărite decât arată această listă. Turele aflate acum în urmărire sunt primele; lipsesc cele a căror urmărire a fost încheiată cel mai demult.",
+      "expectedReturn": "Ieșire estimată",
+      "neverHeard": "nicio veste încă",
+      "closedAt": "Încheiată",
+      "partyEmpty": "Nimeni nu este pe lista acestei ture.",
+      "unnamed": "Persoană fără nume",
+      "openTracking": "Deschide urmărirea acestei ture"
+    },
     "albums": "Albume despre această tabără",
     "noAlbums": "Încă niciun album despre această tabără.",
     "rosterRoleValues": {

@@ -429,6 +429,7 @@ export const queryKeys = {
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,
   expeditionMap: (id: string) => ['expeditions', 'map', id] as const,
   expeditionLeads: (id: string) => ['expeditions', 'leads', id] as const,
+  expeditionSurfaceLog: (id: string) => ['expeditions', 'surface-log', id] as const,
   expeditionSharing: (id: string) => ['expeditions', 'sharing', id] as const,
   events: (params: EventListParams) => ['events', 'list', params] as const,
   event: (id: string) => ['events', 'detail', id] as const,
@@ -8518,6 +8519,63 @@ function tripTrackingQuery(tripLogId: string) {
         }),
       ),
     refetchInterval: (query) => trackingPollInterval(query.state.data?.state),
+  });
+}
+
+export type ExpeditionSurfaceLog = components['schemas']['ExpeditionSurfaceLogDto'];
+export type ExpeditionSurfaceLogTrip = components['schemas']['ExpeditionSurfaceLogTripDto'];
+export type ExpeditionSurfaceLogPerson = components['schemas']['ExpeditionSurfaceLogPersonDto'];
+
+/**
+ * How often a camp's head count is asked for again, or `false` for not at all.
+ *
+ * <b>One condition: somebody is looking.</b> The camp page keeps a section mounted once it has been
+ * opened, so a count that polled whenever it was mounted would go on asking every half minute from
+ * behind the map for as long as the camp stayed open. That is the only reason to stop.
+ *
+ * <b>What the last answer held is deliberately not one.</b> A single trip's watch can be left alone
+ * once it is closed, because only a report moves it and a closed watch takes none. This answer is
+ * a list, and the list changes from outside it: a party arms its watch from a phone at the cave,
+ * a watch that was closed is armed again because somebody went back in, a finished trip passes out
+ * of the window it is kept for. A count that stopped asking on an empty list would go on showing a
+ * coordinator "nobody is being followed" over a camp with a party underground, for as long as the
+ * tab stayed in front — and nothing on the screen would say it had stopped. The same holds for a
+ * read that failed: it is asked again at the next interval rather than left as the error it was.
+ *
+ * The interval is the trip's own, on purpose: a camp's count that ran behind the trip it links to
+ * would show a party underground on one screen and out on the next.
+ */
+export function expeditionSurfaceLogPollInterval(shown: boolean) {
+  return shown ? TRACKING_POLL_MS : (false as const);
+}
+
+/**
+ * Who is underground on one camp's trips: every member trip this caller may read whose watch is
+ * running or was closed recently, each with its party counted and named.
+ *
+ * <b>No place is on this answer, and none may be added to it here.</b> It carries who is in, who is
+ * out, who has not been heard from and when each was last heard — not a station, a depth, a survey
+ * or a cave — which is what lets it count a party in a cave whose position this reader may not be
+ * told. Anything a caller wants to know about *where* is the trip's own watch, behind the trip's
+ * own rules.
+ *
+ * Read only while its section is the one on screen, and read afresh each time it becomes so: a
+ * head count somebody comes back to after an hour on another tab must not be the hour-old one
+ * with nothing to say it is. And kept fresh for as long as it stays on screen, by the rule above.
+ */
+export function useExpeditionSurfaceLog(expeditionId: string | undefined, shown = true) {
+  return useQuery({
+    queryKey: queryKeys.expeditionSurfaceLog(expeditionId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/expeditions/{id}/surface-log', {
+          params: { path: { id: expeditionId! } },
+        }),
+      ),
+    enabled: !!expeditionId && shown,
+    staleTime: 0,
+    retry: false,
+    refetchInterval: () => expeditionSurfaceLogPollInterval(shown),
   });
 }
 

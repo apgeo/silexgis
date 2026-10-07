@@ -1,0 +1,59 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+
+/* The three counts of one trip, side by side at every width.
+
+   Equal columns rather than flex, so the figures of a party of 12 and of a party of 3 sit at the
+   same places across every card on the screen and can be read down as columns. Three across even
+   at 360px: stacked, the count of people nobody has heard from would fall below the fold of its
+   own card, and it is the one a coordinator opens this section to find.
+
+   No colour of this stylesheet's own. The figure is the page's text colour and the label is the
+   library's secondary text, both of which already answer in either theme. */
+.expedition-watch-counts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.expedition-watch-count-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.expedition-watch-count {
+  font-size: 24px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.expedition-watch-count-label {
+  /* Small enough that "Not heard from" stays on one line in a third of a 360px screen. */
+  font-size: 12px;
+}
+
+/* One person: the name takes what room there is and breaks inside itself rather than pushing the
+   standing off the edge of a phone; the standing and the age keep their width and wrap under the
+   name together when the row is too narrow for all three. */
+.expedition-watch-party {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.expedition-watch-person {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: 4px 0;
+}
+
+.expedition-watch-person-name {
+  flex: 1 1 10em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

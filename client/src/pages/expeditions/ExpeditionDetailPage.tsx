@@ -49,6 +49,7 @@ import ExpeditionRosterTab from './ExpeditionRosterTab.tsx';
 import ExpeditionSharingModal from './ExpeditionSharingModal.tsx';
 import ExpeditionStateControl from './ExpeditionStateControl.tsx';
 import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
+import ExpeditionWatchTab from './ExpeditionWatchTab.tsx';
 
 /**
  * The tab keys this page answers to, in the order they are offered. The first is the page's own
@@ -56,7 +57,7 @@ import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
  * survives a reload. Adding a section to the camp is one more entry here and one more component —
  * nothing else about the page has to move.
  */
-const TAB_KEYS = ['trips', 'map', 'leads', 'roster', 'photos', 'files', 'history'] as const;
+const TAB_KEYS = ['trips', 'watch', 'map', 'leads', 'roster', 'photos', 'files', 'history'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 const DEFAULT_TAB: TabKey = 'trips';
 
@@ -266,6 +267,14 @@ export default function ExpeditionDetailPage() {
             key: 'trips',
             label: t('expeditions.tabTrips'),
             children: <ExpeditionTripsTab expeditionId={camp.id} />,
+          },
+          {
+            key: 'watch',
+            label: t('expeditions.tabWatch'),
+            // Directly after the trips it counts, and told when it is the pane on screen for a
+            // reason of its own: it asks the server again every half minute while a party is
+            // underground, and a pane that stays mounted behind another must not go on asking.
+            children: <ExpeditionWatchTab expeditionId={camp.id} active={activeTab === 'watch'} />,
           },
           {
             key: 'map',
