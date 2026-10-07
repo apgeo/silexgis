@@ -53,21 +53,40 @@ public sealed class ExpeditionShareRequestValidator : AbstractValidator<Expediti
     }
 }
 
+/// <summary>One member trip a camp's sharing did not reach, which the caller may be told about.</summary>
+/// <remarks>
+/// Only ever built for a trip the caller may read — the title is on it, and a title is exactly
+/// what a refusal must not hand to somebody who cannot open the trip.
+/// </remarks>
+public sealed record ExpeditionCascadeSkip(Guid TripId, string Title, CascadeSkipReason Reason);
+
 /// <summary>
 /// What one application of a camp's sharing came to. <see cref="Problem"/> set means nothing
 /// was written at all.
 /// </summary>
 /// <param name="Problem">The refusal, or null when the cascade may be saved.</param>
 /// <param name="Trips">Member trips the camp gathered when this ran.</param>
+/// <param name="Shared">Member trips that took the sharing — every rule of it, or already had.</param>
 /// <param name="Written">Rules staged as new rows.</param>
 /// <param name="Updated">Rules this camp had already written here, restated with new actions.</param>
 /// <param name="Unchanged">Rules this camp had already written here, exactly as asked.</param>
+/// <param name="Skipped">The trips that did not take it and that the caller may read.</param>
+/// <param name="SkippedNotNamed">
+/// How many more did not take it. A number only: these are trips the caller may not read.
+/// </param>
 public sealed record ExpeditionCascadeOutcome(
     ProblemHttpResult? Problem,
     int Trips,
+    int Shared,
     int Written,
     int Updated,
-    int Unchanged);
+    int Unchanged,
+    IReadOnlyList<ExpeditionCascadeSkip> Skipped,
+    int SkippedNotNamed)
+{
+    /// <summary>How many member trips did not take the sharing, named or not.</summary>
+    public int SkippedTrips => Skipped.Count + SkippedNotNamed;
+}
 
 /// <summary>
 /// Sharing a camp, reaching the trips in it: one object-scoped rule per member trip, marked
@@ -91,16 +110,29 @@ public sealed record ExpeditionCascadeOutcome(
 /// somebody else owns is exactly how "may manage sharing" turns into full disclosure.
 /// </para>
 /// <para>
-/// <b>All-or-nothing.</b> Rows are staged and added only once every member trip has answered,
-/// so a refusal leaves the change tracker as it found it and there is no half-shared camp for
-/// anybody to reason about. The refusal carries a count and never a name — see the rule it
-/// calls for why.
+/// <b>Trip by trip.</b> A member trip takes the whole of the sharing or none of it, and one
+/// trip refusing does not refuse the others: a camp exists to gather other people's trips, and
+/// an organiser who owns nine of ten should not have to wait on the tenth's owner to share the
+/// nine. What refuses a trip has not moved — the granter must be able to administer that
+/// trip's rules, and may hand out there no more than they hold there. The trips that refused
+/// are reported: the ones the granter may read by name, the rest as a count, by the one rule
+/// that decides what a skipped row may disclose. Applying again later picks a skipped trip up
+/// once its owner has delegated.
+/// </para>
+/// <para>
+/// <b>Nothing reached is still a refusal.</b> The rules of a camp's sharing are the rows on
+/// its member trips and are stored nowhere else — nothing is written on the camp, whose own
+/// readers are decided on the camp's own permissions tab. So a sharing every trip refused
+/// would store nothing at all, and saying it had succeeded would leave a camp that claims a
+/// grant it has no row of and cannot apply again. Rows are staged and added only once every
+/// member trip has answered, so that refusal leaves the change tracker as it found it.
 /// </para>
 /// <para>
 /// <b>Trips that join later are not covered.</b> This runs when somebody asks it to and reads
 /// membership as it stands at that moment; a trip added afterwards carries no rule from it
-/// until somebody applies the camp's sharing again. Automatic coverage would mean a grant
-/// nobody performed, which is precisely what an audit trail cannot account for.
+/// until somebody applies the camp's sharing again — and is then taken or skipped by the same
+/// per-trip rule as every other. Automatic coverage would mean a grant nobody performed, which
+/// is precisely what an audit trail cannot account for.
 /// </para>
 /// </remarks>
 public static class ExpeditionAccessCascade
@@ -151,14 +183,17 @@ public static class ExpeditionAccessCascade
         }
 
         // Every member trip, with no visibility filter: one the granter cannot read has to be
-        // counted among the refusals rather than quietly skipped, and it is the count alone
-        // that leaves this method.
+        // counted among the skipped rather than left out of the answer, and of such a trip it
+        // is the count alone that leaves this method. Ordered, so the trips an answer names
+        // come in the order the camp's own page lists them rather than in whatever order the
+        // table gave them up.
         var memberIds = await db.ExpeditionTrips.AsNoTracking()
             .Where(m => m.ExpeditionId == expeditionId)
             .Select(m => m.TripLogId)
             .ToListAsync(ct);
         var trips = await db.TripLogs.AsNoTracking()
             .Where(t => memberIds.Contains(t.Id))
+            .OrderBy(t => t.TripDate).ThenBy(t => t.Id)
             .ToListAsync(ct);
         if (trips.Count == 0)
         {
@@ -177,40 +212,71 @@ public static class ExpeditionAccessCascade
         var staged = new List<AccessEntry>();
         var restated = new List<(AccessEntry Row, AccessAction Actions)>();
         var unchanged = 0;
-        var refusedTrips = 0;
+        var shared = 0;
+        var skipped = new List<(ExpeditionCascadeSkip Row, bool CallerMayRead)>();
 
         foreach (var trip in trips)
         {
-            if (await RefusesAsync(db, access, ctx, expeditionId, trip, entries, ct))
-            {
-                refusedTrips++;
-                continue;
-            }
-
+            // What this trip would have written onto it: the rules it does not carry yet, and
+            // the ones it carries with other actions.
+            var writes = new List<(ExpeditionShareEntryWrite Write, AccessEntry? Mine)>();
             foreach (var write in entries)
             {
                 var mine = alreadyMine.Find(e => e.ScopeId == trip.Id
                     && e.SubjectKind == write.SubjectKind
                     && e.SubjectId == write.SubjectId
                     && e.Effect == write.Effect);
+                if (mine is not null && mine.Actions == write.Actions)
+                {
+                    unchanged++;
+                }
+                else
+                {
+                    writes.Add((write, mine));
+                }
+            }
+
+            // A trip that already carries all of it is covered, whoever is asking: nothing is
+            // written, so there is no authority to ask for, and calling it skipped would have
+            // the answer contradict the coverage the camp reports for the very same rows.
+            if (writes.Count == 0)
+            {
+                shared++;
+                continue;
+            }
+
+            var asked = writes.ConvertAll(x => x.Write);
+            if (await RefusalOfAsync(db, access, ctx, expeditionId, trip, asked, ct) is { } reason)
+            {
+                // The rules it already carried exactly were counted above and stay as they
+                // are; the trip as a whole did not take what was asked of it.
+                //
+                // Whether the granter may read the trip decides whether the answer may name
+                // it, and is asked of the trip itself, the way opening it would be.
+                var mayRead = (await access.DecideAsync(ctx, AccessAction.Read, trip, ct)).Allowed;
+                skipped.Add((new ExpeditionCascadeSkip(trip.Id, trip.Title, reason), mayRead));
+                continue;
+            }
+
+            shared++;
+            foreach (var (write, mine) in writes)
+            {
                 if (mine is null)
                 {
                     staged.Add(ToEntity(trip, write, ctx.UserId, expeditionId));
                 }
-                else if (mine.Actions != write.Actions)
-                {
-                    restated.Add((mine, write.Actions));
-                }
                 else
                 {
-                    unchanged++;
+                    restated.Add((mine, write.Actions));
                 }
             }
         }
 
-        if (refusedTrips > 0)
+        // No trip took it, so there is nothing to write and nowhere for the sharing to live:
+        // the camp holds no rule of its own. A refusal, built from the count and nothing else.
+        if (shared == 0)
         {
-            return Refused(Incomplete(refusedTrips));
+            return Refused(Incomplete(skipped.Count));
         }
 
         db.AccessEntries.AddRange(staged);
@@ -219,16 +285,21 @@ public static class ExpeditionAccessCascade
             row.Actions = actions;
         }
 
-        return new ExpeditionCascadeOutcome(null, trips.Count, staged.Count, restated.Count, unchanged);
+        // The titles of the trips the granter may not read stop here: what leaves is the rows
+        // the rule hands back to be named, and a number.
+        var disclosed = AccessCascadeRules.Disclose(skipped);
+        return new ExpeditionCascadeOutcome(
+            null, trips.Count, shared, staged.Count, restated.Count, unchanged,
+            disclosed.Named, disclosed.NotNamed);
     }
 
     /// <summary>
-    /// Whether this trip refuses the camp's sharing — because the granter may not write rules
-    /// on it at all, or because some rule would hand out more than they hold there. True is
-    /// the whole answer: which trip it was, and which of the two reasons applied, are both
-    /// things the caller must not learn.
+    /// Why this trip refuses the camp's sharing, or null when it takes it — because the granter
+    /// may not write rules on it at all, or because some rule would hand out more than they
+    /// hold there. The reason reaches the caller only for a trip they may read; for one they
+    /// may not, neither the trip nor the reason leaves the writer.
     /// </summary>
-    private static async Task<bool> RefusesAsync(
+    private static async Task<CascadeSkipReason?> RefusalOfAsync(
         SilexGisDbContext db,
         IAccessService access,
         AccessContext ctx,
@@ -242,19 +313,22 @@ public static class ExpeditionAccessCascade
         // to whoever I like", which it is nowhere else in this application.
         if (!(await access.DecideAsync(ctx, AccessAction.ManagePermissions, trip, ct)).Allowed)
         {
-            return true;
+            return CascadeSkipReason.NotAdministered;
         }
 
+        // The whole sharing or none of it on any one trip: a trip carrying two of a camp's
+        // three rules would make "this camp is shared with them" mean something different on
+        // every trip, and the coverage a rule reports could no longer be read as trips.
         foreach (var write in entries)
         {
             var candidate = ToEntity(trip, write, ctx.UserId, expeditionId);
             if (await AccessEntryMapping.RejectAsync(db, access, ctx, candidate, ct) is not null)
             {
-                return true;
+                return CascadeSkipReason.BeyondHolding;
             }
         }
 
-        return false;
+        return null;
     }
 
     private static AccessEntry ToEntity(
@@ -272,9 +346,9 @@ public static class ExpeditionAccessCascade
         };
 
     /// <summary>
-    /// The refusal, carrying the count as a field of its own so a client can say it in its own
-    /// words rather than parsing the sentence. Nothing else about the refused trips is here,
-    /// and nothing else may be added.
+    /// The refusal of a sharing no trip took, carrying the count as a field of its own so a
+    /// client can say it in its own words rather than parsing the sentence. Nothing else about
+    /// the refused trips is here, and nothing else may be added.
     /// </summary>
     private static ProblemHttpResult Incomplete(int refusedTrips) =>
         TypedResults.Problem(
@@ -287,5 +361,5 @@ public static class ExpeditionAccessCascade
             });
 
     private static ExpeditionCascadeOutcome Refused(ProblemHttpResult problem) =>
-        new(problem, 0, 0, 0, 0);
+        new(problem, 0, 0, 0, 0, 0, [], 0);
 }
