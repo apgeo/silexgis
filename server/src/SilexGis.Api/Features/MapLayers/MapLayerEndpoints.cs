@@ -18,10 +18,16 @@ namespace SilexGis.Api.Features.MapLayers;
 /// are not there: past its range a tile server answers 404 for the whole viewport at once, and a
 /// map that goes blank on zoom-in reads as the application breaking.
 /// </param>
+/// <param name="InDocuments">
+/// Whether this installation's catalogue says the source's tiles may be copied into a document
+/// the application produces. A client drawing a picture for such a document takes its background
+/// only from a source that says yes; this is the catalogue's answer, published, and never a
+/// guess made from the address.
+/// </param>
 public sealed record MapLayerDto(
     long Id, string Name, MapLayerKind LayerKind, string UrlTemplate, string? Options,
     string? Attribution, string? GroupName, int MinZoom, int MaxZoom,
-    bool IsBase, bool IsDefault, int SortOrder);
+    bool IsBase, bool IsDefault, int SortOrder, bool InDocuments);
 
 /// <summary>
 /// The base and overlay layers the map workspace offers. Every account reads them
@@ -60,7 +66,7 @@ public static class MapLayerEndpoints
             .Select(l => new MapLayerDto(
                 l.Id, l.Name, l.LayerKind, l.UrlTemplate, l.Options,
                 l.Attribution, l.GroupName, l.MinZoom, l.MaxZoom,
-                l.IsBase, l.IsDefault, l.SortOrder))
+                l.IsBase, l.IsDefault, l.SortOrder, l.InDocuments))
             .ToListAsync(ct));
     }
 }

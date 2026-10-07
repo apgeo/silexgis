@@ -147,6 +147,7 @@ public static class TripLogEndpoints
             .WithSummary(
                 "The trip written up as a document, built from this caller's own reading of the "
                 + "trip — the same one the page shows.");
+        TripReportEndpoints.MapDownloadWithMap(trips);
         trips.MapPost("/{id:guid}/report", TripReportEndpoints.KeepAsync)
             .WithSummary(
                 "Writes the trip up and files the document against the trip, replacing any report "

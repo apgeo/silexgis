@@ -72,6 +72,32 @@ describe('TripStatisticsPanel', () => {
     expect(screen.getByText('People')).toBeTruthy();
   });
 
+  it('leaves the two figures that say nothing off a cave’s own panel', () => {
+    show('cave', totals);
+
+    // Every trip counted for a cave names that cave, so its places can only be one and its first
+    // visits can only repeat its people. Drawn, each would read as a fact of its own.
+    expect(screen.queryByText('Places')).toBeNull();
+    expect(screen.queryByText('First visits')).toBeNull();
+    // What the cave's panel is for is all still there, the people figure included — the one the
+    // dropped tile would have duplicated.
+    expect(screen.getByText('Trips')).toBeTruthy();
+    expect(screen.getByText('People')).toBeTruthy();
+    expect(screen.getByText('Hours underground')).toBeTruthy();
+  });
+
+  it.each(['caver', 'cavingGroup', 'expedition'] as const)(
+    'keeps both figures where they can vary: %s',
+    (subject) => {
+      show(subject, totals);
+
+      // The absence on a cave's panel is that subject and nothing wider: a person reaches many
+      // places, and a club's or a camp's first visits are a figure in their own right.
+      expect(screen.getByText('Places')).toBeTruthy();
+      expect(screen.getByText('First visits')).toBeTruthy();
+    },
+  );
+
   it('adds a camp up through the same panel, sentence and all', () => {
     show('expedition', totals);
 

@@ -24,6 +24,11 @@ the **days it actually ran**, not a single date.
 Set its **visibility** — this is who may read the trip at all. And note the banner: *"This is
 a draft. Nobody has been notified about it yet."* Drafts are for writing; nothing goes out.
 
+If your right to record trips comes from your caving group rather than from the installation,
+the form also tells you the trip **will belong to that group** — or asks which, if you are in
+several. That is expected, and it is not the same thing as visibility: see
+[When your right to record trips is your club's](../features/trips.md#when-your-right-to-record-trips-is-your-clubs).
+
 Then **Float it** to propose it, or go straight to **Start organising**.
 
 ## Stage 2 — Plan it
@@ -195,8 +200,14 @@ same renderings the gallery shows you, with camera metadata stripped.
 A copy filed against the trip is narrower still: it is written for whoever may read the trip
 *at all*, not for the person who filed it.
 
-There is no map picture in it — the sketch is written out in words — and there is no public
-address for a report. It is downloaded by somebody signed in who may read the trip.
+The copy you download carries **a map of the trip** — its sketch, the meeting point and the
+caves it names that you may place — drawn by your own browser from what the page already holds,
+with a line under it saying whose view it is. The copy filed against the trip does not: it is
+opened by everybody who may read the trip. Details:
+[The map in the download](../features/trips.md#the-map-in-the-download).
+
+There is no public address for a report. It is downloaded by somebody signed in who may read
+the trip.
 
 Your club can write **its own layout**: download the standard one (a short, self-explaining
 text file), edit it, upload it under Configuration → Report layouts, and choose it. A layout

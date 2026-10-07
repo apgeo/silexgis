@@ -1346,7 +1346,20 @@
       "audienceNotice": "This report shows what you may see. Somebody else reading the same trip may see more, or less.",
       "keepAudience": "The copy saved to the trip can be opened by everybody who may read the trip, so it leaves out what only editors of the trip may see. Your own fuller copy is the download.",
       "meetingPoint": "Meeting point: a point at {{position}}.",
-      "meetingShape": "Meeting point: {{shape}}, {{count}} points, centred on {{position}}."
+      "meetingShape": "Meeting point: {{shape}}, {{count}} points, centred on {{position}}.",
+      "map": {
+        "legendSketch": "Where the trip worked (its sketch)",
+        "legendMeeting": "Meeting point",
+        "legendCave": "Cave the trip names",
+        "background": "Background map: {{attribution}}",
+        "noBackgroundNoneOffered": "No background map: this installation offers no map source that may be copied into a document.",
+        "noBackgroundNotDelivered": "No background map: the map source did not deliver all of its tiles.",
+        "noBackgroundTimedOut": "No background map: the map source did not answer in time.",
+        "noBackgroundNotCopyable": "No background map: the browser would not let the map source's tiles be copied into a picture.",
+        "withoutBackground": "The map in the document has no background map under it. The line under the map says why.",
+        "notMade": "The document was downloaded without its map: the map could not be drawn in this browser.",
+        "refused": "The document was downloaded without its map: the server did not take the picture."
+      }
     },
     "geometry": "Trip sketch",
     "geometryHint": "Pick a shape, then draw on the map. A new shape replaces the one before it.",
@@ -1399,7 +1412,16 @@
       "new": "Plan a trip",
       "createMenu": "Other ways to create a trip",
       "audienceFromGroup": "Unless you choose otherwise, this plan is shared with your caving group, {{group}} — a plan only its author can read is a plan to nobody.",
-      "audiencePrivate": "This plan starts private: you are in no single caving group, so the application does not guess which club should read it. Widen the audience here if it should be read."
+      "audiencePrivate": "This plan starts private: you are in no single caving group, so the application does not guess which club should read it. Widen the audience here if it should be read.",
+      "audienceFromChosenGroup": "Unless you choose otherwise, this plan is shared with the caving group it belongs to — a plan only its author can read is a plan to nobody."
+    },
+    "owningGroup": {
+      "label": "Belongs to",
+      "placeholder": "Choose a caving group",
+      "required": "Choose the caving group this trip belongs to.",
+      "only": "You record trips for {{group}}; this one will belong to it.",
+      "several": "You record trips for your caving groups, so this one has to belong to one of them.",
+      "meaning": "Who in the group may read and correct it is decided by the group's own rules, not by the visibility chosen here."
     },
     "expectedReturnAt": "Expected back",
     "calloutAlarmAt": "Raise the alarm at",
@@ -1943,6 +1965,22 @@
     "rosterWithheld": "Who was at this camp is not shown to you",
     "rosterWithheldDetail": "You may read this camp, but not the people in this installation — so the names, the days and how many there were are withheld together. Showing the stays with the names struck out would still say how many people were there and when.",
     "rosterUnavailable": "Who was at this camp could not be read just now.",
+    "stay": {
+      "add": "Add a stay",
+      "edit": "Edit stay",
+      "remove": "Remove stay",
+      "removeConfirm": "Remove this stay of {{name}}? Only the record that they were at this camp for these days goes — the person stays in the list of cavers.",
+      "hint": "One stay is one person in one role, for one stretch of days. Somebody who cooked and also surveyed is two stays, and so is somebody who left and came back.",
+      "person": "Who",
+      "personPlaceholder": "Somebody from the list of cavers, or a new name",
+      "personRequired": "Say who was there",
+      "role": "Role",
+      "roleRequired": "Choose a role",
+      "daysHint": "The first and the last day they were there. For a single day, pick it twice.",
+      "note": "Note",
+      "notePlaceholder": "Arrived late, left early, came back…",
+      "personGone": "That person is no longer in the list of cavers. Choose them again, or type their name."
+    },
     "mapEmpty": "Nothing to draw for this camp: it has no working area, and none of the trips you may read left a sketch or named a cave you may place.",
     "mapCaveat": "Drawn over the trips you may read. The working area is the shape somebody drew on the plan; a trip's sketch is shown exactly as drawn, whatever protection the caves it names carry; and a cave entrance appears only where you may see its exact position.",
     "mapTruncated": "This camp names more cave entrances than one map can carry, so not every entrance is drawn.",
@@ -2136,7 +2174,11 @@
     "mergeInto": "Merge into {{name}}",
     "mergeHint": "Pick the duplicate entry to fold in. Their trips and caving groups move across, and the duplicate is removed.",
     "deleteConfirm": "Remove this person from the roster?",
-    "deleteRefused": "This person is named on trips. Merge their duplicate entry instead."
+    "deleteRefused": "This person is named on trips. Merge their duplicate entry instead.",
+    "picker": {
+      "picked": "From the list of cavers.",
+      "typed": "Not chosen from the list, so it is saved as a name: it means whoever the list of cavers already holds under exactly this name, and adds them if nobody is."
+    }
   },
   "statistics": {
     "title": "Trip statistics",
@@ -5664,6 +5706,7 @@
     "trips": "Trips",
     "areasSoFar": "Distinct areas reached",
     "newGroundNote": "The line is how many distinct areas the counted trips had reached by the end of each year. Still climbing means new ground is being found; flattening under bars that are not means the same places are being revisited.",
+    "newWithin": "“New” means new among {{population}}, not new to the whole archive. An area that a trip outside them had already reached counts as new the first time one of them gets there, so a narrower filter starts the line again from nothing.",
     "overlapping": "A trip counts into every value it holds, so these bars add up to more than the {{count}} trips counted.",
     "showingValues": "Showing the {{shown}} largest of {{distinct}}.",
     "empty": "No trips to count.",

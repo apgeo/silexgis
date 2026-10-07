@@ -111,7 +111,7 @@ public static class PermissionGroupEndpoints
 
         var explained = await explainer.ExplainDomainsAsync(subject, ctx, ct);
         return TypedResults.Ok(new AccessPreviewDto(
-            CapabilitiesOf(subject).Domains,
+            DomainRightsOf(subject),
             [
                 .. explained.SelectMany(d => d.Explanations.Select(e => new AccessPreviewExplanationDto(
                     AccessCatalog.Name(d.Domain),
@@ -125,7 +125,7 @@ public static class PermissionGroupEndpoints
     }
 
     /// <summary>Domain-level rights, with no row in view — what UI gating needs.</summary>
-    internal static CapabilitiesDto CapabilitiesOf(AccessContext ctx)
+    internal static IReadOnlyDictionary<string, AccessAction> DomainRightsOf(AccessContext ctx)
     {
         var domains = new Dictionary<string, AccessAction>();
         foreach (var domain in Enum.GetValues<AccessDomain>())
@@ -142,7 +142,60 @@ public static class PermissionGroupEndpoints
             domains[AccessCatalog.Name(domain)] = held;
         }
 
-        return new CapabilitiesDto(domains, ctx.IsFullAdmin);
+        return domains;
+    }
+
+    /// <summary>
+    /// What the caller may do, as an interface needs it told: the domain-level map, and beside
+    /// it the caving groups a create may be bound to.
+    /// </summary>
+    /// <remarks>
+    /// The two are kept as two answers on purpose. Folding a right held at one group's scope
+    /// into the map would make every reader of the map wrong at once — a control drawn from
+    /// "may write" would appear for somebody who may write a few rows and is refused on the
+    /// rest — whereas "with no row in view" is exactly what makes the map safe to gate on. So
+    /// the map keeps its meaning, and where a create reaches through a group is said separately,
+    /// by the rule the write itself asks.
+    /// </remarks>
+    internal static async Task<CapabilitiesDto> CapabilitiesOfAsync(
+        AccessContext ctx, SilexGisDbContext db, CancellationToken ct)
+    {
+        var creatable = new Dictionary<AccessDomain, IReadOnlyList<Guid>>();
+        foreach (var domain in Enum.GetValues<AccessDomain>())
+        {
+            if (AccessEntryRules.IsTrioDomain(domain))
+            {
+                creatable[domain] = CreateRules.CavingGroupsToCreateIn(ctx, domain);
+            }
+        }
+
+        // Named here rather than left for the client to look up: the form that reads this says
+        // which group a new row will belong to, and the directory it would otherwise take the
+        // name from answers to a read right of its own, which an installation may have taken
+        // from this very caller. These are the caller's own memberships, so naming them tells
+        // the caller nothing new. One read for every domain at once, and none at all for the
+        // account that is in no group.
+        //
+        // Ordered where the directory of caving groups is ordered, by the database, so the two
+        // lists a person may see agree about what "by name" means in their alphabet; then by id,
+        // so two groups that share a name keep one order between requests and a form listing
+        // them does not reshuffle under somebody who is choosing.
+        var groupIds = creatable.Values.SelectMany(ids => ids).Distinct().ToArray();
+        var named = groupIds.Length == 0
+            ? []
+            : await db.CavingGroups.AsNoTracking()
+                .Where(group => groupIds.Contains(group.Id))
+                .OrderBy(group => group.Name)
+                .ThenBy(group => group.Id)
+                .Select(group => new CreatableCavingGroupDto(group.Id, group.Name))
+                .ToListAsync(ct);
+
+        var createIn = creatable.ToDictionary(
+            pair => AccessCatalog.Name(pair.Key),
+            pair => (IReadOnlyList<CreatableCavingGroupDto>)
+                [.. named.Where(group => pair.Value.Contains(group.Id))]);
+
+        return new CapabilitiesDto(DomainRightsOf(ctx), ctx.IsFullAdmin, createIn);
     }
 
     // ---- groups ----

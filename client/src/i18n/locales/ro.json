@@ -1346,7 +1346,20 @@
       "audienceNotice": "Acest raport arată ceea ce puteți vedea dumneavoastră. Altcineva care citește aceeași tură poate vedea mai mult sau mai puțin.",
       "keepAudience": "Copia salvată la tură poate fi deschisă de toți cei care pot citi tura, așa că lasă deoparte ceea ce văd doar cei care pot modifica tura. Copia dumneavoastră completă este descărcarea.",
       "meetingPoint": "Punct de întâlnire: un punct la {{position}}.",
-      "meetingShape": "Punct de întâlnire: {{shape}}, {{count}} puncte, centrat pe {{position}}."
+      "meetingShape": "Punct de întâlnire: {{shape}}, {{count}} puncte, centrat pe {{position}}.",
+      "map": {
+        "legendSketch": "Unde a lucrat tura (schița ei)",
+        "legendMeeting": "Punct de întâlnire",
+        "legendCave": "Peșteră numită de tură",
+        "background": "Hartă de bază: {{attribution}}",
+        "noBackgroundNoneOffered": "Fără hartă de bază: această instalare nu oferă nicio sursă de hartă care poate fi copiată într-un document.",
+        "noBackgroundNotDelivered": "Fără hartă de bază: sursa hărții nu a livrat toate dalele.",
+        "noBackgroundTimedOut": "Fără hartă de bază: sursa hărții nu a răspuns la timp.",
+        "noBackgroundNotCopyable": "Fără hartă de bază: browserul nu a permis copierea dalelor sursei într-o imagine.",
+        "withoutBackground": "Harta din document nu are hartă de bază dedesubt. Rândul de sub hartă spune de ce.",
+        "notMade": "Documentul a fost descărcat fără hartă: harta nu a putut fi desenată în acest browser.",
+        "refused": "Documentul a fost descărcat fără hartă: serverul nu a acceptat imaginea."
+      }
     },
     "geometry": "Schița turei",
     "geometryHint": "Alegeți o formă, apoi desenați pe hartă. O formă nouă o înlocuiește pe cea dinainte.",
@@ -1399,7 +1412,16 @@
       "new": "Planifică o tură",
       "createMenu": "Alte moduri de a crea o tură",
       "audienceFromGroup": "Dacă nu alegi altfel, acest plan este vizibil grupului tău de speologie, {{group}} — un plan pe care îl poate citi doar autorul este un plan pentru nimeni.",
-      "audiencePrivate": "Acest plan începe privat: nu ești într-un singur grup de speologie, așa că aplicația nu ghicește care club ar trebui să îl citească. Lărgește audiența aici dacă trebuie citit."
+      "audiencePrivate": "Acest plan începe privat: nu ești într-un singur grup de speologie, așa că aplicația nu ghicește care club ar trebui să îl citească. Lărgește audiența aici dacă trebuie citit.",
+      "audienceFromChosenGroup": "Dacă nu alegi altfel, acest plan este vizibil grupului de speologie căruia îi aparține — un plan pe care îl poate citi doar autorul este un plan pentru nimeni."
+    },
+    "owningGroup": {
+      "label": "Grupul căruia îi aparține",
+      "placeholder": "Alege un grup de speologie",
+      "required": "Alege grupul de speologie căruia îi aparține această tură.",
+      "only": "Înregistrezi ture pentru {{group}}; aceasta îi va aparține.",
+      "several": "Înregistrezi ture pentru grupurile tale de speologie, așa că aceasta trebuie să aparțină unuia dintre ele.",
+      "meaning": "Cine din grup o poate citi și corecta este hotărât de regulile grupului, nu de vizibilitatea aleasă aici."
     },
     "expectedReturnAt": "Ieșire estimată",
     "calloutAlarmAt": "Dă alarma la",
@@ -1943,6 +1965,22 @@
     "rosterWithheld": "Cine a fost la această tabără nu vă este arătat",
     "rosterWithheldDetail": "Puteți citi această tabără, dar nu și persoanele din această instalare — așa că numele, zilele și numărul lor sunt reținute împreună. Afișarea șederilor cu numele tăiate ar spune tot câte persoane au fost și când.",
     "rosterUnavailable": "Cine a fost la această tabără nu a putut fi citit acum.",
+    "stay": {
+      "add": "Adaugă o ședere",
+      "edit": "Editare ședere",
+      "remove": "Șterge șederea",
+      "removeConfirm": "Ștergeți această ședere pentru {{name}}? Dispare doar consemnarea că a fost la această tabără în aceste zile — persoana rămâne în lista de speologi.",
+      "hint": "O ședere înseamnă o persoană, într-un rol, pentru un interval de zile. Cine a gătit și a și cartat are două șederi, la fel și cine a plecat și s-a întors.",
+      "person": "Cine",
+      "personPlaceholder": "Cineva din lista de speologi sau un nume nou",
+      "personRequired": "Spuneți cine a fost",
+      "role": "Rol",
+      "roleRequired": "Alegeți un rol",
+      "daysHint": "Prima și ultima zi în care a fost acolo. Pentru o singură zi, alegeți-o de două ori.",
+      "note": "Notă",
+      "notePlaceholder": "A sosit mai târziu, a plecat mai devreme, s-a întors…",
+      "personGone": "Această persoană nu mai este în lista de speologi. Alegeți-o din nou sau scrieți-i numele."
+    },
     "mapEmpty": "Nu este nimic de desenat pentru această tabără: nu are o zonă de lucru, iar niciuna dintre turele pe care le puteți citi nu a lăsat o schiță sau nu a numit o peșteră a cărei poziție o puteți vedea.",
     "mapCaveat": "Desenat peste turele pe care le puteți citi. Zona de lucru este forma trasată pe plan; schița unei ture este arătată exact așa cum a fost trasată, oricare ar fi protecția peșterilor pe care le numește; iar o intrare de peșteră apare doar acolo unde îi puteți vedea poziția exactă.",
     "mapTruncated": "Această tabără numește mai multe intrări de peșteră decât poate purta o hartă, așa că nu toate intrările sunt desenate.",
@@ -2136,7 +2174,11 @@
     "mergeInto": "Unifică în {{name}}",
     "mergeHint": "Alegeți înregistrarea duplicat. Turele și grupurile sale trec la aceasta, iar duplicatul este eliminat.",
     "deleteConfirm": "Eliminați această persoană din listă?",
-    "deleteRefused": "Persoana apare în ture. Unificați înregistrarea duplicat în loc."
+    "deleteRefused": "Persoana apare în ture. Unificați înregistrarea duplicat în loc.",
+    "picker": {
+      "picked": "Din lista de speologi.",
+      "typed": "Nu a fost ales din listă, așa că se salvează ca nume: înseamnă persoana pe care lista de speologi o are deja exact sub acest nume, iar dacă nu este nimeni, o adaugă."
+    }
   },
   "statistics": {
     "title": "Statistici din ture",
@@ -5664,6 +5706,7 @@
     "trips": "Ieșiri",
     "areasSoFar": "Zone distincte atinse",
     "newGroundNote": "Linia arată câte zone distincte atinseseră ieșirile numărate până la sfârșitul fiecărui an. Dacă urcă în continuare, se descoperă teren nou; dacă se aplatizează sub bare care nu se aplatizează, se revine în aceleași locuri.",
+    "newWithin": "„Nou” înseamnă nou față de {{population}}, nu față de întreaga arhivă. O zonă în care ajunsese deja o ieșire din afara lor se numără ca nouă prima dată când ajunge acolo una dintre ele, așa că un filtru mai restrâns pornește linia din nou de la zero.",
     "overlapping": "O ieșire se numără la fiecare valoare pe care o conține, așa că barele adună mai mult decât cele {{count}} ieșiri numărate.",
     "showingValues": "Se arată cele mai mari {{shown}} din {{distinct}}.",
     "empty": "Nicio ieșire de numărat.",

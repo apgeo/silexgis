@@ -5,12 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { MyTripLogListParams, TripLogInfo } from '../../api/hooks.ts';
 
-const { listSpy, canSpy } = vi.hoisted(() => ({ listSpy: vi.fn(), canSpy: vi.fn() }));
+const { listSpy, doorSpy } = vi.hoisted(() => ({ listSpy: vi.fn(), doorSpy: vi.fn() }));
+
+/** Somebody who may record no trip anywhere, which is what most of these tests are about. */
+const mayNot = { canCreate: false, unbound: false, cavingGroups: [] };
 
 vi.mock('../../api/hooks.ts', () => ({
   useMyTripLogs: (params: MyTripLogListParams) => listSpy(params),
   useTripTypes: () => ({ data: undefined }),
-  useCan: () => canSpy(),
+  useCreateDoor: () => doorSpy(),
 }));
 
 // The form is a probe of its props: which door it was opened on is the whole claim here, and the
@@ -67,7 +70,7 @@ function fails() {
 afterEach(cleanup);
 beforeEach(() => {
   listSpy.mockReset();
-  canSpy.mockReset().mockReturnValue(false);
+  doorSpy.mockReset().mockReturnValue(mayNot);
   answer([trip()]);
 });
 
@@ -221,13 +224,30 @@ describe('my trips', () => {
  */
 describe('planning a trip from my trips', () => {
   it('opens the one trip form on its plan door', () => {
-    canSpy.mockReturnValue(true);
+    doorSpy.mockReturnValue({ canCreate: true, unbound: true, cavingGroups: [] });
     show();
     const form = screen.getByTestId('trip-form');
     expect(form.dataset.open).toBe('false');
 
     fireEvent.click(screen.getByTestId('my-trips-plan'));
 
+    expect(form.dataset.open).toBe('true');
+    expect(form.dataset.intent).toBe('plan');
+  });
+
+  it('opens it for somebody who may record trips only for their caving group', () => {
+    // No right over trips as such, and a club that lets its members plan the club's trips: the
+    // page that lists what they are going on is exactly where they would start one.
+    doorSpy.mockReturnValue({
+      canCreate: true,
+      unbound: false,
+      cavingGroups: [{ id: 'g-1', name: 'Silex' }],
+    });
+    show();
+
+    fireEvent.click(screen.getByTestId('my-trips-plan'));
+
+    const form = screen.getByTestId('trip-form');
     expect(form.dataset.open).toBe('true');
     expect(form.dataset.intent).toBe('plan');
   });

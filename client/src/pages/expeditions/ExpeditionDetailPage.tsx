@@ -285,7 +285,17 @@ export default function ExpeditionDetailPage() {
           {
             key: 'roster',
             label: t('expeditions.tabRoster'),
-            children: <ExpeditionRosterTab expeditionId={camp.id} />,
+            // Keeping the roster takes the right to write the camp and nothing of its own, so
+            // the tab is told the one answer this page already holds about that — and, with it,
+            // the camp's days, which a new stay starts out as.
+            children: (
+              <ExpeditionRosterTab
+                expeditionId={camp.id}
+                editable={
+                  canEdit ? { startDate: camp.startDate, endDate: camp.endDate } : undefined
+                }
+              />
+            ),
           },
           {
             key: 'photos',

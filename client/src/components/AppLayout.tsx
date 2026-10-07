@@ -82,6 +82,12 @@ export default function AppLayout() {
     // Reading a spreadsheet into trips ends in creating them, and the server refuses the whole
     // screen — the preview included — to anyone who may not. A read check here would offer an
     // afternoon's review to somebody whose first request is turned down.
+    //
+    // Deliberately the domain-level right and not the wider answer the trip pages gate their
+    // create control on. Somebody who may record trips only for their caving group can file one
+    // through the form, but both import reviews open by asking for the right with no group
+    // named — before a sheet or an archive is so much as read — so their first request here
+    // would be refused, which is exactly the offer this gate exists not to make.
     tripLogCreate: hasAccessAction(capabilities?.domains.tripLogs, 'create'),
     // Three facts, all from the server: whether this account may reach the neighbouring photo
     // libraries at all, whether this installation has been given one, and whether it is currently

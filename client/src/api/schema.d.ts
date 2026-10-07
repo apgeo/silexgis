@@ -285,7 +285,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's domain-level rights, for interface gating. */
+        /** The caller's domain-level rights, for interface gating, and the caller's own caving groups in which a new row of each group-bindable domain may be created. */
         get: {
             parameters: {
                 query?: never;
@@ -13188,6 +13188,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{id}/report/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The trip written up as a document, with a picture of a map the caller drew placed where the write-up says where the trip went.
+         * @description Multipart, with one optional part named 'map': a PNG or JPEG the caller's own browser drew out of what the trip's page was already given. The picture is checked, redrawn here and placed in this one answer; it is stored nowhere. Without the part the answer is the plain download's. The layout is chosen by the same query parameter the plain download takes.
+         */
+        post: {
+            parameters: {
+                query?: {
+                    templateId?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "multipart/form-data": components["schemas"]["TripReportDownloadForm"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-logs/{tripLogId}/invitations": {
         parameters: {
             query?: never;
@@ -15438,7 +15483,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Records that somebody was at this camp for a stretch of days (Write permission on the camp). Stays may overlap and one person may have several. */
+        /** Records that somebody was at this camp for a stretch of days (Write permission on the camp). The person is named by their entry in the directory or by a name, never both; a name already in the directory means that person and a new one adds them. Stays may overlap and one person may have several. */
         post: {
             parameters: {
                 query?: never;
@@ -15479,7 +15524,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Rewrites one recorded stay whole (Write permission on the camp). */
+        /** Rewrites one recorded stay whole (Write permission on the camp), naming the person exactly as when recording one. */
         put: {
             parameters: {
                 query?: never;
@@ -19691,6 +19736,9 @@ export interface components {
                 [key: string]: components["schemas"]["AccessAction"];
             };
             isFullAdmin: boolean;
+            createInCavingGroups: {
+                [key: string]: components["schemas"]["CreatableCavingGroupDto"][];
+            };
         };
         CaveCrossSectionDto: {
             /** Format: uuid */
@@ -20382,6 +20430,11 @@ export interface components {
         };
         /** @enum {unknown} */
         ConversionState: "notApplicable" | "pending" | "converted" | "unavailable" | "failed" | "deferred";
+        CreatableCavingGroupDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
         CrossSectionDistribution: {
             /** Format: int32 */
             count: number;
@@ -21041,7 +21094,8 @@ export interface components {
         };
         ExpeditionRosterEntryWriteRequest: {
             /** Format: uuid */
-            caverId?: string;
+            caverId?: null | string;
+            newCaverName?: null | string;
             /** Format: int64 */
             roleId?: number;
             /** Format: date */
@@ -22262,6 +22316,7 @@ export interface components {
             isDefault: boolean;
             /** Format: int32 */
             sortOrder: number;
+            inDocuments: boolean;
         };
         /** @enum {unknown} */
         MapLayerKind: "xyz" | "wmts" | "wms" | "vector" | "cog";
@@ -25874,6 +25929,9 @@ export interface components {
             promoted: number;
             /** Format: int32 */
             alreadyNamed: number;
+        };
+        TripReportDownloadForm: {
+            map?: null | components["schemas"]["IFormFile"];
         };
         TripReportSavedDto: {
             /** Format: uuid */

@@ -127,6 +127,10 @@ them over. → [Mobile sync](features/mobile-sync.md)
 **Share link** — A revocable link to one record, public or sign-in-only. Shown once. Never
 reveals a protected location. → [Sharing](features/sharing-and-public-pages.md)
 
+**Stay** — One stretch of days somebody was at a [camp](features/camps.md), in one role. It is
+not the person: somebody in two roles, or somebody who left and came back, has two stays.
+→ [Camps](features/camps.md#who-was-there)
+
 **Survey source** — The `.th`, `.svx`, `.thconfig`, `.log` or survey-app `.zip` a compiled
 survey was made from. Archived, never read.
 → [Surveys and models](features/surveys-and-models.md#survey-sources)

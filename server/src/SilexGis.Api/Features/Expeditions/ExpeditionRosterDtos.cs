@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using FluentValidation;
+using SilexGis.Domain.Profiles;
 
 namespace SilexGis.Api.Features.Expeditions;
 
@@ -80,14 +81,32 @@ public sealed record ExpeditionRosterDto
 /// One stay, written or rewritten whole.
 /// </summary>
 /// <remarks>
-/// The person is named by their entry in the club's directory and never by a bare name. A trip
-/// may name somebody who is not in the directory yet, because a trip is written up on the evening
-/// it happened by whoever was there; a camp's roster is kept over a fortnight by whoever is
-/// running it, and the person it records is somebody the club has already had to know about.
+/// <para>
+/// The person is named in one of two ways and never both: by their entry in the club's
+/// directory, or by a name. A name is how a camp records the people a roster exists for — the
+/// cook who never signs in and never goes underground has no entry until somebody makes one,
+/// and making it a separate errand to be run before the stay can be written is how the stay
+/// comes not to be written. A name somebody is already recorded under means that person, the
+/// oldest entry if several hold it; a name nobody holds adds them to the directory in the same
+/// save as the stay. It is the rule a trip names its people by, and the same code.
+/// </para>
+/// <para>
+/// Naming somebody asks no right over the directory, exactly as on a trip: it is part of
+/// writing the camp's own record, and the right to write the camp is the right that is asked.
+/// </para>
 /// </remarks>
 public sealed record ExpeditionRosterEntryWriteRequest
 {
-    public Guid CaverId { get; init; }
+    /// <summary>
+    /// The person's entry in the directory. Absent when <see cref="NewCaverName"/> says who.
+    /// </summary>
+    public Guid? CaverId { get; init; }
+
+    /// <summary>
+    /// The person's name, for somebody given no entry here. Matched against the directory as
+    /// written, spaces around it aside, and added to it when nobody is recorded under it.
+    /// </summary>
+    public string? NewCaverName { get; init; }
 
     public long RoleId { get; init; }
 
@@ -109,7 +128,16 @@ public sealed class ExpeditionRosterEntryWriteRequestValidator
 {
     public ExpeditionRosterEntryWriteRequestValidator()
     {
-        RuleFor(x => x.CaverId).NotEmpty();
+        // Exactly one way of saying who, and a name no longer than the directory can hold. Both
+        // are asked of the rule every record that names a person answers to, rather than written
+        // out here a second time: a trip's people and a camp's stays must not come to disagree
+        // about what a person may be called.
+        RuleFor(x => x)
+            .Must(x => CaverReferenceRules.NamesOnePerson(x.CaverId, x.NewCaverName))
+            .WithMessage("The person is either an existing caver or a new name, not both.");
+        RuleFor(x => x.NewCaverName)
+            .MaximumLength(CaverReferenceRules.NameMaxLength)
+            .WithMessage($"Names are limited to {CaverReferenceRules.NameMaxLength} characters.");
         RuleFor(x => x.RoleId).GreaterThan(0);
 
         // A stay with no first day is not a stay. The default of a date is a real value the

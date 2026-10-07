@@ -439,6 +439,40 @@ SILEXGIS__MapLayers__ApiKeys__Thunderforest=your-key-here
 That way the file itself holds no secrets and can be shared with the group next door. Until you set the
 key, those entries simply do not appear.
 
+**Backgrounds that may be copied into a document.** A trip's write-up is downloaded with a map of the trip
+in it, and that map is drawn over **one** background from this file — but only over one whose entry says
+`inDocuments="true"`. The mark is separate from being switched on, because it answers a different
+question: showing a map tile on a screen and putting it into a file that is then mailed and printed are
+different uses, and a provider's terms usually treat the second on its own. So the answer is **no unless
+the entry says yes**:
+
+```xml
+<layer name="My national topo"
+       group="Topographic"
+       url="https://tiles.example.gov/{z}/{x}/{y}.png"
+       attribution="© National Mapping Agency"
+       inDocuments="true"
+       maxZoom="18" />
+```
+
+Set it only where **you have read the source's terms** and they allow a copy with the credit beside it.
+Two more things have to be true, or the map simply comes out with no background:
+
+- the entry has an `attribution` — it is what gets written under the picture, and an entry marked without
+  one is reported at startup and loses the mark;
+- the tile server answers **every** tile with an `Access-Control-Allow-Origin` header, whether or not the
+  request named an origin. The picture is read back out of the browser, which hands over nothing that was
+  fetched without that header.
+
+Five sources ship marked — the three OpenStreetMap renderings, OpenTopoMap and CyclOSM — each published
+under an open licence that allows a copy with its credit, and each measured to send that header. Everything
+else ships unmarked: Esri, Carto and every keyed provider because their terms are an agreement for you to
+read rather than an open licence, the Sentinel-2 composite because its licence is non-commercial, Freemap
+because it does not send the header to an address it does not know, and Google because it may not be
+copied at all. A document takes the default background when that one is marked, otherwise the first marked
+background in the file; with none, or when the tiles do not arrive, the map is drawn on a plain ground and
+says so under itself.
+
 **Backgrounds you should decide about.** Google's map, satellite, hybrid and terrain tiles are in the
 file, and they are currently **switched on**. They work, and you will find them in every collection of
 layer definitions passed around — but using them this way is not something Google's terms permit.
@@ -1423,6 +1457,8 @@ the reasoning beside each one.
 | `SILEXGIS__Terrain__BakeTimeoutSeconds` | `43200` (12 h) | how long one bake may run before it is abandoned. The queue a build runs on has no limit of its own, so this is the only one there is, and it is meant to catch a bake that has stopped making progress rather than to cap a large one. Values outside 60 s to 7 days are brought back inside that range — `0` does **not** mean "no limit" and becomes 60 s, which abandons every real bake after a minute |
 | `SILEXGIS__MapLayers__CatalogPath` | — (the file shipped in the image) | the XML file listing the tile sources this installation offers. Set it to a path outside the image — that is the only way an edit of yours survives an upgrade. Start from a copy of the shipped `map-layers.xml` |
 | `SILEXGIS__MapLayers__ApiKeys__<name>` | — | the access key a catalogue entry names, e.g. `SILEXGIS__MapLayers__ApiKeys__Thunderforest`. An entry whose key is not set is **not offered at all**, rather than offered and broken: a tile address still carrying the placeholder answers 401 for every tile, which on screen looks exactly like a source that is down |
+| `SILEXGIS__Reports__MaxMapBytes` | `5242880` (5 MB) | the largest picture of a map a trip's write-up takes when it is downloaded. The page sends one of a few hundred kilobytes (a megabyte or two over photographic imagery); a larger one is refused and the document is downloaded without it. The picture is held for the one answer it came with and stored nowhere. If a reverse proxy sits in front, its body-size cap has to allow this plus about a megabyte |
+| `SILEXGIS__Reports__MaxMapPixels` | `8000000` | the most pixels that picture may hold, width times height. Separate from the size in bytes because a picture is held decoded while it is redrawn, and a file of a few kilobytes can declare a size that would take gigabytes; the declared size is read first and anything over this is refused undecoded |
 | `SILEXGIS__Map__MaxPoints` | `10000` | the most points one map layer request answers with. Raise it if you import GPS recordings of tens of thousands of points and want to see all of them at once; the cost is the browser's memory and drawing time, not the server's |
 | `SILEXGIS__ExpeditionMap__MaxPoints` | `2000` | the most cave entrances one camp's map answers with. Past it the map says it was cut short — a yes or no, never how many, because the number would say how many caves the camp reached |
 | `SILEXGIS__TripList__MaxExportedTrips` | `2000` | the most trips one spreadsheet export holds. Past it the file says so on its first lines, so a file that stopped at the limit cannot be mistaken for one that ended |

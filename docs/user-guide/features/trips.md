@@ -211,6 +211,34 @@ visibility control, naming the group, before the trip exists. If you are in no g
 several, nothing is guessed: the plan starts private, the form says why, and you widen it there if
 it should be read. A visibility you choose yourself is kept as chosen.
 
+### When your right to record trips is your club's
+
+Not everybody holds the right to record trips in general. A caving group's own rules usually let
+its members record **the group's** trips and nothing wider. Somebody whose right comes only that
+way is offered the same ways in as everybody else — *New trip log* and *Plan a trip* on the trip
+list, *Plan a trip* on *My trips*, the trip action on the dashboard — with one difference: the
+trip has to **belong to the group**, because that is the only trip the application accepts from
+them.
+
+| You may record trips for | What the form does |
+|---|---|
+| **One group** | Says so before the trip exists — *"You record trips for «group»; this one will belong to it"* — and binds the trip to that group. A report still starts **private**; a plan starts shared with that group |
+| **Several groups** | Asks **Belongs to**, offering exactly the groups you may record trips for. Nothing is guessed between them, and the form does not save until you choose. A plan is then shared with the group you chose |
+
+**Belonging is not visibility.** A trip that belongs to a group answers to that group's own
+rules. With the rules a group starts with, its members can read and correct every trip that
+belongs to it — whatever the **Visibility** control says. Visibility decides who *else* may read
+the trip; it does not keep the group out. The form says this beside the group, because the
+visibility control cannot.
+
+Somebody who holds the right to record trips in general sees none of this: their trip belongs to
+no group unless they plan it while in exactly one, as above.
+
+If you are offered no way to create a trip at all, you hold the right nowhere — ask whoever
+manages your group's rules, or an administrator. And the two import pages (*Import trips*,
+*Import a recording*) are **not** opened by a group's right: they need the right to record trips
+in general.
+
 ### The meeting point on the map
 
 A point, or the walk in to it, drawn on the same kind of map as the trip's sketch.
@@ -248,13 +276,47 @@ See [Checklists and the callout](checklists-and-callout.md#the-callout).
 - Photographs go in as the same renderings the gallery shows you, **camera metadata stripped**.
 - **A copy filed against the trip is narrower still** — written for whoever may read the trip
   at all, not for the person who filed it.
-- **No map picture** — the sketch is written out in words.
+- **The download carries a map of the trip** — see below. The sketch is still written out in
+  words beside it.
 - **No public address.** A report is downloaded by somebody signed in who may read the trip.
 
 Your club can write **its own layout** — download the standard one (a short, self-explaining
 text file), edit, upload under Configuration → Report layouts, choose it. A layout can only
 ask for things the reader was already given, and a line whose contents turn out empty simply
 disappears, so the same layout produces an honest document for a member and for an editor.
+
+### The map in the download
+
+**Download document** draws a map of the trip and puts it in the file, where the document says
+where the trip went.
+
+| On the map | Drawn as |
+|---|---|
+| The trip's sketch — where the party worked | a filled disc, a line or an area |
+| The meeting point | a hollow ring |
+| Each cave the trip names **that you may place** | a square, with the cave's name |
+
+- **It is your view, and it says so.** The map is drawn by your own browser from what this page
+  had already been given — the trip as you read it, and each named cave as you read it. Nothing
+  is asked of the server for the sake of the picture, so it cannot show a position the page
+  would not have shown you. The line under the picture names you and the day: *Map as shown to …
+  on …; positions as this reader may see them.* Somebody else downloading the same trip may get
+  a different map.
+- **The copy filed against the trip has no map.** *Save to the trip* never sends one, and the
+  server refuses one if it is sent: that copy is opened by everybody who may read the trip, and a
+  map shows what one reader may see.
+- **On and under the map**: a scale on it; under it, what the marks mean and the credit of the
+  map behind it.
+- **Where it goes in the document**: after the line that prints the sketch — or, in a layout of
+  your club's that prints no sketch, after the meeting point, or failing both at the end.
+- **The background** is one of this installation's map backgrounds — the standard one, when
+  whoever runs the installation has said it may be copied into a document. If its tiles do not
+  arrive in time, or the installation offers no such background, the map is drawn on a plain
+  ground and the reason is written under it.
+- **You are told when the file differs from the page**: when the map went out with no
+  background, and when no map could be drawn or the server would not take it. The document is
+  downloaded in every case.
+- **Print** is as before: paper gets the sketch in words, not a map.
 
 ---
 

@@ -15,6 +15,23 @@ namespace SilexGis.Api.Features.TripLogs;
 internal sealed record TripReportPlate(byte[] Image, string? Caption);
 
 /// <summary>
+/// A picture of a map, as it goes into one person's download of a write-up.
+/// </summary>
+/// <remarks>
+/// The one part of a write-up this application did not draw. It was drawn by the browser of the
+/// person the document is for, out of what the trip's page had been given for that person, and
+/// it is carried here only for that person's own copy. Who that was and when travel with it,
+/// because a picture forwarded without them reads as the trip's map rather than as one reader's.
+/// </remarks>
+/// <param name="Image">The picture, already redrawn by this application — never the upload.</param>
+/// <param name="ShownTo">
+/// How the person it was drawn for is named on every other surface, or null when nothing names
+/// them. Never an address.
+/// </param>
+/// <param name="ShownOn">The day it was drawn, in universal time.</param>
+internal sealed record TripReportMap(byte[] Image, string? ShownTo, DateOnly ShownOn);
+
+/// <summary>
 /// Everything a written-up trip is made of, already decided.
 /// </summary>
 /// <remarks>
@@ -32,7 +49,11 @@ internal sealed record TripReportContent(
     IReadOnlyDictionary<Guid, string> CaveNames,
     IReadOnlyDictionary<long, string> RoleNames,
     IReadOnlyDictionary<TripSectionKey, IReadOnlyDictionary<string, string>> SectionTitles,
-    IReadOnlyList<TripReportPlate> Plates);
+    IReadOnlyList<TripReportPlate> Plates,
+    // Present only in a copy somebody downloads for themselves, and only when they sent one.
+    // Appended, and defaulted to nothing, so the copy filed against the trip — which is built
+    // without ever naming this member — cannot come to carry one by an argument slipping along.
+    TripReportMap? Map = null);
 
 /// <summary>Which of a trip's three sections a set of field titles belongs to.</summary>
 internal enum TripSectionKey
@@ -69,6 +90,7 @@ internal static class TripReportDocument
         ArgumentNullException.ThrowIfNull(template);
         var trip = content.Trip;
         var blocks = new List<DocumentBlock>();
+        var mapLine = content.Map is null ? null : MapLine(template);
 
         foreach (var part in template)
         {
@@ -145,9 +167,63 @@ internal static class TripReportDocument
                 default:
                     break;
             }
+
+            // After the line's own words, never instead of them: the written position is what a
+            // reader can copy out of the document, and the picture is what shows where that is.
+            if (content.Map is { } map && ReferenceEquals(part, mapLine))
+            {
+                AppendMap(blocks, map);
+            }
+        }
+
+        // A layout that says nowhere where the trip went still carries the picture its reader
+        // asked for, at the end. Leaving it out would be a download that silently lacks what the
+        // page said it would hold, and nothing in the file would say why.
+        if (content.Map is { } unplaced && mapLine is null)
+        {
+            AppendMap(blocks, unplaced);
         }
 
         return ReportComposition.Pruned(blocks);
+    }
+
+    /// <summary>
+    /// The line of the layout a picture of a map goes after: the first that speaks of the trip's
+    /// sketch, or failing that the first that speaks of where its party met.
+    /// </summary>
+    /// <remarks>
+    /// Chosen by what the line asks for rather than by what it produced, so a trip that drew no
+    /// sketch of its own still gets its picture where the layout talks about place — such a
+    /// picture shows where the party met and the caves the trip names, which is most of what a
+    /// club's older trips have to show. Null when the layout names neither.
+    /// </remarks>
+    private static ReportTemplatePart? MapLine(IReadOnlyList<ReportTemplatePart> template) =>
+        template.FirstOrDefault(part => Names(part, "sketch"))
+        ?? template.FirstOrDefault(part => Names(part, "meeting"));
+
+    private static bool Names(ReportTemplatePart part, string name) =>
+        ReportTemplateFormat.PlaceholdersIn(part.Text).Contains(name, StringComparer.Ordinal);
+
+    /// <summary>
+    /// The picture, with the line that says whose view it is.
+    /// </summary>
+    /// <remarks>
+    /// The line is this document's own and no layout can take it off: it is written as the
+    /// picture's caption, so wherever the picture goes the line goes with it. It is there because
+    /// the picture is the one thing here that states a reading by showing it — two people's
+    /// copies of the same trip may carry different maps, and each has to say which one it is.
+    /// </remarks>
+    private static void AppendMap(List<DocumentBlock> blocks, TripReportMap map)
+    {
+        var reader = string.IsNullOrWhiteSpace(map.ShownTo)
+            ? "the person who produced this document"
+            : map.ShownTo;
+        blocks.Add(DocumentBlock.Picture(
+            map.Image,
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"Map as shown to {reader} on {map.ShownOn:yyyy-MM-dd} (UTC); positions as this "
+                + $"reader may see them.")));
     }
 
     private static void AppendRoster(List<DocumentBlock> blocks, TripReportContent content)

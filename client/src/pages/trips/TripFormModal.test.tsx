@@ -11,6 +11,13 @@ const createPlan = vi.fn();
 const updateTrip = vi.fn();
 // What the server says a plan's audience would be, as the plan-default read answers it.
 const planDefault = vi.fn();
+// Where this caller may record a trip, as the capabilities answer says it.
+const door = vi.fn();
+
+/** Somebody who holds the right to record trips over the domain as such — nearly everybody. */
+const holdsTheRight = { canCreate: true, unbound: true, cavingGroups: [] };
+const silex = { id: 'g-1', name: 'Silex' };
+const avenul = { id: 'g-2', name: 'Avenul' };
 
 vi.mock('../../api/hooks.ts', () => ({
   useCavingGroups: () => ({ data: [] }),
@@ -22,6 +29,7 @@ vi.mock('../../api/hooks.ts', () => ({
     ],
   }),
   useSearch: () => ({ data: undefined }),
+  useCreateDoor: () => door(),
   useCreateTripLog: () => ({ mutateAsync: createTrip, isPending: false }),
   useCreateTripPlan: () => ({ mutateAsync: createPlan, isPending: false }),
   useTripPlanDefault: (enabled: boolean) => (enabled ? planDefault() : { data: undefined }),
@@ -69,6 +77,12 @@ function show(subject: TripLogInfo | null, intent?: 'report' | 'plan') {
     </App>,
   );
 }
+
+// Every test that does not say otherwise is about somebody who holds the right outright, which
+// is the caller this form was written for and whose form must not have changed.
+beforeEach(() => {
+  door.mockReset().mockReturnValue(holdsTheRight);
+});
 
 describe('TripFormModal dates', () => {
   beforeEach(() => {
@@ -453,5 +467,182 @@ describe('TripFormModal as the plan door', () => {
     expect(createPlan).not.toHaveBeenCalled();
     // A report's audience is always stated, private unless chosen otherwise.
     expect(body.visibility).toBe('private');
+  });
+});
+
+/**
+ * The same form for somebody whose right to record trips reaches only through a caving group: a
+ * club's own rules let its members record the club's trips and nothing wider. The server accepts
+ * a trip from them only when it belongs to such a group — left unbound, as a report always was,
+ * it is refused — so the form binds it: to the one group there is, saying so, or to the one the
+ * author chooses from exactly the groups the server named.
+ */
+describe('TripFormModal for somebody who may record trips only for a caving group', () => {
+  const byOneClub = { canCreate: true, unbound: false, cavingGroups: [silex] };
+  const bySeveralClubs = { canCreate: true, unbound: false, cavingGroups: [avenul, silex] };
+
+  beforeEach(() => {
+    createTrip.mockReset().mockResolvedValue({ id: 'new-trip' });
+    createPlan.mockReset().mockResolvedValue({ id: 'new-plan' });
+    updateTrip.mockReset().mockResolvedValue({ id: 'trip-1' });
+    planDefault.mockReset().mockReturnValue({ data: undefined });
+  });
+  afterEach(cleanup);
+
+  it('binds a report to the one group, says so by name, and keeps the narrowest audience', async () => {
+    door.mockReturnValue(byOneClub);
+    show(null);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Quick look' } });
+
+    // Said before the trip exists, and the group is named rather than called "your group".
+    expect(screen.getByTestId('trip-owning-group').textContent).toContain(
+      'You record trips for Silex; this one will belong to it.',
+    );
+    // One group is nothing to choose between.
+    expect(screen.queryByTestId('trip-owning-group-choice')).toBeNull();
+
+    const body = await savedBody(createTrip);
+    expect(createPlan).not.toHaveBeenCalled();
+    // The binding is what the server admits the trip on; the audience beside it stays the
+    // narrowest there is, as a report's always was.
+    expect(body.cavingGroupId).toBe('g-1');
+    expect(body.visibility).toBe('private');
+  });
+
+  it('says what belonging to the group means, which the visibility control cannot', () => {
+    door.mockReturnValue(byOneClub);
+    show(null);
+
+    // "Private" beside a trip that belongs to a club does not keep the club out: what its
+    // members may do with the club's trips is the club's rules' to say.
+    expect(screen.getByTestId('trip-owning-group').textContent).toContain(
+      "decided by the group's own rules, not by the visibility chosen here",
+    );
+  });
+
+  it('binds a plan to the one group, shared with it, and states both rather than leaving them to the rule', async () => {
+    door.mockReturnValue(byOneClub);
+    show(null, 'plan');
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Spring recce' } });
+
+    const audience = screen.getByLabelText('Visibility').closest('.ant-select');
+    expect(audience?.textContent).toContain('Caving group');
+    expect(screen.getByTestId('trip-plan-audience').textContent).toContain('Silex');
+    expect(screen.getByTestId('trip-owning-group').textContent).toContain('Silex');
+
+    const body = await savedBody(createPlan);
+    expect(createTrip).not.toHaveBeenCalled();
+    // Stated, not null. Unstated, the server's rule would decide — and it binds a plan only for
+    // somebody in exactly one group, which this form cannot know: the list it holds is the
+    // groups the caller may create in, not the groups they are in.
+    expect(body.visibility).toBe('cavingGroup');
+    expect(body.cavingGroupId).toBe('g-1');
+    // So the read that describes an unstated plan is not asked for at all.
+    expect(planDefault).not.toHaveBeenCalled();
+  });
+
+  it('keeps the trip in its group when the author changes who else may read it', async () => {
+    door.mockReturnValue(byOneClub);
+    show(null, 'plan');
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Open day' } });
+    fireEvent.mouseDown(screen.getByLabelText('Visibility'));
+    fireEvent.click(await screen.findByText('Public'));
+
+    const body = await savedBody(createPlan);
+    // A chosen audience with the group dropped would be exactly the unbound trip the server
+    // refuses this caller.
+    expect(body.visibility).toBe('public');
+    expect(body.cavingGroupId).toBe('g-1');
+  });
+
+  it('asks which group when there are several, offers exactly those, and takes no answer for none', async () => {
+    door.mockReturnValue(bySeveralClubs);
+    show(null);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Quick look' } });
+
+    // Nothing is guessed between them, so there is no sentence claiming a group either.
+    expect(screen.queryByTestId('trip-owning-group')).toBeNull();
+
+    // Pressing OK without choosing is refused on the field, and nothing is sent.
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    expect(await screen.findByText('Choose the caving group this trip belongs to.')).toBeInTheDocument();
+    expect(createTrip).not.toHaveBeenCalled();
+
+    // The choice is the server's list and nothing else: a group left out of it is one the
+    // server would refuse, so it is not there to pick.
+    fireEvent.mouseDown(screen.getByLabelText('Belongs to'));
+    await screen.findByTitle('Silex');
+    // The list as drawn. antd builds a select's options only once it is opened, and this is the
+    // only one this test opens, so every option in the document is one of this control's.
+    const offered = Array.from(
+      document.querySelectorAll('.ant-select-item-option-content'),
+      (option) => option.textContent,
+    );
+    expect(offered).toEqual(['Avenul', 'Silex']);
+    fireEvent.click(screen.getByTitle('Silex'));
+
+    const body = await savedBody(createTrip);
+    expect(body.cavingGroupId).toBe('g-1');
+    expect(body.visibility).toBe('private');
+  });
+
+  it('asks which group for a plan too, and shares the plan with the one chosen', async () => {
+    door.mockReturnValue(bySeveralClubs);
+    show(null, 'plan');
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Spring recce' } });
+
+    const audience = screen.getByLabelText('Visibility').closest('.ant-select');
+    expect(audience?.textContent).toContain('Caving group');
+    // No group is named before one is chosen: the sentence is about the group the plan will
+    // belong to, which is the choice just below it.
+    expect(screen.getByTestId('trip-plan-audience').textContent).toContain(
+      'the caving group it belongs to',
+    );
+
+    fireEvent.mouseDown(screen.getByLabelText('Belongs to'));
+    fireEvent.click(await screen.findByTitle('Avenul'));
+
+    const body = await savedBody(createPlan);
+    expect(body.visibility).toBe('cavingGroup');
+    expect(body.cavingGroupId).toBe('g-2');
+  });
+
+  it('leaves somebody who holds the right outright alone, whatever clubs they are in', async () => {
+    // The right over trips as such, and a club besides: nothing makes this caller file their
+    // work under the club, so the form is the one it always was — no sentence, no choice, a
+    // report bound to nothing and a plan left to the server's rule.
+    door.mockReturnValue({ canCreate: true, unbound: true, cavingGroups: [silex] });
+    planDefault.mockReturnValue({
+      data: { visibility: 'cavingGroup', cavingGroupId: 'g-1', cavingGroupName: 'Silex' },
+    });
+    show(null);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Quick look' } });
+
+    expect(screen.queryByTestId('trip-owning-group')).toBeNull();
+    expect(screen.queryByTestId('trip-owning-group-choice')).toBeNull();
+    const report = await savedBody(createTrip);
+    expect(report.cavingGroupId).toBeNull();
+    expect(report.visibility).toBe('private');
+
+    cleanup();
+    show(null, 'plan');
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Spring recce' } });
+    const plan = await savedBody(createPlan);
+    expect(plan.visibility).toBeNull();
+    expect(plan.cavingGroupId).toBeNull();
+  });
+
+  it('does not move an existing trip between groups, and asks nothing about one', async () => {
+    // Editing is a different question from creating: the trip has the group it has, and what
+    // this caller may do to it was decided on the trip itself before the form opened.
+    door.mockReturnValue(bySeveralClubs);
+    show(trip({ cavingGroupId: 'g-9', visibility: 'cavingGroup' }));
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Digging weekend (5)' } });
+
+    expect(screen.queryByTestId('trip-owning-group')).toBeNull();
+    expect(screen.queryByTestId('trip-owning-group-choice')).toBeNull();
+    const body = await savedBody(updateTrip);
+    expect(body.cavingGroupId).toBe('g-9');
+    expect(body.visibility).toBe('cavingGroup');
   });
 });

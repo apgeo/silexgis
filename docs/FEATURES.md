@@ -225,6 +225,9 @@ feature and walkthroughs of whole jobs.
   Nothing is stored: hours are worked out from the times recorded, over however many days the trip
   really ran, and a first visit is simply the earliest trip that took somebody somewhere — so typing
   up an older trip from the archive corrects the figures instead of leaving a stale flag behind.
+  A figure that would say nothing is left out rather than drawn: on a cave's own totals every trip
+  counted went to that cave, so its places could only ever read one and its first visits could only
+  repeat its people, and neither is shown there.
   Any of the three can be saved as a spreadsheet, which carries exactly what the screen carried and
   says whose totals they are, because a file gets forwarded and read months later.
 - **What a club's trips add up to, on one page** — from the trip list, one button opens the same
@@ -232,9 +235,12 @@ feature and walkthroughs of whole jobs.
   them, largest first. Beside the yearly bars runs the figure a trip log cannot otherwise be asked
   for — how many distinct areas the trips had reached by the end of each year. A line still climbing
   says the club is finding new ground; a line flattening under bars that are not says it is going
-  back to ground it already knows. Everything is counted over the trips **you** may read, and each
-  card's title says which trips it is drawing, because you can switch between the filter you came in
-  with and everything you may read, and a title that did not move with the switch would be a lie.
+  back to ground it already knows. *New* there means new among the trips being counted, and the page
+  says so under the line: narrow the list to one year and the line starts again from nothing,
+  because an area an earlier trip had reached is new to the trips that are left. Everything is
+  counted over the trips **you** may read, and each card's title says which trips it is drawing,
+  because you can switch between the filter you came in with and everything you may read, and a
+  title that did not move with the switch would be a lie.
   Where a trip counts into more than one bar — it went to two areas, it had four people — the page
   says so, and where there are more names than bars it says how many it is showing out of how many
   there are.
@@ -416,9 +422,14 @@ feature and walkthroughs of whole jobs.
   contain something the page would not have shown you — no cave you may not place, no account of an
   incident if you are only a reader of the trip, and photographs go in as the same renderings the
   gallery shows you, with their camera metadata stripped. A copy filed against the trip is narrower
-  still: it is written for whoever may read the trip at all, not for the person who filed it. There
-  is no map picture in it — the trip's sketch is written out in words instead — and there is no
-  public address for a report: it is downloaded by somebody signed in who may read the trip.
+  still: it is written for whoever may read the trip at all, not for the person who filed it. The
+  copy you download carries **a map of the trip** — its sketch, where its party met, and the caves
+  it names that you may place — drawn by your own browser out of what the page had already been
+  given, over one of the installation's map backgrounds that may be copied into a document, with
+  a line under it saying whose view it is and when. The sketch is still written out in words
+  beside it. The copy filed against the trip never carries that map: it shows what one reader may
+  see, and a filed copy is opened by everybody who may read the trip. There is no public address
+  for a report: it is downloaded by somebody signed in who may read the trip.
   A club can write **its own layout** for the document: download the standard one, which is a short
   text file that explains itself in its own comments, edit it, upload it, and choose it. A layout can
   only ask for things the reader was already given, and a line whose contents turn out to be empty
@@ -433,6 +444,9 @@ feature and walkthroughs of whole jobs.
   group's content, a feature subtree, a named feature set, a cabinet and everything filed
   below it, one object), per-object grants
   with the same reach, and an explainer that answers "why can this person see that?".
+  A right held only over a caving group's content opens the door it should: a member whose club
+  lets them record the club's trips — and who holds nothing wider — is offered the trip form, which
+  binds the trip to the club and says so, or asks which club when there are several.
   Two-factor sign-in (authenticator app, emailed code or texted code), optional external
   login (Google/GitHub/OIDC), and location protection for sensitive caves — which keeps a
   protected cave's documents readable while withholding the fact that they point at *that*

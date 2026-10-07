@@ -31,6 +31,22 @@
                   rather than published with the placeholder still in it — a url like that answers
                   401 for every tile, which on screen is indistinguishable from a source that is
                   simply down.
+    inDocuments   true lets a basemap be drawn into a document this application writes: the map
+                  in a trip's write-up. Default false, and deliberately. Showing a tile on a
+                  screen and putting it into a file that is then mailed and printed are different
+                  uses, and a provider's terms decide the second separately — some allow it with
+                  the credit beside the picture, some only through a product of their own, some
+                  not at all. Nothing about an address says which, so say yes only for a source
+                  whose terms you have read. Two things have to be true as well, and an entry
+                  that fails the first is reported at startup and loses the mark:
+                    - it has an attribution, because that is what is written under the picture;
+                    - it answers EVERY tile with an Access-Control-Allow-Origin header, whether
+                      or not the request named an origin. The picture is read back out of the
+                      browser, which hands over nothing fetched without that header — and a
+                      browser already holding a tile from the map view reuses the copy it has.
+                  A document takes ONE background: the default basemap if it is marked, otherwise
+                  the first marked basemap in this file. With none marked, or when the tiles do
+                  not arrive, the picture is drawn on a plain ground and says so.
 
   EVERY maxZoom BELOW WAS MEASURED, not copied from documentation: each source was asked for a
   tile over Romanian karst (22.85E 46.55N) at every zoom from 10 to 20, and the value here is the
@@ -40,6 +56,18 @@
     - Wikimedia Maps answers 403 to anything that is not a Wikimedia project.
     - Esri World Terrain Base answers a 2521-byte "no data" placeholder at every zoom here.
   Re-measure before changing one of these, and prefer measuring your own area of interest.
+
+  WHICH SOURCES SHIP MARKED inDocuments, AND WHY ONLY THOSE. Five: the three OpenStreetMap
+  renderings, OpenTopoMap and CyclOSM. Each is drawn from OpenStreetMap data and published under
+  an open licence that allows a copy with its credit (the credit travels under the picture, and
+  the picture inherits the licence's share-alike condition — the document around it does not).
+  Each was also measured on 2026-10-06 to send Access-Control-Allow-Origin on a tile requested
+  with and without an origin. Everything else ships unmarked, for one of two reasons:
+    - its terms are an agreement rather than an open licence (Esri, Carto, every keyed provider,
+      and Google, which may not be marked at all), or allow only non-commercial use (the
+      Sentinel-2 composite) — a decision about YOUR installation, for you to take;
+    - it does not send the header to an origin it does not know (Freemap Outdoor, measured the
+      same day), so the mark would only ever produce a picture with no background.
 -->
 <silexgis-map-layers version="1">
 
@@ -50,18 +78,21 @@
          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
          attribution="© OpenStreetMap contributors"
          default="true"
+         inDocuments="true"
          maxZoom="19" />
 
   <layer name="OpenStreetMap Humanitarian"
          group="General"
          url="https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
          attribution="© OpenStreetMap contributors, tiles by Humanitarian OSM Team"
+         inDocuments="true"
          maxZoom="20" />
 
   <layer name="OpenStreetMap France"
          group="General"
          url="https://a.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png"
          attribution="© OpenStreetMap contributors, tiles by OpenStreetMap France"
+         inDocuments="true"
          maxZoom="20" />
 
   <!-- Muted basemaps: worth having because cave data is drawn ON TOP of the basemap, and a
@@ -91,6 +122,7 @@
          group="Topographic"
          url="https://tile.opentopomap.org/{z}/{x}/{y}.png"
          attribution="© OpenStreetMap contributors, SRTM | © OpenTopoMap (CC-BY-SA)"
+         inDocuments="true"
          maxZoom="17" />
 
   <layer name="Esri World Topographic"
@@ -109,6 +141,7 @@
          group="Topographic"
          url="https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png"
          attribution="© OpenStreetMap contributors, tiles by CyclOSM, hosted by OpenStreetMap France"
+         inDocuments="true"
          maxZoom="20" />
 
   <!-- ================================ Imagery ================================ -->

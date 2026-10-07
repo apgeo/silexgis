@@ -181,6 +181,21 @@ export default function TripStatsPage() {
               <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
                 {t('tripStats.newGroundNote')}
               </Typography.Paragraph>
+              {/* What "new" is measured against, said under the line that draws it. An area's
+                  first arrival is the earliest of the trips being counted that reached it, so a
+                  window of dates starts the line again from nothing and a filter by purpose
+                  credits the survey trips with ground an exploration trip had reached first.
+                  Read without this sentence the line claims discovery; read with it, it says
+                  what these trips added to one another. It takes the population the card's own
+                  title names, so it moves with the scope control exactly as the title does and
+                  is never a sentence about the filter standing under a chart of everything. */}
+              <Typography.Paragraph
+                type="secondary"
+                style={{ marginTop: 4, marginBottom: 0 }}
+                data-testid="trip-stats-new-within"
+              >
+                {t('tripStats.newWithin', { population })}
+              </Typography.Paragraph>
             </Card>
           </Col>
           <Col xs={24} xl={12}>

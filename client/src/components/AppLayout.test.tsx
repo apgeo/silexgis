@@ -12,6 +12,9 @@ import { buildNavItems, isNavGroup, GROUP_PREFIX } from './navItems.tsx';
 
 let mobile = false;
 let capabilities: Record<string, string> | undefined;
+// The answer beside the map: the caller's own caving groups in which a create is accepted, per
+// domain. Empty unless a test is about somebody whose right reaches only through a group.
+let createInCavingGroups: Record<string, { id: string; name: string }[]> = {};
 // The rank the relation vocabulary is gated on, which no capability answer expresses:
 // membership of the protected group is what the server resolves it from.
 let permissionGroups: { slug: string }[] = [];
@@ -25,7 +28,9 @@ vi.mock('../api/hooks.ts', () => ({
   useMe: () => ({ data: me }),
   useUpdateLocale: () => ({ mutate: saveLocale }),
   useMyPermissionGroups: () => ({ data: permissionGroups }),
-  useCapabilities: () => ({ data: capabilities ? { domains: capabilities } : undefined }),
+  useCapabilities: () => ({
+    data: capabilities ? { domains: capabilities, createInCavingGroups } : undefined,
+  }),
   // The header's bell reads this; the mock replaces the module wholesale, so a hook left out
   // here is undefined at the call site and every test in this file dies on the render.
   useUnreadNotificationCount: () => ({ data: unreadNotifications }),
@@ -84,6 +89,7 @@ beforeEach(() => {
   me = { avatarUrl: null, displayName: null, email: 'caver@example.org' };
   mobile = false;
   capabilities = undefined;
+  createInCavingGroups = {};
   permissionGroups = [];
   unreadNotifications = undefined;
   saveLocale.mockClear();
@@ -304,6 +310,34 @@ describe('AppLayout nav gating', () => {
     expect(screen.queryByText('Configuration')).toBeNull();
     expect(screen.queryByText('Message texts')).toBeNull();
     expect(screen.queryByText('Feature sets')).toBeNull();
+  });
+
+  it('keeps both trip imports off the rail for somebody who may record trips only for their caving group', () => {
+    // The trip pages offer this account their create control, because a trip of theirs that
+    // belongs to the club is accepted. The imports are a different matter and stay gated on the
+    // right held over trips as such: each review opens by asking for it with no group named,
+    // before a sheet or an archive is read, so the entry would lead to a refusal on arrival.
+    capabilities = { tripLogs: 'none' };
+    createInCavingGroups = { tripLogs: [{ id: 'g-1', name: 'Silex' }] };
+    renderShell();
+    expandRail();
+    openGroup('Activity');
+
+    // The control: the group is open and the trip list is in it.
+    expect(screen.getByText('Trip logs')).toBeInTheDocument();
+    expect(screen.queryByText('Import trips')).toBeNull();
+    expect(screen.queryByText('Import a recording')).toBeNull();
+
+    // And the holder of the right, so a gate that had stopped offering the entries to anybody
+    // does not read as a passing assertion.
+    cleanup();
+    capabilities = { tripLogs: 'read, create' };
+    createInCavingGroups = {};
+    renderShell();
+    expandRail();
+    openGroup('Activity');
+    expect(screen.getByText('Import trips')).toBeInTheDocument();
+    expect(screen.getByText('Import a recording')).toBeInTheDocument();
   });
 
   it('offers the terrain builder only to a holder of the terrain right', () => {

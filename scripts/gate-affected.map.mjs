@@ -30,6 +30,7 @@ export const groups = {
     'CredentialUrlScrubberTests',
     'TripOrganizingGroupGuardTests', 'TripsOfTheCallerTests',
     'EnumBindingTests', 'TripPurgeTests', 'TripTrackImportTests', 'TripWriteShapeTests',
+    'TripReportMapTests',
     // A deleted trip is hidden from every read and kept whole until it is removed for good:
     // what leaves and returns with it, who may put it back, and what the rest of the
     // application does about the rows it still holds.
@@ -60,6 +61,9 @@ export const groups = {
     // What becomes of a generated write-up when the record it was written for goes is decided
     // beside the documents, for trips and camps alike, and these two are what ask it.
     'ExpeditionDeleteCleanupTests', 'TripPurgeTests',
+    // A picture a caller hands a write-up is read and redrawn beside the document writer; the
+    // first is that reader on its own, the second the route that passes it a real upload.
+    'SuppliedPictureTests', 'TripReportMapTests',
   ],
   photos: [
     'AlbumAndPublicGalleryTests', 'ExpeditionPhotographTests', 'PhotoBytesProtectionTests',
@@ -382,10 +386,11 @@ export const crossCutting = {
     'TripAttendanceLimitTests', 'TripCalloutStandDownTests', 'TripChecklistTickTests',
     'TripImportCommitTests', 'TripImportSessionTests', 'TripInvitationTests',
     'TripOrganizingGroupGuardTests', 'TripParticipantRoleVocabularyTests', 'TripPromotionTests',
-    'TripReportDocumentTests', 'TripReportTemplateTests', 'TripRestoreTests',
-    'TripStatisticsTests', 'TripTrackImportTests', 'TripTrackingPicturesTests',
-    'TripTrackingPublicationTests', 'TripTrackingTests', 'TripTypeVocabularyTests',
-    'UiDefaultsTests', 'UploadDestinationTests', 'UserAdministrationTests',
+    'TripReportDocumentTests', 'TripReportMapTests', 'TripReportTemplateTests',
+    'TripRestoreTests', 'TripStatisticsTests', 'TripTrackImportTests',
+    'TripTrackingPicturesTests', 'TripTrackingPublicationTests', 'TripTrackingTests',
+    'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
+    'UserAdministrationTests',
   ],
   locationClasses: [
     'AccessHistoryTests', 'AclAndCavingGroupTests', 'AreaKarstStatisticsTests',

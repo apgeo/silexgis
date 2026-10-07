@@ -1020,6 +1020,53 @@ export function useCan(domain: AccessDomainName, action: AccessActionFlag): bool
   return hasAccessAction(data?.domains[domain], action);
 }
 
+/** One of the caller's own caving groups a new row may be bound to. */
+export type CreatableCavingGroup = components['schemas']['CreatableCavingGroupDto'];
+
+/** Where the caller may create in one domain — what a create door and its form need to know. */
+export interface CreateDoor {
+  /**
+   * Whether a create door is worth drawing at all: the right is held over the domain as such,
+   * or it reaches through at least one of the caller's caving groups.
+   */
+  canCreate: boolean;
+  /**
+   * The right is held with no row in view, so a row that belongs to no caving group is accepted.
+   * False for somebody whose right comes only through their groups: what they create has to be
+   * bound to one of `cavingGroups`, or the server refuses it.
+   */
+  unbound: boolean;
+  /** The caller's own caving groups a new row may be bound to, ordered by name. */
+  cavingGroups: readonly CreatableCavingGroup[];
+}
+
+// One array for every "none", so a component that depends on the list does not see a new one
+// on each render while the answer is still on its way.
+const NO_CAVING_GROUPS: readonly CreatableCavingGroup[] = [];
+
+/**
+ * Whether the caller may create in a domain somewhere, and where.
+ *
+ * `useCan(domain, 'create')` answers a narrower question — is the right held over the domain as
+ * such, with no row in view — and a right held only at a caving group's scope is never that: a
+ * member whose club lets them record the club's trips is told `create` on none. Gating a create
+ * door on it hides a door the server would open. The capabilities answer therefore says, beside
+ * the map, in which of the caller's own groups a create is accepted, decided by the rule the
+ * write itself is decided by; this reads both and keeps them apart, because the form behind the
+ * door needs to know which it is — an unbound create needs no group, a create by club only must
+ * name one.
+ *
+ * Creating only. Whether somebody may write or delete under a right held at a group's scope is a
+ * question about a row and stays with the per-object answers. All false and empty while the
+ * answer is loading, so a door appears and never flashes away.
+ */
+export function useCreateDoor(domain: AccessDomainName): CreateDoor {
+  const { data } = useCapabilities();
+  const unbound = hasAccessAction(data?.domains[domain], 'create');
+  const cavingGroups = data?.createInCavingGroups[domain] ?? NO_CAVING_GROUPS;
+  return { canCreate: unbound || cavingGroups.length > 0, unbound, cavingGroups };
+}
+
 export type MyPermissionGroup = components['schemas']['MyPermissionGroupDto'];
 
 /** The permission groups the caller reaches — where a right of theirs comes from. */
@@ -4192,6 +4239,60 @@ export function useKeepTripReport() {
 }
 
 /**
+ * What the picture of a map in a trip's write-up is drawn from, handed over as it is already
+ * held.
+ *
+ * Two things, and both are answers the write-up's page asks for anyway. The caves a trip names
+ * are read one by one, by id, to print their names; each answer also says where that cave is as
+ * far as this reader may know — exactly, approximately, or not at all — so the picture takes its
+ * positions from those answers and from nowhere else. The catalogue of map backgrounds is what
+ * every map in the application is built from.
+ *
+ * Nothing here is a new question. Each read goes by the key and the route the page's own reads
+ * go by, so an answer already held is handed back as it is, and one still on its way is waited
+ * for rather than asked for twice. That matters for more than thrift: a route of its own for
+ * "where are this trip's caves" would be a second place the server decides what a reader may be
+ * shown of them.
+ *
+ * A cave whose read fails — it stopped being readable between the trip's answer and this one —
+ * is simply not among the answers, and a catalogue that cannot be read is no catalogue.
+ */
+export function useTripReportMapSources() {
+  const queryClient = useQueryClient();
+  return {
+    caves: async (ids: readonly string[]): Promise<Map<string, CaveDetail>> => {
+      const answers = await Promise.allSettled(
+        ids.map((id) =>
+          queryClient.ensureQueryData({
+            queryKey: queryKeys.cave(id),
+            queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id } } })),
+            retry: false,
+          }),
+        ),
+      );
+      const held = new Map<string, CaveDetail>();
+      answers.forEach((answer, index) => {
+        if (answer.status === 'fulfilled') {
+          held.set(ids[index], answer.value);
+        }
+      });
+      return held;
+    },
+    catalog: async (): Promise<MapLayerInfo[] | undefined> => {
+      try {
+        return await queryClient.ensureQueryData({
+          queryKey: queryKeys.mapLayers,
+          queryFn: () => unwrap(api.GET('/api/v1/map-layers')),
+          staleTime: 5 * 60_000,
+        });
+      } catch {
+        return undefined;
+      }
+    },
+  };
+}
+
+/**
  * Moving a trip to another lifecycle state, through the one route that names the state it moves
  * to rather than a verb per move.
  *
@@ -4643,9 +4744,21 @@ export function useCavingGroupMembers(cavingGroupId: string | undefined) {
   });
 }
 
+/**
+ * What creating a caving group changes, which is more than the directory.
+ *
+ * Whoever creates a group joins it as its owner, and the group's starter rules reach them from
+ * that moment: the right to add people to its roster, and the right to create content that
+ * belongs to the group. So the creator's own capabilities are read again with the directory —
+ * left to go stale by themselves, the create doors those rights open would stay shut for minutes
+ * on the very account that has just earned them.
+ */
 function useInvalidateCavingGroups() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.capabilities });
+  };
 }
 
 /**
@@ -4655,6 +4768,12 @@ function useInvalidateCavingGroups() {
  * roster the edit was made in, and so does how many people an announcement to that club would
  * reach. Refetching only the directory leaves the drawer showing the roster as it was before the
  * edit that was just made in it.
+ *
+ * And membership is what a group's rules reach people through, so an edit to a roster can be an
+ * edit to what the person making it may do: somebody who puts themselves on a roster, or takes
+ * themselves off one, has just gained or lost the right to create that group's content. Their
+ * own capabilities are read again rather than left to go stale, so a create door opens and shuts
+ * with the membership instead of leading, for a few minutes, to a refusal.
  */
 function useInvalidateCavingGroupRoster(cavingGroupId: string) {
   const queryClient = useQueryClient();
@@ -4662,6 +4781,7 @@ function useInvalidateCavingGroupRoster(cavingGroupId: string) {
     void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
     void queryClient.invalidateQueries({ queryKey: queryKeys.cavingGroupMembers(cavingGroupId) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.cavingGroupAudience(cavingGroupId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.capabilities });
   };
 }
 
@@ -7742,6 +7862,111 @@ export function useExpeditionRoster(expeditionId: string | undefined) {
       ),
     enabled: !!expeditionId,
     retry: false,
+  });
+}
+
+/**
+ * One stay as it is written: who, as what, and for which days.
+ *
+ * The person is named in exactly one of two ways — `caverId` for somebody picked out of the
+ * directory, `newCaverName` for a name typed in — and the server refuses a row carrying both or
+ * neither. A typed name is not a new person by being typed: the server reads it against the
+ * directory, means whoever is already recorded under exactly it, and adds somebody only when
+ * nobody is. That is the rule a trip's people are named by, and it lives on the server only.
+ */
+export type ExpeditionRosterEntryWrite = components['schemas']['ExpeditionRosterEntryWriteRequest'];
+
+/**
+ * What every write on a camp's roster leaves stale.
+ *
+ * The roster itself, read again rather than patched: the head count beside the rows is worked
+ * out on the server, distinctly by person, and a row added locally would leave it wrong by
+ * exactly the mistake that count exists to prevent. The camp's timeline, because a stay is a
+ * change to the camp's own record and is written there. And the directory of people, because a
+ * stay that names somebody by a name nobody held has just added them to it — a picker opened a
+ * moment later must offer the person the last save made, or the next stay types them in again.
+ */
+function useExpeditionRosterWritten(expeditionId: string) {
+  const queryClient = useQueryClient();
+  const invalidateHistory = useInvalidateHistory();
+  return () => {
+    invalidateHistory();
+    void queryClient.invalidateQueries({ queryKey: queryKeys.cavers });
+    // Returned, so the write is not finished until the rows it changed have been read back and
+    // a dialog closing on it closes over the list it expects to see.
+    return queryClient.invalidateQueries({ queryKey: queryKeys.expeditionRoster(expeditionId) });
+  };
+}
+
+/**
+ * What a refused write on a camp's roster says about what is held here.
+ *
+ * One refusal is a statement about the cache rather than about the request: the entry a stay
+ * named is not in the directory any more. It was removed after the list of people was read, or
+ * — the only way it can go while a stay still names it — it was joined into another entry for
+ * the same person, and the stays it held moved to the one that was kept. Either way what is
+ * held here is behind: the list of people still offers the entry that is gone, and the roster
+ * may still show stays under it. Both are read again, so the next thing somebody presses is
+ * not the same dead entry.
+ */
+function useExpeditionRosterRefused(expeditionId: string) {
+  const queryClient = useQueryClient();
+  return (error: unknown) => {
+    if (error instanceof ApiError && error.code === 'expedition_roster.caver_unknown') {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cavers });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.expeditionRoster(expeditionId) });
+    }
+  };
+}
+
+/** Records that somebody was at a camp for a stretch of days. Takes the right to write the camp. */
+export function useCreateExpeditionRosterEntry(expeditionId: string) {
+  const written = useExpeditionRosterWritten(expeditionId);
+  const refused = useExpeditionRosterRefused(expeditionId);
+  return useMutation({
+    mutationFn: (body: ExpeditionRosterEntryWrite) =>
+      unwrap(
+        api.POST('/api/v1/expeditions/{expeditionId}/roster', {
+          params: { path: { expeditionId } },
+          body,
+        }),
+      ),
+    onSuccess: () => written(),
+    onError: refused,
+  });
+}
+
+/**
+ * Rewrites one stay whole. No version travels with it: a stay is not versioned against its camp,
+ * so correcting the day somebody arrived is never refused for want of a camp read in between.
+ */
+export function useUpdateExpeditionRosterEntry(expeditionId: string) {
+  const written = useExpeditionRosterWritten(expeditionId);
+  const refused = useExpeditionRosterRefused(expeditionId);
+  return useMutation({
+    mutationFn: ({ entryId, body }: { entryId: number; body: ExpeditionRosterEntryWrite }) =>
+      unwrap(
+        api.PUT('/api/v1/expeditions/{expeditionId}/roster/{entryId}', {
+          params: { path: { expeditionId, entryId } },
+          body,
+        }),
+      ),
+    onSuccess: () => written(),
+    onError: refused,
+  });
+}
+
+/** Removes one recorded stay. The person stays in the directory: a stay is not who somebody is. */
+export function useDeleteExpeditionRosterEntry(expeditionId: string) {
+  const written = useExpeditionRosterWritten(expeditionId);
+  return useMutation({
+    mutationFn: (entryId: number) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/expeditions/{expeditionId}/roster/{entryId}', {
+          params: { path: { expeditionId, entryId } },
+        }),
+      ),
+    onSuccess: () => written(),
   });
 }
 

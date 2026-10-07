@@ -64,6 +64,21 @@ public class MapLayer : ITimestamped
 
     public bool Enabled { get; set; } = true;
 
+    /// <summary>
+    /// Whether this source's tiles may be copied into a document the application produces.
+    /// </summary>
+    /// <remarks>
+    /// Its own answer rather than a consequence of being enabled, because they are two different
+    /// permissions. A source is switched on to be looked at; a picture written into a file leaves
+    /// with the file, is forwarded and printed, and the terms most tile providers publish treat
+    /// that as a different use from display — some allow it with a credit, some only through a
+    /// product of their own, some not at all. Nothing about a tile address says which, so the
+    /// answer is declared by whoever read the terms, per source, and is no unless they said yes.
+    /// A source added by hand, or by a catalogue written before this existed, is therefore never
+    /// copied into anything.
+    /// </remarks>
+    public bool InDocuments { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { App } from 'antd';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { TripLogInfo } from '../../api/hooks.ts';
 
@@ -22,7 +23,12 @@ const fieldDataSchema = JSON.stringify({
   },
 });
 
-const { tripSpy, photosSpy } = vi.hoisted(() => ({ tripSpy: vi.fn(), photosSpy: vi.fn() }));
+const { tripSpy, photosSpy, downloadSpy, keepSpy } = vi.hoisted(() => ({
+  tripSpy: vi.fn(),
+  photosSpy: vi.fn(),
+  downloadSpy: vi.fn(),
+  keepSpy: vi.fn(),
+}));
 
 vi.mock('../../api/hooks.ts', () => ({
   useTripLog: () => tripSpy(),
@@ -56,17 +62,18 @@ vi.mock('../../api/hooks.ts', () => ({
   useCave: () => ({ data: { id: CAVE, name: 'Peștera Mare' } }),
   useTripReportTemplates: () => ({ data: [] }),
   useEffectiveAccess: () => ({ data: undefined }),
-  useCan: () => false,
-  useKeepTripReport: () => ({ mutate: vi.fn(), isPending: false }),
+  // Somebody who may change the trip, so that both ways of producing a document are on the page.
+  useCan: () => true,
+  useKeepTripReport: () => ({ mutate: keepSpy, isPending: false }),
   parseAccessActions: () => new Set<string>(),
   hasAccessAction: () => true,
 }));
 
-// The document is fetched with the caller's token and handed to the browser as a file, neither of
-// which a jsdom test can do or is about.
-vi.mock('../../api/download.ts', () => ({
-  downloadFile: vi.fn(async () => {}),
-  tripReportUrl: (id: string) => `/api/v1/trip-logs/${id}/report`,
+// The document is fetched with the caller's token and handed to the browser as a file, and its
+// map is drawn on a canvas — none of which a jsdom test can do. How a download is made has tests
+// of its own; what this page does with one is asked here.
+vi.mock('../../components/trips/useTripReportDownload.ts', () => ({
+  useTripReportDownload: () => ({ download: downloadSpy, downloading: false }),
 }));
 
 // The sketch is drawn by a real map, which wants a browser; the report's own contribution is what
@@ -151,13 +158,22 @@ function show(subject: TripLogInfo, photos: unknown[] = []) {
   tripSpy.mockReturnValue({ data: subject, isPending: false });
   photosSpy.mockReturnValue({ data: { items: photos }, isPending: false });
   return render(
-    <MemoryRouter initialEntries={['/trip-logs/trip-1/report']}>
-      <Routes>
-        <Route path="/trip-logs/:id/report" element={<TripReportPage />} />
-      </Routes>
-    </MemoryRouter>,
+    // Inside the application's own message host, as the page is when it is really on screen:
+    // what it tells its reader after a download is said through it.
+    <App>
+      <MemoryRouter initialEntries={['/trip-logs/trip-1/report']}>
+        <Routes>
+          <Route path="/trip-logs/:id/report" element={<TripReportPage />} />
+        </Routes>
+      </MemoryRouter>
+    </App>,
   );
 }
+
+beforeEach(() => {
+  downloadSpy.mockReset().mockResolvedValue('with-map');
+  keepSpy.mockReset();
+});
 
 afterEach(cleanup);
 
@@ -277,5 +293,65 @@ describe('TripReportPage', () => {
     const image = screen.getByAltText('The dig face');
     expect(image.getAttribute('src')).toBe('/api/v1/files/f1/thumbnail?size=480&token=x');
     expect(screen.getByTestId('trip-report-plates').textContent).toContain('Ana Pop');
+  });
+
+  /**
+   * The download is handed the trip exactly as this page read it. The map that goes into the
+   * document is drawn from that object, so anything else passed here — a trip re-read some other
+   * way, a copy with fields filled in — would be a map of something the page did not show.
+   */
+  it('downloads the document from the trip it is showing, and says nothing when it arrives whole', async () => {
+    const subject = trip({ geom: { type: 'Point', coordinates: [22.76314, 46.81953] } as never });
+    show(subject);
+
+    fireEvent.click(screen.getByTestId('trip-report-download'));
+
+    expect(downloadSpy).toHaveBeenCalledTimes(1);
+    expect(downloadSpy.mock.calls[0][0]).toBe(subject);
+    expect(downloadSpy.mock.calls[0][1]).toBeUndefined();
+    await Promise.resolve();
+    expect(document.querySelector('.ant-message-notice')).toBeNull();
+  });
+
+  /**
+   * A file that differs from what the page showed is announced, because the alternative is that
+   * its reader finds out by opening it. Each of the three ways it can differ says its own thing.
+   */
+  it.each([
+    ['with-map-no-background', 'The map in the document has no background map under it.'],
+    ['map-not-made', 'the map could not be drawn in this browser'],
+    ['map-refused', 'the server did not take the picture'],
+  ])('tells its reader when the download ended as %s', async (outcome, words) => {
+    downloadSpy.mockResolvedValue(outcome);
+    show(trip());
+
+    fireEvent.click(screen.getByTestId('trip-report-download'));
+
+    expect((await screen.findByText(words, { exact: false })).textContent).toContain(words);
+  });
+
+  it('says the document could not be produced when the download fails', async () => {
+    downloadSpy.mockRejectedValue(new Error('refused'));
+    show(trip());
+
+    fireEvent.click(screen.getByTestId('trip-report-download'));
+
+    expect(await screen.findByText('The document could not be produced.')).toBeTruthy();
+  });
+
+  /**
+   * The map goes into a download and never into the copy filed against the trip, which every
+   * later reader of the trip opens. So filing asks the server for a document and hands it
+   * nothing: the request carries the trip's id and the layout, and no picture, and the download
+   * — the only thing here that draws a map — is not touched.
+   */
+  it('files the write-up against the trip without drawing or sending a map', () => {
+    show(trip({ geom: { type: 'Point', coordinates: [22.76314, 46.81953] } as never }));
+
+    fireEvent.click(screen.getByTestId('trip-report-keep'));
+
+    expect(keepSpy).toHaveBeenCalledTimes(1);
+    expect(keepSpy.mock.calls[0][0]).toEqual({ id: 'trip-1', templateId: undefined });
+    expect(downloadSpy).not.toHaveBeenCalled();
   });
 });

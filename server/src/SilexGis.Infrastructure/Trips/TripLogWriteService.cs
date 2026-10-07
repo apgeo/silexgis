@@ -482,27 +482,15 @@ public sealed class TripLogWriteService(
         requested.AddRange((input.Proposers ?? []).Select(p => (p.RoleId ?? roles.Proposer, p)));
 
         // A name with no roster entry becomes one, so the person can be counted and found again
-        // on later trips. Repeating a name already in the roster reuses it rather than making a
-        // second entry for the same person.
-        var named = requested
-            .Where(p => p.Write.CaverId is null)
-            .Select(p => p.Write.NewCaverName!.Trim())
-            .Where(name => name.Length > 0)
-            .ToList();
-
-        // Two people can share a name — that is exactly the state the roster merge exists to
-        // resolve — so the lookup groups before it keys. Keying the query straight by name would
-        // fault on the duplicate and lose the whole trip write over a coincidence of spelling.
-        // The oldest entry wins, so the same typed name resolves to the same person every time
-        // rather than to whichever row the database happened to return first.
-        var matchedRows = named.Count == 0
-            ? []
-            : await db.Cavers.Where(c => named.Contains(c.FullName))
-                .OrderBy(c => c.CreatedAt).ThenBy(c => c.Id)
-                .ToListAsync(ct);
-        var matched = matchedRows
-            .GroupBy(c => c.FullName)
-            .ToDictionary(g => g.Key, g => g.First().Id);
+        // on later trips, and repeating a name already in the roster reuses it rather than making
+        // a second entry for the same person. Who a typed name means is decided in one place, for
+        // every record that may name somebody this way and not for trips alone: it is a rule
+        // about identity, and stated a second time it would sooner or later be stated
+        // differently — which is how one person comes to hold two entries.
+        var named = await CaverNames.ResolveAsync(
+            db,
+            requested.Where(p => p.Write.CaverId is null).Select(p => p.Write.NewCaverName!),
+            ct);
 
         // Keyed on the pair the roster is unique on, so one person in two jobs is two entries and
         // the same person named twice for one job is one — the last of them, since a request that
@@ -510,22 +498,8 @@ public sealed class TripLogWriteService(
         var desired = new Dictionary<(long RoleId, Guid CaverId), TripRosterEntry>();
         foreach (var (roleId, write) in requested)
         {
-            var caverId = write.CaverId;
-            if (caverId is null)
-            {
-                var name = write.NewCaverName!.Trim();
-                if (!matched.TryGetValue(name, out var existingId))
-                {
-                    var created = new Caver { FullName = name };
-                    db.Cavers.Add(created);
-                    matched[name] = created.Id;
-                    existingId = created.Id;
-                }
-
-                caverId = existingId;
-            }
-
-            desired[(roleId, caverId.Value)] = write;
+            var caverId = write.CaverId ?? named.IdOf(write.NewCaverName!);
+            desired[(roleId, caverId)] = write;
         }
 
         var existing = await db.TripLogParticipants.Where(x => x.TripLogId == tripId).ToListAsync(ct);

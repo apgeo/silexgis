@@ -212,6 +212,34 @@ nu sunteți în niciun grup, sau sunteți în mai multe, nu se ghicește nimic: 
 formularul spune de ce, și îl lărgiți acolo dacă trebuie citit. O vizibilitate pe care o alegeți
 dvs. este păstrată așa cum ați ales-o.
 
+### Când dreptul de a înregistra ture vine de la club
+
+Nu toată lumea are dreptul de a înregistra ture în general. De obicei, regulile unui grup de
+speologie le permit membrilor să înregistreze turele **grupului** și nimic mai larg. Cine are
+dreptul doar pe această cale primește aceleași căi de intrare ca toți ceilalți — *Jurnal de tură
+nou* și *Planifică o tură* pe lista de ture, *Planifică o tură* pe *Turele mele*, acțiunea de tură
+de pe panoul de bord — cu o singură diferență: tura trebuie să **aparțină grupului**, pentru că
+aceasta este singura tură pe care aplicația o acceptă de la acea persoană.
+
+| Puteți înregistra ture pentru | Ce face formularul |
+|---|---|
+| **Un singur grup** | O spune înainte ca tura să existe — *„Înregistrezi ture pentru «grup»; aceasta îi va aparține"* — și leagă tura de acel grup. Un jurnal începe tot **privat**; un plan începe vizibil acelui grup |
+| **Mai multe grupuri** | Întreabă **Grupul căruia îi aparține**, oferind exact grupurile pentru care puteți înregistra ture. Nu se ghicește nimic între ele, iar formularul nu se salvează până nu alegeți. Planul este apoi vizibil grupului ales |
+
+**Apartenența nu este vizibilitate.** O tură care aparține unui grup răspunde regulilor acelui
+grup. Cu regulile cu care pornește un grup, membrii lui pot citi și corecta orice tură care îi
+aparține — indiferent ce spune controlul **Vizibilitate**. Vizibilitatea hotărăște cine *altcineva*
+poate citi tura; nu ține grupul pe dinafară. Formularul o spune lângă grup, pentru că controlul de
+vizibilitate nu o poate spune.
+
+Cine are dreptul de a înregistra ture în general nu vede nimic din toate acestea: tura sa nu
+aparține niciunui grup, decât dacă o planifică fiind într-un singur grup, ca mai sus.
+
+Dacă nu vi se oferă nicio cale de a crea o tură, nu aveți dreptul nicăieri — întrebați pe cine
+administrează regulile grupului, sau un administrator. Iar cele două pagini de import (*Importă
+ture*, *Importă o înregistrare*) **nu** se deschid prin dreptul unui grup: cer dreptul de a
+înregistra ture în general.
+
 ### Punctul de întâlnire pe hartă
 
 Un punct, sau drumul de acces, desenat pe același fel de hartă ca schița turei.
@@ -251,7 +279,8 @@ Vedeți [Liste de verificare și apelul de urgență](checklists-and-callout.md#
   îndepărtate**.
 - **O copie clasată pe tură este și mai îngustă** — scrisă pentru oricine poate citi tura, nu
   pentru cine a clasat-o.
-- **Nicio imagine de hartă** — schița este scrisă în cuvinte.
+- **Descărcarea conține o hartă a turei** — vedeți mai jos. Schița rămâne scrisă și în cuvinte,
+  lângă hartă.
 - **Nicio adresă publică.** Un raport se descarcă de cineva autentificat care poate citi tura.
 
 Clubul poate scrie **propriul model** — descărcați-l pe cel standard (un fișier text scurt care se
@@ -259,6 +288,40 @@ explică singur), editați-l, încărcați-l la Configurare → Modele de raport
 poate cere doar lucruri care i-au fost deja date cititorului, iar un rând al cărui conținut se
 dovedește gol pur și simplu dispare, așa că același model produce un document onest și pentru un
 membru, și pentru un editor.
+
+### Harta din descărcare
+
+**Descarcă documentul** desenează o hartă a turei și o pune în fișier, acolo unde documentul spune
+pe unde a fost tura.
+
+| Pe hartă | Desenat ca |
+|---|---|
+| Schița turei — unde a lucrat echipa | un disc plin, o linie sau o suprafață |
+| Punctul de întâlnire | un inel gol |
+| Fiecare peșteră numită de tură **pe care o puteți localiza** | un pătrat, cu numele peșterii |
+
+- **Este vederea dumneavoastră, și o spune.** Harta este desenată de propriul browser din ceea ce
+  pagina primise deja — tura așa cum ați citit-o și fiecare peșteră numită așa cum ați citit-o.
+  Serverului nu i se cere nimic de dragul imaginii, așa că ea nu poate arăta o poziție pe care
+  pagina nu v-ar fi arătat-o. Rândul de sub imagine vă numește și spune ziua: *Map as shown to …
+  on …; positions as this reader may see them.* Altcineva care descarcă aceeași tură poate primi
+  o altă hartă.
+- **Copia clasată pe tură nu are hartă.** *Salvează la tură* nu trimite niciodată una, iar
+  serverul o refuză dacă este trimisă: acea copie este deschisă de toți cei care pot citi tura,
+  iar o hartă arată ce poate vedea un singur cititor.
+- **Pe hartă și sub ea**: o scară pe hartă; dedesubt, ce înseamnă semnele și creditul hărții
+  de dedesubt.
+- **Unde ajunge în document**: după rândul care tipărește schița — sau, într-un model al
+  clubului care nu tipărește schița, după punctul de întâlnire, iar în lipsa amândurora, la
+  sfârșit.
+- **Harta de bază** este una dintre hărțile de bază ale acestei instalări — cea standard, atunci
+  când cine administrează instalarea a spus că poate fi copiată într-un document. Dacă dalele ei
+  nu sosesc la timp sau instalarea nu oferă o asemenea hartă, harta este desenată pe un fond
+  simplu, iar motivul este scris sub ea.
+- **Vi se spune când fișierul diferă de pagină**: când harta a plecat fără hartă de bază și când
+  harta nu a putut fi desenată sau serverul nu a acceptat-o. Documentul se descarcă în toate
+  cazurile.
+- **Tipărirea** rămâne ca înainte: pe hârtie ajunge schița în cuvinte, nu o hartă.
 
 ---
 

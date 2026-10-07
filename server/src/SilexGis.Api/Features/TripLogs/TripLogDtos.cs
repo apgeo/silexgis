@@ -4,6 +4,7 @@ using FluentValidation;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Profiles;
 using SilexGis.Domain.ResLinks;
 
 namespace SilexGis.Api.Features.TripLogs;
@@ -382,12 +383,14 @@ public sealed class TripParticipantValidator : AbstractValidator<TripParticipant
 {
     public TripParticipantValidator()
     {
+        // Asked rather than restated: which of the two ways a row says who, and how long a name
+        // may be, are the same for every record that names a person, and are written down once.
         RuleFor(p => p)
-            .Must(p => (p.CaverId is not null) ^ !string.IsNullOrWhiteSpace(p.NewCaverName))
+            .Must(p => CaverReferenceRules.NamesOnePerson(p.CaverId, p.NewCaverName))
             .WithMessage("Each person is either an existing caver or a new name, not both.");
         RuleFor(p => p.NewCaverName)
-            .MaximumLength(200)
-            .WithMessage("Names are limited to 200 characters.");
+            .MaximumLength(CaverReferenceRules.NameMaxLength)
+            .WithMessage($"Names are limited to {CaverReferenceRules.NameMaxLength} characters.");
         RuleFor(p => p.Note)
             .MaximumLength(500)
             .WithMessage("A note about one person's part in the trip is limited to 500 characters.");

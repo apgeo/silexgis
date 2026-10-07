@@ -3954,6 +3954,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("group_name");
 
+                    b.Property<bool>("InDocuments")
+                        .HasColumnType("boolean")
+                        .HasColumnName("in_documents");
+
                     b.Property<bool>("IsBase")
                         .HasColumnType("boolean")
                         .HasColumnName("is_base");

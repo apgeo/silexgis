@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useCan,
+  useCreateDoor,
   useTripLogFacets,
   useTripLogGrouping,
   useTripLogs,
@@ -128,9 +129,16 @@ export default function TripLogListPage() {
     }
   }, [location.pathname, location.search, location.state, navigate]);
 
-  const canCreate = useCan('tripLogs', 'create');
+  // Whether the create control is offered. Asked of the door rather than of the domain-level
+  // right, which is the narrower question: somebody whose only right to record trips is their
+  // caving group's holds no create over trips as such, and the server still accepts a trip of
+  // theirs that belongs to the group — through either door, which is why both are offered. The
+  // form behind them reads the same answer and binds the trip accordingly.
+  const { canCreate } = useCreateDoor('tripLogs');
   // Whoever may delete trips, and whoever may create them: a trip's author may delete it by
-  // owning it, whether or not their account holds the right over anybody else's.
+  // owning it, whether or not their account holds the right over anybody else's. The create
+  // half is the door's answer for the same reason the create control's is — somebody who
+  // records trips only for their caving group owns those trips, and may have deleted one.
   const mayDelete = useCan('tripLogs', 'delete');
   const canRestore = canCreate || mayDelete;
   // Write, not read: every account may read the vocabularies, so a read check would offer these
