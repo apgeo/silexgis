@@ -23,6 +23,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
+import { phoneOnlyPatterns as phoneOnlyPatternsIn } from './e2e-mode.mjs';
+
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const e2eDir = join(repoRoot, 'client', 'e2e');
 const configPath = join(repoRoot, 'client', 'playwright.config.ts');
@@ -35,12 +37,8 @@ function specsOnDisk() {
     .sort();
 }
 
-/** The regex literals held in the shared phone-only list. */
-function phoneOnlyPatterns() {
-  const block = /const PHONE_ONLY_SPECS = \[([\s\S]*?)\];/.exec(config);
-  assert.ok(block, 'playwright.config.ts no longer declares PHONE_ONLY_SPECS as an array literal');
-  return [...block[1].matchAll(/\/((?:[^/\\\n]|\\.)+)\/[gimsuy]*/g)].map((m) => new RegExp(m[1]));
-}
+/** The regex literals held in the shared phone-only list; the runner's fast form reads them too. */
+const phoneOnlyPatterns = () => phoneOnlyPatternsIn(config);
 
 /**
  * One entry per project: its name, the patterns it selects, and the patterns it subtracts.
