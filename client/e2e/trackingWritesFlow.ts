@@ -118,21 +118,57 @@ export async function correctImportAndReportByPlace(page: Page) {
   await uploadModal.getByRole('button', { name: 'Upload model' }).click();
   await expect(page.getByText('Survex .3d')).toBeVisible({ timeout: 30_000 });
 
+  // The stations are read out of the file by a job behind the upload, and the card below offers
+  // names only from a survey that has been read and is the cave's current one. Waited for on the
+  // server and the page then read afresh, so the walk is not a race against that job.
+  const token = await bearerToken(page);
+  const surveysOf = async () =>
+    (await apiJson(page, token, 'GET', `/api/v1/caves/${caveId}/survey-models`)) as {
+      id: string;
+      status: string;
+      isCurrent: boolean;
+    }[];
+  await expect
+    .poll(async () => (await surveysOf()).some((m) => m.isCurrent && m.status === 'ready'), {
+      timeout: 60_000,
+    })
+    .toBe(true);
+  const modelId = (await surveysOf())[0].id;
+  await expect
+    .poll(
+      async () =>
+        (
+          (await apiJson(
+            page,
+            token,
+            'GET',
+            `/api/v1/survey-models/${modelId}/stations?q=${DECLARED_STATION}&pageSize=5`,
+          )) as { items: { viewerName: string }[] }
+        ).items.some((station) => station.viewerName === DECLARED_STATION),
+      { timeout: 60_000 },
+    )
+    .toBe(true);
+  await page.reload();
+
   // ---- What the cave's depths mean, declared on the cave's own page ----
   const places = page.getByTestId('cave-depth-places');
   await places.scrollIntoViewIfNeeded();
   await places.getByTestId('cave-depth-place-add').click();
   await places.getByTestId('cave-depth-place-depth').fill(String(PLACE.depthM));
-  await places.getByTestId('cave-depth-place-station').fill(DECLARED_STATION);
+  // The station is chosen rather than spelled: typed the way a relayed message arrives — in
+  // capitals — and taken from the survey's own names offered under the box, which is what puts
+  // the survey's spelling in the field.
+  const declaredStation = places.getByTestId('cave-depth-place-station');
+  await declaredStation.fill(DECLARED_STATION.toUpperCase());
+  await page
+    .locator(`.ant-select-dropdown:visible .ant-select-item-option[title="${DECLARED_STATION}"]`)
+    .click();
+  await expect(declaredStation).toHaveValue(DECLARED_STATION);
   await places.getByTestId('cave-depth-place-label').fill(PLACE.label);
   await places.getByTestId('cave-depth-place-save').click();
   await expect(places.getByRole('cell', { name: PLACE.label })).toBeVisible({ timeout: 15_000 });
-
-  const token = await bearerToken(page);
-  const models = (await apiJson(page, token, 'GET', `/api/v1/caves/${caveId}/survey-models`)) as {
-    id: string;
-  }[];
-  const modelId = models[0].id;
+  // A station of the cave's survey, so the row carries no mark saying the survey lacks it.
+  await expect(places.locator('[data-testid^="cave-depth-place-not-in-survey-"]')).toHaveCount(0);
 
   // ---- A trip with the sheet's two people, its watch armed on the survey ----
   const participant = (name: string) => ({
@@ -362,6 +398,36 @@ export async function correctImportAndReportByPlace(page: Page) {
   await isBackAsItWas();
   // Nothing is left waiting, so the fold is gone with its last report.
   await expect(removedFold).toHaveCount(0, { timeout: 15_000 });
+
+  // ---- The same place block in the correction dialog ----
+  // A correction asks where the report is with the fields the card above asks with: the declared
+  // places, the depth, and a station box that offers the survey's names.
+  const ionBelow = (await logOf()).find((row) => row.caverId === ion && row.kind === 'atDepth')!;
+  await page.getByTestId(`trip-tracking-event-edit-${ionBelow.id}`).click();
+  await expect(correction).toBeVisible();
+  // It opens on the report as it stands: the depth that was entered, read as the place it names.
+  await expect(correction.getByTestId('trip-tracking-edit-depth')).toHaveValue(
+    String(PLACE.depthM),
+  );
+  await expect(correction.getByTestId('trip-tracking-edit-place')).toContainText(
+    `${PLACE.label} — ${PLACE.depthM} m`,
+  );
+  // Re-read as a station report, the station chosen from the survey's names as on the cave's card.
+  await chooseOption(page, correction.getByTestId('trip-tracking-edit-kind'), 'At a station');
+  const correctedStation = correction.getByTestId('trip-tracking-edit-station');
+  await correctedStation.fill(DECLARED_STATION.toUpperCase());
+  await page
+    .locator(`.ant-select-dropdown:visible .ant-select-item-option[title="${DECLARED_STATION}"]`)
+    .click();
+  await expect(correctedStation).toHaveValue(DECLARED_STATION);
+  await correction.getByRole('button', { name: 'Save the correction' }).click();
+  await expect(correction).toBeHidden();
+  await expect
+    .poll(async () => {
+      const row = (await logOf()).find((entry) => entry.id === ionBelow.id);
+      return [row?.kind, row?.stationName, row?.corrected];
+    })
+    .toEqual(['atStation', DECLARED_STATION, true]);
 
   // ---- Importing the sample sheet the dialog offers ----
   const beforeImport = await logOf();
