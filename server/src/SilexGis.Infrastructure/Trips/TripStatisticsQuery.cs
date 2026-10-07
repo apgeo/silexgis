@@ -95,6 +95,7 @@ public static class TripStatisticsQuery
             await HoursAsync(db, scoped, subjectCaverId, ct);
         var placeIds = await PlaceIdsAsync(db, protection, ctx, scopedIds, subjectCaveId, ct);
         var photographs = await PhotographsAsync(db, ctx, scopedIds, ct);
+        var watch = await WatchAsync(db, scopedIds, subjectCaverId, ct);
         var firstVisits = await FirstVisitsAsync(
             db,
             visible,
@@ -117,7 +118,85 @@ public static class TripStatisticsQuery
             totals.SurveyStations,
             totals.Earliest,
             totals.Latest,
-            photographs);
+            photographs,
+            watch.TrackedTrips,
+            watch.UndergroundMinutes,
+            watch.TimedPersonTrips);
+    }
+
+    /// <summary>
+    /// What the tracking logs of a set of trips add up to: how many of the trips have one, and
+    /// the time underground its entries and exits come to.
+    /// </summary>
+    /// <param name="readableTripIds">
+    /// The trips to count over — <b>already narrowed to the ones the reader may open</b>. This
+    /// takes a statement rather than a list so that the narrowing stays inside the query that
+    /// counts: a log is read here only through the trip that owns it, and a trip the reader may
+    /// not open contributes neither a tracked trip nor a minute.
+    /// </param>
+    /// <param name="subjectCaverId">
+    /// Set when the subject is one person: the minutes are then that person's alone. Whether a
+    /// trip was tracked stays a fact about the trip.
+    /// </param>
+    /// <remarks>
+    /// Only the reports that say somebody went in or came out are read, and of those only whose
+    /// they are and when — never a station, a depth or the survey they were made on. So nothing
+    /// that comes back from here is a place, and the figure is the same for a reader who may know
+    /// where the cave is and for one who may not.
+    ///
+    /// The log is counted as it stands: somebody with reports on a trip is timed on it whether or
+    /// not their row is still on that trip's roster. Asked about one person the question does not
+    /// arise, because the trips in scope are already the ones whose roster names them.
+    ///
+    /// Read in the log's own order — by the instant a report speaks of, then by when it was
+    /// written — because two reports may share an instant and the pairing rule resolves them in
+    /// the order it is handed them. Without the second and third keys the same log could come to
+    /// two figures on two requests.
+    /// </remarks>
+    public static async Task<TripWatchTotals> WatchAsync(
+        SilexGisDbContext db,
+        IQueryable<Guid> readableTripIds,
+        Guid? subjectCaverId,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(readableTripIds);
+
+        var log = db.TripPositionEvents.AsNoTracking().Where(e => readableTripIds.Contains(e.TripLogId));
+
+        var trackedTrips = await log.Select(e => e.TripLogId).Distinct().CountAsync(ct);
+        if (trackedTrips == 0)
+        {
+            return new TripWatchTotals(0, 0, 0);
+        }
+
+        var passages = log.Where(e =>
+            e.Kind == TripPositionEventKind.Entered || e.Kind == TripPositionEventKind.Exited);
+        if (subjectCaverId is { } subject)
+        {
+            passages = passages.Where(e => e.CaverId == subject);
+        }
+
+        var rows = await passages
+            .OrderBy(e => e.RecordedAt)
+            .ThenBy(e => e.CreatedAt)
+            .ThenBy(e => e.Id)
+            .Select(e => new { e.TripLogId, e.CaverId, e.Kind, e.RecordedAt })
+            .ToListAsync(ct);
+
+        var minutes = 0;
+        var timed = 0;
+        foreach (var person in rows.GroupBy(r => (r.TripLogId, r.CaverId)))
+        {
+            if (TrackingAttendance.UndergroundMinutes(
+                    person.Select(r => new TrackingPassage(r.Kind, r.RecordedAt))) is { } counted)
+            {
+                minutes += counted;
+                timed++;
+            }
+        }
+
+        return new TripWatchTotals(trackedTrips, minutes, timed);
     }
 
     /// <summary>
@@ -344,3 +423,13 @@ public static class TripStatisticsQuery
         : right is null ? left
         : left < right ? left : right;
 }
+
+/// <summary>
+/// What the tracking logs of a set of trips come to. A second source beside the roster's own
+/// times, and kept apart from them on purpose: where a trip has both they describe the same
+/// hours, so no surface adds one to the other.
+/// </summary>
+/// <param name="TrackedTrips">Trips with at least one report in their log.</param>
+/// <param name="UndergroundMinutes">Person-minutes between each entry and the exit that followed it.</param>
+/// <param name="TimedPersonTrips">(person, trip) pairs with at least one entry an exit followed.</param>
+public readonly record struct TripWatchTotals(int TrackedTrips, int UndergroundMinutes, int TimedPersonTrips);

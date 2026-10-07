@@ -110,6 +110,33 @@ public class ExpeditionReportTemplateFormatTests
     }
 
     /// <summary>
+    /// The hours a camp's tracking logs come to have a name of their own that a club's layout may
+    /// use — and the layout the system hands out does not use it on any line it prints, so no
+    /// write-up changes until somebody asks for the figure. A trip's layout does not know the
+    /// name at all: one trip's log is that trip's own journal, not a total.
+    /// </summary>
+    [Fact]
+    public void Hours_from_tracking_are_a_name_a_camp_layout_may_use_and_the_shipped_one_does_not()
+    {
+        ReportTemplateFormat.ExpeditionPlaceholders.ShouldContain("watchhours");
+        ReportTemplateFormat.Placeholders.ShouldNotContain("watchhours");
+
+        var own = ReportTemplateFormat.Parse(
+            "title: {title}\nfield: By tracking = {watchhours}", ReportTemplateKind.Expedition);
+        own.Ok.ShouldBeTrue(string.Join(" ", own.Errors));
+
+        ReportTemplateFormat.Parse("field: By tracking = {watchhours}", ReportTemplateKind.Trip)
+            .Ok.ShouldBeFalse();
+
+        var shipped = ReportTemplateFormat.Parse(
+            ReportTemplateFormat.ExpeditionDefault, ReportTemplateKind.Expedition);
+        shipped.Ok.ShouldBeTrue(string.Join(" ", shipped.Errors));
+        shipped.Parts
+            .SelectMany(p => ReportTemplateFormat.PlaceholdersIn(p.Text))
+            .ShouldNotContain("watchhours");
+    }
+
+    /// <summary>
     /// The two vocabularies overlap only where the word means the same thing. Where a camp shares
     /// a name with a trip it is because a camp answers it too — never because the list was copied.
     /// </summary>

@@ -26786,6 +26786,12 @@ export interface components {
             latestTripDate: null | string;
             /** Format: int32 */
             photographs: number;
+            /** Format: int32 */
+            trackedTrips: number;
+            /** Format: int32 */
+            watchUndergroundMinutes: number;
+            /** Format: int32 */
+            watchTimedPersonTrips: number;
         };
         TripStatsBreakdownDto: {
             overlapping: boolean;

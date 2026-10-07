@@ -35,6 +35,9 @@ const totals: TripStatistics = {
   earliestTripDate: '2026-05-03',
   latestTripDate: '2026-06-01',
   photographs: 9,
+  trackedTrips: 4,
+  watchUndergroundMinutes: 330,
+  watchTimedPersonTrips: 6,
 };
 
 function show(subject: StatisticsSubject, data: TripStatistics | undefined, isError = false) {

@@ -145,11 +145,17 @@ public static class ReportTemplateFormat
     /// sum of what this reader may see rather than a figure read off one record — so a name shared
     /// with the trip vocabulary would mean a different thing under it, which is exactly how a club
     /// comes to believe a document says something it does not.
+    ///
+    /// <c>watchhours</c> is the time underground the member trips' tracking logs come to — each
+    /// person's reported entries paired with the exits that followed — and it has a name of its
+    /// own rather than changing what <c>hours</c> prints. The two are different sources for
+    /// overlapping hours: a layout that wants both prints both, each on a line that says which it
+    /// is, and no layout is handed their sum.
     /// </remarks>
     public static readonly IReadOnlyList<string> ExpeditionPlaceholders =
     [
         "title", "description", "dates", "days", "club", "area", "trips", "caves", "people",
-        "depth", "length", "stations", "rope", "hours", "published",
+        "depth", "length", "stations", "rope", "hours", "published", "watchhours",
     ];
 
     private static readonly Regex PlaceholderPattern =
@@ -542,6 +548,8 @@ public static class ReportTemplateFormat
         "#",
         "#   {title} {description} {dates} {days} {club} {area} {trips} {caves} {people}",
         "#   {depth} {length} {stations} {rope} {hours} {published}",
+        "#   {watchhours}  person-hours underground by the trips' tracking logs: a second count,",
+        "#                 from reported entries and exits, never to be added to {hours}",
         "#",
         "# A line whose braces all come back empty is left out. Every total is the sum of what the",
         "# person producing the document may read — a trip they may not open contributes nothing to",

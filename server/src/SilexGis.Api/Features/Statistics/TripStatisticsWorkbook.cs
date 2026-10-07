@@ -56,6 +56,13 @@ internal static class TripStatisticsWorkbook
         "Counted over the trips you may read. Somebody with different access sees different totals "
         + "for the same subject, and both are right.";
 
+    /// <summary>
+    /// The label of the hours read from tracking logs. It names its source and says it is not a
+    /// part of the roster's hours, because the file is read with nobody beside the reader.
+    /// </summary>
+    internal const string WatchHoursLabel =
+        "Hours underground, from tracking (a second count, not added to the hours above)";
+
     internal static IReadOnlyList<IReadOnlyList<SheetCell>> Rows(
         StatisticsSubject subject, TripStatisticsDto totals)
     {
@@ -109,6 +116,27 @@ internal static class TripStatisticsWorkbook
             // reach as much as any other figure here: two people saving this file legitimately
             // get two different numbers.
             Figure("Photographs", totals.Photographs),
+
+            // What the tracking logs say, kept in rows of their own below everything the trips
+            // and their rosters say. The hours are a second count of time underground, taken from
+            // each person's reported entries and exits, and the label says in so many words that
+            // they are not to be added to the row above: a trip that has both a roster with times
+            // and a log describes the same hours twice, and somebody summing a column of this
+            // file would otherwise double them. The third row is to these hours what "with times
+            // recorded" is to the roster's — how many of the times somebody went they cover.
+            //
+            // Where the logs cover nobody the hours cell is left empty rather than written as a
+            // nought. A log whose entries were never closed does not say the party spent no time
+            // underground; it says nothing about how long, and an empty cell is how a sheet says
+            // nothing. The count beside it, which is a count and may honestly be nought, stays.
+            Figure("Tracked trips", totals.TrackedTrips),
+            [
+                SheetCell.Of(WatchHoursLabel),
+                SheetCell.Of(totals.WatchTimedPersonTrips == 0
+                    ? (double?)null
+                    : totals.WatchUndergroundMinutes / 60d),
+            ],
+            Figure("Times somebody went, timed by tracking", totals.WatchTimedPersonTrips),
 
             // Written out rather than left as date cells: a date cell with no format applied opens
             // as a five-digit number, and this one written form is read the same way everywhere.
