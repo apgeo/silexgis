@@ -170,6 +170,24 @@ describe('waiting in turn', () => {
   });
 });
 
+/**
+ * A process that is doing nothing, handed over once it really is.
+ *
+ * Starting up costs a node process tens of milliseconds of CPU, and on a busy machine that start
+ * can still be going on when a test begins to watch the process for idleness — which then reads as
+ * an idle process burning CPU, about one run in four beside a full suite. So the child says when
+ * it is up, and nobody looks at it before.
+ */
+function idleProcess() {
+  const child = spawn(process.execPath, ['-e', "console.log('up'); setTimeout(() => {}, 60000);"], {
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  return new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.stdout.once('data', () => resolve(child));
+  });
+}
+
 describe('telling a wedged holder from a slow one', () => {
   // The lock already takes over from a holder that died. What it could not see is a holder still
   // running and doing nothing, which is what wedged this machine twice — eight and twelve hours
@@ -202,7 +220,7 @@ describe('telling a wedged holder from a slow one', () => {
   });
 
   it('sees an idle process as idle', async () => {
-    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000);']);
+    const child = await idleProcess();
     try {
       const p = await holderProgress(child.pid, { windowMs: 1500 });
       if (!p.known) return; // no /proc
@@ -226,7 +244,7 @@ describe('telling a wedged holder from a slow one', () => {
 
   it('steals from a holder that is doing nothing, and leaves its process alone', async () => {
     const dir = freshDir('steal-wedged');
-    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000);']);
+    const child = await idleProcess();
     try {
       assert.ok(tryAcquire(dir, 'wedged'));
       // Rewrite the owner so the recorded holder is the idle child rather than this test.
@@ -247,7 +265,7 @@ describe('telling a wedged holder from a slow one', () => {
 
   it('a waiter takes over from a holder that burns no CPU for the whole window, by itself', async () => {
     const dir = freshDir('auto-takeover');
-    const sleeper = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000);']);
+    const sleeper = await idleProcess();
     try {
       mkdirSync(dir, { recursive: true });
       writeFileSync(
