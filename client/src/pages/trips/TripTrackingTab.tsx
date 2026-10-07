@@ -56,8 +56,14 @@ import {
 } from '../../components/trips/trackingDepthGap.ts';
 import { publicNamingOf } from '../../components/trips/trackingPublicName.ts';
 import {
+  byLastHeard,
   lastHeardInWords,
+  lateSpanOf,
+  planHourInWords,
+  planStanding,
   positionAgeOf,
+  quietCount,
+  quietThresholdOf,
   trackingLogWritable,
   trackingStandingOf,
   trackingStandings,
@@ -67,6 +73,7 @@ import { drawableOn } from '../../caveview/drawableOn.ts';
 import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import { useNow } from '../../hooks/useNow.ts';
 // The position's age is worded by the followed page's own rule, called rather than copied — the
 // same reason the standing and the "last heard" age above are. A coordinator and a family read the
 // same position, and two roundings of one gap would have them disagreeing about it.
@@ -130,6 +137,11 @@ export default function TripTrackingTab({
   // And chosen on the width, never on the pointer: how much room there is across is what decides
   // whether five columns can stand side by side, and a tablet with a trackpad has the room.
   const narrow = useIsMobile();
+  // The present moment, from the one ticker of this page. Every age on the screen is measured
+  // from it, so two rows cannot round one silence to different minutes — and it redraws the tab
+  // by itself, which a clock read once at render does not: on a closed watch nothing polls, and
+  // "planned out by 17:00" has to become "late" at 17:00 with nobody touching the page.
+  const now = useNow();
   const { data, isPending, isFetching, error, refetch } = useTripTracking(trip.id);
   const events = useTripTrackingEvents(trip.id, { pageSize: RECENT_EVENTS });
   /**
@@ -356,11 +368,19 @@ export default function TripTrackingTab({
   const named = (caverId: string) => names.get(caverId) ?? t('trips.tracking.unknownCaver');
   const when = (value: string | null) =>
     value ? new Date(value).toLocaleString(i18n.language) : '—';
-  // Taken once per render rather than per row, so every age on the screen is measured from one
-  // moment: two rows a millisecond apart rounding to different minutes would be a table disagreeing
-  // with itself about how long it has been.
-  const now = Date.now();
   const standings = trackingStandings(data.participants);
+  // What the installation calls a long silence, or null where the read sent no threshold — a watch
+  // that is not running, or an installation that switched the mark off. Null removes the whole
+  // subject from the screen rather than leaving a count of nought over a rule nobody is applying.
+  const quietThreshold = quietThresholdOf(data.quietAfterSeconds);
+  const quietPeople = quietCount(data.participants);
+  // The hour the party said it would be out by, read off the trip and against nothing but the
+  // party's own standing. The trip's overdue callout is a separate arrangement and is not asked.
+  const plan = planStanding({
+    expectedReturnAt: trip.expectedReturnAt,
+    underground: standings.underground,
+    now,
+  });
 
   /**
    * Whether a row of this log can be corrected or removed, and whether a photograph can be hung on
@@ -458,6 +478,28 @@ export default function TripTrackingTab({
         data-testid={`trip-tracking-standing-${standing}`}
       >
         {label[standing]}
+      </Tag>
+    );
+  };
+
+  /**
+   * The mark on somebody underground nobody has heard from for longer than the installation's
+   * threshold, or nothing.
+   *
+   * <b>The server's mark, worded with the server's number.</b> Who is quiet is decided where the
+   * reports and the clock they are read against both live; this draws the answer and says what it
+   * means. Amber and not red: it is something to look at, sent to nobody, and the colour of an
+   * alarm on a screen that raises none would be a promise this page does not keep.
+   */
+  const quietTag = (participant: TrackingParticipant) => {
+    if (!participant.quiet || quietThreshold === null) {
+      return null;
+    }
+    return (
+      <Tag color="warning" data-testid={`trip-tracking-quiet-${participant.caverId}`}>
+        {quietThreshold.unit === 'hours'
+          ? t('trips.tracking.quiet.tagHours', { amount: quietThreshold.amount })
+          : t('trips.tracking.quiet.tagMinutes', { amount: quietThreshold.amount })}
       </Tag>
     );
   };
@@ -1131,7 +1173,14 @@ export default function TripTrackingTab({
             Drawn as three equal cells rather than as a sentence so the three stay side by side and
             comparable at 360px, and so the silent count cannot be mistaken for a footnote to the
             other two. */}
-        <div className="tracking-standings" data-testid="trip-tracking-counts">
+        <div
+          className={
+            plan !== null && !narrow
+              ? 'tracking-standings tracking-standings-with-plan'
+              : 'tracking-standings'
+          }
+          data-testid="trip-tracking-counts"
+        >
           {/* Written out one by one rather than mapped over the three names: the check that every
               translation key the code asks for exists reads literal calls out of the source, and
               these are the words that say whether anybody is still in a cave. */}
@@ -1159,6 +1208,86 @@ export default function TripTrackingTab({
               {t('trips.tracking.standing.unheard')}
             </Typography.Text>
           </div>
+          {/* <b>The hour the party said it would be out by, beside the counts it is read
+              against.</b> Absent on a trip with no plan. Once the hour has passed with somebody
+              still underground it turns amber and says by how much; with everybody out it stays
+              the plain hour, because a plan about people in a cave is over when they are not in
+              it. On a phone it takes a row of its own, so the three counts stay three across.
+
+              It reads the trip's planned return and nothing about the overdue callout, and it
+              does nothing: the line under the strip says so. */}
+          {plan !== null && (
+            <div
+              className={
+                narrow
+                  ? 'tracking-standing-cell tracking-plan-cell tracking-plan-cell-own-row'
+                  : 'tracking-standing-cell tracking-plan-cell'
+              }
+              data-testid="trip-tracking-plan"
+              data-late={plan.late ? 'true' : 'false'}
+            >
+              <Typography.Text
+                type={plan.late ? 'warning' : undefined}
+                className="tracking-standing-count"
+                title={when(plan.dueAt)}
+                data-testid="trip-tracking-plan-hour"
+              >
+                {planHourInWords(plan.dueAt, now, i18n.language)}
+              </Typography.Text>
+              <Typography.Text type="secondary" className="tracking-standing-label">
+                {t('trips.tracking.plan.label')}
+              </Typography.Text>
+              {plan.late && (
+                <Tag color="warning" className="tracking-plan-late" data-testid="trip-tracking-plan-late">
+                  {lateSpanOf(plan.lateByMs).unit === 'hours'
+                    ? t('trips.tracking.plan.lateHours', {
+                        amount: lateSpanOf(plan.lateByMs).amount,
+                      })
+                    : t('trips.tracking.plan.lateMinutes', {
+                        amount: lateSpanOf(plan.lateByMs).amount,
+                      })}
+                </Tag>
+              )}
+            </div>
+          )}
+          {/* How many of the people underground have gone unreported for longer than the
+              installation's threshold — a line under the three counts and not a fourth of them,
+              because it is a reading of the first count and not another way the party divides.
+              Drawn only where the read sent a threshold; amber once there is somebody to count. */}
+          {quietThreshold !== null && (
+            <div className="tracking-standings-line">
+              <Typography.Text
+                type={quietPeople > 0 ? 'warning' : 'secondary'}
+                data-testid="trip-tracking-count-quiet"
+                data-quiet={quietPeople}
+              >
+                {quietThreshold.unit === 'hours'
+                  ? t('trips.tracking.quiet.countHours', {
+                      amount: quietThreshold.amount,
+                      people: quietPeople,
+                    })
+                  : t('trips.tracking.quiet.countMinutes', {
+                      amount: quietThreshold.amount,
+                      people: quietPeople,
+                    })}
+              </Typography.Text>
+            </div>
+          )}
+          {/* <b>Said wherever either reading is on the screen: they alarm nobody.</b> An amber
+              figure over a party in a cave reads as something that has been noticed by more than
+              the person looking at it, and nothing has: no message goes out and the trip's
+              overdue callout is neither started nor stopped by anything here. */}
+          {(quietThreshold !== null || plan !== null) && (
+            <div className="tracking-standings-line">
+              <Typography.Text
+                type="secondary"
+                className="tracking-standing-label"
+                data-testid="trip-tracking-marks-note"
+              >
+                {t('trips.tracking.marksNote')}
+              </Typography.Text>
+            </div>
+          )}
         </div>
 
         {/* <b>What the published page will call this party, said before a link is minted rather
@@ -1267,6 +1396,7 @@ export default function TripTrackingTab({
                               stands is what the row is read for, and on a phone the fields below
                               are read only after one of these has said which row to read. */}
                           {standingTag(row)}
+                          {quietTag(row)}
                         </div>
                         <div className="tracking-stacked-facts">
                           {fact(t('trips.tracking.publicName.column'), publicNameCell(row))}
@@ -1288,6 +1418,7 @@ export default function TripTrackingTab({
                         <span>{named(row.caverId)}</span>
                         {rosterTag(row)}
                         {standingTag(row)}
+                        {quietTag(row)}
                       </Flex>
                     ),
                   },
@@ -1314,6 +1445,12 @@ export default function TripTrackingTab({
                     title: t('trips.tracking.columnLastHeard'),
                     key: 'lastHeard',
                     render: (_value, row) => lastHeard(row),
+                    // The one column that can be sorted, and the first press puts the longest
+                    // silence at the top — somebody never heard from above everybody. Unsorted,
+                    // the table stays in the order the trip names its party, which is the order
+                    // every other surface lists them in.
+                    sorter: byLastHeard,
+                    sortDirections: ['ascend', 'descend'],
                   },
                   {
                     title: t('trips.tracking.columnPosition'),

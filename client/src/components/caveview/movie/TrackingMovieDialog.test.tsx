@@ -199,6 +199,7 @@ function tracking(): TrackingState {
     publishesRealNames: true,
     publishedAt: null,
     publishedUntil: null,
+    quietAfterSeconds: null,
     teams: [],
     participants: [],
   } as unknown as TrackingState;

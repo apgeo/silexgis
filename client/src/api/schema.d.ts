@@ -25531,6 +25531,7 @@ export interface components {
             publishedAs: null | string;
             onRoster: boolean;
             name: null | string;
+            quiet: boolean;
         };
         TrackingParticipantLabelDto: {
             /** Format: uuid */
@@ -25600,6 +25601,8 @@ export interface components {
             publishedUntil: null | string;
             teams: components["schemas"]["TrackingTeamDto"][];
             participants: components["schemas"]["TrackingParticipantDto"][];
+            /** Format: int32 */
+            quietAfterSeconds: null | number;
         };
         TrackingTeamDto: {
             /** Format: uuid */

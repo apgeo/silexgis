@@ -1625,6 +1625,18 @@
       "unknownCaver": "Somebody not on the roster",
       "notOnRoster": "No longer on the roster",
       "notOnRosterDetail": "Taken off the trip's roster after reports about them were recorded. Their reports stay in the log; nothing more can be recorded for them, and a published page does not show them.",
+      "quiet": {
+        "tagHours": "No word for over {{amount}} h",
+        "tagMinutes": "No word for over {{amount}} min",
+        "countHours": "No word for over {{amount}} h: {{people}}",
+        "countMinutes": "No word for over {{amount}} min: {{people}}"
+      },
+      "plan": {
+        "label": "Planned out by",
+        "lateHours": "{{amount}} h late",
+        "lateMinutes": "{{amount}} min late"
+      },
+      "marksNote": "The readings for a long silence and for a late return are for whoever has this page open. Nothing is sent, no alarm is raised and none is stood down.",
       "modelTitle": "The party on the survey",
       "modelShow": "Show the model",
       "modelHide": "Hide the model",

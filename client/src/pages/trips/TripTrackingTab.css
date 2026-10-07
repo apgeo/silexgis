@@ -65,6 +65,30 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The planned hour beside the counts: a fourth, wider column where there is room for one. The
+   three counts keep equal thirds of what is left, so they still read against each other. */
+.tracking-standings-with-plan {
+  grid-template-columns: repeat(3, 1fr) minmax(0, 1.5fr);
+}
+
+/* On a phone the plan takes the whole of a row of its own, under the counts: a fourth cell across
+   360px would squeeze "Not heard from" onto two lines and the three figures out of comparison. */
+.tracking-plan-cell-own-row {
+  grid-column: 1 / -1;
+}
+
+/* The tag is a library tag with its own right-hand margin, which in a centred column pushes it
+   off centre. */
+.tracking-plan-late {
+  margin-inline-end: 0;
+}
+
+/* A sentence under the counts, the full width of the strip whatever the columns above it are. */
+.tracking-standings-line {
+  grid-column: 1 / -1;
+  text-align: center;
+}
+
 .tracking-standing-label {
   /* Small enough that "Not heard from" stays on one line in a third of a 360px screen, which is
      what keeps the three labels reading as one row of three rather than as a ragged block. */

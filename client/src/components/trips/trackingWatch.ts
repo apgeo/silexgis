@@ -134,3 +134,132 @@ export function positionAgeOf(
 ): string | null {
   return positionAgeInWords(positionRecordedAt, now, language);
 }
+
+/**
+ * How many of the party the read marks as not heard from for too long.
+ *
+ * Counted off the server's own mark and never worked out here from a threshold and this browser's
+ * clock: a second reading of the rule would be free to disagree with the tags in the rows below
+ * it, by however far this machine's clock is from the server's.
+ */
+export function quietCount(participants: readonly Pick<TrackingParticipant, 'quiet'>[]): number {
+  return participants.filter((participant) => participant.quiet).length;
+}
+
+/** A length of time in the one unit it is said in on the watch. */
+export interface WatchSpan {
+  unit: 'hours' | 'minutes';
+  amount: number;
+}
+
+/**
+ * The installation's quiet threshold, as the number the mark is worded with — or null where the
+ * read sent none, which is how it says that nobody is being marked here.
+ *
+ * Hours where the threshold is a whole number of them, which is what nearly every installation
+ * sets; minutes otherwise, so that an hour and a half is said as "90 min" and not rounded to a
+ * figure the server is not applying.
+ */
+export function quietThresholdOf(quietAfterSeconds: number | null | undefined): WatchSpan | null {
+  if (quietAfterSeconds == null || quietAfterSeconds <= 0) {
+    return null;
+  }
+  return quietAfterSeconds % 3600 === 0
+    ? { unit: 'hours', amount: quietAfterSeconds / 3600 }
+    : { unit: 'minutes', amount: Math.max(1, Math.round(quietAfterSeconds / 60)) };
+}
+
+/**
+ * Orders two people by when each was last heard from, the longest silence first.
+ *
+ * Somebody nobody has said a word about sorts ahead of everybody: of all the silences on the
+ * table theirs is the one with no end to measure from, and a sort that put them last would file
+ * the row a coordinator most needs under the ones just reported.
+ */
+export function byLastHeard(
+  a: Pick<TrackingParticipant, 'lastRecordedAt'>,
+  b: Pick<TrackingParticipant, 'lastRecordedAt'>,
+): number {
+  const moment = (participant: Pick<TrackingParticipant, 'lastRecordedAt'>) =>
+    participant.lastRecordedAt === null
+      ? Number.NEGATIVE_INFINITY
+      : Date.parse(participant.lastRecordedAt);
+  const [first, second] = [moment(a), moment(b)];
+  return first === second ? 0 : first < second ? -1 : 1;
+}
+
+/** How the party stands against the hour it said it would be out by. */
+export interface PlanStanding {
+  /** The hour the party planned to be out by, as the trip records it. */
+  dueAt: string;
+  /** Whether that hour has passed with somebody still underground. */
+  late: boolean;
+  /** By how long, in milliseconds; zero while not late. */
+  lateByMs: number;
+}
+
+/**
+ * The trip's planned return read against the party as it stands, or null for a trip with no plan.
+ *
+ * <b>Late only while somebody is still underground.</b> A plan is a promise about people in a
+ * cave: once the last of them is reported out it has been kept or broken and is over either way,
+ * and a figure that went on counting up over a party safely out would be an alarm about nobody.
+ * Somebody never heard from does not make a party late either — the watch has no word that they
+ * went in at all, and their silence already has its own count.
+ *
+ * <b>It reads the hour and nothing else.</b> Whether an overdue callout was arranged for this
+ * trip, whether it has fired or been stood down, is not asked: this is a figure for whoever is
+ * looking at the watch, and it sends nothing and changes nothing.
+ */
+export function planStanding(input: {
+  expectedReturnAt: string | null | undefined;
+  underground: number;
+  now: number;
+}): PlanStanding | null {
+  if (input.expectedReturnAt == null) {
+    return null;
+  }
+  const due = Date.parse(input.expectedReturnAt);
+  if (Number.isNaN(due)) {
+    return null;
+  }
+  const late = input.underground > 0 && input.now > due;
+  return { dueAt: input.expectedReturnAt, late, lateByMs: late ? input.now - due : 0 };
+}
+
+/**
+ * A lateness in the unit it is said in: whole hours once there is one, minutes before that.
+ *
+ * Rounded down, both of them. "2 h late" at an hour and fifty minutes would be the screen claiming
+ * more than has happened, on the one figure of this page most likely to be read out over a phone.
+ */
+export function lateSpanOf(lateByMs: number): WatchSpan {
+  const minutes = Math.floor(lateByMs / 60_000);
+  return minutes >= 60
+    ? { unit: 'hours', amount: Math.floor(minutes / 60) }
+    : { unit: 'minutes', amount: Math.max(1, minutes) };
+}
+
+/**
+ * The planned hour as a clock reading: the hour alone when it falls on the reader's today, with
+ * its day in front when it does not.
+ *
+ * A camp's trip can plan to be out tomorrow morning, and "09:00" on its own the evening before
+ * reads as an hour long gone.
+ */
+export function planHourInWords(dueAt: string, now: number, language: string): string {
+  const due = new Date(dueAt);
+  const today = new Date(now);
+  const sameDay =
+    due.getFullYear() === today.getFullYear() &&
+    due.getMonth() === today.getMonth() &&
+    due.getDate() === today.getDate();
+  return sameDay
+    ? due.toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })
+    : due.toLocaleString(language, {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+}

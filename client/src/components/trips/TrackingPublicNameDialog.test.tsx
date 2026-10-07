@@ -34,6 +34,7 @@ function participant(label: string | null): TrackingParticipant {
     publishedAs: null,
     onRoster: true,
     name: null,
+    quiet: false,
   };
 }
 

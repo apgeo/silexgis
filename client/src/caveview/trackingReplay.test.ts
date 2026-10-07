@@ -41,6 +41,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
     // and a test about a published trip says both.
     publishedAt: null,
     publishedUntil: null,
+    quietAfterSeconds: null,
     surveyModelMissing: false,
     participants: [
       {
@@ -64,6 +65,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         publishedAs: null,
         onRoster: true,
         name: null,
+        quiet: false,
       },
     ],
     ...overrides,
@@ -371,6 +373,7 @@ describe('trackedCaversAt', () => {
           publishedAs: null,
           onRoster: true,
           name: null,
+          quiet: false,
         },
       ],
     });

@@ -37,6 +37,7 @@ function participant(overrides: Partial<TrackingParticipant> = {}): TrackingPart
     publishedAs: null,
     onRoster: true,
     name: null,
+    quiet: false,
     ...overrides,
   };
 }
@@ -56,6 +57,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
     // and a test about a published trip says both.
     publishedAt: null,
     publishedUntil: null,
+    quietAfterSeconds: null,
     teams: [{ id: 'team-1', title: 'Echipa 1' }],
     participants: [participant()],
     ...overrides,

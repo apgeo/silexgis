@@ -92,6 +92,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
     // and a test about a published trip says both.
     publishedAt: null,
     publishedUntil: null,
+    quietAfterSeconds: null,
     teams: [],
     participants: [],
     ...overrides,
@@ -315,6 +316,7 @@ describe('TrackingConfigCard', () => {
       publishedAs: null,
       onRoster: true,
       name: null,
+      quiet: false,
     };
 
     const { unmount } = show(

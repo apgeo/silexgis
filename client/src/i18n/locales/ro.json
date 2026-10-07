@@ -1625,6 +1625,18 @@
       "unknownCaver": "Cineva care nu este pe listă",
       "notOnRoster": "Nu mai este pe listă",
       "notOnRosterDetail": "A fost scos de pe lista turei după ce s-au înregistrat rapoarte despre el. Rapoartele rămân în jurnal; nu se mai poate înregistra nimic pentru el, iar o pagină publică nu îl arată.",
+      "quiet": {
+        "tagHours": "Nicio veste de peste {{amount}} h",
+        "tagMinutes": "Nicio veste de peste {{amount}} min",
+        "countHours": "Nicio veste de peste {{amount}} h: {{people}}",
+        "countMinutes": "Nicio veste de peste {{amount}} min: {{people}}"
+      },
+      "plan": {
+        "label": "Ieșire plănuită până la",
+        "lateHours": "întârziere de {{amount}} h",
+        "lateMinutes": "întârziere de {{amount}} min"
+      },
+      "marksNote": "Semnele pentru o tăcere lungă și pentru o întoarcere întârziată sunt pentru cine are această pagină deschisă. Nu se trimite nimic, nu se dă nicio alarmă și niciuna nu este oprită.",
       "modelTitle": "Echipa pe ridicarea topografică",
       "modelShow": "Arată modelul",
       "modelHide": "Ascunde modelul",

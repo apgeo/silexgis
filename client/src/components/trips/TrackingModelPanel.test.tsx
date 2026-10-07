@@ -217,6 +217,7 @@ function tracking(overrides: Partial<TrackingState> = {}): TrackingState {
     // and a test about a published trip says both.
     publishedAt: null,
     publishedUntil: null,
+    quietAfterSeconds: null,
     teams: [{ id: 'team-1', title: 'Team A' }],
     participants: [
       {
@@ -236,6 +237,7 @@ function tracking(overrides: Partial<TrackingState> = {}): TrackingState {
         publishedAs: null,
         onRoster: true,
         name: null,
+        quiet: false,
       },
     ],
     ...overrides,

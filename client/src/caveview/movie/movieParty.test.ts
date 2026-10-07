@@ -37,6 +37,7 @@ function participant(caverId: string): TrackingState['participants'][number] {
     publishedAs: null,
     onRoster: true,
     name: null,
+    quiet: false,
   } as TrackingState['participants'][number];
 }
 
@@ -53,6 +54,7 @@ function state(caverIds: string[], teams: TrackingState['teams'] = [], positions
     publishesRealNames: true,
     publishedAt: null,
     publishedUntil: null,
+    quietAfterSeconds: null,
     teams,
     participants: caverIds.map(participant),
   };
