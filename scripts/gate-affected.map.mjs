@@ -176,7 +176,12 @@ export const groups = {
   // the application answers, but whether each test was given the application its mode promises.
   about: ['ApiSmokeTests', 'TestModeTests'],
   audit: ['AccessHistoryTests', 'HistoryTests'],
-  admin: ['AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests', 'SeededGroupUpgradeTests'],
+  admin: [
+    'AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests', 'SeededGroupUpgradeTests',
+    // Which map backgrounds a document may copy is an administrator's setting, kept across
+    // restarts beside the shipped catalogue's answer.
+    'MapBackgroundDocumentChoiceTests',
+  ],
   settings: ['AccountSettingsTests', 'TerrainOptionsTests', 'UiDefaultsTests'],
   messaging: [
     'AdminMessagingTests', 'CavingGroupAnnouncementPaidCapTests', 'NotificationDeliveryTests',
@@ -378,14 +383,14 @@ export const crossCutting = {
     'ExpeditionRosterTests', 'ExpeditionSharingCascadeTests', 'ExpeditionTests',
     'ExpeditionTimelineTests', 'FeatureHierarchyTests', 'FeatureLinkTests',
     'FeatureRestoreTests', 'FeatureShareTests', 'FeatureTests', 'FileAttachmentTests',
-    'GeofileTests', 'HypsometryTests', 'ImmichPhotoLibraryTests', 'MapViewTests',
-    'NotificationHealthTests', 'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests',
-    'PhotoLibraryBrowseEndpointTests', 'PhotoLibraryEndpointTests',
-    'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests', 'PublishedLinkWithdrawalTests',
-    'PublishedLinksAdminTests', 'ResLinkApiTests', 'SeededGroupUpgradeTests',
-    'SpeleolocTripImportTests', 'SpeologieCatalogueTests', 'StagedImportTests',
-    'SurveyCompilationTests', 'SurveyModelTests', 'SurveySourceTests', 'SyncSetTests',
-    'TermRuleSetTests', 'TerrainActivationTests', 'TerrainBuildApiTests',
+    'GeofileTests', 'HypsometryTests', 'ImmichPhotoLibraryTests',
+    'MapBackgroundDocumentChoiceTests', 'MapViewTests', 'NotificationHealthTests',
+    'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
+    'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',
+    'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests', 'ResLinkApiTests',
+    'SeededGroupUpgradeTests', 'SpeleolocTripImportTests', 'SpeologieCatalogueTests',
+    'StagedImportTests', 'SurveyCompilationTests', 'SurveyModelTests', 'SurveySourceTests',
+    'SyncSetTests', 'TermRuleSetTests', 'TerrainActivationTests', 'TerrainBuildApiTests',
     'TerrainBuildPipelineTests', 'TerrainDerivativeApiTests', 'TerrainProbeTests',
     'TerrainSourceTests', 'TextExtractionPipelineTests', 'TrackingCsvImportTests',
     'TripAndTagTests', 'TripAttendanceLimitTests', 'TripCalloutStandDownTests',

@@ -28,6 +28,12 @@ public sealed record MapLayerSeedReport(
 /// by hand while still taking the shipped list's corrections.
 /// </para>
 /// <para>
+/// One thing about a named entry the file does not win over, because the file does not declare
+/// it: what an administrator of this installation decided about copying the source into
+/// documents (<see cref="MapLayer.InDocumentsChoice"/>). The file's own answer is written to its
+/// own column on every start; the decision beside it is never read or written here.
+/// </para>
+/// <para>
 /// Idempotent, and it has to be: this runs on every start, so applying it twice must equal
 /// applying it once, or a restart would renumber, re-default or duplicate the list.
 /// </para>

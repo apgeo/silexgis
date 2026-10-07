@@ -373,6 +373,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapMfaEndpoints();
     api.MapTaxonomyEndpoints();
     api.MapMapLayerEndpoints();
+    api.MapMapLayerDocumentEndpoints();
     api.MapCaveEndpoints();
     api.MapCaveExternalIdEndpoints();
     api.MapCaveDepthPlaceEndpoints();
