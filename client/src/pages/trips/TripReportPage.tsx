@@ -17,7 +17,6 @@ import {
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
-import { downloadFile, tripReportUrl } from '../../api/download.ts';
 import {
   hasAccessAction,
   parseAccessActions,
@@ -47,6 +46,10 @@ import {
   tripSectionValueText,
 } from '../../components/trips/tripSectionFields.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
+import {
+  useTripReportDownload,
+  type ReportDownloadOutcome,
+} from '../../components/trips/useTripReportDownload.ts';
 import { parsePropertiesSchema, type SchemaField } from '../../components/typedProperties/propertiesSchema.ts';
 import '../../components/trips/TripReport.css';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
@@ -61,6 +64,21 @@ const SECTIONS = ['fieldData', 'logistics', 'safety'] as const;
 type SectionKey = (typeof SECTIONS)[number];
 
 type Bag = Record<string, unknown>;
+
+/**
+ * What a reader is told once a download has finished, by how it went.
+ *
+ * Only where the file differs from what the page showed. A document that arrived whole needs no
+ * announcing — the file is the announcement — but one that arrived without its map, or with a
+ * map on a bare ground, would otherwise be discovered by opening it and wondering.
+ */
+const DOWNLOAD_NOTICES: Partial<
+  Record<ReportDownloadOutcome, { level: 'info' | 'warning'; key: string }>
+> = {
+  'with-map-no-background': { level: 'info', key: 'trips.report.map.withoutBackground' },
+  'map-not-made': { level: 'warning', key: 'trips.report.map.notMade' },
+  'map-refused': { level: 'warning', key: 'trips.report.map.refused' },
+};
 
 const asBag = (value: unknown): Bag =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Bag) : {};
@@ -149,7 +167,7 @@ export default function TripReportPage() {
   const held = effective ? parseAccessActions(effective.actions) : null;
   const canKeep = held ? held.has('write') : domainFallback;
   const [templateId, setTemplateId] = useState<string | undefined>(undefined);
-  const [downloading, setDownloading] = useState(false);
+  const report = useTripReportDownload();
   const keepReport = useKeepTripReport();
   const { message } = App.useApp();
   // The pictures come the way the gallery gets them, through the photographs request, which
@@ -244,15 +262,23 @@ export default function TripReportPage() {
               ]}
             />
           )}
+          {/* The download takes a map of the trip with it, drawn here from what this page was
+              given. Saving to the trip, beside it, deliberately does not: that copy is opened by
+              every later reader of the trip, and the map shows what this one may see. */}
           <Button
             icon={<FileWordOutlined />}
-            loading={downloading}
+            loading={report.downloading}
             data-testid="trip-report-download"
             onClick={() => {
-              setDownloading(true);
-              downloadFile(tripReportUrl(trip.id, templateId))
-                .catch(() => void message.error(t('trips.report.documentFailed')))
-                .finally(() => setDownloading(false));
+              report
+                .download(trip, templateId)
+                .then((outcome) => {
+                  const notice = DOWNLOAD_NOTICES[outcome];
+                  if (notice) {
+                    void message[notice.level](t(notice.key));
+                  }
+                })
+                .catch(() => void message.error(t('trips.report.documentFailed')));
             }}
           >
             {t('trips.report.download')}

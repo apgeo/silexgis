@@ -1317,7 +1317,20 @@
       "audienceNotice": "This report shows what you may see. Somebody else reading the same trip may see more, or less.",
       "keepAudience": "The copy saved to the trip can be opened by everybody who may read the trip, so it leaves out what only editors of the trip may see. Your own fuller copy is the download.",
       "meetingPoint": "Meeting point: a point at {{position}}.",
-      "meetingShape": "Meeting point: {{shape}}, {{count}} points, centred on {{position}}."
+      "meetingShape": "Meeting point: {{shape}}, {{count}} points, centred on {{position}}.",
+      "map": {
+        "legendSketch": "Where the trip worked (its sketch)",
+        "legendMeeting": "Meeting point",
+        "legendCave": "Cave the trip names",
+        "background": "Background map: {{attribution}}",
+        "noBackgroundNoneOffered": "No background map: this installation offers no map source that may be copied into a document.",
+        "noBackgroundNotDelivered": "No background map: the map source did not deliver all of its tiles.",
+        "noBackgroundTimedOut": "No background map: the map source did not answer in time.",
+        "noBackgroundNotCopyable": "No background map: the browser would not let the map source's tiles be copied into a picture.",
+        "withoutBackground": "The map in the document has no background map under it. The line under the map says why.",
+        "notMade": "The document was downloaded without its map: the map could not be drawn in this browser.",
+        "refused": "The document was downloaded without its map: the server did not take the picture."
+      }
     },
     "geometry": "Trip sketch",
     "geometryHint": "Pick a shape, then draw on the map. A new shape replaces the one before it.",

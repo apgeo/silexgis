@@ -1317,7 +1317,20 @@
       "audienceNotice": "Acest raport arată ceea ce puteți vedea dumneavoastră. Altcineva care citește aceeași tură poate vedea mai mult sau mai puțin.",
       "keepAudience": "Copia salvată la tură poate fi deschisă de toți cei care pot citi tura, așa că lasă deoparte ceea ce văd doar cei care pot modifica tura. Copia dumneavoastră completă este descărcarea.",
       "meetingPoint": "Punct de întâlnire: un punct la {{position}}.",
-      "meetingShape": "Punct de întâlnire: {{shape}}, {{count}} puncte, centrat pe {{position}}."
+      "meetingShape": "Punct de întâlnire: {{shape}}, {{count}} puncte, centrat pe {{position}}.",
+      "map": {
+        "legendSketch": "Unde a lucrat tura (schița ei)",
+        "legendMeeting": "Punct de întâlnire",
+        "legendCave": "Peșteră numită de tură",
+        "background": "Hartă de bază: {{attribution}}",
+        "noBackgroundNoneOffered": "Fără hartă de bază: această instalare nu oferă nicio sursă de hartă care poate fi copiată într-un document.",
+        "noBackgroundNotDelivered": "Fără hartă de bază: sursa hărții nu a livrat toate dalele.",
+        "noBackgroundTimedOut": "Fără hartă de bază: sursa hărții nu a răspuns la timp.",
+        "noBackgroundNotCopyable": "Fără hartă de bază: browserul nu a permis copierea dalelor sursei într-o imagine.",
+        "withoutBackground": "Harta din document nu are hartă de bază dedesubt. Rândul de sub hartă spune de ce.",
+        "notMade": "Documentul a fost descărcat fără hartă: harta nu a putut fi desenată în acest browser.",
+        "refused": "Documentul a fost descărcat fără hartă: serverul nu a acceptat imaginea."
+      }
     },
     "geometry": "Schița turei",
     "geometryHint": "Alegeți o formă, apoi desenați pe hartă. O formă nouă o înlocuiește pe cea dinainte.",

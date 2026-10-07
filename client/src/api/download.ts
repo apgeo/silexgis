@@ -31,6 +31,17 @@ export async function downloadFilePost(url: string, body: unknown): Promise<void
   return download(url, body);
 }
 
+/**
+ * The same download again, for one the caller sends something with: a file of its own, in a form.
+ *
+ * The form is handed over untouched and its content type is left to the browser, which has to
+ * write the boundary between the parts into it — set here by hand, the server would be told of a
+ * form with no way of finding where its parts begin.
+ */
+export async function downloadFileForm(url: string, form: FormData): Promise<void> {
+  return download(url, form);
+}
+
 /** A refused download, carrying the server's stable code and members. */
 export class DownloadError extends Error {
   readonly status: number;
@@ -52,14 +63,15 @@ async function download(url: string, body?: unknown): Promise<void> {
   if (user?.access_token) {
     headers.Authorization = `Bearer ${user.access_token}`;
   }
-  if (body !== undefined) {
+  const form = body instanceof FormData ? body : undefined;
+  if (body !== undefined && !form) {
     headers['Content-Type'] = 'application/json';
   }
 
   const response = await fetch(url, {
     method: body === undefined ? 'GET' : 'POST',
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : (form ?? JSON.stringify(body)),
   });
   if (!response.ok) {
     let problem: Record<string, unknown> | undefined;
@@ -237,6 +249,21 @@ export function tripStatisticsExportUrl(subject: StatisticsSubject, id: string):
 export function tripReportUrl(id: string, templateId?: string): string {
   return buildUrl(`/api/v1/trip-logs/${encodeURIComponent(id)}/report`, { templateId });
 }
+
+/**
+ * POST /api/v1/trip-logs/{id}/report/download — the same write-up, taking with it a picture of a
+ * map this reader's browser drew.
+ *
+ * The document is the one the route above answers, word for word; the picture is placed where it
+ * says where the trip went. It is its own route because it takes a file, and the plain one stays
+ * a plain request for everything that has no picture to send.
+ */
+export function tripReportDownloadUrl(id: string, templateId?: string): string {
+  return buildUrl(`/api/v1/trip-logs/${encodeURIComponent(id)}/report/download`, { templateId });
+}
+
+/** The name of the form part the picture travels in. The server reads this one and no other. */
+export const TRIP_REPORT_MAP_PART = 'map';
 
 /**
  * GET /api/v1/expeditions/{id}/report — one camp written up as a document, over the trips it

@@ -382,6 +382,7 @@ describe('the basemap groups of the layer panel', () => {
     isBase: true,
     isDefault: id === 2,
     sortOrder: id,
+    inDocuments: false,
   });
   const catalogue = [
     base(1, 'Loose Base', null),

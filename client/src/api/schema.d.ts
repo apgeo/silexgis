@@ -13075,6 +13075,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{id}/report/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The trip written up as a document, with a picture of a map the caller drew placed where the write-up says where the trip went.
+         * @description Multipart, with one optional part named 'map': a PNG or JPEG the caller's own browser drew out of what the trip's page was already given. The picture is checked, redrawn here and placed in this one answer; it is stored nowhere. Without the part the answer is the plain download's. The layout is chosen by the same query parameter the plain download takes.
+         */
+        post: {
+            parameters: {
+                query?: {
+                    templateId?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "multipart/form-data": components["schemas"]["TripReportDownloadForm"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-logs/{tripLogId}/invitations": {
         parameters: {
             query?: never;
@@ -22140,6 +22185,7 @@ export interface components {
             isDefault: boolean;
             /** Format: int32 */
             sortOrder: number;
+            inDocuments: boolean;
         };
         /** @enum {unknown} */
         MapLayerKind: "xyz" | "wmts" | "wms" | "vector" | "cog";
@@ -25739,6 +25785,9 @@ export interface components {
             promoted: number;
             /** Format: int32 */
             alreadyNamed: number;
+        };
+        TripReportDownloadForm: {
+            map?: null | components["schemas"]["IFormFile"];
         };
         TripReportSavedDto: {
             /** Format: uuid */

@@ -279,7 +279,8 @@ Vedeți [Liste de verificare și apelul de urgență](checklists-and-callout.md#
   îndepărtate**.
 - **O copie clasată pe tură este și mai îngustă** — scrisă pentru oricine poate citi tura, nu
   pentru cine a clasat-o.
-- **Nicio imagine de hartă** — schița este scrisă în cuvinte.
+- **Descărcarea conține o hartă a turei** — vedeți mai jos. Schița rămâne scrisă și în cuvinte,
+  lângă hartă.
 - **Nicio adresă publică.** Un raport se descarcă de cineva autentificat care poate citi tura.
 
 Clubul poate scrie **propriul model** — descărcați-l pe cel standard (un fișier text scurt care se
@@ -287,6 +288,40 @@ explică singur), editați-l, încărcați-l la Configurare → Modele de raport
 poate cere doar lucruri care i-au fost deja date cititorului, iar un rând al cărui conținut se
 dovedește gol pur și simplu dispare, așa că același model produce un document onest și pentru un
 membru, și pentru un editor.
+
+### Harta din descărcare
+
+**Descarcă documentul** desenează o hartă a turei și o pune în fișier, acolo unde documentul spune
+pe unde a fost tura.
+
+| Pe hartă | Desenat ca |
+|---|---|
+| Schița turei — unde a lucrat echipa | un disc plin, o linie sau o suprafață |
+| Punctul de întâlnire | un inel gol |
+| Fiecare peșteră numită de tură **pe care o puteți localiza** | un pătrat, cu numele peșterii |
+
+- **Este vederea dumneavoastră, și o spune.** Harta este desenată de propriul browser din ceea ce
+  pagina primise deja — tura așa cum ați citit-o și fiecare peșteră numită așa cum ați citit-o.
+  Serverului nu i se cere nimic de dragul imaginii, așa că ea nu poate arăta o poziție pe care
+  pagina nu v-ar fi arătat-o. Rândul de sub imagine vă numește și spune ziua: *Map as shown to …
+  on …; positions as this reader may see them.* Altcineva care descarcă aceeași tură poate primi
+  o altă hartă.
+- **Copia clasată pe tură nu are hartă.** *Salvează la tură* nu trimite niciodată una, iar
+  serverul o refuză dacă este trimisă: acea copie este deschisă de toți cei care pot citi tura,
+  iar o hartă arată ce poate vedea un singur cititor.
+- **Pe hartă și sub ea**: o scară pe hartă; dedesubt, ce înseamnă semnele și creditul hărții
+  de dedesubt.
+- **Unde ajunge în document**: după rândul care tipărește schița — sau, într-un model al
+  clubului care nu tipărește schița, după punctul de întâlnire, iar în lipsa amândurora, la
+  sfârșit.
+- **Harta de bază** este una dintre hărțile de bază ale acestei instalări — cea standard, atunci
+  când cine administrează instalarea a spus că poate fi copiată într-un document. Dacă dalele ei
+  nu sosesc la timp sau instalarea nu oferă o asemenea hartă, harta este desenată pe un fond
+  simplu, iar motivul este scris sub ea.
+- **Vi se spune când fișierul diferă de pagină**: când harta a plecat fără hartă de bază și când
+  harta nu a putut fi desenată sau serverul nu a acceptat-o. Documentul se descarcă în toate
+  cazurile.
+- **Tipărirea** rămâne ca înainte: pe hârtie ajunge schița în cuvinte, nu o hartă.
 
 ---
 
