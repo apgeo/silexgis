@@ -167,8 +167,14 @@ care o tură își numește oamenii. Din *exact* decurg două lucruri:
   fiecare cu grupurile ei. Dacă scrieți numele în loc să alegeți, se ia înregistrarea mai
   veche.
 
-*Șterge șederea* scoate doar consemnarea că a fost la tabără în acele zile — *„persoana rămâne
-în lista de speologi."*
+Dacă persoana aleasă este unificată cu altă înregistrare sau ștearsă înainte să salvați,
+șederea nu se salvează: *„Această persoană nu mai este în lista de speologi. Alegeți-o din nou
+sau scrieți-i numele."* Fereastra rămâne deschisă cu tot ce ați completat, iar numele din
+casetă este de acum un nume scris obișnuit — alegeți din nou persoana din listă, care a fost
+citită din nou, sau salvați-l așa cum este.
+
+*Șterge șederea* întreabă mai întâi, spunând a cui este șederea, și scoate doar consemnarea că
+a fost la tabără în acele zile — *„persoana rămâne în lista de speologi."*
 
 Dacă puteți citi tabăra dar nu și persoanele din această instalare, lista este reținută în
 întregime — nume, număr și tot — nu arătată parțial, și nu se oferă nimic pentru ținerea ei.

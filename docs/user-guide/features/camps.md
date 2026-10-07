@@ -160,8 +160,14 @@ its people by. Two things follow from *exactly*:
 - **If two people are recorded under one name, the list shows both**, each with their clubs.
   Typing that name instead of picking one means the older entry.
 
-*Remove stay* takes away only the record that they were at the camp for those days — *"the
-person stays in the list of cavers."*
+If the person you picked is merged into another entry, or removed, before you save, the stay
+is not saved: *"That person is no longer in the list of cavers. Choose them again, or type
+their name."* The dialog stays open with everything you entered, and the name in the box is
+from then on an ordinary typed name — pick the person again from the list, which has been
+read again, or save it as it stands.
+
+*Remove stay* asks first, naming whose stay it is, and takes away only the record that they
+were at the camp for those days — *"the person stays in the list of cavers."*
 
 If you may read the camp but not the people in this installation, the roster is withheld
 whole — names, count and all — rather than shown partially, and nothing is offered for
