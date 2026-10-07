@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
@@ -635,7 +634,7 @@ internal static class TripReportEndpoints
             groupName,
             caveNames,
             roleNames,
-            SectionTitles(tripType),
+            TripNarrativeComposition.SectionTitles(tripType),
             await PlatesAsync(id, db, reading, thumbnails, ct),
             map);
 
@@ -699,64 +698,5 @@ internal static class TripReportEndpoints
                 await File.ReadAllBytesAsync(rendering, ct), string.Join(" — ", caption)));
         }
         return plates;
-    }
-
-    /// <summary>
-    /// What a purpose calls the questions in each of its three sections.
-    /// </summary>
-    /// <remarks>
-    /// Read off the schema the answers were written against, so a document names a field the way
-    /// the form that collected it did. A schema that says nothing about a key leaves the key
-    /// itself, which is worse to read than a title and better than dropping the answer.
-    /// </remarks>
-    private static Dictionary<TripSectionKey, IReadOnlyDictionary<string, string>> SectionTitles(
-        TripType? tripType)
-    {
-        var titles = new Dictionary<TripSectionKey, IReadOnlyDictionary<string, string>>();
-        if (tripType is null)
-        {
-            return titles;
-        }
-
-        Add(TripSectionKey.FieldData, tripType.FieldDataSchema);
-        Add(TripSectionKey.Logistics, tripType.LogisticsSchema);
-        Add(TripSectionKey.Safety, tripType.SafetySchema);
-        return titles;
-
-        void Add(TripSectionKey key, string? schema)
-        {
-            if (string.IsNullOrWhiteSpace(schema))
-            {
-                return;
-            }
-
-            try
-            {
-                using var parsed = JsonDocument.Parse(schema);
-                if (!parsed.RootElement.TryGetProperty("properties", out var properties)
-                    || properties.ValueKind != JsonValueKind.Object)
-                {
-                    return;
-                }
-
-                var map = new Dictionary<string, string>();
-                foreach (var property in properties.EnumerateObject())
-                {
-                    if (property.Value.ValueKind == JsonValueKind.Object
-                        && property.Value.TryGetProperty("title", out var title)
-                        && title.ValueKind == JsonValueKind.String
-                        && title.GetString() is { Length: > 0 } text)
-                    {
-                        map[property.Name] = text;
-                    }
-                }
-
-                titles[key] = map;
-            }
-            catch (JsonException)
-            {
-                // A schema that will not parse names nothing; the keys stand in for its titles.
-            }
-        }
     }
 }
