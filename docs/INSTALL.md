@@ -1262,8 +1262,13 @@ If your installation does hold a `.lox` model whose file names its root survey, 
 model and reports made by pressing a station on it would not have worked before this release, and
 they will work for models uploaded from now on. The fix needs one fact read out of the file, and
 that fact is recorded when a file is read, so a model already in your installation keeps behaving as
-it did: there is no button that re-reads one — upload the same file again as a new model for that
-cave, and track against the new one. Positions recorded before the upgrade keep the name they were
+it did until it is read again. Somebody who may edit the cave does that with **Read again** on the
+model's row in the cave's list of survey models; an administrator does it for every line plot of the
+installation at once with the survey-reading sweep described under
+[Maintenance sweeps](user-guide/admin/maintenance.md)
+(`POST /api/v1/jobs/survey-reading-backfill`, which needs the job-execution right). Nothing has to
+be uploaded a second time, trips already tracked on the model stay on it, and a model goes on being
+drawn and measured from its earlier reading until the new one has replaced it. Positions recorded before the upgrade keep the name they were
 written with: nothing rewrites a report by itself. A report that names the wrong station is put
 right by a person, with **Correct** on its row in the trip's tracking tab — the report keeps its
 place on the log and whatever is pinned to it — or taken out with **Delete this report**. Both work

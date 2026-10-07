@@ -93,6 +93,14 @@ distanță — caz în care verificați numărul sau declarația peșterii.
 **Din desen.** **Arată modelul** deschide ridicarea cu toți pe ea; apăsați o stație și alegeți
 **Înregistrează aici** ca să raportați exact la acea stație.
 
+O stație căreia fișierul ridicării nu îi dă nume poate fi și ea apăsată, pe o ridicare Therion:
+desenul o etichetează cu numărul la care a scris-o fișierul, între paranteze drepte (`[42]`), iar
+raportul este înregistrat sub acea etichetă. Dacă cardul răspunde că ridicarea trebuie citită din
+nou, ridicarea a fost citită înainte ca astfel de stații să poată fi raportate — apăsați
+**Citește din nou** pe rândul ei, la **Modele topo 3D** pe pagina peșterii, așteptați să se
+încheie și raportați din nou. Stațiile fără nume ale unei ridicări Survex nu sunt deloc pe desen,
+iar o adâncime raportată nu ajunge niciodată pe una dintre ele.
+
 **Scrierea unui raport după tură.** După ce urmărirea a fost încheiată, cardul o spune —
 *„Urmărirea acestei ture este încheiată — un raport adăugat acum este completat ulterior"* — iar
 **Când s-a spus** nu mai este opțional. Răspunsurile rapide (*Acum*, *acum 15 min*…) nu mai
@@ -342,6 +350,10 @@ mai multe nume decât arată, ultimul rând spune câte — scrieți mai mult di
   promisiune, nici într-un sens, nici în celălalt: unde ridicarea curentă nu a fost citită (chiar
   dacă o altă încărcare a fost), sau locația peșterii vă este ascunsă, nu se spune nimic.
 - **Retrage** scoate o declarație. Rapoartele deja înregistrate păstrează stația primită.
+- **O stație căreia fișierul ridicării nu îi dă nume nu poate fi declarată.** Este cunoscută doar
+  prin numărul la care a scris-o fișierul, iar următorul export al ridicării dă acel număr altei
+  stații — așa că declarația ar ajunge să însemne alt loc fără ca cineva să o fi schimbat.
+  Declarați adâncimea la o stație care are nume.
 
 Declararea cere dreptul de scriere pe peșteră. O stație declarată este o poziție, așa că lista
 poartă protecția peșterii.

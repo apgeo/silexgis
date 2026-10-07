@@ -108,7 +108,11 @@ feature and walkthroughs of whole jobs.
   with it, so the map and the figures never describe two different surveys. Two line plots of one
   cave can be **compared** in the survey viewer: overlaid in two colours where they are in the
   same coordinates, or side by side with linked views where they are not, with each survey's parts
-  shown and hidden together or separately.
+  shown and hidden together or separately. A stored model can be **read again** from its row —
+  after a reading that failed, or after an upgrade that reads surveys better — without uploading
+  it a second time, and an administrator can ask the same of every line plot at once. A station
+  the file gives no name is kept under the label the drawing gives it, so on a Therion survey it
+  can be pressed and reported at like any other.
 - **Survey closure** — archive the compilation log beside the model and the cave page reports how
   well the survey closes, in the compiler's own words: every loop it found, with both its relative
   error and its absolute error in metres, its length, its stations and its per-axis components. The

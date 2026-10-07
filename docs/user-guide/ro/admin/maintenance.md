@@ -13,7 +13,7 @@ este paginat pentru citire, poziția unei fotografii este scoasă din datele apa
 Ceea ce ridică o întrebare pe care orice arhivă în creștere ajunge s-o pună: *dar cu tot ce a
 sosit înainte ca acelea să funcționeze?*
 
-Trei **operațiuni de recuperare** răspund. Fiecare parcurge rândurile existente ale instalării și
+Patru **operațiuni de recuperare** răspund. Fiecare parcurge rândurile existente ale instalării și
 face munca ce nu s-a făcut la vremea ei.
 
 ---
@@ -25,7 +25,7 @@ face munca ce nu s-a făcut la vremea ei.
 
 ---
 
-## Cele trei operațiuni
+## Cele patru operațiuni
 
 ### Citirea textului
 
@@ -70,6 +70,33 @@ Pune **poziția înregistrată de un aparat** pe fotografiile deja stocate făr�
 Citește ce este în fișiere. Nu inventează poziții și nu scrie nimic înapoi în fișierele
 dumneavoastră de imagine.
 
+### Citirea topografiilor
+
+Citește din nou **fiecare poligonație** (`.lox` / `.3d`) a instalării, din fișierul deja păstrat.
+
+**Rulați-o când:**
+
+- ați actualizat la o versiune ale cărei note spun că topografiile sunt citite altfel — o stație
+  numită în alt fel, o cifră înregistrată de acum, pereți construiți de acum dintr-un grafic,
+- modelele topo încărcate înaintea unei asemenea actualizări se comportă altfel decât cele
+  încărcate după ea.
+
+Înlocuiește ce a produs fiecare citire anterioară; nu se încarcă nimic și niciun model nu își
+schimbă identitatea, așa că turele urmărite pe un model rămân pe el. Un model nu reține ce
+versiune l-a citit, așa că operațiunea le ia pe **toate**, nu doar pe cele vechi — socotiți că
+durează cât citirea fiecărei topografii o dată. Modelele care nu au putut fi citite sunt
+încercate din nou; pereții (`.stl`) sunt lăsați în pace. Pentru un singur model, **Citește din
+nou** pe rândul lui din lista peșterii face același lucru — vedeți
+[Topografii și modele](../features/surveys-and-models.md).
+
+**Se pornește cu** `POST /api/v1/jobs/survey-reading-backfill`, dintr-un cont care are dreptul de
+executare a lucrărilor.
+
+**Nimic nu iese din uz cât rulează.** O topografie care a fost citită rămâne **Gata** cât își
+așteaptă rândul și cât este citită: peștera își păstrează cifrele, iar o urmărire a unei echipe pe
+ea își păstrează desenul, din citirea anterioară, până când cea nouă o înlocuiește într-un singur
+pas. Dacă o topografie nu poate fi citită de data aceasta, păstrează citirea pe care o avea.
+
 ---
 
 ## Ce au în comun
@@ -81,7 +108,10 @@ dumneavoastră de imagine.
 - **Au nevoie de dreptul de *Rulare* pe domeniul Jobs** — vedeți
   [Permisiuni](permissions.md#acțiuni).
 - **Se pot rula de mai multe ori în siguranță.** O operațiune face munca nefăcută; nu reface munca
-  făcută.
+  făcută. Operațiunea de citire a topografiilor este excepția
+  doar la cost: nu are cum să știe ce topografii a citit o versiune mai veche, așa că fiecare
+  rulare le citește pe toate din nou — cu același rezultat. Rulată de două ori la rând, nu pune
+  nimic la coadă pentru o topografie a cărei citire încă așteaptă.
 
 ## Urmărirea uneia
 

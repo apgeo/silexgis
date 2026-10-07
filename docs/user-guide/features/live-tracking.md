@@ -87,6 +87,13 @@ puts it some metres away — in which case check the number or the cave's declar
 **From the drawing.** **Show the model** opens the survey with everybody on it; press a station
 and choose **Record here** to report at exactly that station.
 
+A station the survey file gives no name can be pressed too, on a Therion survey: the drawing
+labels it with the number the file wrote it at, in square brackets (`[42]`), and the report is
+recorded under that label. If the card answers that the survey has to be read again, the survey
+was read before such stations could be reported at — press **Read again** on its row under
+**3D survey models** on the cave's page, wait for it to finish, and report again. A Survex survey's
+nameless stations are not on the drawing at all, and a reported depth never lands on one.
+
 **Writing a report up after the trip.** Once tracking is closed the card says so — *"This
 trip's tracking is closed — a report added now is being written up afterwards"* — and **When it
 was said** is no longer optional. The quick answers (*Now*, *15 min ago*…) are not offered, and
@@ -327,6 +334,10 @@ there are more names than it shows, its last line says how many — type more of
   either way: where the current survey has not been read (even if another upload has), or the
   cave's location is withheld from you, nothing is said.
 - **Withdraw** removes a declaration. Reports already recorded keep the station they were given.
+- **A station the survey file gives no name cannot be declared.** It is known only by the number
+  its file wrote it at, and the next export of the survey gives that number to another station —
+  so the declaration would come to mean a different place without anybody changing it. Declare
+  the depth at a station that has a name.
 
 Declaring needs the right to write to the cave. A declared station is a position, so the list
 carries the cave's own protection.

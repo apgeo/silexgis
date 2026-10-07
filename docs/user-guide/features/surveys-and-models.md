@@ -47,6 +47,49 @@ A compiled survey is not left as a file the browser draws. It is **read into its
 shots**, which is what makes the [statistics](measurements-and-statistics.md) possible. The
 plot can be viewed while that is happening; the list updates itself when the reading is done.
 
+A model is read once, when it arrives. **Read again** on its row asks for the stored file to be
+read a second time, and what the last reading produced — stations, shots, the extracted centerline,
+the walls built from the plot — is replaced by what this one produces. Nothing is uploaded, the
+model stays the same model, and trips tracked on it stay on it. It is there for two cases: a
+reading that **failed** for a reason that has since gone, and an **upgrade** that reads surveys
+better than the version that read yours. You need to be able to edit the cave; it is not offered
+while a reading is already waiting or running. An administrator can ask the same of every line plot
+at once — see [Maintenance sweeps](../admin/maintenance.md).
+
+A model that has been read stays **Ready** while it is read again, with **Being read again**
+beside it: the cave keeps its figures and a trip tracked on the model keeps its drawing, from the
+earlier reading, until the new one replaces it in one step. If the new reading fails, the model
+keeps the reading it had and whoever asked is notified why. Only a model that holds nothing — one
+whose reading failed — goes back to **Waiting its turn**. A wall mesh (`.stl`) can be converted
+again the same way, and its earlier conversion is replaced.
+
+**Stations the file gives no name.** A compiled survey can hold a station its file wrote no name
+for — only a number, the place the station has in that file. It is a station like any other and is
+read like any other. What it is called follows the drawing, so that a station pressed in the model
+and the same station among the rows carry one name:
+
+| Survey | A nameless station is called | On the drawing |
+| --- | --- | --- |
+| Therion (`.lox`) | its number in square brackets — `[42]`, after the part of the survey it belongs to | Yes, under that same label; it can be pressed and reported at |
+| Survex (`.3d`) | its number behind a hash sign — `#42` | No; the drawing leaves a station without a label out, so the name exists only among the rows |
+
+This is not the far end of a shot fired at the passage wall, which a survey writes as `-` or `.`:
+that is no station at all, and none is kept for it.
+
+Two things follow from the number being **the file's and not the cave's** — the next export of the
+survey hands it to another station:
+
+- [What a depth means](live-tracking.md#what-a-caves-depths-mean) is declared for the cave and
+  outlives any one model, so **a depth cannot be declared at a nameless station**; and a reported
+  depth is never placed on a station the drawing cannot show.
+- A Therion model read by a version older than this naming holds its nameless stations under
+  another spelling, which no press on the drawing matches. **Read again** puts that right; a
+  report refused for that reason says so. A position that was already recorded at such a station
+  under the old spelling is not rewritten: it stays on the trip's log under the name it was
+  recorded with, which no station answers to any more, so it is not drawn. Correct it on its row
+  in the trip's tracking tab if it matters. Every station the file names keeps its name, and
+  positions recorded at those are untouched.
+
 ### Where a survey sits in the world
 
 This is the part people get wrong, so the forms are explicit about it.
