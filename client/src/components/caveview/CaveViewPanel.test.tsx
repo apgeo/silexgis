@@ -330,6 +330,34 @@ describe('CaveViewPanel', () => {
     expect(typeof lastViewerConfig!.crsLookup).toBe('function');
   });
 
+  it('builds the viewer with the labels’ own plate unless a caller asks for the dark one', async () => {
+    // Every screen that draws a party draws it through this panel and names no plate, so what a
+    // viewer is built with by default is what members and visitors see. Exactly these three
+    // options, and no theme: an option added to the default shows here.
+    const { unmount } = render(<CaveViewPanel fileUrl="http://files.local/survey" fileName="demo.lox" />);
+    await waitFor(() => expect(lastViewerConfig).toBeDefined());
+    expect(Object.keys(lastViewerConfig!).sort()).toEqual(['crsLookup', 'home', 'language']);
+    unmount();
+
+    // Named outright, the viewer's own plate is the same construction.
+    lastViewerConfig = undefined;
+    const derived = render(
+      <CaveViewPanel fileUrl="http://files.local/survey" fileName="demo.lox" markerLabels="derived" />,
+    );
+    await waitFor(() => expect(lastViewerConfig).toBeDefined());
+    expect(Object.keys(lastViewerConfig!).sort()).toEqual(['crsLookup', 'home', 'language']);
+    derived.unmount();
+
+    // Asked for, the dark plate is the one a movie of a trip is drawn with.
+    lastViewerConfig = undefined;
+    render(<CaveViewPanel fileUrl="http://files.local/survey" fileName="demo.lox" markerLabels="dark" />);
+    await waitFor(() => expect(lastViewerConfig).toBeDefined());
+    expect(lastViewerConfig!.theme).toEqual({
+      liveMarkers: { labelBackground: '#141414', labelText: '#ffffff', labelBackgroundOpacity: 0.8 },
+    });
+    expect(Object.keys(lastViewerConfig!).sort()).toEqual(['crsLookup', 'home', 'language', 'theme']);
+  });
+
   it('builds the viewer in the language the interface is in, and builds no other when that changes', async () => {
     // A viewer given no language takes the browser's, which says nothing about the language this
     // application is being read in: it opens in Romanian in a browser configured in English, and

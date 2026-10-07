@@ -14,6 +14,7 @@ import {
   type CaveViewUi,
   type CaveViewer,
 } from '../../caveview/loadCaveView.ts';
+import { markerLabelTheme, type MarkerLabelPlate } from '../../caveview/markerLabelTheme.ts';
 import { modelDeliveryIdentity } from '../../caveview/modelDelivery.ts';
 import {
   focusForRef,
@@ -217,6 +218,16 @@ export interface CaveViewPanelProps {
    */
   crsLookup?: (code: string) => Promise<string | null>;
   /**
+   * The plate behind each marker's label: `derived`, the viewer's own, worked out from the scene's
+   * background — or `dark`, white writing on a near-black plate, as a movie of a trip draws them.
+   * Left out, it is `derived`, and the viewer is built with exactly the options it is built with
+   * when this is not named at all.
+   *
+   * Read once, when the viewer is built, like the lookup above: the viewer takes its colours when it
+   * is made, so a change afterwards changes nothing until the model is loaded again.
+   */
+  markerLabels?: MarkerLabelPlate;
+  /**
    * A place to fly the camera to, asked for from outside. See {@link CaveViewFocusRequest}.
    */
   focusRequest?: CaveViewFocusRequest;
@@ -359,6 +370,7 @@ export default function CaveViewPanel({
   toolbar = false,
   stationMedia,
   crsLookup,
+  markerLabels = 'derived',
   focusRequest,
   compare,
 }: CaveViewPanelProps) {
@@ -503,6 +515,8 @@ export default function CaveViewPanel({
   // fresh closure, which is what the callbacks above already ride a ref to avoid.
   const crsLookupRef = useRef(crsLookup);
   crsLookupRef.current = crsLookup;
+  const markerLabelsRef = useRef(markerLabels);
+  markerLabelsRef.current = markerLabels;
   // Read off a ref at the moment a viewer is built, like the lookup above: a language switched
   // while a model is open is not a reason to rebuild the viewer and reload the model.
   const languageRef = useRef(i18n.language);
@@ -591,10 +605,13 @@ export default function CaveViewPanel({
       // Built with what every viewer here is built with — see `caveViewerOptions` for why none of
       // it is this component's to choose. A caller with no account cannot reach this installation's
       // coordinate-system registry and supplies a lookup of its own; see the prop.
-      const viewer = new cv2.CaveViewer(
-        containerIdRef.current!,
-        caveViewerOptions(languageRef.current, crsLookupRef.current),
-      );
+      // The labels' plate is the one thing a caller may choose, and a caller that chooses nothing
+      // adds no option at all.
+      const labelTheme = markerLabelTheme(markerLabelsRef.current);
+      const viewer = new cv2.CaveViewer(containerIdRef.current!, {
+        ...caveViewerOptions(languageRef.current, crsLookupRef.current),
+        ...(labelTheme === undefined ? {} : { theme: labelTheme }),
+      });
       viewer.addEventListener('newCave', () => {
         if (disposed) return;
         setStatus('ready');
