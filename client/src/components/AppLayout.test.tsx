@@ -495,6 +495,26 @@ describe('AppLayout nav destinations', () => {
     // neighbouring library and not the group around it.
     expect(libraryOf(without)).toContain('gallery');
   });
+
+  it('offers the page of everything published to full administrators and to nobody else', () => {
+    // By rank, not by a right over a domain: the server answers that page to full administrators
+    // only, so an account holding every domain's every action and not the rank would be sent to
+    // a refusal by an entry offered on anything else.
+    const adminOf = (gates: Parameters<typeof buildNavItems>[1]) => {
+      const group = buildNavItems(i18n.t, gates).find(
+        (item) => item.key === `${GROUP_PREFIX}admin`,
+      );
+      return isNavGroup(group!) ? group.children.map((child) => child.key) : [];
+    };
+
+    expect(adminOf(everything)).toContain('admin/published-trips');
+
+    const withoutRank = { ...everything, isFullAdmin: false };
+    expect(adminOf(withoutRank)).not.toContain('admin/published-trips');
+    // The control: the rest of the administration group is still there, so what disappeared is
+    // this one page and not the group around it.
+    expect(adminOf(withoutRank)).toContain('admin/audit');
+  });
 });
 
 describe('AppLayout language switch', () => {

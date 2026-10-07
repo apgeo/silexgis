@@ -39,6 +39,7 @@ import {
   ReadOutlined,
   SafetyCertificateOutlined,
   ScheduleOutlined,
+  ShareAltOutlined,
   SolutionOutlined,
   TagsOutlined,
   TeamOutlined,
@@ -157,6 +158,13 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
     // what the page needs — starting one is a separate right the page asks for.
     ...(gates.can('terrain')
       ? [{ key: 'admin/terrain', icon: <GlobalOutlined />, label: t('nav.terrain') }]
+      : []),
+    // By rank rather than by a domain, unlike its neighbours: the page lists every published
+    // trip across every trip's own access rules and can take all of them back, and the server
+    // answers it to full administrators only. Offered by a domain's right it would be a rail
+    // entry leading most of its holders to a refusal.
+    ...(gates.isFullAdmin
+      ? [{ key: 'admin/published-trips', icon: <ShareAltOutlined />, label: t('nav.publishedTrips') }]
       : []),
   ];
 
