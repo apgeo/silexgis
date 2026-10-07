@@ -64,7 +64,11 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
             new Dictionary<string, string?> { ["Terrain:BuildRoot"] = buildRoot },
             // The handler is driven here directly. A worker running beside it would claim the job
             // row first and this class would be asserting against work it did not do.
-            JobWorkers.RemoveFrom);
+            JobWorkers.RemoveFrom,
+            // An application of this test's own in either test mode: one test here compares a path the
+            // application recorded with the directory this test named, and an application shared by the
+            // class knows that directory under the class's name for it.
+            ownHost: true);
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
