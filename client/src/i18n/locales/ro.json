@@ -1724,6 +1724,9 @@
         "ends": "Un link de urmărire se încheie singur. Nu mai funcționează după închiderea urmăririi și, în orice caz, după data de mai jos — astfel încât o adresă rămasă într-un articol vechi să nu arate echipa la nesfârșit. Retragerea îl încheie imediat.",
         "mintedExpires": "Această adresă nu mai funcționează după {{when}}, sau mai devreme dacă închideți urmărirea.",
         "tellsParty": "Toți participanții la această tură care au cont sunt anunțați că a fost publicată.",
+        "languageLabel": "Limba în care se deschide pagina",
+        "languageDefault": "Nicio limbă precizată",
+        "languageHelp": "O adresă care nu precizează nicio limbă se deschide în română sau în limba aleasă anterior de cititor pe acest site. Alegerea de aici rescrie adresa și blocul pentru site de mai jos — nu se creează nimic nou, același link răspunde în ambele cazuri, iar cititorul poate schimba limba și din pagină.",
         "replace": "Înlocuiește linkul",
         "replaceConfirm": "Înlocuiești acest link de urmărire? Adresa veche nu mai răspunde din acest moment, oriunde a fost lipită. Una nouă este arătată aici, o singură dată; expiră atunci când ar fi expirat cea veche și nimeni din tură nu este anunțat.",
         "replacedTitle": "Adresa nouă este gata",
@@ -3735,6 +3738,11 @@
       "line": "Fiecare loc de mai jos este acolo unde cineva a fost raportat ultima dată, la ora de alături — vestea este transmisă din peșteră și introdusă de un om. Nu este o poziție în timp real.",
       "title": "Cum funcționează pagina",
       "body": "Nimeni nu este urmărit de un aparat sub pământ. Un loc apare aici când o echipă transmite o veste la suprafață și cineva o introduce, așa că arată unde era un om la ora aceea, nu unde este în acest minut. Pauzele lungi sunt normale: în peșteră nu există semnal, iar veștile ies doar de la un punct de telefon sau de la intrare. O pauză înseamnă că încă nu a transmis nimeni nimic. Nu înseamnă că s-a întâmplat ceva."
+    },
+    "language": {
+      "name": "Română",
+      "short": "RO",
+      "switchTo": "Afișează pagina în română"
     },
     "embedNoModel": "Nu există nicio ridicare topografică de arătat pentru această tură.",
     "past": {

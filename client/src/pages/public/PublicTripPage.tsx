@@ -40,6 +40,7 @@ import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import { followedStation, type PastFollow } from './pastTrackReplay.ts';
 import { usePinnedModelUrl } from './pinnedModelUrl.ts';
 import PublicPastBar from './PublicPastBar.tsx';
+import PublicLanguageButton from './PublicLanguageButton.tsx';
 import PublicTripAbout from './PublicTripAbout.tsx';
 import PublicLiveTripList from './PublicLiveTripList.tsx';
 import PublicPastTripList from './PublicPastTripList.tsx';
@@ -56,6 +57,7 @@ import {
   watchStartedAt,
 } from './publicTripParty.ts';
 import { usePastTripPlayback } from './usePastTripPlayback.ts';
+import { usePublicLanguage } from './usePublicLanguage.ts';
 import { readPastLink, writePastLink } from './pastTripLink.ts';
 import './PublicTripPage.css';
 
@@ -109,6 +111,9 @@ export default function PublicTripPage() {
    */
   const past = usePastTripPlayback(token);
   const [search, setSearch] = useSearchParams();
+  // The language an address names, and the button that changes it. Read before every early
+  // return below, so a page that has nothing to show still says so in the language asked for.
+  const language = usePublicLanguage();
 
   /**
    * What the page is actually showing: the party now, or a past trip wound back to a moment.
@@ -428,9 +433,16 @@ export default function PublicTripPage() {
             title={t('publicTrip.unreachableTitle')}
             subTitle={t('publicTrip.unreachableBody')}
             extra={
-              <Button type="primary" onClick={() => void refetch()} data-testid="public-trip-retry">
-                {t('publicTrip.retry')}
-              </Button>
+              <Flex vertical align="center" gap={8}>
+                <Button
+                  type="primary"
+                  onClick={() => void refetch()}
+                  data-testid="public-trip-retry"
+                >
+                  {t('publicTrip.retry')}
+                </Button>
+                <PublicLanguageButton control={language} />
+              </Flex>
             }
             data-testid="public-trip-unreachable"
           />
@@ -447,6 +459,8 @@ export default function PublicTripPage() {
             status="warning"
             title={t('publicTrip.notFoundTitle')}
             subTitle={t('publicTrip.notFoundBody')}
+            // The one sentence on this page is the one a reader most needs to be able to read.
+            extra={<PublicLanguageButton control={language} />}
             data-testid="public-trip-not-found"
           />
         </Card>
@@ -1050,6 +1064,7 @@ export default function PublicTripPage() {
 
       <footer className="public-trip-foot">
         <Typography.Text type="secondary">{t('app.name')}</Typography.Text>
+        <PublicLanguageButton control={language} />
       </footer>
     </div>
   );

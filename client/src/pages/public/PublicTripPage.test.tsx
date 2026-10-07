@@ -194,6 +194,35 @@ describe('a trip followed by somebody with no account', () => {
     expect(screen.queryByRole('button', { name: /sign in/i })).toBeNull();
   });
 
+  it('offers the other language as a button, in that language, wherever the page ends up', () => {
+    // The suite reads English, so the way out leads to Romanian — and is written in Romanian,
+    // because whoever needs it is not reading the page around it.
+    ready();
+    const { container, unmount } = render(<PublicTripPage />);
+
+    const button = screen.getByRole('button', { name: 'Afișează pagina în română' });
+    expect(button).toHaveTextContent('Română');
+    expect(button).toHaveAttribute('lang', 'ro');
+    expect(container.querySelector('footer')).toContainElement(button);
+    expect(container.querySelectorAll('a')).toHaveLength(0);
+    unmount();
+
+    // A link that opens nothing says so in one sentence, and that sentence is the page.
+    answer = { data: undefined, isPending: false, error: new ApiError(404) };
+    render(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-not-found')).toContainElement(
+      screen.getByTestId('public-trip-language'),
+    );
+    cleanup();
+
+    // And so does a server that could not be reached.
+    answer = { data: undefined, isPending: false, error: new ApiError(503) };
+    render(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-unreachable')).toContainElement(
+      screen.getByTestId('public-trip-language'),
+    );
+  });
+
   it('groups the party by team and keeps the teams in the order the envelope sent them', () => {
     ready();
     render(<PublicTripPage />);

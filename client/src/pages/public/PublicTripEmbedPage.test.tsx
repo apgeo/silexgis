@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { PublicTripEnvelope, PublicTripParticipant } from '../../api/hooks.ts';
 import type { CaveViewFocusRequest } from '../../components/caveview/CaveViewPanel.tsx';
@@ -49,7 +49,13 @@ vi.mock('../../api/hooks.ts', () => ({
     isError: false,
   }),
 }));
-vi.mock('react-router-dom', () => ({ useParams: () => ({ token: 'follow-token' }) }));
+// The frame's address, which is where an article says what language it is written in.
+let address = new URLSearchParams();
+const setAddress = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useParams: () => ({ token: 'follow-token' }),
+  useSearchParams: () => [address, setAddress],
+}));
 
 let given: Record<string, unknown> | undefined;
 vi.mock('../../components/caveview/CaveViewPanel.tsx', () => ({
@@ -203,6 +209,34 @@ describe('the viewer a website frames', () => {
     expect(screen.getByTestId('viewer')).toBeInTheDocument();
     expect(screen.queryByText('Peștera Demo Mare')).toBeNull();
     expect(screen.queryByRole('heading')).toBeNull();
+  });
+
+  it('keeps the way into the other language to two letters with a name a screen reader can say', () => {
+    const { container } = render(<PublicTripEmbedPage />);
+
+    const button = screen.getByRole('button', { name: 'Afișează pagina în română' });
+    expect(button).toHaveTextContent('RO');
+    expect(button).toHaveAttribute('lang', 'ro');
+    // Reachable by keyboard like any button: nothing takes it out of the tab order.
+    expect(button).not.toHaveAttribute('tabindex', '-1');
+    expect(button).not.toBeDisabled();
+    expect(container.querySelectorAll('a')).toHaveLength(0);
+  });
+
+  it('opens in the language its own address names, which is how an article says what it is written in', async () => {
+    address = new URLSearchParams('lang=ro');
+    try {
+      render(<PublicTripEmbedPage />);
+
+      expect(screen.getByTestId('public-past-open')).toHaveTextContent(
+        'Ture trecute în această peșteră',
+      );
+      expect(document.documentElement.lang).toBe('ro');
+    } finally {
+      address = new URLSearchParams();
+      cleanup();
+      await i18n.changeLanguage('en');
+    }
   });
 
   /**

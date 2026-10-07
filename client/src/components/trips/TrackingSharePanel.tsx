@@ -1,7 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { CopyOutlined, GlobalOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Card, Flex, Input, Popconfirm, Tag, Typography } from 'antd';
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Flex,
+  Input,
+  Popconfirm,
+  Segmented,
+  Tag,
+  Typography,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   useMintTripTrackingShare,
@@ -10,7 +21,12 @@ import {
   useTripTrackingShares,
 } from '../../api/hooks.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
-import { buildEmbedSnippet, publicTripPath } from '../../pages/public/publicTripEmbed.ts';
+import {
+  buildEmbedSnippet,
+  PUBLIC_TRIP_LANGUAGES,
+  type PublicTripLanguage,
+  publicTripPath,
+} from '../../pages/public/publicTripEmbed.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
 
 interface Props {
@@ -74,6 +90,7 @@ export default function TrackingSharePanel({
 }: Props) {
   const { t, i18n } = useTranslation();
   const { message } = App.useApp();
+  const languageLabelId = useId();
   // Every control here is pressed, and how big a thing has to be to be pressed depends on what is
   // pressing it — not on how much room there is across.
   const coarse = useCoarsePointer();
@@ -107,6 +124,14 @@ export default function TrackingSharePanel({
      */
     protectedCaveWithinSurveyBounds: boolean;
   } | null>(null);
+  /**
+   * The language the address and the block are written to open in, or none.
+   *
+   * <b>Not part of the link.</b> One token answers in either language; this only decides whether
+   * the two strings on screen say `lang=`. So changing it mints nothing and takes nothing back —
+   * somebody can copy the Romanian address for one article and the English one for another.
+   */
+  const [language, setLanguage] = useState<PublicTripLanguage | null>(null);
 
   if (!canEdit) {
     return null;
@@ -120,7 +145,9 @@ export default function TrackingSharePanel({
 
   const when = (value: string) => new Date(value).toLocaleString(i18n.language);
   const followUrl =
-    minted === null ? '' : `${window.location.origin}${publicTripPath(minted.token)}`;
+    minted === null
+      ? ''
+      : `${window.location.origin}${publicTripPath(minted.token, language ?? undefined)}`;
   const snippet =
     minted === null
       ? ''
@@ -128,6 +155,7 @@ export default function TrackingSharePanel({
           origin: window.location.origin,
           token: minted.token,
           title: tripTitle,
+          language: language ?? undefined,
         });
 
   /**
@@ -338,6 +366,33 @@ export default function TrackingSharePanel({
                   when: when(minted.expiresAt),
                 })}
               </Typography.Text>
+
+              <div>
+                <Typography.Text type="secondary" id={languageLabelId}>
+                  {t('trips.tracking.publish.languageLabel')}
+                </Typography.Text>
+                <div style={{ marginTop: 4 }}>
+                  <Segmented<PublicTripLanguage | 'none'>
+                    size={controlSize}
+                    aria-labelledby={languageLabelId}
+                    value={language ?? 'none'}
+                    onChange={(value) => setLanguage(value === 'none' ? null : value)}
+                    options={[
+                      { value: 'none', label: t('trips.tracking.publish.languageDefault') },
+                      // Each language under its own name for itself, whichever one this panel
+                      // is being read in.
+                      ...PUBLIC_TRIP_LANGUAGES.map((code) => ({
+                        value: code,
+                        label: t('publicTrip.language.name', { lng: code }),
+                      })),
+                    ]}
+                    data-testid="trip-tracking-publish-language"
+                  />
+                </div>
+                <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0' }}>
+                  {t('trips.tracking.publish.languageHelp')}
+                </Typography.Paragraph>
+              </div>
 
               <div>
                 <Typography.Text type="secondary">

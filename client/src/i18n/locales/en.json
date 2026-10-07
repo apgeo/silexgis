@@ -1724,6 +1724,9 @@
         "ends": "A follow link ends on its own. It stops working when the watch is closed, and in any case on the date below — so an address left in an old article does not go on showing the party for ever. Taking it back ends it at once.",
         "mintedExpires": "This address stops working on {{when}}, or sooner when you close the watch.",
         "tellsParty": "Everybody on this trip who has an account is told that it has been published.",
+        "languageLabel": "Language the page opens in",
+        "languageDefault": "None named",
+        "languageHelp": "An address that names no language opens in Romanian, or in whatever its reader chose on this site before. Naming one here rewrites the address and the website block below — nothing new is created, the same link answers either way, and the reader can still change the language on the page.",
         "replace": "Replace link",
         "replaceConfirm": "Replace this follow link? The old address stops answering at once, wherever it has been pasted. A fresh one is shown here, once; it runs out when the old one would have, and nobody on the trip is told.",
         "replacedTitle": "The new address is ready",
@@ -3735,6 +3738,11 @@
       "line": "Each place below is where somebody was last reported, at the time beside it — word is passed out of the cave and typed in by a person. It is not a live position.",
       "title": "How this page works",
       "body": "Nobody is tracked by a device underground. A place appears here when a party passes word to the surface and somebody types it in, so it says where a person was at that time, not where they are this minute. Long gaps are normal: there is no signal in a cave, and word gets out only from a telephone point or from the entrance. A gap means nobody has passed word yet. It does not mean anything has happened."
+    },
+    "language": {
+      "name": "English",
+      "short": "EN",
+      "switchTo": "Show this page in English"
     },
     "embedNoModel": "There is no survey drawing to show for this trip.",
     "past": {

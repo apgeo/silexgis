@@ -9,6 +9,7 @@ import {
   parseEmbedInbound,
   publicTripEmbedPath,
   publicTripPath,
+  readLanguageLink,
 } from './publicTripEmbed.ts';
 
 const TOKEN = 'abcDEF-123_xyz';
@@ -44,6 +45,19 @@ describe('the block a website is handed', () => {
   it('points the frame at the embed address of this installation', () => {
     expect(snippet()).toContain(
       `src="https://caves.example.org/shared/trips/${TOKEN}/embed"`,
+    );
+  });
+
+  it('names a language in the frame’s address only when it was asked to', () => {
+    // A block pasted before the option existed, and one made without it today, are the same
+    // block: the frame opens as the installation does.
+    expect(snippet()).not.toContain('lang=');
+    expect(snippet({ language: 'en' })).toContain(
+      `src="https://caves.example.org/shared/trips/${TOKEN}/embed?lang=en"`,
+    );
+    // The origin the relay is allowed to talk to is an origin, with or without a language.
+    expect(snippet({ language: 'en' })).toContain(
+      'data-silexgis-embed="https://caves.example.org"',
     );
   });
 
@@ -445,6 +459,35 @@ describe('the two addresses a published trip has', () => {
 
   it('escapes a token that would otherwise change the address it is put in', () => {
     expect(publicTripPath('a/../b')).toBe('/shared/trips/a%2F..%2Fb');
+  });
+
+  it('says which language to open in after the path, on either address', () => {
+    expect(publicTripPath(TOKEN, 'en')).toBe(`/shared/trips/${TOKEN}?lang=en`);
+    expect(publicTripEmbedPath(TOKEN, 'ro')).toBe(`/shared/trips/${TOKEN}/embed?lang=ro`);
+  });
+});
+
+describe('the language an address names', () => {
+  const asked = (query: string) => readLanguageLink(new URLSearchParams(query));
+
+  it('is one of the two the application speaks', () => {
+    expect(asked('lang=en')).toBe('en');
+    expect(asked('lang=ro')).toBe('ro');
+    expect(asked('past=abc&lang=en&team=x')).toBe('en');
+  });
+
+  it('is read however it was typed', () => {
+    expect(asked('lang=EN')).toBe('en');
+    expect(asked('lang=%20Ro%20')).toBe('ro');
+  });
+
+  it('is nothing for anything else, rather than a nearest match', () => {
+    expect(asked('')).toBeNull();
+    expect(asked('lang=')).toBeNull();
+    expect(asked('lang=de')).toBeNull();
+    expect(asked('lang=en-GB')).toBeNull();
+    expect(asked('lang=english')).toBeNull();
+    expect(asked('language=en')).toBeNull();
   });
 });
 

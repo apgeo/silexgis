@@ -58,7 +58,13 @@ vi.mock('../../api/hooks.ts', () => ({
       : trackAnswer;
   },
 }));
-vi.mock('react-router-dom', () => ({ useParams: () => ({ token: 'follow-token' }) }));
+// The frame's address, which is where an article says what language it is written in.
+const address = new URLSearchParams();
+const setAddress = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useParams: () => ({ token: 'follow-token' }),
+  useSearchParams: () => [address, setAddress],
+}));
 // Whether a finger is driving the frame. False by default — the desk this suite is read on.
 let coarse = false;
 vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: () => coarse }));

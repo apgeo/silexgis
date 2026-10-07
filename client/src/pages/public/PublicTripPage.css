@@ -177,6 +177,12 @@
 }
 
 .public-trip-foot {
+  /* The application's name and the way into the other language, side by side and wrapping. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 12px;
   padding: 12px;
   text-align: center;
   border-top: 1px solid var(--silexgis-public-border);
@@ -534,4 +540,13 @@
 /* The frame's one standing word about its own age, at the far end of the strip from its button. */
 .public-trip-embed-updated {
   font-size: 0.72rem;
+}
+
+/* The frame's age and its language button, kept together at the strip's far end and dropping
+   under the archive button as one piece in a frame too narrow for both. */
+.public-trip-embed-strip-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
 }

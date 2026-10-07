@@ -42,6 +42,8 @@ import {
 } from './publicTripEmbed.ts';
 import { ageInWords, clockInWords, instantOf } from './publicTripParty.ts';
 import { usePastTripPlayback } from './usePastTripPlayback.ts';
+import PublicLanguageButton from './PublicLanguageButton.tsx';
+import { usePublicLanguage } from './usePublicLanguage.ts';
 import './PublicTripPage.css';
 
 /**
@@ -87,6 +89,9 @@ export default function PublicTripEmbedPage() {
   const { data, isPending, error, refetch, dataUpdatedAt } = usePublicTrip(token);
   // The one clock of this frame: what redraws its age as time passes with no read landing.
   const present = useNow();
+  // The language the frame's own address names — which is how the article it sits in says what
+  // language it is written in — and the button that changes it for the reader in front of it.
+  const language = usePublicLanguage();
   const [focusRequest, setFocusRequest] = useState<CaveViewFocusRequest | undefined>();
   /**
    * How big the frame's own buttons are drawn: for a finger where a finger drives them, whatever
@@ -856,17 +861,27 @@ export default function PublicTripEmbedPage() {
       {/* The frame's age, standing: a gap while the trip is being followed and reads are landing,
           the hour once the watch is closed or the link has ended and nothing will change again.
           While a read is failing the line above says it, with the same figure. */}
-      {readAt !== null && stale === null && (
-        <Typography.Text
-          type="secondary"
-          className="public-trip-embed-updated"
-          data-testid="public-trip-updated"
-        >
-          {data.state !== 'armed' || linkEnded
-            ? t('publicTrip.updated.settled', { clock: clockInWords(readAt, present, i18n.language) })
-            : t('publicTrip.updated.running', { since: ageInWords(readAt, present, i18n.language) })}
-        </Typography.Text>
-      )}
+      <span className="public-trip-embed-strip-end">
+        {readAt !== null && stale === null && (
+          <Typography.Text
+            type="secondary"
+            className="public-trip-embed-updated"
+            data-testid="public-trip-updated"
+          >
+            {data.state !== 'armed' || linkEnded
+              ? t('publicTrip.updated.settled', {
+                  clock: clockInWords(readAt, present, i18n.language),
+                })
+              : t('publicTrip.updated.running', {
+                  since: ageInWords(readAt, present, i18n.language),
+                })}
+          </Typography.Text>
+        )}
+        {/* Two letters, in the strip that is this frame's only chrome. Not drawn while a past trip
+            is playing: that strip is the replay's own controls and has no room left at the
+            narrowest width a frame is given. */}
+        <PublicLanguageButton control={language} compact size={controlSize} />
+      </span>
     </div>
   );
 

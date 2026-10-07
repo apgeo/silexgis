@@ -518,6 +518,13 @@ export interface EmbedSnippetOptions {
    * so the frame is correct at every width without the host page measuring anything.
    */
   aspectRatio?: string;
+  /**
+   * The language the frame opens in, when the article it sits in is written in one.
+   *
+   * Left out, the frame's address names no language and the viewer opens in whatever the
+   * installation opens in — which is what every block pasted before this option existed does.
+   */
+  language?: PublicTripLanguage;
 }
 
 /** Everything of an embed that has to be identical in the page and in the snippet that frames it. */
@@ -529,14 +536,49 @@ export const EMBED_BOX = {
   maxHeight: '80vh',
 } as const;
 
-/** The address of a published trip's page, for a follower. */
-export function publicTripPath(token: string): string {
-  return `/shared/trips/${encodeURIComponent(token)}`;
+/** The languages a published trip can be read in. */
+export const PUBLIC_TRIP_LANGUAGES = ['ro', 'en'] as const;
+export type PublicTripLanguage = (typeof PUBLIC_TRIP_LANGUAGES)[number];
+
+/**
+ * The name, in a published trip's address, of the language the page is to be read in.
+ *
+ * <b>Read by the two published-trip routes and by nothing else.</b> The application's own language
+ * is settled from a choice somebody made in this browser; an address that could override that on
+ * every route would let any link change the language of a signed-in session. Here the reader has
+ * no account and no switch in a header, and the person who wrote the link knows which language
+ * their article is in — so on these two pages, and only on them, the address may say.
+ */
+export const PUBLIC_TRIP_LANGUAGE_PARAM = 'lang';
+
+/**
+ * The language an address names, or nothing.
+ *
+ * Anything that is not one of the languages this application speaks is nothing — not an error and
+ * not a nearest match: a link carrying `lang=de` opens exactly as the same link without it.
+ */
+export function readLanguageLink(params: URLSearchParams): PublicTripLanguage | null {
+  const asked = params.get(PUBLIC_TRIP_LANGUAGE_PARAM)?.trim().toLowerCase();
+  return PUBLIC_TRIP_LANGUAGES.find((language) => language === asked) ?? null;
+}
+
+function languageQuery(language: PublicTripLanguage | undefined): string {
+  return language === undefined ? '' : `?${PUBLIC_TRIP_LANGUAGE_PARAM}=${language}`;
+}
+
+/**
+ * The address of a published trip's page, for a follower.
+ *
+ * With a language, the address says which one the page opens in; without, it says nothing and the
+ * page opens as the installation does.
+ */
+export function publicTripPath(token: string, language?: PublicTripLanguage): string {
+  return `/shared/trips/${encodeURIComponent(token)}${languageQuery(language)}`;
 }
 
 /** The address of the same trip as a chrome-less viewer, for an iframe. */
-export function publicTripEmbedPath(token: string): string {
-  return `${publicTripPath(token)}/embed`;
+export function publicTripEmbedPath(token: string, language?: PublicTripLanguage): string {
+  return `${publicTripPath(token)}/embed${languageQuery(language)}`;
 }
 
 /**
@@ -588,8 +630,11 @@ export function buildEmbedSnippet({
   token,
   title,
   aspectRatio = EMBED_BOX.aspectRatio,
+  language,
 }: EmbedSnippetOptions): string {
-  const src = escapeAttribute(`${origin.replace(/\/+$/, '')}${publicTripEmbedPath(token)}`);
+  const src = escapeAttribute(
+    `${origin.replace(/\/+$/, '')}${publicTripEmbedPath(token, language)}`,
+  );
   const home = escapeAttribute(origin.replace(/\/+$/, ''));
   const frameId = escapeAttribute(embedFrameId(token));
   const box =

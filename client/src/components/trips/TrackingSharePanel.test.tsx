@@ -292,6 +292,33 @@ describe('publishing a tracked trip', () => {
     expect(embed.value).toContain('aspect-ratio:');
   });
 
+  it('names a language in the address and the block only when one is picked, and mints nothing for it', async () => {
+    view();
+    fireEvent.click(screen.getByTestId('trip-tracking-publish-mint'));
+    await waitFor(() => expect(screen.getByTestId('trip-tracking-publish-minted')).toBeVisible());
+
+    const link = () => (screen.getByTestId('trip-tracking-publish-link') as HTMLInputElement).value;
+    const block = () =>
+      (screen.getByTestId('trip-tracking-publish-snippet') as HTMLTextAreaElement).value;
+    // Untouched, both say nothing about language: the page opens as the installation does.
+    expect(link()).not.toContain('lang=');
+    expect(block()).not.toContain('lang=');
+
+    const choices = screen.getByTestId('trip-tracking-publish-language');
+    fireEvent.click(within(choices).getByText('English'));
+
+    expect(link()).toBe(`${window.location.origin}/shared/trips/${TOKEN}?lang=en`);
+    expect(block()).toContain(`/shared/trips/${TOKEN}/embed?lang=en"`);
+
+    fireEvent.click(within(choices).getByText('Română'));
+    expect(link()).toBe(`${window.location.origin}/shared/trips/${TOKEN}?lang=ro`);
+
+    fireEvent.click(within(choices).getByText('None named'));
+    expect(link()).toBe(`${window.location.origin}/shared/trips/${TOKEN}`);
+    // One link throughout: the language is in the address, not in what was created.
+    expect(mint).toHaveBeenCalledTimes(1);
+  });
+
   it('captions the frame with the trip, since it will sit on somebody else’s page', () => {
     view();
     fireEvent.click(screen.getByTestId('trip-tracking-publish-mint'));

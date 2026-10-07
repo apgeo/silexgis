@@ -47,8 +47,16 @@ void i18n
 // dayjs keeps one default locale for the whole module, and it is what anything formatting a date
 // outside a picker reads. Kept in step with the language i18next settled on, so the two cannot
 // disagree about which language the page is in.
+//
+// The document says which language it is in for the same reason, and for readers nothing else
+// reaches: a screen reader picks its voice from that attribute, so Romanian under an English
+// label is read aloud with English pronunciation, and a browser's offer to translate the page is
+// decided by it. Set here rather than by a component, because the language can change on any
+// screen and there is exactly one place that hears every change.
 function followLanguage(): void {
-  dayjs.locale(i18n.resolvedLanguage?.startsWith('ro') ? 'ro' : 'en');
+  const language = i18n.resolvedLanguage?.startsWith('ro') ? 'ro' : 'en';
+  dayjs.locale(language);
+  document.documentElement.lang = language;
 }
 
 followLanguage();
