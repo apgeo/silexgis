@@ -137,11 +137,11 @@ public sealed class FeatureTypeConfiguration : IEntityTypeConfiguration<FeatureT
     }
 }
 
-public sealed class TripReportTemplateConfiguration : IEntityTypeConfiguration<TripReportTemplate>
+public sealed class ReportTemplateConfiguration : IEntityTypeConfiguration<ReportTemplate>
 {
-    public void Configure(EntityTypeBuilder<TripReportTemplate> builder)
+    public void Configure(EntityTypeBuilder<ReportTemplate> builder)
     {
-        builder.ToTable("trip_report_templates");
+        builder.ToTable("report_templates");
         builder.Property(x => x.Name).HasMaxLength(120);
         builder.Property(x => x.Body).HasMaxLength(ReportTemplateFormat.MaxLength);
         builder.Property(x => x.Kind).HasConversion<short>();
@@ -155,7 +155,7 @@ public sealed class TripReportTemplateConfiguration : IEntityTypeConfiguration<T
         // choosing one silently unchoose the other.
         builder.HasIndex(x => new { x.Kind, x.IsDefault }).IsUnique()
             .HasFilter("is_default")
-            .HasDatabaseName("ux_trip_report_templates_default");
+            .HasDatabaseName("ux_report_templates_default");
 
         // A purpose carries at most one layout of its own, for the same reason: "which layout is
         // a survey trip's" decided by whichever row was read first is not a rule. Deleting the
@@ -165,6 +165,6 @@ public sealed class TripReportTemplateConfiguration : IEntityTypeConfiguration<T
             .OnDelete(DeleteBehavior.SetNull);
         builder.HasIndex(x => x.TripTypeId).IsUnique()
             .HasFilter("trip_type_id IS NOT NULL")
-            .HasDatabaseName("ux_trip_report_templates_trip_type");
+            .HasDatabaseName("ux_report_templates_trip_type");
     }
 }

@@ -279,6 +279,13 @@ See [Checklists and the callout](checklists-and-callout.md#the-callout).
 - **The download carries a map of the trip** — see below. The sketch is still written out in
   words beside it.
 - **No public address.** A report is downloaded by somebody signed in who may read the trip.
+- **As a PDF, where your installation can make one.** If whoever runs your installation has
+  switched on its document converter, **Download PDF** sits beside **Download document** and
+  gives you the same write-up — same layout, same map — as a PDF. Nothing is kept of it on the
+  server. If the button is not there, your installation does not run the converter: use
+  **Print** and choose *Save as PDF* in the browser instead. If the converter does not answer,
+  the page says so; try again, or take the Word document. The copy **filed against the trip**
+  is always a Word document, because that is the one a club edits afterwards.
 
 Your club can write **its own layout** — download the standard one (a short, self-explaining
 text file), edit, upload under Configuration → Report layouts, choose it. A layout can only

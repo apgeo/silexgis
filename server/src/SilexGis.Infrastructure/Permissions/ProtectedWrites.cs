@@ -3,7 +3,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Permissions;
 
-namespace SilexGis.Api.Common;
+namespace SilexGis.Infrastructure.Permissions;
 
 /// <summary>
 /// Which of a page of protected rows this caller may change: one fetch of the facts for the
@@ -14,9 +14,11 @@ namespace SilexGis.Api.Common;
 /// Shared rather than per-surface because more than one kind of answer now depends on it — a
 /// listing that says which of its rows the caller may curate, and a record that holds back a
 /// part of itself from anyone who may only read it. Asking the same question two ways is how
-/// two surfaces come to disagree about the same row.
+/// two surfaces come to disagree about the same row. It sits below the surfaces for that
+/// reason: the read that decides what a caller is told of a trip's own words asks it too, and
+/// that read is shared by documents built in different parts of the application.
 /// </remarks>
-internal static class ProtectedWrites
+public static class ProtectedWrites
 {
     public static async Task<HashSet<Guid>> WritableAsync<T>(
         IAccessService access, AccessContext ctx, IReadOnlyList<T> rows, CancellationToken ct)

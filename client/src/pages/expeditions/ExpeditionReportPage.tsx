@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
-import { ArrowLeftOutlined, FileWordOutlined, PrinterOutlined, SaveOutlined } from '@ant-design/icons';
+import {
+  ArrowLeftOutlined,
+  FilePdfOutlined,
+  FileWordOutlined,
+  PrinterOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import {
   App,
   Alert,
@@ -17,13 +23,19 @@ import {
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
-import { downloadFile, expeditionReportUrl } from '../../api/download.ts';
+import {
+  downloadFile,
+  expeditionReportUrl,
+  reportPdfRefusal,
+  type ReportFormat,
+} from '../../api/download.ts';
 import {
   parseAccessActions,
   useCan,
   useCavingGroups,
   useEffectiveAccess,
   useExpedition,
+  useFileConfig,
   useKeepExpeditionReport,
   usePhotos,
   useReportTemplatesOfKind,
@@ -37,6 +49,7 @@ import '../../components/trips/TripReport.css';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import { formatPosition, shapeLabelKey, tripGeometrySummary } from '../../components/trips/tripGeometrySummary.ts';
 import ExpeditionRosterTab from './ExpeditionRosterTab.tsx';
+import ExpeditionTripAccounts from './ExpeditionTripAccounts.tsx';
 import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
 
 /**
@@ -97,7 +110,13 @@ export default function ExpeditionReportPage() {
   const mayFile = useCan('documents', 'create');
   const canKeep = (held ? held.has('write') : domainFallback) && mayFile;
   const [templateId, setTemplateId] = useState<string | undefined>(undefined);
-  const [downloading, setDownloading] = useState(false);
+  // Which format is on its way, so the button that was pressed spins and its twin waits.
+  const [downloading, setDownloading] = useState<ReportFormat | null>(null);
+  // Whether this installation can lay a write-up out as a PDF is a fact about the installation,
+  // read from what it says about itself. Where it cannot, the choice is not offered: a button
+  // that can only be refused is worse than no button, and printing to PDF is still on this page.
+  const { data: fileConfig } = useFileConfig();
+  const pdfOffered = fileConfig?.conversionAvailable === true;
   const keepReport = useKeepExpeditionReport();
   const { message } = App.useApp();
   // The pictures come the way the gallery gets them, through the photographs request, which
@@ -119,6 +138,21 @@ export default function ExpeditionReportPage() {
       </Flex>
     );
   }
+
+  /**
+   * Downloads the write-up in one format. A refusal that is about the PDF — the converter did
+   * not answer, or could not lay this one out — is said in those words, because the remedy is
+   * on this page: the Word document.
+   */
+  const downloadAs = (format: ReportFormat) => {
+    setDownloading(format);
+    downloadFile(expeditionReportUrl(camp.id, templateId, format))
+      .catch(
+        (error: unknown) =>
+          void message.error(t(reportPdfRefusal(error) ?? 'trips.report.documentFailed')),
+      )
+      .finally(() => setDownloading(null));
+  };
 
   const organizingCavingGroup = cavingGroups?.find((g) => g.id === camp.cavingGroupId);
   const spansDays = isMultiDay(camp.startDate, camp.endDate);
@@ -157,17 +191,25 @@ export default function ExpeditionReportPage() {
           )}
           <Button
             icon={<FileWordOutlined />}
-            loading={downloading}
+            loading={downloading === 'docx'}
+            disabled={downloading === 'pdf'}
             data-testid="expedition-report-download"
-            onClick={() => {
-              setDownloading(true);
-              downloadFile(expeditionReportUrl(camp.id, templateId))
-                .catch(() => void message.error(t('trips.report.documentFailed')))
-                .finally(() => setDownloading(false));
-            }}
+            onClick={() => downloadAs('docx')}
           >
             {t('trips.report.download')}
           </Button>
+          {/* The same document, laid out by the installation's converter. */}
+          {pdfOffered && (
+            <Button
+              icon={<FilePdfOutlined />}
+              loading={downloading === 'pdf'}
+              disabled={downloading === 'docx'}
+              data-testid="expedition-report-download-pdf"
+              onClick={() => downloadAs('pdf')}
+            >
+              {t('trips.report.downloadPdf')}
+            </Button>
+          )}
           {canKeep && (
             /* Said before the button rather than after it: what is filed against the camp is
                readable by everybody who may read the camp, so the server builds that copy for
@@ -276,6 +318,11 @@ export default function ExpeditionReportPage() {
         <Part title={t('expeditions.report.trips')}>
           <ExpeditionTripsTab expeditionId={camp.id} />
         </Part>
+
+        {/* What each of those trips wrote about itself, from the same answer the list above is
+            drawn from. It brings its own heading, so a camp none of whose trips wrote anything
+            shows no part here rather than an empty one. */}
+        <ExpeditionTripAccounts expeditionId={camp.id} />
 
         {/* The roster, read with the two rights that govern it and withheld whole where the
             reader may not read people; that refusal is drawn as it is on the camp's own tab. */}

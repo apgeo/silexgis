@@ -326,7 +326,7 @@ export const queryKeys = {
   publicLiveTrips: (token: string) => ['public-trips', token, 'live'] as const,
   checklists: ['checklists'] as const,
   checklist: (id: string) => ['checklists', 'detail', id] as const,
-  tripReportTemplates: ['trip-report-templates'] as const,
+  reportTemplates: ['report-templates'] as const,
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
   cavingGroups: ['cavingGroups'] as const,
@@ -4255,13 +4255,13 @@ export function useRestoreTripLog() {
   });
 }
 
-export type TripReportTemplate = components['schemas']['TripReportTemplateDto'];
+export type ReportTemplate = components['schemas']['ReportTemplateDto'];
 
 /** The layouts a write-up may be built in. Every account may read them: choosing one is not editing one. */
-export function useTripReportTemplates(enabled = true) {
+export function useReportTemplates(enabled = true) {
   return useQuery({
-    queryKey: queryKeys.tripReportTemplates,
-    queryFn: () => unwrap(api.GET('/api/v1/trip-report-templates')),
+    queryKey: queryKeys.reportTemplates,
+    queryFn: () => unwrap(api.GET('/api/v1/report-templates')),
     enabled,
   });
 }
@@ -4272,18 +4272,18 @@ export function useTripReportTemplates(enabled = true) {
  */
 export function useReportTemplatesOfKind(kind: 'trip' | 'expedition', enabled = true) {
   return useQuery({
-    queryKey: [...queryKeys.tripReportTemplates, kind] as const,
+    queryKey: [...queryKeys.reportTemplates, kind] as const,
     queryFn: () =>
-      unwrap(api.GET('/api/v1/trip-report-templates', { params: { query: { kind } } })),
+      unwrap(api.GET('/api/v1/report-templates', { params: { query: { kind } } })),
     enabled,
   });
 }
 
-export type TripReportTemplateWrite = components['schemas']['TripReportTemplateRequest'];
+export type ReportTemplateWrite = components['schemas']['ReportTemplateRequest'];
 
-function useInvalidateTripReportTemplates() {
+function useInvalidateReportTemplates() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: queryKeys.tripReportTemplates });
+  return () => void queryClient.invalidateQueries({ queryKey: queryKeys.reportTemplates });
 }
 
 /**
@@ -4291,29 +4291,29 @@ function useInvalidateTripReportTemplates() {
  * line is at fault — the message is passed through rather than replaced, because the person
  * editing the layout is the only one who can act on it.
  */
-export function useCreateTripReportTemplate() {
-  const invalidate = useInvalidateTripReportTemplates();
+export function useCreateReportTemplate() {
+  const invalidate = useInvalidateReportTemplates();
   return useMutation({
-    mutationFn: (body: TripReportTemplateWrite) =>
-      unwrap(api.POST('/api/v1/trip-report-templates', { body })),
+    mutationFn: (body: ReportTemplateWrite) =>
+      unwrap(api.POST('/api/v1/report-templates', { body })),
     onSuccess: invalidate,
   });
 }
 
-export function useUpdateTripReportTemplate() {
-  const invalidate = useInvalidateTripReportTemplates();
+export function useUpdateReportTemplate() {
+  const invalidate = useInvalidateReportTemplates();
   return useMutation({
-    mutationFn: ({ id, ...body }: TripReportTemplateWrite & { id: string }) =>
-      unwrap(api.PUT('/api/v1/trip-report-templates/{id}', { params: { path: { id } }, body })),
+    mutationFn: ({ id, ...body }: ReportTemplateWrite & { id: string }) =>
+      unwrap(api.PUT('/api/v1/report-templates/{id}', { params: { path: { id } }, body })),
     onSuccess: invalidate,
   });
 }
 
-export function useDeleteTripReportTemplate() {
-  const invalidate = useInvalidateTripReportTemplates();
+export function useDeleteReportTemplate() {
+  const invalidate = useInvalidateReportTemplates();
   return useMutation({
     mutationFn: (id: string) =>
-      unwrapVoid(api.DELETE('/api/v1/trip-report-templates/{id}', { params: { path: { id } } })),
+      unwrapVoid(api.DELETE('/api/v1/report-templates/{id}', { params: { path: { id } } })),
     onSuccess: invalidate,
   });
 }

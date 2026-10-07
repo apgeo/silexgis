@@ -20,17 +20,17 @@ import {
 import type { UploadFile } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
-import { downloadFile, tripReportTemplateDefaultUrl } from '../../api/download.ts';
+import { downloadFile, reportTemplateDefaultUrl } from '../../api/download.ts';
 import {
   hasAccessAction,
   useCapabilities,
-  useCreateTripReportTemplate,
-  useDeleteTripReportTemplate,
-  useTripReportTemplates,
+  useCreateReportTemplate,
+  useDeleteReportTemplate,
+  useReportTemplates,
   useTripTypes,
-  useUpdateTripReportTemplate,
-  type TripReportTemplate,
-  type TripReportTemplateWrite,
+  useUpdateReportTemplate,
+  type ReportTemplate,
+  type ReportTemplateWrite,
 } from '../../api/hooks.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 
@@ -40,9 +40,9 @@ import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
  * left it out would have one chosen for it — quietly retyping a camp layout as a trip layout and
  * taking the club's chosen trip layout with it.
  */
-type ReportTemplateKind = NonNullable<TripReportTemplateWrite['kind']>;
+type ReportTemplateKind = NonNullable<ReportTemplateWrite['kind']>;
 
-const emptyDraft: TripReportTemplateWrite = {
+const emptyDraft: ReportTemplateWrite = {
   name: '',
   body: '',
   isDefault: false,
@@ -67,21 +67,21 @@ const emptyDraft: TripReportTemplateWrite = {
  * produced, and the refusal names the line — so it is shown in the server's own words, which are
  * the only words that can name a line.
  */
-export default function TripReportTemplatesPage() {
+export default function ReportTemplatesPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
-  const { data: templates, isLoading } = useTripReportTemplates();
+  const { data: templates, isLoading } = useReportTemplates();
   const { data: tripTypes } = useTripTypes();
-  const createTemplate = useCreateTripReportTemplate();
-  const updateTemplate = useUpdateTripReportTemplate();
-  const deleteTemplate = useDeleteTripReportTemplate();
-  const [editing, setEditing] = useState<TripReportTemplate | null>(null);
+  const createTemplate = useCreateReportTemplate();
+  const updateTemplate = useUpdateReportTemplate();
+  const deleteTemplate = useDeleteReportTemplate();
+  const [editing, setEditing] = useState<ReportTemplate | null>(null);
   const [creating, setCreating] = useState(false);
   const [shippedKind, setShippedKind] = useState<ReportTemplateKind>('trip');
-  const [form] = Form.useForm<TripReportTemplateWrite>();
+  const [form] = Form.useForm<ReportTemplateWrite>();
 
   const kindOptions: { value: ReportTemplateKind; label: string }[] = [
     { value: 'trip', label: t('admin.reportTemplates.kindTrip') },
@@ -125,7 +125,7 @@ export default function TripReportTemplatesPage() {
 
   const save = async () => {
     const values = await form.validateFields();
-    const body: TripReportTemplateWrite = {
+    const body: ReportTemplateWrite = {
       name: values.name.trim(),
       body: values.body,
       isDefault: values.isDefault,
@@ -148,7 +148,7 @@ export default function TripReportTemplatesPage() {
     }
   };
 
-  const remove = async (template: TripReportTemplate) => {
+  const remove = async (template: ReportTemplate) => {
     try {
       await deleteTemplate.mutateAsync(template.id);
       message.success(t('common.deleted'));
@@ -197,7 +197,7 @@ export default function TripReportTemplatesPage() {
           icon={<DownloadOutlined />}
           data-testid="report-template-shipped"
           onClick={() => {
-            downloadFile(tripReportTemplateDefaultUrl(shippedKind)).catch(() =>
+            downloadFile(reportTemplateDefaultUrl(shippedKind)).catch(() =>
               message.error(t('admin.reportTemplates.downloadFailed')),
             );
           }}
@@ -227,17 +227,17 @@ export default function TripReportTemplatesPage() {
             // contradicting each other about which one is used.
             title: t('admin.reportTemplates.kind'),
             key: 'kind',
-            render: (_: unknown, template: TripReportTemplate) => kindLabel(template.kind),
+            render: (_: unknown, template: ReportTemplate) => kindLabel(template.kind),
           },
           {
             title: t('admin.reportTemplates.tripType'),
             key: 'tripTypeId',
-            render: (_: unknown, template: TripReportTemplate) => purposeLabel(template.tripTypeId),
+            render: (_: unknown, template: ReportTemplate) => purposeLabel(template.tripTypeId),
           },
           {
             title: t('admin.reportTemplates.used'),
             key: 'isDefault',
-            render: (_: unknown, template: TripReportTemplate) =>
+            render: (_: unknown, template: ReportTemplate) =>
               template.isDefault ? <Tag color="blue">{t('admin.reportTemplates.isDefault')}</Tag> : '',
           },
           ...(canWrite
@@ -245,7 +245,7 @@ export default function TripReportTemplatesPage() {
                 {
                   title: '',
                   key: 'actions',
-                  render: (_: unknown, template: TripReportTemplate) => (
+                  render: (_: unknown, template: ReportTemplate) => (
                     <Flex gap={8}>
                       <Button size="small" onClick={() => setEditing(template)}>
                         {t('admin.reportTemplates.editAction')}
@@ -350,7 +350,7 @@ function problemMessage(error: unknown, t: ReturnType<typeof useTranslation>['t'
     return t('common.saveFailed');
   }
 
-  if (error.code === 'trip_report_template.invalid') {
+  if (error.code === 'report_template.invalid') {
     return error.detail ?? t('admin.reportTemplates.invalid');
   }
   return t('common.saveFailed');

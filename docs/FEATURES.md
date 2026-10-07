@@ -519,11 +519,21 @@ feature and walkthroughs of whole jobs.
   kept across restarts. The sketch is still written out in words
   beside it. The copy filed against the trip never carries that map: it shows what one reader may
   see, and a filed copy is opened by everybody who may read the trip. There is no public address
-  for a report: it is downloaded by somebody signed in who may read the trip.
+  for a report: it is downloaded by somebody signed in who may read the trip. Where the
+  installation runs its optional document converter, the same write-up — a trip's or a camp's,
+  map included — can be downloaded **as a PDF**: the Word document is passed through the
+  converter inside the request and nothing is stored. Without the converter the button is not
+  offered, and the page's print view is the way to a PDF.
   A club can write **its own layout** for the document: download the standard one, which is a short
   text file that explains itself in its own comments, edit it, upload it, and choose it. A layout can
   only ask for things the reader was already given, and a line whose contents turn out to be empty
   simply disappears — so the same layout produces an honest document for a member and for an editor.
+  **A camp writes itself up too**, as one document over the trips it gathered — day by day, team by
+  team, in a layout of its own kind — and it carries **what each trip wrote about itself**: the
+  trip's account, its results and the answers on its form, under the trip's date and title. Each
+  trip's text is exactly what that trip's own write-up would show the same reader, decided in one
+  place for both documents, so a camp's write-up can never print what a trip's withholds; the copy
+  filed against the camp carries each trip only as any account may read it.
 - **Tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.

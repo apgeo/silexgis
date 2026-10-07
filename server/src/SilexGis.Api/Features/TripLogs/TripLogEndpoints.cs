@@ -146,7 +146,8 @@ public static class TripLogEndpoints
         trips.MapGet("/{id:guid}/report", TripReportEndpoints.DownloadAsync)
             .WithSummary(
                 "The trip written up as a document, built from this caller's own reading of the "
-                + "trip — the same one the page shows.");
+                + "trip — the same one the page shows. 'format=pdf' asks for it as a PDF, which "
+                + "an installation without the document converter refuses.");
         TripReportEndpoints.MapDownloadWithMap(trips);
         trips.MapPost("/{id:guid}/report", TripReportEndpoints.KeepAsync)
             .WithSummary(
@@ -1496,10 +1497,12 @@ public static class TripLogEndpoints
         var disclosableCaves = await TripCaveDisclosure.DisclosableCaveIdsAsync(
             db, protection, ctx, [.. caveLinks.Select(x => x.FeatureId)], ct);
 
-        // Which of these trips this caller may change, decided for the whole page at once so a
-        // longer listing does not cost more round trips. It answers one question here: who is
-        // told what went wrong, as against who is told that something did.
-        var writable = await ProtectedWrites.WritableAsync(access, ctx, trips, ct);
+        // What this caller is told of each trip's own words — its account, its results and the
+        // answers on its form, with the account of what went wrong kept for whoever may change
+        // the trip. Asked of the one place that decides it, for the whole page at once, because
+        // this answer is not the only thing that prints those words: a camp's write-up prints
+        // them for each trip it gathered, and the two must hand one reader the same thing.
+        var told = await TripNarrativeReads.ForAsync(access, ctx, trips, ct);
 
         // How much of the list its purpose names each of these trips has settled, resolved for the
         // whole page at once rather than per row: which list a trip is measured against belongs to
@@ -1509,11 +1512,11 @@ public static class TripLogEndpoints
         // rule about who may see the plan.
         var readiness = await TripChecklistReads.ReadinessForAsync(db, ctx, trips, ct);
 
-        return [.. trips.Select(trip => MapOne(trip, writable.Contains(trip.Id)))];
+        return [.. trips.Select(MapOne)];
 
-        TripLogDto MapOne(TripLog trip, bool mayWrite)
+        TripLogDto MapOne(TripLog trip)
         {
-            var (safety, safetyVersion) = TripDisclosure.Safety(trip, mayWrite);
+            var words = told[trip.Id];
             var named = caveLinks.Where(x => x.TripId == trip.Id).Select(x => x.FeatureId).ToList();
             return new TripLogDto(
                 trip.Id,
@@ -1523,8 +1526,8 @@ public static class TripLogEndpoints
                 trip.TripDateEnd,
                 trip.EntryTime,
                 trip.ExitTime,
-                trip.Description,
-                trip.Results,
+                words.Description,
+                words.Results,
                 trip.WeatherConditions,
                 trip.LocationText,
                 trip.OrganizingCavingGroupId,
@@ -1547,12 +1550,12 @@ public static class TripLogEndpoints
                 trip.SurveyStations,
                 trip.RopeMetres,
                 trip.HadIncident,
-                JsonSerializer.Deserialize<JsonElement>(trip.FieldData),
+                words.FieldData,
                 trip.FieldDataSchemaVersion,
-                JsonSerializer.Deserialize<JsonElement>(trip.Logistics),
+                words.Logistics,
                 trip.LogisticsSchemaVersion,
-                safety is null ? null : JsonSerializer.Deserialize<JsonElement>(safety),
-                safetyVersion,
+                words.Safety,
+                words.SafetySchemaVersion,
                 campOfTrip.TryGetValue(trip.Id, out var campId) ? campId : null,
                 named.Count(id => !disclosableCaves.Contains(id)),
                 trip.MaxParticipants,

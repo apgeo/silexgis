@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
-import type { TripReportTemplateWrite } from '../../api/hooks.ts';
+import type { ReportTemplateWrite } from '../../api/hooks.ts';
 
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
@@ -29,23 +29,23 @@ vi.mock('../../api/hooks.ts', async () => {
   return {
     hasAccessAction: actual.hasAccessAction,
     useCapabilities: () => ({ data: capabilities }),
-    useTripReportTemplates: () => ({ data: templates, isLoading: false }),
+    useReportTemplates: () => ({ data: templates, isLoading: false }),
     // The purposes a trip layout may be bound to; none here, so the selector offers nothing and
     // every row reads as a layout for any trip.
     useTripTypes: () => ({ data: [] }),
-    useCreateTripReportTemplate: () => ({ mutateAsync: createMutate, isPending: false }),
-    useUpdateTripReportTemplate: () => ({ mutateAsync: updateMutate, isPending: false }),
-    useDeleteTripReportTemplate: () => ({ mutateAsync: deleteMutate, isPending: false }),
+    useCreateReportTemplate: () => ({ mutateAsync: createMutate, isPending: false }),
+    useUpdateReportTemplate: () => ({ mutateAsync: updateMutate, isPending: false }),
+    useDeleteReportTemplate: () => ({ mutateAsync: deleteMutate, isPending: false }),
   };
 });
 
 vi.mock('../../api/download.ts', () => ({
   downloadFile: (url: string) => download(url) as Promise<void>,
-  tripReportTemplateDefaultUrl: (kind: string) =>
-    `/api/v1/trip-report-templates/default?kind=${kind}`,
+  reportTemplateDefaultUrl: (kind: string) =>
+    `/api/v1/report-templates/default?kind=${kind}`,
 }));
 
-const { default: TripReportTemplatesPage } = await import('./TripReportTemplatesPage.tsx');
+const { default: ReportTemplatesPage } = await import('./ReportTemplatesPage.tsx');
 
 beforeEach(() => {
   createMutate.mockReset().mockResolvedValue({});
@@ -58,16 +58,16 @@ afterEach(cleanup);
 function show() {
   return render(
     <App>
-      <TripReportTemplatesPage />
+      <ReportTemplatesPage />
     </App>,
   );
 }
 
-describe('TripReportTemplatesPage', () => {
+describe('ReportTemplatesPage', () => {
   it('hands out the layout the system ships, which is where a club’s own starts', () => {
     show();
     fireEvent.click(screen.getByTestId('report-template-shipped'));
-    expect(download).toHaveBeenCalledWith('/api/v1/trip-report-templates/default?kind=trip');
+    expect(download).toHaveBeenCalledWith('/api/v1/report-templates/default?kind=trip');
   });
 
   it('stores an edited layout, and which one write-ups use when nobody chooses', async () => {
@@ -81,7 +81,7 @@ describe('TripReportTemplatesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await vi.waitFor(() => expect(createMutate).toHaveBeenCalled());
-    const body = createMutate.mock.calls[0][0] as TripReportTemplateWrite;
+    const body = createMutate.mock.calls[0][0] as ReportTemplateWrite;
     expect(body).toMatchObject({ name: 'Bulletin', body: '{title}\n{dates}\n', isDefault: true });
   });
 
@@ -89,7 +89,7 @@ describe('TripReportTemplatesPage', () => {
     // No wording this page holds could name a line of a file it never parsed, so a refusal that
     // arrived as "the layout could not be read" would leave the editor with nothing to act on.
     createMutate.mockRejectedValue(
-      new ApiError(400, 'trip_report_template.invalid', 'Line 4: unknown field {porridge}.'),
+      new ApiError(400, 'report_template.invalid', 'Line 4: unknown field {porridge}.'),
     );
     show();
     fireEvent.click(screen.getByRole('button', { name: /Add a layout/ }));

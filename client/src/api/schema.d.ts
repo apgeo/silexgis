@@ -9456,7 +9456,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Upload limits this installation applies, and how much room the caller has left. */
+        /** Upload limits this installation applies, how much room the caller has left, and whether it runs the service that lays office documents out as PDF. */
         get: {
             parameters: {
                 query?: never;
@@ -13288,11 +13288,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The trip written up as a document, built from this caller's own reading of the trip — the same one the page shows. */
+        /** The trip written up as a document, built from this caller's own reading of the trip — the same one the page shows. 'format=pdf' asks for it as a PDF, which an installation without the document converter refuses. */
         get: {
             parameters: {
                 query?: {
                     templateId?: string;
+                    format?: string;
                 };
                 header?: never;
                 path: {
@@ -13317,6 +13318,7 @@ export interface paths {
             parameters: {
                 query?: {
                     templateId?: string;
+                    format?: string;
                 };
                 header?: never;
                 path: {
@@ -13354,12 +13356,13 @@ export interface paths {
         put?: never;
         /**
          * The trip written up as a document, with a picture of a map the caller drew placed where the write-up says where the trip went.
-         * @description Multipart, with one optional part named 'map': a PNG or JPEG the caller's own browser drew out of what the trip's page was already given. The picture is checked, redrawn here and placed in this one answer; it is stored nowhere. Without the part the answer is the plain download's. The layout is chosen by the same query parameter the plain download takes.
+         * @description Multipart, with one optional part named 'map': a PNG or JPEG the caller's own browser drew out of what the trip's page was already given. The picture is checked, redrawn here and placed in this one answer; it is stored nowhere. Without the part the answer is the plain download's. The layout and the format are chosen by the same query parameters the plain download takes; asked for as a PDF, the picture goes in before the document is converted.
          */
         post: {
             parameters: {
                 query?: {
                     templateId?: string;
+                    format?: string;
                 };
                 header?: never;
                 path: {
@@ -15612,11 +15615,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The camp written up as one document, in the layout named or the club's chosen one. Built from what this caller may read: a trip they may not open contributes nothing to it. */
+        /** The camp written up as one document, in the layout named or the club's chosen one. Built from what this caller may read: a trip they may not open contributes nothing to it. 'format=pdf' asks for it as a PDF, which an installation without the document converter refuses. */
         get: {
             parameters: {
                 query?: {
                     templateId?: string;
+                    format?: string;
                 };
                 header?: never;
                 path: {
@@ -15641,6 +15645,7 @@ export interface paths {
             parameters: {
                 query?: {
                     templateId?: string;
+                    format?: string;
                 };
                 header?: never;
                 path: {
@@ -15907,7 +15912,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trip-report-templates": {
+    "/api/v1/report-templates": {
         parameters: {
             query?: never;
             header?: never;
@@ -15932,7 +15937,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TripReportTemplateDto"][];
+                        "application/json": components["schemas"]["ReportTemplateDto"][];
                     };
                 };
             };
@@ -15948,7 +15953,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["TripReportTemplateRequest"];
+                    "application/json": components["schemas"]["ReportTemplateRequest"];
                 };
             };
             responses: {
@@ -15958,7 +15963,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TripReportTemplateDto"];
+                        "application/json": components["schemas"]["ReportTemplateDto"];
                     };
                 };
             };
@@ -15969,7 +15974,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trip-report-templates/default": {
+    "/api/v1/report-templates/default": {
         parameters: {
             query?: never;
             header?: never;
@@ -16005,7 +16010,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trip-report-templates/{id}": {
+    "/api/v1/report-templates/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -16025,7 +16030,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["TripReportTemplateRequest"];
+                    "application/json": components["schemas"]["ReportTemplateRequest"];
                 };
             };
             responses: {
@@ -16035,7 +16040,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TripReportTemplateDto"];
+                        "application/json": components["schemas"]["ReportTemplateDto"];
                     };
                 };
             };
@@ -21866,6 +21871,7 @@ export interface components {
             /** Format: int64 */
             resumableThresholdBytes: number;
             archiveExtensions: string[];
+            conversionAvailable: boolean;
         };
         FileDto: {
             /** Format: uuid */
@@ -24232,8 +24238,30 @@ export interface components {
             /** Format: int32 */
             caveCount: number;
         };
+        ReportTemplateDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["ReportTemplateKind"];
+            body: string;
+            isDefault: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: int64 */
+            tripTypeId?: null | number;
+        };
         /** @enum {unknown} */
         ReportTemplateKind: "trip" | "expedition";
+        ReportTemplateRequest: {
+            name: string;
+            body: string;
+            isDefault: boolean;
+            kind: null | components["schemas"]["ReportTemplateKind"];
+            /** Format: int64 */
+            tripTypeId?: null | number;
+        };
         ResetPasswordRequest: {
             email: string;
             token: string;
@@ -26406,28 +26434,6 @@ export interface components {
             /** Format: uuid */
             fileId: string;
             fileName: string;
-        };
-        TripReportTemplateDto: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            kind: components["schemas"]["ReportTemplateKind"];
-            body: string;
-            isDefault: boolean;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-            /** Format: int64 */
-            tripTypeId?: null | number;
-        };
-        TripReportTemplateRequest: {
-            name: string;
-            body: string;
-            isDefault: boolean;
-            kind: null | components["schemas"]["ReportTemplateKind"];
-            /** Format: int64 */
-            tripTypeId?: null | number;
         };
         TripStatisticsDto: {
             /** Format: int32 */

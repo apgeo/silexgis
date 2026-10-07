@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261007170424_RenameReportTemplates")]
+    partial class RenameReportTemplates
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2635,7 +2638,7 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.ToTable("expedition_roster", null, t =>
                         {
-                            t.HasCheckConstraint("ck_expedition_roster_dates", "to_date IS NULL OR to_date >= from_date");
+                            t.HasCheckConstraint("ck_expedition_roster_dates", "to_date IS NULL OR to_date > from_date");
                         });
                 });
 
@@ -3957,10 +3960,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<bool>("InDocuments")
                         .HasColumnType("boolean")
                         .HasColumnName("in_documents");
-
-                    b.Property<bool?>("InDocumentsChoice")
-                        .HasColumnType("boolean")
-                        .HasColumnName("in_documents_choice");
 
                     b.Property<bool>("IsBase")
                         .HasColumnType("boolean")
@@ -6807,10 +6806,7 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("CalloutState", "CalloutAlarmAt")
                         .HasDatabaseName("ix_trip_logs_callout_state_callout_alarm_at");
 
-                    b.ToTable("trip_logs", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_trip_logs_dates", "trip_date_end IS NULL OR trip_date_end > trip_date");
-                        });
+                    b.ToTable("trip_logs", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripLogParticipant", b =>

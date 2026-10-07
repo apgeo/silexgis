@@ -282,6 +282,13 @@ Vedeți [Liste de verificare și apelul de urgență](checklists-and-callout.md#
 - **Descărcarea conține o hartă a turei** — vedeți mai jos. Schița rămâne scrisă și în cuvinte,
   lângă hartă.
 - **Nicio adresă publică.** Un raport se descarcă de cineva autentificat care poate citi tura.
+- **Ca PDF, acolo unde instalarea îl poate produce.** Dacă cine administrează instalarea a
+  pornit convertorul de documente, **Descarcă PDF** apare lângă **Descarcă documentul** și vă dă
+  același raport — același model, aceeași hartă — ca PDF. Nimic din el nu se păstrează pe
+  server. Dacă butonul lipsește, instalarea nu rulează convertorul: folosiți **Tipărește** și
+  alegeți *Salvează ca PDF* în browser. Dacă convertorul nu răspunde, pagina o spune; încercați
+  din nou sau luați documentul Word. Copia **clasată pe tură** este întotdeauna un document
+  Word, pentru că pe acela îl editează clubul ulterior.
 
 Clubul poate scrie **propriul model** — descărcați-l pe cel standard (un fișier text scurt care se
 explică singur), editați-l, încărcați-l la Configurare → Modele de raport, alegeți-l. Un model

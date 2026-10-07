@@ -21,7 +21,7 @@ export const groups = {
     'TripCaveReachTests', 'TripChecklistTickTests', 'TripInvitationTests',
     'TripInvitationSubjectTests', 'TripMeetingPointTests', 'TripParticipantRoleVocabularyTests',
     'TripPlanNotificationTests', 'TripPromotionTests', 'TripReportDocumentTests',
-    'TripListGroupingTests', 'TripReportTemplateTests', 'TripRoleLinkUnitOfWorkTests',
+    'TripListGroupingTests', 'ReportTemplateTests', 'TripRoleLinkUnitOfWorkTests',
     'TripSectionSchemaTests', 'TripSilentWriteTests', 'TripStatisticsTests',
     'TripTypeVocabularyTests', 'TripTrackingTests', 'TripTrackingPublicationTests',
     'TripPastTrackTests', 'TripTrackingPicturesTests', 'TripTrackingStationNamesTests',
@@ -41,6 +41,9 @@ export const groups = {
     // One day is stored one way: folded to no end on a trip, kept as its day on a camp's
     // roster — and the calendar, the feed and the write-ups read both.
     'OneDaySpanTests',
+    // A write-up asked for as a PDF: the generated document passed through the optional
+    // conversion service, and each way of not getting one.
+    'WriteUpPdfTests',
   ],
   events: [
     'EventAccessDomainTests', 'EventAuthoringTests', 'EventInvitationTests',
@@ -56,6 +59,7 @@ export const groups = {
     'ExpeditionRosterRoleVocabularyTests', 'ExpeditionRosterTests',
     'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
     'OneDaySpanTests',
+    'WriteUpPdfTests',
   ],
   documents: [
     'ContentMetadataTests', 'DemoPdfTests', 'DocumentAccessApiTests',
@@ -71,6 +75,8 @@ export const groups = {
     // A picture a caller hands a write-up is read and redrawn beside the document writer; the
     // first is that reader on its own, the second the route that passes it a real upload.
     'SuppliedPictureTests', 'TripReportMapTests',
+    // The write-up's own caller of the conversion service sits beside the document writer.
+    'WriteUpPdfTests',
   ],
   photos: [
     'AlbumAndPublicGalleryTests', 'ExpeditionPhotographTests', 'PhotoBytesProtectionTests',
@@ -175,6 +181,9 @@ export const groups = {
   taxonomies: [
     'ExpeditionRosterRoleVocabularyTests', 'TaxonomyWideningTests', 'TermRuleSetTests',
     'TripParticipantRoleVocabularyTests', 'TripTypeVocabularyTests',
+    // A report layout is kept as a vocabulary: read by everyone, written by whoever may edit
+    // the installation's vocabularies.
+    'ReportTemplateTests',
   ],
   cabinets: ['CabinetApiTests', 'CabinetTreeTests'],
   crs: ['CrsTests', 'SpatialOptionsTests', 'WorkingSridBehaviourTests'],
@@ -396,17 +405,17 @@ export const crossCutting = {
     'MapBackgroundDocumentChoiceTests', 'MapViewTests', 'NotificationHealthTests',
     'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
     'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',
-    'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests', 'ResLinkApiTests',
-    'SeededGroupUpgradeTests', 'SpeleolocTripImportTests', 'SpeologieCatalogueTests',
-    'StagedImportTests', 'SurveyCompilationTests', 'SurveyModelTests', 'SurveySourceTests',
-    'SyncSetTests', 'TermRuleSetTests', 'TerrainActivationTests', 'TerrainBuildApiTests',
-    'TerrainBuildPipelineTests', 'TerrainDerivativeApiTests', 'TerrainProbeTests',
-    'TerrainSourceTests', 'TextExtractionPipelineTests', 'TrackingCsvImportTests',
-    'TripAndTagTests', 'TripAttendanceLimitTests', 'TripCalloutStandDownTests',
-    'TripChecklistTickTests', 'TripImportCommitTests', 'TripImportSessionTests',
-    'TripInvitationTests', 'TripOrganizingGroupGuardTests',
-    'TripParticipantRoleVocabularyTests', 'TripPromotionTests', 'TripReportDocumentTests',
-    'TripReportMapTests', 'TripReportTemplateTests', 'TripRestoreTests', 'TripStatisticsTests',
+    'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests', 'ReportTemplateTests',
+    'ResLinkApiTests', 'SeededGroupUpgradeTests', 'SpeleolocTripImportTests',
+    'SpeologieCatalogueTests', 'StagedImportTests', 'SurveyCompilationTests',
+    'SurveyModelTests', 'SurveySourceTests', 'SyncSetTests', 'TermRuleSetTests',
+    'TerrainActivationTests', 'TerrainBuildApiTests', 'TerrainBuildPipelineTests',
+    'TerrainDerivativeApiTests', 'TerrainProbeTests', 'TerrainSourceTests',
+    'TextExtractionPipelineTests', 'TrackingCsvImportTests', 'TripAndTagTests',
+    'TripAttendanceLimitTests', 'TripCalloutStandDownTests', 'TripChecklistTickTests',
+    'TripImportCommitTests', 'TripImportSessionTests', 'TripInvitationTests',
+    'TripOrganizingGroupGuardTests', 'TripParticipantRoleVocabularyTests', 'TripPromotionTests',
+    'TripReportDocumentTests', 'TripReportMapTests', 'TripRestoreTests', 'TripStatisticsTests',
     'TripTrackImportTests', 'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
     'TripTrackingTests', 'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
     'UserAdministrationTests',

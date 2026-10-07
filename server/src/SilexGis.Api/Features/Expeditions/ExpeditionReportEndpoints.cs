@@ -66,7 +66,8 @@ internal static class ExpeditionReportEndpoints
             .WithSummary(
                 "The camp written up as one document, in the layout named or the club's chosen "
                 + "one. Built from what this caller may read: a trip they may not open contributes "
-                + "nothing to it.");
+                + "nothing to it. 'format=pdf' asks for it as a PDF, which an installation "
+                + "without the document converter refuses.");
         camps.MapPost("/report", KeepAsync)
             .WithSummary(
                 "Files the write-up against the camp, superseding the last one this route "
@@ -77,9 +78,15 @@ internal static class ExpeditionReportEndpoints
     }
 
     /// <summary>The write-up as a file the caller keeps.</summary>
+    /// <param name="format">
+    /// The format it is wanted in: nothing, or <c>docx</c>, for the document this application
+    /// writes; <c>pdf</c> for that same document laid out by the installation's conversion
+    /// service, where it runs one.
+    /// </param>
     public static async Task<Results<FileContentHttpResult, ProblemHttpResult>> DownloadAsync(
         Guid id,
         Guid? templateId,
+        string? format,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -87,15 +94,22 @@ internal static class ExpeditionReportEndpoints
         FeatureProtection protection,
         ThumbnailService thumbnails,
         IDocumentWriter writer,
+        WriteUpPdfConverter pdf,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(pdf);
         var ctx = await accessAccessor.GetAsync(ct);
         var built = await BuildAsync(
-            id, templateId, db, access, ctx, ctx, userAccessor, protection, thumbnails, writer, ct);
-        return built.Problem is { } problem
-            ? problem
-            : TypedResults.File(built.Bytes!, writer.ContentType, built.FileName!);
+            id, templateId, db, access, ctx, ctx, userAccessor, protection, thumbnails, writer,
+            () => ReportDownloads.RefusalBeforeBuilding(format, pdf),
+            ct);
+        if (built.Problem is { } problem)
+        {
+            return problem;
+        }
+
+        return await ReportDownloads.AnswerAsync(built.Bytes!, built.FileName!, format, writer, pdf, ct);
     }
 
     /// <summary>
@@ -117,6 +131,7 @@ internal static class ExpeditionReportEndpoints
     public static async Task<Results<Ok<ExpeditionReportSavedDto>, ProblemHttpResult>> KeepAsync(
         Guid id,
         Guid? templateId,
+        string? format,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -151,9 +166,18 @@ internal static class ExpeditionReportEndpoints
             return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
+        // The filed copy is the word-processor document and nothing else: it is the one a club
+        // edits afterwards, and it must not depend on a service an installation may switch
+        // off. Asked only of somebody who could have filed the write-up at all.
+        if (ReportDownloads.RefusalWhenFiling(format) is { } formatRefused)
+        {
+            return formatRefused;
+        }
+
         var everyReader = await AccessContextResolver.ResolveForAnyAccountAsync(db, ct);
         var built = await BuildAsync(
-            id, templateId, db, access, ctx, everyReader, userAccessor, protection, thumbnails, writer, ct);
+            id, templateId, db, access, ctx, everyReader, userAccessor, protection, thumbnails, writer,
+            null, ct);
         if (built.Problem is { } problem)
         {
             return problem;
@@ -210,12 +234,21 @@ internal static class ExpeditionReportEndpoints
     /// <summary>The bytes of a write-up, or the refusal the camp's own read would have given.</summary>
     private readonly record struct BuiltReport(byte[]? Bytes, string? FileName, ProblemHttpResult? Problem);
 
+    /// <summary>The field titles of a trip that has no purpose, and so no form that named any.</summary>
+    private static readonly Dictionary<TripSectionKey, IReadOnlyDictionary<string, string>> NoSectionTitles = [];
+
     /// <param name="ctx">Who is asking. Decides whether there is a document at all, and nothing else.</param>
     /// <param name="reading">
     /// Whose reading the document states. The caller's own for a download; the reading any account
     /// has for a copy filed where a whole audience reaches it. Every question of who may see what —
     /// which trips are in it, which caves are named, who is listed, which photographs go in — is put
     /// to this one context and to nothing else.
+    /// </param>
+    /// <param name="formatRefusal">
+    /// What is already known to be refused about the format the caller asked for, or null on a
+    /// route that takes none. Asked only once the camp has been found readable and its layout
+    /// found, so nobody learns from the format what the plain download would not tell them, and
+    /// before anything is gathered, so a request that cannot be answered costs nothing.
     /// </param>
     private static async Task<BuiltReport> BuildAsync(
         Guid id,
@@ -228,6 +261,7 @@ internal static class ExpeditionReportEndpoints
         FeatureProtection protection,
         ThumbnailService thumbnails,
         IDocumentWriter writer,
+        Func<ProblemHttpResult?>? formatRefusal,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -250,6 +284,11 @@ internal static class ExpeditionReportEndpoints
             return new BuiltReport(null, null, ApiProblems.NotFound(ReportTemplateReads.NotFoundCode));
         }
 
+        if (formatRefusal?.Invoke() is { } unwanted)
+        {
+            return new BuiltReport(null, null, unwanted);
+        }
+
         // Read here rather than trusted: a layout is checked when it is stored, and one that has
         // since become unreadable falls back to the shipped layout so a broken row cannot stop a
         // club producing its write-ups.
@@ -259,7 +298,7 @@ internal static class ExpeditionReportEndpoints
             : ReportTemplateFormat.Parse(
                 ReportTemplateFormat.ExpeditionDefault, ReportTemplateKind.Expedition).Parts;
 
-        var trips = await TripsAsync(id, db, reading, protection, ct);
+        var trips = await TripsAsync(id, db, access, reading, protection, ct);
         var content = new ExpeditionReportContent(
             ExpeditionEndpoints.Map(camp),
             camp.CavingGroupId is { } groupId
@@ -288,6 +327,7 @@ internal static class ExpeditionReportEndpoints
     private static async Task<ExpeditionReportTrips> TripsAsync(
         Guid id,
         SilexGisDbContext db,
+        IAccessService access,
         AccessContext reading,
         FeatureProtection protection,
         CancellationToken ct)
@@ -296,22 +336,13 @@ internal static class ExpeditionReportEndpoints
             .Where(m => m.ExpeditionId == id)
             .Select(m => m.TripLogId);
 
+        // Whole rows rather than a handful of columns, because what a trip wrote about itself is
+        // decided over the trip — who may change it is a question about the row, not about a
+        // projection of it. A trip that has been deleted is not among them: the trip table hides
+        // those from every read that does not ask for them by name, and this one does not.
         var rows = await db.TripLogs.AsNoTracking()
             .VisibleTo(reading, AccessDomain.TripLogs)
             .Where(x => memberTripIds.Contains(x.Id))
-            .Select(x => new
-            {
-                x.Id,
-                x.Title,
-                x.TripDate,
-                x.TripDateEnd,
-                x.EntryTime,
-                x.ExitTime,
-                x.DepthReachedM,
-                x.LengthSurveyedM,
-                x.SurveyStations,
-                x.RopeMetres,
-            })
             .ToListAsync(ct);
         if (rows.Count == 0)
         {
@@ -319,6 +350,20 @@ internal static class ExpeditionReportEndpoints
         }
 
         var tripIds = rows.Select(x => x.Id).ToList();
+
+        // Each trip's own words, as this reading is told them. Asked of the one place that
+        // decides it for the trip's own page and its own write-up, and asked with this reading
+        // and nothing else — so a copy filed for everybody carries what a trip's own filed
+        // write-up carries, whoever pressed the button.
+        var told = await TripNarrativeReads.ForAsync(access, reading, rows, ct);
+
+        // What each purpose calls the questions on its form, so an answer is printed under the
+        // name the form that collected it gave it.
+        var typeIds = rows.Where(x => x.TripTypeId is not null).Select(x => x.TripTypeId!.Value).Distinct().ToList();
+        var sectionTitles = typeIds.Count == 0
+            ? []
+            : (await db.TripTypes.AsNoTracking().Where(t => typeIds.Contains(t.Id)).ToListAsync(ct))
+                .ToDictionary(t => t.Id, TripNarrativeComposition.SectionTitles);
 
         // People, counted distinctly per trip: a roster row is a person and a role, so somebody who
         // led and surveyed is two rows and one person, and counting rows is wrong in a way that
@@ -378,7 +423,11 @@ internal static class ExpeditionReportEndpoints
                         .Where(name => !string.IsNullOrWhiteSpace(name))
                         .Select(name => name!)
                         .Distinct(StringComparer.Ordinal),
-                ])));
+                ],
+                told[row.Id],
+                row.TripTypeId is { } typeId && sectionTitles.TryGetValue(typeId, out var titles)
+                    ? titles
+                    : NoSectionTitles)));
 
         return new ExpeditionReportTrips(trips, distinctPeople);
     }

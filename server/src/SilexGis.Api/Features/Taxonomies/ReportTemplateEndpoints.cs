@@ -10,10 +10,10 @@ using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
-namespace SilexGis.Api.Features.TripLogs;
+namespace SilexGis.Api.Features.Taxonomies;
 
-/// <summary>One club-written layout for the document a trip is written up as.</summary>
-public sealed record TripReportTemplateDto(
+/// <summary>One club-written layout for the document a trip or a camp is written up as.</summary>
+public sealed record ReportTemplateDto(
     Guid Id,
     string Name,
     ReportTemplateKind Kind,
@@ -36,12 +36,12 @@ public sealed record TripReportTemplateDto(
 /// another is named. Appended with a default so a caller that does not know of it saves a layout
 /// for any trip, which is what every layout was before.
 /// </param>
-public sealed record TripReportTemplateRequest(
+public sealed record ReportTemplateRequest(
     string Name, string Body, bool IsDefault, ReportTemplateKind? Kind, long? TripTypeId = null);
 
-public sealed class TripReportTemplateRequestValidator : AbstractValidator<TripReportTemplateRequest>
+public sealed class ReportTemplateRequestValidator : AbstractValidator<ReportTemplateRequest>
 {
-    public TripReportTemplateRequestValidator()
+    public ReportTemplateRequestValidator()
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(120);
         // Asked for rather than assumed. See the request's own note: a missing kind that fell back
@@ -61,7 +61,7 @@ public sealed class TripReportTemplateRequestValidator : AbstractValidator<TripR
 }
 
 /// <summary>
-/// The layouts a club writes its trip write-ups in.
+/// The layouts a club writes its write-ups in — a trip's and a camp's, told apart by their kind.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -78,10 +78,10 @@ public sealed class TripReportTemplateRequestValidator : AbstractValidator<TripR
 /// as a failure on the evening the bulletin is due.
 /// </para>
 /// </remarks>
-public static class TripReportTemplateEndpoints
+public static class ReportTemplateEndpoints
 {
     /// <summary>A layout that could not be read, with the faults and their line numbers in the detail.</summary>
-    public const string InvalidCode = "trip_report_template.invalid";
+    public const string InvalidCode = "report_template.invalid";
 
     /// <summary>
     /// A layout that is not there. Shared with the read that resolves a layout for a write-up, so
@@ -90,17 +90,17 @@ public static class TripReportTemplateEndpoints
     public const string NotFoundCode = ReportTemplateReads.NotFoundCode;
 
     /// <summary>A word that is not one of the kinds of thing a layout writes up.</summary>
-    public const string KindInvalidCode = "trip_report_template.kind_invalid";
+    public const string KindInvalidCode = "report_template.kind_invalid";
 
     /// <summary>A layout bound to a trip purpose that does not exist.</summary>
-    public const string TypeUnknownCode = "trip_report_template.type_unknown";
+    public const string TypeUnknownCode = "report_template.type_unknown";
 
     /// <summary>A layout bound to a trip purpose another layout is already the own layout of.</summary>
-    public const string TypeTakenCode = "trip_report_template.type_taken";
+    public const string TypeTakenCode = "report_template.type_taken";
 
-    public static RouteGroupBuilder MapTripReportTemplateEndpoints(this RouteGroupBuilder api)
+    public static RouteGroupBuilder MapReportTemplateEndpoints(this RouteGroupBuilder api)
     {
-        var templates = api.MapGroup("/trip-report-templates").WithTags("TripLogs");
+        var templates = api.MapGroup("/report-templates").WithTags("Taxonomies");
 
         templates.MapGet("/", ListAsync)
             .WithSummary(
@@ -111,10 +111,10 @@ public static class TripReportTemplateEndpoints
                 "The layout the system ships for the named kind, as a file to edit and upload "
                 + "back. It documents that kind's whole vocabulary in its own comments.");
         templates.MapPost("/", CreateAsync)
-            .WithValidation<TripReportTemplateRequest>()
+            .WithValidation<ReportTemplateRequest>()
             .WithSummary("Stores a layout, refusing one whose lines cannot be read.");
         templates.MapPut("/{id:guid}", UpdateAsync)
-            .WithValidation<TripReportTemplateRequest>()
+            .WithValidation<ReportTemplateRequest>()
             .WithSummary("Rewrites a layout, refusing one whose lines cannot be read.");
         templates.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Removes a layout; write-ups fall back to the one the system ships.");
@@ -149,7 +149,7 @@ public static class TripReportTemplateEndpoints
         return true;
     }
 
-    private static async Task<Results<Ok<List<TripReportTemplateDto>>, ProblemHttpResult>> ListAsync(
+    private static async Task<Results<Ok<List<ReportTemplateDto>>, ProblemHttpResult>> ListAsync(
         string? kind,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
@@ -166,7 +166,7 @@ public static class TripReportTemplateEndpoints
             return ApiProblems.BadRequest(KindInvalidCode, $"Unknown layout kind '{kind}'.");
         }
 
-        var rows = await db.TripReportTemplates.AsNoTracking()
+        var rows = await db.ReportTemplates.AsNoTracking()
             .Where(x => wanted == null || x.Kind == wanted)
             .OrderBy(x => x.Kind).ThenBy(x => x.Name).ThenBy(x => x.Id)
             .ToListAsync(ct);
@@ -200,8 +200,8 @@ public static class TripReportTemplateEndpoints
         return TypedResults.File(bytes, "text/plain; charset=utf-8", name);
     }
 
-    private static async Task<Results<Created<TripReportTemplateDto>, ProblemHttpResult>> CreateAsync(
-        TripReportTemplateRequest request,
+    private static async Task<Results<Created<ReportTemplateDto>, ProblemHttpResult>> CreateAsync(
+        ReportTemplateRequest request,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -225,18 +225,18 @@ public static class TripReportTemplateEndpoints
             return typeRefusal;
         }
 
-        var row = new TripReportTemplate
+        var row = new ReportTemplate
         {
             Name = request.Name.Trim(), Body = request.Body, Kind = kind, TripTypeId = request.TripTypeId,
         };
-        db.TripReportTemplates.Add(row);
+        db.ReportTemplates.Add(row);
         await SaveWithDefaultAsync(db, row, request.IsDefault, ct);
-        return TypedResults.Created($"/api/v1/trip-report-templates/{row.Id}", ToDto(row));
+        return TypedResults.Created($"/api/v1/report-templates/{row.Id}", ToDto(row));
     }
 
-    private static async Task<Results<Ok<TripReportTemplateDto>, ProblemHttpResult>> UpdateAsync(
+    private static async Task<Results<Ok<ReportTemplateDto>, ProblemHttpResult>> UpdateAsync(
         Guid id,
-        TripReportTemplateRequest request,
+        ReportTemplateRequest request,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -247,7 +247,7 @@ public static class TripReportTemplateEndpoints
             return ApiProblems.Forbidden();
         }
 
-        var row = await db.TripReportTemplates.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var row = await db.ReportTemplates.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (row is null)
         {
             return ApiProblems.NotFound(NotFoundCode);
@@ -281,13 +281,13 @@ public static class TripReportTemplateEndpoints
             return ApiProblems.Forbidden();
         }
 
-        var row = await db.TripReportTemplates.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var row = await db.ReportTemplates.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (row is null)
         {
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        db.TripReportTemplates.Remove(row);
+        db.ReportTemplates.Remove(row);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }
@@ -302,7 +302,7 @@ public static class TripReportTemplateEndpoints
     /// between them cannot leave an installation with no chosen layout.
     /// </remarks>
     private static async Task SaveWithDefaultAsync(
-        SilexGisDbContext db, TripReportTemplate row, bool isDefault, CancellationToken ct)
+        SilexGisDbContext db, ReportTemplate row, bool isDefault, CancellationToken ct)
     {
         if (!isDefault)
         {
@@ -312,7 +312,7 @@ public static class TripReportTemplateEndpoints
         }
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        var held = await db.TripReportTemplates
+        var held = await db.ReportTemplates
             .Where(x => x.IsDefault && x.Kind == row.Kind && x.Id != row.Id)
             .ToListAsync(ct);
         foreach (var other in held)
@@ -346,7 +346,7 @@ public static class TripReportTemplateEndpoints
             return ApiProblems.BadRequest(TypeUnknownCode, "There is no such trip purpose.");
         }
 
-        if (await db.TripReportTemplates.AsNoTracking().AnyAsync(x => x.TripTypeId == typeId && x.Id != exceptId, ct))
+        if (await db.ReportTemplates.AsNoTracking().AnyAsync(x => x.TripTypeId == typeId && x.Id != exceptId, ct))
         {
             return ApiProblems.Conflict(TypeTakenCode, "Another layout is already this trip purpose's own.");
         }
@@ -360,6 +360,6 @@ public static class TripReportTemplateEndpoints
         return read.Ok ? null : ApiProblems.BadRequest(InvalidCode, string.Join(" ", read.Errors));
     }
 
-    private static TripReportTemplateDto ToDto(TripReportTemplate row) =>
+    private static ReportTemplateDto ToDto(ReportTemplate row) =>
         new(row.Id, row.Name, row.Kind, row.Body, row.IsDefault, row.CreatedAt, row.UpdatedAt, row.TripTypeId);
 }

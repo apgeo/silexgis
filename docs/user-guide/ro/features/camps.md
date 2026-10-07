@@ -207,15 +207,29 @@ acestei tabere sau turelor din ea pe care le puteți citi."*
 ## Raportul
 
 **Raport**, în antetul taberei, deschide tabăra aranjată pentru citit: *Despre tabără*, *Turele*,
-*Cine a participat* și fotografiile, construite din ceea ce puteți vedea **dumneavoastră** —
-pagina o spune: *„Acest raport arată ceea ce puteți vedea dumneavoastră. Altcineva care citește
-aceeași tabără poate vedea mai mult sau mai puțin: turele din ea, persoanele, fotografiile."*
+*Ce a scris fiecare tură*, *Cine a participat* și fotografiile, construite din ceea ce puteți
+vedea **dumneavoastră** — pagina o spune: *„Acest raport arată ceea ce puteți vedea
+dumneavoastră. Altcineva care citește aceeași tabără poate vedea mai mult sau mai puțin: turele
+din ea, persoanele, fotografiile."*
+
+**Ce a scris fiecare tură** este textul propriu al fiecărei ture, sub data și titlul ei:
+relatarea, rezultatele și răspunsurile din formularul ei. Vi se arată, pentru fiecare tură, exact
+ce v-ar arăta raportul propriu al acelei ture — așa că relatarea a ceea ce a mers prost într-o
+tură apare doar dacă puteți edita acea tură, iar o tură pe care nu o puteți citi nu apare deloc.
+O tură care nu a scris nimic nu are titlu. În documentul Word aceeași parte este tipărită de
+rândul `accounts` din model; un club care nu o dorește scoate acel rând din modelul său de tabără.
 
 - **Descarcă documentul** îl salvează ca document Word, în modelul standard sau într-unul pe
   care clubul îl ține la **Configurare → Modele de raport**.
+- **Descarcă PDF** dă același document ca PDF. Apare doar acolo unde instalarea rulează
+  convertorul de documente; unde lipsește, **Tipărește** și *Salvează ca PDF* din browser este
+  calea. Nimic din PDF nu se păstrează pe server, iar copia salvată la tabără este întotdeauna
+  documentul Word.
 - **Salvează la tabără** depune documentul pe fila *Fișiere* a taberei. Copia salvată acolo poate
   fi deschisă de toți cei care pot citi tabăra, așa că este construită din ce poate vedea orice
-  cont din turele ei; copia dumneavoastră completă este descărcarea.
+  cont din turele ei — inclusiv ce a scris fiecare tură: textul unei ture este în copia salvată
+  doar așa cum îl poate citi orice cont, niciodată așa cum îl citiți dumneavoastră. Copia
+  dumneavoastră completă este descărcarea.
 - **Tipărește** folosește browserul, fără cadrul aplicației pe hârtie.
 
 ## Permisiuni și partajare

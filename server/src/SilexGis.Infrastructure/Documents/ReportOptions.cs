@@ -4,12 +4,14 @@ using SilexGis.Infrastructure.Files;
 namespace SilexGis.Infrastructure.Documents;
 
 /// <summary>
-/// The bounds on a picture somebody hands a generated write-up to be placed in it.
+/// The bounds on the two things a generated write-up takes from outside this application: a
+/// picture somebody hands it to be placed in it, and the wait for a service that turns it into
+/// a portable document.
 /// </summary>
 /// <remarks>
 /// A write-up is otherwise built entirely from what this application already holds, so these
 /// are the only numbers on that path an installation has to be able to move: they bound an
-/// upload, and an upload is the one part of it this application does not control.
+/// upload and a call to another service, the two parts of it this application does not control.
 /// </remarks>
 public sealed class ReportOptions
 {
@@ -45,4 +47,22 @@ public sealed class ReportOptions
     /// bound it exceeded.
     /// </remarks>
     public long MaxMapRequestBytes => Math.Max(0, MaxMapBytes) + FilesOptions.MultipartEnvelopeBytes;
+
+    /// <summary>
+    /// How long somebody who asked for a write-up as a portable document is kept waiting for
+    /// the conversion service, in seconds.
+    /// </summary>
+    /// <remarks>
+    /// Shorter than the service's own time limit on purpose. That limit is sized for work done
+    /// in the background on a long upload; this one is for a person watching a button spin, who
+    /// is better told "it did not answer" than left with a request held open for minutes. A
+    /// write-up is a few pages and a dozen pictures and converts in seconds on a healthy service.
+    /// </remarks>
+    public int PdfTimeoutSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// The wait as it is applied: never less than a second and never more than five minutes,
+    /// so a mistyped value can neither refuse every request nor hold one open all day.
+    /// </summary>
+    public TimeSpan PdfWait => TimeSpan.FromSeconds(Math.Clamp(PdfTimeoutSeconds, 1, 300));
 }

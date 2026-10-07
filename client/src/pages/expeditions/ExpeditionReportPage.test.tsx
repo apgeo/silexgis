@@ -4,16 +4,18 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { DownloadError } from '../../api/download.ts';
 import type { ExpeditionInfo } from '../../api/hooks.ts';
 
 const CAMP = '77777777-8888-9999-aaaa-bbbbbbbbbbbb';
 
-const { campSpy, accessSpy, canSpy, keepMutate, downloadSpy } = vi.hoisted(() => ({
+const { campSpy, accessSpy, canSpy, keepMutate, downloadSpy, fileConfigSpy } = vi.hoisted(() => ({
   campSpy: vi.fn(),
   accessSpy: vi.fn(),
   canSpy: vi.fn(),
   keepMutate: vi.fn(),
   downloadSpy: vi.fn(),
+  fileConfigSpy: vi.fn(),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
@@ -23,6 +25,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useEffectiveAccess: () => accessSpy(),
   useCan: (domain: string, action: string) => canSpy(domain, action),
   useKeepExpeditionReport: () => ({ mutate: keepMutate, isPending: false }),
+  useFileConfig: () => fileConfigSpy(),
   usePhotos: () => ({ data: { items: [] }, isPending: false }),
   parseAccessActions: (actions: string) => new Set(actions.split(',')),
 }));
@@ -39,6 +42,9 @@ vi.mock('./ExpeditionTripsTab.tsx', () => ({
 }));
 vi.mock('./ExpeditionRosterTab.tsx', () => ({
   default: () => <div>who was at the camp</div>,
+}));
+vi.mock('./ExpeditionTripAccounts.tsx', () => ({
+  default: () => <div>what each trip wrote about itself</div>,
 }));
 vi.mock('../../components/trips/TripGeometryField.tsx', () => ({
   default: () => <div>the working area, drawn</div>,
@@ -84,6 +90,8 @@ beforeEach(() => {
   canSpy.mockReturnValue(false);
   keepMutate.mockReset();
   downloadSpy.mockReset().mockResolvedValue(undefined);
+  // The ordinary installation: no service that lays a document out as a PDF.
+  fileConfigSpy.mockReset().mockReturnValue({ data: { conversionAvailable: false } });
 });
 
 describe('the camp write-up', () => {
@@ -106,6 +114,39 @@ describe('the camp write-up', () => {
 
     expect(downloadSpy).toHaveBeenCalledTimes(1);
     expect(downloadSpy.mock.calls[0][0]).toBe(`/api/v1/expeditions/${CAMP}/report?`);
+  });
+
+  /**
+   * A PDF of the write-up exists only where the installation runs the service that makes one.
+   * Where it does not, the choice is not on the page, and the document is still downloaded.
+   */
+  it('offers the write-up as a PDF only where the installation says it can make one', () => {
+    renderPage();
+    expect(screen.getByTestId('expedition-report-download')).toBeTruthy();
+    expect(screen.queryByTestId('expedition-report-download-pdf')).toBeNull();
+
+    cleanup();
+    fileConfigSpy.mockReturnValue({ data: undefined });
+    renderPage();
+    expect(screen.queryByTestId('expedition-report-download-pdf')).toBeNull();
+
+    cleanup();
+    fileConfigSpy.mockReturnValue({ data: { conversionAvailable: true } });
+    renderPage();
+    fireEvent.click(screen.getByTestId('expedition-report-download-pdf'));
+    expect(downloadSpy).toHaveBeenCalledTimes(1);
+    expect(downloadSpy.mock.calls[0][0]).toBe(`/api/v1/expeditions/${CAMP}/report?format=pdf`);
+  });
+
+  it('says that the PDF service did not answer, rather than that there is no document', async () => {
+    fileConfigSpy.mockReturnValue({ data: { conversionAvailable: true } });
+    downloadSpy.mockRejectedValue(new DownloadError(503, { code: 'report.pdf_no_answer' }));
+    renderPage();
+
+    fireEvent.click(screen.getByTestId('expedition-report-download-pdf'));
+
+    expect(await screen.findByText('did not answer in time', { exact: false })).toBeTruthy();
+    expect(screen.queryByText('The document could not be produced.')).toBeNull();
   });
 
   it('offers to file the write-up only to somebody who may change the camp and put a document in the archive', () => {
