@@ -58,7 +58,8 @@ centerlines are being withheld you are told: *"n more centerlines not shown at t
 
 Both are kept in this browser only. The same two numbers are under
 [Settings › Advanced](account-and-settings.md#survey-lines-on-the-map), which also says how
-high your installation lets the line budget go.
+high your installation lets the line budget go. Both places take the same range, so a number set
+in one is never out of range in the other.
 
 ---
 
