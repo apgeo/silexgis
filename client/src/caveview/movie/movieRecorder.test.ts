@@ -322,6 +322,7 @@ function recording(
     constants: CONSTANTS as MovieRecording['constants'],
     settings: settings(),
     trips: [TRIP],
+    excluded: new Set(),
     timeline: TIMELINE,
     surveyModelId: MODEL,
     title: 'Trip one',
@@ -405,6 +406,22 @@ describe('recordMovie', () => {
     }
     expect(fake.captured[0].markers).toEqual({ 'trip-1:ana': 'p.1', 'trip-1:bogdan': 'p.1' });
     expect(fake.captured[29].markers).toEqual({ 'trip-1:ana': 'p.2', 'trip-1:bogdan': 'p.3' });
+  });
+
+  it('records nobody the reader left out, on any frame, and the others exactly as before', async () => {
+    const everybody = fakeViewer();
+    await recordMovie(recording(everybody, fakeEncoder()));
+    const without = fakeViewer();
+    await recordMovie(recording(without, fakeEncoder(), { excluded: new Set(['trip-1:bogdan']) }));
+
+    // With nobody left out both are in the file — so the frames below lack Bogdan because he was
+    // left out, not because this trip never shows him.
+    expect(everybody.captured.every((frame) => 'trip-1:bogdan' in frame.markers)).toBe(true);
+    expect(without.captured).toHaveLength(everybody.captured.length);
+    expect(without.captured.some((frame) => 'trip-1:bogdan' in frame.markers)).toBe(false);
+    expect(without.captured.map((frame) => frame.markers['trip-1:ana'])).toEqual(
+      everybody.captured.map((frame) => frame.markers['trip-1:ana']),
+    );
   });
 
   it('samples a palette from frames spread over the movie before the first frame, then starts from the first', async () => {

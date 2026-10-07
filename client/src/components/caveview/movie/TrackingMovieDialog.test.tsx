@@ -1551,3 +1551,167 @@ describe('the preview’s party', () => {
     expect(viewer.moveLiveMarker).not.toHaveBeenCalled();
   });
 });
+
+describe('who appears in the movie', () => {
+  const ROSTER: Record<string, string> = { 'caver-1': 'Ana Popescu', 'caver-2': 'Bogdan Ionescu' };
+
+  /** A trip with two cavers on its roster, each reported at a station of the model. */
+  function tripOfTwo(tripLogId: string, title: string) {
+    const made = movieTrip(tripLogId, title);
+    const stations: Record<string, string> = { 'caver-1': 'p8.1', 'caver-2': 'p8.2' };
+    const ids = Object.keys(ROSTER);
+    return {
+      trip: {
+        ...made.trip,
+        nameOf: (caverId: string) => ROSTER[caverId] ?? '?',
+        events: ids.map((caverId, index) => ({
+          id: `${tripLogId}-event-${index}`,
+          caverId,
+          teamId: null,
+          kind: 'atStation',
+          surveyModelId: MODEL,
+          stationName: stations[caverId],
+          depthEnteredM: null,
+          note: null,
+          recordedAt: ARMED,
+        })) as unknown as TrackingEvent[],
+        tracking: {
+          ...made.trip.tracking,
+          participants: ids.map((caverId) => ({
+            caverId,
+            teamId: null,
+            lastKind: 'atStation',
+            lastRecordedAt: ARMED,
+            positionRecordedAt: ARMED,
+            stationName: stations[caverId],
+            depthM: null,
+            positionSurveyModelId: MODEL,
+          })),
+        } as unknown as TrackingState,
+      },
+      span: { ...made.span, moments: [Date.parse(ARMED)] },
+    };
+  }
+
+  const cavers = (tripLogId: string) => screen.getByTestId(`movie-trip-cavers-${tripLogId}`);
+  const unfold = (tripLogId: string) => fireEvent.click(screen.getByTestId(`movie-trip-cavers-toggle-${tripLogId}`));
+  const caverBox = (tripLogId: string, name: string) => within(cavers(tripLogId)).getByRole('checkbox', { name });
+
+  it('lists a ticked trip’s roster folded away, everybody ticked, and nothing under a trip that is not ticked', async () => {
+    reads.movie = ready(tripOfTwo('trip-a', 'Alpha'));
+    open(['trip-a']);
+
+    const toggle = await screen.findByTestId('movie-trip-cavers-toggle-trip-a');
+    expect(toggle).toHaveTextContent('Who appears: 2 of 2');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // Folded: the names are not on the screen until it is opened.
+    expect(within(cavers('trip-a')).queryAllByRole('checkbox')).toHaveLength(0);
+    expect(screen.queryByTestId('movie-trip-cavers-trip-b')).not.toBeInTheDocument();
+
+    unfold('trip-a');
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(caverBox('trip-a', 'Ana Popescu')).toBeChecked();
+    expect(caverBox('trip-a', 'Bogdan Ionescu')).toBeChecked();
+    expect(cavers('trip-a')).toHaveTextContent('it is not remembered');
+    // The roster is the trip's, not the trip's own tick box: unticking a person leaves the trip in.
+    fireEvent.click(caverBox('trip-a', 'Bogdan Ionescu'));
+    expect(within(screen.getByTestId('movie-trip-trip-a')).getAllByRole('checkbox')[0]).toBeChecked();
+    expect(toggle).toHaveTextContent('Who appears: 1 of 2');
+  });
+
+  it('takes an unticked caver off the preview and out of the file, and puts them back when ticked again', async () => {
+    const viewer = preview.viewer as ReturnType<typeof fakeViewer>;
+    reads.movie = ready(tripOfTwo('trip-a', 'Alpha'));
+    recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
+    open(['trip-a']);
+
+    // Both stand on the preview first, and a file made now has nobody left out.
+    await waitFor(() => expect(viewer.addLiveMarker).toHaveBeenCalledTimes(2));
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    expect([...recordMovie.mock.calls[0][0].excluded]).toEqual([]);
+    await waitFor(() => expect(screen.queryByTestId('movie-cancel')).not.toBeInTheDocument());
+
+    unfold('trip-a');
+    fireEvent.click(caverBox('trip-a', 'Bogdan Ionescu'));
+    await waitFor(() => expect(viewer.removeLiveMarker).toHaveBeenCalledWith('trip-a:caver-2'));
+    expect(viewer.removeLiveMarker).not.toHaveBeenCalledWith('trip-a:caver-1');
+
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(2));
+    expect([...recordMovie.mock.calls[1][0].excluded]).toEqual(['trip-a:caver-2']);
+    await waitFor(() => expect(screen.queryByTestId('movie-cancel')).not.toBeInTheDocument());
+
+    fireEvent.click(caverBox('trip-a', 'Bogdan Ionescu'));
+    await waitFor(() => expect(viewer.addLiveMarker).toHaveBeenCalledTimes(3));
+    expect(viewer.addLiveMarker).toHaveBeenLastCalledWith('trip-a:caver-2', 'p8.2', expect.anything());
+  });
+
+  it('keeps the choice for this dialog only: not with the remembered settings, not in storage, not in the address', async () => {
+    reads.movie = ready(tripOfTwo('trip-a', 'Alpha'));
+    const address = window.location.href;
+    open(['trip-a']);
+    unfold('trip-a');
+    fireEvent.click(caverBox('trip-a', 'Bogdan Ionescu'));
+    expect(screen.getByTestId('movie-trip-cavers-toggle-trip-a')).toHaveTextContent('Who appears: 1 of 2');
+
+    // A setting changed afterwards is what writes the remembered settings: they are written here,
+    // so what is checked below is a store that has just been saved, not one nothing has touched.
+    fireEvent.click(screen.getByText('Captions'));
+    fireEvent.click(await screen.findByTestId('movie-caption-note'));
+    await waitFor(() => expect(useUiPrefsStore.getState().movieSettings?.captions.note).toBe(true));
+
+    const remembered = JSON.stringify(useUiPrefsStore.getState());
+    const stored = Object.keys(localStorage).map((key) => `${key}=${localStorage.getItem(key)}`).join('\n');
+    const session = Object.keys(sessionStorage).map((key) => `${key}=${sessionStorage.getItem(key)}`).join('\n');
+    // The store did reach the browser's storage, with the setting just changed in it.
+    expect(stored).toContain('"note":true');
+    for (const held of [remembered, stored, session, window.location.href]) {
+      expect(held).not.toContain('caver-2');
+      expect(held).not.toContain('Bogdan');
+    }
+    expect(window.location.href).toBe(address);
+  });
+
+  it('starts a trip with everybody again once it has been taken out of the movie and put back', async () => {
+    reads.movie = ready(tripOfTwo('trip-a', 'Alpha'), tripOfTwo('trip-b', 'Bravo'));
+    open(['trip-a', 'trip-b']);
+    unfold('trip-a');
+    unfold('trip-b');
+    fireEvent.click(caverBox('trip-a', 'Bogdan Ionescu'));
+    fireEvent.click(caverBox('trip-b', 'Ana Popescu'));
+    expect(screen.getByTestId('movie-trip-cavers-toggle-trip-a')).toHaveTextContent('Who appears: 1 of 2');
+    expect(screen.getByTestId('movie-trip-cavers-toggle-trip-b')).toHaveTextContent('Who appears: 1 of 2');
+
+    const alpha = within(screen.getByTestId('movie-trip-trip-a')).getAllByRole('checkbox')[0];
+    fireEvent.click(alpha);
+    expect(screen.queryByTestId('movie-trip-cavers-trip-a')).not.toBeInTheDocument();
+    fireEvent.click(alpha);
+    expect(screen.getByTestId('movie-trip-cavers-toggle-trip-a')).toHaveTextContent('Who appears: 2 of 2');
+    // The other trip's choice is its own, and stands.
+    expect(screen.getByTestId('movie-trip-cavers-toggle-trip-b')).toHaveTextContent('Who appears: 1 of 2');
+  });
+});
+
+describe('the time-lapse figure', () => {
+  it('has a switch of its own, on to begin with, that goes with the clock’s', async () => {
+    open(['trip-a']);
+    fireEvent.click(await screen.findByText('Captions'));
+    const speed = await screen.findByTestId('movie-caption-speed');
+    expect(speed).toBeChecked();
+    expect(speed).not.toBeDisabled();
+
+    fireEvent.click(speed);
+    await waitFor(() => expect(useUiPrefsStore.getState().movieSettings?.captions.speed).toBe(false));
+    fireEvent.click(speed);
+    await waitFor(() => expect(useUiPrefsStore.getState().movieSettings?.captions.speed).toBe(true));
+
+    // With no clock there is nothing for the figure to stand beside.
+    fireEvent.click(screen.getByRole('switch', { name: 'Clock' }));
+    await waitFor(() => expect(speed).toBeDisabled());
+    expect(useUiPrefsStore.getState().movieSettings?.captions.speed).toBe(true);
+  });
+});

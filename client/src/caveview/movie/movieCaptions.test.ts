@@ -8,11 +8,14 @@ import {
   movieCaptionColors,
   movieCaptionsAt,
   movieClockText,
+  movieClockWithSpeed,
+  movieSpeedText,
   movieTitle,
   type MovieCaptions,
 } from './movieCaptions.ts';
 import { MOVIE_MARKER_PALETTE } from './movieParty.ts';
-import { DEFAULT_MOVIE_SETTINGS } from './movieSettings.ts';
+import { DEFAULT_MOVIE_SETTINGS, type MovieSettings } from './movieSettings.ts';
+import { buildMovieTimeline } from './movieTimeline.ts';
 
 /** The test environment's 2D stub, with the calls this module makes recorded. */
 function recordingContext() {
@@ -102,7 +105,8 @@ describe('drawMovieCaptions', () => {
 
   it('names the legend entries it left out in the reader’s language', () => {
     const party = { legend: [], note: null };
-    const made = movieCaptionsAt(DEFAULT_MOVIE_SETTINGS, null, party, { kind: 'elapsed', ms: 0, totalMs: 0 }, 0, {
+    const timeline = { length: 0, clock: () => ({ kind: 'elapsed' as const, ms: 0, totalMs: 0 }) };
+    const made = movieCaptionsAt(DEFAULT_MOVIE_SETTINGS, null, party, timeline, { position: 0, progress: 0 }, {
       t: i18n.t.bind(i18n),
       language: 'en',
     });
@@ -173,6 +177,100 @@ describe('movieClockText', () => {
   it('reads a calendar moment in the reader’s language, with no coordinate or altitude in it', () => {
     const text = movieClockText({ kind: 'calendar', at: Date.parse('2026-09-12T10:30:00Z') }, i18n.t, 'en');
     expect(text).toMatch(/2026/);
+  });
+});
+
+describe('movieSpeedText', () => {
+  it('rounds to what a reader can use: tens from a hundred, whole from ten, one decimal below', () => {
+    expect(movieSpeedText(237, 'en')).toBe('240');
+    expect(movieSpeedText(104.9, 'en')).toBe('100');
+    expect(movieSpeedText(86.4, 'en')).toBe('86');
+    expect(movieSpeedText(12.5, 'en')).toBe('13');
+    expect(movieSpeedText(2.54, 'en')).toBe('2.5');
+    expect(movieSpeedText(4, 'en')).toBe('4');
+  });
+
+  it('cuts between the forms on the figure shown, so none reads 99.7 or 10.0', () => {
+    expect(movieSpeedText(99.7, 'en')).toBe('100');
+    expect(movieSpeedText(9.96, 'en')).toBe('10');
+    expect(movieSpeedText(9.94, 'en')).toBe('9.9');
+  });
+
+  it('keeps a movie slower than life readable instead of rounding it to nothing', () => {
+    expect(movieSpeedText(0.333, 'en')).toBe('0.33');
+    expect(movieSpeedText(0.042, 'en')).toBe('0.042');
+  });
+
+  it('says nothing within a twentieth of life speed, and nothing for no figure at all', () => {
+    for (const about of [0.95, 1, 1.04, 1.05]) {
+      expect(movieSpeedText(about, 'en')).toBeNull();
+    }
+    expect(movieSpeedText(0.94, 'en')).toBe('0.94');
+    expect(movieSpeedText(1.06, 'en')).toBe('1.1');
+    for (const none of [null, 0, -3, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(movieSpeedText(none, 'en')).toBeNull();
+    }
+  });
+
+  it('writes the decimal mark and the thousands the reader’s language uses', () => {
+    expect(movieSpeedText(2.54, 'ro')).toBe('2,5');
+    expect(movieSpeedText(14_403, 'en')).toBe('14,400');
+    expect(movieSpeedText(14_403, 'ro')).toBe('14.400');
+  });
+});
+
+describe('the time-lapse figure in the clock caption', () => {
+  const HOUR = 3_600_000;
+  const T0 = Date.parse('2026-09-12T08:00:00Z');
+  const words = { t: i18n.t.bind(i18n), language: 'en' };
+  const party = { legend: [], note: null };
+  const twoHours = (mode: 'calendar' | 'together') =>
+    buildMovieTimeline([{ tripLogId: 'trip-a', window: { from: T0, to: T0 + 2 * HOUR }, moments: [] }], {
+      mode,
+      quietGapMs: null,
+    })!;
+  /** 30 s at 25 frames a second: two hours go by 240 times faster than life, near enough. */
+  const chosen = (captions: Partial<MovieSettings['captions']> = {}, output: Partial<MovieSettings> = {}): MovieSettings => ({
+    ...DEFAULT_MOVIE_SETTINGS,
+    fps: 25,
+    durationS: 30,
+    ...output,
+    captions: { ...DEFAULT_MOVIE_SETTINGS.captions, ...captions },
+  });
+  const clockOf = (settings: MovieSettings, mode: 'calendar' | 'together' = 'together', position = HOUR) =>
+    movieCaptionsAt(settings, null, party, twoHours(mode), { position, progress: 0.5 }, words).clock;
+
+  it('follows the clock, on by default', () => {
+    expect(DEFAULT_MOVIE_SETTINGS.captions.speed).toBe(true);
+    expect(clockOf(chosen())).toBe('Elapsed 1:00 · ×240');
+    const calendar = clockOf(chosen(), 'calendar')!;
+    expect(calendar).toMatch(/2026.* · ×240$/u);
+  });
+
+  it('is left off when its switch is, and the clock stands as it was', () => {
+    expect(clockOf(chosen({ speed: false }))).toBe('Elapsed 1:00');
+  });
+
+  it('is never drawn without the clock', () => {
+    expect(clockOf(chosen({ clock: false, speed: true }))).toBeNull();
+  });
+
+  it('is left out of a movie that runs at about life speed', () => {
+    // Two hours of trip in two hours of movie.
+    expect(clockOf(chosen({}, { fps: 5, durationS: 7200 }))).toBe('Elapsed 1:00');
+  });
+
+  it('is the same on every frame of a movie, the still frames at the end included', () => {
+    const settings = chosen();
+    const speeds = [0, 0.25 * HOUR, HOUR, 2 * HOUR].map((position) => clockOf(settings, 'together', position)!.split(' · ')[1]);
+    expect(new Set(speeds)).toEqual(new Set(['×240']));
+  });
+
+  it('is written in Romanian around the same figure, with the Romanian decimal mark', () => {
+    const t = i18n.getFixedT('ro');
+    expect(movieClockWithSpeed('Timp scurs 1:30', 2.54, t, 'ro')).toBe('Timp scurs 1:30 · ×2,5');
+    expect(movieClockWithSpeed('Timp scurs 1:30', 1, t, 'ro')).toBe('Timp scurs 1:30');
+    expect(movieClockWithSpeed('Timp scurs 1:30', null, t, 'ro')).toBe('Timp scurs 1:30');
   });
 });
 

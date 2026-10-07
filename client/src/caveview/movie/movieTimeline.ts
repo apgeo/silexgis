@@ -269,6 +269,39 @@ export function movieFrameCount(
 }
 
 /**
+ * How many times faster than life a movie's clock runs while it plays, or null when the movie has
+ * no rate to speak of.
+ *
+ * <b>One figure for the whole movie, known before any frame is drawn.</b> Consecutive frames of the
+ * replay part are a fixed step of the timeline apart and a fixed time apart on screen, so the rate
+ * is the same at every frame — which is what lets the clock caption carry it on each of them, the
+ * still frames at the end included, without the plate changing width as the movie plays.
+ *
+ * It is the timeline's length that is divided, not the trips' real span: where a quiet stretch was
+ * shortened the clock jumps over the middle of it, and a jump is an instant, not a speed. What the
+ * figure says is how fast everything that <i>is</i> shown goes by.
+ *
+ * Measured between the first and the last frame of the replay part rather than over the length
+ * the reader asked for: the last frame shows the end of the timeline, so the timeline is crossed in
+ * one frame's time less than that length. On a long movie the two agree to within a rounding; on a
+ * two-second GIF at ten frames a second they differ by a twentieth, and the caption would be wrong
+ * by that much against a stopwatch held to the clock it stands beside.
+ */
+export function movieSpeedFactor(
+  timeline: Pick<MovieTimeline, 'length'>,
+  settings: Pick<MovieSettings, 'fps' | 'durationS' | 'holdEndS'>,
+): number | null {
+  const { replayFrames } = movieFrameCount(settings);
+  // A single frame shows one moment: nothing runs, at any speed.
+  if (replayFrames < 2 || !(settings.fps > 0)) {
+    return null;
+  }
+  const playedMs = ((replayFrames - 1) * 1000) / settings.fps;
+  const factor = timeline.length / playedMs;
+  return Number.isFinite(factor) && factor > 0 ? factor : null;
+}
+
+/**
  * The sign of an azimuth step that turns the picture clockwise.
  *
  * "Clockwise" is said of what the reader sees: the model turning like a clock's hands, seen from

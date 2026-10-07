@@ -3,7 +3,7 @@ import type { TFunction } from 'i18next';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
 import { MOVIE_MARKER_PALETTE, type MovieLegendEntry, type MovieParty } from './movieParty.ts';
 import type { MovieSettings } from './movieSettings.ts';
-import type { MovieClock } from './movieTimeline.ts';
+import { movieSpeedFactor, type MovieClock, type MovieFrame, type MovieTimeline } from './movieTimeline.ts';
 
 /**
  * The words and marks an exported movie carries over the model: a title, the replay clock, the
@@ -274,6 +274,49 @@ export function movieClockText(clock: MovieClock, t: TFunction, language: string
 }
 
 /**
+ * A time-lapse factor as the clock caption writes it — `240` of "×240" — or null when the movie runs
+ * at about the pace things happened at, where the figure would say nothing.
+ *
+ * <b>Rounded to what a reader can use.</b> The figure answers "how much faster than life is this?",
+ * and nobody reads 237 differently from 240: from a hundred up it is given to the nearest ten, from
+ * ten up as a whole number, below that to one decimal — and below one, where one decimal would turn
+ * a third into 0.3 and a twentieth into nothing at all, to two figures that mean something. Rounded
+ * first and written second, so the cut between the forms is made on the number shown: 99.7 is
+ * written 100, never 99.7 rounded as a small number.
+ *
+ * Within a twentieth of life speed nothing is written. "×1" on a movie that plays as it happened is
+ * a caption about the absence of something.
+ *
+ * Written in the reader's language, since the decimal mark is not the same in all of them.
+ */
+export function movieSpeedText(factor: number | null, language: string): string | null {
+  if (factor === null || !Number.isFinite(factor) || factor <= 0 || (factor >= 0.95 && factor <= 1.05)) {
+    return null;
+  }
+  const whole = Math.round(factor);
+  if (whole >= 100) {
+    return (Math.round(factor / 10) * 10).toLocaleString(language, { maximumFractionDigits: 0 });
+  }
+  if (Math.round(factor * 10) / 10 >= 10) {
+    return whole.toLocaleString(language, { maximumFractionDigits: 0 });
+  }
+  if (factor >= 1) {
+    return factor.toLocaleString(language, { maximumFractionDigits: 1 });
+  }
+  return factor.toLocaleString(language, { maximumSignificantDigits: 2 });
+}
+
+/**
+ * The clock caption with the time-lapse factor after it, when there is one to write: "… · ×240".
+ * The factor is never drawn by itself — it qualifies the clock, and beside nothing it is a bare
+ * number — so this takes the clock's own text and hands it back unchanged when no factor applies.
+ */
+export function movieClockWithSpeed(clock: string, factor: number | null, t: TFunction, language: string): string {
+  const speed = movieSpeedText(factor, language);
+  return speed === null ? clock : t('caveview.movie.clockSpeed', { clock, factor: speed });
+}
+
+/**
  * The title a movie is given when the reader wrote none.
  *
  * One trip is called by its own title. Several are called by where and when: the place, and the
@@ -311,19 +354,29 @@ export function movieTitle(
 /**
  * The captions of one frame, with what the reader switched off left out — the one composition the
  * export and the preview both draw, so the preview shows the captions the file will carry.
+ *
+ * The frame is named by where it stands on the movie's own timeline, and the clock and the
+ * time-lapse factor are both read from that timeline here: a caller that worked the factor out for
+ * itself could caption a file recorded along one timeline with the rate of another.
  */
 export function movieCaptionsAt(
   settings: MovieSettings,
   title: string | null,
   party: Pick<MovieParty, 'legend' | 'note'>,
-  clock: MovieClock,
-  progress: number,
+  timeline: Pick<MovieTimeline, 'length' | 'clock'>,
+  frame: Pick<MovieFrame, 'position' | 'progress'>,
   words: { t: TFunction; language: string },
 ): MovieCaptions {
   const { captions } = settings;
+  const { progress } = frame;
+  const clock = movieClockText(timeline.clock(frame.position), words.t, words.language);
   return {
     title,
-    clock: captions.clock ? movieClockText(clock, words.t, words.language) : null,
+    clock: !captions.clock
+      ? null
+      : captions.speed
+        ? movieClockWithSpeed(clock, movieSpeedFactor(timeline, settings), words.t, words.language)
+        : clock,
     legend: captions.legend ? party.legend : [],
     legendMore: (hidden) => words.t('caveview.movie.legendMore', { count: hidden }),
     progress: captions.progress ? progress : null,

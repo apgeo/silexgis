@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { CaretRightOutlined, PauseOutlined, VideoCameraOutlined } from '@ant-design/icons';
+import {
+  CaretRightOutlined,
+  DownOutlined,
+  PauseOutlined,
+  RightOutlined,
+  VideoCameraOutlined,
+} from '@ant-design/icons';
 import { Alert, App, Button, Checkbox, Flex, Modal, Progress, Slider, Spin, Typography } from 'antd';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,7 +34,12 @@ import {
   movieGifCalibrationFrom,
   normaliseMovieGifCalibration,
 } from '../../../caveview/movie/movieOutput.ts';
-import { movieParty, type MovieParty } from '../../../caveview/movie/movieParty.ts';
+import {
+  movieMarkerId,
+  movieMarkerIsOfTrip,
+  movieParty,
+  type MovieParty,
+} from '../../../caveview/movie/movieParty.ts';
 import { isMovieAbort, recordMovie, type MovieProgress } from '../../../caveview/movie/movieRecorder.ts';
 import {
   DEFAULT_MOVIE_SETTINGS,
@@ -210,6 +221,9 @@ interface ExportRun {
 
 const PREVIEW_TRAIL_PREFIX = 'movie-preview:';
 
+/** Nobody left out: what every movie starts with. */
+const NOBODY: ReadonlySet<string> = new Set();
+
 /**
  * Past this many pixels rendered — frames times the frame's area — a video export is warned about
  * before it starts: about 1,100 frames at 1280 × 720, or 36 seconds of it at 30 frames a second.
@@ -353,10 +367,47 @@ function MovieDialogBody({
   // An export of a trip under way reads its log again first; when that read cannot reach the log's
   // end the export is held back, in the words every unreadable log is refused in.
   const [liveLogFailed, setLiveLogFailed] = useState(false);
+  // ---- who appears ----
+  // The markers the reader left out of this movie. Held here and nowhere else — not with the
+  // remembered settings, not in the address, not in any storage: a list of the people somebody
+  // chose to leave out, kept after the movie was made, would be a record about those people.
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(NOBODY);
+  const showCaver = useCallback((tripLogId: string, caverId: string, shown: boolean) => {
+    const id = movieMarkerId(tripLogId, caverId);
+    setExcluded((before) => {
+      if (before.has(id) !== shown) {
+        return before;
+      }
+      const next = new Set(before);
+      if (shown) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
   const chooseTrips = useCallback((ids: readonly string[]) => {
     setLiveLogFailed(false);
     setTripIds(ids);
+    // A trip taken out of the movie takes its choice of people with it: ticked again, it starts
+    // with everybody, as every trip does.
+    setExcluded((before) => {
+      const kept = [...before].filter((marker) => ids.some((id) => movieMarkerIsOfTrip(marker, id)));
+      return kept.length === before.size ? before : new Set(kept);
+    });
   }, []);
+  // Each ready trip's roster as the picker lists it, by the names the trip's own page gives.
+  const rosters = useMemo(
+    () =>
+      new Map(
+        movie.trips.map((trip) => [
+          trip.tripLogId,
+          trip.tracking.participants.map((person) => ({ caverId: person.caverId, name: trip.nameOf(person.caverId) })),
+        ]),
+      ),
+    [movie.trips],
+  );
   const frames = useMemo(() => (timeline === null ? null : movieFrames(timeline, settings)), [timeline, settings]);
   const frameCount = movieFrameCount(settings).count;
   const frameSize = movieSize(settings);
@@ -540,6 +591,7 @@ function MovieDialogBody({
         : movieParty(movie.trips, timeline.instants(frames.frame(index).position), surveyModelId, {
             settings,
             ...words,
+            excluded,
           });
     partyRef.current = party;
     drawnRef.current = syncLiveMarkers(viewer, drawnRef.current, party?.markers ?? new Map(), {
@@ -578,7 +630,7 @@ function MovieDialogBody({
           context,
           canvas.width,
           canvas.height,
-          movieCaptionsAt(settings, title, party, timeline.clock(frame.position), frame.progress, words),
+          movieCaptionsAt(settings, title, party, timeline, frame, words),
         );
       }
     }
@@ -592,6 +644,7 @@ function MovieDialogBody({
     surveyModelId,
     settings,
     words,
+    excluded,
     title,
     playing,
     clusterLabel,
@@ -618,14 +671,15 @@ function MovieDialogBody({
     const party = movieParty(movie.trips, timeline.instants(frame.position), surveyModelId, {
       settings,
       ...words,
+      excluded,
     });
     drawMovieCaptions(
       context,
       canvas.width,
       canvas.height,
-      movieCaptionsAt(settings, title, party, timeline.clock(frame.position), frame.progress, words),
+      movieCaptionsAt(settings, title, party, timeline, frame, words),
     );
-  }, [recording, recordedFrame, timeline, frames, movie.trips, surveyModelId, settings, words, title]);
+  }, [recording, recordedFrame, timeline, frames, movie.trips, surveyModelId, settings, words, excluded, title]);
 
   // ---- what the file will be called ----
   // Its name is shown before the export, not only said afterwards: with the title caption on it
@@ -707,6 +761,7 @@ function MovieDialogBody({
         constants: handle.cv2,
         settings,
         trips,
+        excluded,
         timeline: recorded,
         surveyModelId,
         title,
@@ -783,6 +838,9 @@ function MovieDialogBody({
         tripsFailed={movie.failed}
         logFailed={movie.logFailed}
         newReports={newReports}
+        rosters={rosters}
+        excluded={excluded}
+        onShowCaver={showCaver}
         disabled={recording}
         onChange={chooseTrips}
       />
@@ -796,6 +854,9 @@ function MovieDialogBody({
       movie.failed,
       movie.logFailed,
       newReports,
+      rosters,
+      excluded,
+      showCaver,
       recording,
       chooseTrips,
     ],
@@ -1026,6 +1087,10 @@ function ExportProgress({ run }: { run: ExportRun }) {
  * whose reports cover no stretch of time, is listed and cannot be ticked, saying why; a ticked trip
  * that could not be read says so under its name, and can be unticked. A ticked trip still under way
  * says so, with how many reports have come in since the dialog first read it.
+ *
+ * Under each ticked trip that has been read is its roster, folded away, to untick the people this
+ * movie should not show. Everybody starts ticked. The line it is folded under says how many of the
+ * roster appear, so a movie with somebody left out says so without the list being opened.
  */
 function MovieTripPicker({
   tracked,
@@ -1036,6 +1101,9 @@ function MovieTripPicker({
   tripsFailed,
   logFailed,
   newReports,
+  rosters,
+  excluded,
+  onShowCaver,
   disabled,
   onChange,
 }: {
@@ -1048,10 +1116,17 @@ function MovieTripPicker({
   logFailed: readonly string[];
   /** Each trip of the movie that is still under way, with the reports arrived since it was first read. */
   newReports: ReadonlyMap<string, number>;
+  /** The roster of each trip that has been read, by trip. */
+  rosters: ReadonlyMap<string, readonly { caverId: string; name: string }[]>;
+  /** The markers left out of the movie, by the id a caver's marker has in a movie. */
+  excluded: ReadonlySet<string>;
+  onShowCaver: (tripLogId: string, caverId: string, shown: boolean) => void;
   disabled: boolean;
   onChange: (ids: readonly string[]) => void;
 }) {
   const { t, i18n } = useTranslation();
+  // Which trips' rosters are unfolded: how the list is looked at, not something about the movie.
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(NOBODY);
   if (listFailed) {
     return <Alert type="error" showIcon title={t('caveview.movie.trackedLoadError')} />;
   }
@@ -1067,6 +1142,8 @@ function MovieTripPicker({
       {tracked.map((trip) => {
         const nothing = trip.armedAt === null || empty.includes(trip.tripLogId);
         const checked = chosen.includes(trip.tripLogId);
+        const roster = rosters.get(trip.tripLogId) ?? [];
+        const open = unfolded.has(trip.tripLogId);
         const help = logFailed.includes(trip.tripLogId)
           ? t('trips.tracking.replay.logUnavailable')
           : tripsFailed.includes(trip.tripLogId)
@@ -1109,6 +1186,48 @@ function MovieTripPicker({
                 )}
               </Flex>
             </Checkbox>
+            {checked && roster.length > 0 && (
+              <div className="movie-trip-cavers" data-testid={`movie-trip-cavers-${trip.tripLogId}`}>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={open ? <DownOutlined /> : <RightOutlined />}
+                  aria-expanded={open}
+                  onClick={() =>
+                    setUnfolded((before) => {
+                      const next = new Set(before);
+                      if (!next.delete(trip.tripLogId)) {
+                        next.add(trip.tripLogId);
+                      }
+                      return next;
+                    })
+                  }
+                  data-testid={`movie-trip-cavers-toggle-${trip.tripLogId}`}
+                >
+                  {t('caveview.movie.whoAppears', {
+                    shown: roster.filter((person) => !excluded.has(movieMarkerId(trip.tripLogId, person.caverId))).length,
+                    total: roster.length,
+                  })}
+                </Button>
+                {open && (
+                  <Flex vertical gap={2} className="movie-trip-cavers-list">
+                    <Typography.Text type="secondary" className="movie-setting-help">
+                      {t('caveview.movie.whoAppearsHelp')}
+                    </Typography.Text>
+                    {roster.map((person) => (
+                      <Checkbox
+                        key={person.caverId}
+                        checked={!excluded.has(movieMarkerId(trip.tripLogId, person.caverId))}
+                        onChange={(event) => onShowCaver(trip.tripLogId, person.caverId, event.target.checked)}
+                        data-testid={`movie-caver-${trip.tripLogId}-${person.caverId}`}
+                      >
+                        {person.name}
+                      </Checkbox>
+                    ))}
+                  </Flex>
+                )}
+              </div>
+            )}
           </div>
         );
       })}

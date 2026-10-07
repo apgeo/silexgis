@@ -110,6 +110,11 @@ export interface MovieSettings {
     /** '' means the title is composed from the trips. */
     titleText: string;
     clock: boolean;
+    /**
+     * Whether the clock says how many times faster than life the movie runs. Part of the clock's
+     * caption, so it is drawn only while the clock is.
+     */
+    speed: boolean;
     legend: boolean;
     progress: boolean;
     note: boolean;
@@ -219,6 +224,7 @@ export const DEFAULT_MOVIE_SETTINGS: MovieSettings = {
     title: true,
     titleText: '',
     clock: true,
+    speed: true,
     legend: true,
     progress: true,
     note: false,
@@ -363,6 +369,7 @@ export function normaliseMovieSettings(raw: unknown): MovieSettings {
       title: flag(captions.title, d.captions.title),
       titleText: typeof captions.titleText === 'string' ? captions.titleText.slice(0, 200) : d.captions.titleText,
       clock: flag(captions.clock, d.captions.clock),
+      speed: flag(captions.speed, d.captions.speed),
       legend: flag(captions.legend, d.captions.legend),
       progress: flag(captions.progress, d.captions.progress),
       note: flag(captions.note, d.captions.note),

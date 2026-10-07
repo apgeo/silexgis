@@ -79,6 +79,11 @@ export interface MovieRecording {
   settings: MovieSettings;
   /** In the order the reader chose them, which is what keeps each trip's colour. */
   trips: readonly MovieTripData[];
+  /**
+   * The markers the reader left out of this movie, by the id a caver's marker has in a movie.
+   * Required, so that a caller cannot record everybody by forgetting to say who was left out.
+   */
+  excluded: ReadonlySet<string>;
   timeline: MovieTimeline;
   surveyModelId: string;
   /** The title caption, as the preview draws it; null when the caption is off. */
@@ -159,6 +164,7 @@ export async function recordMovie(recording: MovieRecording): Promise<Blob> {
     constants,
     settings,
     trips,
+    excluded,
     timeline,
     surveyModelId,
     title,
@@ -289,6 +295,7 @@ export async function recordMovie(recording: MovieRecording): Promise<Blob> {
         t: words.t,
         language: words.language,
         today: words.today,
+        excluded,
       });
       // Set before the markers move, so the groups their moves form are named by this frame's party.
       viewer.setLiveMarkerClusterLabel((markers) => party.clusterLabel(markers.map((marker) => marker.id)));
@@ -304,7 +311,7 @@ export async function recordMovie(recording: MovieRecording): Promise<Blob> {
         context,
         width,
         height,
-        movieCaptionsAt(settings, title, party, timeline.clock(frame.position), frame.progress, words),
+        movieCaptionsAt(settings, title, party, timeline, frame, words),
       );
     };
 

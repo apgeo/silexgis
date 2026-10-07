@@ -80,6 +80,14 @@ describe('normaliseMovieSettings', () => {
     expect(DEFAULT_MOVIE_SETTINGS.captions.note).toBe(false);
   });
 
+  it('says how fast the movie runs unless told not to, and keeps the answer either way', () => {
+    expect(DEFAULT_MOVIE_SETTINGS.captions.speed).toBe(true);
+    // Settings remembered before the figure existed have no answer: they get the default.
+    expect(normaliseMovieSettings({ captions: { clock: true } }).captions.speed).toBe(true);
+    expect(normaliseMovieSettings({ captions: { speed: false } }).captions.speed).toBe(false);
+    expect(normaliseMovieSettings({ captions: { speed: 'no' } }).captions.speed).toBe(true);
+  });
+
   it('names cavers by their first name unless asked otherwise', () => {
     expect(DEFAULT_MOVIE_SETTINGS.cavers.labels).toBe('first');
     for (const labels of ['first', 'full', 'initials', 'off'] as const) {

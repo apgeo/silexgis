@@ -701,6 +701,16 @@ export default function MovieSettingsForm({
           onChange={(clock) => patch('captions', { clock })}
         />
       </Row>
+      <Row label={t('caveview.movie.captionSpeed')} help={t('caveview.movie.captionSpeedHelp')}>
+        <Switch
+          // The figure is part of the clock's caption, so with the clock off there is nothing to switch.
+          disabled={disabled || !captions.clock}
+          checked={captions.speed}
+          onChange={(speed) => patch('captions', { speed })}
+          data-testid="movie-caption-speed"
+          aria-label={t('caveview.movie.captionSpeed')}
+        />
+      </Row>
       <Row label={t('caveview.movie.captionLegend')}>
         <Switch
           aria-label={t('caveview.movie.captionLegend')}

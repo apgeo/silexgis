@@ -52,6 +52,15 @@
   margin-top: 2px;
 }
 
+/* A trip's roster, set in under the trip's own tick box so it reads as part of that trip. */
+.movie-trip-cavers {
+  margin-left: 24px;
+}
+
+.movie-trip-cavers-list {
+  padding: 2px 0 4px 8px;
+}
+
 .movie-layers {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

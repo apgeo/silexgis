@@ -7,6 +7,7 @@ import { DEFAULT_MOVIE_SETTINGS, type MovieSettings } from './movieSettings.ts';
 import {
   MOVIE_MARKER_PALETTE,
   movieMarkerId,
+  movieMarkerIsOfTrip,
   movieParty,
   type MovieTripData,
 } from './movieParty.ts';
@@ -91,8 +92,12 @@ function settings(cavers: Partial<MovieSettings['cavers']> = {}, captions: Parti
   };
 }
 
-const partyOf = (trips: MovieTripData[], s: MovieSettings = settings(), instants = trips.map(() => LATE)) =>
-  movieParty(trips, instants, MODEL, { settings: s, t: i18n.t, language: 'en', today: 'never' });
+const partyOf = (
+  trips: MovieTripData[],
+  s: MovieSettings = settings(),
+  instants = trips.map(() => LATE),
+  excluded?: ReadonlySet<string>,
+) => movieParty(trips, instants, MODEL, { settings: s, t: i18n.t, language: 'en', today: 'never', excluded });
 
 describe('movieParty', () => {
   it('draws only cavers placed at a station of this model', () => {
@@ -389,5 +394,118 @@ describe('the marker palette', () => {
         expect(apart(color, other), `${color} and ${other}`).toBeGreaterThan(30);
       }
     }
+  });
+});
+
+describe('movieParty — somebody left out of the movie', () => {
+  const without = (...ids: string[]) => new Set(ids);
+
+  it('draws no marker and no trail for them, and everybody else exactly as before', () => {
+    const one = trip('trip-1', 'One', state([ANA, BOGDAN]), [
+      event({ caverId: ANA, stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ caverId: ANA, stationName: 'p.2', recordedAt: '2026-09-12T10:00:00Z' }),
+      event({ caverId: BOGDAN, stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ caverId: BOGDAN, stationName: 'p.3', recordedAt: '2026-09-12T10:00:00Z' }),
+    ]);
+    const trails = settings({ trails: true });
+    const everybody = partyOf([one], trails);
+    // Both are drawn, with a trail each, when nobody is left out — so what is missing below is
+    // missing because of the choice, not because this trip never shows Bogdan.
+    expect([...everybody.markers.keys()]).toEqual(['trip-1:caver-ana', 'trip-1:caver-bogdan']);
+    expect([...everybody.trails.keys()]).toEqual(['trip-1:caver-ana', 'trip-1:caver-bogdan']);
+
+    const party = partyOf([one], trails, [LATE], without(movieMarkerId('trip-1', BOGDAN)));
+    expect([...party.markers.keys()]).toEqual(['trip-1:caver-ana']);
+    expect([...party.trails.keys()]).toEqual(['trip-1:caver-ana']);
+    expect(party.markers.get('trip-1:caver-ana')).toEqual(everybody.markers.get('trip-1:caver-ana'));
+    expect(party.trails.get('trip-1:caver-ana')).toEqual(everybody.trails.get('trip-1:caver-ana'));
+    // A group of markers at one station is named without them too.
+    expect(party.clusterLabel(['trip-1:caver-ana', 'trip-1:caver-bogdan'])).toEqual(['Ana']);
+  });
+
+  it('leaves one trip’s caver out and keeps the same person on another trip', () => {
+    const log = [event({ caverId: ANA, stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' })];
+    const trips = [trip('trip-1', 'One', state([ANA]), log), trip('trip-2', 'Two', state([ANA]), log)];
+    const party = partyOf(trips, settings(), [LATE, LATE], without(movieMarkerId('trip-1', ANA)));
+    expect([...party.markers.keys()]).toEqual(['trip-2:caver-ana']);
+    expect(movieMarkerIsOfTrip('trip-1:caver-ana', 'trip-1')).toBe(true);
+    expect(movieMarkerIsOfTrip('trip-1:caver-ana', 'trip-2')).toBe(false);
+    // One trip's id that begins with another's is still another trip.
+    expect(movieMarkerIsOfTrip('trip-10:caver-ana', 'trip-1')).toBe(false);
+  });
+
+  it('does not lengthen anybody’s label because of a person the movie does not show', () => {
+    const one = trip('trip-1', 'One', state([ANA, BOGDAN]), [
+      event({ caverId: ANA, stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ caverId: BOGDAN, stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+    ]);
+    const two: MovieTripData = {
+      ...trip('trip-2', 'Two', state(['caver-ana-dima']), [
+        event({ caverId: 'caver-ana-dima', stationName: 'p.4', recordedAt: '2026-09-12T09:00:00Z' }),
+      ]),
+      nameOf: () => 'Ana Dima',
+    };
+    // With both Anas in the movie each is told from the other.
+    const both = partyOf([one, two]);
+    expect(both.markers.get('trip-1:caver-ana')!.label).toBe('Ana P.');
+    expect(both.markers.get('trip-2:caver-ana-dima')!.label).toBe('Ana D.');
+
+    // With the second left out the first is the only Ana there is.
+    const party = partyOf([one, two], settings(), [LATE, LATE], without(movieMarkerId('trip-2', 'caver-ana-dima')));
+    expect(party.markers.has('trip-2:caver-ana-dima')).toBe(false);
+    expect(party.markers.get('trip-1:caver-ana')!.label).toBe('Ana');
+    expect(party.markers.get('trip-1:caver-bogdan')!.label).toBe('Bogdan');
+  });
+
+  it('does not caption a note they spoke: the one in force is the latest said by somebody shown', () => {
+    const one = trip('trip-1', 'One', state([ANA, BOGDAN]), [
+      event({ caverId: ANA, kind: 'note', surveyModelId: null, note: 'All well', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ caverId: BOGDAN, kind: 'note', surveyModelId: null, note: 'Turning back', recordedAt: '2026-09-12T11:00:00Z' }),
+    ]);
+    const notes = settings({}, { note: true });
+    // Bogdan's is the note in force while he is in the movie.
+    expect(partyOf([one], notes).note).toBe('Bogdan: Turning back');
+    expect(partyOf([one], notes, [LATE], without(movieMarkerId('trip-1', BOGDAN))).note).toBe('Ana: All well');
+    // Nobody shown has said anything: no note, rather than the words of somebody left out.
+    expect(partyOf([one], notes, [LATE], without(movieMarkerId('trip-1', ANA), movieMarkerId('trip-1', BOGDAN))).note).toBeNull();
+    // Unnamed, it is still theirs.
+    expect(
+      partyOf([one], settings({ labels: 'off' }, { note: true }), [LATE], without(movieMarkerId('trip-1', BOGDAN))).note,
+    ).toBe('All well');
+  });
+
+  it('changes nobody else’s colour and no line of the legend that names a trip or a team', () => {
+    const teams = [{ id: 'team-1', title: 'Echipa 1' }, { id: 'team-2', title: 'Echipa 2' }];
+    const one = trip('trip-1', 'One', state([ANA, BOGDAN], teams), [
+      event({ caverId: ANA, teamId: 'team-1', stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ caverId: BOGDAN, teamId: 'team-2', stationName: 'p.2', recordedAt: '2026-09-12T09:00:00Z' }),
+    ]);
+    const two = trip('trip-2', 'Two', state([CORA]), [
+      event({ caverId: CORA, stationName: 'p.3', recordedAt: '2026-09-12T09:00:00Z' }),
+    ]);
+    // Leaving out the whole of the first team, and the whole of the first trip.
+    const leftOut = without(movieMarkerId('trip-1', ANA));
+    for (const colourBy of ['team', 'trip'] as const) {
+      const everybody = partyOf([one, two], settings({ colourBy }));
+      const party = partyOf([one, two], settings({ colourBy }), [LATE, LATE], leftOut);
+      expect(party.markers.get('trip-1:caver-bogdan')).toEqual(everybody.markers.get('trip-1:caver-bogdan'));
+      expect(party.markers.get('trip-2:caver-cora')).toEqual(everybody.markers.get('trip-2:caver-cora'));
+      expect(party.legend.filter((entry) => entry.pinned !== true)).toEqual(
+        everybody.legend.filter((entry) => entry.pinned !== true),
+      );
+    }
+    const wholeTrip = partyOf([one, two], settings({ colourBy: 'trip' }), [LATE, LATE], without(
+      movieMarkerId('trip-1', ANA),
+      movieMarkerId('trip-1', BOGDAN),
+    ));
+    expect(wholeTrip.legend.map((entry) => entry.label)).toEqual(['One', 'Two']);
+    expect(wholeTrip.markers.get('trip-2:caver-cora')!.color).toBe(MOVIE_MARKER_PALETTE[1]);
+  });
+
+  it('is nobody when not given, and an empty set is the same as none', () => {
+    const one = trip('trip-1', 'One', state([ANA]), [
+      event({ caverId: ANA, stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+    ]);
+    expect(partyOf([one], settings(), [LATE], new Set()).markers).toEqual(partyOf([one]).markers);
   });
 });

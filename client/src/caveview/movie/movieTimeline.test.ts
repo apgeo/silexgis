@@ -7,6 +7,7 @@ import {
   movieFrames,
   movieNewReports,
   movieSpansAt,
+  movieSpeedFactor,
   movieTripIsLive,
   movieTripSpan,
   type MovieTripSpan,
@@ -247,5 +248,43 @@ describe('movieFrameCount', () => {
 
   it('never has an empty replay part', () => {
     expect(movieFrameCount(settings({ fps: 10, durationS: 0, holdEndS: 0 })).count).toBe(1);
+  });
+});
+
+describe('movieSpeedFactor', () => {
+  const twoHours = buildMovieTimeline([span('trip-a', T0, T0 + 2 * HOUR, [])], { mode: 'calendar', quietGapMs: null })!;
+
+  it('is how much of the timeline goes by in a second of the movie, between its first and last replay frames', () => {
+    // 30 s at 25 frames a second is 750 frames, the last of them showing the end: the two hours are
+    // crossed in 749 frame times.
+    const chosen = settings({ fps: 25, durationS: 30, holdEndS: 2 });
+    expect(movieSpeedFactor(twoHours, chosen)).toBeCloseTo((2 * HOUR) / ((749 * 1000) / 25), 9);
+    // Which is what the schedule's own frames say: one frame's step of the timeline over one frame's time.
+    const frames = movieFrames(twoHours, chosen);
+    const step = frames.frame(1).position - frames.frame(0).position;
+    expect(movieSpeedFactor(twoHours, chosen)).toBeCloseTo(step / (1000 / 25), 9);
+  });
+
+  it('is the same on every frame: it reads nothing but the timeline’s length and the settings', () => {
+    const chosen = settings({ fps: 10, durationS: 10, holdEndS: 5 });
+    expect(movieSpeedFactor({ length: twoHours.length }, chosen)).toBe(movieSpeedFactor(twoHours, chosen));
+    // The still frames at the end add nothing to it.
+    expect(movieSpeedFactor(twoHours, { ...chosen, holdEndS: 0 })).toBe(movieSpeedFactor(twoHours, chosen));
+  });
+
+  it('is the rate of what is shown, not of what was skipped: a shortened quiet stretch lowers it', () => {
+    // Twenty minutes of reports at each end of ten hours, and nothing between them.
+    const quiet = [span('trip-a', T0, T0 + 10 * HOUR, [T0 + 20 * MIN, T0 + 10 * HOUR - 20 * MIN])];
+    const whole = buildMovieTimeline(quiet, { mode: 'calendar', quietGapMs: null })!;
+    const shortened = buildMovieTimeline(quiet, { mode: 'calendar', quietGapMs: 30 * MIN })!;
+    const chosen = settings({ fps: 10, durationS: 10 });
+    expect(shortened.length).toBe(70 * MIN);
+    expect(movieSpeedFactor(shortened, chosen)! / movieSpeedFactor(whole, chosen)!).toBeCloseTo(70 / 600, 9);
+  });
+
+  it('has no figure for a movie of one replay frame, or a timeline with no length', () => {
+    expect(movieSpeedFactor(twoHours, settings({ fps: 10, durationS: 0 }))).toBeNull();
+    expect(movieSpeedFactor({ length: 0 }, settings({ fps: 10, durationS: 10 }))).toBeNull();
+    expect(movieSpeedFactor({ length: Number.NaN }, settings({ fps: 10, durationS: 10 }))).toBeNull();
   });
 });
