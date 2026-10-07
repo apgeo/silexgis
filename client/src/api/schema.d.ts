@@ -12731,6 +12731,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The deleted trips this caller may put back — the ones they could read and could delete — most recently deleted first, each with when it went and when it will be removed for good. A trip past that moment is not listed. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfDeletedTripLogDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What this installation does with a deleted trip: how many days it stays restorable, or nothing when deleted trips are kept until somebody says otherwise. Asked before a delete so the confirmation can say what will happen. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogConfigDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-logs/{id}": {
         parameters: {
             query?: never;
@@ -12789,7 +12864,7 @@ export interface paths {
             };
         };
         post?: never;
-        /** Deletes a trip log with its links and attachments. */
+        /** Deletes a trip log (Delete permission). The trip leaves every listing, map, calendar and published address at once and answers as not found; nothing on it is removed, so it can be put back until the installation's restore window runs out. */
         delete: {
             parameters: {
                 query?: never;
@@ -12885,6 +12960,44 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Puts a deleted trip back with everything it had (the right to read it and to delete it), and answers the trip with its version. Refused once the restore window has passed. Nobody is notified. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -20379,6 +20492,22 @@ export interface components {
             deletedByUserId: null | string;
             deletedByName: null | string;
         };
+        DeletedTripLogDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: date */
+            tripDate: string;
+            /** Format: date */
+            tripDateEnd: null | string;
+            /** Format: date-time */
+            deletedAt: string;
+            /** Format: date-time */
+            restorableUntil: null | string;
+            /** Format: uuid */
+            deletedByUserId: null | string;
+            deletedByName: null | string;
+        };
         DelimitedSourceOptions: {
             delimiter?: null | string;
             latitudeColumn?: null | string;
@@ -21707,6 +21836,7 @@ export interface components {
             /** Format: uuid */
             tripLogId: null | string;
             tripTitle: null | string;
+            tripDeleted: boolean;
         };
         /** @enum {unknown} */
         ImportBatchMode: "reviewed" | "autoCreated";
@@ -22511,6 +22641,15 @@ export interface components {
         };
         PagedResultOfDeletedPhotoDto: {
             items: components["schemas"]["DeletedPhotoDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfDeletedTripLogDto: {
+            items: components["schemas"]["DeletedTripLogDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -25548,6 +25687,10 @@ export interface components {
             overlapping: boolean;
             truncated: boolean;
             groups: components["schemas"]["TripGroupDto"][];
+        };
+        TripLogConfigDto: {
+            /** Format: int32 */
+            deletedRetentionDays: null | number;
         };
         TripLogDto: {
             /** Format: uuid */

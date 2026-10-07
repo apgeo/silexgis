@@ -89,4 +89,12 @@ describe('the addresses this application hands out', () => {
     expect(matched).toBeTruthy();
     expect(matched?.at(-1)?.route.path).toBe('/trip-logs/stats');
   });
+
+  // The same shape of address, and the same risk: swallowed by the route for one trip, the list
+  // of deleted trips would open as a page saying no trip is called "deleted".
+  it('include the deleted trips page the listing sends people to', () => {
+    const matched = matchRoutes(routes, '/trip-logs/deleted');
+    expect(matched).toBeTruthy();
+    expect(matched?.at(-1)?.route.path).toBe('/trip-logs/deleted');
+  });
 });

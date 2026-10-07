@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChartOutlined,
+  DeleteOutlined,
   DownOutlined,
   DownloadOutlined,
   EnvironmentOutlined,
@@ -128,6 +129,10 @@ export default function TripLogListPage() {
   }, [location.pathname, location.search, location.state, navigate]);
 
   const canCreate = useCan('tripLogs', 'create');
+  // Whoever may delete trips, and whoever may create them: a trip's author may delete it by
+  // owning it, whether or not their account holds the right over anybody else's.
+  const mayDelete = useCan('tripLogs', 'delete');
+  const canRestore = canCreate || mayDelete;
   // Write, not read: every account may read the vocabularies, so a read check would offer these
   // to everyone. Authoring one decides what every trip under it may say.
   const canWriteTaxonomies = useCan('taxonomies', 'write');
@@ -191,6 +196,18 @@ export default function TripLogListPage() {
               from whoever is reading it, so it is never a door onto somebody else's trips —
               an account on none of them is shown that, which is a useful answer. */}
           <Button onClick={() => navigate('/trip-logs/mine')}>{t('trips.mine.link')}</Button>
+          {/* Where a deleted trip is put back from, offered to whoever could have deleted one.
+              The page itself is answered row by row from what its reader may restore, so this
+              only decides whether the door is worth showing. */}
+          {canRestore && (
+            <Button
+              icon={<DeleteOutlined />}
+              data-testid="trip-list-deleted"
+              onClick={() => navigate('/trip-logs/deleted')}
+            >
+              {t('trips.deleted.link')}
+            </Button>
+          )}
           {/* The narrowing travels; where the reader was standing in the list does not, because
               a map has no page four. */}
           <Button

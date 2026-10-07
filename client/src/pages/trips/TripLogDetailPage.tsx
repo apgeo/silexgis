@@ -34,6 +34,7 @@ import {
   useEffectiveAccess,
   useImportTripTrack,
   useTripLog,
+  useTripLogConfig,
   useTripParticipantRoles,
   useTripTypes,
   useUpdateTripLog,
@@ -55,6 +56,7 @@ import TripGallerySection from '../../components/trips/TripGallerySection.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { participantRoleLabel } from '../../components/trips/participantRoles.ts';
 import { formatTripDates, formatUndergroundTime, isMultiDay } from '../../components/trips/tripDates.ts';
+import { formatDays } from '../../components/trips/tripRestoreWindow.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 import TripFormModal from './TripFormModal.tsx';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
@@ -172,6 +174,13 @@ export default function TripLogDetailPage() {
   // bridges the first render (the server enforces regardless).
   const { data: effective } = useEffectiveAccess('tripLog', id);
   const domainFallback = useCan('tripLogs', 'write');
+  // Whoever could have deleted a trip is who a deleted one might be waiting for: an account
+  // that may delete trips, and one that may create them, since an author may delete their own.
+  const mayCreate = useCan('tripLogs', 'create');
+  const mayDelete = useCan('tripLogs', 'delete');
+  const canRestore = mayCreate || mayDelete;
+  // What this installation does with a deleted trip, asked so the confirmation can say it.
+  const { data: tripConfig } = useTripLogConfig();
   const held = effective ? parseAccessActions(effective.actions) : null;
   const [editing, setEditing] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
@@ -192,11 +201,28 @@ export default function TripLogDetailPage() {
       <Result
         status="404"
         title={t('trips.notFound')}
-        subTitle={t('trips.notFoundDetail')}
+        // A deleted trip answers exactly as one that was never there, so this page cannot know
+        // which it is looking at either. What it can do is say where a deleted one would be,
+        // to somebody who might have deleted it.
+        subTitle={
+          canRestore
+            ? `${t('trips.notFoundDetail')} ${t('trips.deleted.notFoundHint')}`
+            : t('trips.notFoundDetail')
+        }
         extra={
-          <Button type="primary" onClick={() => void navigate('/trip-logs')}>
-            {t('common.back')}
-          </Button>
+          <Flex gap={8} justify="center" wrap>
+            <Button type="primary" onClick={() => void navigate('/trip-logs')}>
+              {t('common.back')}
+            </Button>
+            {canRestore && (
+              <Button
+                data-testid="trip-not-found-deleted"
+                onClick={() => void navigate('/trip-logs/deleted')}
+              >
+                {t('trips.deleted.link')}
+              </Button>
+            )}
+          </Flex>
         }
       />
     );
@@ -236,6 +262,18 @@ export default function TripLogDetailPage() {
       message.error(t('common.saveFailed'));
     }
   };
+
+  // What the delete is about to do, in the installation's own number. Nothing is promised until
+  // the server has said: a confirmation that guessed thirty days on an installation keeping
+  // seven would be the one sentence somebody relied on.
+  const restoreHint =
+    tripConfig === undefined
+      ? undefined
+      : tripConfig.deletedRetentionDays === null
+        ? t('trips.deleted.restorable')
+        : t('trips.deleted.restorableFor', {
+            period: formatDays(tripConfig.deletedRetentionDays, i18n.resolvedLanguage),
+          });
 
   return (
     <div style={{ padding: 24, maxWidth: 900 }}>
@@ -308,8 +346,12 @@ export default function TripLogDetailPage() {
                 </Button>
               )}
               {canDelete && (
-                <Popconfirm title={t('trips.deleteConfirm')} onConfirm={() => void onDelete()}>
-                  <Button danger icon={<DeleteOutlined />}>
+                <Popconfirm
+                  title={t('trips.deleteConfirm')}
+                  description={restoreHint}
+                  onConfirm={() => void onDelete()}
+                >
+                  <Button danger icon={<DeleteOutlined />} data-testid="trip-delete">
                     {t('features.delete')}
                   </Button>
                 </Popconfirm>

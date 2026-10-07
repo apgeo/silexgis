@@ -9,10 +9,11 @@ import TripLogDetailPage from './TripLogDetailPage.tsx';
 
 const TRIP = '33333333-4444-5555-6666-777777777777';
 
-const { tripSpy, canSpy, importTrack } = vi.hoisted(() => ({
+const { tripSpy, canSpy, importTrack, configSpy } = vi.hoisted(() => ({
   tripSpy: vi.fn(),
   canSpy: vi.fn(),
   importTrack: vi.fn(),
+  configSpy: vi.fn(),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
@@ -26,6 +27,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useUpdateTripLog: () => ({ mutateAsync: vi.fn() }),
   useImportTripTrack: () => ({ mutateAsync: importTrack, isPending: false }),
   useEffectiveAccess: () => ({ data: undefined }),
+  useTripLogConfig: () => configSpy(),
   useCan: () => canSpy(),
   parseAccessActions: (actions: string) => new Set(actions.split(',')),
 }));
@@ -143,6 +145,7 @@ beforeEach(() => {
   tripSpy.mockReturnValue({ data: trip(), isPending: false });
   canSpy.mockReturnValue(false);
   importTrack.mockReset();
+  configSpy.mockReset().mockReturnValue({ data: { deletedRetentionDays: 30 } });
 });
 
 describe('the trip page', () => {
@@ -245,6 +248,64 @@ describe('the trip page', () => {
     ).toBeInTheDocument();
     expect(document.querySelector('.ant-spin')).toBeNull();
     expect(screen.queryByTestId('trip-open-report')).toBeNull();
+    // A reader who could not have deleted a trip is not pointed at a list they have no use for.
+    expect(screen.queryByTestId('trip-not-found-deleted')).toBeNull();
+  });
+
+  /**
+   * A deleted trip answers exactly as one that was never there, so the page cannot say which it
+   * is looking at. What it can do is say where a deleted one would be found, to somebody who
+   * could have deleted it — the person who followed an old link to a trip they removed last week.
+   */
+  it('points somebody who could have deleted the trip at the deleted trips', () => {
+    canSpy.mockReturnValue(true);
+    tripSpy.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    renderPage();
+
+    expect(screen.getByText(/it may still be among the deleted trips/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('trip-not-found-deleted'));
+    expect(screen.getByTestId('address').textContent).toBe('/trip-logs/deleted');
+  });
+
+  /**
+   * The confirmation says what the delete is about to do, in the installation's own number. The
+   * number is the server's: one written into the page would go on promising thirty days on an
+   * installation that keeps seven, in the one sentence somebody reads before pressing the button.
+   */
+  describe('deleting', () => {
+    const confirmation = async () => {
+      fireEvent.click(screen.getByTestId('trip-delete'));
+      return (await screen.findByRole('tooltip')).textContent ?? '';
+    };
+
+    beforeEach(() => canSpy.mockReturnValue(true));
+
+    it('says the trip can be restored and for how long, as the server reported it', async () => {
+      configSpy.mockReturnValue({ data: { deletedRetentionDays: 7 } });
+      renderPage();
+
+      const text = await confirmation();
+      expect(text).toContain('Delete this trip log?');
+      expect(text).toContain('It can be restored from Deleted trips for 7 days.');
+    });
+
+    it('names no deadline where the installation keeps deleted trips', async () => {
+      configSpy.mockReturnValue({ data: { deletedRetentionDays: null } });
+      renderPage();
+
+      const text = await confirmation();
+      expect(text).toContain('It can be restored from Deleted trips.');
+      expect(text).not.toMatch(/\bfor \d/);
+    });
+
+    it('promises nothing it has not been told yet', async () => {
+      configSpy.mockReturnValue({ data: undefined });
+      renderPage();
+
+      const text = await confirmation();
+      expect(text).toContain('Delete this trip log?');
+      expect(text).not.toContain('restored');
+    });
   });
 
   it('lets the row of page actions wrap rather than pushing the whole page sideways', () => {

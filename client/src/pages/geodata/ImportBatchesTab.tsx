@@ -8,15 +8,19 @@ import {
   useImportBatch,
   useImportBatches,
   useRevertImportBatch,
+  useTripLogConfig,
   type ImportBatch,
 } from '../../api/hooks.ts';
+import { formatDays } from '../../components/trips/tripRestoreWindow.ts';
 
 /**
  * The confirmations this account has made, newest first, each with the one action a
  * confirmation still has: undoing it.
  *
- * Reverting soft-deletes everything the confirmation created, as one unit — for the case
- * where the mapping was wrong and nobody noticed until the map looked odd.
+ * Reverting deletes everything the confirmation created, as one unit — for the case where the
+ * mapping was wrong and nobody noticed until the map looked odd. Nothing is removed by it: a
+ * trip it deleted is on the list of deleted trips and can be put back from there, and the
+ * confirmation and the lines of an undone batch both say so.
  */
 export default function ImportBatchesTab() {
   const { t, i18n } = useTranslation();
@@ -28,6 +32,23 @@ export default function ImportBatchesTab() {
   const batches = useImportBatches({ page, pageSize });
   const detail = useImportBatch(open ?? undefined);
   const revert = useRevertImportBatch();
+  // How long a deleted trip can be put back, for the undo of a batch that created trips.
+  const { data: tripConfig } = useTripLogConfig();
+
+  /**
+   * What undoing a batch does to the trips it created, for the two sources that create any.
+   * Said in the installation's own number, and not at all until the server has said it.
+   */
+  const tripsRestorable = (source: ImportBatch['source']): string | undefined => {
+    if ((source !== 'tripCsv' && source !== 'speleolocArchive') || tripConfig === undefined) {
+      return undefined;
+    }
+    return tripConfig.deletedRetentionDays === null
+      ? t('vectorImport.revertTripsRestorable')
+      : t('vectorImport.revertTripsRestorableFor', {
+          period: formatDays(tripConfig.deletedRetentionDays, i18n.resolvedLanguage),
+        });
+  };
 
   /**
    * What to call a batch in the file column. A batch that never had a file must not claim its
@@ -140,6 +161,7 @@ export default function ImportBatchesTab() {
                 row.canRevert && (
                   <Popconfirm
                     title={t('vectorImport.revertConfirm', { count: row.createdCount })}
+                    description={tripsRestorable(row.source)}
                     onConfirm={() => void onRevert(row.id)}
                     okButtonProps={{ danger: true }}
                   >
@@ -182,6 +204,7 @@ export default function ImportBatchesTab() {
                   featureDeleted?: boolean;
                   tripLogId?: string | null;
                   tripTitle?: string | null;
+                  tripDeleted?: boolean;
                 },
               ) => {
                 if (row.featureId) {
@@ -192,6 +215,20 @@ export default function ImportBatchesTab() {
                     </Flex>
                   );
                 }
+                // A deleted trip answers as not found at its own address, so the line does not
+                // link there: it says the trip is deleted and sends the reader to where it can
+                // be put back.
+                if (row.tripLogId && row.tripDeleted) {
+                  return (
+                    <Flex gap={8} align="center" wrap>
+                      <Typography.Text>{row.tripTitle ?? t('vectorImport.unnamed')}</Typography.Text>
+                      <Tag>{t('vectorImport.deletedTag')}</Tag>
+                      <Link to="/trip-logs/deleted" data-testid="import-batch-trip-restore">
+                        {t('vectorImport.tripDeletedRestore')}
+                      </Link>
+                    </Flex>
+                  );
+                }
                 if (row.tripLogId) {
                   return (
                     <Link to={`/trip-logs/${row.tripLogId}`}>
@@ -199,9 +236,8 @@ export default function ImportBatchesTab() {
                     </Link>
                   );
                 }
-                // A reverted trip keeps its title here and loses its pointer, because the trip
-                // itself is gone rather than soft-deleted. Saying what it was named is the whole
-                // reason the title is recorded on the line.
+                // A trip removed for good keeps its title here and loses its pointer. Saying what
+                // it was named is the whole reason the title is recorded on the line.
                 if (row.tripTitle) {
                   return (
                     <Flex gap={8} align="center">

@@ -38,6 +38,7 @@ const ChecklistsPage = lazy(() => import('./pages/checklists/ChecklistsPage.tsx'
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const MyTripsPage = lazy(() => import('./pages/trips/MyTripsPage.tsx'));
+const DeletedTripsPage = lazy(() => import('./pages/trips/DeletedTripsPage.tsx'));
 const TripStatsPage = lazy(() => import('./pages/trips/TripStatsPage.tsx'));
 const RegistryDistributionPage = lazy(
   () => import('./pages/statistics/RegistryDistributionPage.tsx'),
@@ -170,6 +171,7 @@ export const routes: RouteObject[] = [
           { path: '/calendar', element: <Loadable><CalendarPage /></Loadable> },
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
           { path: '/trip-logs/mine', element: <Loadable><MyTripsPage /></Loadable> },
+          { path: '/trip-logs/deleted', element: <Loadable><DeletedTripsPage /></Loadable> },
           { path: '/trip-logs/stats', element: <Loadable><TripStatsPage /></Loadable> },
           { path: '/statistics/distribution', element: <Loadable><RegistryDistributionPage /></Loadable> },
           { path: '/statistics/correlation', element: <Loadable><RegistryCorrelationPage /></Loadable> },

@@ -276,6 +276,10 @@ export const queryKeys = {
   tripLogStats: (params: TripLogFacetParams) => ['trip-logs', 'stats', params] as const,
   myTripLogs: (params: MyTripLogListParams) => ['trip-logs', 'mine', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
+  deletedTripLogs: (page: number) => ['trip-logs', 'deleted', page] as const,
+  // Outside the trip prefix on purpose: it describes the installation, so no write to a trip
+  // makes it stale, and every one of them would otherwise ask for it again.
+  tripLogConfig: ['trip-log-config'] as const,
   tripPlanDefault: ['trip-logs', 'plan-default'] as const,
   tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
   tripChecklist: (id: string) => ['trip-logs', 'checklist', id] as const,
@@ -4040,6 +4044,68 @@ export function useDeleteTripLog() {
   });
 }
 
+export type TripLogConfig = components['schemas']['TripLogConfigDto'];
+export type DeletedTripLog = components['schemas']['DeletedTripLogDto'];
+
+/**
+ * What this installation does with a deleted trip: how many days it can still be put back, or
+ * null when it is kept until somebody says otherwise. Asked so that a confirmation can say what
+ * a delete is about to do rather than recite a number the installation may have changed — which
+ * is why it is the server's answer and not a constant here. It changes only when an operator
+ * changes it, so it is held for a long while.
+ */
+export function useTripLogConfig(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripLogConfig,
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/config')),
+    staleTime: 30 * 60_000,
+    enabled,
+  });
+}
+
+/**
+ * The deleted trips this caller may put back, most recently deleted first. Which those are is
+ * decided on the server row by row — the right that deletes a trip is the right that restores
+ * it — so an account that may delete nothing is answered with an empty list rather than refused.
+ */
+export function useDeletedTripLogs(page = 1, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.deletedTripLogs(page),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/trip-logs/deleted', { params: { query: { page, pageSize: 50 } } })),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/**
+ * Puts a deleted trip back. A write that answers the trip, and finished the way every other one
+ * is: the answer is the trip as it now stands, with the version the restore produced, so the
+ * page it opens on is drawn from it and its first save needs no read in between. Everything
+ * else under the trip prefix is read again — the list it returns to, and the deleted list it
+ * has just left. An import's own page says which of its trips are deleted, so that is read
+ * again too.
+ *
+ * A refusal is news about the list the button was on: the trip's time ran out, or somebody else
+ * put it back or it has gone for good. So the deleted list is read again then as well, rather
+ * than left offering a row that can only be refused a second time.
+ */
+export function useRestoreTripLog() {
+  const written = useTripLogWritten();
+  const invalidateHistory = useInvalidateHistory();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/api/v1/trip-logs/{id}/restore', { params: { path: { id } } })),
+    onSuccess: (trip) => {
+      invalidateHistory();
+      void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      written(trip);
+    },
+    onError: () => void queryClient.invalidateQueries({ queryKey: ['trip-logs', 'deleted'] }),
+  });
+}
+
 export type TripReportTemplate = components['schemas']['TripReportTemplateDto'];
 
 /** The layouts a write-up may be built in. Every account may read them: choosing one is not editing one. */
@@ -6053,6 +6119,9 @@ export function useRevertImportBatch() {
       void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
       void queryClient.invalidateQueries({ queryKey: ['features'] });
       void queryClient.invalidateQueries({ queryKey: ['caves'] });
+      // An undo deletes the trips a batch created, so the list they leave and the list of
+      // deleted trips they arrive on are both behind.
+      void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
     },
   });
 }
