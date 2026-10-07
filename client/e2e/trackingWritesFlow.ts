@@ -83,7 +83,9 @@ const LATE_NOTE = 'E2E written up after the watch was closed';
 interface Report {
   id: string;
   caverId: string;
+  teamId: string | null;
   kind: string;
+  surveyModelId: string | null;
   stationName: string | null;
   depthEnteredM: number | null;
   note: string | null;
@@ -300,6 +302,65 @@ export async function correctImportAndReportByPlace(page: Page) {
       (await logOf()).find((row) => row.caverId === ion && row.kind === 'atDepth')?.stationName,
     )
     .toBe(DECLARED_STATION);
+
+  // ---- Taking a report off the log, and putting it back ----
+  // The report just made, because it is the one with the most to lose: a station, the depth that
+  // was asked for, and the survey both were read on. Held whole, as the log answers it, so that
+  // "back as it was" below is a comparison of every member rather than of the ones listed here.
+  const placed = (await logOf()).find((row) => row.caverId === ion && row.kind === 'atDepth')!;
+  const ionOnWatch = party.getByRole('row', { name: new RegExp(ION) });
+  const binOf = page.getByTestId(`trip-tracking-event-delete-${placed.id}`);
+  const removedFold = page.getByTestId('trip-tracking-removed');
+  // The watch places Ion where that report said, and nothing has been taken off this log yet.
+  await expect(ionOnWatch).toContainText(DECLARED_STATION, { timeout: 15_000 });
+  await expect(removedFold).toHaveCount(0);
+
+  const takeOff = async () => {
+    await binOf.click();
+    const asked = page.locator('.ant-popconfirm:visible');
+    // The confirmation says where the report goes, and no longer that it is gone for good.
+    await expect(asked).toContainText('can be put back');
+    await expect(asked).not.toContainText('for good');
+    await asked.getByRole('button', { name: 'OK' }).click();
+    // Gone from the log on the screen, from the log as the server answers it, and from the fold of
+    // the watch: Ion is no longer placed by a report that is not there.
+    await expect(binOf).toHaveCount(0, { timeout: 15_000 });
+    expect((await logOf()).some((row) => row.id === placed.id)).toBe(false);
+    await expect(ionOnWatch).not.toContainText(DECLARED_STATION, { timeout: 15_000 });
+  };
+  const isBackAsItWas = async () => {
+    await expect(binOf).toBeVisible({ timeout: 15_000 });
+    // The same report under the same id, every member as it was — its place, its moment, and not
+    // marked as corrected, since nobody corrected it.
+    expect((await logOf()).find((row) => row.id === placed.id)).toEqual(placed);
+    await expect(page.getByTestId(`trip-tracking-event-corrected-${placed.id}`)).toHaveCount(0);
+    await expect(ionOnWatch).toContainText(DECLARED_STATION, { timeout: 15_000 });
+  };
+
+  // Once by the Undo on the notice that says it went…
+  await takeOff();
+  await page.getByTestId('trip-tracking-event-undo').click();
+  await isBackAsItWas();
+  await expect(removedFold).toHaveCount(0, { timeout: 15_000 });
+
+  // …and once from the removed reports under the log, where it waits after the notice has gone.
+  await takeOff();
+  await expect(page.getByTestId('trip-tracking-removed-count')).toHaveText('Removed reports: 1', {
+    timeout: 15_000,
+  });
+  await page.getByTestId('trip-tracking-removed-count').click();
+  const waiting = page.getByTestId(`trip-tracking-removed-${placed.id}`);
+  // Shown there with the place it had: the station and the depth that was asked for.
+  await expect(waiting).toContainText(DECLARED_STATION);
+  await expect(waiting).toContainText(`Reported as ${PLACE.depthM} m down`);
+  // Destroying it is offered beside putting it back, as an act of its own. Not pressed here.
+  await expect(
+    page.getByTestId(`trip-tracking-removed-destroy-${placed.id}`),
+  ).toHaveText('Delete for good');
+  await page.getByTestId(`trip-tracking-removed-restore-${placed.id}`).click();
+  await isBackAsItWas();
+  // Nothing is left waiting, so the fold is gone with its last report.
+  await expect(removedFold).toHaveCount(0, { timeout: 15_000 });
 
   // ---- Importing the sample sheet the dialog offers ----
   const beforeImport = await logOf();
