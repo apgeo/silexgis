@@ -41,7 +41,10 @@ public static class ExpeditionRosterEndpoints
     /// <summary>A role id no row of the camp-roster vocabulary carries.</summary>
     private const string RoleUnknownCode = "expedition_roster.role_unknown";
 
-    /// <summary>A person who has no entry in the club's directory.</summary>
+    /// <summary>
+    /// An entry the club's directory does not hold. Only ever said of a person named by their
+    /// entry: one named by a name is whoever that name turns out to mean, and cannot be unknown.
+    /// </summary>
     private const string CaverUnknownCode = "expedition_roster.caver_unknown";
 
     /// <summary>
@@ -65,9 +68,13 @@ public static class ExpeditionRosterEndpoints
         roster.MapPost("/", CreateAsync).WithValidation<ExpeditionRosterEntryWriteRequest>()
             .WithSummary(
                 "Records that somebody was at this camp for a stretch of days (Write permission "
-                + "on the camp). Stays may overlap and one person may have several.");
+                + "on the camp). The person is named by their entry in the directory or by a "
+                + "name, never both; a name already in the directory means that person and a "
+                + "new one adds them. Stays may overlap and one person may have several.");
         roster.MapPut("/{entryId:long}", UpdateAsync).WithValidation<ExpeditionRosterEntryWriteRequest>()
-            .WithSummary("Rewrites one recorded stay whole (Write permission on the camp).");
+            .WithSummary(
+                "Rewrites one recorded stay whole (Write permission on the camp), naming the "
+                + "person exactly as when recording one.");
         roster.MapDelete("/{entryId:long}", DeleteAsync)
             .WithSummary("Removes one recorded stay (Write permission on the camp).");
 
@@ -177,8 +184,11 @@ public static class ExpeditionRosterEndpoints
         }
 
         var entry = new ExpeditionRosterEntry { ExpeditionId = expeditionId };
-        Apply(entry, request);
+        Apply(entry, request, await PersonOfAsync(db, request, ct));
         db.ExpeditionRoster.Add(entry);
+
+        // One save for the stay and for anybody its name added to the directory, so the two
+        // land together or not at all.
         await db.SaveChangesAsync(ct);
 
         var labels = await CaverDirectory.ResolveLabelsAsync(db, user, [entry.CaverId], ct);
@@ -231,7 +241,7 @@ public static class ExpeditionRosterEndpoints
             return problem;
         }
 
-        Apply(entry, request);
+        Apply(entry, request, await PersonOfAsync(db, request, ct));
         await db.SaveChangesAsync(ct);
 
         var labels = await CaverDirectory.ResolveLabelsAsync(db, user, [entry.CaverId], ct);
@@ -283,7 +293,10 @@ public static class ExpeditionRosterEndpoints
     private static async Task<ProblemHttpResult?> ValidateReferencesAsync(
         SilexGisDbContext db, ExpeditionRosterEntryWriteRequest request, CancellationToken ct)
     {
-        if (!await db.Cavers.AsNoTracking().AnyAsync(c => c.Id == request.CaverId, ct))
+        // Asked only of a person named by their entry. A name cannot be wrong in this way: it
+        // means whoever the directory already records under it, or somebody new.
+        if (request.CaverId is { } caverId
+            && !await db.Cavers.AsNoTracking().AnyAsync(c => c.Id == caverId, ct))
         {
             return ApiProblems.BadRequest(CaverUnknownCode, "That person is not in the club's directory.");
         }
@@ -296,9 +309,44 @@ public static class ExpeditionRosterEndpoints
         return null;
     }
 
-    private static void Apply(ExpeditionRosterEntry entry, ExpeditionRosterEntryWriteRequest request)
+    /// <summary>
+    /// Who the stay is about: the entry the request names, or the person its name means.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A name is turned into a person by the rule every record that names somebody shares — the
+    /// oldest entry already recorded under it, or a new one — and deliberately not by anything
+    /// written here. A camp's roster and a trip's list of people name the same club's people,
+    /// and two readings of one typed name would give that club two entries for one of them.
+    /// </para>
+    /// <para>
+    /// Asked last, once nothing is left that could refuse the request. Resolving a name may add
+    /// somebody to the directory — to the unit of work, saved with the stay — and a request that
+    /// is turned away must not have left a person behind it.
+    /// </para>
+    /// <para>
+    /// No right over the directory is asked for a name that adds somebody, because a trip asks
+    /// none either: recording who was there is part of writing the record, and the right to
+    /// write this camp has already been established by the time this runs.
+    /// </para>
+    /// </remarks>
+    private static async Task<Guid> PersonOfAsync(
+        SilexGisDbContext db, ExpeditionRosterEntryWriteRequest request, CancellationToken ct)
     {
-        entry.CaverId = request.CaverId;
+        if (request.CaverId is { } caverId)
+        {
+            return caverId;
+        }
+
+        // Present, because the request's own shape requires a name wherever no entry is given.
+        var name = request.NewCaverName!;
+        return (await CaverNames.ResolveAsync(db, [name], ct)).IdOf(name);
+    }
+
+    private static void Apply(
+        ExpeditionRosterEntry entry, ExpeditionRosterEntryWriteRequest request, Guid caverId)
+    {
+        entry.CaverId = caverId;
         entry.RoleId = request.RoleId;
         entry.FromDate = request.FromDate;
 

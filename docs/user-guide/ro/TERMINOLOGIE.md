@@ -131,6 +131,8 @@ odată cu ea — și apoi paginile.
 | First visits | Primele vizite |
 | Leads | Continuări |
 | Who was there | Cine a fost |
+| Add a stay / Edit stay / Remove stay | Adaugă o ședere / Editare ședere / Șterge șederea |
+| Who / Role / Days / Note (a stay) | Cine / Rol / Zilele / Notă |
 | Tracking (the tab) | Urmărire |
 | Tracking setup | Configurarea urmăririi |
 | Start tracking / Close tracking | Pornește urmărirea / Încheie urmărirea |
@@ -158,6 +160,9 @@ odată cu ea — și apoi paginile.
 | Closest approach | Cea mai mică distanță |
 | Distributions | Distribuții |
 | Trip statistics | Statistici din ture |
+| Insights (the button) / Trip insights (the page) | Sinteză / Sinteza ieșirilor |
+| The current filter / All trips | Filtrul curent / Toate ieșirile |
+| Trips per year / What they were for / Where they went / Who was on them | Ieșiri pe an / Cu ce scop / Unde s-a mers / Cine a fost |
 | Imports | Importuri |
 | Review and import | Verifică și importă |
 | Undo (an import) | Anulează |

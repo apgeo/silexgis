@@ -113,6 +113,10 @@ făcută o topografie compilată. Arhivat, niciodată citit.
 **Scop de tură** — Pentru ce a fost o tură. Decide și ce cere raportul ei și ce listă de verificare
 parcurge.
 
+**Ședere** — Un interval de zile în care cineva a fost la o [tabără](features/camps.md), într-un
+rol. Nu este persoana: cine are două roluri, sau cine a plecat și s-a întors, are două șederi.
+→ [Tabere](features/camps.md#cine-a-fost)
+
 **Tabără** *(expediție)* — Un efort de mai multe zile și mai multe ture, cu listă proprie, zonă de
 lucru și panou de continuări. → [Tabere](features/camps.md)
 

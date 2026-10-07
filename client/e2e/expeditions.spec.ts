@@ -295,3 +295,101 @@ test('a camp is made from the list, renamed, announced, opened for its permissio
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page).toHaveURL(/\/expeditions$/, { timeout: 15_000 });
 });
+
+/**
+ * A camp's roster kept from its own tab: somebody the club's directory does not hold is named on
+ * a stay, the stay appears, and the person is in the directory afterwards — once.
+ *
+ * The camp is made here rather than borrowed from the seeded data, so the roster this flow writes
+ * into is its own: the other checks in this file read the seeded camp, and none of them should
+ * come to depend on a stay this one left behind.
+ */
+test('a stay names somebody new, appears on the roster, and puts them in the directory once', async ({
+  page,
+}) => {
+  const authorization = await authorizedHeader(page);
+  const stamp = Date.now();
+  const made = await page.request.post('/api/v1/expeditions', {
+    headers: { authorization },
+    data: {
+      name: `Roster camp ${stamp}`,
+      startDate: '2026-07-18',
+      endDate: '2026-08-01',
+      visibility: 'authenticated',
+    },
+  });
+  expect(made.ok(), await made.text()).toBe(true);
+  const { id } = (await made.json()) as { id: string };
+
+  await gotoRoute(page, `/expeditions/${id}?tab=roster`);
+  const roster = page.getByTestId('expedition-roster-tab');
+  await expect(roster).toBeVisible({ timeout: 15_000 });
+  await expect(roster).toContainText('Nobody has been recorded');
+
+  // Each save is waited on by its own response rather than by a message on the screen: the
+  // confirmation of the first is still up when the second is pressed, and would answer for it.
+  const recorded = () =>
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        /\/api\/v1\/expeditions\/[^/]+\/roster/.test(response.url()),
+      { timeout: 30_000 },
+    );
+
+  // ---- somebody the directory does not hold, typed in and not chosen
+  const person = `E2E camp cook ${stamp}`;
+  await page.getByTestId('expedition-stay-add').click();
+  const dialog = page.getByRole('dialog', { name: 'Add a stay' });
+  await expect(dialog).toBeVisible({ timeout: 15_000 });
+  await dialog.getByTestId('expedition-stay-person').fill(person);
+  // The box says what a typed name is before it is saved, rather than leaving it to be found out.
+  await expect(dialog.getByTestId('caver-name-typed')).toContainText('saved as a name');
+
+  const first = recorded();
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  expect((await first).status()).toBe(201);
+  await expect(dialog).toBeHidden({ timeout: 15_000 });
+
+  // The row appears, for the whole camp — which is what a stay nobody dated starts out as — and
+  // the head count is the server's.
+  const stays = roster.locator('.silex-list-item');
+  await expect(stays).toHaveCount(1, { timeout: 15_000 });
+  await expect(stays.first()).toContainText(person);
+  await expect(stays.first()).toContainText('Member');
+  await expect(page.getByTestId('expedition-roster-people')).toContainText('People at this camp: 1');
+
+  // ---- the same person again, chosen from the directory this time, in a second role
+  await page.getByTestId('expedition-stay-add').click();
+  await expect(dialog).toBeVisible({ timeout: 15_000 });
+  // The first letters of the name, the way somebody looks a person up. The directory has to
+  // offer the person the last save made: a list that still read as it did before would have
+  // them typed in a second time.
+  await dialog.getByTestId('expedition-stay-person').pressSequentially(person.slice(0, 12), {
+    delay: 30,
+  });
+  const offered = page.locator('.ant-select-item-option', { hasText: person });
+  await expect(offered).toBeVisible({ timeout: 20_000 });
+  await offered.click();
+  await expect(dialog.getByTestId('expedition-stay-person')).toHaveValue(person);
+  await expect(dialog.getByTestId('caver-name-picked')).toBeVisible();
+
+  await dialog.getByTestId('expedition-stay-role').click();
+  await page.getByTitle('Cook', { exact: true }).click();
+
+  const second = recorded();
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  expect((await second).status()).toBe(201);
+  await expect(dialog).toBeHidden({ timeout: 15_000 });
+
+  // Two stays and one person: a roster row is somebody in a role, and counting rows would report
+  // a camp bigger than it was.
+  await expect(stays).toHaveCount(2, { timeout: 15_000 });
+  await expect(page.getByTestId('expedition-roster-people')).toContainText('People at this camp: 1');
+
+  // ---- and in the directory, once: the name made one entry and the second stay made none
+  await gotoRoute(page, '/cavers');
+  await page.getByPlaceholder('Search by name…').fill(person);
+  const entries = page.getByRole('row', { name: new RegExp(person) });
+  await expect(entries).toHaveCount(1, { timeout: 15_000 });
+  await expect(entries.first()).toContainText('No account');
+});

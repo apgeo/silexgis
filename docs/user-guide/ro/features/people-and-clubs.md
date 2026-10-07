@@ -32,6 +32,14 @@ nu poate răspunde la o invitație. Trebuie contactat altfel.
 
 Marcați **Fără cont** acolo unde nu există autentificare în spatele fișei.
 
+Cineva ajunge în listă pe una din patru căi: îl adaugă aici cine ține lista; un cont își
+primește fișa proprie când este creat; unei foi importate cu ture vechi i se poate spune să
+creeze persoanele pe care le numește; iar **un nume scris pe o tură sau pe
+[lista unei tabere](camps.md#cine-a-fost), sub care nu este înregistrat nimeni, îl adaugă**.
+Un nume scris sub care cineva *este* înregistrat înseamnă acea persoană — fișa mai veche, dacă
+două îl poartă — așa că același nume scris de două ori este un singur speolog, nu doi. Un nume
+scris în două feluri înseamnă doi, și de aici vin cele mai multe duplicate.
+
 ### Contopirea duplicatelor
 
 Listele acumulează duplicate — *Ion Popescu*, *I. Popescu*, *Popescu Ion*. **Contopește** pliază o

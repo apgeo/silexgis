@@ -1936,6 +1936,22 @@
     "rosterWithheld": "Who was at this camp is not shown to you",
     "rosterWithheldDetail": "You may read this camp, but not the people in this installation — so the names, the days and how many there were are withheld together. Showing the stays with the names struck out would still say how many people were there and when.",
     "rosterUnavailable": "Who was at this camp could not be read just now.",
+    "stay": {
+      "add": "Add a stay",
+      "edit": "Edit stay",
+      "remove": "Remove stay",
+      "removeConfirm": "Remove this stay of {{name}}? Only the record that they were at this camp for these days goes — the person stays in the list of cavers.",
+      "hint": "One stay is one person in one role, for one stretch of days. Somebody who cooked and also surveyed is two stays, and so is somebody who left and came back.",
+      "person": "Who",
+      "personPlaceholder": "Somebody from the list of cavers, or a new name",
+      "personRequired": "Say who was there",
+      "role": "Role",
+      "roleRequired": "Choose a role",
+      "daysHint": "The first and the last day they were there. For a single day, pick it twice.",
+      "note": "Note",
+      "notePlaceholder": "Arrived late, left early, came back…",
+      "personGone": "That person is no longer in the list of cavers. Choose them again, or type their name."
+    },
     "mapEmpty": "Nothing to draw for this camp: it has no working area, and none of the trips you may read left a sketch or named a cave you may place.",
     "mapCaveat": "Drawn over the trips you may read. The working area is the shape somebody drew on the plan; a trip's sketch is shown exactly as drawn, whatever protection the caves it names carry; and a cave entrance appears only where you may see its exact position.",
     "mapTruncated": "This camp names more cave entrances than one map can carry, so not every entrance is drawn.",
@@ -2129,7 +2145,11 @@
     "mergeInto": "Merge into {{name}}",
     "mergeHint": "Pick the duplicate entry to fold in. Their trips and caving groups move across, and the duplicate is removed.",
     "deleteConfirm": "Remove this person from the roster?",
-    "deleteRefused": "This person is named on trips. Merge their duplicate entry instead."
+    "deleteRefused": "This person is named on trips. Merge their duplicate entry instead.",
+    "picker": {
+      "picked": "From the list of cavers.",
+      "typed": "Not chosen from the list, so it is saved as a name: it means whoever the list of cavers already holds under exactly this name, and adds them if nobody is."
+    }
   },
   "statistics": {
     "title": "Trip statistics",
@@ -5654,6 +5674,7 @@
     "trips": "Trips",
     "areasSoFar": "Distinct areas reached",
     "newGroundNote": "The line is how many distinct areas the counted trips had reached by the end of each year. Still climbing means new ground is being found; flattening under bars that are not means the same places are being revisited.",
+    "newWithin": "“New” means new among {{population}}, not new to the whole archive. An area that a trip outside them had already reached counts as new the first time one of them gets there, so a narrower filter starts the line again from nothing.",
     "overlapping": "A trip counts into every value it holds, so these bars add up to more than the {{count}} trips counted.",
     "showingValues": "Showing the {{shown}} largest of {{distinct}}.",
     "empty": "No trips to count.",

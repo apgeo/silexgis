@@ -115,6 +115,30 @@ describe('the trip insights page', () => {
     expect(screen.getByTestId('address').textContent).toContain('scope=all');
   });
 
+  it('says under the curve what “new” is measured against', () => {
+    renderAt('?states=done');
+
+    // An area's first arrival is the earliest of the *counted* trips that reached it, so under a
+    // filter the line starts again from nothing. Without this sentence a rising line reads as
+    // ground nobody had covered, when it is ground these trips had not.
+    const caption = screen.getByTestId('trip-stats-new-within').textContent ?? '';
+    expect(caption).toContain('new among the 4 of 12 trips you can read that this filter leaves');
+    expect(caption).toContain('not new to the whole archive');
+  });
+
+  it('moves that sentence with the scope, so it never describes a filter the chart is not drawn over', () => {
+    renderAt('?states=done');
+
+    statsSpy.mockReturnValue({ data: stats({ matching: 12 }), isError: false });
+    fireEvent.click(screen.getByText('All trips'));
+
+    // The same defect the titles are guarded against: a caption still naming the filter under
+    // a line drawn over everything the reader may read.
+    const caption = screen.getByTestId('trip-stats-new-within').textContent ?? '';
+    expect(caption).toContain('new among all 12 trips you can read');
+    expect(caption).not.toContain('this filter leaves');
+  });
+
   it('says a breakdown adds up to more than the trips, where it does', () => {
     renderAt('');
 

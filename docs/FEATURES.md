@@ -219,6 +219,9 @@ feature and walkthroughs of whole jobs.
   Nothing is stored: hours are worked out from the times recorded, over however many days the trip
   really ran, and a first visit is simply the earliest trip that took somebody somewhere — so typing
   up an older trip from the archive corrects the figures instead of leaving a stale flag behind.
+  A figure that would say nothing is left out rather than drawn: on a cave's own totals every trip
+  counted went to that cave, so its places could only ever read one and its first visits could only
+  repeat its people, and neither is shown there.
   Any of the three can be saved as a spreadsheet, which carries exactly what the screen carried and
   says whose totals they are, because a file gets forwarded and read months later.
 - **What a club's trips add up to, on one page** — from the trip list, one button opens the same
@@ -226,9 +229,12 @@ feature and walkthroughs of whole jobs.
   them, largest first. Beside the yearly bars runs the figure a trip log cannot otherwise be asked
   for — how many distinct areas the trips had reached by the end of each year. A line still climbing
   says the club is finding new ground; a line flattening under bars that are not says it is going
-  back to ground it already knows. Everything is counted over the trips **you** may read, and each
-  card's title says which trips it is drawing, because you can switch between the filter you came in
-  with and everything you may read, and a title that did not move with the switch would be a lie.
+  back to ground it already knows. *New* there means new among the trips being counted, and the page
+  says so under the line: narrow the list to one year and the line starts again from nothing,
+  because an area an earlier trip had reached is new to the trips that are left. Everything is
+  counted over the trips **you** may read, and each card's title says which trips it is drawing,
+  because you can switch between the filter you came in with and everything you may read, and a
+  title that did not move with the switch would be a lie.
   Where a trip counts into more than one bar — it went to two areas, it had four people — the page
   says so, and where there are more names than bars it says how many it is showing out of how many
   there are.

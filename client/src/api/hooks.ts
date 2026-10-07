@@ -7797,6 +7797,111 @@ export function useExpeditionRoster(expeditionId: string | undefined) {
 }
 
 /**
+ * One stay as it is written: who, as what, and for which days.
+ *
+ * The person is named in exactly one of two ways — `caverId` for somebody picked out of the
+ * directory, `newCaverName` for a name typed in — and the server refuses a row carrying both or
+ * neither. A typed name is not a new person by being typed: the server reads it against the
+ * directory, means whoever is already recorded under exactly it, and adds somebody only when
+ * nobody is. That is the rule a trip's people are named by, and it lives on the server only.
+ */
+export type ExpeditionRosterEntryWrite = components['schemas']['ExpeditionRosterEntryWriteRequest'];
+
+/**
+ * What every write on a camp's roster leaves stale.
+ *
+ * The roster itself, read again rather than patched: the head count beside the rows is worked
+ * out on the server, distinctly by person, and a row added locally would leave it wrong by
+ * exactly the mistake that count exists to prevent. The camp's timeline, because a stay is a
+ * change to the camp's own record and is written there. And the directory of people, because a
+ * stay that names somebody by a name nobody held has just added them to it — a picker opened a
+ * moment later must offer the person the last save made, or the next stay types them in again.
+ */
+function useExpeditionRosterWritten(expeditionId: string) {
+  const queryClient = useQueryClient();
+  const invalidateHistory = useInvalidateHistory();
+  return () => {
+    invalidateHistory();
+    void queryClient.invalidateQueries({ queryKey: queryKeys.cavers });
+    // Returned, so the write is not finished until the rows it changed have been read back and
+    // a dialog closing on it closes over the list it expects to see.
+    return queryClient.invalidateQueries({ queryKey: queryKeys.expeditionRoster(expeditionId) });
+  };
+}
+
+/**
+ * What a refused write on a camp's roster says about what is held here.
+ *
+ * One refusal is a statement about the cache rather than about the request: the entry a stay
+ * named is not in the directory any more. It was removed after the list of people was read, or
+ * — the only way it can go while a stay still names it — it was joined into another entry for
+ * the same person, and the stays it held moved to the one that was kept. Either way what is
+ * held here is behind: the list of people still offers the entry that is gone, and the roster
+ * may still show stays under it. Both are read again, so the next thing somebody presses is
+ * not the same dead entry.
+ */
+function useExpeditionRosterRefused(expeditionId: string) {
+  const queryClient = useQueryClient();
+  return (error: unknown) => {
+    if (error instanceof ApiError && error.code === 'expedition_roster.caver_unknown') {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cavers });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.expeditionRoster(expeditionId) });
+    }
+  };
+}
+
+/** Records that somebody was at a camp for a stretch of days. Takes the right to write the camp. */
+export function useCreateExpeditionRosterEntry(expeditionId: string) {
+  const written = useExpeditionRosterWritten(expeditionId);
+  const refused = useExpeditionRosterRefused(expeditionId);
+  return useMutation({
+    mutationFn: (body: ExpeditionRosterEntryWrite) =>
+      unwrap(
+        api.POST('/api/v1/expeditions/{expeditionId}/roster', {
+          params: { path: { expeditionId } },
+          body,
+        }),
+      ),
+    onSuccess: () => written(),
+    onError: refused,
+  });
+}
+
+/**
+ * Rewrites one stay whole. No version travels with it: a stay is not versioned against its camp,
+ * so correcting the day somebody arrived is never refused for want of a camp read in between.
+ */
+export function useUpdateExpeditionRosterEntry(expeditionId: string) {
+  const written = useExpeditionRosterWritten(expeditionId);
+  const refused = useExpeditionRosterRefused(expeditionId);
+  return useMutation({
+    mutationFn: ({ entryId, body }: { entryId: number; body: ExpeditionRosterEntryWrite }) =>
+      unwrap(
+        api.PUT('/api/v1/expeditions/{expeditionId}/roster/{entryId}', {
+          params: { path: { expeditionId, entryId } },
+          body,
+        }),
+      ),
+    onSuccess: () => written(),
+    onError: refused,
+  });
+}
+
+/** Removes one recorded stay. The person stays in the directory: a stay is not who somebody is. */
+export function useDeleteExpeditionRosterEntry(expeditionId: string) {
+  const written = useExpeditionRosterWritten(expeditionId);
+  return useMutation({
+    mutationFn: (entryId: number) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/expeditions/{expeditionId}/roster/{entryId}', {
+          params: { path: { expeditionId, entryId } },
+        }),
+      ),
+    onSuccess: () => written(),
+  });
+}
+
+/**
  * One build with its sources and the tail of what the tool itself said.
  *
  * The log tail and the source list live only on this response, so a running build is watched

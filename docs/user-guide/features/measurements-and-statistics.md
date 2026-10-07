@@ -211,7 +211,7 @@ sizes of the very thing the answer declined to state.
 
 ## Trip statistics
 
-A person, a cave and a caving group each get their totals:
+A person, a cave, a caving group and a camp each get their totals:
 
 **Trips · People · Places · First visits · Hours underground · Surveyed · Rope · Survey
 stations · Trips with an incident · Photographs**
@@ -228,12 +228,42 @@ trip really ran. A **first visit** is simply the earliest trip that took somebod
 so typing up an older trip from the archive *corrects* the figures rather than leaving a
 stale flag behind.
 
-Any of the three can be **saved as a spreadsheet**, carrying exactly what the screen carried
-and saying whose totals they are — because a file gets forwarded and read months later.
+**Not every subject shows all ten:**
+
+| Whose totals | Left out | Why |
+|---|---|---|
+| A person's | *People* | How many were on somebody's trips is a fact about their company, not about them |
+| A cave's | *Places* · *First visits* | Every trip counted for a cave went to that cave — so *Places* could only ever read one, and *First visits* could only repeat *People*. A figure that cannot differ from its neighbour still reads as a second fact |
+| A caving group's, a camp's | nothing | |
+
+Any of them can be **saved as a spreadsheet**, carrying exactly what the screen carried — the
+same figures left out — and saying whose totals they are, because a file gets forwarded and
+read months later.
 
 > **You cannot ask for one person's trips by name.** That is a question about a person,
 > assembled out of records the asker may never be allowed to read. Your own trips are under
 > *Trip logs → My trips*, worked out from whoever is signed in.
+
+### Trip insights
+
+**Insights**, above the trip list, adds up the trips the list is showing — it carries the
+list's filter with it. Four charts: *Trips per year*, *What they were for*, *Where they went*
+and *Who was on them*. Every chart's title says how many trips it was drawn over, and
+**The current filter · All trips** switches between the filter you arrived with and
+everything you may read, so a narrowed view has something to be compared against.
+
+The first chart draws a line over its bars: how many distinct areas the counted trips had
+reached by the end of each year. *"Still climbing means new ground is being found; flattening
+under bars that are not means the same places are being revisited."*
+
+> **"New" means new among the trips being counted, not new to the whole archive.** An area
+> that a trip outside them had already reached counts as new the first time one of them gets
+> there. So narrowing the list to one year starts the line again from nothing, and narrowing
+> it to one purpose credits the survey trips with ground an exploration trip reached first.
+> The page says this under the line, and names the trips it means — the same ones the chart's
+> title names.
+
+Like every total here, these are counted over the trips you may read.
 
 ---
 

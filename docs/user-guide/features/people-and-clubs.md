@@ -32,6 +32,14 @@ cannot answer an invitation. They have to be reached another way.
 
 Marked **No account** where there is no sign-in behind the entry.
 
+Somebody comes onto the roster in one of four ways: whoever keeps it adds them here; an
+account gets an entry of its own when it is created; an imported sheet of old trips may be
+told to create the people it names; and **a name typed on a trip, or on a
+[camp's roster](camps.md#who-was-there), that nobody is recorded under adds them**. A typed
+name somebody *is* recorded under means that person — the older entry, if two hold it — so
+the same name written twice is one caver, not two. A name written two ways is two, which is
+where most duplicates come from.
+
 ### Merging duplicates
 
 Rosters accumulate duplicates — *Ion Popescu*, *I. Popescu*, *Popescu Ion*. **Merge** folds

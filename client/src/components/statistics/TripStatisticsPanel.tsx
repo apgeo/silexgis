@@ -115,9 +115,20 @@ function tilesFor(
     tiles.push({ key: 'people', label: t('statistics.people'), value: count(data?.people) });
   }
 
+  // Two figures are true of a cave and say nothing about it, so its panel leaves them out. Every
+  // trip counted for a cave names that cave, and its places are narrowed to that cave alone — so
+  // "places" can only read one, or none while nobody has been. And everybody on those trips
+  // reached the cave for the first time on one of them, so "first visits" can only repeat the
+  // people figure standing beside it. A tile that cannot differ from its neighbour still reads as
+  // a second fact. Both stay wherever they can vary: for a person, a club and a camp.
+  if (subject !== 'cave') {
+    tiles.push(
+      { key: 'places', label: t('statistics.places'), value: count(data?.places) },
+      { key: 'firstVisits', label: t('statistics.firstVisits'), value: count(data?.firstVisits) },
+    );
+  }
+
   tiles.push(
-    { key: 'places', label: t('statistics.places'), value: count(data?.places) },
-    { key: 'firstVisits', label: t('statistics.firstVisits'), value: count(data?.firstVisits) },
     {
       key: 'hours',
       label: t('statistics.hoursUnderground'),

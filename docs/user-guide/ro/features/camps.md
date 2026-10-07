@@ -130,12 +130,54 @@ sub dumneavoastră, și spune că a fost plafonat.
 
 ### Cine a fost
 
-Lista taberei, **numărată o dată pentru fiecare persoană**, oricâte roluri ar avea înregistrate.
+Lista taberei: cine a fost la tabără, în ce rol și în ce zile. Se ține de mână, nu se deduce
+din ture, pentru că oamenii pentru care există — bucătarul, șoferul, cine a ținut tabăra de
+bază — nu au mers în niciuna.
 
-Roluri: Membru · Organizator · Bucătar · Tabără de bază · Șofer · Medic · Echipament · Invitat.
+Persoanele sunt **numărate o singură dată fiecare**, oricâte roluri sau șederi ar avea
+înregistrate.
+
+Roluri: Membru · Organizator · Bucătar · Tabăra de bază · Șofer · Sanitar · Echipament · Invitat.
+
+**Cum se ține.** Dacă puteți edita tabăra, **Adaugă o ședere** înregistrează una, iar fiecare
+rând are *Editare ședere* și *Șterge șederea*. O ședere înseamnă **o persoană, într-un rol,
+pentru un interval de zile**:
+
+| | |
+|---|---|
+| **Cine** | Începeți să scrieți și alegeți pe cineva din lista de speologi — sau scrieți numele cuiva care nu este în ea |
+| **Rol** | *Membru*, dacă nu spuneți altfel |
+| **Zilele** | Prima și ultima zi în care a fost acolo; pentru o singură zi, alegeți-o de două ori. Pornește de la întreaga tabără |
+| **Notă** | *A sosit mai târziu, a plecat mai devreme, s-a întors…* |
+
+Cine a gătit și a și cartat are **două șederi**, la fel și cine a plecat și s-a întors. Nimic
+nu împiedică șederile să se suprapună.
+
+**Numirea cuiva nou.** Un nume pe care îl scrieți în loc să îl alegeți *„se salvează ca nume:
+înseamnă persoana pe care lista de speologi o are deja exact sub acest nume, iar dacă nu este
+nimeni, o adaugă."* Așa că bucătarul taberei poate fi scris direct pe listă și apare apoi la
+**Persoane → Speologi** — o singură dată, oricâte șederi l-ar numi. Este aceeași regulă după
+care o tură își numește oamenii. Din *exact* decurg două lucruri:
+
+- **Alegeți din listă când persoana este în ea.** Un nume scris puțin altfel — fără un
+  diacritic, o poreclă — este alt nume și creează o a doua înregistrare pentru aceeași
+  persoană. (Două înregistrări pentru o persoană se unesc ulterior cu **Unifică**, pe pagina
+  speologilor.)
+- **Dacă două persoane sunt înregistrate sub același nume, lista le arată pe amândouă**,
+  fiecare cu grupurile ei. Dacă scrieți numele în loc să alegeți, se ia înregistrarea mai
+  veche.
+
+Dacă persoana aleasă este unificată cu altă înregistrare sau ștearsă înainte să salvați,
+șederea nu se salvează: *„Această persoană nu mai este în lista de speologi. Alegeți-o din nou
+sau scrieți-i numele."* Fereastra rămâne deschisă cu tot ce ați completat, iar numele din
+casetă este de acum un nume scris obișnuit — alegeți din nou persoana din listă, care a fost
+citită din nou, sau salvați-l așa cum este.
+
+*Șterge șederea* întreabă mai întâi, spunând a cui este șederea, și scoate doar consemnarea că
+a fost la tabără în acele zile — *„persoana rămâne în lista de speologi."*
 
 Dacă puteți citi tabăra dar nu și persoanele din această instalare, lista este reținută în
-întregime — nume, număr și tot — nu arătată parțial.
+întregime — nume, număr și tot — nu arătată parțial, și nu se oferă nimic pentru ținerea ei.
 
 Rolurile sunt un vocabular propriu al taberei, separat de rolurile în tură; un administrator îl
 editează la **Configurare → Roluri în tabără** (vedeți [Vocabulare](../admin/vocabularies.md)).
