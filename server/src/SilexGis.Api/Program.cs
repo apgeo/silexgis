@@ -224,6 +224,13 @@ try
         .BindConfiguration(SilexGis.Api.Features.Calendar.CalendarOptions.SectionName);
     builder.Services.AddOptions<SilexGis.Api.Features.Expeditions.ExpeditionMapOptions>()
         .BindConfiguration(SilexGis.Api.Features.Expeditions.ExpeditionMapOptions.SectionName);
+    // A camp's surface log: how long a finished watch stays on it and how many trips it carries.
+    // Checked while starting, unlike the sizes above, because a wrong value here does not fail —
+    // it answers an empty log, which a coordinator reads as "nobody is underground".
+    builder.Services.AddOptions<ExpeditionSurfaceLogOptions>()
+        .BindConfiguration(ExpeditionSurfaceLogOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<ExpeditionSurfaceLogOptions>, ExpeditionSurfaceLogOptionsValidator>();
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<AdminTestSendThrottle>();
 builder.Services.AddScoped<GroupAnnouncementThrottle>();
@@ -481,6 +488,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapSurveyModelTrackedTripsEndpoints();
     api.MapTripPastTrackEndpoints();
     api.MapTripLiveSiblingEndpoints();
+    api.MapExpeditionSurfaceLogEndpoints();
     api.MapTripChecklistEndpoints();
     api.MapChecklistEndpoints();
     api.MapExpeditionEndpoints();

@@ -14665,6 +14665,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expeditions/{id}/surface-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Who is underground on one camp's trips: every member trip this caller may read whose watch is armed or was closed recently, with its party counted in, out and not heard from. No station, depth, survey or cave is on this answer. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionSurfaceLogDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-logs/{tripLogId}/checklist": {
         parameters: {
             query?: never;
@@ -21619,6 +21657,43 @@ export interface components {
             id: string;
             title: string;
             reason: components["schemas"]["CascadeSkipReason"];
+        ExpeditionSurfaceLogDto: {
+            trips: components["schemas"]["ExpeditionSurfaceLogTripDto"][];
+            truncated: boolean;
+        };
+        ExpeditionSurfaceLogPersonDto: {
+            /** Format: uuid */
+            caverId: string;
+            name: string;
+            in: boolean;
+            out: boolean;
+            /** Format: date-time */
+            lastRecordedAt?: null | string;
+        };
+        ExpeditionSurfaceLogTripDto: {
+            /** Format: uuid */
+            tripLogId: string;
+            title: string;
+            /** Format: date */
+            tripDate: string;
+            /** Format: date */
+            tripDateEnd?: null | string;
+            state: components["schemas"]["TripTrackingState"];
+            /** Format: date-time */
+            armedAt?: null | string;
+            /** Format: date-time */
+            closedAt?: null | string;
+            /** Format: date-time */
+            expectedReturnAt?: null | string;
+            /** Format: int32 */
+            underground: number;
+            /** Format: int32 */
+            out: number;
+            /** Format: int32 */
+            unheard: number;
+            /** Format: date-time */
+            lastRecordedAt?: null | string;
+            party: components["schemas"]["ExpeditionSurfaceLogPersonDto"][];
         };
         ExpeditionTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];
