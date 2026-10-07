@@ -47,8 +47,8 @@ export const EMBED_CHANNEL = 'silexgis-trip-embed';
  * target it has never heard of, and it is exactly the graceful half.
  *
  * Every change below is additive in that direction: new focus kinds an old relay never sends, two
- * optional fields an old relay never sets, and one extra member on the announcement that an old
- * relay hands to an article that is not reading it. Raise this only for a change that would make
+ * optional fields an old relay never sets, and extra members on the announcement that an old
+ * relay hands to an article that is not reading them. Raise this only for a change that would make
  * an old relay's message mean something different from what it meant — which is the change nobody
  * has needed yet.
  */
@@ -194,6 +194,29 @@ export interface EmbedReadyMessage {
     title: string;
     /** Where the replay's clock stands, as an ISO-8601 instant. */
     at: string;
+  };
+  /**
+   * Which other party of the cave the party above is, while the frame's reader is watching one.
+   *
+   * <b>Announced for the reason `past` is, and the hazard is the sharper of the two.</b> A reader
+   * can open the frame's list of parties being followed in the cave and ask for another of them to
+   * be drawn. Both parties are underground now, both are numbered from one, and the message is
+   * otherwise identical: an article that prints "caver 3 is at the sump" under its own trip's
+   * heading would, without this, be printing where somebody of another party is — a true place
+   * under the wrong person's name, at the one moment a family is reading it for that.
+   *
+   * Absent means the party is not another party being followed now: it is the trip this link was
+   * published for, or — where `past` is present — a replay. The two are never present together.
+   * It is the reader's own choice inside the frame and nothing a link in the article can ask for;
+   * a link asking for the trip called `live` ends it, as it ends a replay.
+   *
+   * Said again when the reader moves from one party to another, and when the watch ends — by the
+   * reader going back, or by the party leaving the list — the next announcement simply no longer
+   * carries it.
+   */
+  watching?: {
+    tripLogId: string;
+    title: string;
   };
 }
 

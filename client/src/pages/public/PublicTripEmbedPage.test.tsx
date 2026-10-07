@@ -16,6 +16,10 @@ let answer: {
   refetch?: () => unknown;
   /** When the last read that succeeded arrived, as the query reports it. */
   dataUpdatedAt?: number;
+  /** The failure of an attempt that is still being retried, as the query reports it. */
+  failureReason?: unknown;
+  /** True while the browser holds the read back because it knows it has no connection. */
+  isPaused?: boolean;
 };
 
 /**
@@ -316,6 +320,41 @@ describe('the viewer a website frames', () => {
     expect(given?.height).toBe('100%');
   });
 
+  it('says the server could not be reached when a first read was never sent for want of a connection', () => {
+    // Held back by the browser, so still "pending" — and a spinner in somebody's article for as
+    // long as the reader's phone is offline.
+    answer = { data: undefined, isPending: true, error: null, isPaused: true };
+    render(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('public-trip-embed-unreachable')).toHaveTextContent(
+      'The trip could not be read just now',
+    );
+    expect(screen.queryByTestId('public-trip-embed-failure')).toBeNull();
+  });
+
+  it('says the same while a first read waits out a pause the server asked for', () => {
+    // Refused for being asked too often, with a time to come back: held for that long before
+    // it is made again, all of it "pending" — a minute of spinner in somebody's article.
+    answer = {
+      data: undefined,
+      isPending: true,
+      error: null,
+      failureReason: new ApiError(429, undefined, undefined, undefined, 60_000),
+    };
+    render(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('public-trip-embed-unreachable')).toHaveTextContent(
+      'The trip could not be read just now',
+    );
+    expect(screen.queryByTestId('public-trip-embed-failure')).toBeNull();
+
+    // The twin: an attempt being retried on the frame's own short pacing is still loading.
+    cleanup();
+    answer = { data: undefined, isPending: true, error: null, failureReason: new ApiError(503) };
+    render(<PublicTripEmbedPage />);
+    expect(screen.queryByTestId('public-trip-embed-unreachable')).toBeNull();
+  });
+
   it('keeps showing the trip when a later read fails, rather than emptying somebody’s page', () => {
     // A frame on a club's website that blanked itself every time a poll missed would read as a
     // broken embed. The envelope in hand is still the last true word.
@@ -380,6 +419,24 @@ describe('the viewer a website frames', () => {
       view.rerender(<PublicTripEmbedPage />);
       expect(screen.queryByTestId('public-trip-stale')).toBeNull();
       expect(screen.getByTestId('public-trip-updated')).toHaveTextContent('Page updated now');
+    });
+
+    it('says the same line while a read is held back offline, though nothing has failed', () => {
+      const view = render(<PublicTripEmbedPage />);
+
+      answer = { ...answer, isPaused: true };
+      view.rerender(<PublicTripEmbedPage />);
+      pass(20);
+
+      expect(screen.getByTestId('public-trip-stale')).toHaveTextContent(
+        'Not refreshing — last read 20 minutes ago',
+      );
+      expect(screen.getByTestId('viewer')).toBeInTheDocument();
+      expect(screen.queryByTestId('public-trip-ended')).toBeNull();
+
+      answer = { ...answer, isPaused: false, dataUpdatedAt: Date.now() };
+      view.rerender(<PublicTripEmbedPage />);
+      expect(screen.queryByTestId('public-trip-stale')).toBeNull();
     });
 
     it('says the hour instead of a gap once the trip is over, and that stands still', () => {
