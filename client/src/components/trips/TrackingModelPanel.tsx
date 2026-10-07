@@ -994,6 +994,9 @@ export default function TrackingModelPanel({
               defaultAt={attachingAt}
               defaultCaverId={selectedCaverIds[0] ?? null}
               cavers={dialogCavers}
+              // The watch's own survey here too, whichever one is on screen: the preview says
+              // where a photograph lands on the survey a replay of this trip opens on.
+              surveyModelId={tracking.surveyModelId}
               onClose={() => setAttachingAt(null)}
             />
           )}

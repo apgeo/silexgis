@@ -2000,6 +2000,7 @@ export default function TripTrackingTab({
             caverId: person.caverId,
             name: person.name,
           }))}
+          surveyModelId={data?.surveyModelId ?? null}
           onClose={() => setAttaching(null)}
         />
       )}

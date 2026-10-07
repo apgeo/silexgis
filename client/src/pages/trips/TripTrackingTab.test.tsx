@@ -115,7 +115,11 @@ vi.mock('../../api/download.ts', async (original) => ({
 // The dialog that picks photographs off the trip's gallery has its own tests; what this suite asks
 // is what it is opened with, so it is recorded rather than driven.
 vi.mock('../../components/trips/TrackingPicturesDialog.tsx', () => ({
-  default: (props: { defaultAt: number; defaultCaverId: string | null }) => {
+  default: (props: {
+    defaultAt: number;
+    defaultCaverId: string | null;
+    surveyModelId: string | null;
+  }) => {
     pictureDialogProps(props);
     return <div data-testid="trip-tracking-pictures-dialog" />;
   },
@@ -2715,6 +2719,9 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
       expect(pictureDialogProps).toHaveBeenLastCalledWith(
         expect.objectContaining({ defaultAt: Date.parse(AT), defaultCaverId: ANA }),
       );
+      // …and with the survey the watch is on, as this reader is told it: what the dialog previews
+      // each photograph's place against.
+      expect(pictureDialogProps.mock.calls.at(-1)![0]).toHaveProperty('surveyModelId', 'model-1');
       // The negative twin, and the reason the whole design is shaped this way: nothing the dialog
       // was opened with names the report that supplied the clock.
       expect(JSON.stringify(pictureDialogProps.mock.calls.at(-1))).not.toContain('event-1');
