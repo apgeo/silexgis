@@ -90,6 +90,12 @@ export interface MovieSettings {
   };
   view: Record<MovieViewLayer, boolean> & {
     /**
+     * Whether the surface over the cave is drawn, where the survey's file carries one. Off unless
+     * the reader turns it on: a cave drawn under its hills is a cave somebody can place, which a
+     * drawing of its passages alone is not — the same reason the compass and the scale start off.
+     */
+    terrain: boolean;
+    /**
      * The view the preview turns to when the model loads and when this changes. The movie starts
      * from what the preview shows, so turning or zooming the preview afterwards is kept.
      */
@@ -214,6 +220,7 @@ export const DEFAULT_MOVIE_SETTINGS: MovieSettings = {
     HUD: false,
     box: false,
     grid: false,
+    terrain: false,
     direction: 'north',
     shading: null,
     camera: 'perspective',
@@ -359,6 +366,7 @@ export function normaliseMovieSettings(raw: unknown): MovieSettings {
     },
     view: {
       ...layers,
+      terrain: flag(view.terrain, d.view.terrain),
       direction: oneOf<MovieViewDirection>(view.direction, MOVIE_VIEW_DIRECTIONS, d.view.direction),
       shading,
       camera: oneOf(view.camera, ['perspective', 'orthographic'] as const, d.view.camera),

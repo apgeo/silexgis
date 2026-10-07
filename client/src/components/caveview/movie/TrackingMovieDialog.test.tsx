@@ -981,6 +981,39 @@ describe('the tracking movie dialog', () => {
     expect(screen.getByText(/The depth shadings need the model to stand on real terrain/)).toBeInTheDocument();
   });
 
+  it('offers the surface over the cave only where the survey’s file carries one, and starts with it off', async () => {
+    // A choice remembered from a model that has terrain, opened on one that has none of its own.
+    useUiPrefsStore.setState({
+      movieSettings: normaliseMovieSettings({
+        ...DEFAULT_MOVIE_SETTINGS,
+        view: { ...DEFAULT_MOVIE_SETTINGS.view, terrain: true },
+      }),
+    });
+    open();
+    fireEvent.click(await screen.findByText('View'));
+    const refused = await screen.findByTestId('movie-terrain');
+    expect(refused).toBeDisabled();
+    expect(refused).not.toBeChecked();
+    expect(screen.getByText(/carries no terrain of its own/)).toBeInTheDocument();
+
+    // The same dialog over a model whose file does carry its terrain.
+    cleanup();
+    useUiPrefsStore.setState({ movieSettings: undefined });
+    preview.viewer = { ...fakeViewer(), hasTerrain: true, hasRealTerrain: true } as never;
+    open();
+    fireEvent.click(await screen.findByText('View'));
+    const offered = await screen.findByTestId('movie-terrain');
+    await waitFor(() => expect(offered).toBeEnabled());
+    // Off until asked for, and the reason is said beside it.
+    expect(offered).not.toBeChecked();
+    expect(screen.getByText(/can be placed on a map by whoever gets the file/)).toBeInTheDocument();
+    expect(screen.queryByText(/carries no terrain of its own/)).not.toBeInTheDocument();
+
+    fireEvent.click(offered);
+    await waitFor(() => expect(screen.getByTestId('movie-terrain')).toBeChecked());
+    expect(useUiPrefsStore.getState().movieSettings?.view.terrain).toBe(true);
+  });
+
   it('shows the viewer’s sliders as what they mean', async () => {
     open();
     fireEvent.click(await screen.findByText('View'));

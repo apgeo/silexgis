@@ -179,6 +179,9 @@ function fakeViewer() {
     cameraType: CONSTANTS.CAMERA_PERSPECTIVE,
     linewidth: 0,
     zScale: 0.5 as number | undefined,
+    // A model with no terrain at all, unless a test gives it one.
+    terrain: false,
+    hasTerrain: false,
     hasRealTerrain: null as boolean | null,
     liveMarkerLabels: true,
     liveMarkerLabelSize: 12 as number | null,
@@ -495,6 +498,30 @@ describe('recordMovie', () => {
     expect([...fake.trails.keys()]).toEqual(['preview-trail']);
     // During the recording the preview's trail was hidden, and the movie's view was on.
     expect(fake.viewer.updateTrail).toHaveBeenCalledWith('preview-trail', null, { visible: false });
+  });
+
+  it('records the surface over the cave only when the movie asks for it, and hands back what the viewer showed', async () => {
+    const terrainDuring = async (shownBefore: boolean, asked: boolean) => {
+      const fake = previewViewer();
+      // A model whose file carries its own terrain.
+      const surface = fake.viewer;
+      Object.assign(surface, { terrain: shownBefore, hasTerrain: true, hasRealTerrain: true });
+      const draw = fake.viewer.captureFrame.getMockImplementation()!;
+      const during: boolean[] = [];
+      fake.viewer.captureFrame.mockImplementation((options) => {
+        during.push(surface.terrain);
+        return draw(options);
+      });
+      const asking = settings({ view: { ...DEFAULT_MOVIE_SETTINGS.view, terrain: asked } });
+      await recordMovie(recording(fake, fakeEncoder(4), { settings: asking }));
+      expect(during.length).toBeGreaterThan(0);
+      return { during: new Set(during), after: surface.terrain };
+    };
+
+    // Shown by the viewer on its own, not asked for: off in every frame, on again afterwards.
+    expect(await terrainDuring(true, false)).toEqual({ during: new Set([false]), after: true });
+    // Asked for on a viewer that was not showing it: on in every frame, off again afterwards.
+    expect(await terrainDuring(false, true)).toEqual({ during: new Set([true]), after: false });
   });
 
   it('is the same recording every time from the same inputs', async () => {

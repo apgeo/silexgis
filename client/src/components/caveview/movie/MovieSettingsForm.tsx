@@ -612,6 +612,23 @@ export default function MovieSettingsForm({
         </Typography.Text>
       )}
       {view.HUD && <Alert type="warning" showIcon title={t('caveview.movie.hudWarning')} />}
+      {/* Offered only over terrain the survey's file carries, which is whole once the model has
+          loaded. The flat plane the viewer lays under a survey that names its coordinate system is
+          not offered: it is tiles asked for again as the camera moves, and would still be arriving
+          in a movie that turns. */}
+      <Row
+        label={t('caveview.movie.terrain')}
+        help={modelLoaded && !terrain ? t('caveview.movie.terrainNoneHelp') : t('caveview.movie.terrainHelp')}
+      >
+        <Switch
+          disabled={disabled || !terrain}
+          // A choice remembered from another model is not shown as made on one that cannot draw it.
+          checked={terrain && view.terrain}
+          onChange={(shown) => patch('view', { terrain: shown })}
+          data-testid="movie-terrain"
+          aria-label={t('caveview.movie.terrain')}
+        />
+      </Row>
       <Row
         label={t('caveview.movie.shading')}
         help={modelLoaded && !terrain ? t('caveview.movie.shadingTerrainHelp') : undefined}

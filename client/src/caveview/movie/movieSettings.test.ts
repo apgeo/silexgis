@@ -80,6 +80,15 @@ describe('normaliseMovieSettings', () => {
     expect(DEFAULT_MOVIE_SETTINGS.captions.note).toBe(false);
   });
 
+  it('starts without the surface over the cave, and keeps the reader\'s answer either way', () => {
+    // A cave drawn under its hills can be placed; one drawn alone cannot.
+    expect(DEFAULT_MOVIE_SETTINGS.view.terrain).toBe(false);
+    // Settings remembered before the switch existed have no answer: they get the default.
+    expect(normaliseMovieSettings({ view: { legs: true } }).view.terrain).toBe(false);
+    expect(normaliseMovieSettings({ view: { terrain: true } }).view.terrain).toBe(true);
+    expect(normaliseMovieSettings({ view: { terrain: 'yes' } }).view.terrain).toBe(false);
+  });
+
   it('says how fast the movie runs unless told not to, and keeps the answer either way', () => {
     expect(DEFAULT_MOVIE_SETTINGS.captions.speed).toBe(true);
     // Settings remembered before the figure existed have no answer: they get the default.
