@@ -1624,6 +1624,10 @@ export default function TripTrackingTab({
           // The state itself rather than a yes or no, because a closed watch changes what the
           // card asks: a report written up afterwards has to say when it was made.
           state={data.state}
+          // The watch's survey and its cave, both null for a reader who is not told them — and
+          // then no station is offered and no cave is pointed at.
+          surveyModelId={data.surveyModelId}
+          caveId={data.caveFeatureId}
           caverIds={chosen}
           teams={data.teams}
           onRecorded={() => setSelected(new Set())}
@@ -1899,6 +1903,9 @@ export default function TripTrackingTab({
         <TrackingEventEditDialog
           tripLogId={trip.id}
           report={correcting}
+          caverName={correcting === null ? undefined : named(correcting.caverId)}
+          surveyModelId={data?.surveyModelId ?? null}
+          armedAt={data?.armedAt ?? null}
           teams={data?.teams ?? []}
           onClose={() => setCorrecting(null)}
         />

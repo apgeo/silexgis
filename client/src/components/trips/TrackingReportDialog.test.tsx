@@ -9,6 +9,9 @@ const recordEvents = vi.fn();
 
 vi.mock('../../api/hooks.ts', () => ({
   useRecordTrackingEvents: () => ({ mutateAsync: recordEvents, isPending: false }),
+  // What the station field offers once the pressed spelling has been refused. Nothing found here:
+  // the field takes any text, and what it offers is tested with the field itself.
+  useSurveyModelStationSearch: () => ({ data: undefined }),
 }));
 
 // What decides how big every target in this dialog is drawn. False by default: the machine this
@@ -41,6 +44,7 @@ function show(
         tripLogId="trip-1"
         state={props.state ?? 'armed'}
         station={props.station ?? 'p.g.42'}
+        surveyModelId="model-1"
         cavers={CAVERS}
         teams={props.teams ?? []}
         defaultCaverIds={props.defaultCaverIds ?? ['caver-1']}

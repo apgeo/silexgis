@@ -39,6 +39,7 @@ const recordEvents = vi.fn();
 vi.mock('../../api/hooks.ts', () => ({
   TRACKING_EVENT_KINDS: ['entered', 'atStation', 'atDepth', 'note', 'exited'],
   useRecordTrackingEvents: () => ({ mutateAsync: recordEvents, isPending: false }),
+  useSurveyModelStationSearch: () => ({ data: undefined }),
   surveyModelReadableByViewer: (m: { format: string }) => m.format === 'lox' || m.format === 'survex3d',
   useSurveyModel: (id: string | undefined) => {
     askedFor = id;

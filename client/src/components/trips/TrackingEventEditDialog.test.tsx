@@ -5,12 +5,25 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import '../../i18n';
 
 const update = vi.fn();
+/** The places the watch's cave has declared, as the server sends them — or its refusal to say. */
+const declaredPlaces = vi.fn();
+/** What a depth means on the watch's survey, and which depth was asked about. */
+const depthReading = vi.fn();
+/** The survey's stations beginning with what has been typed, and which survey was asked. */
+const stationSearch = vi.fn();
 
 // The kinds and the station rules are the real ones — what is stubbed is only the write, so a
 // change to what a valid report looks like is felt here rather than mocked away.
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
-  return { ...actual, useUpdateTrackingEvent: () => ({ mutateAsync: update, isPending: false }) };
+  return {
+    ...actual,
+    useUpdateTrackingEvent: () => ({ mutateAsync: update, isPending: false }),
+    useTrackingPlaces: () => ({ data: declaredPlaces() }),
+    useTrackingDepthReading: (_tripLogId: string, depthM: number | null) => depthReading(depthM),
+    useSurveyModelStationSearch: (surveyModelId: string | undefined, q: string) =>
+      stationSearch(surveyModelId, q),
+  };
 });
 
 // The pointer, which is what every control's size follows. False by default — the desk this suite
@@ -35,9 +48,17 @@ const REPORT: TrackingEvent = {
   outsideDeclaredParts: false,
 };
 
+/** The watch the report is on: its survey, and when it was started — two hours before the report. */
+const WATCH = { surveyModelId: 'model-1', armedAt: '2026-09-12T08:00:00Z' } as const;
+
 beforeEach(() => {
   coarse = false;
   update.mockReset().mockResolvedValue({ ...REPORT });
+  declaredPlaces.mockReset().mockReturnValue([]);
+  depthReading
+    .mockReset()
+    .mockReturnValue({ data: undefined, isFetching: false, error: null, refetch: vi.fn() });
+  stationSearch.mockReset().mockReturnValue({ data: undefined });
 });
 afterEach(cleanup);
 
@@ -70,7 +91,7 @@ describe('TrackingEventEditDialog', () => {
   it('opens on the report it was given, with its own values in the fields', () => {
     render(
       <App>
-        <TrackingEventEditDialog tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+        <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
       </App>,
     );
     expect(screen.getByTestId('trip-tracking-edit-station')).toHaveValue('cave.upper.2');
@@ -80,7 +101,7 @@ describe('TrackingEventEditDialog', () => {
   it('says that a correction changes what the log records, rather than doing it silently', () => {
     render(
       <App>
-        <TrackingEventEditDialog tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+        <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
       </App>,
     );
     // The replay and the published page both follow the log, so a reader correcting one is
@@ -92,7 +113,7 @@ describe('TrackingEventEditDialog', () => {
   it('keeps the report it corrects, and never offers to change whose report it is', () => {
     render(
       <App>
-        <TrackingEventEditDialog tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+        <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
       </App>,
     );
     // A report about a different person is a different report — the delete beside this control is
@@ -103,7 +124,7 @@ describe('TrackingEventEditDialog', () => {
   it('sends the place belonging to the kind, and clears the one that does not', async () => {
     render(
       <App>
-        <TrackingEventEditDialog tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+        <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
       </App>,
     );
 
@@ -135,7 +156,7 @@ describe('TrackingEventEditDialog', () => {
     try {
       render(
         <App>
-          <TrackingEventEditDialog tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+          <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
         </App>,
       );
       fireEvent.change(screen.getByTestId('trip-tracking-edit-station'), { target: { value: '' } });
@@ -155,7 +176,7 @@ describe('TrackingEventEditDialog', () => {
   it('fills itself from whichever report is opened, not from the one before it', async () => {
     const { rerender } = render(
       <App>
-        <TrackingEventEditDialog tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+        <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
       </App>,
     );
     expect(screen.getByTestId('trip-tracking-edit-station')).toHaveValue('cave.upper.2');
@@ -165,6 +186,7 @@ describe('TrackingEventEditDialog', () => {
     rerender(
       <App>
         <TrackingEventEditDialog
+          {...WATCH}
           tripLogId="trip-1"
           report={{ ...REPORT, id: 'ev-2', stationName: 'cave.deep.3', note: 'second call' }}
           teams={[]}
@@ -192,6 +214,7 @@ describe('TrackingEventEditDialog', () => {
       render(
         <App>
           <TrackingEventEditDialog
+            {...WATCH}
             tripLogId="trip-1"
             report={REPORT}
             teams={[{ id: 'team-1', title: 'One' }]}
@@ -212,7 +235,7 @@ describe('TrackingEventEditDialog', () => {
     it('wears the stylesheet that keeps the dialog on the screen', () => {
       render(
         <App>
-          <TrackingEventEditDialog tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+          <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
         </App>,
       );
       // The class is the whole of the contract with the stylesheet: no wider than the screen, and
@@ -224,7 +247,7 @@ describe('TrackingEventEditDialog', () => {
       coarse = true;
       render(
         <App>
-          <TrackingEventEditDialog tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+          <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
         </App>,
       );
 
@@ -242,11 +265,190 @@ describe('TrackingEventEditDialog', () => {
     it('leaves a mouse the dense chrome it has everywhere else', () => {
       render(
         <App>
-          <TrackingEventEditDialog tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+          <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
         </App>,
       );
 
       expect(screen.getByRole('button', { name: /save the correction/i })).not.toHaveClass('ant-btn-lg');
+    });
+  });
+
+  /**
+   * The place, asked as the report card asks it.
+   *
+   * A correction is where a wrong place is repaired, and it used to be the one surface that could
+   * neither offer the cave's places by name nor say that a depth lands far from any station. Each
+   * case here is something the card could do and this dialog could not.
+   */
+  describe('the place it corrects', () => {
+    const DEEP: TrackingEvent = { ...REPORT, kind: 'atDepth', stationName: null, depthEnteredM: 400 };
+    /** The station the survey puts nearest to 400 m, which is a long way from it. */
+    const FAR = {
+      stationName: 'cave.deep.3',
+      surveyName: null,
+      depthM: 140,
+      deltaM: 260,
+      declared: false,
+    };
+
+    it('says at once that the recorded depth lands far from any station, with nothing retyped', () => {
+      depthReading.mockReturnValue({ data: [FAR], isFetching: false, error: null, refetch: vi.fn() });
+      render(
+        <App>
+          <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={DEEP} teams={[]} onClose={() => {}} />
+        </App>,
+      );
+
+      // Asked about on the render that opens the dialog — not a third of a second later, which is
+      // the wait a typed number gets and exactly when somebody is reading what they opened.
+      expect(depthReading.mock.calls[0][0]).toBe(400);
+      expect(screen.getByTestId('trip-tracking-edit-depth-gap')).toHaveTextContent('cave.deep.3');
+    });
+
+    it('says nothing about a depth on a report that is at a station', () => {
+      // The other half: the warning is about the depth this report holds, so a station report —
+      // which the same reading could not be asked about — draws none and asks about none.
+      depthReading.mockReturnValue({ data: [FAR], isFetching: false, error: null, refetch: vi.fn() });
+      render(
+        <App>
+          <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+        </App>,
+      );
+
+      expect(screen.queryByTestId('trip-tracking-edit-depth-gap')).toBeNull();
+      expect(depthReading.mock.calls.every(([depth]) => depth === null)).toBe(true);
+    });
+
+    it('offers the places the cave declared, and corrects the report to the one chosen', async () => {
+      declaredPlaces.mockReturnValue([
+        { depthM: 96, stationName: 'cave.upper.2', placeLabel: 'Meandru', stationInModel: true },
+      ]);
+      render(
+        <App>
+          <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+        </App>,
+      );
+
+      const chooser = screen.getByTestId('trip-tracking-edit-place');
+      fireEvent.mouseDown(chooser.querySelector('.ant-select-selector') ?? chooser);
+      await act(async () => {
+        fireEvent.click(
+          await waitFor(() => {
+            const option = document.querySelector('.ant-select-item-option[title="Meandru — 96 m"]');
+            expect(option).not.toBeNull();
+            return option!;
+          }),
+        );
+      });
+      fireEvent.click(screen.getByRole('button', { name: /save the correction/i }));
+
+      // As its depth and with no station: the server reads the depth through the declaration that
+      // was chosen, so what was picked and what lands on the log cannot disagree.
+      await waitFor(() => expect(update).toHaveBeenCalled());
+      expect(update.mock.calls[0][0]).toMatchObject({ kind: 'atDepth', depthM: 96, stationName: null });
+    });
+
+    it('offers the stations of the survey the correction will be measured against', async () => {
+      stationSearch.mockImplementation((_model: string | undefined, q: string) => ({
+        data: q === '' ? undefined : { items: [{ viewerName: 'cave.deep.3' }], totalItems: 1 },
+      }));
+      render(
+        <App>
+          <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+        </App>,
+      );
+
+      // The field answers to its label, which is what makes it reachable without a pointer.
+      const station = screen.getByLabelText('Station');
+      expect(station).toBe(screen.getByTestId('trip-tracking-edit-station'));
+      fireEvent.change(station, { target: { value: 'cave.d' } });
+
+      await waitFor(() => expect(stationSearch).toHaveBeenCalledWith('model-1', 'cave.d'));
+      fireEvent.click(
+        await waitFor(() => {
+          const option = document.querySelector('.ant-select-item-option[title="cave.deep.3"]');
+          expect(option).not.toBeNull();
+          return option!;
+        }),
+      );
+      expect(station).toHaveValue('cave.deep.3');
+    });
+  });
+
+  /**
+   * Whose report it is, and a moment that is probably a slip.
+   *
+   * One dialog serves every row and covers the row that opened it, so the title is the only thing
+   * left on screen saying which report this is. And a moment before the watch began is legitimate
+   * but rare, while a mistyped day lands there often — so it is warned about and never refused.
+   */
+  describe('what it says about the report', () => {
+    it('names the person the report is about, where it is told who that is', () => {
+      render(
+        <App>
+          <TrackingEventEditDialog
+            {...WATCH}
+            tripLogId="trip-1"
+            report={REPORT}
+            caverName="Ana Pop"
+            teams={[]}
+            onClose={() => {}}
+          />
+        </App>,
+      );
+      expect(screen.getByText(/Correct the report about Ana Pop of /)).toBeInTheDocument();
+    });
+
+    it('keeps its plain title where nobody is named', () => {
+      render(
+        <App>
+          <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+        </App>,
+      );
+      expect(screen.getByText('Correct this report')).toBeInTheDocument();
+    });
+
+    it('warns about a moment before the watch was started, and saves it all the same', async () => {
+      render(
+        <App>
+          <TrackingEventEditDialog
+            {...WATCH}
+            tripLogId="trip-1"
+            report={{ ...REPORT, recordedAt: '2026-09-11T10:00:00Z' }}
+            teams={[]}
+            onClose={() => {}}
+          />
+        </App>,
+      );
+      expect(screen.getByTestId('trip-tracking-edit-before-armed')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /save the correction/i }));
+      await waitFor(() => expect(update).toHaveBeenCalled());
+      expect(update.mock.calls[0][0].recordedAt).toBe('2026-09-11T10:00:00.000Z');
+    });
+
+    it('says nothing about a moment after the watch was started, or on a watch never started', () => {
+      const { unmount } = render(
+        <App>
+          <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+        </App>,
+      );
+      expect(screen.queryByTestId('trip-tracking-edit-before-armed')).toBeNull();
+      unmount();
+
+      render(
+        <App>
+          <TrackingEventEditDialog
+            surveyModelId={null}
+            armedAt={null}
+            tripLogId="trip-1"
+            report={{ ...REPORT, recordedAt: '2026-09-11T10:00:00Z' }}
+            teams={[]}
+            onClose={() => {}}
+          />
+        </App>,
+      );
+      expect(screen.queryByTestId('trip-tracking-edit-before-armed')).toBeNull();
     });
   });
 });

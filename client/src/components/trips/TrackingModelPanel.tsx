@@ -813,6 +813,9 @@ export default function TrackingModelPanel({
               tripLogId={tripLogId}
               state={tracking.state}
               station={recording}
+              // The watch's own survey, always: it is the one a report is measured against, and
+              // so the only one whose station names are worth offering when a spelling is refused.
+              surveyModelId={tracking.surveyModelId}
               cavers={dialogCavers}
               teams={tracking.teams}
               defaultCaverIds={selectedCaverIds}

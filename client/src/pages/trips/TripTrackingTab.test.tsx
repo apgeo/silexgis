@@ -45,6 +45,7 @@ vi.mock('../../api/hooks.ts', async () => ({
   // Nothing declared, which is every cave until somebody declares something — so the place
   // chooser is absent here and the cases below are drawn as they were.
   useTrackingPlaces: () => ({ data: [] }),
+  useSurveyModelStationSearch: () => ({ data: undefined }),
   // Arguments passed straight through, because which depths the tab decides to ask about is itself
   // a thing worth asserting: a report the screen cannot honestly measure must not cost a request.
   useTrackingDepthReadings: (...args: unknown[]) => depthReadings(...args),

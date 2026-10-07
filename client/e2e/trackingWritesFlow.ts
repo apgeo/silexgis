@@ -248,7 +248,8 @@ export async function correctImportAndReportByPlace(page: Page) {
   await expect(page.getByTestId(`trip-tracking-off-roster-${maria}`)).toHaveCount(0);
 
   // ---- Correcting a report in place ----
-  const correction = page.getByRole('dialog', { name: 'Correct this report' });
+  // The dialog is titled with whose report it is and of when, so it is found by how that begins.
+  const correction = page.getByRole('dialog', { name: /^Correct the report about / });
   const note = correction.getByTestId('trip-tracking-edit-note');
 
   // Opened on each row in turn, it carries that row's own report — not the last one it was filled

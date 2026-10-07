@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 
@@ -25,6 +26,9 @@ vi.mock('../../api/hooks.ts', () => ({
     placesAsked(enabled);
     return { data: declaredPlaces() };
   },
+  // The survey's stations offered under the station field. Nothing found here: what the field
+  // offers is the shared block's own business and is tested with it.
+  useSurveyModelStationSearch: () => ({ data: undefined }),
 }));
 
 /** Asking the check again, the way the button on a failed reading does. */
@@ -43,6 +47,8 @@ function show(state: 'off' | 'armed' | 'closed' = 'armed') {
       <TrackingReportForm
         tripLogId="trip-1"
         state={state}
+        surveyModelId="model-1"
+        caveId={null}
         caverIds={['caver-1']}
         teams={[]}
         onRecorded={vi.fn()}
@@ -162,6 +168,8 @@ describe('TrackingReportForm, reporting a declared place', () => {
         <TrackingReportForm
           tripLogId="trip-1"
           state="off"
+          surveyModelId="model-1"
+          caveId={null}
           caverIds={['caver-1']}
           teams={[]}
           onRecorded={vi.fn()}
@@ -169,14 +177,17 @@ describe('TrackingReportForm, reporting a declared place', () => {
       </App>,
     );
     expect(screen.getByTestId('trip-tracking-not-armed')).toBeInTheDocument();
-    expect(placesAsked).toHaveBeenCalled();
-    expect(placesAsked.mock.calls.every(([enabled]) => enabled === false)).toBe(true);
+    // Not asked at all, rather than asked and switched off: the fields that ask are not drawn
+    // until there is a log to write on.
+    expect(placesAsked).not.toHaveBeenCalled();
 
     rerender(
       <App>
         <TrackingReportForm
           tripLogId="trip-1"
           state="armed"
+          surveyModelId="model-1"
+          caveId={null}
           caverIds={['caver-1']}
           teams={[]}
           onRecorded={vi.fn()}
@@ -184,6 +195,39 @@ describe('TrackingReportForm, reporting a declared place', () => {
       </App>,
     );
     expect(placesAsked).toHaveBeenLastCalledWith(true);
+  });
+
+  it('points at the watch\'s cave when that cave has declared nothing', async () => {
+    // The card is told which cave the watch is in so that this line can lead somewhere. Told no
+    // cave — a reader from whom it is withheld — the line stands with no link, which the default
+    // rendering of every other case here is.
+    render(
+      <MemoryRouter>
+        <App>
+          <TrackingReportForm
+            tripLogId="trip-1"
+            state="armed"
+            surveyModelId="model-1"
+            caveId="cave-7"
+            caverIds={['caver-1']}
+            teams={[]}
+            onRecorded={vi.fn()}
+          />
+        </App>
+      </MemoryRouter>,
+    );
+    await toDepth('96');
+
+    expect(screen.getByTestId('trip-tracking-place-none-cave')).toHaveAttribute(
+      'href',
+      '/caves/cave-7',
+    );
+    cleanup();
+
+    show();
+    await toDepth('96');
+    expect(screen.getByTestId('trip-tracking-place-none')).toBeInTheDocument();
+    expect(screen.queryByTestId('trip-tracking-place-none-cave')).toBeNull();
   });
 
   it('is not drawn at all for a cave that has declared nothing', () => {
