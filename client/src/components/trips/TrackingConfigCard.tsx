@@ -59,6 +59,12 @@ interface Props {
   tripLogId: string;
   /** The caves this trip names, which is where the models a position can be placed in come from. */
   caveIds: readonly string[];
+  /**
+   * How many caves this trip names that this reader is not shown — counted by the server and never
+   * listed. Without it an empty `caveIds` is two different facts: a trip that names no cave, and a
+   * trip whose caves are all kept from whoever is looking.
+   */
+  cavesWithheld: number;
   tracking: TrackingState;
   canEdit: boolean;
   /**
@@ -98,6 +104,7 @@ interface Props {
 export default function TrackingConfigCard({
   tripLogId,
   caveIds,
+  cavesWithheld,
   tracking,
   canEdit,
   calloutState,
@@ -489,6 +496,20 @@ export default function TrackingConfigCard({
     );
   };
 
+  // One notice for one fact — the surveys of a cave this reader may not place are kept from them —
+  // reached two ways: the cave is shown and its survey list arrives empty, or the cave itself is
+  // among those the trip names and this reader is not shown.
+  const surveysWithheldNotice = (
+    <Alert
+      type="info"
+      showIcon
+      title={t('trips.tracking.surveysWithheldTitle')}
+      description={t('trips.tracking.surveysWithheldBody')}
+      style={{ marginBottom: 12 }}
+      data-testid="trip-tracking-surveys-withheld"
+    />
+  );
+
   return (
     <Card size="small" title={t('trips.tracking.setup')} style={{ marginBottom: 16 }}>
       <Descriptions column={1} size="small" data-testid="trip-tracking-state">
@@ -678,15 +699,29 @@ export default function TrackingConfigCard({
                   person, in a different place: name the cave on this trip's own details, or upload
                   a survey to the cave. Answering either with the other sends somebody to a page
                   where there is nothing for them to do. */}
-              {!models.isPending && caveIds.length === 0 && (
-                <Alert
-                  type="info"
-                  showIcon
-                  title={t('trips.tracking.noCaveNamedTitle')}
-                  description={t('trips.tracking.noCaveNamedBody')}
-                  style={{ marginBottom: 12 }}
-                  data-testid="trip-tracking-no-cave-named"
-                />
+              {/* <b>"Names no cave" is said only where it is true of the trip, not merely of what
+                  this reader was sent.</b> The list of caves arrives with every cave the reader
+                  may not open, or may not be told the position of, taken out — so for exactly the
+                  person a protected cave is kept from, it is empty on a trip that names one. Told
+                  to name the cave on the trip's details, they would go and find it named, or find
+                  a count of caves they are not shown, and either way an instruction that cannot
+                  be followed. With a cave withheld the true reason for the empty chooser is the
+                  one the notice further down already gives for a cave whose surveys are kept
+                  back, and it is given here in the same words; under a withheld setup the warning
+                  above the form has said everything, and nothing is added to it. */}
+              {!models.isPending && caveIds.length === 0 && !configWithheld && (
+                cavesWithheld > 0 ? (
+                  surveysWithheldNotice
+                ) : (
+                  <Alert
+                    type="info"
+                    showIcon
+                    title={t('trips.tracking.noCaveNamedTitle')}
+                    description={t('trips.tracking.noCaveNamedBody')}
+                    style={{ marginBottom: 12 }}
+                    data-testid="trip-tracking-no-cave-named"
+                  />
+                )
               )}
               {/* <b>An empty list is three different facts, and only one of them is "nothing was
                   uploaded".</b> The survey request answers a cave whose exact location this
@@ -713,14 +748,7 @@ export default function TrackingConfigCard({
                     }
                   />
                 ) : location.withheld ? (
-                  <Alert
-                    type="info"
-                    showIcon
-                    title={t('trips.tracking.surveysWithheldTitle')}
-                    description={t('trips.tracking.surveysWithheldBody')}
-                    style={{ marginBottom: 12 }}
-                    data-testid="trip-tracking-surveys-withheld"
-                  />
+                  surveysWithheldNotice
                 ) : location.isPending ? null : (
                   <Alert
                     type="info"

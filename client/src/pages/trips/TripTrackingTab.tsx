@@ -1177,6 +1177,9 @@ export default function TripTrackingTab({
       <TrackingConfigCard
         tripLogId={trip.id}
         caveIds={trip.caveIds}
+        // The caves the trip names and this reader is not shown, as a count: what lets the card
+        // tell a trip that names no cave from one whose cave is kept from whoever is looking.
+        cavesWithheld={trip.cavesWithheld}
         tracking={data}
         canEdit={canEdit}
         // Whether this trip has an arrangement to notice the party has not come back. Handed down

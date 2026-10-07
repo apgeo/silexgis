@@ -114,12 +114,14 @@ function show(
   canEdit = true,
   calloutState: TripCalloutState = 'none',
   caveIds: readonly string[] = ['cave-1'],
+  cavesWithheld = 0,
 ) {
   return render(
     <App>
       <TrackingConfigCard
         tripLogId="trip-1"
         caveIds={caveIds}
+        cavesWithheld={cavesWithheld}
         tracking={tracking}
         canEdit={canEdit}
         calloutState={calloutState}
@@ -923,6 +925,61 @@ describe('TrackingConfigCard', () => {
       expect(said).not.toHaveTextContent(/upload/i);
       expect(screen.queryByTestId('trip-tracking-no-survey-uploaded')).not.toBeInTheDocument();
       expect(screen.queryByTestId('trip-tracking-no-placeable-model')).not.toBeInTheDocument();
+    });
+
+    /**
+     * The list of caves reaches this card with every cave the reader is not shown taken out, so an
+     * empty list is true of two different trips. Only one of them "does not say which cave it is
+     * in". The four cases, side by side: whether a cave is withheld, and whether the setup is.
+     */
+    describe('a trip whose list of caves arrives empty', () => {
+      const WITHHELD_SETUP: Partial<TrackingState> = {
+        state: 'armed',
+        positionsWithheld: true,
+        surveyModelId: null,
+        referenceStationName: null,
+        depthFilter: [],
+      };
+      const OPEN_SETUP: Partial<TrackingState> = { state: 'off', surveyModelId: null, armedAt: null };
+
+      it('says the trip names no cave when none is named and nothing is withheld', () => {
+        models = [];
+        show(state(OPEN_SETUP), true, 'none', [], 0);
+
+        expect(screen.getByTestId('trip-tracking-no-cave-named')).toBeInTheDocument();
+        expect(screen.queryByTestId('trip-tracking-surveys-withheld')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('trip-tracking-config-withheld')).not.toBeInTheDocument();
+      });
+
+      it('says the surveys are kept back, not that no cave is named, when the cave is withheld', () => {
+        models = [];
+        show(state(OPEN_SETUP), true, 'none', [], 1);
+
+        expect(screen.queryByTestId('trip-tracking-no-cave-named')).not.toBeInTheDocument();
+        // The chooser is still empty and still has to say why — with the reason that is true.
+        expect(screen.getByTestId('trip-tracking-surveys-withheld')).toHaveTextContent(
+          /not shown to you/i,
+        );
+        expect(screen.queryByTestId('trip-tracking-no-survey-uploaded')).not.toBeInTheDocument();
+      });
+
+      it('says only that the setup is withheld when the setup is, and no cave is counted', () => {
+        models = [];
+        show(state(WITHHELD_SETUP), true, 'none', [], 0);
+
+        expect(screen.getByTestId('trip-tracking-config-withheld')).toBeInTheDocument();
+        expect(screen.queryByTestId('trip-tracking-no-cave-named')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('trip-tracking-surveys-withheld')).not.toBeInTheDocument();
+      });
+
+      it('says only that the setup is withheld when the cave and the setup both are', () => {
+        models = [];
+        show(state(WITHHELD_SETUP), true, 'none', [], 1);
+
+        expect(screen.getByTestId('trip-tracking-config-withheld')).toBeInTheDocument();
+        expect(screen.queryByTestId('trip-tracking-no-cave-named')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('trip-tracking-surveys-withheld')).not.toBeInTheDocument();
+      });
     });
 
     /** The twin that proves the notice is about the cave being absent and not about the list. */
