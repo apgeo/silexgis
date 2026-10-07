@@ -191,6 +191,10 @@ public sealed class TripSoftDeleteTests : IAsyncLifetime, IDisposable, IClassFix
             ("callout", () => owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/callout", new { })),
             ("stand down", () => owner.PostAsync($"/api/v1/trip-logs/{trip}/callout/stand-down", null)),
             ("write-up", () => owner.GetAsync($"/api/v1/trip-logs/{trip}/report")),
+            // The same document asked for with a picture of a map to go in it. Sent with no
+            // picture, which the route answers with the plain document — so before the delete it
+            // reaches the trip, and after it there is no trip for a picture to be put beside.
+            ("write-up with a picture", () => owner.PostAsync($"/api/v1/trip-logs/{trip}/report/download", null)),
             ("invitations", () => owner.GetAsync($"/api/v1/trip-logs/{trip}/invitations/")),
             ("checklist", () => owner.GetAsync($"/api/v1/trip-logs/{trip}/checklist/")),
             ("tracking", () => owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/")),
