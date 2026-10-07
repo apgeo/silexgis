@@ -232,6 +232,58 @@ public static class TripTrackingRules
         state is TripTrackingState.Armed or TripTrackingState.Closed;
 
     /// <summary>
+    /// Whether somebody may be taken off a trip's roster altogether, given the state of the trip's
+    /// watch and whether its log holds a report about them.
+    /// </summary>
+    /// <param name="state">
+    /// The state the trip's watch is in now; a trip that never had a watch is
+    /// <see cref="TripTrackingState.Off"/>.
+    /// </param>
+    /// <param name="hasReports">Whether the watch's log holds at least one report about them.</param>
+    /// <remarks>
+    /// <para>
+    /// <b>Refused in exactly one case: the watch is running and the person has been reported.</b>
+    /// A running watch is read to answer who is still inside, and the roster is what its published
+    /// page counts the party from. Somebody who went in and then disappears from the list is the
+    /// one error such a page cannot afford — the count of people underground drops by one with
+    /// nobody having come out — and it is reached by an ordinary act: the trip's form sends the
+    /// whole roster back, so a form that was opened before the person was added, or an edit made
+    /// for another reason, removes them without anybody having decided to.
+    /// </para>
+    /// <para>
+    /// <b>Allowed once the watch has closed, and on a trip that never had one.</b> A finished trip
+    /// is a record somebody is writing up, and its list of people has to stay correctable: a guest
+    /// entered under the wrong trip is taken off it. The reports about them remain in the log, and
+    /// the watch's own read goes on listing everybody its log speaks of, so nothing recorded is
+    /// lost from sight by the removal.
+    /// </para>
+    /// <para>
+    /// <b>Somebody nobody has reported on may leave at any time</b>, a running watch included:
+    /// there is nothing about them for the watch to lose, and a party that changes at the entrance
+    /// is the commonest roster edit there is.
+    /// </para>
+    /// <para>
+    /// <b>What this does not promise: that a running watch never speaks of somebody off the
+    /// roster.</b> It refuses the ordinary way there, a roster edit, and two others remain. A
+    /// watch that was closed, had a reported person taken off, and is then started again is
+    /// running with that person off its list; and the answer here is given from what the caller
+    /// read a moment earlier, with nothing holding the log still until the roster is saved, so a
+    /// first report recorded in that moment lands after the departure it should have refused.
+    /// Every reader of a watch therefore still has to cope with a reported person who is not on
+    /// the roster — the watch's own read lists them and says so — and must not take this rule as
+    /// leave to assume otherwise.
+    /// </para>
+    /// <para>
+    /// <b>This is asked about leaving the trip, never about leaving a job on it.</b> One person can
+    /// hold several jobs on a trip, each its own roster row; giving one up, or exchanging one for
+    /// another, leaves them on the trip and is not a departure. The caller decides who is leaving
+    /// by comparing people, not rows, and asks this only of those named in no job afterwards.
+    /// </para>
+    /// </remarks>
+    public static bool MayLeaveRoster(TripTrackingState state, bool hasReports) =>
+        !(state == TripTrackingState.Armed && hasReports);
+
+    /// <summary>
     /// Whether a stored report has been changed since it was first written down.
     /// </summary>
     /// <remarks>

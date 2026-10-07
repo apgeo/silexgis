@@ -158,7 +158,8 @@ public static class TripTrackingEndpoints
     private static async Task<Results<Ok<TrackingStateDto>, ProblemHttpResult>> GetAsync(
         Guid tripLogId, HttpContext http, SilexGisDbContext db, IAccessService access,
         FeatureProtection protection, IAccessContextAccessor accessAccessor,
-        IOptions<TripTrackingOptions> options, TimeProvider clock, CancellationToken ct)
+        IOptions<TripTrackingOptions> options, TimeProvider clock, IUserContextAccessor userAccessor,
+        CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null) return ApiProblems.NotFound("trip_log.not_found");
@@ -168,8 +169,10 @@ public static class TripTrackingEndpoints
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         var teams = await db.TripTeams.AsNoTracking()
             .Where(t => t.TripLogId == tripLogId).OrderBy(t => t.Title).ToListAsync(ct);
-        var rosterCavers = await db.TripLogParticipants.AsNoTracking()
-            .Where(p => p.TripLogId == tripLogId).Select(p => p.CaverId).Distinct().ToListAsync(ct);
+        // The people the trip names, in the order it first named each of them — asked of the same
+        // function the published reads number the party by, so the table a coordinator reads and
+        // the page a follower reads list the same people in the same order.
+        var rosterCavers = await TripTrackingPublicationEndpoints.RosterOrderAsync(db, tripLogId, ct);
         // What a published page calls each of them, where somebody chose. Shown here so the
         // panel that sets the labels can show what it set; nothing about the choice is
         // location data, so it follows the trip's own readability and nothing else.
@@ -263,9 +266,38 @@ public static class TripTrackingEndpoints
 
         var withheldAny = configHasVocabulary && !configOpen;
         var byCaver = events.GroupBy(e => e.CaverId).ToDictionary(g => g.Key, g => g.ToList());
-        var participants = new List<TrackingParticipantDto>();
-        foreach (var caverId in rosterCavers.OrderBy(c => c))
+
+        // <b>The party is everybody the trip names and everybody the log speaks of.</b> Folding the
+        // roster alone dropped a person the moment they were taken off it, while every report about
+        // them stayed in the log printed under this table: one screen, two answers to who was in
+        // the cave. Nothing recorded is a reason to stop showing somebody, so they stay, marked.
+        //
+        // After the roster, and in the order the log first mentions each of them. That order is
+        // the log's own (the events above are already oldest first), it does not move when the
+        // roster is edited again, and it keeps the people nothing more can be recorded for below
+        // the ones a coordinator is still working with.
+        var onRoster = rosterCavers.ToHashSet();
+        var offRoster = new List<Guid>();
+        var seenOffRoster = new HashSet<Guid>();
+        foreach (var report in events)
         {
+            if (!onRoster.Contains(report.CaverId) && seenOffRoster.Add(report.CaverId))
+            {
+                offRoster.Add(report.CaverId);
+            }
+        }
+
+        // Their names, since the trip this reader holds no longer has them: the label every
+        // signed-in surface shows a person under, by the one rule that decides it. Asked only when
+        // there is somebody to name, which on nearly every trip there is not.
+        var formerNames = offRoster.Count > 0
+            ? await CaverDirectory.ResolveLabelsAsync(db, await userAccessor.GetAsync(ct), offRoster, ct)
+            : [];
+
+        var participants = new List<TrackingParticipantDto>();
+        foreach (var caverId in rosterCavers.Concat(offRoster))
+        {
+            var listed = onRoster.Contains(caverId);
             byCaver.TryGetValue(caverId, out var own);
             var last = own?.Count > 0 ? own[^1] : null;
             // A note or an exit says something happened, not where — the displayed position
@@ -300,11 +332,17 @@ public static class TripTrackingEndpoints
                 positionOpen ? lastPositioned?.SurveyModelId : null,
                 standing == TripStanding.Underground,
                 standing == TripStanding.Out,
-                labels.GetValueOrDefault(caverId),
+                // The caption and the published name are statements about a page that counts its
+                // party from the roster. For somebody off it that page shows nothing, so neither
+                // is said — a caption row may well still be stored for them, and reading it out
+                // would describe a line the page does not print.
+                listed ? labels.GetValueOrDefault(caverId) : null,
                 // One rule, two surfaces. Calling the published read's own function is what keeps
                 // this from telling somebody they appear as a place in the party while the page
                 // names them.
-                TripTrackingPublicationEndpoints.NameFor(caverId, labels, publishedNames)));
+                listed ? TripTrackingPublicationEndpoints.NameFor(caverId, labels, publishedNames) : null,
+                listed,
+                listed ? null : formerNames.GetValueOrDefault(caverId)));
         }
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
@@ -364,7 +402,8 @@ public static class TripTrackingEndpoints
     private static async Task<Results<Ok<TrackingStateDto>, ProblemHttpResult>> PutConfigAsync(
         Guid tripLogId, TrackingConfigRequest request, HttpContext http, SilexGisDbContext db,
         IAccessService access, FeatureProtection protection, IAccessContextAccessor accessAccessor,
-        IOptions<TripTrackingOptions> options, TimeProvider clock, CancellationToken ct)
+        IOptions<TripTrackingOptions> options, TimeProvider clock, IUserContextAccessor userAccessor,
+        CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
@@ -515,7 +554,8 @@ public static class TripTrackingEndpoints
             return ApiProblems.Conflict(TrackingProblemCodes.ConcurrentWrite, "Another tracking write landed first — reload and retry.");
         }
 
-        return await GetAsync(tripLogId, http, db, access, protection, accessAccessor, options, clock, ct);
+        return await GetAsync(
+            tripLogId, http, db, access, protection, accessAccessor, options, clock, userAccessor, ct);
     }
 
     private static async Task<Results<Ok<TrackingTeamDto>, ProblemHttpResult>> CreateTeamAsync(

@@ -1269,6 +1269,164 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         (await owner.GetAsync(PlacesOf(trip))).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    // ---- the roster and the log ----------------------------------------------------------
+
+    /// <summary>
+    /// The trip's form sends the whole roster back, so an edit made for any other reason can take
+    /// somebody off it. While the watch runs that is refused for anybody it has reports about;
+    /// once it has closed it is allowed, and the watch goes on listing them — marked, and with
+    /// nothing said about what a published page would call them, because it shows them no more.
+    /// </summary>
+    [Fact]
+    public async Task Somebody_the_log_speaks_of_cannot_leave_a_running_watch_and_stays_in_sight_once_it_has_closed()
+    {
+        var (trip, cavers) = await CreateTripAsync("Roster and log", guests: 3);
+        var (stays, reported, silent) = (cavers[0], cavers[1], cavers[2]);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ReportAsync(trip, new { caverIds = new[] { stays, reported }, kind = "entered" }, At(9, 0));
+        await ReportAsync(
+            trip, new { caverIds = new[] { reported }, kind = "atStation", stationName = "cave.upper.2" }, At(10, 0));
+        // Captioned, so that the empty caption asserted at the end is a field that had something
+        // in it to withhold and not one that was empty anyway.
+        (await owner.PutAsJsonAsync(
+            $"/api/v1/trip-logs/{trip}/tracking/participants/{reported}", new { label = "R." }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Nobody has said anything about the third: the party changed at the entrance, and that is
+        // an ordinary edit on a running watch.
+        var trimmed = await PutRosterAsync(trip, [stays, reported]);
+        trimmed.StatusCode.ShouldBe(HttpStatusCode.OK, await trimmed.Content.ReadAsStringAsync());
+        (await StateAsync(owner, trip)).GetProperty("participants").EnumerateArray()
+            .Select(p => p.GetProperty("caverId").GetGuid())
+            .ShouldNotContain(silent, "somebody with no report and no place on the trip is not on its watch");
+
+        // A change of job is not a departure: the reported person stops being a participant and
+        // becomes the proposer, which removes one roster row and adds another, and is never refused.
+        var moved = await PutRosterAsync(trip, [stays], proposers: [reported]);
+        moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+        Participant(await StateAsync(owner, trip), reported).GetProperty("onRoster").GetBoolean().ShouldBeTrue();
+        (await PutRosterAsync(trip, [stays, reported])).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Off the trip altogether, while the watch runs: refused, by a code, naming nobody.
+        var refused = await PutRosterAsync(trip, [stays]);
+        var refusal = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, refusal);
+        refusal.ShouldContain("trip_log.participant_tracked");
+        refusal.Contains(reported.ToString(), StringComparison.OrdinalIgnoreCase).ShouldBeFalse();
+        (await RosterAsync(trip)).ShouldBe([stays, reported], ignoreOrder: true);
+        var running = Participant(await StateAsync(owner, trip), reported);
+        running.GetProperty("in").GetBoolean().ShouldBeTrue();
+        running.GetProperty("onRoster").GetBoolean().ShouldBeTrue();
+        running.GetProperty("label").GetString().ShouldBe("R.");
+
+        // Closed: the same write goes through, and the watch still shows the person.
+        (await PutConfigAsync(owner, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var removed = await PutRosterAsync(trip, [stays]);
+        removed.StatusCode.ShouldBe(HttpStatusCode.OK, await removed.Content.ReadAsStringAsync());
+        (await RosterAsync(trip)).ShouldBe([stays]);
+
+        var state = await StateAsync(owner, trip);
+        state.GetProperty("participants").EnumerateArray()
+            .Select(p => p.GetProperty("caverId").GetGuid())
+            .ShouldBe([stays, reported], "the people the trip names come first, the rest after them");
+
+        var listed = Participant(state, stays);
+        listed.GetProperty("onRoster").GetBoolean().ShouldBeTrue();
+        listed.GetProperty("name").ValueKind.ShouldBe(JsonValueKind.Null, "the trip itself names the people on its roster");
+        listed.GetProperty("publishedAs").ValueKind.ShouldBe(JsonValueKind.String);
+
+        var gone = Participant(state, reported);
+        gone.GetProperty("onRoster").GetBoolean().ShouldBeFalse();
+        gone.GetProperty("in").GetBoolean().ShouldBeTrue();
+        gone.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        gone.GetProperty("name").GetString().ShouldBe(await CaverNameAsync(reported));
+        // A published page counts the party from the roster, so it shows this person no longer —
+        // and a field saying what it would call them would be describing nothing.
+        gone.GetProperty("label").ValueKind.ShouldBe(JsonValueKind.Null);
+        gone.GetProperty("publishedAs").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The log has not changed, and now agrees with the table above it.
+        var log = await BodyAsync(await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events?caverId={reported}"));
+        log.GetProperty("items").GetArrayLength().ShouldBe(2);
+
+        // Nothing more can be recorded about somebody the trip no longer names: that rule is
+        // unchanged, and it is why the screen keeps such a row out of the report's candidates.
+        var late = await PostEventAsync(owner, trip, new { caverIds = new[] { reported }, kind = "exited" });
+        late.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await late.Content.ReadAsStringAsync()).ShouldContain("tracking.caver_not_participant");
+    }
+
+    /// <summary>
+    /// The party is listed in the order the trip names it, which is the order a published page
+    /// numbers it in — not in the order its people happened to be entered in the club's register.
+    /// </summary>
+    [Fact]
+    public async Task The_party_is_listed_in_the_order_the_trip_names_it()
+    {
+        // Somebody already in the register, from an earlier trip.
+        var (_, earlier) = await CreateTripAsync("Order, an earlier trip", guests: 1);
+        var registeredFirst = earlier[0];
+
+        // This trip names a newcomer first and the long-standing member second.
+        var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Order {Guid.NewGuid():N}",
+            tripDate = "2026-09-12",
+            participants = new object[]
+            {
+                new { newCaverName = $"Newcomer {Guid.NewGuid():N}"[..24] },
+                new { caverId = registeredFirst },
+            },
+            visibility = "authenticated",
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var trip = (await BodyAsync(response)).GetProperty("id").GetGuid();
+
+        var named = await RosterAsync(trip);
+        named.Count.ShouldBe(2);
+        named[1].ShouldBe(registeredFirst);
+        // What makes this a test of the order and not a coincidence: sorted by identity, the two
+        // would come out the other way round.
+        registeredFirst.CompareTo(named[0]).ShouldBeLessThan(0);
+
+        (await StateAsync(owner, trip)).GetProperty("participants").EnumerateArray()
+            .Select(p => p.GetProperty("caverId").GetGuid())
+            .ShouldBe(named);
+    }
+
+    /// <summary>
+    /// Rewrites a trip's roster the way its form does: the two lists sent are the whole of it.
+    /// </summary>
+    private Task<HttpResponseMessage> PutRosterAsync(
+        Guid trip, IEnumerable<Guid> participants, IEnumerable<Guid>? proposers = null) =>
+        owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{trip}", new
+        {
+            title = $"Roster {Guid.NewGuid():N}"[..28],
+            tripDate = "2026-09-12",
+            participants = participants.Select(id => new { caverId = id }).ToArray(),
+            proposers = (proposers ?? []).Select(id => new { caverId = id }).ToArray(),
+            visibility = "authenticated",
+        });
+
+    /// <summary>The people a trip names, in the order it first named each of them.</summary>
+    private async Task<List<Guid>> RosterAsync(Guid trip)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var rows = await db.TripLogParticipants.Where(p => p.TripLogId == trip)
+            .OrderBy(p => p.Id).Select(p => p.CaverId).ToListAsync();
+        return [.. rows.Distinct()];
+    }
+
+    private async Task<string> CaverNameAsync(Guid caver)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Cavers.Where(c => c.Id == caver).Select(c => c.FullName).SingleAsync();
+    }
+
     private static string PlacesOf(Guid trip) => $"/api/v1/trip-logs/{trip}/tracking/places";
 
     private static Task<HttpResponseMessage> PutEventAsync(

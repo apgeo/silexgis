@@ -183,6 +183,23 @@ public class TripTrackingDomainTests
         TripTrackingRules.ArmedForLongerThan(TripTrackingState.Armed, null, now, week).ShouldBeFalse();
     }
 
+    // The whole table, because it is six cells and exactly one of them refuses: a rule this small
+    // is cheapest to keep right by writing every case down, so that widening the refusal to a
+    // closed watch (which would make a finished trip's list uncorrectable) or to people nobody has
+    // reported on (which would freeze the roster at the entrance) fails here by name.
+    [Theory]
+    [InlineData(TripTrackingState.Armed, true, false)]
+    [InlineData(TripTrackingState.Armed, false, true)]
+    [InlineData(TripTrackingState.Closed, true, true)]
+    [InlineData(TripTrackingState.Closed, false, true)]
+    [InlineData(TripTrackingState.Off, true, true)]
+    [InlineData(TripTrackingState.Off, false, true)]
+    public void Somebody_may_leave_the_roster_unless_a_running_watch_has_reports_about_them(
+        TripTrackingState state, bool hasReports, bool mayLeave)
+    {
+        TripTrackingRules.MayLeaveRoster(state, hasReports).ShouldBe(mayLeave);
+    }
+
     // ---- where one member of the party stands --------------------------------------------
     //
     // StandingOf is pure, takes a plain sequence and is the one home both tracking reads ask.

@@ -142,7 +142,39 @@ public sealed record TrackingParticipantDto(
     /// set than that: only to somebody who may read this trip.
     /// </para>
     /// </remarks>
-    string? PublishedAs);
+    string? PublishedAs,
+    /// <summary>
+    /// Whether the trip still names this person. False for somebody who is listed here only
+    /// because the watch's log holds reports about them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The party is everybody the trip names <em>and</em> everybody its log speaks of. The two part
+    /// company when somebody is taken off a finished trip's roster after having been reported on:
+    /// their reports stay in the log, and a table that listed only the roster would count one
+    /// person fewer than the log printed beneath it accounts for.
+    /// </para>
+    /// <para>
+    /// <b>What false changes.</b> No report and no caption is taken for somebody the trip does not
+    /// name, so a surface offers neither. <see cref="Label"/> and <see cref="PublishedAs"/> are null
+    /// for them whatever is stored: a published page counts its party from the roster and shows
+    /// this person no longer, so a field saying what it would call them would describe nothing.
+    /// </para>
+    /// </remarks>
+    bool OnRoster,
+    /// <summary>
+    /// The person's name, sent only for somebody the trip no longer names
+    /// (<see cref="OnRoster"/> false); null for everybody on the roster.
+    /// </summary>
+    /// <remarks>
+    /// Everybody on the roster is named by the trip itself, which every reader of this watch has
+    /// already read, so repeating those names here would be a second copy that could disagree with
+    /// the first. Somebody off the roster is named by nothing the reader holds, and a row that
+    /// could only say "somebody" beside a place in a cave is the least useful thing this read could
+    /// send. It is the label every signed-in surface shows that person under, resolved by the same
+    /// rule and for the same caller, so it tells nobody a name they could not already read.
+    /// </remarks>
+    string? Name);
 
 public sealed record TrackingStateDto(
     TripTrackingState State,
