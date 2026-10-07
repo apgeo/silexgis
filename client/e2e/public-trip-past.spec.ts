@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, type Page } from '@playwright/test';
 import { CHOICE_KEY } from '../src/i18n/languageStorage.ts';
-import { tryAsPerson } from './arrange.ts';
+import { surveyRead, tryAsPerson } from './arrange.ts';
 import { ownContext, test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
@@ -83,29 +83,6 @@ async function makeTrip(
     maxParticipants: null,
     meetingGeom: null,
   })) as { id: string; participants: { caverId: string; name: string }[] };
-}
-
-/**
- * Waits until an uploaded survey has been read.
- *
- * The upload answers as soon as the file is stored; the survey's stations are written by a job
- * that starts then, and the row says when it has finished. A report naming a station before that
- * is refused as naming no station of the model — which the steps between an upload and the first
- * such report are long enough to hide on a quiet machine, and not on a busy one. Waited on by the
- * row's own word, so a survey that could not be read fails here, saying so.
- */
-async function surveyRead(page: Page, token: string, modelId: string) {
-  await expect
-    .poll(
-      async () => {
-        const model = (await apiJson(page, token, 'GET', `/api/v1/survey-models/${modelId}`)) as {
-          status: string;
-        };
-        return model.status;
-      },
-      { timeout: 90_000, message: 'the uploaded survey was never read into its stations' },
-    )
-    .toBe('ready');
 }
 
 /** Points a trip's watch at a survey and moves it between states, honouring the read's etag. */
@@ -192,8 +169,8 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
   });
   expect(laterUpload.status(), await laterUpload.text()).toBe(201);
   const laterModelId = ((await laterUpload.json()) as { id: string }).id;
-  await surveyRead(page, auth, modelId);
-  await surveyRead(page, auth, laterModelId);
+  await surveyRead(page, modelId);
+  await surveyRead(page, laterModelId);
 
   // ---- The earlier trip: tracked, reported, closed, published ----
   const pastTitle = `E2E the morning push ${stamp}`;
@@ -814,7 +791,7 @@ test('a visitor watches another party of the cave on the survey of the link they
     });
     expect(uploaded.status(), await uploaded.text()).toBe(201);
     const modelId = ((await uploaded.json()) as { id: string }).id;
-    await surveyRead(page, auth, modelId);
+    await surveyRead(page, modelId);
 
     const today = new Date().toISOString().slice(0, 10);
     const report = (

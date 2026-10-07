@@ -9,6 +9,7 @@ import {
   localDay,
   registerAccount,
   signedInElsewhere,
+  surveyRead,
   tripBody,
   tryAsPerson,
   versionOf,
@@ -192,13 +193,7 @@ test('somebody who may read a trip but not where its cave is is told who is unde
     const model = ((await upload.json()) as { id: string }).id;
     modelId = model;
     // The stations a report names are stored when the server has read the file through.
-    await expect
-      .poll(
-        async () =>
-          (await asPerson<{ status: string }>(page, 'GET', `/api/v1/survey-models/${model}`)).status,
-        { timeout: 90_000, message: 'the uploaded survey was never read' },
-      )
-      .toBe('ready');
+    await surveyRead(page, model);
 
     const person = (name: string) => ({
       caverId: null, newCaverName: name, roleId: null, entryTime: null, exitTime: null, note: null,

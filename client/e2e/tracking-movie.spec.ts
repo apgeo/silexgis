@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { readFile } from 'node:fs/promises';
 import { expect, type Locator, type Page } from '@playwright/test';
+import { surveyRead } from './arrange.ts';
 import { test } from './consoleGuard.ts';
 import { gotoRoute, login } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
@@ -220,6 +221,9 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   const auth = await bearerToken(page);
   const models = (await apiJson(page, auth, 'GET', `/api/v1/caves/${caveId}/survey-models`)) as { id: string }[];
   const modelId = models[0].id;
+  // Every report below names a station, and the survey's stations are stored after the upload
+  // answers: named before then, a station is refused as none of the survey's.
+  await surveyRead(page, modelId);
 
   // ---- Two trips, each tracked on the survey and reported hours apart ----
   const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();

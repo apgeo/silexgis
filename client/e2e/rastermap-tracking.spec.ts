@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
+import { surveyRead } from './arrange.ts';
 import { test } from './consoleGuard.ts';
 import { gotoRoute, login } from './helpers.ts';
 import { apiJson, bearerToken, relationId, uploadMapPng } from './rastermapApi.ts';
@@ -81,6 +82,9 @@ test('the watch draws its party on the sheet, and says who the sheet cannot plac
     id: string;
   }[];
   const modelId = models[0].id;
+  // The reports further down name stations, and the survey's stations are stored after the
+  // upload answers: named before then, a station is refused as none of the survey's.
+  await surveyRead(page, modelId);
 
   // The map and its two pins, authored the way batch-2's flows write them.
   const mapFile = await uploadMapPng(page, token, `${mapName}.png`);
