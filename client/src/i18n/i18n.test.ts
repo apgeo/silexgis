@@ -600,6 +600,8 @@ describe('i18n locales', () => {
   it('every tracking sheet column role is named in both locales, and none is left over', () => {
     const roles = [
       'RecordedAt',
+      'Date',
+      'Time',
       'Depth',
       'Station',
       'Place',

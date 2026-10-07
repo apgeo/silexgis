@@ -12,6 +12,7 @@ import {
   Form,
   Input,
   Modal,
+  Segmented,
   Select,
   Statistic,
   Table,
@@ -42,13 +43,34 @@ import {
   type SheetDelimiterChoice,
   type SheetEncodingChoice,
 } from './trackingCsvSheet.ts';
+import {
+  momentInSheetZone,
+  ownSheetZone,
+  SHEET_ZONE_AS_WRITTEN,
+  sheetDayInWords,
+  sheetZoneNames,
+} from './trackingCsvZones.ts';
 import './TrackingCsvImportDialog.css';
 
 interface Props {
   tripLogId: string;
+  /**
+   * The trip's own date ("2026-09-12"), offered as the day a sheet of bare times was kept on.
+   *
+   * Offered, never assumed: it fills the field in when the sheet turns out to need a day, and it
+   * is sent only once the reviewer has been shown that field and read the sheet again.
+   */
+  tripDay?: string | null;
   open: boolean;
   onClose: () => void;
 }
+
+/** Where the sheet's text comes from: a file chosen on this machine, or rows pasted in. */
+type SheetSource = 'file' | 'paste';
+
+/** The days the server will put a sheet of times on; the field's own bounds, so both agree. */
+const EARLIEST_SHEET_DAY = '1900-01-01';
+const LATEST_SHEET_DAY = '2200-12-31';
 
 /** Which of a row's fields a hand-written mapping can point at a header. */
 type FieldMapping = Record<string, string>;
@@ -87,7 +109,7 @@ type DateOrderChoice = 'auto' | 'dayFirst' | 'monthFirst';
  * question about the width, so it is the width that decides; how big a control has to be is the
  * pointer's question and the library answers it on its own here.
  */
-export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Props) {
+export default function TrackingCsvImportDialog({ tripLogId, tripDay, open, onClose }: Props) {
   const { t, i18n } = useTranslation();
   const narrow = useIsMobile();
   // Only the ticks on the preview's rows ask this: a bare checkbox is sixteen pixels under any
@@ -101,9 +123,47 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
   // instead of asking for it again.
   const [bytes, setBytes] = useState<ArrayBuffer | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  /**
+   * Rows pasted in, as the other way of handing the sheet over.
+   *
+   * <b>For the phone a coordinator actually has in their hand.</b> A sheet kept in a spreadsheet
+   * application on a phone is not a file anybody can find: getting it into a file chooser means
+   * exporting it, saving it somewhere and finding it again, where selecting the rows and copying
+   * them is two gestures. What a spreadsheet puts on the clipboard is the same rows separated by
+   * tabs, which the reader takes like any other separator — so the pasted text goes through the
+   * same read and the same import as a file's, with nothing of its own on the server.
+   *
+   * Both are kept while the dialog is open and only the chosen one is sent, so looking at the other
+   * way in does not throw away a file already chosen or rows already pasted.
+   */
+  const [source, setSource] = useState<SheetSource>('file');
+  const [pasted, setPasted] = useState('');
   const [encoding, setEncoding] = useState<SheetEncodingChoice>('auto');
   const [delimiter, setDelimiter] = useState<SheetDelimiterChoice>('auto');
   const [dateOrder, setDateOrder] = useState<DateOrderChoice>('auto');
+  /**
+   * Whose clock the sheet's times are on: a zone by name, or "exactly as written".
+   *
+   * <b>Opens on "exactly as written", every time.</b> That is the reading a sheet has always been
+   * given here, so a sheet imported without touching this is imported as it was before the choice
+   * existed. It is deliberately not remembered from one import to the next: a remembered zone is a
+   * different default, applied to a sheet whose reviewer never chose it.
+   */
+  const [zone, setZone] = useState<string>(SHEET_ZONE_AS_WRITTEN);
+  /**
+   * The day a sheet of bare times was kept on, and whether the sheet has asked for one.
+   *
+   * <b>The question comes from the sheet, not from this screen.</b> Most sheets write their dates,
+   * and a day field standing there for all of them would be a setting that does nothing. So the
+   * field appears once a read has come back saying the times have no dates, already holding the
+   * trip's own date — the likeliest answer — and the reviewer reads the sheet again to accept it.
+   * A day nobody has been shown is never sent.
+   *
+   * Once asked it stays for that sheet, whatever later reads say: a field that came and went as
+   * the columns were remapped would take the reviewer's answer away with it.
+   */
+  const [day, setDay] = useState(tripDay ?? '');
+  const [asksForDay, setAsksForDay] = useState(false);
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [mapping, setMapping] = useState<FieldMapping>({});
   const [wentIn, setWentIn] = useState('');
@@ -137,7 +197,7 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
   const commit = useTrackingCsvCommit();
 
   const decoded = useMemo(() => (bytes ? decodeSheet(bytes, encoding) : null), [bytes, encoding]);
-  const text = decoded?.text ?? '';
+  const text = source === 'paste' ? pasted : (decoded?.text ?? '');
   // Guessed from the header line of the text as read, so a semicolon sheet — what a Romanian
   // Excel writes, and what it writes back after opening the comma template — is read as one
   // without anybody being told the sheet lacks columns it has.
@@ -164,8 +224,31 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
       dateOrder: dateOrder === 'auto' ? null : dateOrder,
       wentInWords: words(wentIn).length > 0 ? words(wentIn) : null,
       cameOutWords: words(cameOut).length > 0 ? words(cameOut) : null,
+      timeZone: zone === SHEET_ZONE_AS_WRITTEN ? null : zone,
+      day: asksForDay && day.length > 0 ? day : null,
     };
-  }, [mapping, wentIn, cameOut, effectiveDelimiter, dateOrder]);
+  }, [mapping, wentIn, cameOut, effectiveDelimiter, dateOrder, zone, asksForDay, day]);
+
+  // The zones offered, the importer's own first: it is the answer for nearly every sheet, and
+  // nobody should have to know how their own zone is spelled to find it in a list of hundreds.
+  const ownZone = useMemo(ownSheetZone, []);
+  const zoneOptions = useMemo(
+    () => [
+      { value: SHEET_ZONE_AS_WRITTEN, label: t('trips.tracking.csvImport.zoneAsWritten') },
+      ...(ownZone
+        ? [{ value: ownZone, label: t('trips.tracking.csvImport.zoneMine', { zone: ownZone }) }]
+        : []),
+      ...sheetZoneNames()
+        .filter((name) => name !== ownZone)
+        .map((name) => ({ value: name, label: name })),
+    ],
+    [ownZone, t],
+  );
+  // Asked of the browser rather than assumed: reading the clipboard exists only on a secure page
+  // and not in every browser, and a button that can only fail is worse than a text box that
+  // already takes a paste from the keyboard or a long press.
+  const clipboardReadable =
+    typeof navigator !== 'undefined' && typeof navigator.clipboard?.readText === 'function';
 
   /** Saving the sample sheet, through the one helper that knows how to carry the token. */
   const takeTemplate = async () => {
@@ -197,6 +280,8 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
   const chooseEncoding = rereadWith(setEncoding);
   const chooseDelimiter = rereadWith(setDelimiter);
   const chooseDateOrder = rereadWith(setDateOrder);
+  const chooseZone = rereadWith(setZone);
+  const chooseDay = rereadWith(setDay);
   const typeWentIn = rereadWith(setWentIn);
   const typeCameOut = rereadWith(setCameOut);
   const mapField = (field: string, headerName: string | undefined) => {
@@ -204,9 +289,48 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
     setPreview(null);
   };
 
+  /**
+   * Another sheet, by whichever way it came: what was decided about the last one goes with it.
+   *
+   * A tick to overwrite was given for the rows it was read on, the column choosers offer the last
+   * sheet's headers, and the question about the day was that sheet's question. How the sheet is
+   * read — separator, zone, words — stays, because those are usually the club's habits rather than
+   * one sheet's.
+   */
+  const forgetSheet = () => {
+    setPreview(null);
+    setHeader([]);
+    setReplaceExisting(false);
+    setAsksForDay(false);
+  };
+  const chooseSource = (next: SheetSource) => {
+    setSource(next);
+    forgetSheet();
+  };
+  /** Typing or pasting is a change to the sheet itself, so the reading of it goes like any other. */
+  const typePasted = (value: string) => {
+    setPasted(value);
+    setPreview(null);
+    setReplaceExisting(false);
+  };
+  const pasteFromClipboard = async () => {
+    try {
+      typePasted(await navigator.clipboard.readText());
+    } catch {
+      // Refused by the browser or by the person asked: the box still takes a paste by hand, and
+      // saying so is the whole of what there is to do about it.
+      message.warning(t('trips.tracking.csvImport.pasteUnavailable'));
+    }
+  };
+
   const close = () => {
     setBytes(null);
     setFileName(null);
+    setSource('file');
+    setPasted('');
+    setZone(SHEET_ZONE_AS_WRITTEN);
+    setDay(tripDay ?? '');
+    setAsksForDay(false);
     setEncoding('auto');
     setDelimiter('auto');
     setDateOrder('auto');
@@ -227,6 +351,14 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
       // Every line ticked afresh on each read: a new reading is a new set of rows, and a line left
       // unticked under the last one may now mean something else entirely.
       setChosenLines(new Set(page.rows.map((row) => row.line)));
+      // The sheet saying its times have no dates — either by refusing to be read without a day, or
+      // by having been read on the one that was named.
+      if (
+        page.day !== null ||
+        page.fileDiagnostics.some((finding) => finding.problem === 'TimeColumnNeedsADay')
+      ) {
+        setAsksForDay(true);
+      }
       setPreview(page);
     } catch (error) {
       message.error(trackingProblemMessage(error, t));
@@ -271,11 +403,9 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
   const takeFile = async (file: File) => {
     setBytes(await file.arrayBuffer());
     setFileName(file.name);
-    setPreview(null);
-    setHeader([]);
     // A tick to overwrite was given for the sheet it was read on. Another file is another set of
     // rows to overwrite, and the reviewer ticks it again for those.
-    setReplaceExisting(false);
+    forgetSheet();
     return false;
   };
 
@@ -327,10 +457,23 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
    * team name the trip lacks, which the row survived intact.
    */
   const changesMeaning = (problem: string) =>
-    problem === 'StateWordUnknown' || problem === 'StateOverridesPlace';
+    problem === 'StateWordUnknown' ||
+    problem === 'StateOverridesPlace' ||
+    // The two where the moment itself may be the wrong one: an hour the clocks showed twice, read
+    // as the first of the two, and a time that only makes sense on the day after the one named.
+    problem === 'MomentRepeatedByClockChange' ||
+    problem === 'ClockRunsBackwards';
 
-  /** The moment a row is filed at, in the application's language and the reader's zone. */
-  const momentOf = (row: TrackingCsvPreviewRow) => new Date(row.recordedAt).toLocaleString(i18n.language);
+  /**
+   * The moment a row is filed at, in the application's language.
+   *
+   * On the clocks of the zone the sheet was read in, where it was read in one — the zone the server
+   * says it applied, not the one the chooser is on now — so the reviewer reads back the hour the
+   * sheet wrote. A sheet read exactly as written is shown on the reader's own clock, like every
+   * other moment on the tracking surfaces.
+   */
+  const momentOf = (row: TrackingCsvPreviewRow) =>
+    momentInSheetZone(row.recordedAt, i18n.language, preview?.timeZone ?? null);
   const caverOf = (row: TrackingCsvPreviewRow) => (
     <Flex vertical>
       <span>{row.caverMatched}</span>
@@ -462,32 +605,130 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
         {t('trips.tracking.csvImport.help')}
       </Typography.Paragraph>
 
-      <Upload.Dragger
-        accept=".csv,text/csv"
-        maxCount={1}
-        beforeUpload={takeFile}
-        showUploadList={false}
-        data-testid="trip-tracking-csv-file"
-      >
-        <Typography.Text>
-          {fileName ?? t('trips.tracking.csvImport.choose')}
-        </Typography.Text>
-        {/* What was made of the file, beside its name and outside the fold: a reviewer looking
-            at a garbled name needs to know which encoding was guessed without going looking for
-            the control that changes it. */}
-        {decoded && (
-          <div>
-            <Typography.Text type="secondary" data-testid="trip-tracking-csv-read-as">
-              {t('trips.tracking.csvImport.readAs', {
-                encoding: t(`trips.tracking.csvImport.encodings.${decoded.encoding}`),
-                delimiter: t(
-                  `trips.tracking.csvImport.delimiters.${DELIMITER_LABELS[effectiveDelimiter]}`,
-                ),
-              })}
-            </Typography.Text>
-          </div>
-        )}
-      </Upload.Dragger>
+      <Segmented<SheetSource>
+        // The whole width on a phone, so each of the two is a target a thumb can hit.
+        block={narrow}
+        value={source}
+        onChange={chooseSource}
+        aria-label={t('trips.tracking.csvImport.source')}
+        data-testid="trip-tracking-csv-source"
+        style={{ marginBottom: 8 }}
+        options={[
+          { value: 'file', label: t('trips.tracking.csvImport.sourceFile') },
+          { value: 'paste', label: t('trips.tracking.csvImport.sourcePaste') },
+        ]}
+      />
+
+      {source === 'file' ? (
+        <Upload.Dragger
+          accept=".csv,text/csv"
+          maxCount={1}
+          beforeUpload={takeFile}
+          showUploadList={false}
+          data-testid="trip-tracking-csv-file"
+        >
+          <Typography.Text>
+            {fileName ?? t('trips.tracking.csvImport.choose')}
+          </Typography.Text>
+          {/* What was made of the file, beside its name and outside the fold: a reviewer looking
+              at a garbled name needs to know which encoding was guessed without going looking for
+              the control that changes it. */}
+          {decoded && (
+            <div>
+              <Typography.Text type="secondary" data-testid="trip-tracking-csv-read-as">
+                {t('trips.tracking.csvImport.readAs', {
+                  encoding: t(`trips.tracking.csvImport.encodings.${decoded.encoding}`),
+                  delimiter: t(
+                    `trips.tracking.csvImport.delimiters.${DELIMITER_LABELS[effectiveDelimiter]}`,
+                  ),
+                })}
+              </Typography.Text>
+            </div>
+          )}
+        </Upload.Dragger>
+      ) : (
+        <Form layout="vertical">
+          <Form.Item
+            label={t('trips.tracking.csvImport.pasteLabel')}
+            htmlFor={fieldId('paste')}
+            style={{ marginBottom: 0 }}
+            extra={
+              <Flex gap={12} align="center" wrap style={{ marginTop: 8 }}>
+                {clipboardReadable && (
+                  <Button
+                    onClick={() => void pasteFromClipboard()}
+                    data-testid="trip-tracking-csv-paste-clipboard"
+                  >
+                    {t('trips.tracking.csvImport.pasteFromClipboard')}
+                  </Button>
+                )}
+                {/* The separator that was found, said as it is beside a file's name: pasted rows
+                    have no encoding to guess, but which character divides them is still a guess
+                    somebody may have to overrule. */}
+                {pasted.trim().length > 0 && (
+                  <span data-testid="trip-tracking-csv-pasted-as">
+                    {t('trips.tracking.csvImport.pastedAs', {
+                      delimiter: t(
+                        `trips.tracking.csvImport.delimiters.${DELIMITER_LABELS[effectiveDelimiter]}`,
+                      ),
+                    })}
+                  </span>
+                )}
+              </Flex>
+            }
+          >
+            <Input.TextArea
+              id={fieldId('paste')}
+              value={pasted}
+              onChange={(event) => typePasted(event.target.value)}
+              placeholder={t('trips.tracking.csvImport.pastePlaceholder')}
+              rows={6}
+              // A sheet's names and stations are not prose: a phone "correcting" one on the way in
+              // changes who a row is about.
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
+              data-testid="trip-tracking-csv-paste"
+            />
+          </Form.Item>
+        </Form>
+      )}
+
+      {asksForDay && (
+        // Outside the folds, where the question is seen: the sheet cannot be placed without the
+        // answer, and a field behind "File settings" would leave the reviewer looking at a
+        // refusal with nothing on screen to answer it with.
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginTop: 12 }}
+          data-testid="trip-tracking-csv-day-ask"
+          title={t('trips.tracking.csvImport.sheetDayTitle')}
+          description={
+            <Form layout="vertical">
+              <Form.Item
+                label={t('trips.tracking.csvImport.sheetDay')}
+                htmlFor={fieldId('day')}
+                className="tracking-csv-field"
+                style={{ marginBottom: 0 }}
+                extra={t('trips.tracking.csvImport.sheetDayHelp')}
+              >
+                {/* The browser's own date field: a wheel on a phone, typed digits on a desk, and
+                    nothing to open that the dialog would have to make room for. */}
+                <Input
+                  id={fieldId('day')}
+                  type="date"
+                  value={day}
+                  min={EARLIEST_SHEET_DAY}
+                  max={LATEST_SHEET_DAY}
+                  onChange={(event) => chooseDay(event.target.value)}
+                  data-testid="trip-tracking-csv-day"
+                />
+              </Form.Item>
+            </Form>
+          }
+        />
+      )}
 
       <Collapse
         ghost
@@ -503,25 +744,29 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
                 </Typography.Paragraph>
                 <Form layout="vertical" size="small">
                   <Flex gap={12} wrap>
-                    <Form.Item
-                      label={t('trips.tracking.csvImport.encoding')}
-                      htmlFor={fieldId('encoding')}
-                      className="tracking-csv-field"
-                    >
-                      <Select<SheetEncodingChoice>
-                        id={fieldId('encoding')}
-                        value={encoding}
-                        onChange={chooseEncoding}
-                        data-testid="trip-tracking-csv-encoding"
-                        options={[
-                          { value: 'auto', label: t('trips.tracking.csvImport.encodingAuto') },
-                          ...SHEET_ENCODINGS.map((value) => ({
-                            value,
-                            label: t(`trips.tracking.csvImport.encodings.${value}`),
-                          })),
-                        ]}
-                      />
-                    </Form.Item>
+                    {/* A question about a file's bytes. Pasted rows arrive as text already, so
+                        there is nothing for the choice to change and it is not offered. */}
+                    {source === 'file' && (
+                      <Form.Item
+                        label={t('trips.tracking.csvImport.encoding')}
+                        htmlFor={fieldId('encoding')}
+                        className="tracking-csv-field"
+                      >
+                        <Select<SheetEncodingChoice>
+                          id={fieldId('encoding')}
+                          value={encoding}
+                          onChange={chooseEncoding}
+                          data-testid="trip-tracking-csv-encoding"
+                          options={[
+                            { value: 'auto', label: t('trips.tracking.csvImport.encodingAuto') },
+                            ...SHEET_ENCODINGS.map((value) => ({
+                              value,
+                              label: t(`trips.tracking.csvImport.encodings.${value}`),
+                            })),
+                          ]}
+                        />
+                      </Form.Item>
+                    )}
                     <Form.Item
                       label={t('trips.tracking.csvImport.delimiter')}
                       htmlFor={fieldId('delimiter')}
@@ -559,6 +804,22 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
                             label: t('trips.tracking.csvImport.dateOrderMonthFirst'),
                           },
                         ]}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={t('trips.tracking.csvImport.zone')}
+                      htmlFor={fieldId('zone')}
+                      className="tracking-csv-field tracking-csv-field-wide"
+                      extra={t('trips.tracking.csvImport.zoneHelp')}
+                    >
+                      <Select<string>
+                        id={fieldId('zone')}
+                        showSearch
+                        optionFilterProp="label"
+                        value={zone}
+                        onChange={chooseZone}
+                        data-testid="trip-tracking-csv-zone"
+                        options={zoneOptions}
                       />
                     </Form.Item>
                   </Flex>
@@ -661,19 +922,36 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
               data-testid="trip-tracking-csv-replaces"
             />
           </Flex>
-          {/* How the moments were read, said where the numbers are: a sheet's 09:40 is filed as
-              09:40 UTC and shown in the reviewer's own zone, and which number of a date is the day
-              was decided for the whole file — both are things a reviewer would otherwise learn
-              from a row that looks three hours wrong. */}
+          {/* How the moments were read, said where the numbers are: whose clock a time with no
+              zone was put on, and which number of a date is the day, were each decided for the
+              whole file — things a reviewer would otherwise learn from a row that looks three
+              hours wrong. The zone named is the one the server says it applied, so the sentence
+              cannot describe a reading other than the one in the table under it. */}
           <Typography.Paragraph type="secondary" data-testid="trip-tracking-csv-moments-rule">
-            {t('trips.tracking.csvImport.momentsRule', {
-              order: t(
-                preview.dateOrder === 'monthFirst'
-                  ? 'trips.tracking.csvImport.datesMonthFirst'
-                  : 'trips.tracking.csvImport.datesDayFirst',
-              ),
-            })}{' '}
+            {t(
+              preview.timeZone
+                ? 'trips.tracking.csvImport.momentsRuleZone'
+                : 'trips.tracking.csvImport.momentsRule',
+              {
+                zone: preview.timeZone,
+                order: t(
+                  preview.dateOrder === 'monthFirst'
+                    ? 'trips.tracking.csvImport.datesMonthFirst'
+                    : 'trips.tracking.csvImport.datesDayFirst',
+                ),
+              },
+            )}{' '}
             {dateOrderSettledBy(preview.dateOrderSource)}
+            {preview.day && (
+              <>
+                {' '}
+                <span data-testid="trip-tracking-csv-moments-day">
+                  {t('trips.tracking.csvImport.momentsOnDay', {
+                    day: sheetDayInWords(preview.day, i18n.language),
+                  })}
+                </span>
+              </>
+            )}
           </Typography.Paragraph>
 
           {preview.unmatchedCavers.length > 0 && (
@@ -778,10 +1056,9 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
                     {
                       title: t('trips.tracking.csvImport.moment'),
                       key: 'moment',
-                      // In the application's language and the reader's zone, like every other
-                      // clock on the tracking surfaces: a sheet's 14:30 is filed as 14:30 UTC,
-                      // and this is where the reviewer sees what hour that lands on before
-                      // anything is written.
+                      // Where the reviewer sees what hour each row lands on before anything
+                      // is written: on the sheet's own clocks where a zone was named for it, on
+                      // the reader's otherwise.
                       render: (_: unknown, row: TrackingCsvPreviewRow) => momentOf(row),
                     },
                     {

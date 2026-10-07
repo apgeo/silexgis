@@ -22,6 +22,9 @@ export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   // that one is a log that exists and may not be written to, this is a log with nowhere to put a
   // report, and the way out is setting the watch up rather than starting or reopening it.
   'tracking.not_configured': 'trips.tracking.problems.notConfigured',
+  // A sheet read in a zone this server does not carry. Reached by a browser whose zone list is
+  // newer or older than the server's; the way out is another name for the same clock.
+  'tracking_csv.zone_unknown': 'trips.tracking.problems.csvZoneUnknown',
   'tracking.state_invalid': 'trips.tracking.problems.stateInvalid',
   'tracking.model_missing': 'trips.tracking.problems.modelMissing',
   'tracking.model_unavailable': 'trips.tracking.problems.modelUnavailable',
