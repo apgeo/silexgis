@@ -441,14 +441,22 @@
   min-height: 0;
 }
 
-/* The one line the frame adds when its link has stopped answering: fixed height, above the strip,
-   so the drawing keeps the rest of whatever box the snippet gave it. */
+/* The one line the frame adds when its link has stopped answering, or while it is not being
+   refreshed: fixed height, above the strip, so the drawing keeps the rest of whatever box the
+   snippet gave it. */
 .public-trip-embed-ended {
   flex: none;
 }
 
 .public-trip-embed-strip {
   flex: none;
+  /* The button at one end and the frame's age at the other, the age dropping under the button
+     in a frame too narrow for both. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
   padding: 4px 8px 6px;
   border-top: 1px solid var(--silexgis-public-border);
 }
@@ -488,4 +496,42 @@
   .public-past-row {
     min-height: 40px;
   }
+}
+
+/* Since when the trip has been followed: its own line under the dates and the state, because at
+   360px the three do not fit on one and a line broken in the middle of an hour reads as two facts. */
+.public-trip-since {
+  flex-basis: 100%;
+  font-size: 0.82rem;
+}
+
+/* How old the page is. Small and to one side — it is there to be found when somebody wonders, not
+   to compete with the counts above it. */
+.public-trip-updated {
+  display: block;
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+/* What a place on this page is. The standing sentence reads as part of the page; the fuller text
+   opens under it, in place. */
+.public-trip-about {
+  font-size: 0.82rem;
+}
+
+.public-trip-about-more {
+  padding-inline: 0;
+  /* A finger's height on a page read on a phone, though it is drawn as a line of text. */
+  min-height: 32px;
+  display: block;
+}
+
+.public-trip-about-body {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+}
+
+/* The frame's one standing word about its own age, at the far end of the strip from its button. */
+.public-trip-embed-updated {
+  font-size: 0.72rem;
 }

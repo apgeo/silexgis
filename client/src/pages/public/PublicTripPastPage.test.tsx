@@ -288,6 +288,25 @@ describe('reaching a cave’s past from a published link', () => {
     expect(what.textContent).toMatch(/2019/);
   });
 
+  it('says from when to when the trip on screen was followed, and never the live trip’s hours', () => {
+    render(<PublicTripPage />);
+    // The live trip, watched since six in the morning of 2026 and still running.
+    expect(screen.getByTestId('public-trip-since').textContent).toMatch(/^Followed since /);
+
+    openArchive();
+    fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
+
+    // The replay's own span, with its own year: a header still counting the hours of the party
+    // underground now, over a trip from 2019, would be the page telling two stories at once.
+    const said = screen.getByTestId('public-trip-since').textContent ?? '';
+    expect(said).toMatch(/^Followed .*2019/);
+    expect(said).not.toMatch(/since|2026/);
+    // Nothing about the page's own age over a replay — the past is not being refreshed.
+    expect(screen.queryByTestId('public-trip-updated')).toBeNull();
+    // And the explanation of what a place is stands over the past party as it does over the live.
+    expect(screen.getByTestId('public-trip-about')).toHaveTextContent('where somebody was last reported');
+  });
+
   it('draws the past party and not the live one', () => {
     render(<PublicTripPage />);
     openArchive();

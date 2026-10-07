@@ -2,6 +2,11 @@
 import { describe, expect, it } from 'vitest';
 import type { PublicTripParticipant } from '../../api/hooks.ts';
 import {
+  clockInWords,
+  durationInWords,
+  followedSpanInWords,
+  momentOrAge,
+  watchStartedAt,
   instantOf,
   partyByTeam,
   partyStandings,
@@ -195,5 +200,135 @@ describe('reading a reported moment', () => {
       const at = instantOf(value);
       expect(at === null || Number.isFinite(at)).toBe(true);
     }
+  });
+});
+
+/**
+ * Moments built from the reader's own calendar rather than from UTC strings, so these read the
+ * same on a machine in any time zone: what is under test is "today where the reader is".
+ */
+const local = (day: number, hour: number, minute = 0) => new Date(2026, 8, day, hour, minute).getTime();
+const iso = (instant: number) => new Date(instant).toISOString();
+
+describe('the hour of a moment', () => {
+  it('is the hour alone on the reader’s own day', () => {
+    const said = clockInWords(local(14, 8, 40), local(14, 15), 'en');
+
+    expect(said).toMatch(/8:40/);
+    expect(said).not.toMatch(/Sep|2026/);
+  });
+
+  it('carries its date once it is not today, so yesterday evening is not read as tonight', () => {
+    const said = clockInWords(local(13, 23, 50), local(14, 0, 10), 'en');
+
+    expect(said).toMatch(/11:50/);
+    expect(said).toMatch(/Sep 13/);
+  });
+
+  it('is said in the reader’s language', () => {
+    expect(clockInWords(local(13, 23, 50), local(14, 0, 10), 'ro')).toMatch(/13 sept\. 2026, 23:50/);
+  });
+});
+
+describe('a moment said as a gap or as an hour', () => {
+  const heardAt = local(14, 11, 55);
+  const now = local(14, 12);
+
+  it('is a gap while the trip is being followed', () => {
+    expect(momentOrAge(iso(heardAt), now, 'en', false)).toBe('5 minutes ago');
+  });
+
+  it('is the hour once the trip has settled, and no longer grows', () => {
+    const atNoon = momentOrAge(iso(heardAt), now, 'en', true);
+    const atNight = momentOrAge(iso(heardAt), local(14, 23), 'en', true);
+
+    expect(atNoon).toMatch(/11:55/);
+    expect(atNoon).not.toMatch(/ago/);
+    // The point of it: eleven hours on, the same words.
+    expect(atNight).toBe(atNoon);
+  });
+
+  it('says nothing for a moment that is not one, in either wording', () => {
+    for (const settled of [false, true]) {
+      expect(momentOrAge(null, now, 'en', settled)).toBeNull();
+      expect(momentOrAge(undefined, now, 'en', settled)).toBeNull();
+      expect(momentOrAge('not a moment', now, 'en', settled)).toBeNull();
+    }
+    // The twin, so the nulls above are not a function that answers nothing at all.
+    expect(momentOrAge(iso(heardAt), now, 'en', false)).not.toBeNull();
+  });
+});
+
+describe('a length of time in words', () => {
+  const from = local(14, 8, 40);
+
+  it('rounds down to the minute, never up', () => {
+    expect(durationInWords(from, from + 59_999, 'en')).toBe('0 min');
+    expect(durationInWords(from, from + 10 * 60_000 + 59_000, 'en')).toBe('10 min');
+  });
+
+  it('says hours and minutes, and leaves out a zero of minutes', () => {
+    expect(durationInWords(from, from + 190 * 60_000, 'en')).toBe('3 hr 10 min');
+    expect(durationInWords(from, from + 180 * 60_000, 'en')).toBe('3 hr');
+  });
+
+  it('goes on being a length across midnight and past a day', () => {
+    // Half past ten at night until two in the morning: three and a half hours, not minus twenty.
+    expect(durationInWords(local(14, 22, 30), local(15, 2), 'en')).toBe('3 hr 30 min');
+    expect(durationInWords(from, from + (2 * 24 + 3) * 3_600_000 + 59 * 60_000, 'en')).toBe('2 days 3 hr');
+  });
+
+  it('is worded by the reader’s language without a plural form of our own', () => {
+    expect(durationInWords(from, from + 190 * 60_000, 'ro')).toBe('3 ore 10 min.');
+    expect(durationInWords(from, from + 61 * 60_000, 'ro')).toBe('1 oră 1 min.');
+  });
+
+  it('is no length at all when the end is before the start or either is not a moment', () => {
+    expect(durationInWords(from, from - 1, 'en')).toBeNull();
+    expect(durationInWords(Number.NaN, from, 'en')).toBeNull();
+    expect(durationInWords(from, Number.NaN, 'en')).toBeNull();
+  });
+});
+
+describe('since when a trip has been followed', () => {
+  it('is the moment the watch was started', () => {
+    expect(watchStartedAt({ armedAt: '2026-09-14T06:00:00Z' })).toBe(Date.parse('2026-09-14T06:00:00Z'));
+  });
+
+  it('is nothing where the trip says none, or says something that is not a moment', () => {
+    expect(watchStartedAt({ armedAt: null })).toBeNull();
+    expect(watchStartedAt({ armedAt: undefined })).toBeNull();
+    expect(watchStartedAt({ armedAt: 'soon' })).toBeNull();
+  });
+
+  it('says a finished trip’s span once, with one date for a trip inside a day', () => {
+    const trip = { armedAt: iso(local(14, 8, 40)), closedAt: iso(local(14, 14, 10)) };
+
+    const today = followedSpanInWords(trip, local(14, 20), 'en');
+    expect(today).toMatch(/8:40.*2:10/);
+    expect(today).not.toMatch(/Sep/);
+
+    const later = followedSpanInWords(trip, local(20, 9), 'en');
+    expect(later).toMatch(/8:40.*2:10/);
+    expect(later?.match(/Sep 14/g)).toHaveLength(1);
+  });
+
+  it('says both dates for a trip that ran across midnight', () => {
+    const said = followedSpanInWords(
+      { armedAt: iso(local(14, 22, 30)), closedAt: iso(local(15, 2)) },
+      local(20, 9),
+      'en',
+    );
+
+    expect(said).toMatch(/Sep 14.*Sep 15/);
+  });
+
+  it('says no span where either end is missing or they are the wrong way round', () => {
+    const start = iso(local(14, 8, 40));
+    expect(followedSpanInWords({ armedAt: start, closedAt: null }, local(14, 20), 'en')).toBeNull();
+    expect(followedSpanInWords({ armedAt: null, closedAt: start }, local(14, 20), 'en')).toBeNull();
+    expect(
+      followedSpanInWords({ armedAt: start, closedAt: iso(local(14, 7)) }, local(14, 20), 'en'),
+    ).toBeNull();
   });
 });

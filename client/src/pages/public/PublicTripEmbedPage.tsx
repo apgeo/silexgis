@@ -21,6 +21,7 @@ import CaveViewPanel, {
 import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
+import { useNow } from '../../hooks/useNow.ts';
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import { usePublishedSheets } from '../../rastermap/publishedSheets.ts';
@@ -39,7 +40,7 @@ import {
   type EmbedOutboundMessage,
   type EmbedReadyMessage,
 } from './publicTripEmbed.ts';
-import { instantOf } from './publicTripParty.ts';
+import { ageInWords, clockInWords, instantOf } from './publicTripParty.ts';
 import { usePastTripPlayback } from './usePastTripPlayback.ts';
 import './PublicTripPage.css';
 
@@ -72,16 +73,20 @@ const TAB_3D = '3d';
  * link in an article can stay correct while the party moves.
  */
 export default function PublicTripEmbedPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const { token: antdToken } = theme.useToken();
   // The refusal is read for two decisions and nothing else. With nothing in hand it decides
   // whether the box says the link opens nothing or that the server could not be reached — the
   // first is an answer, the second is a phone with no signal, and a frame asserting the first on
   // the evidence of the second would be somebody's website calling its own embed dead. With an
-  // envelope in hand a later fault leaves the drawing alone, and only a refusal that is final is
-  // said at all, in one line, because from then on this frame is a picture of the past.
-  const { data, isPending, error, refetch } = usePublicTrip(token);
+  // envelope in hand a later fault leaves the drawing alone, and what is said about it is one
+  // line: that the frame has stopped being refreshed and since when, or — for a refusal that is
+  // final — that the link has stopped answering, because from then on this frame is a picture of
+  // the past.
+  const { data, isPending, error, refetch, dataUpdatedAt } = usePublicTrip(token);
+  // The one clock of this frame: what redraws its age as time passes with no read landing.
+  const present = useNow();
   const [focusRequest, setFocusRequest] = useState<CaveViewFocusRequest | undefined>();
   /**
    * How big the frame's own buttons are drawn: for a finger where a finger drives them, whatever
@@ -743,6 +748,39 @@ export default function PublicTripEmbedPage() {
     ) : null;
 
   /**
+   * When this frame last heard from the server, or null where it cannot say. A read that fails
+   * leaves the moment standing, which is what makes it the age of what is drawn.
+   */
+  const readAt = Number.isFinite(dataUpdatedAt) && dataUpdatedAt > 0 ? dataUpdatedAt : null;
+
+  /**
+   * A read that failed and may yet succeed, said in one line with how old the drawing now is.
+   *
+   * <b>A frame that goes on looking live while it is not being refreshed is the worse fault.</b>
+   * It used to say nothing here, on the reasoning that a fault which may clear is not news inside
+   * an article. But the reader of an article has nothing else to go by: the page next door has a
+   * party list with times on it, and this is a drawing with markers, which reads as now for as
+   * long as nothing says otherwise. So it says so — one line, in the place the link's end is
+   * said, gone by itself the moment a read lands, and worded as the frame's own condition rather
+   * than as anything about the trip. Not over a replay: the past is not being refreshed at all.
+   */
+  const stale =
+    error != null && !linkEnded && !past.engaged ? (
+      <Alert
+        type="warning"
+        banner
+        showIcon
+        title={
+          readAt === null
+            ? t('publicTrip.staleTitle')
+            : t('publicTrip.staleLine', { since: ageInWords(readAt, present, i18n.language) })
+        }
+        className="public-trip-embed-ended"
+        data-testid="public-trip-stale"
+      />
+    ) : null;
+
+  /**
    * The archive, over the frame rather than beside it.
    *
    * <b>A sheet and not a section, because the box is the whole page here.</b> The frame a club
@@ -815,6 +853,20 @@ export default function PublicTripEmbedPage() {
       >
         {t('publicTrip.past.sectionTitle')}
       </Button>
+      {/* The frame's age, standing: a gap while the trip is being followed and reads are landing,
+          the hour once the watch is closed or the link has ended and nothing will change again.
+          While a read is failing the line above says it, with the same figure. */}
+      {readAt !== null && stale === null && (
+        <Typography.Text
+          type="secondary"
+          className="public-trip-embed-updated"
+          data-testid="public-trip-updated"
+        >
+          {data.state !== 'armed' || linkEnded
+            ? t('publicTrip.updated.settled', { clock: clockInWords(readAt, present, i18n.language) })
+            : t('publicTrip.updated.running', { since: ageInWords(readAt, present, i18n.language) })}
+        </Typography.Text>
+      )}
     </div>
   );
 
@@ -833,6 +885,7 @@ export default function PublicTripEmbedPage() {
       <div className={frameClass} style={palette} data-testid="public-trip-embed">
         <div className="public-trip-embed-pending" data-testid="public-trip-embed-pending" />
         {ended}
+        {stale}
         {strip}
         {archive}
       </div>
@@ -854,6 +907,7 @@ export default function PublicTripEmbedPage() {
           <Typography.Text type="secondary">{t('publicTrip.embedNoModel')}</Typography.Text>
         </div>
         {ended}
+        {stale}
         {strip}
         {archive}
       </div>
@@ -928,6 +982,7 @@ export default function PublicTripEmbedPage() {
         ]}
       />
       {ended}
+      {stale}
       {strip}
       {archive}
     </div>

@@ -14,6 +14,8 @@ let answer: {
   isPending: boolean;
   error: unknown;
   refetch?: () => unknown;
+  /** When the last read that succeeded arrived, as the query reports it. */
+  dataUpdatedAt?: number;
 };
 
 /**
@@ -288,8 +290,92 @@ describe('the viewer a website frames', () => {
 
     expect(screen.getByTestId('viewer')).toBeInTheDocument();
     expect(screen.queryByTestId('public-trip-embed-failure')).toBeNull();
-    // And says nothing about it: a fault that may clear is not news inside an article.
+    // A fault that may clear is not the link's end, and is never said as one.
     expect(screen.queryByTestId('public-trip-ended')).toBeNull();
+  });
+
+  /**
+   * <b>A drawing with markers reads as now for as long as nothing says otherwise.</b> The page
+   * next door has a party list with times on it; a frame in an article has only this line. On a
+   * clock the test moves, with no read landing: the frame's own ticker is all that redraws it.
+   */
+  describe('how old the frame says it is', () => {
+    const NOON = new Date(2026, 8, 14, 12, 0).getTime();
+    const pass = (minutes: number) =>
+      act(() => {
+        vi.advanceTimersByTime(minutes * 60_000);
+      });
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(NOON);
+      answer = { data: envelope(), isPending: false, error: null, dataUpdatedAt: NOON - 40_000 };
+    });
+
+    afterEach(() => {
+      cleanup();
+      vi.useRealTimers();
+    });
+
+    it('says when it last heard from the server, and the figure moves by itself', () => {
+      render(<PublicTripEmbedPage />);
+      expect(screen.getByTestId('public-trip-updated')).toHaveTextContent('Page updated 40 seconds ago');
+      expect(screen.queryByTestId('public-trip-stale')).toBeNull();
+
+      pass(3);
+
+      expect(screen.getByTestId('public-trip-updated')).toHaveTextContent('Page updated 3 minutes ago');
+    });
+
+    it('says in one line that it is not being refreshed, and since when, once a read fails', () => {
+      const view = render(<PublicTripEmbedPage />);
+
+      answer = { ...answer, error: new Error('offline') };
+      view.rerender(<PublicTripEmbedPage />);
+      pass(5 * 60);
+
+      expect(screen.getByTestId('public-trip-stale')).toHaveTextContent('Not refreshing — last read 5 hours ago');
+      // The drawing stays, and nothing claims the link is gone or was never there.
+      expect(screen.getByTestId('viewer')).toBeInTheDocument();
+      expect(screen.queryByTestId('public-trip-ended')).toBeNull();
+      expect(screen.queryByTestId('public-trip-embed-failure')).toBeNull();
+      expect(screen.queryByTestId('public-trip-embed-unreachable')).toBeNull();
+
+      // Gone by itself the moment a read lands.
+      answer = { ...answer, error: null, dataUpdatedAt: Date.now() };
+      view.rerender(<PublicTripEmbedPage />);
+      expect(screen.queryByTestId('public-trip-stale')).toBeNull();
+      expect(screen.getByTestId('public-trip-updated')).toHaveTextContent('Page updated now');
+    });
+
+    it('says the hour instead of a gap once the trip is over, and that stands still', () => {
+      answer = { ...answer, data: envelope({ state: 'closed', closedAt: '2026-09-14T08:00:00Z' }) };
+      render(<PublicTripEmbedPage />);
+      const said = screen.getByTestId('public-trip-updated').textContent ?? '';
+      expect(said).toMatch(/^Last read at .*11:59/);
+
+      pass(6 * 60);
+
+      expect(screen.getByTestId('public-trip-updated').textContent).toBe(said);
+    });
+
+    it('leaves the link’s end to the line that says it', () => {
+      answer = { ...answer, error: new ApiError(404) };
+      render(<PublicTripEmbedPage />);
+
+      expect(screen.getByTestId('public-trip-ended')).toBeInTheDocument();
+      expect(screen.queryByTestId('public-trip-stale')).toBeNull();
+      expect(screen.getByTestId('public-trip-updated')).toHaveTextContent(/^Last read at /);
+    });
+
+    it('leaves no timer behind when the frame goes', () => {
+      const view = render(<PublicTripEmbedPage />);
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+      view.unmount();
+
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 
   it('says the link has stopped answering once a poll is refused for good, and keeps the drawing', () => {

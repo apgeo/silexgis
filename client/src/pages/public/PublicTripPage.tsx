@@ -34,20 +34,26 @@ import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTra
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import { useNow } from '../../hooks/useNow.ts';
 import { usePublishedSheets } from '../../rastermap/publishedSheets.ts';
 import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import { followedStation, type PastFollow } from './pastTrackReplay.ts';
 import { usePinnedModelUrl } from './pinnedModelUrl.ts';
 import PublicPastBar from './PublicPastBar.tsx';
+import PublicTripAbout from './PublicTripAbout.tsx';
 import PublicLiveTripList from './PublicLiveTripList.tsx';
 import PublicPastTripList from './PublicPastTripList.tsx';
 import {
+  ageInWords,
+  clockInWords,
+  durationInWords,
+  followedSpanInWords,
+  momentOrAge,
   partyByTeam,
   partyStandings,
-  positionAgeInWords,
-  sinceInWords,
   standingOf,
   tripDateRange,
+  watchStartedAt,
 } from './publicTripParty.ts';
 import { usePastTripPlayback } from './usePastTripPlayback.ts';
 import { readPastLink, writePastLink } from './pastTripLink.ts';
@@ -90,7 +96,10 @@ export default function PublicTripPage() {
   const { token } = useParams<{ token: string }>();
   const narrow = useIsMobile();
   const { token: antdToken } = theme.useToken();
-  const { data, isPending, error, refetch } = usePublicTrip(token);
+  const { data, isPending, error, refetch, dataUpdatedAt } = usePublicTrip(token);
+  // The one clock of this page: every gap below is measured from it, and it is what redraws them
+  // as time passes on a page that nothing else is redrawing.
+  const present = useNow();
 
   /**
    * The cave's past, and which of it this reader has asked to see.
@@ -456,7 +465,28 @@ export default function PublicTripPage() {
    * "6 years ago" of every position on a trip from 2019, which is true, useless, and identical for
    * the first report and the last.
    */
-  const now = past.engaged ? (past.at ?? Date.now()) : Date.now();
+  const now = past.engaged ? (past.at ?? present) : present;
+
+  /**
+   * Whether what is on screen has stopped changing for good: the watch is closed, or the link has
+   * given its final answer.
+   *
+   * From then on a moment is said as its hour rather than as a gap. A gap is right while the page
+   * keeps up with it; on a page nothing will change again it either stands still and is wrong
+   * within the minute, or grows all night under a party who came out in the afternoon. A read
+   * that merely failed is not this — it may clear, the gaps are still true of the clock, and the
+   * notice above them says since when they have not been refreshed. Nor is a replay, which
+   * measures from the moment on its own scrubber.
+   */
+  const settled = !past.engaged && (data.state !== 'armed' || linkEnded);
+
+  /**
+   * When this page last heard from the server, or null where it cannot say.
+   *
+   * The moment the last read that succeeded arrived — a read that fails leaves it standing, which
+   * is exactly what makes it the answer to "how old is what I am looking at".
+   */
+  const readAt = Number.isFinite(dataUpdatedAt) && dataUpdatedAt > 0 ? dataUpdatedAt : null;
 
   const when = (value: string | null) =>
     value === null ? '—' : new Date(value).toLocaleString(i18n.language);
@@ -560,18 +590,20 @@ export default function PublicTripPage() {
    */
   const positionFact = (participant: PublicTripParticipant): ReactNode => {
     const { shown, placedAt } = positionOf(participant);
-    const since = positionAgeInWords(placedAt, now, i18n.language);
+    const placed = momentOrAge(placedAt, now, i18n.language, settled);
     return (
       <>
         {shown}
-        {since !== null && (
+        {placed !== null && (
           <Typography.Text
             type="secondary"
             className="public-trip-position-age"
             title={when(placedAt)}
             data-testid={`public-trip-position-age-${participant.ordinal}`}
           >
-            {t('publicTrip.positionSince', { since })}
+            {settled
+              ? t('publicTrip.positionAt', { clock: placed })
+              : t('publicTrip.positionSince', { since: placed })}
           </Typography.Text>
         )}
       </>
@@ -617,6 +649,38 @@ export default function PublicTripPage() {
   const dates =
     head === null ? null : tripDateRange(head.tripDate, head.tripDateEnd, i18n.language);
 
+  /**
+   * Since when — or from when to when — the trip in the header was followed.
+   *
+   * <b>Of whatever trip the header names, and worded as what it is.</b> The moment is when the
+   * watch was started, so the line says "followed" and never "underground": a watch is often
+   * started in the car park, or an hour after the party went in. While the watch runs it is the
+   * hour and how long that has been, which is the figure somebody at home is counting; once it is
+   * closed, and on every replay, it is the span, measured against today's real date however far
+   * back the scrubber stands — the hour a trip of last year started is not "today" because the
+   * replay is at that hour. Nothing at all where the trip carries no such moment.
+   */
+  const followedLine = ((): string | null => {
+    if (head === null) {
+      return null;
+    }
+    const startedAt = watchStartedAt(head);
+    if (startedAt === null) {
+      return null;
+    }
+    if (head.state === 'armed') {
+      const duration = durationInWords(startedAt, present, i18n.language);
+      const clock = clockInWords(startedAt, present, i18n.language);
+      return duration === null
+        ? t('publicTrip.since.started', { clock })
+        : t('publicTrip.since.running', { clock, duration });
+    }
+    const span = followedSpanInWords(head, present, i18n.language);
+    return span === null
+      ? t('publicTrip.since.started', { clock: clockInWords(startedAt, present, i18n.language) })
+      : t('publicTrip.since.span', { span });
+  })();
+
   return (
     <div className="public-trip" style={palette} data-testid="public-trip">
       {/* The title and the dates are of whatever is on screen — a past trip has its own, and a
@@ -637,6 +701,15 @@ export default function PublicTripPage() {
             >
               {t(`publicTrip.state.${head.state}`)}
             </Tag>
+            {followedLine !== null && (
+              <Typography.Text
+                type="secondary"
+                className="public-trip-since"
+                data-testid="public-trip-since"
+              >
+                {followedLine}
+              </Typography.Text>
+            )}
           </div>
         )}
       </header>
@@ -655,7 +728,15 @@ export default function PublicTripPage() {
         )}
 
         {view !== undefined && (
-          <div className="public-trip-standing" data-testid="public-trip-counts">
+          <div
+            className="public-trip-standing"
+            data-testid="public-trip-counts"
+            // Announced when it changes — somebody coming out is the one event this page is kept
+            // open for — but only for the live party: a replay changes these counts as it plays,
+            // and a reader moving a scrubber is not waiting to be told.
+            role={past.engaged ? undefined : 'status'}
+            aria-live={past.engaged ? undefined : 'polite'}
+          >
             {(['underground', 'out', 'unheard'] as const).map((standing) => (
               <div className="public-trip-standing-cell" key={standing}>
                 <span className="public-trip-standing-count" data-testid={`public-trip-count-${standing}`}>
@@ -667,6 +748,26 @@ export default function PublicTripPage() {
               </div>
             ))}
           </div>
+        )}
+
+        {/* How old what is on screen is, said standing and not only when something goes wrong: a
+            reader should not have to wonder whether a quiet page is a quiet cave or a page that
+            stopped asking. A gap while the page is keeping up, the hour once it never will again.
+            About the live read, so not said over a replay. Not a live region — a figure that
+            changes twice a minute would be read out twice a minute. */}
+        {readAt !== null && !past.engaged && (
+          <Typography.Text
+            type="secondary"
+            className="public-trip-updated"
+            title={new Date(readAt).toLocaleString(i18n.language)}
+            data-testid="public-trip-updated"
+          >
+            {settled
+              ? t('publicTrip.updated.settled', { clock: clockInWords(readAt, present, i18n.language) })
+              : t('publicTrip.updated.running', {
+                  since: ageInWords(readAt, present, i18n.language),
+                })}
+          </Typography.Text>
         )}
 
         {/* A poll that failed is a fact about the live read, so it is said while the live read is
@@ -682,7 +783,13 @@ export default function PublicTripPage() {
               type="warning"
               showIcon
               title={t('publicTrip.endedTitle')}
-              description={t('publicTrip.endedBody')}
+              description={
+                readAt === null
+                  ? t('publicTrip.endedBody')
+                  : t('publicTrip.endedBodyAt', {
+                      clock: clockInWords(readAt, present, i18n.language),
+                    })
+              }
               data-testid="public-trip-ended"
             />
           ) : (
@@ -690,7 +797,15 @@ export default function PublicTripPage() {
               type="warning"
               showIcon
               title={t('publicTrip.staleTitle')}
-              description={t('publicTrip.staleBody')}
+              // How stale, and not only that it is: "stopped refreshing" reads the same at one
+              // minute and at five hours, and they are different things to somebody waiting.
+              description={
+                readAt === null
+                  ? t('publicTrip.staleBody')
+                  : t('publicTrip.staleBodySince', {
+                      since: ageInWords(readAt, present, i18n.language),
+                    })
+              }
               data-testid="public-trip-stale"
             />
           )
@@ -832,6 +947,9 @@ export default function PublicTripPage() {
           </div>
         )}
 
+        {/* Directly over the names it explains, on the live page and on a replay alike. */}
+        {view !== undefined && <PublicTripAbout />}
+
         {view !== undefined && (
         <section data-testid="public-trip-party">
           {groups.map((group) => (
@@ -863,8 +981,12 @@ export default function PublicTripPage() {
                         participant.lastRecordedAt === null ? (
                           '—'
                         ) : (
-                          <Typography.Text title={when(participant.lastRecordedAt)}>
-                            {sinceInWords(participant.lastRecordedAt, now, i18n.language)}
+                          <Typography.Text
+                            title={when(participant.lastRecordedAt)}
+                            data-testid={`public-trip-last-heard-${participant.ordinal}`}
+                          >
+                            {momentOrAge(participant.lastRecordedAt, now, i18n.language, settled)
+                              ?? '—'}
                           </Typography.Text>
                         ),
                       )}

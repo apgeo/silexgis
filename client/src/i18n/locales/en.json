@@ -3698,6 +3698,7 @@
     },
     "columnPosition": "Last reported at",
     "positionSince": "Reported {{since}}",
+    "positionAt": "Reported at {{clock}}",
     "columnLastHeard": "Last heard",
     "positionMaybeWithheld": "Not shown, or not reported",
     "positionUnreported": "No position reported",
@@ -3713,11 +3714,28 @@
     "withheldBody": "At least one position on this trip was reported against a cave that is not published. Those people are listed, but not placed.",
     "staleTitle": "This page has stopped refreshing",
     "staleBody": "The trip could not be read just now — the connection may have dropped. What is below is the last word this page was given, and it starts refreshing again by itself as soon as it can.",
+    "staleBodySince": "The trip could not be read just now — the connection may have dropped. What is below is the last word this page was given, {{since}}, and it starts refreshing again by itself as soon as it can.",
+    "staleLine": "Not refreshing — last read {{since}}",
     "unreachableTitle": "The trip could not be read just now",
     "unreachableBody": "This phone or computer could not reach the server — check the connection and try again. Nothing here says anything about the link itself.",
     "retry": "Try again",
     "endedTitle": "This link has stopped answering",
     "endedBody": "It may have been taken back, or the trip's publication may have ended. What is below is the last word this page was given, and it will not be refreshed again.",
+    "endedBodyAt": "It may have been taken back, or the trip's publication may have ended. What is below is the last word this page was given, at {{clock}}, and it will not be refreshed again.",
+    "since": {
+      "running": "Followed since {{clock}} · {{duration}}",
+      "started": "Following started {{clock}}",
+      "span": "Followed {{span}}"
+    },
+    "updated": {
+      "running": "Page updated {{since}}",
+      "settled": "Last read at {{clock}}"
+    },
+    "about": {
+      "line": "Each place below is where somebody was last reported, at the time beside it — word is passed out of the cave and typed in by a person. It is not a live position.",
+      "title": "How this page works",
+      "body": "Nobody is tracked by a device underground. A place appears here when a party passes word to the surface and somebody types it in, so it says where a person was at that time, not where they are this minute. Long gaps are normal: there is no signal in a cave, and word gets out only from a telephone point or from the entrance. A gap means nobody has passed word yet. It does not mean anything has happened."
+    },
     "embedNoModel": "There is no survey drawing to show for this trip.",
     "past": {
       "sectionTitle": "Past trips in this cave",
