@@ -29,7 +29,7 @@ On the trip's page, open **Tracking** and fill in **Tracking setup**:
 |---|---|
 | **Survey** | The survey the party's positions are placed in — one of the cave's uploaded surveys that holds stations |
 | **Depth is measured from** | The station a reported depth counts down from. Left empty, the survey's highest entrance station is used |
-| **Only these parts of the survey** | Where a reported depth may land — the start of a station or survey name. Left empty, the whole survey is searched |
+| **Where the party said it was going** | The parts of the cave the party plans to visit — the start of a station or survey name, as many as needed. A reported depth is looked for only there, and a station reported anywhere else is marked *Outside the declared parts*. Left empty, the whole survey is searched and nothing is marked |
 
 Then **Start tracking**. The trip now shows *Tracking*, and reports can be recorded.
 
@@ -95,6 +95,53 @@ underground on a trip that was over. **Mark N out** asks for the moment as well,
 **Record here** on the drawing. Nothing else about a closed log changes — it takes reports as
 before — and for a whole trip's worth of them a spreadsheet (below) is the quicker way.
 
+**Who is in the table.** Everybody on the trip's roster, in the order the trip lists them — the
+same order a published page numbers the party in — followed by anybody the log has reports about
+who is no longer on the roster. Such a row is marked *No longer on the roster*: it still shows
+where that person was last reported, its checkbox is off and **Select everybody** leaves it out,
+because no further report can be recorded for somebody the trip does not name. A published page
+does not show them.
+
+**Taking somebody off a trip that is being followed.** Saving the trip sends its whole roster,
+so removing a row removes the person. While tracking is running, that is refused for anybody the
+log has reports about — *"Somebody taken off the roster has reports on this trip's tracking, and
+it is still running."* Close the tracking first, or keep them on the trip. Somebody nobody has
+reported on can be taken off at any time, and giving a person a different job on the trip is
+never refused.
+
+**No word for hours.** While tracking is running, somebody who is underground and about whom
+nothing at all has been recorded for three hours gets an amber tag beside their name — *No word
+for over 3 h* — and the line under the three counts says how many such people there are. Any
+report ends it, a note included: "voice contact, all well" names no place and is exactly what
+ends a silence. Somebody who is out is never marked, nor is somebody nobody has heard from at
+all (that is its own count), and nothing is marked once tracking is closed. Press the **Last
+heard** heading to put the longest silence at the top; on a phone, where the table has no
+headings, tick **Longest silence first** above it instead. The three hours are the installation's
+setting; an administrator can change the figure or switch the mark off.
+
+**Planned out by.** When the trip has an expected return, the strip shows it — *Planned out by
+17:00*. Once that hour has passed **and somebody is still underground** it turns amber and says
+by how much: *2 h late*. With everybody reported out it goes back to the plain hour. A trip with
+no expected return shows no such cell.
+
+**Outside the declared parts.** When the setup names **where the party said it was going**, a
+station reported anywhere else carries an amber tag — *Outside the declared parts* — beside the
+place, on the person's row and on the report in the log. It compares the station with the
+declared names exactly as a reported depth is matched to them, so `upper` takes `upper.2` and
+`upper2.1` alike. Nothing is marked when nothing was declared, for a place reported on a survey
+the watch no longer uses, or for a place you are not shown: the tag only ever stands beside a
+station that is on your screen. A depth chosen from the cave's own declared places lands on the
+station the cave declared, which may itself lie outside the parts this trip named — and is then
+marked like any other.
+
+**What none of this does.** The three marks — *No word for over 3 h*, *2 h late*, *Outside the
+declared parts* — are readings for whoever is looking at the tab, and the tab says so under the
+counts: *nothing is sent, no alarm is raised and none is stood down.* Nobody is notified, by
+e-mail or otherwise, and a tab nobody has open tells nobody anything. The planned hour is read
+off the trip; whether a [callout](checklists-and-callout.md) was arranged, and whether it has
+fired, is not involved in any of them — if somebody must be told when a party is late, arrange
+the callout. A published page shows none of the three.
+
 ## The party on the survey
 
 The model panel marks each person where they were last reported, with **Underground**, **Out**
@@ -106,6 +153,13 @@ party already out.
 | **On another survey** | The place was reported against a different survey than the one the watch uses now |
 | **Not on the drawing** | The survey's drawing holds no station of that name |
 | **Not shown to you** | The position exists and you may not be told it: the cave's exact location is withheld from you |
+
+**Show only the declared parts** — offered above the model when the setup names where the party
+said it was going — takes off the drawing every survey that holds nothing declared, and says how
+many it hid. Everybody keeps their marker: somebody reported outside the declared parts is then
+drawn without the passage around them, which is the same thing the amber tag in the table says.
+The switch stays off, and says why, when the drawing has no survey of a declared name, or when
+every survey of it is declared. Turning it off brings back exactly what it hid.
 
 **Replay the trip** plays the whole log back on the survey, with the notes said along the way;
 **Back to live** returns. Photographs can be hung on **a moment** of the trip (*Photographs of
@@ -701,7 +755,7 @@ outside, what one link answers. The full table, with the reason word for each ca
 |---|---|
 | *"Tracking has never been started for this trip, so its log cannot be written to."* | Start tracking first; a closed watch is fine |
 | *"That survey belongs to a different cave…"* | A running watch stays in its cave — close it first |
-| *"No station matches that depth under this trip's filter…"* | Widen **Only these parts of the survey**, or report a station |
+| *"No station matches that depth under this trip's filter…"* | Widen **Where the party said it was going**, or report a station |
 | *"A report cannot be about the future."* | Check the time on it |
 | *"Say when this was said. The tracking is closed, so the report cannot be stamped with the present time."* | A report added to a closed watch is being written up afterwards: fill in **When it was said** with the moment it was made during the trip |
 | *"This trip has no watch to import reports onto."* | Choose a survey and save the tracking setup first |

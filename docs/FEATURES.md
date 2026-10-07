@@ -404,6 +404,14 @@ feature and walkthroughs of whole jobs.
   paged and can be narrowed to one person, a report that was changed after it was written is
   marked **Corrected**, and a report added once tracking is closed has to say when it was made
   rather than being stamped with the hour it was typed.
+  The tab also tells whoever is coordinating three things it used to leave them to work out:
+  somebody underground with **no word for hours** (three by default, an installation setting),
+  the trip's **planned hour out and how late** the party is once it has passed with people
+  still inside, and a station reported **outside the parts of the cave the party said it was
+  going to** — parts the model can be narrowed to. Everybody the log has reports about stays
+  in the table, marked, after being taken off the roster, and cannot be taken off it while
+  tracking is running. None of this alarms anybody: nothing is sent, the overdue callout is not
+  involved, and a published page shows none of it.
   A trip can then be **published** with a link: anybody holding it, with no account, sees the
   party on the survey, refreshed while they are underground. The page is written for a reader who
   has never followed a trip: it says that a place is where somebody was last *reported* and not a

@@ -145,6 +145,14 @@ odată cu ea — și apoi paginile.
 | Import a sheet | Importă o foaie |
 | What this cave's depths mean | Ce înseamnă adâncimile acestei peșteri |
 | Declare a depth | Declară o adâncime |
+| Where the party said it was going | Unde a spus echipa că merge |
+| Outside the declared parts | În afara părților declarate |
+| Show only the declared parts | Arată doar părțile declarate |
+| No longer on the roster | Nu mai este pe listă |
+| Last heard | Ultima veste |
+| No word for over N h | Nicio veste de peste N h |
+| Longest silence first | Cea mai lungă tăcere întâi |
+| Planned out by / N h late | Ieșire plănuită până la / întârziere de N h |
 | Publish this trip | Publică această tură |
 | Follow link | Link de urmărire |
 | Caption (on the public page) | Etichetă |

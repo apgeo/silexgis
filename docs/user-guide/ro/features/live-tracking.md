@@ -29,7 +29,7 @@ Pe pagina turei, deschideți **Urmărire** și completați **Configurarea urmăr
 |---|---|
 | **Ridicare** | Ridicarea în care sunt plasate pozițiile echipei — una dintre ridicările încărcate ale peșterii care conține stații |
 | **Adâncimea se măsoară de la** | Stația de la care coboară o adâncime raportată. Lăsat gol, se folosește cea mai înaltă stație de intrare a ridicării |
-| **Doar aceste părți ale ridicării** | Unde poate ajunge o adâncime raportată — începutul unui nume de stație sau de ridicare. Lăsat gol, se caută în toată ridicarea |
+| **Unde a spus echipa că merge** | Părțile peșterii în care echipa și-a propus să meargă — începutul unui nume de stație sau de ridicare, oricâte este nevoie. O adâncime raportată este căutată doar acolo, iar o stație raportată în altă parte este marcată *În afara părților declarate*. Lăsat gol, se caută în toată ridicarea și nu se marchează nimic |
 
 Apoi **Pornește urmărirea**. Tura arată acum *În urmărire* și se pot înregistra rapoarte.
 
@@ -101,6 +101,56 @@ terminată. **Marchează N ca ieșiți** cere și el momentul, la fel și **Înr
 desen. Nimic altceva nu se schimbă la un jurnal încheiat — primește rapoarte ca înainte — iar
 pentru rapoartele unei ture întregi o foaie de calcul (mai jos) este calea mai rapidă.
 
+**Cine este în tabel.** Toți cei de pe lista turei, în ordinea în care îi trece tura — aceeași
+ordine în care o pagină publicată numerotează echipa — urmați de oricine are rapoarte în jurnal
+și nu mai este pe listă. Un astfel de rând este marcat *Nu mai este pe listă*: arată în
+continuare unde a fost raportat ultima dată omul, caseta lui este dezactivată, iar **Selectează
+pe toți** îl lasă deoparte, pentru că nu se mai poate înregistra niciun raport despre cineva pe
+care tura nu îl numește. O pagină publicată nu îl arată.
+
+**Scoaterea cuiva dintr-o tură care este urmărită.** Salvarea turei trimite toată lista, așa că
+ștergerea unui rând scoate omul. Cât timp urmărirea este pornită, acest lucru este refuzat
+pentru oricine are rapoarte în jurnal — *„Cineva scos de pe listă are rapoarte în urmărirea
+acestei ture, iar urmărirea este încă pornită."* Încheiați întâi urmărirea sau păstrați persoana
+pe listă. Cineva despre care nu s-a raportat nimic poate fi scos oricând, iar schimbarea rolului
+unui om în tură nu este refuzată niciodată.
+
+**Nicio veste de ore întregi.** Cât timp urmărirea este pornită, cineva care este în peșteră și
+despre care nu s-a înregistrat nimic de trei ore primește o etichetă portocalie lângă nume —
+*Nicio veste de peste 3 h* — iar rândul de sub cele trei numere spune câți astfel de oameni
+sunt. Orice raport îi pune capăt, inclusiv o notă: „contact vocal, totul bine" nu numește niciun
+loc și este exact ce încheie o tăcere. Cineva care a ieșit nu este marcat niciodată, nici cineva
+despre care nu a venit nicio veste (acela are numărul lui), iar după încheierea urmăririi nu mai
+este marcat nimeni. Apăsați pe titlul **Ultima veste** pentru a aduce sus tăcerea cea mai lungă;
+pe telefon, unde tabelul nu are titluri, bifați în schimb **Cea mai lungă tăcere întâi** deasupra
+lui.
+Cele trei ore sunt setarea instalării; un administrator poate schimba cifra sau poate opri
+marcajul.
+
+**Ieșire plănuită până la.** Când tura are o oră de întoarcere așteptată, banda de sus o arată —
+*Ieșire plănuită până la 17:00*. După ce ora a trecut **și cineva este încă în peșteră**, devine
+portocalie și spune cu cât: *întârziere de 2 h*. Când toți sunt raportați ieșiți, revine la ora
+simplă. O tură fără oră de întoarcere nu are această căsuță.
+
+**În afara părților declarate.** Când configurarea spune **unde a spus echipa că merge**, o
+stație raportată în altă parte poartă o etichetă portocalie — *În afara părților declarate* —
+lângă loc, pe rândul omului și pe raportul din jurnal. Stația este comparată cu numele declarate
+exact așa cum este potrivită o adâncime raportată, deci `upper` cuprinde deopotrivă `upper.2` și
+`upper2.1`. Nu se marchează nimic când nu s-a declarat nimic, pentru un loc raportat pe o
+ridicare pe care urmărirea nu o mai folosește sau pentru un loc care nu vă este arătat: eticheta
+stă doar lângă o stație aflată pe ecranul dumneavoastră. O adâncime aleasă dintre locurile
+declarate ale peșterii ajunge la stația declarată de peșteră, care poate fi ea însăși în afara
+părților numite de această tură — și este atunci marcată ca oricare alta.
+
+**Ce nu face nimic din toate acestea.** Cele trei semne — *Nicio veste de peste 3 h*,
+*întârziere de 2 h*, *În afara părților declarate* — sunt indicații pentru cine se uită la filă,
+iar fila o spune sub numere: *nu se trimite nimic, nu se dă nicio alarmă și niciuna nu este
+oprită.* Nimeni nu este anunțat, nici prin e-mail, nici altfel, iar o filă pe care nu o are
+nimeni deschisă nu spune nimănui nimic. Ora plănuită este citită de pe tură; dacă a fost stabilit
+un [apel de urgență](checklists-and-callout.md) și dacă acesta s-a declanșat nu are legătură cu
+niciunul dintre ele — dacă cineva trebuie anunțat când echipa întârzie, stabiliți apelul de
+urgență. O pagină publicată nu arată niciunul dintre cele trei.
+
 ## Echipa pe ridicare
 
 Panoul modelului marchează fiecare om acolo unde a fost raportat ultima dată, cu **În peșteră**,
@@ -112,6 +162,14 @@ Panoul modelului marchează fiecare om acolo unde a fost raportat ultima dată, 
 | **Pe altă ridicare** | Locul a fost raportat față de altă ridicare decât cea folosită acum de urmărire |
 | **Nu e pe desen** | Desenul ridicării nu are nicio stație cu acel nume |
 | **Nu îți este arătată** | Poziția există și nu vă poate fi comunicată: locația exactă a peșterii vă este ascunsă |
+
+**Arată doar părțile declarate** — oferit deasupra modelului când configurarea spune unde a spus
+echipa că merge — scoate din desen fiecare topografie în care nu se află nimic declarat și spune
+câte a ascuns. Toți își păstrează marcajul: cine este raportat în afara părților declarate este
+atunci desenat fără galeria din jur, adică exact ce spune eticheta portocalie din tabel.
+Comutatorul rămâne oprit, și spune de ce, când desenul nu are nicio topografie cu un nume
+declarat sau când toate topografiile lui sunt declarate. Oprirea lui aduce înapoi exact ce a
+ascuns.
 
 **Reia tura** redă tot jurnalul pe ridicare, cu notele spuse pe parcurs; **Înapoi la direct** vă
 întoarce. Fotografiile pot fi puse pe **un moment** al turei (*Fotografii de la acest moment*),
@@ -730,7 +788,7 @@ instalare](../../../INSTALL.md#when-a-published-page-or-the-article-showing-it-s
 |---|---|
 | *„Urmărirea nu a fost pornită niciodată pentru această tură, așa că jurnalul ei nu poate fi modificat."* | Porniți întâi urmărirea; o urmărire încheiată este în regulă |
 | *„Acea ridicare aparține altei peșteri…"* | O urmărire pornită rămâne în peștera ei — închideți-o întâi |
-| *„Nicio stație nu corespunde acelei adâncimi sub filtrul acestei ture…"* | Lărgiți **Doar aceste părți ale ridicării** sau raportați o stație |
+| *„Nicio stație nu corespunde acelei adâncimi sub filtrul acestei ture…"* | Lărgiți **Unde a spus echipa că merge** sau raportați o stație |
 | *„Un raport nu poate fi despre viitor."* | Verificați ora de pe el |
 | *„Spune când s-a spus. Urmărirea este încheiată, așa că raportul nu poate fi marcat cu ora de acum."* | Un raport adăugat pe o urmărire încheiată este completat ulterior: treceți la **Când s-a spus** momentul în care a fost făcut, în timpul turei |
 | *„Această tură nu are nicio urmărire pe care să fie importate rapoarte."* | Alegeți o ridicare și salvați întâi configurarea urmăririi |
