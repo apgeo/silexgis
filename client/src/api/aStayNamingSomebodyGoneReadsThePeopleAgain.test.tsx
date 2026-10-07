@@ -29,6 +29,9 @@ vi.mock('./client.ts', () => ({
     }
   },
   lastReadETag: () => undefined,
+  // A refused call is asked how long the server wants the caller to wait. These refusals name
+  // no wait.
+  retryAfterOf: () => undefined,
 }));
 
 const {
