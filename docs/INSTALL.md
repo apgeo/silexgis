@@ -1228,8 +1228,10 @@ they will work for models uploaded from now on. The fix needs one fact read out 
 that fact is recorded when a file is read, so a model already in your installation keeps behaving as
 it did: there is no button that re-reads one — upload the same file again as a new model for that
 cave, and track against the new one. Positions recorded before the upgrade keep the name they were
-written with; the tracking log is append-only by design, and a correction is made by deleting a
-report and entering it again.
+written with: nothing rewrites a report by itself. A report that names the wrong station is put
+right by a person, with **Correct** on its row in the trip's tracking tab — the report keeps its
+place on the log and whatever is pinned to it — or taken out with **Delete this report**. Both work
+on tracking that has been closed as well as on tracking that is running.
 
 ### Upgrading across the release that checks the published-trip settings at start
 
@@ -1609,5 +1611,89 @@ crawlers read, and what the page then says is who is on the trip, where each of 
 reported and who is still underground. Revoking a share closes the live page but cannot take a copy
 out of somebody's index, so the page refuses to be indexed in the first place. If you build your own
 wrapper page around the frame, give that page the same treatment.
+
+### When a published page, or the article showing it, shows nothing
+
+A published page answers a link that is wrong in *any* way exactly as it answers a link that was
+never issued: "Nothing to show for this link", one `404`, one code. That is deliberate — a stranger
+holding a guess learns nothing from it — and it means the page cannot tell you why. The server
+can, in three places only its operator reads.
+
+**The API log.** Every refused read writes one line, with a reason word and the link's handle:
+
+```
+Published trip read refused: route follow, reason revoked, link Jq3x0aBc
+```
+
+`route` is which of the four published addresses was asked: `follow` (the link's own party),
+`live` (who is in the cave now), `past` (the cave's list of past trips), `past_trip` (one of them,
+played back). `link` is the **handle**: the first eight characters of a one-way fingerprint of the
+link, never the link itself. It is the same code the request log writes in place of a token and
+the **Log code** column of **Administration → Published trips** shows, so a line, a request and a
+row can be matched to one another, and none of them opens anything. `docker compose logs api |
+grep "read refused"` shows the lines; add `| grep Jq3x0aBc` for one link.
+
+**The counters.** The API counts, for the whole installation and never per link, under the meter
+`SilexGis.PublicTrips`: `silexgis.public_trip.reads`, by `route` and `outcome` (`served`, or one
+of the reason words below), and `silexgis.public_trip.limited`, by `route` — reads turned away
+with `429` before they reached a route. They are read with Microsoft's `dotnet-counters` from
+where it can see the API process: `dotnet-counters ps` lists the processes, then
+`dotnet-counters monitor --process-id <pid> --counters SilexGis.PublicTrips`. On a non-Docker
+install that is the server itself, as the account the service runs under. The packaged API image
+does not carry the tool, so on the Docker stack count the log instead: the refusal lines above,
+and `docker compose logs api | grep -c "responded 429"` for the limiter.
+
+**The check from outside.** `deploy/verify-published-trip.mjs` asks an installation what one link
+answers, from wherever you run it, and prints a verdict per line — the page and its two headers,
+the party, the two lists, the survey drawing, and the handle to search the log for:
+
+```bash
+node deploy/verify-published-trip.mjs https://gis.example.org --origin https://club.example.org
+```
+
+It asks for the follow link on standard input (or reads it from `SILEXGIS_VERIFY_TOKEN`) and
+**never takes it as an argument**: the link is the credential, and a command line is kept in the
+shell's history and shown in the process list. Nothing it prints contains the link. A line
+beginning `LIMITED` means the server refused the check itself as one request too many from the
+address you ran it from — which is not a verdict on the link, and is a finding about that address.
+It needs Node 18 or newer and nothing else, so it runs from a laptop as well as from the server.
+
+The causes, most likely first. "Reason" is the word in the log line and the `outcome` of the reads
+counter.
+
+| What happened | Reason | How to tell, and what to do |
+|---|---|---|
+| The link was taken back, or replaced — the old address stops at once | `revoked` | The row on **Administration → Published trips** reads *Taken back*. It cannot be put back: publish again, or use the fresh address *Replace link* showed, and change it in the article |
+| The address in the article is not a link of this installation: cut short when pasted, mistyped, copied from another installation or a test one, or its trip has been deleted | `unknown_link` | No row carries that handle. Paste the link again from the trip's publish panel |
+| Tracking was closed and the period the page keeps answering afterwards is over | `closed_past_grace`, on route `follow` only | Nothing is wrong. The link's own page is over and the trip is now among its cave's past trips, which the same link opens — the `live` and `past` reads beside it are `served`. `SILEXGIS__TripTracking__ShareGraceAfterClose` is the period |
+| Tracking was closed less than that period ago, and somebody expected the trip among the past trips | *(none — every read is `served`)* | Nothing is wrong either. A just-closed trip is still on its own page and in *Being followed now*, marked *Just finished*; it moves to the past trips when the period ends (two days by default) |
+| Both lists are simply empty: nobody is being followed in that cave, and no finished trip of it is published | *(none — `served`)* | The page says so. An installation that has only ever published trips still running has no past trips to show |
+| The link ran out while its trip is not yet a past trip — nearly always tracking nobody closed, still running past the link's lifetime | `expired` | The row says its tracking is still running behind a link that has run out. Close the tracking (the trip then becomes a past trip, and the link opens it as one) or *Replace link*. `SILEXGIS__TripTracking__ShareLifetime` is the lifetime |
+| Readers are being turned away as too many requests from one address | *(no reason line)* `silexgis.public_trip.limited` moves; the request log has `responded 429` | Almost always many readers counted as **one**: a proxy in front that the installation was not told about, or a website fetching pages for its readers. See "Your own proxy" under Enabling HTTPS, and the address printed on **Administration → Published trips**. The answer carries `Retry-After`, in seconds; raise `SILEXGIS__TripTracking__PublicRateLimitPerMinute` only when the readers really do share an address |
+| The API is down, or answering errors | *(nothing is logged for a request that never arrives)* | `docker compose ps`, `docker compose logs api`. **After an upgrade or an edit of `.env`, look here first**: a published-trip setting that cannot mean anything now stops the application at start, naming the setting — see "Upgrading across the release that checks the published-trip settings at start" |
+| Something between the reader and the server is repeating an old answer — a caching proxy, a CDN, a website's relay that keeps what it fetched | *(no reason line: the request was `served` earlier, or never arrives now)* | Run the check from outside against the address the reader uses, then against the installation itself, and compare. Where they differ, the thing in between is holding an answer past its time, and the cure is in its settings, not in this installation |
+| The cave's position was protected after the trip was published, or the tracking lost its cave | `cave_withheld` | The row reads *Withheld*. Deliberate: a protected cave is never published, and the page answers again by itself if the protection is lifted |
+| Past trips are switched off for the installation | `archive_off` | `SILEXGIS__TripPastTracks__Enabled=false`. The page of published trips says so in a line above its table |
+| The trip is older than past trips are kept | `past_retention` | `SILEXGIS__TripPastTracks__Retention` |
+| One past trip was asked for that the link may not read: of another cave, deleted, never published or wholly taken back, or still being followed | `trip_not_in_archive`, on route `past_trip` | Usually an article's link naming a trip id that was right once. Pick the trip again on the full page and copy the address from there |
+| Tracking is off on a trip that has a link | `watch_off`, on route `follow` | Not something the application produces: a link is made only while tracking is running, and tracking that has been started is closed, never switched back off. If the line appears, the row was changed outside the application |
+| **Only inside a frame on a website**, while the link opens normally on its own | *(nothing — the server answered; the browser refused to draw it)* | The site is not allowed to frame the page: `SILEXGIS_FRAME_ANCESTORS`, above, with every origin the site is served on. The browser's console names the refusal; `--origin` on the check from outside tests it |
+
+Three things about reading these.
+
+**A reason line is not always a fault.** Crawlers and old bookmarks go on asking for links that
+ended long ago, and each such request writes its one short line — `closed_past_grace` on a trip
+that is correctly in the archive is the commonest line in a healthy log. Look for the handle
+somebody is actually asking you about.
+
+**The lines are written at the ordinary level.** An installation that has raised its log level
+above `Information` gets none of them; the counters go on counting either way.
+
+**Rehearsing before a real trip.** With the defaults a closed trip does not reach the past trips
+for two days, so a test installation cannot show its archive on the day it is set up. A rehearsal
+installation may set `SILEXGIS__TripTracking__ShareGraceAfterClose=00:00:00`: a trip then becomes a
+past trip the moment its tracking is closed. Do not leave it so on an installation families read —
+the moment the party is out is when the people following look, and with zero the page they are
+looking at ends in that same moment.
 
 Secrets belong only in the environment / `.env`, never in the repository.

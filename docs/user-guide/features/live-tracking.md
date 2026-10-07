@@ -625,6 +625,31 @@ Read it for what it is:
   protected caves the person publishing may already see exactly — somebody who may not see a
   cave's position is not told that one is near.
 
+### When a published page shows nothing
+
+A published page answers a link that is wrong in *any* way with the same words — *"Nothing to
+show for this link"* — whatever the reason, so that a stranger holding a guess learns nothing.
+An administrator can tell the reasons apart. Start from the link's row on this page (find it by
+its trip, or by the **Log code** if whoever runs the server gave you one):
+
+| The row says | Why the page shows nothing | What to do |
+|---|---|---|
+| **Taken back** | Somebody took the link back, or replaced it | It cannot be put back. Hand out the address **Replace link** showed, or publish the trip again |
+| There is no row for that address | The address in the article is not one of this installation's links: cut short when pasted, mistyped, or its trip was deleted | Copy the link again from the trip's publish panel |
+| **In the archive** | Nothing is wrong. Tracking was closed and the grace period is over: the link's own page has ended and the trip is among its cave's past trips, which the same link opens | — |
+| **Just closed**, and the trip is not among the past trips | Nothing is wrong. A trip just closed stays on its own page, marked *Just finished*, and joins the past trips when the grace period ends (two days unless the installation says otherwise) | Wait for the period to end |
+| **Opens nothing**, its tracking still running | The link ran out and nobody had closed the tracking | **Close tracking** on the trip — it becomes a past trip — or **Replace link** |
+| **Opens nothing**, otherwise | Past trips are switched off for the installation (a line above the table says so), or the trip is older than past trips are kept | An installation setting: ask whoever runs the server |
+| **Withheld** | The cave's position has been protected since, or the tracking lost its cave | Deliberate. It answers again by itself if that stops holding |
+| **Followed now**, and readers still see nothing, or are told to try again later | The link is good. Readers are being turned away as too many requests from one address, the server is not answering, or something between them and the server is repeating an old answer | For whoever runs the server, below. Look first at the address printed under the counts on this page |
+| The link opens by itself, and the frame in an article is empty | The website is not allowed to frame the page | `SILEXGIS_FRAME_ANCESTORS` — see [Putting it on your website](#putting-it-on-your-website) |
+
+**For whoever runs the server.** Every refused read is written to the server's log with a
+one-word reason and the link's **Log code**, never its address; the installation counts the
+published reads it answers and the ones it turns away; and a script asks an installation, from
+outside, what one link answers. The full table, with the reason word for each cause, is in the
+[install guide](../../INSTALL.md#when-a-published-page-or-the-article-showing-it-shows-nothing).
+
 ---
 
 ## When something is refused

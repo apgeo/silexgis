@@ -429,6 +429,17 @@ feature and walkthroughs of whole jobs.
   reader chooses, and leads to the trip where closing it is done. It also prints the address
   the server counted the reader's own request under, which is how a reverse-proxy count that
   is too low — otherwise silent — is seen.
+- **"The published page shows nothing" has an answer** — a published page tells a visitor the
+  same thing for every link it will not open, on purpose, and that used to leave whoever runs
+  the installation guessing among a dozen causes. Now each refused read is written to the
+  server's log with a one-word reason and the link's short log code (never its address), the
+  installation counts the published reads it answers and the ones it turns away, a reader turned
+  away as one request too many is told how long to wait, and a script asks an installation from
+  outside what one link answers — taking the link on standard input, never as an argument, and
+  printing it nowhere. The [install guide](INSTALL.md#when-a-published-page-or-the-article-showing-it-shows-nothing)
+  lists the causes in order of likelihood with the reason word for each. Settings for published
+  trips that cannot mean anything now stop the application at start, naming the setting, instead
+  of quietly producing pages that answer nobody.
 - **A tracked trip becomes a movie you can send** — from the trip's tracking tab, or from a survey
   on the cave's page, a signed-in member makes a short film of the party moving through the
   survey: one trip or several, on one calendar or side by side, the model turning or still. It is

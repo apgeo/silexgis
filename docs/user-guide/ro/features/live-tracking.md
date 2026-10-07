@@ -647,6 +647,33 @@ Citiți-l drept ceea ce este:
   unei ture, ia în calcul doar peșterile protejate pe care cel care publică le poate deja vedea
   exact — cuiva care nu are voie să vadă poziția unei peșteri nu i se spune că una este aproape.
 
+### Când o pagină publicată nu arată nimic
+
+O pagină publicată răspunde unui link greșit în *orice* fel cu aceleași cuvinte — *„Nimic de
+arătat pentru acest link"* — oricare ar fi motivul, pentru ca un străin care încearcă o adresă
+la întâmplare să nu afle nimic. Un administrator poate deosebi motivele. Porniți de la rândul
+linkului de pe această pagină (îl găsiți după tură sau după **Cod în jurnal**, dacă vi l-a dat
+cel care administrează serverul):
+
+| Rândul spune | De ce pagina nu arată nimic | Ce este de făcut |
+|---|---|---|
+| **Retras** | Cineva a retras linkul sau l-a înlocuit | Nu poate fi pus la loc. Dați mai departe adresa arătată de **Înlocuiește linkul** sau publicați tura din nou |
+| Nu există niciun rând pentru acea adresă | Adresa din articol nu este un link al acestei instalări: tăiată la lipire, scrisă greșit, ori tura ei a fost ștearsă | Copiați din nou linkul din panoul de publicare al turei |
+| **În arhivă** | Nu este nimic în neregulă. Urmărirea a fost încheiată și perioada de grație a trecut: pagina proprie a linkului s-a terminat, iar tura este printre turele trecute ale peșterii, pe care același link le deschide | — |
+| **Abia încheiată**, iar tura nu este printre turele trecute | Nu este nimic în neregulă. O tură abia încheiată rămâne pe pagina ei, marcată *Abia încheiată*, și trece printre turele trecute când se termină perioada de grație (două zile, dacă instalarea nu spune altfel) | Așteptați sfârșitul perioadei |
+| **Nu deschide nimic**, cu urmărirea încă pornită | Linkul a expirat și nimeni nu încheiase urmărirea | **Încheie urmărirea** pe tură — devine tură trecută — sau **Înlocuiește linkul** |
+| **Nu deschide nimic**, altfel | Turele trecute sunt oprite pentru instalare (o spune un rând deasupra tabelului) sau tura este mai veche decât perioada cât sunt păstrate turele trecute | O setare a instalării: întrebați-l pe cel care administrează serverul |
+| **Reținut** | Poziția peșterii a fost protejată între timp sau urmărirea și-a pierdut peștera | Intenționat. Răspunde iar de la sine dacă asta nu mai ține |
+| **Urmărire în curs**, iar cititorii tot nu văd nimic sau li se spune să încerce mai târziu | Linkul este bun. Cititorii sunt refuzați ca prea multe cereri de la o singură adresă, serverul nu răspunde sau ceva aflat între ei și server repetă un răspuns vechi | Pentru cel care administrează serverul, mai jos. Uitați-vă întâi la adresa scrisă sub numere pe această pagină |
+| Linkul se deschide singur, dar cadrul dintr-un articol este gol | Site-ului nu i s-a permis să încadreze pagina | `SILEXGIS_FRAME_ANCESTORS` — vedeți [Pe site-ul dumneavoastră](#pe-site-ul-dumneavoastră) |
+
+**Pentru cel care administrează serverul.** Fiecare citire refuzată este scrisă în jurnalul
+serverului cu un motiv de un cuvânt și cu **Codul în jurnal** al linkului, niciodată cu adresa
+lui; instalarea numără citirile publicate la care răspunde și pe cele pe care le refuză; iar un
+script întreabă o instalare, din afară, ce răspunde un anumit link. Tabelul complet, cu cuvântul
+fiecărui motiv, este în [ghidul de
+instalare](../../../INSTALL.md#when-a-published-page-or-the-article-showing-it-shows-nothing).
+
 ---
 
 ## Când ceva este refuzat
