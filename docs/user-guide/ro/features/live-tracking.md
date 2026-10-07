@@ -197,7 +197,7 @@ fără nicio urmărire nu are pe ce să importe: alegeți întâi o ridicare și
 pornită.
 
 - **Copiază-l acum — este singurul moment în care este arătat.** Se păstrează doar o amprentă a
-  linkului, așa că nu mai poate fi arătat; un link pierdut se retrage și se creează altul.
+  linkului, așa că nu mai poate fi arătat; un link pierdut se înlocuiește (mai jos).
 - Același panou dă **Pentru un site**: un bloc de lipit în site-ul clubului (mai jos).
 - **Publicarea cere dreptul de a partaja peștera**, pentru că pagina predă ridicarea topografică
   a peșterii.
@@ -205,6 +205,11 @@ pornită.
   refuzată, și decis din nou la fiecare citire a paginii, așa că protejarea ulterioară a peșterii
   închide linkurile deja date.
 - **Toți participanții la tură care au cont sunt anunțați** că a fost publicată.
+- **Lângă linkul nou poate apărea un avertisment**: *„O peșteră protejată, sau una dintre
+  intrările ei, se află în zona acoperită de ridicarea topografică a acestei ture."* Nimic nu a
+  fost refuzat, iar linkul funcționează. Este o verificare după poziție, care nu poate vedea în
+  interiorul fișierului ridicării — ce înseamnă și ce îi poate scăpa se află la
+  [Tot ce este publicat](#tot-ce-este-publicat-pentru-administratorii-deplini).
 
 **Pe cine numește pagina.** Implicit, această instalare publică **numele reale**; un operator
 poate opri asta pentru toată lumea, după care oamenii apar ca *Speolog 1*, *Speolog 2*. Coloana
@@ -215,7 +220,22 @@ departe de o pagină care altfel ar numi-o, fără a opri numele pentru tot club
 **Un link se încheie singur.** Funcționează cât timp urmărirea este pornită, apoi o perioadă de
 grație după închidere (două zile, implicit) ca cei care urmăresc să poată citi că au ieșit toți,
 și oricum doar până la data arătată de panou (implicit, două săptămâni după ultima zi a turei).
-**Retrage-l** îl încheie imediat. Fiecare link apare ca **Activ** sau **Inactiv**.
+**Retrage-l** îl încheie imediat. Fiecare link apare ca **Activ**, **Inactiv** sau **Expirat**.
+
+**Un link expirat rămâne în listă și încă contează.** Expirarea încheie urmărirea, nu
+publicarea: cât timp nu îl retrage nimeni, linkul ține tura încheiată printre turele trecute ale
+peșterii, iar adresa lui încă le deschide. De aceea un rând **Expirat** păstrează ambele butoane
+— **Înlocuiește linkul** când adresa a ajuns unde nu trebuia, **Retrage-l** ca să scoateți tura
+și dintre turele trecute ale peșterii.
+
+**Înlocuiește linkul** este pentru o adresă care a ajuns unde nu trebuia sau pe care nu a
+păstrat-o nimeni. Într-o singură operație, adresa veche încetează să răspundă — oriunde a fost
+lipită — iar una nouă este arătată, o singură dată. Linkul nou expiră atunci când ar fi expirat
+cel vechi, tura își păstrează locul printre turele trecute ale peșterii și nimeni din tură nu
+este anunțat din nou. Cere ce cere și publicarea (dreptul de a partaja peștera, o peșteră care
+nu este protejată), dar **nu** și o urmărire pornită, așa că linkul unei ture încheiate poate fi
+înlocuit fără a-i porni iar urmărirea — inclusiv unul expirat. Un link deja retras nu poate fi
+înlocuit.
 
 ---
 
@@ -285,6 +305,90 @@ lipiți unul nou, înlocuind fiecare bloc mai vechi din articol.
 
 ---
 
+## Tot ce este publicat, pentru administratorii deplini
+
+**Administrare → Ture publicate** arată toate linkurile de urmărire date de instalare, pentru
+toate turele, indiferent de regulile de acces ale fiecărei ture. Pagina este deschisă
+**administratorilor deplini** și nimănui altcuiva: oricui altcuiva îi scrie adresa i se spune
+asta, iar bara nu o oferă.
+
+**Un rând pentru fiecare link**, iar un link rămâne în listă și după ce a fost retras, cât timp
+tura lui există. Fiecare rând arată tura și datele ei, peștera, cine a publicat-o și când, când
+expiră (sau când a fost retras) și o **stare** — ce deschide adresa pentru cine o are, la
+momentul scris deasupra tabelului:
+
+| Stare | Adresa deschide |
+|---|---|
+| **Urmărire în curs** | Echipa, așa cum este raportată — urmărirea este pornită |
+| **Abia încheiată** | Aceeași pagină, care spune că au ieșit toți, pe perioada de grație de după încheiere |
+| **În arhivă** | Tura ca istoric și celelalte ture publicate și încheiate ale peșterii |
+| **Reținut** | Nimic, *deocamdată*: urmărirea și-a pierdut peștera sau poziția peșterii a fost protejată între timp. Răspunde ca un link necunoscut cât timp ține asta și începe iar să răspundă dacă nu mai ține |
+| **Nu deschide nimic** | Nimic: a expirat, urmărirea a fost oprită sau turele trecute sunt oprite ori nu îl mai acoperă. Nu l-a retras nimeni |
+| **Retras** | Nimic, și nici nu va mai deschide vreodată |
+
+Stările sunt calculate de server, după chiar regulile după care sunt servite paginile publicate
+— lista nu poate spune *Urmărire în curs* despre o adresă care nu răspunde. Numerele de deasupra
+tabelului sunt ale întregii instalări, lista poate fi restrânsă la o singură stare, iar
+majoritatea coloanelor se pot ordona. Apăsați **Reîncarcă** înainte de a acționa pe o
+listă care a stat deschisă o vreme.
+
+**Pagina nu arată niciodată o adresă.** Se păstrează doar o amprentă a fiecărui link, așa că nu
+este nimic de arătat. Coloana **Cod în jurnal** este codul scurt pe care jurnalul de cereri al
+serverului îl scrie în locul adresei unui link, ca o linie din jurnal să poată fi potrivită cu
+un rând; nu deschide nimic.
+
+### Cele trei lucruri pe care le poate face
+
+| Buton | Ce face | Ce nu se mai poate anula |
+|---|---|---|
+| **Înlocuiește linkul** | Adresa veche încetează să răspundă pe loc, iar una nouă este arătată, **o singură dată**, într-o fereastră care se închide doar cu *Am copiat-o*. Aceeași expirare ca a celei vechi; tura rămâne printre turele trecute ale peșterii; nimeni nu este anunțat | Adresa veche este pierdută definitiv. La fel și o adresă închisă înainte de a fi copiată — înlocuiți linkul din nou |
+| **Retrage publicarea turei** | Retrage **toate** linkurile acelei ture într-o singură operație și spune câte | Tot ce urmează mai jos |
+| **Retrage tot ce este publicat** | Retrage toate linkurile instalării — toate turele, toate peșterile. Confirmarea spune câte linkuri mai sunt active și cere scrierea unui cuvânt înainte ca butonul să funcționeze | Tot ce urmează mai jos, pentru toate turele deodată |
+
+**Ce mai aduce cu sine retragerea unui link, fără să fie evident.** Pagina încetează să răspundă
+pentru oricine are adresa, pe această instalare și pe orice site care o arată într-un cadru. Iar
+o tură încheiată al cărei ultim link a dispărut **iese din lista publică de ture trecute a
+peșterii ei** — pe care o arătau și linkurile altor ture. Un link retras nu mai poate fi pus la
+loc. O tură se publică din nou doar **pornindu-i iar urmărirea** și creând un link nou, tură cu
+tură, iar adresa nouă trebuie dată din nou tuturor celor care o aveau pe cea veche.
+
+De aceea nu există nici un comutator de **„pauză"**: o adresă care ar putea începe iar să
+răspundă nu este una despre care să se poată spune că a fost retrasă. Dacă scopul este ca turele
+trecute să nu mai fie arătate, fără a renunța la linkuri, aceea este o setare a instalării (vedeți
+[ghidul de instalare](../../../INSTALL.md#configuration-reference)) și apare pe această pagină
+ca un rând deasupra tabelului.
+
+Retragerea linkurilor nu șterge nimic din instalare: turele, rapoartele și ridicările lor rămân
+cum erau, iar fiecare link retras sau înlocuit este consemnat la tura lui în
+[istoricul modificărilor](history-and-audit.md), împreună cu cine a făcut-o.
+
+### „Peșteră protejată în apropiere?"
+
+Publicarea unei ture predă fișierul ridicării topografice a peșterii ei, iar dacă asta este
+permis se întreabă despre **acea** peșteră. Un fișier de ridicare nu este însă legat de o
+singură peșteră: exportul unui sistem întreg este înregistrat la o peșteră și le desenează și pe
+cele vecine. Așa că, atunci când poziția unei peșteri **protejate**, alta decât cea a turei —
+sau a uneia dintre intrările ei — cade în dreptunghiul acoperit de stațiile ridicării, rândul
+poartă o etichetă portocalie **Peșteră protejată în apropiere?**, iar același avertisment apare
+lângă un link atunci când este creat sau înlocuit.
+
+Citiți-l drept ceea ce este:
+
+- **Nu refuză nimic.** Linkul există și funcționează. Deschideți ridicarea, uitați-vă și
+  retrageți linkul dacă arată ce nu ar trebui publicat.
+- **Este o verificare după poziție și nu poate vedea în interiorul fișierului.** O peșteră se
+  poate afla în dreptunghiul unei ridicări care nu intră deloc în ea. Iar o ridicare care
+  *desenează* o vecină protejată trece nemarcată atunci când punctul înregistrat al acelei
+  peșteri cade în afara dreptunghiului sau când ridicarea nu are stații stocate din care să
+  rezulte unul (un model de pereți, un fișier încă necitit).
+  **Lipsa etichetei nu este o confirmare că totul e în regulă.**
+- **Nu numește nicio peșteră și nu dă nicio poziție.** Pe această pagină, citită de oameni care
+  pot localiza orice peșteră, ia în calcul toate peșterile protejate. Lângă un link, în panoul
+  unei ture, ia în calcul doar peșterile protejate pe care cel care publică le poate deja vedea
+  exact — cuiva care nu are voie să vadă poziția unei peșteri nu i se spune că una este aproape.
+
+---
+
 ## Când ceva este refuzat
 
 | Vedeți | De ce |
@@ -296,7 +400,8 @@ lipiți unul nou, înlocuind fiecare bloc mai vechi din articol.
 | *„Această tură nu are nicio urmărire pe care să fie importate rapoarte."* | Alegeți o ridicare și salvați întâi configurarea urmăririi |
 | *„Publicarea acestei ture predă ridicarea topografică a peșterii, iar asta cere dreptul de a partaja peștera."* | Întrebați-l pe cel care se ocupă de peșteră |
 | *„Peștera acestei ture are coordonate protejate, așa că tura nu poate fi publicată deloc."* | Intenționat — desenul este poziția peșterii |
-| *„Nimic de arătat pentru acest link"* (pe pagina publică) | Retras, încheiat, sau peștera a fost protejată între timp |
+| *„Acel link a fost deja retras, așa că nu mai este nimic de înlocuit. Publică tura din nou."* | L-a retras altcineva mai întâi — poate chiar acum o clipă, de pe alt ecran |
+| *„Nimic de arătat pentru acest link"* (pe pagina publică) | Retras, înlocuit, încheiat, sau peștera a fost protejată între timp |
 | *„Turele trecute nu sunt oferite prin acest link"* | Instalarea a oprit turele trecute |
 
 ---

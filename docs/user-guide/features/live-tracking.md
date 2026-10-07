@@ -187,7 +187,7 @@ with no watch at all has nothing to import onto: choose a survey and save the se
 **Publish this trip** → **Create a follow link**, on a trip whose tracking is running.
 
 - **Copy it now — this is the only time it is shown.** Only a fingerprint of the link is kept,
-  so it cannot be shown again; a lost link is taken back and a new one made.
+  so it cannot be shown again; a lost link is replaced (below).
 - The same panel gives **For a website**: a block to paste into your club's site (below).
 - **Publishing needs the right to share the cave**, because the page hands over the cave's
   survey drawing.
@@ -195,6 +195,10 @@ with no watch at all has nothing to import onto: choose a survey and save the se
   partial — refused, and decided again every time the page is read, so protecting a cave later
   closes links already handed out.
 - **Everybody on the trip who has an account is told** that it has been published.
+- **A warning may appear beside the new link**: *"A protected cave, or one of its entrances,
+  stands inside the area this trip's survey covers."* Nothing was refused and the link works.
+  It is a check by position that cannot see inside the survey file — what it means, and what it
+  can miss, is under [Everything published](#everything-published-for-full-administrators).
 
 **Who the page names.** By default this installation publishes **real names**; an operator can
 switch that off for everybody, after which people appear as *Caver 1*, *Caver 2*. The
@@ -205,7 +209,22 @@ off a page that would otherwise name them, without turning names off for the clu
 **A link ends on its own.** It works while the watch is running, then for a grace period after
 closing (two days by default) so the people following can read that everybody is out, and in
 any case only until the date the panel shows (by default two weeks after the trip's last day).
-**Take it back** ends it at once. Each link is listed as **Live** or **Not open**.
+**Take it back** ends it at once. Each link is listed as **Live**, **Not open** or **Run out**.
+
+**A link that has run out is still listed, and still matters.** Running out ends the following,
+not the publication: while nobody takes the link back it keeps the finished trip among its
+cave's past trips, and its address still opens them. So a **Run out** row keeps both buttons —
+**Replace link** when the address is somewhere it should not be, **Take it back** to remove the
+trip from the cave's past trips as well.
+
+**Replace link** is for an address that has ended up somewhere it should not be, or that
+nobody kept. In one act the old address stops answering — wherever it was pasted — and a fresh
+one is shown, once. The fresh link runs out when the old one would have, the trip keeps its
+place among the cave's past trips, and nobody on the trip is told again. It asks for what
+publishing asks for (the right to share the cave, a cave that is not protected) but **not**
+for a running watch, so a finished trip's link can be replaced without starting its watch
+again — one that has run out included. A link that has already been taken back cannot be
+replaced.
 
 ---
 
@@ -274,6 +293,86 @@ one, replacing every older block in the article.
 
 ---
 
+## Everything published, for full administrators
+
+**Administration → Published trips** lists every follow link the installation has handed
+out, across every trip, whatever the trip's own access rules say. It is open to **Full
+Administrators** and to nobody else: anybody else who types its address is told so, and the
+rail does not offer it.
+
+**One row per link**, and a link stays listed after it has been taken back, for as long as its
+trip exists. Each row gives the trip and its dates, the cave, who published it and when, when
+it runs out (or when it was taken back), and a **status** — what the address opens for whoever
+holds it at the moment printed above the table:
+
+| Status | The address opens |
+|---|---|
+| **Followed now** | The party, as it is reported — the watch is running |
+| **Just closed** | The same page, saying everybody is out, for the grace period after closing |
+| **In the archive** | The trip as history, and the cave's other finished published trips |
+| **Withheld** | Nothing, *for now*: the watch has lost its cave, or the cave's position has been protected since. It answers like an unknown link for as long as that holds, and starts answering again if it stops holding |
+| **Opens nothing** | Nothing: it ran out, its watch was stood down, or past trips are switched off or no longer cover it. Nobody took it back |
+| **Taken back** | Nothing, and never will again |
+
+The statuses are worked out by the server, by the very rules the published pages are served
+by — the list cannot say *Followed now* about an address that answers nothing. The counts
+above the table are of the whole installation, the list can be narrowed to one status, and
+most columns sort. Press **Refresh** before acting on a list that has been open for a while.
+
+**The page never shows an address.** Only a fingerprint of each link is kept, so there is
+nothing to show. The **Log code** column is the short code the server's request log writes in
+place of a link's address, so a line in the log can be matched with a row; it opens nothing.
+
+### The three things it can do
+
+| Button | What it does | What it cannot undo |
+|---|---|---|
+| **Replace link** | The old address stops answering at once and a fresh one is shown, **once**, in a window that closes only on *I have copied it*. Same expiry as the old one; the trip stays in its cave's past trips; nobody is told | The old address is gone for good. An address closed before it was copied is gone too — replace the link again |
+| **Unpublish this trip** | Takes back **every** link of that trip in one act, and says how many | Everything below |
+| **Unpublish everything** | Takes back every link of the installation — every trip, every cave. The confirmation states how many links are still standing and asks you to type a word before the button works | Everything below, for every trip at once |
+
+**What goes with taking a link back, and is not obvious.** The page stops answering for
+everybody holding the address, on this installation and on any website showing it in a frame.
+And a finished trip whose last link is gone **leaves its cave's public list of past trips** —
+which other trips' links were showing too. There is no way to put a taken-back link back. A
+trip is published again only by **starting its watch again** and creating a new link, one trip
+at a time, and the new address has to be handed out afresh to everyone who had the old one.
+
+That is also why there is **no "pause" switch**: an address that might start answering again
+is not one anybody can call withdrawn. If the aim is to stop showing past trips without
+giving up the links, that is an installation setting (see the [install
+guide](../../INSTALL.md#configuration-reference)), and it shows on this page as a line above
+the table.
+
+Taking links back deletes nothing inside the installation: the trips, their reports and their
+surveys are as they were, and each link taken back or replaced is recorded under its trip in
+the [audit history](history-and-audit.md), with who did it.
+
+### "Protected cave nearby?"
+
+Publishing a trip hands over its cave's survey file, and whether that is allowed is asked of
+**that** cave. A survey file is not bound to one cave, though: an export of a whole system is
+filed under one cave and draws its neighbours. So when the position of a **protected** cave
+other than the trip's own — or of one of its entrances — lies inside the rectangle spanned by
+the survey's stations, the row carries an orange **Protected cave nearby?** tag, and the same
+warning is shown beside a link when it is created or replaced.
+
+Read it for what it is:
+
+- **It refuses nothing.** The link exists and works. Open the survey, look, and take the link
+  back if it shows what should not be published.
+- **It is a check by position and cannot see inside the file.** A cave can lie inside the
+  rectangle of a survey that never enters it. And a survey that *does* draw a protected
+  neighbour passes unmarked when that cave's recorded point lies outside the rectangle, or when
+  the survey has no stored stations to span one (a wall model, a file not yet read).
+  **No tag is not a clearance.**
+- **It names no cave and gives no position.** On this page, read by people who may place every
+  cave, it counts every protected cave. Beside a link on a trip's own panel it counts only
+  protected caves the person publishing may already see exactly — somebody who may not see a
+  cave's position is not told that one is near.
+
+---
+
 ## When something is refused
 
 | You see | Why |
@@ -285,7 +384,8 @@ one, replacing every older block in the article.
 | *"This trip has no watch to import reports onto."* | Choose a survey and save the tracking setup first |
 | *"Publishing this trip hands over its cave's survey drawing, and that takes the right to share the cave."* | Ask whoever looks after the cave |
 | *"This trip's cave has protected coordinates, so the trip cannot be published at all."* | Deliberate — the drawing is the cave's position |
-| *"Nothing to show for this link"* (on the public page) | Taken back, ended, or the cave has been protected since |
+| *"That link has already been taken back, so there is nothing to replace. Publish the trip again instead."* | Somebody took it back first — possibly a moment ago, from another screen |
+| *"Nothing to show for this link"* (on the public page) | Taken back, replaced, ended, or the cave has been protected since |
 | *"Past trips are not offered through this link"* | The installation has switched past trips off |
 
 ---

@@ -148,6 +148,14 @@ odată cu ea — și apoi paginile.
 | Caption (on the public page) | Etichetă |
 | Past trips in this cave | Ture trecute în această peșteră |
 | Being followed now | Urmărite acum |
+| Published trips (the administration page) | Ture publicate |
+| Replace link | Înlocuiește linkul |
+| Take it back / Taken back (a follow link) | Retrage-l / Retras |
+| Unpublish this trip / Unpublish everything | Retrage publicarea turei / Retrage tot ce este publicat |
+| Followed now / Just closed / In the archive (a link's status) | Urmărire în curs / Abia încheiată / În arhivă |
+| Withheld / Opens nothing (a link's status) | Reținut / Nu deschide nimic |
+| Protected cave nearby? | Peșteră protejată în apropiere? |
+| Log code | Cod în jurnal |
 
 ## Alte
 

@@ -67,6 +67,7 @@ not a protection.
 | **QR landing pages** | No cave, no place, no position — for anybody, account or not |
 | **The phone sync API** | A position you may not have is **simply absent** |
 | **Links** | A link shows each reader only the ends they may see |
+| **Published trips** | A protected cave **cannot be published at all**, and protecting it later closes the links already handed out. One limit: a survey file filed under an unprotected cave can also draw a protected neighbour, and nothing can see that inside the file — the application only [warns by position](../features/live-tracking.md#protected-cave-nearby) |
 
 **None of this is done by the client.** The withholding happens on the server. A modified
 browser, a direct API call and a scraped page all get the same answer.

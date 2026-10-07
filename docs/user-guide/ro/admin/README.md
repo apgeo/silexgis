@@ -20,6 +20,7 @@ Pentru instalare, actualizare, copii de siguranță și TLS, vedeți
 | [Mesagerie și trimitere](messaging.md) | E-mail, SMS, texte de mesaje, politica de autentificare, urmărirea plecării mesajelor |
 | [Generarea reliefului](terrain-builds.md) | Transformarea datelor de elevație în terenul pe care îl desenează scena 3D |
 | [Operațiuni de întreținere](maintenance.md) | Recuperarea textului, a paginilor de document și a pozițiilor fotografiilor pentru fișiere sosite înainte ca acestea să funcționeze |
+| [Ture publicate](../features/live-tracking.md#tot-ce-este-publicat-pentru-administratorii-deplini) | Toate linkurile de urmărire date de instalare și ce deschide fiecare; înlocuirea unui link, retragerea publicării unei ture sau a tot ce este publicat și avertismentul „peșteră protejată în apropiere?" |
 
 ---
 
@@ -47,6 +48,7 @@ orice modificare care ar lăsa niciun administrator complet activ capabil să se
 | Seturi de elemente | Drepturi pe **featureSets** |
 | Tipuri de documente, scopuri de tură, roluri în tură, modele de raport | **Scriere** pe vocabulare — pentru că autorarea schemei unui tip decide ce poate spune fiecare înregistrare de acel tip |
 | Relații între elemente | Administratori compleți |
+| [Ture publicate](../features/live-tracking.md#tot-ce-este-publicat-pentru-administratorii-deplini) | Administratori compleți (pagina îi numește *administratori deplini*) — arată linkurile tuturor turelor, indiferent de regulile de acces ale fiecărei ture, și le poate retrage pe toate |
 | Reguli de detectare | Oricine poate crea elemente. Doar *promovarea* unui set la ce moștenește un grup sau instalarea este act de administrator |
 | [Operațiuni de întreținere](maintenance.md) | **Rulare** pe domeniul **jobs** (încă fără pagină în interfață — se declanșează prin API) |
 

@@ -121,7 +121,10 @@ as a viewer the article's own links can drive. It is the one public surface that
 people** — by default their real names, unless the installation turns that off or a caption
 replaces one person's — and the one that updates itself while a party is underground. A cave
 whose coordinates are protected cannot be published at all. Everything about it is in
-[Live tracking and published trips](live-tracking.md).
+[Live tracking and published trips](live-tracking.md) — including the page on which a full
+administrator sees [every link the installation has handed
+out](live-tracking.md#everything-published-for-full-administrators), replaces one, or takes
+them back.
 
 ---
 

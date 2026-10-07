@@ -64,6 +64,7 @@ protecție.
 | **Paginile QR** | Nicio peșteră, niciun loc, nicio poziție — pentru nimeni, cu sau fără cont |
 | **Sincronizarea cu telefonul** | O poziție pe care nu aveți voie s-o aveți este **pur și simplu absentă** |
 | **Legături** | O legătură arată fiecărui cititor doar capetele pe care le poate vedea |
+| **Ture publicate** | O peșteră protejată **nu poate fi publicată deloc**, iar protejarea ei ulterioară închide linkurile deja date. O limită: un fișier de ridicare înregistrat la o peșteră neprotejată poate desena și o vecină protejată, iar asta nu se poate vedea în interiorul fișierului — aplicația doar [avertizează după poziție](../features/live-tracking.md#peșteră-protejată-în-apropiere) |
 
 **Nimic din toate acestea nu este făcut de client.** Reținerea se face pe server. Un browser
 modificat, un apel direct la interfața de programare și o pagină extrasă automat primesc toate

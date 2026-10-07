@@ -395,7 +395,19 @@ feature and walkthroughs of whole jobs.
   a replay on the survey its reports were measured in. The page names people as the installation
   decides — real names by default, a caption to keep one person off it — a cave with protected
   coordinates cannot be published at all, and a link ends by itself a short while after the watch
-  is closed. The [user guide](user-guide/features/live-tracking.md) has the whole of it.
+  is closed. A link that has ended up in the wrong place is **replaced** in one act — the old
+  address stops answering, a fresh one is shown once, and the trip keeps its place in the cave's
+  history. The [user guide](user-guide/features/live-tracking.md) has the whole of it.
+- **Everything published, on one page for the full administrators** — every follow link of the
+  installation with what its address opens right now (followed, just closed, in the archive,
+  withheld because of its cave, opening nothing, taken back), worked out by the same rules the
+  published pages are served by, so the list cannot disagree with the page. From there a link
+  is replaced, a trip is unpublished, or everything is — each confirmation saying what goes with
+  it and cannot be undone: a finished trip leaves its cave's public list of past trips and comes
+  back only by starting its watch again. A survey file can draw more than its own cave, so a
+  publication is **flagged, never refused**, when a protected cave's position lies inside the
+  area the survey's stations span — a check by position that cannot see inside the file, names
+  no cave, and tells a publisher nothing about a cave they may not place.
 - **Being asked onto a trip does not open the cave, so somebody who can open it is told** — an
   invitation grants nothing, so when a person asked onto a trip cannot read a cave the trip is about,
   the cave's owner and the full administrators get a message, whether the cave was already on the trip

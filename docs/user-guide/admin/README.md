@@ -20,6 +20,7 @@ For installing, upgrading, backing up and TLS, see [INSTALL.md](../../INSTALL.md
 | [Messaging and delivery](messaging.md) | Email, SMS, message texts, sign-in policy, watching the mail go out |
 | [Building terrain](terrain-builds.md) | Turning elevation data into the ground the 3D scene draws |
 | [Maintenance sweeps](maintenance.md) | Backfilling text, document pages and photo positions for files that arrived before those worked |
+| [Published trips](../features/live-tracking.md#everything-published-for-full-administrators) | Every follow link the installation has handed out and what each opens; replacing a link, unpublishing a trip or everything, and the "protected cave nearby?" warning |
 
 ---
 
@@ -47,6 +48,7 @@ change that would leave no active Full Administrator able to sign in.
 | Feature sets | Rights over **featureSets** |
 | Document kinds, trip purposes, trip roles, report layouts | **Write** on taxonomies — because authoring a kind's schema decides what every record of that kind may say |
 | Link relations | Full Administrators |
+| [Published trips](../features/live-tracking.md#everything-published-for-full-administrators) | Full Administrators — it lists every trip's links whatever the trip's own access rules say, and can take all of them back |
 | Detection rules | Anybody who can create features. Only *promoting* a set to what a group or the installation inherits is an administrator's act |
 | [Maintenance sweeps](maintenance.md) | **Run** on the **jobs** domain (no interface page yet — triggered through the API) |
 
