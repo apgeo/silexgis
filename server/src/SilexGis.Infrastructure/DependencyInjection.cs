@@ -420,6 +420,11 @@ public static class DependencyInjection
             configuration.GetSection(TripCalloutOptions.SectionName));
         services.AddScoped<IProcessingJobHandler, TripCalloutSweepHandler>();
         services.AddHostedService<TripCalloutScheduler>();
+
+        services.Configure<TripRetentionOptions>(
+            configuration.GetSection(TripRetentionOptions.SectionName));
+        services.AddScoped<IProcessingJobHandler, TripPurgeHandler>();
+        services.AddHostedService<TripPurgeScheduler>();
         return services;
     }
 }

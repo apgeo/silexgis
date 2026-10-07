@@ -11,7 +11,6 @@ using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Documents;
-using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Trips;
@@ -82,6 +81,16 @@ public static class TripLogEndpoints
                 + "by lifecycle state. Whose trips these are is worked out from the caller and "
                 + "cannot be asked for: there is no parameter naming a person, because one would "
                 + "answer where a named person has been out of trips the asker may not read.");
+        trips.MapGet("/deleted", TripLogDeletionEndpoints.ListAsync)
+            .WithSummary(
+                "The deleted trips this caller may put back — the ones they could read and "
+                + "could delete — most recently deleted first, each with when it went and "
+                + "when it will be removed for good. A trip past that moment is not listed.");
+        trips.MapGet("/config", TripLogDeletionEndpoints.ConfigAsync)
+            .WithSummary(
+                "What this installation does with a deleted trip: how many days it stays "
+                + "restorable, or nothing when deleted trips are kept until somebody says "
+                + "otherwise. Asked before a delete so the confirmation can say what will happen.");
         trips.MapGet("/{id:guid}", GetAsync)
             .WithSummary("Single trip log with caves and participants.");
         trips.MapPost("/", CreateAsync).WithValidation<TripLogWriteRequest>()
@@ -104,7 +113,16 @@ public static class TripLogEndpoints
                 + "person left out of both lists is taken off the trip; the caves are replaced only "
                 + "when a list is supplied, and left as they are when the field is omitted.");
         trips.MapDelete("/{id:guid}", DeleteAsync)
-            .WithSummary("Deletes a trip log with its links and attachments.");
+            .WithSummary(
+                "Deletes a trip log (Delete permission). The trip leaves every listing, map, "
+                + "calendar and published address at once and answers as not found; nothing on "
+                + "it is removed, so it can be put back until the installation's restore window "
+                + "runs out.");
+        trips.MapPost("/{id:guid}/restore", TripLogDeletionEndpoints.RestoreAsync)
+            .WithSummary(
+                "Puts a deleted trip back with everything it had (the right to read it and to "
+                + "delete it), and answers the trip with its version. Refused once the restore "
+                + "window has passed. Nobody is notified.");
         trips.MapPost("/{id:guid}/state", TransitionAsync)
             .WithValidation<TripLogTransitionRequest>()
             .WithSummary(
@@ -926,6 +944,16 @@ public static class TripLogEndpoints
         return TypedResults.Ok(items[0]);
     }
 
+    /// <summary>
+    /// Deletes a trip: marks it, and removes nothing.
+    /// </summary>
+    /// <remarks>
+    /// The same right and the same answer as when a delete was final. What changed is what is
+    /// left behind: every row the trip had, hidden with it by the model, so the trip can be put
+    /// back exactly. From this save on it answers as not found on every ordinary read and write,
+    /// to its owner as much as to anybody — the one place it can still be seen is the list of
+    /// deleted trips, and the one thing that can be done to it is to restore it.
+    /// </remarks>
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         HttpContext http,
@@ -933,7 +961,6 @@ public static class TripLogEndpoints
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         TripLogWriteService writes,
-        StoredContentRemover content,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -955,13 +982,10 @@ public static class TripLogEndpoints
             return stale;
         }
 
-        // What goes with a trip is stated in one place, because the undo that takes a whole
-        // imported spreadsheet back has to remove a trip the same way this route does.
-        var removed = await writes.DeleteAsync(trip, ct);
+        // What deleting a trip does is stated in one place, because the undo that takes a whole
+        // imported spreadsheet back has to delete a trip the same way this route does.
+        writes.SoftDelete(trip, ctx.UserId);
         await db.SaveChangesAsync(ct);
-
-        // The generated write-up's bytes, after the rows that pointed at them are gone.
-        await content.DropAsync(removed);
         return TypedResults.NoContent();
     }
 

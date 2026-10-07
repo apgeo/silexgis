@@ -514,8 +514,27 @@ public sealed class TripTrackingPicturesTests : IAsyncLifetime, IDisposable, ICl
             (await db.ResLinkMembers.AsNoTracking().CountAsync(m => m.ResLinkId == linkId)).ShouldBe(3);
         }
 
+        (await owner.GetAsync($"/api/v1/reslinks/{linkId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await LinkCountOnDocumentAsync(photo.DocumentId)).ShouldBe(1);
+
         (await owner.DeleteAsync($"/api/v1/trip-logs/{context.Trip}"))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Deleted, the trip keeps the link — putting the trip back has to put the picture back on
+        // its moment — and the link already reads as gone: left showing, it would be the same
+        // photograph-documents-a-person sentence for as long as the trip waited to be removed.
+        await using (var during = factory.Services.CreateAsyncScope())
+        {
+            var db = during.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.ResLinkMembers.AsNoTracking().CountAsync(m => m.ResLinkId == linkId)).ShouldBe(3);
+        }
+
+        (await owner.GetAsync($"/api/v1/reslinks/{linkId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await LinkCountOnDocumentAsync(photo.DocumentId)).ShouldBe(0);
+
+        // Removed for good, it takes the link with it.
+        await DeletedTrips.AgePastTheWindowAsync(factory, context.Trip);
+        await DeletedTrips.RunPurgeAsync(factory);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var after = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -897,6 +916,15 @@ public sealed class TripTrackingPicturesTests : IAsyncLifetime, IDisposable, ICl
 
     private static List<JsonElement> MembersOf(JsonElement link) =>
         [.. link.GetProperty("members").EnumerateArray()];
+
+    /// <summary>How many links the photograph's own panel lists.</summary>
+    private async Task<int> LinkCountOnDocumentAsync(Guid documentId)
+    {
+        var response = await owner.GetAsync($"/api/v1/reslinks/for-target?type=document&id={documentId}");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("totalItems").GetInt32();
+    }
 
     /// <summary>The stored membership row, so a test can assert it did not move.</summary>
     private async Task<ResLinkMember?> MemberRowAsync(Guid memberId)

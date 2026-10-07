@@ -151,6 +151,12 @@ public static class ProcessingJobKinds
     public const string TripCalloutSweep = "trip-callout-sweep";
 
     /// <summary>
+    /// Remove trips that were deleted longer ago than the installation keeps them restorable,
+    /// with everything that cannot mean anything without them. Scheduled.
+    /// </summary>
+    public const string TripPurge = "trip-purge";
+
+    /// <summary>
     /// Build the terrain the 3D scene draws over one rectangle: obtain the elevation rasters,
     /// prepare them, bake the pyramid, check it and publish it. One row drives the whole chain
     /// and reports which step it has reached.

@@ -328,8 +328,14 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
         acts[^1].Changes!.ShouldContain("withdrawn");
     }
 
+    /// <summary>
+    /// A deleted trip keeps every rule written on it — its own and the camp's alike — so that
+    /// putting it back is exact, and the integrity check does not call them orphans meanwhile:
+    /// their anchor is still there. They go when the trip is removed for good, and leave nothing
+    /// behind then either.
+    /// </summary>
     [Fact]
-    public async Task A_deleted_trip_leaves_no_rule_the_integrity_check_calls_an_orphan()
+    public async Task A_deleted_trip_keeps_its_rules_and_a_removed_one_leaves_none_the_integrity_check_calls_an_orphan()
     {
         var camp = await CreateCampAsync();
         var trip = await CreateTripAsync(organiser, "A trip that will not be here long");
@@ -343,12 +349,52 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
         var deleted = await organiser.DeleteAsync($"/api/v1/trip-logs/{trip}");
         deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await deleted.Content.ReadAsStringAsync());
 
+        (await RulesOnAsync(trip)).Count.ShouldBe(2, "deleting a trip removes nothing written on it");
+        (await OrphansAboutAsync(trip)).ShouldBeEmpty();
+
+        await DeletedTrips.AgePastTheWindowAsync(factory, trip);
+        await DeletedTrips.RunPurgeAsync(factory);
+
         (await RulesOnAsync(trip)).ShouldBeEmpty(
             "a rule anchored on a trip that is gone reads as a live grant and resolves to nothing");
-        var orphans = (await VerifyAsync())
-            .Where(p => p.Check == "access_scope_orphan" && p.Detail.Contains(trip.ToString()))
-            .ToList();
-        orphans.ShouldBeEmpty(string.Join("; ", orphans.Select(p => p.Detail)));
+        (await OrphansAboutAsync(trip)).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// How much of a camp carries a rule is counted over the trips the camp has now. A deleted
+    /// trip keeps the rule the camp wrote onto it and is in no camp while it is deleted, so
+    /// neither figure counts it — and both count it again once it is back.
+    /// </summary>
+    [Fact]
+    public async Task A_camps_sharing_counts_only_the_trips_it_has_now()
+    {
+        var camp = await CreateCampAsync();
+        var stays = await CreateTripAsync(organiser, "A trip that stays in the camp");
+        var goes = await CreateTripAsync(organiser, "A trip deleted for a while");
+        await JoinAsync(camp, stays);
+        await JoinAsync(camp, goes);
+
+        var applied = await organiser.PostAsJsonAsync($"/api/v1/expeditions/{camp}/sharing", Body(readerId));
+        applied.StatusCode.ShouldBe(HttpStatusCode.OK, await applied.Content.ReadAsStringAsync());
+        var whole = await ReadSharingAsync(camp);
+        whole.MemberTrips.ShouldBe(2);
+        whole.Rules.Single().Trips.ShouldBe(2);
+
+        (await organiser.DeleteAsync($"/api/v1/trip-logs/{goes}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // One trip, carrying the rule: not "two of one", which is what counting the kept row
+        // against the camp's present trips would say.
+        var during = await ReadSharingAsync(camp);
+        during.MemberTrips.ShouldBe(1);
+        during.Rules.Single().Trips.ShouldBe(1);
+        (await RulesOnAsync(goes)).Count.ShouldBe(1);
+
+        (await organiser.PostAsync($"/api/v1/trip-logs/{goes}/restore", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var back = await ReadSharingAsync(camp);
+        back.MemberTrips.ShouldBe(2);
+        back.Rules.Single().Trips.ShouldBe(2);
+        (await reader.GetAsync($"/api/v1/trip-logs/{goes}")).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     /// <summary>
@@ -510,6 +556,9 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
             .OrderBy(a => a.Id)
             .ToListAsync();
     }
+
+    private async Task<List<IntegrityProblem>> OrphansAboutAsync(Guid tripId) =>
+        [.. (await VerifyAsync()).Where(p => p.Check == "access_scope_orphan" && p.Detail.Contains(tripId.ToString()))];
 
     private async Task<IReadOnlyList<IntegrityProblem>> VerifyAsync()
     {

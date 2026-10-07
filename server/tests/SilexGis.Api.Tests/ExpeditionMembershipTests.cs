@@ -275,8 +275,13 @@ public sealed class ExpeditionMembershipTests : IAsyncLifetime, IDisposable, ICl
         (await MembersAsync(owner, camp)).ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// A deleted trip is in no camp as far as any reader is concerned, and is back in the camp it
+    /// was in once it is restored — without anybody putting it there again, because the delete
+    /// never took its place away. Only removing the trip for good does that.
+    /// </summary>
     [Fact]
-    public async Task Deleting_a_trip_takes_its_place_in_the_camp_with_it()
+    public async Task A_deleted_trip_is_out_of_its_camp_until_it_is_restored_and_gone_from_it_once_removed()
     {
         var camp = await CreateCampAsync("A camp that loses a trip");
         var trip = await CreateTripAsync("A trip that gets deleted");
@@ -287,7 +292,23 @@ public sealed class ExpeditionMembershipTests : IAsyncLifetime, IDisposable, ICl
         var deleted = await owner.DeleteAsync($"/api/v1/trip-logs/{trip}");
         deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await deleted.Content.ReadAsStringAsync());
 
+        // Hidden from every reader, a test's own ordinary read included, and still in the table.
         (await MembershipRowCountAsync(trip)).ShouldBe(0);
+        (await StoredMembershipRowCountAsync(trip)).ShouldBe(1);
+        (await MembersAsync(owner, camp)).ShouldBe([survivor]);
+        (await owner.GetAsync($"/api/v1/expeditions/{camp}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var restored = await owner.PostAsync($"/api/v1/trip-logs/{trip}/restore", null);
+        restored.StatusCode.ShouldBe(HttpStatusCode.OK, await restored.Content.ReadAsStringAsync());
+        (await CampOfAsync(owner, trip)).ShouldBe(camp);
+        (await MembersAsync(owner, camp)).ShouldBe([trip, survivor], ignoreOrder: true);
+
+        // Removed for good, its place in the camp goes with it and the camp is otherwise untouched.
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{trip}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        await DeletedTrips.AgePastTheWindowAsync(factory, trip);
+        await DeletedTrips.RunPurgeAsync(factory);
+
+        (await StoredMembershipRowCountAsync(trip)).ShouldBe(0);
         (await MembersAsync(owner, camp)).ShouldBe([survivor]);
         (await owner.GetAsync($"/api/v1/expeditions/{camp}")).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
@@ -385,6 +406,14 @@ public sealed class ExpeditionMembershipTests : IAsyncLifetime, IDisposable, ICl
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         return await db.ExpeditionTrips.CountAsync(x => x.TripLogId == tripLogId);
+    }
+
+    /// <summary>The same count past the filter that hides a deleted trip's place in a camp.</summary>
+    private async Task<int> StoredMembershipRowCountAsync(Guid tripLogId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.ExpeditionTrips.IgnoreQueryFilters().CountAsync(x => x.TripLogId == tripLogId);
     }
 
     /// <summary>

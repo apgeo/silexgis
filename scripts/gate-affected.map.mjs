@@ -29,7 +29,11 @@ export const groups = {
     'TrustedProxyTests', 'TripTrackingOptionsTests',
     'CredentialUrlScrubberTests',
     'TripOrganizingGroupGuardTests', 'TripsOfTheCallerTests',
-    'EnumBindingTests', 'TripDeleteCleanupTests', 'TripTrackImportTests', 'TripWriteShapeTests',
+    'EnumBindingTests', 'TripPurgeTests', 'TripTrackImportTests', 'TripWriteShapeTests',
+    // A deleted trip is hidden from every read and kept whole until it is removed for good:
+    // what leaves and returns with it, who may put it back, and what the rest of the
+    // application does about the rows it still holds.
+    'TripSoftDeleteTests', 'TripRestoreTests', 'TripSoftDeleteHousekeepingTests',
   ],
   events: [
     'EventAccessDomainTests', 'EventAuthoringTests', 'EventInvitationTests',
@@ -53,9 +57,9 @@ export const groups = {
     'DocumentSurfaceProtectionSweepTests', 'DocumentViewerBytesTests',
     'LegacyOfficeFixtureTests', 'PageTextTests', 'PdfAndOfficeTextExtractorTests',
     'TextExtractionPipelineTests', 'TextExtractorTests',
-    // What becomes of a generated write-up when the record it was written for is deleted is
-    // decided beside the documents, for trips and camps alike, and these two are what ask it.
-    'ExpeditionDeleteCleanupTests', 'TripDeleteCleanupTests',
+    // What becomes of a generated write-up when the record it was written for goes is decided
+    // beside the documents, for trips and camps alike, and these two are what ask it.
+    'ExpeditionDeleteCleanupTests', 'TripPurgeTests',
   ],
   photos: [
     'AlbumAndPublicGalleryTests', 'ExpeditionPhotographTests', 'PhotoBytesProtectionTests',
@@ -376,10 +380,10 @@ export const crossCutting = {
     'TripAttendanceLimitTests', 'TripCalloutStandDownTests', 'TripChecklistTickTests',
     'TripImportCommitTests', 'TripImportSessionTests', 'TripInvitationTests',
     'TripOrganizingGroupGuardTests', 'TripParticipantRoleVocabularyTests', 'TripPromotionTests',
-    'TripReportDocumentTests', 'TripReportTemplateTests', 'TripStatisticsTests',
-    'TripTrackImportTests', 'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
-    'TripTrackingTests', 'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
-    'UserAdministrationTests',
+    'TripReportDocumentTests', 'TripReportTemplateTests', 'TripRestoreTests',
+    'TripStatisticsTests', 'TripTrackImportTests', 'TripTrackingPicturesTests',
+    'TripTrackingPublicationTests', 'TripTrackingTests', 'TripTypeVocabularyTests',
+    'UiDefaultsTests', 'UploadDestinationTests', 'UserAdministrationTests',
   ],
   locationClasses: [
     'AccessHistoryTests', 'AclAndCavingGroupTests', 'AreaKarstStatisticsTests',
@@ -403,14 +407,14 @@ export const crossCutting = {
     'SurveyGraphTests', 'SurveyModelTests', 'SurveyModelTrackedTripsTests',
     'SurveySegmentSubstrateTests', 'SurveySourceTests', 'SurveyWallsTests', 'SyncPageSizeTests',
     'SyncProtocolTests', 'SyncUploadTests', 'TerrainProbeTests', 'TrackingCsvImportTests',
-    'TripAndTagTests', 'TripCalloutSweepTests', 'TripCaveReachTests', 'TripDeleteCleanupTests',
-    'TripImportCommitTests', 'TripImportPreviewResolutionTests', 'TripImportResolutionTests',
-    'TripListFacetTests', 'TripLiveSiblingTests', 'TripMapDerivedPositionTests',
-    'TripMeetingPointTests', 'TripPastTrackTests', 'TripPlanNotificationTests',
-    'TripReportDocumentTests', 'TripRoleLinkUnitOfWorkTests', 'TripStatisticsTests',
-    'TripStatsTests', 'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
-    'TripTrackingStationNamesTests', 'TripTrackingTests', 'WorkAreaTests',
-    'WorkingSridBehaviourTests',
+    'TripAndTagTests', 'TripCalloutSweepTests', 'TripCaveReachTests', 'TripImportCommitTests',
+    'TripImportPreviewResolutionTests', 'TripImportResolutionTests', 'TripListFacetTests',
+    'TripLiveSiblingTests', 'TripMapDerivedPositionTests', 'TripMeetingPointTests',
+    'TripPastTrackTests', 'TripPlanNotificationTests', 'TripPurgeTests',
+    'TripReportDocumentTests', 'TripRoleLinkUnitOfWorkTests', 'TripSoftDeleteTests',
+    'TripStatisticsTests', 'TripStatsTests', 'TripTrackingPicturesTests',
+    'TripTrackingPublicationTests', 'TripTrackingStationNamesTests', 'TripTrackingTests',
+    'WorkAreaTests', 'WorkingSridBehaviourTests',
   ],
 };
 

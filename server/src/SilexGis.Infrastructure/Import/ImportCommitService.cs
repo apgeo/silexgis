@@ -365,7 +365,7 @@ public sealed class ImportCommitService(
             var trips = await db.TripLogs.Where(t => tripIds.Contains(t.Id)).ToListAsync(ct);
             foreach (var trip in trips)
             {
-                removedFiles.AddRange(await tripWrites.DeleteAsync(trip, ct));
+                removedFiles.AddRange(await tripWrites.PurgeAsync(trip, ct));
             }
 
             // The removals are polymorphic rows deleted by statement and a tracked delete of the

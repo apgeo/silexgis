@@ -145,6 +145,41 @@ public sealed class TripCalloutSweepTests : IAsyncLifetime, IDisposable, IClassF
     }
 
     /// <summary>
+    /// A deleted trip is watched by nothing: the pass does not see it, so no alarm is raised and
+    /// no reminder is sent about a trip nobody can open. The arrangement is kept with the trip
+    /// all the same, and a trip that is put back is watched again from the next pass — a party
+    /// whose hour went by while the record was away is reported late rather than never.
+    /// </summary>
+    [Fact]
+    public async Task A_deleted_trip_raises_nothing_and_is_watched_again_once_it_is_restored()
+    {
+        var deleted = await ArmedTripAsync("Deleted while armed", TimeSpan.FromHours(2));
+        var standing = await ArmedTripAsync("Armed and still there", TimeSpan.FromHours(2));
+
+        (await organiser.DeleteAsync($"/api/v1/trip-logs/{deleted}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        await SweepAsync();
+
+        (await DeletedTrips.RowAsync(factory, deleted))!.CalloutState.ShouldBe(TripCalloutState.Armed);
+        (await AlarmsAboutAsync(mateId, deleted)).ShouldBeEmpty();
+
+        // The same arrangement on a trip that was not deleted does raise, so the silence above
+        // is the deletion and not a pass that raises nothing at all.
+        (await StateOfAsync(standing)).ShouldBe(TripCalloutState.Overdue);
+        (await AlarmsAboutAsync(mateId, standing)).Count.ShouldBe(1);
+
+        (await organiser.PostAsync($"/api/v1/trip-logs/{deleted}/restore", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        // Restoring is not what tells anybody: nothing is raised until a pass has looked.
+        (await AlarmsAboutAsync(mateId, deleted)).ShouldBeEmpty();
+
+        await SweepAsync();
+
+        (await StateOfAsync(deleted)).ShouldBe(TripCalloutState.Overdue);
+        (await AlarmsAboutAsync(mateId, deleted)).Count.ShouldBe(1);
+    }
+
+    /// <summary>
     /// Somebody said the party was out. The alarm is disarmed rather than deleted, and the pass
     /// leaves it alone from then on — including after the hour it was armed for has gone by.
     /// </summary>
@@ -411,6 +446,56 @@ public sealed class TripCalloutSweepTests : IAsyncLifetime, IDisposable, IClassF
         var reminders = await NoticesAboutAsync(mateId, MessageTemplateCatalog.NotifyTripPlanReminder, trip);
         reminders.Count.ShouldBe(1);
         reminders[0].Placeholders.ShouldNotContain("cave", Case.Insensitive);
+    }
+
+    /// <summary>
+    /// The reminder is the other half of the same pass, and a deleted plan is as far out of it as
+    /// out of the alarm: nobody is reminded of a plan nobody can open. The reminder is not spent
+    /// by that silence either — the plan that is put back in time is mentioned then, once.
+    /// </summary>
+    [Fact]
+    public async Task A_deleted_plan_reminds_nobody_and_is_still_owed_its_reminder_once_restored()
+    {
+        using var reminding = new SilexGisApiFactory(
+            connectionString,
+            new Dictionary<string, string?> { ["TripCallout:ReminderLead"] = "2.00:00:00" });
+
+        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        var plans = new List<Guid>();
+        foreach (var title in new[] { "Deleted before its reminder", "Nearly here and still there" })
+        {
+            var plan = await CreatePlanAsync(title, tomorrow);
+            await ProposeAsync(plan);
+            await GrantTripReadAsync(plan, mateId);
+            (await InviteAsync(plan, mateCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+            plans.Add(plan);
+        }
+
+        var (deleted, standing) = (plans[0], plans[1]);
+        (await organiser.DeleteAsync($"/api/v1/trip-logs/{deleted}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        async Task PassAsync()
+        {
+            await using var scope = reminding.Services.CreateAsyncScope();
+            await HandlerIn(scope).ExecuteAsync(
+                new ProcessingJob { Kind = ProcessingJobKinds.TripCalloutSweep }, CancellationToken.None);
+        }
+
+        await PassAsync();
+
+        // The same arrangement on a plan that was not deleted is mentioned, so the silence about
+        // the other is the deletion and not a pass that reminds nobody.
+        (await NoticesAboutAsync(mateId, MessageTemplateCatalog.NotifyTripPlanReminder, standing)).Count.ShouldBe(1);
+        (await NoticesAboutAsync(mateId, MessageTemplateCatalog.NotifyTripPlanReminder, deleted)).ShouldBeEmpty();
+        (await DeletedTrips.RowAsync(factory, deleted))!.PlanReminderSentAt.ShouldBeNull();
+
+        (await organiser.PostAsync($"/api/v1/trip-logs/{deleted}/restore", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await PassAsync();
+        await PassAsync();
+
+        (await NoticesAboutAsync(mateId, MessageTemplateCatalog.NotifyTripPlanReminder, deleted)).Count.ShouldBe(1);
+        (await NoticesAboutAsync(mateId, MessageTemplateCatalog.NotifyTripPlanReminder, standing)).Count.ShouldBe(1);
     }
 
     /// <summary>

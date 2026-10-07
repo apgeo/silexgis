@@ -36,7 +36,8 @@ public sealed class TripLogWriteService(
     FeatureProtection protection,
     TripSectionWriter sections,
     ITripRosterAnnouncer announcer,
-    DocumentWriteService documents)
+    DocumentWriteService documents,
+    TimeProvider clock)
 {
     /// <summary>
     /// The role a bare list of caves is written under. The list says the trip is about those
@@ -154,24 +155,82 @@ public sealed class TripLogWriteService(
     }
 
     /// <summary>
-    /// Takes a trip out of the installation, with everything that cannot mean anything without
-    /// it. Nothing here decides whether it may be removed — that is a question about the trip as
-    /// it stands and is answered before it is loaded — and nothing here saves, as everywhere else
-    /// in this class.
+    /// Deletes a trip, which is to say marks it: the row and everything hung on it stay exactly
+    /// as they are, and the model hides the trip from every read from the moment this is saved.
+    /// Nothing here decides whether it may be deleted — that is a question about the trip as it
+    /// stands and is answered before it is loaded — and nothing here saves, as everywhere else in
+    /// this class.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// One rule, two callers: the route somebody presses and the undo that takes a whole import
-    /// back. What dies with a trip is a rule about the model rather than about the request, and
-    /// stated twice it would eventually be stated differently — the undo would leave orphaned
-    /// access rules and dangling links behind, and the only symptom would be an integrity report
-    /// months later.
+    /// back. Both leave a trip that can be put back, by the same act, from the same list.
+    /// </para>
+    /// <para>
+    /// Removing nothing is the point, not an economy. The roster, the caves the trip names, its
+    /// place in a camp, its files, tags and write-up, and the rules saying who may read it are
+    /// what a restored trip has to have again, and anything taken down here would have to be
+    /// rebuilt from a record of what it was — which is a second copy of the trip, kept in the
+    /// hope it never disagrees with the first. What cannot mean anything without the trip goes
+    /// when the trip itself does, in <see cref="PurgeAsync"/>.
+    /// </para>
+    /// <para>
+    /// A trip already marked keeps the stamp it has. Marking it again would restart the time it
+    /// has left, and name as its deleter somebody who merely repeated what another had done.
+    /// </para>
+    /// </remarks>
+    public void SoftDelete(TripLog trip, Guid? deletedByUserId)
+    {
+        ArgumentNullException.ThrowIfNull(trip);
+        if (trip.DeletedAt is not null)
+        {
+            return;
+        }
+
+        trip.DeletedAt = clock.GetUtcNow();
+        trip.DeletedByUserId = deletedByUserId;
+    }
+
+    /// <summary>
+    /// Puts a deleted trip back. One column is all there is to it, because deleting took nothing
+    /// away: the roster, the links, the files and the rules were never touched, so they are what
+    /// they were. Nothing here decides whether it may be restored, and nothing here saves.
+    /// </summary>
+    /// <remarks>
+    /// What a restored trip's links mean follows from that and needs no rule of its own. A cave
+    /// it named that was itself deleted in the meantime is not shown on it, exactly as on a trip
+    /// that was never deleted; one that was removed for good took its own end of the link with
+    /// it when it went. Nobody is told: a trip coming back is the undoing of a mistake, and the
+    /// people on it were never told it had gone.
+    /// </remarks>
+    public static void Restore(TripLog trip)
+    {
+        ArgumentNullException.ThrowIfNull(trip);
+        trip.DeletedAt = null;
+        trip.DeletedByUserId = null;
+    }
+
+    /// <summary>
+    /// Removes a trip for good, with everything that cannot mean anything without it. This is
+    /// where a deletion becomes one: it is run by the scheduled pass over trips whose time to be
+    /// put back has run out, and by nothing a person presses. Nothing here saves, as everywhere
+    /// else in this class.
+    /// </summary>
+    /// <remarks>
+    /// What dies with a trip is a rule about the model rather than about whoever asked, and it
+    /// is stated in this one place — the pass would otherwise leave orphaned access rules and
+    /// dangling links behind, and the only symptom would be an integrity report months later.
+    /// The trip is loaded past the filter that hides deleted rows, since every trip that reaches
+    /// here is one, and the rows read by its key below are read the same way.
     /// </remarks>
     /// <returns>
     /// The files whose rows went with the trip, so the caller can drop their bytes once the save
     /// that removed the rows has landed. Nothing here touches the store: bytes go after rows.
     /// </returns>
-    public async Task<IReadOnlyList<StoredFile>> DeleteAsync(TripLog trip, CancellationToken ct = default)
+    public async Task<IReadOnlyList<StoredFile>> PurgeAsync(TripLog trip, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(trip);
+
         // What the trip's report slot holds decides what goes with the trip. The write-up the
         // application generated is a derivative of the trip — built from it, byte-identical for an
         // unchanged trip, named after it, and regenerable from nothing else — and means nothing
@@ -190,7 +249,11 @@ public sealed class TripLogWriteService(
         //
         // The trip's place in a camp goes with it, and the camp is otherwise untouched: a camp
         // that gathered this trip has one fewer member, which is what deleting the trip means.
-        await db.ExpeditionTrips.Where(m => m.TripLogId == trip.Id).ExecuteDeleteAsync(ct);
+        // Read past the filter: the membership of a deleted trip is hidden like the trip, and a
+        // delete that could not see the row would leave it to the foreign key alone.
+        await db.ExpeditionTrips.IgnoreQueryFilters()
+            .Where(m => m.TripLogId == trip.Id)
+            .ExecuteDeleteAsync(ct);
 
         // Every rule anchored on this trip goes with it — the ones authored on its own
         // permissions tab and the ones a camp's sharing wrote onto it alike. A rule whose
@@ -221,61 +284,20 @@ public sealed class TripLogWriteService(
             db, documents, generatedReportFileIds, ct);
 
         // The trip's memberships go, and so do the links that cannot mean anything without it.
+        // Which those are is one rule with one home, because the links of a trip that is only
+        // deleted have to read as though this had already happened to them: decided here by a
+        // rule of its own, a link would vanish when its trip was deleted and come back, changed,
+        // on the day the trip was removed.
         //
-        // A link typed with one of the trip roles goes whole, however many features it still
-        // names: the role says what *this trip* did there, so the surviving members are not
-        // related to each other by anything once the trip is gone. Leaving it would also leave a
-        // directed link with no distinguished member, which the link rules refuse — the result
-        // would show on every named cave's links panel as a relation to the other caves, and no
-        // later edit of it would be accepted.
-        //
-        // A link anchored to a *moment* of this trip goes whole for the same reason, and the
-        // reason is worth stating because the relation it is written under is not a trip role and
-        // would otherwise slip past the rule above. Such a link says "at 14:05 of this trip", and
-        // the two other things it names are a photograph and, usually, the caver the moment was
-        // about — related to each other by nothing at all once the instant they share has gone.
-        // Left behind it is worse than an orphan: a directed link whose distinguished member has
-        // been deleted, which the link rules refuse to accept any later edit of, and which renders
-        // on that caver's own links panel as a photograph documenting a person — an association
-        // nobody ever made, assembled by a delete.
-        //
-        // Only where the moment is the link's *main* member, which is the shape a picture on a
-        // moment is written in. A link that merely mentions a moment of this trip while being
-        // about something else — a document, say, which is what its main member names — is an
-        // association somebody authored deliberately, whose subject outlives this trip and whose
-        // curator can still edit it. That one keeps whatever it still relates, under the rule
-        // below, exactly like any other link the trip merely joined.
-        //
-        // A link of any other kind the trip merely joined keeps whatever it still relates, and
-        // goes only when one member is left: an association with one end is a thing no surface
-        // offers and no delete path would ever reach again. Remaining members cascade with it.
-        var roleIds = TripRoleLinks.RoleIds(db);
-        var linkIds = await db.ResLinkMembers
-            .Where(m => m.EntityType == AttachedEntityType.TripLog && m.EntityId == trip.Id)
-            .Select(m => m.ResLinkId)
-            .Distinct()
-            .ToListAsync(ct);
-        var roleLinkIds = await db.ResLinks
-            .Where(l => linkIds.Contains(l.Id)
-                && l.RelationTypeId != null && roleIds.Contains(l.RelationTypeId.Value))
+        // Read before the memberships go, since the rule is about what each link would be left
+        // with; removed after, and the members a doomed link still holds cascade with it.
+        var gone = TripLinkFate.OfTrip(trip.Id);
+        var endingLinkIds = await db.ResLinks
+            .Where(TripLinkFate.EndsWithout(db, gone))
             .Select(l => l.Id)
             .ToListAsync(ct);
-        var momentLinkIds = await db.ResLinkMembers
-            .Where(m => m.EntityType == AttachedEntityType.TripLog
-                && m.EntityId == trip.Id
-                && m.AnchorKind == AnchorKind.TripMoment
-                && m.IsMain)
-            .Select(m => m.ResLinkId)
-            .Distinct()
-            .ToListAsync(ct);
-        await db.ResLinkMembers
-            .Where(m => m.EntityType == AttachedEntityType.TripLog && m.EntityId == trip.Id)
-            .ExecuteDeleteAsync(ct);
-        await db.ResLinks
-            .Where(l => roleLinkIds.Contains(l.Id)
-                || momentLinkIds.Contains(l.Id)
-                || (linkIds.Contains(l.Id) && db.ResLinkMembers.Count(m => m.ResLinkId == l.Id) < 2))
-            .ExecuteDeleteAsync(ct);
+        await db.ResLinkMembers.Where(gone).ExecuteDeleteAsync(ct);
+        await db.ResLinks.Where(l => endingLinkIds.Contains(l.Id)).ExecuteDeleteAsync(ct);
         db.TripLogs.Remove(trip);
         return removedFiles;
     }

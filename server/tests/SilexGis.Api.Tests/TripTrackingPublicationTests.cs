@@ -366,6 +366,65 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     }
 
     /// <summary>
+    /// A deleted trip's address answers exactly as one nobody ever minted, on the followed page
+    /// and on every route the same link opens — and opens again when the trip is put back,
+    /// because deleting the trip kept the link.
+    /// </summary>
+    /// <remarks>
+    /// The link is found by looking its token up with nobody signed in to ask anything else of,
+    /// so the lookup itself has to miss while the trip is deleted. An answer that said "deleted"
+    /// — or differed from the invented token's in any way — would tell a stranger holding the
+    /// address that it had once been real, and that the trip behind it still exists somewhere.
+    /// </remarks>
+    [Fact]
+    public async Task A_deleted_trips_address_answers_exactly_as_an_invented_one_until_the_trip_is_back()
+    {
+        var followed = await TrackedTripAsync("Followed, then deleted", locationProtected: false);
+        var (_, token) = await PublishAsync(followed.Trip);
+        var invented = "Zm9yZ2VkLXRva2VuLXRoYXQtd2FzLW5ldmVyLW1pbnRlZA";
+
+        // Positive half: the page, the live list and the archive all open on this link.
+        string[] routes = ["", "/live", "/past"];
+        foreach (var route in routes)
+        {
+            (await anonymous.GetAsync(Follow(token) + route)).StatusCode
+                .ShouldBe(HttpStatusCode.OK, $"the link never opened '{route}'");
+        }
+
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{followed.Trip}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // One answer per route, and the same one an invented token gets on that route.
+        foreach (var route in routes.Append($"/past/{followed.Trip}"))
+        {
+            var deleted = await anonymous.GetAsync(Follow(token) + route);
+            var unknown = await anonymous.GetAsync(Follow(invented) + route);
+            deleted.StatusCode.ShouldBe(HttpStatusCode.NotFound, $"a deleted trip still answers on '{route}'");
+            unknown.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            (await RefusalShapeAsync(deleted)).ShouldBe(
+                await RefusalShapeAsync(unknown),
+                $"'{route}' tells a deleted trip's address from an invented one");
+        }
+
+        // The link was not removed, and nobody who may run the trip can list it meanwhile either.
+        (await owner.GetAsync(Shares(followed.Trip))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripTrackingShares.AsNoTracking().CountAsync(s => s.TripLogId == followed.Trip)).ShouldBe(0);
+            (await db.TripTrackingShares.AsNoTracking().IgnoreQueryFilters()
+                .CountAsync(s => s.TripLogId == followed.Trip)).ShouldBe(1);
+        }
+
+        (await owner.PostAsync($"/api/v1/trip-logs/{followed.Trip}/restore", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Back, on the same address, with the party where it was last reported.
+        var page = await FollowAsync(token);
+        page.GetProperty("participants").EnumerateArray().Single()
+            .GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+    }
+
+    /// <summary>
     /// A link with an end, and the end is not a distinguishable answer.
     /// </summary>
     /// <remarks>

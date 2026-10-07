@@ -1715,6 +1715,21 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable, IClassFixture
             var remaining = (await GetLinkAsync(linkId)).GetProperty("members").EnumerateArray().ToList();
             remaining.Count.ShouldBe(--expected, route);
             remaining.ShouldAllBe(m => m.GetProperty("targetId").GetGuid() != targetId);
+
+            if (targetId == tripId)
+            {
+                // A trip is the one target here whose delete can be taken back, so its membership
+                // is kept and only stops being shown — which is all the lines above can see. What
+                // takes the membership is removing the trip for good, and that is done now, in
+                // the trip's own turn, because a link is judged then by what it still relates:
+                // left until the other targets had gone, this one would have a single end and
+                // would be removed with the trip rather than survive it.
+                (await StoredMembersNamingAsync(linkId, tripId)).ShouldBe(1);
+                await DeletedTrips.AgePastTheWindowAsync(factory, tripId);
+                await DeletedTrips.RunPurgeAsync(factory);
+                (await StoredMembersNamingAsync(linkId, tripId)).ShouldBe(0);
+                (await GetLinkAsync(linkId)).GetProperty("members").GetArrayLength().ShouldBe(expected);
+            }
         }
 
         // The link survives its shrinkage; only the feature member remains.
@@ -2549,6 +2564,18 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable, IClassFixture
         var response = await owner.GetAsync($"/api/v1/reslinks/{linkId}");
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await ReadJsonAsync(response);
+    }
+
+    /// <summary>
+    /// How many of a link's stored members name a trip, shown or not: the one reading in which a
+    /// membership that is kept and hidden can be told from one that has gone.
+    /// </summary>
+    private async Task<int> StoredMembersNamingAsync(Guid linkId, Guid tripId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.ResLinkMembers.AsNoTracking().CountAsync(m =>
+            m.ResLinkId == linkId && m.EntityType == AttachedEntityType.TripLog && m.EntityId == tripId);
     }
 
     /// <summary>The member id targeting the given feature, from the creator's read.</summary>

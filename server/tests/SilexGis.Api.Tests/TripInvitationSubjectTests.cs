@@ -113,8 +113,13 @@ public sealed class TripInvitationSubjectTests : IAsyncLifetime, IDisposable, IC
     /// rather than in place of it, so the first one's cascade is the half that could quietly stop
     /// working while every new test went on passing.
     /// </summary>
+    /// <remarks>
+    /// A trip that is only deleted keeps the answers about it, hidden with it, so that putting it
+    /// back is exact; the cascade is what removing it for good does, and is asked here past the
+    /// filter that would otherwise answer "none" for both states alike.
+    /// </remarks>
     [Fact]
-    public async Task Deleting_a_trip_still_takes_the_answers_about_it_with_it()
+    public async Task Removing_a_trip_still_takes_the_answers_about_it_with_it()
     {
         var tripId = await CreateTripAsync("Cascades");
         var keptTripId = await CreateTripAsync("Kept");
@@ -127,7 +132,14 @@ public sealed class TripInvitationSubjectTests : IAsyncLifetime, IDisposable, IC
             .ShouldBe(HttpStatusCode.NoContent);
 
         (await CountAsync(x => x.TripLogId == tripId)).ShouldBe(0);
+        (await StoredCountAsync(x => x.TripLogId == tripId)).ShouldBe(2);
         (await CountAsync(x => x.TripLogId == keptTripId)).ShouldBe(1);
+
+        await DeletedTrips.AgePastTheWindowAsync(factory, tripId);
+        await DeletedTrips.RunPurgeAsync(factory);
+
+        (await StoredCountAsync(x => x.TripLogId == tripId)).ShouldBe(0);
+        (await StoredCountAsync(x => x.TripLogId == keptTripId)).ShouldBe(1);
     }
 
     /// <summary>
@@ -241,6 +253,15 @@ public sealed class TripInvitationSubjectTests : IAsyncLifetime, IDisposable, IC
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         return await db.TripInvitations.AsNoTracking().CountAsync(where);
+    }
+
+    /// <summary>The same count past the filter that hides the answers about a deleted trip.</summary>
+    private async Task<int> StoredCountAsync(
+        System.Linq.Expressions.Expression<Func<TripInvitation, bool>> where)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.TripInvitations.AsNoTracking().IgnoreQueryFilters().CountAsync(where);
     }
 
     private async Task<Guid> CreateTripAsync(string title)
