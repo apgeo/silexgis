@@ -1005,6 +1005,101 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     }
 
     /// <summary>
+    /// The log says which of its rows no longer read as they were first written down — and says
+    /// it of the corrected row only, to everybody who reads the trip, place or no place.
+    /// </summary>
+    /// <remarks>
+    /// A log is what somebody said at a moment, so a reader is owed knowing that a row was changed
+    /// afterwards. The mark is a yes or a no and says nothing of where anybody was, which is why it
+    /// stays on a row whose station is withheld; the last half of this test holds both of those at
+    /// once, for a reader the cave is protected from.
+    /// </remarks>
+    [Fact]
+    public async Task A_corrected_report_reads_as_corrected_and_an_untouched_one_does_not()
+    {
+        var (trip, cavers) = await CreateTripAsync("Read back afterwards", guests: 2);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var recorded = await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers,
+            kind = "atStation",
+            stationName = "cave.upper.2",
+            recordedAt = At(10, 0),
+        });
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK, await recorded.Content.ReadAsStringAsync());
+        var written = (await recorded.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().ToList();
+        written.Count.ShouldBe(2);
+        written.ShouldAllBe(e => !e.GetProperty("corrected").GetBoolean(), "a report just written is as written");
+        var fixedId = written.Single(e => e.GetProperty("caverId").GetGuid() == cavers[0]).GetProperty("id").GetGuid();
+        var leftId = written.Single(e => e.GetProperty("caverId").GetGuid() == cavers[1]).GetProperty("id").GetGuid();
+
+        async Task<Dictionary<Guid, JsonElement>> LogAsync(HttpClient client, string query = "")
+        {
+            var response = await client.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events{query}");
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+            return (await BodyAsync(response)).GetProperty("items").EnumerateArray()
+                .ToDictionary(e => e.GetProperty("id").GetGuid());
+        }
+
+        var before = await LogAsync(owner);
+        before[fixedId].GetProperty("corrected").GetBoolean().ShouldBeFalse();
+        before[leftId].GetProperty("corrected").GetBoolean().ShouldBeFalse();
+
+        // A correction that sends back exactly what the row holds changes nothing, and a row
+        // nothing was changed on has not been corrected.
+        var same = await PutEventAsync(owner, trip, fixedId, new
+        {
+            kind = "atStation",
+            stationName = "cave.upper.2",
+            recordedAt = At(10, 0),
+        });
+        same.StatusCode.ShouldBe(HttpStatusCode.OK, await same.Content.ReadAsStringAsync());
+        (await same.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("corrected").GetBoolean().ShouldBeFalse();
+        (await LogAsync(owner))[fixedId].GetProperty("corrected").GetBoolean().ShouldBeFalse();
+
+        var fixedUp = await PutEventAsync(owner, trip, fixedId, new
+        {
+            kind = "atStation",
+            stationName = "cave.deep.3",
+            recordedAt = At(10, 0),
+        });
+        fixedUp.StatusCode.ShouldBe(HttpStatusCode.OK, await fixedUp.Content.ReadAsStringAsync());
+        (await fixedUp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("corrected").GetBoolean()
+            .ShouldBeTrue("the answer to a correction says what the log will say");
+
+        var after = await LogAsync(owner);
+        after[fixedId].GetProperty("corrected").GetBoolean().ShouldBeTrue();
+        after[leftId].GetProperty("corrected").GetBoolean().ShouldBeFalse("only the row that was changed");
+
+        // The log narrowed to one person, and walked a page at a time, is the same rows saying
+        // the same thing — which is how a screen reaches a report older than its first page.
+        var oneCaver = await LogAsync(owner, $"?caverId={cavers[1]}");
+        oneCaver.Keys.ShouldBe([leftId]);
+        var pages = new List<Guid>();
+        foreach (var page in new[] { 1, 2 })
+        {
+            var response = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events?page={page}&pageSize=1");
+            var body = await BodyAsync(response);
+            body.GetProperty("totalItems").GetInt32().ShouldBe(2);
+            pages.Add(body.GetProperty("items").EnumerateArray().Single().GetProperty("id").GetGuid());
+        }
+        pages.ShouldBe([fixedId, leftId], ignoreOrder: true);
+
+        // Somebody the cave is protected from still reads that the row was corrected, and still
+        // reads no station on it; the placer beside them reads both.
+        await SetLocationProtectedAsync(cave, true);
+        var theirs = (await LogAsync(reader))[fixedId];
+        theirs.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        theirs.GetProperty("corrected").GetBoolean().ShouldBeTrue();
+        var mine = (await LogAsync(owner))[fixedId];
+        mine.GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        mine.GetProperty("corrected").GetBoolean().ShouldBeTrue();
+    }
+
+    /// <summary>
     /// A correction passes every gate the original report passed, asked again through the same code.
     /// </summary>
     [Fact]

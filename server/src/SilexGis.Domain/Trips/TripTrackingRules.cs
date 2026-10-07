@@ -232,6 +232,31 @@ public static class TripTrackingRules
         state is TripTrackingState.Armed or TripTrackingState.Closed;
 
     /// <summary>
+    /// Whether a stored report has been changed since it was first written down.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read off the row's own two stamps, which one clock writes together when the row is first
+    /// saved and of which only the second moves afterwards — and only when a save actually changed
+    /// something, so a correction that altered nothing, or a sheet imported twice over the same
+    /// rows, leaves a report reading as it was written.
+    /// </para>
+    /// <para>
+    /// <b>A yes or a no, and deliberately not the two moments.</b> A log is what somebody said at a
+    /// moment, and a reader of it is owed knowing that a row no longer says what was first taken
+    /// down. When it was typed and by whom is the audit timeline's to say, to those who may read
+    /// that; putting the stamps beside the report would publish a second, coarser history to
+    /// everybody who reads the trip.
+    /// </para>
+    /// <para>
+    /// Anything that rewrites the row counts, not only the correction dialog: a sheet that replaced
+    /// it, and folding one roster entry into another, which changes whom the report is about.
+    /// </para>
+    /// </remarks>
+    public static bool ChangedSinceWritten(DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        updatedAt > createdAt;
+
+    /// <summary>
     /// Where one member of the party stands, folded from every report about them.
     /// </summary>
     /// <param name="reports">

@@ -9,6 +9,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
@@ -125,7 +126,10 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
 
         var second = await CommitAsync(trip, corrected, replaceExisting: true);
         second.GetProperty("created").GetInt32().ShouldBe(0);
-        second.GetProperty("updated").GetInt32().ShouldBe(6);
+        // One report was said differently; the other five were said again as they stand, and are
+        // counted as that rather than as corrections.
+        second.GetProperty("updated").GetInt32().ShouldBe(1);
+        second.GetProperty("unchanged").GetInt32().ShouldBe(5);
         (await EventCountAsync(trip)).ShouldBe(6);
 
         // Changed on the rows they were, not replaced by six new ones: a picture pinned to a report,
@@ -212,13 +216,18 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
         var row = byName.GetProperty("rows").EnumerateArray().Single();
         row.GetProperty("stationName").GetString().ShouldBe("deep.3");
         row.GetProperty("depthM").GetDecimal().ShouldBe(110m);
+        // The name the sheet wrote comes back beside the station it became, so the reviewer can
+        // see that the two vocabularies met.
+        row.GetProperty("placeLabel").GetString().ShouldBe("Sala Mare");
 
         // And the declaration outranks measuring: 110 m below the entrance is nearer the station
         // at 100 m, and the club's own answer wins anyway.
         var byDepth = await PreviewAsync(trip,
             "Data si ora,Adancime,Speologi\r\n12.09.2026 09:00,110,Ion Popescu\r\n");
-        byDepth.GetProperty("rows").EnumerateArray().Single()
-            .GetProperty("stationName").GetString().ShouldBe("deep.3");
+        var measured = byDepth.GetProperty("rows").EnumerateArray().Single();
+        measured.GetProperty("stationName").GetString().ShouldBe("deep.3");
+        // A depth is not a name the sheet wrote, whichever station it lands on.
+        measured.GetProperty("placeLabel").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 
     [Fact]
@@ -660,7 +669,14 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
                 d.GetProperty("column").GetString()))
             .ShouldBe([("Error", "TimeColumnNeedsADay", "Ora")]);
         refused.GetProperty("resolvedColumns").GetProperty("Time").GetString().ShouldBe("Ora");
-        (await CommitAsync(trip, NightSheet)).GetProperty("created").GetInt32().ShouldBe(0);
+        // The commit says so too, as a refusal that names the finding: answered as a success that
+        // recorded nothing, a caller has no way to tell this sheet from an empty one.
+        var unread = await owner.PostAsJsonAsync(
+            $"/api/v1/trip-logs/{trip}/tracking/csv-import/commit", new { text = NightSheet, replaceExisting = false });
+        unread.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var unreadBody = await BodyAsync(unread);
+        unreadBody.GetProperty("code").GetString().ShouldBe("tracking_csv.sheet_unreadable");
+        unreadBody.GetProperty("detail").GetString()!.ShouldContain("TimeColumnNeedsADay");
         (await EventCountAsync(trip)).ShouldBe(0);
 
         // With the day: every row is on it, the answer says which day was used, and the row whose
@@ -817,6 +833,199 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
         (await EventCountAsync(off)).ShouldBe(1);
     }
 
+    /// <summary>
+    /// A log that cannot be written refuses the preview exactly as it refuses the commit: the same
+    /// status and the same code, for both of the states a log can be unwritable in.
+    /// </summary>
+    /// <remarks>
+    /// A preview that answered here would have a reviewer read a sheet, tick its rows and only then
+    /// be told that none of it can be written. The armed trip beside them is the positive case:
+    /// the same sheet, the same account, and an answer.
+    /// </remarks>
+    [Fact]
+    public async Task The_preview_refuses_a_log_that_cannot_be_written_exactly_as_the_commit_does()
+    {
+        var (never, _) = await CreateTripAsync();
+
+        var (off, cavers) = await CreateTripAsync();
+        var (model, _) = await SeedModelAsync();
+        (await ArmAsync(off, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var typed = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{off}/tracking/events", new
+        {
+            caverIds = new[] { cavers[0] },
+            kind = "entered",
+            recordedAt = new DateTimeOffset(2026, 9, 12, 8, 0, 0, TimeSpan.Zero),
+        });
+        typed.StatusCode.ShouldBe(HttpStatusCode.OK, await typed.Content.ReadAsStringAsync());
+        await SetStateAsync(off, TripTrackingState.Off);
+
+        foreach (var (trip, code) in new[] { (never, "tracking.not_configured"), (off, "tracking.not_writable") })
+        {
+            var preview = await owner.PostAsJsonAsync(
+                $"/api/v1/trip-logs/{trip}/tracking/csv-import/preview", new { text = Sheet });
+            var commit = await owner.PostAsJsonAsync(
+                $"/api/v1/trip-logs/{trip}/tracking/csv-import/commit", new { text = Sheet });
+
+            commit.StatusCode.ShouldBe(HttpStatusCode.Conflict, await commit.Content.ReadAsStringAsync());
+            (await BodyAsync(commit)).GetProperty("code").GetString().ShouldBe(code);
+            preview.StatusCode.ShouldBe(commit.StatusCode, await preview.Content.ReadAsStringAsync());
+            (await BodyAsync(preview)).GetProperty("code").GetString().ShouldBe(code);
+        }
+
+        (await EventCountAsync(off)).ShouldBe(1);
+
+        var armed = await ArmedTripAsync();
+        (await PreviewAsync(armed, Sheet)).GetProperty("creates").GetInt32().ShouldBe(6);
+    }
+
+    /// <summary>
+    /// A row that would replace a report shows what is there now — and shows it as the log's own
+    /// list shows it, so a station withheld from somebody on the list is withheld from them here.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The preview is reached on the right to write the trip, which somebody can hold without the
+    /// right to be told where the cave is. The second coordinator here is exactly that: they run a
+    /// trip of their own on the first one's survey, they are shown its stations while the cave is
+    /// open, and they stop being shown them the moment the cave is protected — while the cave's
+    /// own author, on a trip of theirs with the same report in its log, goes on being shown.
+    /// </para>
+    /// <para>
+    /// The sheet's row says "out" and names no place, because a row that claims a place is refused
+    /// outright for a caller with no survey to place it on and would never reach the question
+    /// being asked: what the "before" of an importable row gives away.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task What_a_row_would_replace_is_shown_as_the_log_lists_it_and_withheld_from_a_writer_who_may_not_place_the_cave()
+    {
+        var (model, cave) = await SeedModelAsync();
+        var (mine, myCavers) = await CreateTripAsync();
+        (await ArmAsync(mine, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var guideEmail = $"csvimp-guide-{Guid.NewGuid():N}"[..22] + "@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, guideEmail);
+        var guide = await AuthHelper.BearerClientAsync(factory, guideEmail);
+        var (theirs, theirCavers) = await CreateTripAsync(client: guide);
+        (await ArmAsync(theirs, model, guide)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Both logs hold Ion at a station at 09:40, typed while the cave was open to both.
+        var at = new DateTimeOffset(2026, 9, 12, 9, 40, 0, TimeSpan.Zero);
+        foreach (var (client, trip, ion) in new[] { (owner, mine, myCavers[0]), (guide, theirs, theirCavers[0]) })
+        {
+            var typed = await client.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", new
+            {
+                caverIds = new[] { ion },
+                kind = "atStation",
+                stationName = "upper.2",
+                note = "la baza puitului",
+                recordedAt = at,
+            });
+            typed.StatusCode.ShouldBe(HttpStatusCode.OK, await typed.Content.ReadAsStringAsync());
+        }
+
+        // Ion's row is the stored one again; Maria's is new, so it has nothing before it.
+        const string correction =
+            "Data si ora,Speologi,Nota,Stare\r\n"
+            + "12.09.2026 09:40,Ion Popescu,a iesit,iesire\r\n"
+            + "12.09.2026 10:00,Maria Pop,,intrare\r\n";
+
+        // While the cave is open the second coordinator is shown the station, here and on the list.
+        var (openBefore, openBody) = await BeforeOfAsync(guide, theirs, correction, line: 2);
+        openBefore.GetProperty("kind").GetString().ShouldBe("atStation");
+        openBefore.GetProperty("stationName").GetString().ShouldBe("upper.2");
+        openBefore.GetProperty("surveyModelId").GetGuid().ShouldBe(model);
+        openBody.ShouldContain("upper.2");
+
+        await SetLocationProtectedAsync(cave, true);
+
+        // Protected: the report is still said to be there, with its kind and its note — and its
+        // station, its depth and the survey it was read on are gone.
+        var (closedBefore, closedBody) = await BeforeOfAsync(guide, theirs, correction, line: 2);
+        closedBefore.GetProperty("kind").GetString().ShouldBe("atStation");
+        closedBefore.GetProperty("note").GetString().ShouldBe("la baza puitului");
+        closedBefore.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        closedBefore.GetProperty("depthEnteredM").ValueKind.ShouldBe(JsonValueKind.Null);
+        closedBefore.GetProperty("surveyModelId").ValueKind.ShouldBe(JsonValueKind.Null);
+        // Nowhere in the answer, not only in the field it would ordinarily sit in.
+        closedBody.ShouldNotContain("upper.2");
+        closedBody.ShouldNotContain(model.ToString());
+
+        // The cave's own author, the same sheet, the same stored report: shown.
+        var (ownBefore, ownBody) = await BeforeOfAsync(owner, mine, correction, line: 2);
+        ownBefore.GetProperty("kind").GetString().ShouldBe("atStation");
+        ownBefore.GetProperty("stationName").GetString().ShouldBe("upper.2");
+        ownBefore.GetProperty("surveyModelId").GetGuid().ShouldBe(model);
+        ownBody.ShouldContain("upper.2");
+
+        // Nor through the name the plan is committed under. It takes in what this caller was
+        // shown of the stored report, so with the place withheld the name is the same wherever
+        // the report is: moved to another station behind the withholding, the plan is named as it
+        // was — where it was a function of the stored station, a writer could try stations against it.
+        var nameWhileAtUpper = JsonDocument.Parse(closedBody).RootElement.GetProperty("planDigest").GetString();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TripPositionEvents
+                .Where(e => e.TripLogId == theirs)
+                .ExecuteUpdateAsync(set => set.SetProperty(e => e.ViewerStationName, "deep.3"));
+        }
+
+        var (_, movedBody) = await BeforeOfAsync(guide, theirs, correction, line: 2);
+        JsonDocument.Parse(movedBody).RootElement.GetProperty("planDigest").GetString().ShouldBe(nameWhileAtUpper);
+        movedBody.ShouldNotContain("deep.3");
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TripPositionEvents
+                .Where(e => e.TripLogId == theirs)
+                .ExecuteUpdateAsync(set => set.SetProperty(e => e.ViewerStationName, "upper.2"));
+        }
+
+        // One rule, not two that happen to agree today: what each of them is told is there now is
+        // what the log's list tells that same caller about that same report.
+        foreach (var (client, trip, before) in new[] { (guide, theirs, closedBefore), (owner, mine, ownBefore) })
+        {
+            var listed = await client.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events");
+            listed.StatusCode.ShouldBe(HttpStatusCode.OK, await listed.Content.ReadAsStringAsync());
+            var onTheList = (await BodyAsync(listed)).GetProperty("items").EnumerateArray().Single();
+            before.GetRawText().ShouldBe(onTheList.GetRawText());
+        }
+
+        // And a row that replaces nothing has nothing before it.
+        var preview = JsonDocument.Parse(ownBody).RootElement;
+        var fresh = preview.GetProperty("rows").EnumerateArray()
+            .Single(r => r.GetProperty("line").GetInt32() == 3);
+        fresh.GetProperty("replaces").GetBoolean().ShouldBeFalse();
+        fresh.GetProperty("before").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    /// <summary>
+    /// What the preview says is in the log now under the report read from one line, with the whole
+    /// answer as text so a test can ask what appears anywhere in it.
+    /// </summary>
+    private static async Task<(JsonElement Before, string Body)> BeforeOfAsync(
+        HttpClient client, Guid trip, string text, int line)
+    {
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/trip-logs/{trip}/tracking/csv-import/preview", new { text });
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        var row = JsonDocument.Parse(body).RootElement.GetProperty("rows").EnumerateArray()
+            .Single(r => r.GetProperty("line").GetInt32() == line);
+        row.GetProperty("replaces").GetBoolean().ShouldBeTrue();
+        return (row.GetProperty("before").Clone(), body);
+    }
+
+    private async Task SetLocationProtectedAsync(Guid caveFeatureId, bool value)
+    {
+        using var scope = factory.Services.CreateScope();
+        var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+        await writer.SetLocationProtectedAsync(caveFeatureId, value);
+        await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().SaveChangesAsync();
+    }
+
     [Fact]
     public async Task Only_the_lines_a_reviewer_names_are_committed()
     {
@@ -962,6 +1171,327 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
         (await EventCountAsync(trip)).ShouldBe(6);
     }
 
+    // ---- the commit means what was shown ---------------------------------------------------
+
+    [Fact]
+    public async Task A_commit_that_names_its_preview_is_refused_once_the_trip_has_moved_under_it()
+    {
+        var (trip, cavers) = await CreateTripAsync();
+        var (model, _) = await SeedModelAsync();
+        (await ArmAsync(trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var made = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/teams", new { title = "Echipa 1" });
+        made.StatusCode.ShouldBe(HttpStatusCode.OK, await made.Content.ReadAsStringAsync());
+        var team = (await BodyAsync(made)).GetProperty("id").GetGuid();
+
+        const string sheet =
+            "Data si ora,Adancime,Speologi,Echipa,Stare\r\n"
+            + "12.09.2026 08:15,,Ion Popescu,Echipa 1,intrare\r\n"
+            + "12.09.2026 09:40,50,Ion Popescu,Echipa 1,\r\n";
+
+        Task<HttpResponseMessage> CommitNamingAsync(string? digest) => owner.PostAsJsonAsync(
+            $"/api/v1/trip-logs/{trip}/tracking/csv-import/commit",
+            new { text = sheet, replaceExisting = true, planDigest = digest });
+
+        async Task RefusedAsChangedAsync(string digest)
+        {
+            var refused = await CommitNamingAsync(digest);
+            refused.StatusCode.ShouldBe(HttpStatusCode.Conflict, await refused.Content.ReadAsStringAsync());
+            (await BodyAsync(refused)).GetProperty("code").GetString().ShouldBe("tracking_csv.plan_changed");
+        }
+
+        var first = await PreviewAsync(trip, sheet);
+        first.GetProperty("creates").GetInt32().ShouldBe(2);
+        first.GetProperty("rows")[0].GetProperty("teamId").GetGuid().ShouldBe(team);
+        var shown = first.GetProperty("planDigest").GetString()!;
+        shown.Length.ShouldBe(64);
+        // Read a second time with nothing changed, it is the same plan under the same name —
+        // although the two requests read the clock apart.
+        (await PreviewAsync(trip, sheet)).GetProperty("planDigest").GetString().ShouldBe(shown);
+
+        // A colleague types a report for Ion at one of the sheet's instants. The row that was
+        // shown as a report to add would now overwrite theirs.
+        var typed = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", new
+        {
+            caverIds = new[] { cavers[0] },
+            kind = "note",
+            note = "scris de mana",
+            recordedAt = new DateTimeOffset(2026, 9, 12, 9, 40, 0, TimeSpan.Zero),
+        });
+        typed.StatusCode.ShouldBe(HttpStatusCode.OK, await typed.Content.ReadAsStringAsync());
+
+        await RefusedAsChangedAsync(shown);
+        // Nothing was written, the row the sheet did not clash with included, and the typed
+        // report is as it was typed.
+        (await EventCountAsync(trip)).ShouldBe(1);
+        (await NotesAsync(trip)).ShouldBe(["scris de mana"]);
+
+        var second = await PreviewAsync(trip, sheet);
+        second.GetProperty("creates").GetInt32().ShouldBe(1);
+        second.GetProperty("replaces").GetInt32().ShouldBe(1);
+        var shownAgain = second.GetProperty("planDigest").GetString()!;
+        shownAgain.ShouldNotBe(shown);
+
+        // The team the sheet names is renamed: the same rows would now be written with no team.
+        (await owner.PutAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/teams/{team}", new { title = "Echipa 2" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await RefusedAsChangedAsync(shownAgain);
+        (await EventCountAsync(trip)).ShouldBe(1);
+
+        // A name that was never a preview's is a malformed request, not a plan that changed.
+        (await CommitNamingAsync("not-a-digest")).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await EventCountAsync(trip)).ShouldBe(1);
+
+        // The twin: named by the preview of the trip as it now is, the same sheet is written.
+        var third = await PreviewAsync(trip, sheet);
+        var written = await CommitNamingAsync(third.GetProperty("planDigest").GetString());
+        written.StatusCode.ShouldBe(HttpStatusCode.OK, await written.Content.ReadAsStringAsync());
+        var done = await BodyAsync(written);
+        done.GetProperty("created").GetInt32().ShouldBe(1);
+        done.GetProperty("updated").GetInt32().ShouldBe(1);
+        (await EventCountAsync(trip)).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_commit_is_refused_once_a_report_its_preview_showed_has_been_corrected_by_somebody_else()
+    {
+        var (trip, cavers) = await CreateTripAsync();
+        var (model, _) = await SeedModelAsync();
+        (await ArmAsync(trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var at = new DateTimeOffset(2026, 9, 12, 9, 40, 0, TimeSpan.Zero);
+        var typed = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", new
+        {
+            caverIds = new[] { cavers[0] },
+            kind = "atStation",
+            stationName = "upper.2",
+            note = "scris de mana",
+            recordedAt = at,
+        });
+        typed.StatusCode.ShouldBe(HttpStatusCode.OK, await typed.Content.ReadAsStringAsync());
+
+        async Task<TripPositionEvent> StoredAsync()
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            return await db.TripPositionEvents.AsNoTracking().SingleAsync(e => e.TripLogId == trip);
+        }
+
+        var report = (await StoredAsync()).Id;
+
+        // A sheet with no note column: every value it would write is the same before and after
+        // the colleague's correction, so nothing about the plan itself moves.
+        const string sheet = "Data si ora,Adancime,Speologi\r\n12.09.2026 09:40,50,Ion Popescu\r\n";
+
+        Task<HttpResponseMessage> CommitNamingAsync(string digest) => owner.PostAsJsonAsync(
+            $"/api/v1/trip-logs/{trip}/tracking/csv-import/commit",
+            new { text = sheet, replaceExisting = true, planDigest = digest });
+
+        var first = await PreviewAsync(trip, sheet);
+        first.GetProperty("replaces").GetInt32().ShouldBe(1);
+        first.GetProperty("rows")[0].GetProperty("before").GetProperty("stationName").GetString().ShouldBe("upper.2");
+        var shown = first.GetProperty("planDigest").GetString()!;
+        (await PreviewAsync(trip, sheet)).GetProperty("planDigest").GetString().ShouldBe(shown);
+
+        // The colleague corrects that same report in place: another station, another note, the
+        // same person and the same moment — so it is still the one report the row would replace.
+        var corrected = await owner.PutAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events/{report}", new
+        {
+            kind = "atStation",
+            stationName = "deep.3",
+            note = "corectat de coleg",
+        });
+        corrected.StatusCode.ShouldBe(HttpStatusCode.OK, await corrected.Content.ReadAsStringAsync());
+
+        var refused = await CommitNamingAsync(shown);
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict, await refused.Content.ReadAsStringAsync());
+        (await BodyAsync(refused)).GetProperty("code").GetString().ShouldBe("tracking_csv.plan_changed");
+
+        // The correction stands, untouched.
+        var kept = await StoredAsync();
+        kept.Id.ShouldBe(report);
+        kept.Kind.ShouldBe(TripPositionEventKind.AtStation);
+        kept.ViewerStationName.ShouldBe("deep.3");
+        kept.Note.ShouldBe("corectat de coleg");
+
+        // The twin: previewed again, the reviewer is shown the corrected report, and the commit
+        // that names that preview writes.
+        var second = await PreviewAsync(trip, sheet);
+        second.GetProperty("rows")[0].GetProperty("before").GetProperty("stationName").GetString().ShouldBe("deep.3");
+        var shownAgain = second.GetProperty("planDigest").GetString()!;
+        shownAgain.ShouldNotBe(shown);
+        var written = await CommitNamingAsync(shownAgain);
+        written.StatusCode.ShouldBe(HttpStatusCode.OK, await written.Content.ReadAsStringAsync());
+        (await BodyAsync(written)).GetProperty("updated").GetInt32().ShouldBe(1);
+        var after = await StoredAsync();
+        after.Kind.ShouldBe(TripPositionEventKind.AtDepth);
+        after.DepthEnteredM.ShouldBe(50m);
+        after.Note.ShouldBe("corectat de coleg");
+    }
+
+    [Fact]
+    public async Task A_commit_is_refused_once_the_watch_has_been_put_on_another_survey_with_the_same_station_names()
+    {
+        var (trip, _) = await CreateTripAsync();
+        var (first, cave) = await SeedModelAsync();
+        (await ArmAsync(trip, first)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A second survey of the same cave, whose stations are named as the first one's are.
+        Guid second;
+        using (var form = new MultipartFormDataContent())
+        {
+            var bytes = new ByteArrayContent([1, 2, 3, 4]);
+            bytes.Headers.ContentType = new("application/octet-stream");
+            form.Add(bytes, "file", "tracking-again.3d");
+            var created = await owner.PostAsync($"/api/v1/caves/{cave}/survey-models", form);
+            created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+            second = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        }
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.SurveyModels.SingleAsync(m => m.Id == second)).Status = SurveyModelStatus.Ready;
+            db.SurveyStations.AddRange(
+                Station(second, "ent.0", "ent", 350, SurveyStationFlags.Entrance),
+                Station(second, "upper.2", "upper", 300, SurveyStationFlags.Underground),
+                Station(second, "deep.3", "deep", 250, SurveyStationFlags.Underground),
+                Station(second, "deep.4", "deep", 230, SurveyStationFlags.Underground));
+            await db.SaveChangesAsync();
+        }
+
+        const string placed = "Data si ora,Statie,Speologi\r\n12.09.2026 09:40,upper.2,Ion Popescu\r\n";
+        const string comings = "Data si ora,Speologi,Stare\r\n12.09.2026 08:15,Ion Popescu,intrare\r\n";
+
+        Task<HttpResponseMessage> CommitNamingAsync(string text, string digest) => owner.PostAsJsonAsync(
+            $"/api/v1/trip-logs/{trip}/tracking/csv-import/commit",
+            new { text, replaceExisting = false, planDigest = digest });
+
+        var shownPlaced = (await PreviewAsync(trip, placed)).GetProperty("planDigest").GetString()!;
+        var shownComings = (await PreviewAsync(trip, comings)).GetProperty("planDigest").GetString()!;
+
+        (await PutConfigAsync(trip, new { state = "armed", surveyModelId = second }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The row reads to the same station name on either survey, and would now be anchored to
+        // one the preview was never read against.
+        var refused = await CommitNamingAsync(placed, shownPlaced);
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict, await refused.Content.ReadAsStringAsync());
+        (await BodyAsync(refused)).GetProperty("code").GetString().ShouldBe("tracking_csv.plan_changed");
+        (await EventCountAsync(trip)).ShouldBe(0);
+
+        // The twin: a sheet that places nobody writes no anchor, so it is still what was shown.
+        var written = await CommitNamingAsync(comings, shownComings);
+        written.StatusCode.ShouldBe(HttpStatusCode.OK, await written.Content.ReadAsStringAsync());
+        (await BodyAsync(written)).GetProperty("created").GetInt32().ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task The_same_sheet_imported_again_with_leave_to_overwrite_writes_over_nothing()
+    {
+        var trip = await ArmedTripAsync();
+        (await CommitAsync(trip, Sheet)).GetProperty("created").GetInt32().ShouldBe(6);
+        var stamps = await ChangeStampsAsync(trip);
+        stamps.Count.ShouldBe(6);
+
+        var again = await CommitAsync(trip, Sheet, replaceExisting: true);
+        again.GetProperty("created").GetInt32().ShouldBe(0);
+        again.GetProperty("updated").GetInt32().ShouldBe(0);
+        again.GetProperty("unchanged").GetInt32().ShouldBe(6);
+        again.GetProperty("skipped").GetInt32().ShouldBe(0);
+        // Not written at all — not written with the same values: the moment each row was last
+        // changed is what a reader is later told a correction by.
+        (await ChangeStampsAsync(trip)).ShouldBe(stamps);
+
+        // The twin: one note said differently is one row written and five left as they were.
+        var corrected = await CommitAsync(trip, Sheet.Replace("apa mare", "apa mica"), replaceExisting: true);
+        corrected.GetProperty("updated").GetInt32().ShouldBe(1);
+        corrected.GetProperty("unchanged").GetInt32().ShouldBe(5);
+        var after = await ChangeStampsAsync(trip);
+        after.Count(stamp => !stamps.Contains(stamp)).ShouldBe(1);
+        after.Select(stamp => stamp.Id).ShouldBe(stamps.Select(stamp => stamp.Id));
+    }
+
+    [Fact]
+    public async Task A_sheet_with_no_column_for_the_team_or_the_note_leaves_a_replaced_reports_own_standing()
+    {
+        var (trip, cavers) = await CreateTripAsync();
+        var (model, _) = await SeedModelAsync();
+        (await ArmAsync(trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var made = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/teams", new { title = "Echipa 1" });
+        made.StatusCode.ShouldBe(HttpStatusCode.OK, await made.Content.ReadAsStringAsync());
+        var team = (await BodyAsync(made)).GetProperty("id").GetGuid();
+
+        var typed = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", new
+        {
+            caverIds = new[] { cavers[0] },
+            kind = "entered",
+            teamId = team,
+            note = "scris de mana",
+            recordedAt = new DateTimeOffset(2026, 9, 12, 9, 40, 0, TimeSpan.Zero),
+        });
+        typed.StatusCode.ShouldBe(HttpStatusCode.OK, await typed.Content.ReadAsStringAsync());
+
+        async Task<TripPositionEvent> StoredAsync()
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            return await db.TripPositionEvents.AsNoTracking().SingleAsync(e => e.TripLogId == trip);
+        }
+
+        var recordedBy = (await StoredAsync()).RecordedByUserId;
+
+        // Times, depths and names: a sheet that was never asked about teams or notes.
+        const string bare = "Data si ora,Adancime,Speologi\r\n12.09.2026 09:40,50,Ion Popescu\r\n";
+        var corrected = await CommitAsync(trip, bare, replaceExisting: true);
+        corrected.GetProperty("created").GetInt32().ShouldBe(0);
+        corrected.GetProperty("updated").GetInt32().ShouldBe(1);
+
+        var kept = await StoredAsync();
+        // What the sheet carries is written: where Ion was.
+        kept.Kind.ShouldBe(TripPositionEventKind.AtDepth);
+        kept.ViewerStationName.ShouldBe("upper.2");
+        kept.DepthEnteredM.ShouldBe(50m);
+        // What it has no column for stands.
+        kept.TeamId.ShouldBe(team);
+        kept.Note.ShouldBe("scris de mana");
+        kept.RecordedByUserId.ShouldBe(recordedBy);
+
+        // The twin: a sheet that has the two columns and left the cells empty has said that the
+        // report has no team and no note, and that is written.
+        const string full = "Data si ora,Adancime,Speologi,Echipa,Nota\r\n12.09.2026 09:40,50,Ion Popescu,,\r\n";
+        (await CommitAsync(trip, full, replaceExisting: true)).GetProperty("updated").GetInt32().ShouldBe(1);
+
+        var cleared = await StoredAsync();
+        cleared.TeamId.ShouldBeNull();
+        cleared.Note.ShouldBeNull();
+        cleared.ViewerStationName.ShouldBe("upper.2");
+    }
+
+    /// <summary>Each report's id and the moment it was last written, in id order.</summary>
+    private async Task<List<(Guid Id, DateTimeOffset UpdatedAt)>> ChangeStampsAsync(Guid trip)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return (await db.TripPositionEvents.AsNoTracking()
+                .Where(e => e.TripLogId == trip)
+                .OrderBy(e => e.Id)
+                .Select(e => new { e.Id, e.UpdatedAt })
+                .ToListAsync())
+            .Select(e => (e.Id, e.UpdatedAt))
+            .ToList();
+    }
+
+    private async Task<List<string?>> NotesAsync(Guid trip)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.TripPositionEvents.AsNoTracking()
+            .Where(e => e.TripLogId == trip)
+            .OrderBy(e => e.RecordedAt).ThenBy(e => e.Id)
+            .Select(e => e.Note)
+            .ToListAsync();
+    }
+
     // ---- plumbing --------------------------------------------------------------------------
 
     private Task<JsonElement> PreviewAsync(Guid trip, string text) => PreviewAsync(trip, text, options: null);
@@ -1021,8 +1551,8 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
     /// <summary>
     /// Arms the watch on a model, the way the page does — reading the trip's current version first.
     /// </summary>
-    private Task<HttpResponseMessage> ArmAsync(Guid trip, Guid model) =>
-        PutConfigAsync(trip, new { state = "armed", surveyModelId = model });
+    private Task<HttpResponseMessage> ArmAsync(Guid trip, Guid model, HttpClient? client = null) =>
+        PutConfigAsync(trip, new { state = "armed", surveyModelId = model }, client);
 
     /// <summary>
     /// Writes the watch's configuration the way the page does — reading the trip's current version
@@ -1033,16 +1563,17 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
     /// without one is refused before any of this feature is reached. Read from the tracking read's
     /// own ETag rather than from the trip's, because that is the version the route compares.
     /// </remarks>
-    private async Task<HttpResponseMessage> PutConfigAsync(Guid trip, object body)
+    private async Task<HttpResponseMessage> PutConfigAsync(Guid trip, object body, HttpClient? client = null)
     {
-        var current = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking");
+        client ??= owner;
+        var current = await client.GetAsync($"/api/v1/trip-logs/{trip}/tracking");
         current.StatusCode.ShouldBe(HttpStatusCode.OK, await current.Content.ReadAsStringAsync());
         var request = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/trip-logs/{trip}/tracking")
         {
             Content = JsonContent.Create(body),
         };
         request.Headers.TryAddWithoutValidation("If-Match", current.Headers.ETag!.ToString());
-        return await owner.SendAsync(request);
+        return await client.SendAsync(request);
     }
 
     /// <summary>
@@ -1062,9 +1593,10 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
     /// A trip with Ion and Maria on it. A proposer named here must be one of the two, so that the
     /// same person holds two roster rows — which is what the one test that names one is about.
     /// </summary>
-    private async Task<(Guid Trip, List<Guid> Cavers)> CreateTripAsync(string[]? proposers = null)
+    private async Task<(Guid Trip, List<Guid> Cavers)> CreateTripAsync(
+        string[]? proposers = null, HttpClient? client = null)
     {
-        var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        var response = await (client ?? owner).PostAsJsonAsync("/api/v1/trip-logs/", new
         {
             title = $"Csv import {Guid.NewGuid():N}"[..28],
             tripDate = "2026-09-12",

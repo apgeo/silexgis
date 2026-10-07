@@ -36,6 +36,20 @@ public sealed record TrackingCsvSubject
     /// <summary>Whether the watch has a survey model at all.</summary>
     public bool HasModel { get; init; }
 
+    /// <summary>
+    /// The survey a placed row is anchored to, and the cave it draws: the watch's own, as far as
+    /// the caller may place anybody on it, and null otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Here because a station name alone does not say where somebody was: two surveys can both
+    /// have a station "2", and a watch can be moved to another survey between a sheet being read
+    /// and being written. What the rows would be anchored to is part of what the plan would write.
+    /// </remarks>
+    public Guid? SurveyModelId { get; init; }
+
+    /// <inheritdoc cref="SurveyModelId"/>
+    public Guid? CaveFeatureId { get; init; }
+
     public SurveyModelFormat Format { get; init; }
 
     public string? RootSurveyName { get; init; }
@@ -102,6 +116,18 @@ public sealed record TrackingCsvPlannedReport
 
     public string? ViewerStationName { get; init; }
 
+    /// <summary>
+    /// The place as the sheet named it, where the station came from a name the cave declared.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside the station it became because the two are in different vocabularies: the sheet
+    /// says what the club calls the place and the log keeps a survey station, and a reviewer shown
+    /// only the station cannot tell whether the name they wrote was understood. Null wherever the
+    /// station was not arrived at through a declared name — a row that named a station outright,
+    /// one that gave a depth, and one that claims no place at all.
+    /// </remarks>
+    public string? PlaceLabel { get; init; }
+
     public decimal? DepthM { get; init; }
 
     public string? Note { get; init; }
@@ -130,9 +156,34 @@ public sealed record TrackingCsvPlan
     /// </remarks>
     public IReadOnlyList<string> UnmatchedCavers { get; init; } = [];
 
+    /// <summary>Whether the sheet has a column for the team.</summary>
+    /// <remarks>
+    /// What a sheet does not carry it says nothing about, and that matters once, where a row
+    /// replaces a report the log already holds: a sheet with no team column leaves that report's
+    /// team standing, where a sheet that has the column and left the cell empty says the report
+    /// has none. A fact about the sheet rather than about a row, because an empty cell under a
+    /// column and no column at all read alike on the row.
+    /// </remarks>
+    public bool CarriesTeam { get; init; }
+
+    /// <summary>Whether the sheet has a column for the note, or for the details that are folded into it.</summary>
+    public bool CarriesNote { get; init; }
+
+    /// <summary>The survey every row that claims a station would be anchored to.</summary>
+    public Guid? SurveyModelId { get; init; }
+
+    /// <summary>The cave every row that claims a station would be anchored to.</summary>
+    public Guid? CaveFeatureId { get; init; }
+
     public int Creates => Reports.Count(r => !r.Replaces);
 
     public int Replaces => Reports.Count(r => r.Replaces);
+
+    /// <summary>The name a commit gives back to say that this is the plan it was shown.</summary>
+    /// <param name="before">What the caller is shown of each report a row would replace.</param>
+    public string Digest(
+        IReadOnlyDictionary<(Guid CaverId, DateTimeOffset At), TrackingCsvReplacedReport>? before = null) =>
+        TrackingCsvPlanDigest.Of(this, before);
 }
 
 /// <summary>
@@ -155,12 +206,18 @@ public sealed record TrackingCsvPlan
 /// </remarks>
 public static class TrackingCsvPlanner
 {
+    /// <remarks>
+    /// Handed the whole reading rather than its rows, because what a plan may write depends on
+    /// which columns the sheet has as well as on what its rows say.
+    /// </remarks>
     public static TrackingCsvPlan Plan(
-        IReadOnlyList<TrackingCsvRow> rows,
+        TrackingCsvParseResult parsed,
         TrackingCsvSubject subject)
     {
-        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(parsed);
         ArgumentNullException.ThrowIfNull(subject);
+
+        var rows = parsed.Rows;
 
         var stored = subject.Stations.Select(s => s.Name).ToHashSet(StringComparer.Ordinal);
         var reports = new List<TrackingCsvPlannedReport>();
@@ -305,6 +362,7 @@ public static class TrackingCsvPlanner
                     TeamId = teamId,
                     Kind = row.Kind!.Value,
                     ViewerStationName = placed.ViewerStationName,
+                    PlaceLabel = placed.PlaceLabel,
                     DepthM = placed.DepthM,
                     Note = row.Note,
                     Replaces = subject.Existing.Contains(key),
@@ -320,6 +378,11 @@ public static class TrackingCsvPlanner
             Reports = reports,
             Refused = refused,
             UnmatchedCavers = unmatched,
+            SurveyModelId = subject.SurveyModelId,
+            CaveFeatureId = subject.CaveFeatureId,
+            CarriesTeam = parsed.ResolvedColumns.ContainsKey(TrackingCsvField.Team),
+            CarriesNote = parsed.ResolvedColumns.ContainsKey(TrackingCsvField.Note)
+                || parsed.ResolvedColumns.ContainsKey(TrackingCsvField.Details),
         };
     }
 
@@ -347,20 +410,26 @@ public static class TrackingCsvPlanner
     }
 
     /// <summary>Where a row puts somebody, under the fixed order station, place, depth.</summary>
-    private static (string? ViewerStationName, decimal? DepthM, TrackingCsvProblem? Problem) Place(
+    /// <remarks>
+    /// The place label comes back only on the path that used it, so a row that named a place and
+    /// also said "out" — where the standing wins and no station is claimed — is not shown as a
+    /// place that resolved to nothing.
+    /// </remarks>
+    private static (string? ViewerStationName, decimal? DepthM, TrackingCsvProblem? Problem, string? PlaceLabel) Place(
         TrackingCsvRow row, TrackingCsvSubject subject, HashSet<string> stored)
     {
-        // Going in and coming out claim no station, so nothing is resolved for them — which is
-        // also what keeps a sheet's entry and exit rows importable into a watch whose model has
-        // gone missing.
-        if (row.Kind is TripPositionEventKind.Entered or TripPositionEventKind.Exited)
+        // Going in, coming out and a note claim no station, so nothing is resolved for them —
+        // which is also what keeps those rows of a sheet importable into a watch whose model has
+        // gone missing: what somebody said on the telephone does not depend on a survey.
+        if (row.Kind is TripPositionEventKind.Entered or TripPositionEventKind.Exited
+            or TripPositionEventKind.Note)
         {
-            return (null, null, null);
+            return (null, null, null, null);
         }
 
         if (!subject.HasModel)
         {
-            return (null, null, TrackingCsvProblem.ModelMissing);
+            return (null, null, TrackingCsvProblem.ModelMissing, null);
         }
 
         switch (row.Decides)
@@ -373,8 +442,8 @@ public static class TrackingCsvPlanner
                 var viewer = SurveyStationNames.ViewerNameOfMatch(
                     subject.Format, subject.RootSurveyName, row.StationName!, stored.Contains);
                 return viewer is null
-                    ? (null, null, TrackingCsvProblem.StationNotInModel)
-                    : (viewer, null, null);
+                    ? (null, null, TrackingCsvProblem.StationNotInModel, null)
+                    : (viewer, null, null, null);
             }
 
             case TrackingCsvPlaceKind.Place:
@@ -390,18 +459,18 @@ public static class TrackingCsvPlanner
                         && FoldedText.Of(d.PlaceLabel).Value == FoldedText.Of(row.PlaceLabel!).Value);
                     return (null, null, sharing > 1
                         ? TrackingCsvProblem.PlaceLabelAmbiguous
-                        : TrackingCsvProblem.PlaceLabelUnknown);
+                        : TrackingCsvProblem.PlaceLabelUnknown, null);
                 }
 
                 if (!subject.Stations.Any(s => s.ViewerName == declared.Value.ViewerStationName))
                 {
-                    return (null, null, TrackingCsvProblem.StationNotInModel);
+                    return (null, null, TrackingCsvProblem.StationNotInModel, null);
                 }
 
                 // The declared depth is carried through beside the station, because the place the
                 // club named is a depth as well as a station and a reader shown only the station
                 // learns less than the sheet said.
-                return (declared.Value.ViewerStationName, declared.Value.DepthM, null);
+                return (declared.Value.ViewerStationName, declared.Value.DepthM, null, row.PlaceLabel);
             }
 
             case TrackingCsvPlaceKind.Depth:
@@ -413,15 +482,15 @@ public static class TrackingCsvPlanner
                 return placement.Outcome switch
                 {
                     TrackingDepthPlacementOutcome.ReferenceUnknown =>
-                        (null, null, TrackingCsvProblem.DepthReferenceUnknown),
+                        (null, null, TrackingCsvProblem.DepthReferenceUnknown, null),
                     TrackingDepthPlacementOutcome.NoStationAtDepth =>
-                        (null, null, TrackingCsvProblem.NoStationAtDepth),
-                    _ => (placement.ViewerStationName, row.DepthM, null),
+                        (null, null, TrackingCsvProblem.NoStationAtDepth, null),
+                    _ => (placement.ViewerStationName, row.DepthM, null, null),
                 };
             }
 
             default:
-                return (null, null, TrackingCsvProblem.NoPlaceAndNoState);
+                return (null, null, TrackingCsvProblem.NoPlaceAndNoState, null);
         }
     }
 }

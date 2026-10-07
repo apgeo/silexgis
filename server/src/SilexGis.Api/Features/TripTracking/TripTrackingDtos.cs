@@ -239,6 +239,13 @@ public sealed record TrackingStateDto(
 /// because a declaration whose station the model lacks is passed over and measured instead, and a
 /// person who picked a declared place would otherwise never learn that the log holds something else.
 /// </param>
+/// <param name="Corrected">
+/// Whether the report has been changed since it was first written down — corrected in place,
+/// replaced by a sheet, or moved to another roster entry. A yes or a no: when and by whom is not
+/// said here. It is on the signed-in log only; nothing a visitor without an account reads carries
+/// it. It says nothing of where anybody was, so it is answered the same whether or not the place
+/// beside it is withheld.
+/// </param>
 public sealed record TrackingEventDto(
     Guid Id,
     Guid CaverId,
@@ -249,6 +256,7 @@ public sealed record TrackingEventDto(
     decimal? DepthEnteredM,
     string? Note,
     DateTimeOffset RecordedAt,
+    bool Corrected,
     TrackingDepthPlacementOutcome? DepthPlacement = null);
 
 /// <summary>

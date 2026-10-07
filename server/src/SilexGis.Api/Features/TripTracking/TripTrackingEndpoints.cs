@@ -352,20 +352,9 @@ public static class TripTrackingEndpoints
             .OrderByDescending(e => e.RecordedAt).ThenByDescending(e => e.CreatedAt).ThenByDescending(e => e.Id)
             .ToPagedAsync(p, ps, e => e, ct);
 
-        var caveIds = result.Items.Where(e => e.CaveFeatureId is not null)
-            .Select(e => e.CaveFeatureId!.Value).Distinct().ToList();
-        var openCaves = await TrackingWithholding.OpenCaveIdsAsync(db, access, protection, ctx, caveIds, ct);
-
-        var dtos = result.Items.Select(e =>
-        {
-            var open = TrackingWithholding.PositionOpen(e, openCaves);
-            return new TrackingEventDto(
-                e.Id, e.CaverId, e.TeamId, e.Kind,
-                open ? e.SurveyModelId : null,
-                open ? e.ViewerStationName : null,
-                open ? e.DepthEnteredM : null,
-                e.Note, e.RecordedAt);
-        }).ToList();
+        var openCaves = await TrackingWithholding.OpenCavesOfAsync(
+            db, access, protection, ctx, result.Items, ct);
+        var dtos = result.Items.Select(e => TrackingWithholding.Shown(e, openCaves)).ToList();
 
         return TypedResults.Ok(new PagedResult<TrackingEventDto>(dtos, result.Page, result.PageSize, result.TotalItems));
     }
@@ -713,6 +702,7 @@ public static class TripTrackingEndpoints
 
         IReadOnlyList<TrackingEventDto> dtos = [.. created.Select(e => new TrackingEventDto(
             e.Id, e.CaverId, e.TeamId, e.Kind, e.SurveyModelId, e.ViewerStationName, e.DepthEnteredM, e.Note, e.RecordedAt,
+            TripTrackingRules.ChangedSinceWritten(e.CreatedAt, e.UpdatedAt),
             placed.Placement))];
         return TypedResults.Ok(dtos);
     }
@@ -908,7 +898,11 @@ public static class TripTrackingEndpoints
 
         return TypedResults.Ok(new TrackingEventDto(
             row.Id, row.CaverId, row.TeamId, row.Kind, row.SurveyModelId, row.ViewerStationName,
-            row.DepthEnteredM, row.Note, row.RecordedAt, placed.Placement));
+            row.DepthEnteredM, row.Note, row.RecordedAt,
+            // Read off the row as it was saved: a correction that changed nothing leaves the stamps
+            // where they were, and the answer then says what the next read of the log will say.
+            TripTrackingRules.ChangedSinceWritten(row.CreatedAt, row.UpdatedAt),
+            placed.Placement));
     }
 
     /// <summary>

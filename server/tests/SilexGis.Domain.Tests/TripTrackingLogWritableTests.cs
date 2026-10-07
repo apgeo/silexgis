@@ -46,4 +46,14 @@ public class TripTrackingLogWritableTests
         // nothing would say so. If this fails, decide what the new state means and say it above.
         Enum.GetValues<TripTrackingState>().Length.ShouldBe(3);
     }
+
+    [Fact]
+    public void A_report_is_changed_since_written_only_when_its_second_stamp_has_moved()
+    {
+        // The two stamps are written together from one clock when a report is first saved, so
+        // equal means untouched; the later one moving is the only sign a save changed something.
+        var written = new DateTimeOffset(2026, 9, 12, 10, 0, 0, TimeSpan.Zero);
+        TripTrackingRules.ChangedSinceWritten(written, written).ShouldBeFalse();
+        TripTrackingRules.ChangedSinceWritten(written, written.AddTicks(1)).ShouldBeTrue();
+    }
 }

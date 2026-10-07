@@ -117,12 +117,21 @@ public static class TrackingCsvImportEndpoints
         Guid tripLogId, TrackingCsvImportRequest request, SilexGisDbContext db, IAccessService access,
         FeatureProtection protection, IAccessContextAccessor accessAccessor, CancellationToken ct)
     {
-        var loaded = await LoadAsync(tripLogId, db, access, protection, accessAccessor, ct);
+        var loaded = await LoadAsync(tripLogId, forWriting: false, db, access, protection, accessAccessor, ct);
         if (loaded.Refusal is { } refusal) return refusal;
 
         if (Read(request.Options, out var options, out var mapping) is { } unreadable) return unreadable;
         var parsed = TrackingCsvParser.Parse(request.Text, options, mapping);
-        var plan = TrackingCsvPlanner.Plan(parsed.Rows, loaded.Subject!);
+        var plan = TrackingCsvPlanner.Plan(parsed, loaded.Subject!);
+
+        var before = await ShownBeforeAsync(plan, loaded, db, access, protection, ct);
+
+        TrackingCsvPreviewRowDto Row(TrackingCsvPlannedReport report) =>
+            new(report.Line, report.At, report.CaverId, report.CaverWritten, report.CaverMatched,
+                report.MatchedBy.ToString(), report.TeamId, report.Kind, report.ViewerStationName,
+                report.PlaceLabel, report.DepthM, report.Note, report.Replaces,
+                report.Replaces ? before.GetValueOrDefault((report.CaverId, report.At)) : null,
+                [.. report.Diagnostics.Select(Diagnostic)]);
 
         return TypedResults.Ok(new TrackingCsvPreviewDto(
             parsed.Header,
@@ -138,7 +147,8 @@ public static class TrackingCsvImportEndpoints
             [.. parsed.FileDiagnostics.Select(Diagnostic)],
             [.. plan.Refused.Select(Diagnostic)],
             ZoneAsAsked(request.Options?.TimeZone, options.Zone),
-            parsed.NamedDay));
+            parsed.NamedDay,
+            plan.Digest(Bound(before))));
     }
 
     // ---- commit -------------------------------------------------------------------------
@@ -148,21 +158,46 @@ public static class TrackingCsvImportEndpoints
         FeatureProtection protection, IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor, CancellationToken ct)
     {
-        var loaded = await LoadAsync(tripLogId, db, access, protection, accessAccessor, ct);
+        var loaded = await LoadAsync(tripLogId, forWriting: true, db, access, protection, accessAccessor, ct);
         if (loaded.Refusal is { } refusal) return refusal;
 
         var user = await userAccessor.GetAsync(ct);
         if (user is null) return ApiProblems.NotFound("trip_log.not_found");
 
-        if (!TripTrackingRules.MayWriteLog(loaded.Tracking!.State))
-        {
-            return ApiProblems.Conflict(TrackingProblemCodes.NotWritable,
-                "A report lands on a watch that is armed or has been closed — arm the watch first.");
-        }
-
         if (Read(request.Options, out var options, out var mapping) is { } unreadable) return unreadable;
         var parsed = TrackingCsvParser.Parse(request.Text, options, mapping);
-        var plan = TrackingCsvPlanner.Plan(parsed.Rows, loaded.Subject!);
+        var plan = TrackingCsvPlanner.Plan(parsed, loaded.Subject!);
+
+        // A sheet that cannot be read at all is refused, not answered with nothing done. Its plan
+        // is empty, so without this it would commit as a success that created no report and gave
+        // no reason — a sheet of times of day sent without its day, most often. The preview says
+        // the same thing as a finding about the file, because there it is something to look at;
+        // here nothing can come of the request as it stands.
+        if (!parsed.Readable)
+        {
+            var findings = string.Join(", ", parsed.FileDiagnostics
+                .Where(d => d.Severity == TrackingCsvSeverity.Error)
+                .Select(d => d.Problem.ToString())
+                .Distinct());
+            return ApiProblems.BadRequest(SheetUnreadableCode,
+                $"The sheet cannot be read as it stands ({findings}); a preview of it says what to change.");
+        }
+
+        // The plan the caller was shown, or else nothing is written. Asked before anything is
+        // changed and decided on the whole plan rather than on the lines chosen from it: a plan
+        // that moved under the reviewer is one they have not read, whichever of its rows they
+        // would have kept. What the preview said is in the log now is part of what was shown, so
+        // it is worked out again here exactly as the preview worked it out — a report corrected
+        // by a colleague in between is a report this reviewer has not read either.
+        if (request.PlanDigest is { } shown
+            && !string.Equals(
+                shown,
+                plan.Digest(Bound(await ShownBeforeAsync(plan, loaded, db, access, protection, ct))),
+                StringComparison.Ordinal))
+        {
+            return ApiProblems.Conflict(PlanChangedCode,
+                "The trip or its log has changed since this sheet was previewed, and importing it would no longer do what the preview showed. Preview it again.");
+        }
 
         // Null is the caller saying nothing, so every importable row goes; an empty list is the
         // caller saying none, and it commits nothing. The two must not read alike: a screen
@@ -175,23 +210,13 @@ public static class TrackingCsvImportEndpoints
         var refused = new List<TrackingCsvDiagnostic>(plan.Refused);
         var created = 0;
         var updated = 0;
+        var unchanged = 0;
         var skipped = 0;
 
-        // Loaded once for the whole file rather than looked up per row: a trip's log is thousands
-        // of rows at most, and a query per report is what turns importing a season into a minute.
-        //
-        // Grouped rather than keyed directly, because nothing makes the person and the instant
-        // unique in the log: a typed "entered" and a typed note filed at the same minute for one
-        // person are two rows under one key, and a dictionary built straight off them would throw
-        // and fail the whole sheet with nothing naming the rows. A key the log holds once maps to
-        // that row; a key it holds several times maps to null, which the loop below refuses on
-        // the row exactly as the planner does — the planner is the ordinary gate for it, and this
-        // is the same answer for a report typed in between the plan and the write.
-        var existing = (await db.TripPositionEvents
-                .Where(e => e.TripLogId == tripLogId)
-                .ToListAsync(ct))
-            .GroupBy(e => (e.CaverId, e.RecordedAt))
-            .ToDictionary(g => g.Key, g => g.Count() == 1 ? g.First() : null);
+        // The log as the plan was decided against it: the same rows, read once. A key the log
+        // holds once maps to that row; a key it holds several times maps to null, which the loop
+        // below refuses on the row exactly as the planner did.
+        var existing = loaded.Stored!;
 
         foreach (var report in plan.Reports)
         {
@@ -231,14 +256,27 @@ public static class TrackingCsvImportEndpoints
                 // Corrected in place, not deleted and re-entered. A re-entered report is a new row
                 // with a new identity, so anything hanging off the old one is orphaned by a fixed
                 // typo — and the change is audited either way.
-                row.TeamId = report.TeamId;
+                //
+                // Only what the sheet carries is written. The place and the kind always are — a
+                // row is a statement of where somebody was. The team and the note are written
+                // where the sheet has a column for them, an empty cell included; a sheet with no
+                // such column says nothing about them, and a note typed onto the report by hand
+                // is not something a sheet of times and depths was asked to erase. Who recorded
+                // the report first is left as it is: the audit names who changed it.
                 row.Kind = report.Kind;
-                row.SurveyModelId = report.ViewerStationName is null ? null : loaded.SurveyModelId;
-                row.CaveFeatureId = report.ViewerStationName is null ? null : loaded.CaveFeatureId;
+                row.SurveyModelId = report.ViewerStationName is null ? null : plan.SurveyModelId;
+                row.CaveFeatureId = report.ViewerStationName is null ? null : plan.CaveFeatureId;
                 row.ViewerStationName = report.ViewerStationName;
                 row.DepthEnteredM = report.Kind == TripPositionEventKind.AtDepth ? report.DepthM : null;
-                row.Note = report.Note;
-                updated++;
+                if (plan.CarriesTeam) row.TeamId = report.TeamId;
+                if (plan.CarriesNote) row.Note = report.Note;
+
+                // Counted as changed only where a stored value really is another one, asked of the
+                // same comparison that decides whether the row is written at all — so the count is
+                // the number of rows this request wrote over, and a sheet imported a second time
+                // reports none and marks none as corrected.
+                if (db.Entry(row).State == EntityState.Modified) updated++;
+                else unchanged++;
                 continue;
             }
 
@@ -248,8 +286,8 @@ public static class TrackingCsvImportEndpoints
                 CaverId = report.CaverId,
                 TeamId = report.TeamId,
                 Kind = report.Kind,
-                SurveyModelId = report.ViewerStationName is null ? null : loaded.SurveyModelId,
-                CaveFeatureId = report.ViewerStationName is null ? null : loaded.CaveFeatureId,
+                SurveyModelId = report.ViewerStationName is null ? null : plan.SurveyModelId,
+                CaveFeatureId = report.ViewerStationName is null ? null : plan.CaveFeatureId,
                 ViewerStationName = report.ViewerStationName,
                 DepthEnteredM = report.Kind == TripPositionEventKind.AtDepth ? report.DepthM : null,
                 Note = report.Note,
@@ -266,18 +304,78 @@ public static class TrackingCsvImportEndpoints
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Ok(new TrackingCsvCommitDto(
-            created, updated, skipped, [.. refused.Select(Diagnostic)]));
+            created, updated, unchanged, skipped, [.. refused.Select(Diagnostic)]));
     }
+
+    // ---- what a row would replace -------------------------------------------------------
+
+    /// <summary>
+    /// What each row that would replace a report would replace, as this caller may be shown it,
+    /// under the key a sheet upserts on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A stored report is a stored position, and these routes are reached on the right to write
+    /// the trip — which somebody may hold without the right to be told where the cave is. So it
+    /// is shown through the rule the log's own list answers by, evaluated against the cave each
+    /// stored report was placed in rather than against the watch's present survey: nothing
+    /// reaches a caller here that the list would withhold from them.
+    /// </para>
+    /// <para>
+    /// <b>Worked out in one place for the preview and the commit.</b> The preview answers it and
+    /// names the plan by it; the commit names its own plan by it and compares the two. Two ways
+    /// of arriving at it would be two names for one plan, and every commit refused.
+    /// </para>
+    /// </remarks>
+    private static async Task<Dictionary<(Guid CaverId, DateTimeOffset At), TrackingEventDto>> ShownBeforeAsync(
+        TrackingCsvPlan plan, Loaded loaded, SilexGisDbContext db, IAccessService access,
+        FeatureProtection protection, CancellationToken ct)
+    {
+        var stored = loaded.Stored!;
+        var replaced = plan.Reports
+            .Where(r => r.Replaces)
+            .Select(r => stored.GetValueOrDefault((r.CaverId, r.At)))
+            .OfType<TripPositionEvent>()
+            .Distinct()
+            .ToList();
+        var openCaves = await TrackingWithholding.OpenCavesOfAsync(
+            db, access, protection, loaded.Access, replaced, ct);
+        return replaced.ToDictionary(
+            e => (e.CaverId, At: e.RecordedAt),
+            e => TrackingWithholding.Shown(e, openCaves));
+    }
+
+    /// <summary>
+    /// What the caller was shown, as the plan's name takes it in: the answer they read and
+    /// nothing the answer left out, so a withheld place is as absent from the name as from the
+    /// screen.
+    /// </summary>
+    private static Dictionary<(Guid CaverId, DateTimeOffset At), TrackingCsvReplacedReport> Bound(
+        Dictionary<(Guid CaverId, DateTimeOffset At), TrackingEventDto> before) =>
+        before.ToDictionary(
+            b => b.Key,
+            b => new TrackingCsvReplacedReport(
+                b.Value.Id, b.Value.TeamId, b.Value.Kind, b.Value.SurveyModelId, b.Value.StationName,
+                b.Value.DepthEnteredM, b.Value.Note, b.Value.Corrected));
 
     // ---- the trip a sheet is read against -----------------------------------------------
 
     /// <summary>What was loaded about the trip, or why the caller gets nothing.</summary>
+    /// <param name="Stored">
+    /// The trip's log under the key a sheet upserts on, from the one read of it this request makes:
+    /// the report itself where the log holds one under the key, null where it holds several.
+    /// </param>
+    /// <param name="Access">Who is asking, for what a stored report may show them.</param>
     private sealed record Loaded(
         TrackingCsvSubject? Subject,
         Domain.Entities.TripTracking? Tracking,
-        Guid? SurveyModelId,
-        Guid? CaveFeatureId,
-        ProblemHttpResult? Refusal);
+        Dictionary<(Guid CaverId, DateTimeOffset At), TripPositionEvent?>? Stored,
+        AccessContext? Access,
+        ProblemHttpResult? Refusal)
+    {
+        internal static Loaded Refused(ProblemHttpResult refusal) =>
+            new(null, null, null, null, refusal);
+    }
 
     /// <summary>
     /// The trip, its roster, its teams, its survey and its cave's declared places.
@@ -293,10 +391,25 @@ public static class TrackingCsvImportEndpoints
     /// no station, so a sheet of them imports into a watch whose survey has gone missing; the rows
     /// that do claim a place are then refused one by one, with the reason on the row.
     /// </para>
+    /// <para>
+    /// <b>Every refusal a sheet can meet before it is read is decided here, for the preview and
+    /// the commit alike</b> — the log that cannot be written among them. A preview that answered
+    /// where the commit refuses would have a reviewer read a sheet, tick its rows and only then
+    /// learn that none of it can be written; decided in one place, the two cannot come to differ.
+    /// </para>
+    /// <para>
+    /// <b>The log is read once</b>, and both what the planner is told the log holds and the rows
+    /// the commit writes over come from that reading. Two readings are two logs: a report typed
+    /// between them would be a create to the plan and an overwrite to the write.
+    /// </para>
     /// </remarks>
+    /// <param name="forWriting">
+    /// Whether the stored reports are loaded to be changed. A preview changes nothing and reads
+    /// them untracked.
+    /// </param>
     private static async Task<Loaded> LoadAsync(
-        Guid tripLogId, SilexGisDbContext db, IAccessService access, FeatureProtection protection,
-        IAccessContextAccessor accessAccessor, CancellationToken ct)
+        Guid tripLogId, bool forWriting, SilexGisDbContext db, IAccessService access,
+        FeatureProtection protection, IAccessContextAccessor accessAccessor, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var trip = ctx is null
@@ -305,14 +418,20 @@ public static class TrackingCsvImportEndpoints
         var refusal = ctx is null
             ? ApiProblems.NotFound("trip_log.not_found")
             : await TripTrackingEndpoints.WriteGuardAsync(access, ctx, trip, ct);
-        if (refusal is not null) return new Loaded(null, null, null, null, refusal);
+        if (refusal is not null) return Loaded.Refused(refusal);
 
         var tracking = await db.TripTrackings.AsNoTracking()
             .FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         if (tracking is null)
         {
-            return new Loaded(null, null, null, null,
+            return Loaded.Refused(
                 ApiProblems.Conflict(TrackingProblemCodes.NotConfigured, "This trip has no watch to import reports onto."));
+        }
+
+        if (!TripTrackingRules.MayWriteLog(tracking.State))
+        {
+            return Loaded.Refused(ApiProblems.Conflict(TrackingProblemCodes.NotWritable,
+                "A report lands on a watch that is armed or has been closed — arm the watch first."));
         }
 
         // Distinct by person, not by roster row: the roster is one row per person per job, so the
@@ -341,14 +460,19 @@ public static class TrackingCsvImportEndpoints
             declarations = await TripTrackingEndpoints.DeclaredPlacesOfAsync(db, model.Cave.Id, ct);
         }
 
-        // Every key with how many rows the log holds under it. A key held once is one a sheet
-        // corrects; a key held more than once is one the planner refuses, because which of the
-        // rows the sheet means is not the importer's to guess.
-        var existing = await db.TripPositionEvents.AsNoTracking()
-            .Where(e => e.TripLogId == tripLogId)
-            .GroupBy(e => new { e.CaverId, e.RecordedAt })
-            .Select(g => new { g.Key.CaverId, g.Key.RecordedAt, Count = g.Count() })
-            .ToListAsync(ct);
+        // Loaded once for the whole file rather than looked up per row: a trip's log is thousands
+        // of rows at most, and a query per report is what turns importing a season into a minute.
+        //
+        // Grouped rather than keyed directly, because nothing makes the person and the instant
+        // unique in the log: a typed "entered" and a typed note filed at the same minute for one
+        // person are two rows under one key, and a dictionary built straight off them would throw
+        // and fail the whole sheet with nothing naming the rows. A key held once is one a sheet
+        // corrects; a key held more than once maps to null and is one the planner refuses,
+        // because which of the rows the sheet means is not the importer's to guess.
+        var log = forWriting ? db.TripPositionEvents : db.TripPositionEvents.AsNoTracking();
+        var stored = (await log.Where(e => e.TripLogId == tripLogId).ToListAsync(ct))
+            .GroupBy(e => (e.CaverId, At: e.RecordedAt))
+            .ToDictionary(g => g.Key, g => g.Count() == 1 ? g.First() : null);
 
         var subject = new TrackingCsvSubject
         {
@@ -357,23 +481,30 @@ public static class TrackingCsvImportEndpoints
             Declarations = declarations,
             Stations = stations,
             HasModel = usable is not null,
+            SurveyModelId = usable?.Model.Id,
+            CaveFeatureId = usable?.Cave.Id,
             Format = usable?.Model.Format ?? default,
             RootSurveyName = usable?.Model.RootSurveyName,
             ReferenceStationName = tracking.ReferenceStationName,
             DepthFilter = tracking.DepthFilter,
-            Existing = existing.Select(e => (e.CaverId, e.RecordedAt)).ToHashSet(),
-            ExistingSeveralTimes = existing.Where(e => e.Count > 1)
-                .Select(e => (e.CaverId, e.RecordedAt)).ToHashSet(),
+            Existing = stored.Keys.ToHashSet(),
+            ExistingSeveralTimes = stored.Where(e => e.Value is null).Select(e => e.Key).ToHashSet(),
             Now = DateTimeOffset.UtcNow,
         };
 
-        return new Loaded(subject, tracking, usable?.Model.Id, usable?.Cave.Id, null);
+        return new Loaded(subject, tracking, stored, ctx, null);
     }
 
     // ---- request and answer shapes ------------------------------------------------------
 
     /// <summary>What a sheet is refused with when the zone it names is not one this server can read it in.</summary>
     public const string ZoneUnknownCode = "tracking_csv.zone_unknown";
+
+    /// <summary>What a commit is refused with when the sheet has no readable rows at all, for a reason about the file.</summary>
+    public const string SheetUnreadableCode = "tracking_csv.sheet_unreadable";
+
+    /// <summary>What a commit is refused with when it would no longer write what its preview showed.</summary>
+    public const string PlanChangedCode = "tracking_csv.plan_changed";
 
     /// <summary>
     /// The caller's choices as the reader wants them, or the refusal where one of them cannot be
@@ -478,12 +609,6 @@ public static class TrackingCsvImportEndpoints
 
         return null;
     }
-
-    private static TrackingCsvPreviewRowDto Row(TrackingCsvPlannedReport report) =>
-        new(report.Line, report.At, report.CaverId, report.CaverWritten, report.CaverMatched,
-            report.MatchedBy.ToString(), report.TeamId, report.Kind, report.ViewerStationName,
-            report.DepthM, report.Note, report.Replaces,
-            [.. report.Diagnostics.Select(Diagnostic)]);
 
     private static TrackingCsvDiagnosticDto Diagnostic(TrackingCsvDiagnostic d) =>
         new(d.Severity.ToString(), d.Problem.ToString(), d.Line, d.Column, d.Detail);
