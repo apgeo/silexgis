@@ -38,6 +38,7 @@ export const TRACKING_CSV_PROBLEMS = [
   'CaverNotOnRoster',
   'CaverAmbiguous',
   'TeamNotOnTrip',
+  'TeamAmbiguous',
   'PlaceLabelUnknown',
   'PlaceLabelAmbiguous',
   'StationNotInModel',

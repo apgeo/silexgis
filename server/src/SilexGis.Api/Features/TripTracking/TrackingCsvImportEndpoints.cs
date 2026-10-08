@@ -215,9 +215,18 @@ public static class TrackingCsvImportEndpoints
 
         var before = await ShownBeforeAsync(plan, loaded, db, access, protection, ct);
 
+        // The team a row is shown with is the team the report would have once imported. For a
+        // row whose team cell fits more than one team that is the team the report has now — the
+        // commit leaves it alone — and not the "none" the row itself could arrive at; a team is
+        // the trip's and is never among what is withheld from somebody who may write its log.
+        Guid? TeamAfter(TrackingCsvPlannedReport report) =>
+            report is { KeepsStoredTeam: true, Replaces: true }
+                ? before.GetValueOrDefault((report.CaverId, report.At))?.TeamId
+                : report.TeamId;
+
         TrackingCsvPreviewRowDto Row(TrackingCsvPlannedReport report) =>
             new(report.Line, report.At, report.CaverId, report.CaverWritten, report.CaverMatched,
-                report.MatchedBy.ToString(), report.TeamId, report.Kind, report.ViewerStationName,
+                report.MatchedBy.ToString(), TeamAfter(report), report.Kind, report.ViewerStationName,
                 report.PlaceLabel, report.DepthM, report.Note, report.Replaces,
                 report.Replaces ? before.GetValueOrDefault((report.CaverId, report.At)) : null,
                 [.. report.Diagnostics.Select(Diagnostic)]);
@@ -367,7 +376,11 @@ public static class TrackingCsvImportEndpoints
                     row.DepthEnteredM = report.Kind == TripPositionEventKind.AtDepth ? report.DepthM : null;
                 }
 
-                if (plan.CarriesTeam) row.TeamId = report.TeamId;
+                // The team is written where the sheet has a column for it — unless the cell is
+                // the name of more than one of the trip's teams. Which of them was meant cannot
+                // be decided, and that is not the sheet saying "no team": the report keeps the
+                // team it has, and the row carries the finding that says so.
+                if (plan.CarriesTeam && !report.KeepsStoredTeam) row.TeamId = report.TeamId;
 
                 // A note is written only where it reads differently. A cell is tidied as it is
                 // read — a line break and a doubled space become one space, and a cell that only

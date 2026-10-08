@@ -59,6 +59,7 @@ public class TrackingCsvProblemSurfaceTests
         nameof(TrackingCsvProblem.CaverNotOnRoster),
         nameof(TrackingCsvProblem.CaverAmbiguous),
         nameof(TrackingCsvProblem.TeamNotOnTrip),
+        nameof(TrackingCsvProblem.TeamAmbiguous),
         nameof(TrackingCsvProblem.PlaceLabelUnknown),
         nameof(TrackingCsvProblem.PlaceLabelAmbiguous),
         nameof(TrackingCsvProblem.StationNotInModel),

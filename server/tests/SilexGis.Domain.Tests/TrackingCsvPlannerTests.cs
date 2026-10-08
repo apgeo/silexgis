@@ -129,6 +129,48 @@ public class TrackingCsvPlannerTests
             && d.Severity == TrackingCsvSeverity.Warning);
     }
 
+    /// <summary>
+    /// Nothing stops two teams of one trip having the same title. A cell that fits both is not a
+    /// team the trip lacks: the row is planned as saying nothing about the team — no team on it,
+    /// the report's own to be kept — and is told so in words of its own, where a name no team has
+    /// is still planned as "no team".
+    /// </summary>
+    [Fact]
+    public void A_team_name_two_of_the_trips_teams_share_is_not_read_as_no_team()
+    {
+        var teamAgain = Guid.Parse("00000000-0000-0000-0000-0000000000b2");
+        var subject = Subject() with
+        {
+            // The second differs only in its capitals: a name is matched folded, so it is the same name.
+            Teams = [(TeamOne, "Echipa 1"), (teamAgain, "ECHIPA 1"), (Guid.NewGuid(), "Echipa 2")],
+        };
+
+        var shared = PlanOf("12.09.2026 09:00,100,,,Ion Popescu,Echipa 1,,", subject).Reports.ShouldHaveSingleItem();
+        shared.TeamId.ShouldBeNull();
+        shared.KeepsStoredTeam.ShouldBeTrue();
+        shared.Diagnostics.ShouldContain(d =>
+            d.Problem == TrackingCsvProblem.TeamAmbiguous
+            && d.Severity == TrackingCsvSeverity.Warning
+            && d.Detail == "Echipa 1");
+        shared.Diagnostics.ShouldNotContain(d => d.Problem == TrackingCsvProblem.TeamNotOnTrip);
+
+        // The three other things a team cell can be are planned as they always were.
+        var lacking = PlanOf("12.09.2026 09:00,100,,,Ion Popescu,Echipa 9,,", subject).Reports.ShouldHaveSingleItem();
+        lacking.TeamId.ShouldBeNull();
+        lacking.KeepsStoredTeam.ShouldBeFalse();
+        lacking.Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.TeamNotOnTrip);
+
+        var empty = PlanOf("12.09.2026 09:00,100,,,Ion Popescu,,,", subject).Reports.ShouldHaveSingleItem();
+        empty.TeamId.ShouldBeNull();
+        empty.KeepsStoredTeam.ShouldBeFalse();
+        empty.Diagnostics.ShouldBeEmpty();
+
+        var one = PlanOf("12.09.2026 09:00,100,,,Ion Popescu,Echipa 2,,", subject).Reports.ShouldHaveSingleItem();
+        one.TeamId.ShouldNotBeNull();
+        one.KeepsStoredTeam.ShouldBeFalse();
+        one.Diagnostics.ShouldBeEmpty();
+    }
+
     [Fact]
     public void A_station_named_outright_is_resolved_against_the_model()
     {

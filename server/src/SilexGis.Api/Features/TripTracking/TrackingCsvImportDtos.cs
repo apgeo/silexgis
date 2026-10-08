@@ -153,6 +153,12 @@ public sealed record TrackingCsvDiagnosticDto(
     string? Detail);
 
 /// <summary>One report a row would become, with what it matched.</summary>
+/// <param name="TeamId">
+/// The team the report would have once the row is imported. That is the team the row named —
+/// none where the cell is empty or names no team of the trip — except for a row whose cell is the
+/// name of more than one of the trip's teams: such a row leaves a report's team alone, so where
+/// it would replace a report this is that report's own team, and none where it would make one.
+/// </param>
 /// <param name="PlaceLabel">
 /// The place as the sheet named it, where <paramref name="StationName"/> is the station the cave
 /// declared that name to be; null where the row named a station outright, gave a depth, or claims

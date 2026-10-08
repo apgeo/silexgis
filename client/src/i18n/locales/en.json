@@ -2075,6 +2075,7 @@
           "CaverNotOnRoster": "Nobody on this trip answers to that name.",
           "CaverAmbiguous": "More than one person on this trip answers to that name, and only you can say which.",
           "TeamNotOnTrip": "That is not one of this trip's teams, so the report was kept without a team.",
+          "TeamAmbiguous": "More than one of this trip's teams has that name, so which one is meant cannot be decided. A report already in the log keeps the team it has; a new one is made without a team.",
           "PlaceLabelUnknown": "The cave has declared no place by that name.",
           "PlaceLabelAmbiguous": "Two of the cave's declarations share that name, so which station is meant cannot be decided.",
           "StationNotInModel": "The station is not one of the survey this watch is on.",

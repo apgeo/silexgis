@@ -21,7 +21,7 @@ namespace SilexGis.Domain.Import.TrackingCsv;
 /// <para>
 /// <b>The list of what goes into it is the guarantee.</b> Every value that reaches a written row is
 /// in it — the line, the instant, the person, the team, the kind, the station, the depth, the note
-/// whether a report is already there to be replaced and whether its place is left standing — together with the two facts about the
+/// whether a report is already there to be replaced and whether its place or its team is left standing — together with the two facts about the
 /// sheet that decide what a replacement leaves standing, and the survey and the cave a placed row
 /// is anchored to. A value that changed a written row and was not in here would be a change no
 /// commit is refused for; a value in here that is only shown (how a name was matched, the place as
@@ -48,7 +48,7 @@ public static class TrackingCsvPlanDigest
     /// Said first, so that a change to how the rest is written down gives every plan a new name
     /// rather than, by accident, an old plan's.
     /// </summary>
-    private const string Shape = "tracking-sheet-plan/3";
+    private const string Shape = "tracking-sheet-plan/4";
 
     /// <summary>The name, as 64 lower-case hexadecimal digits.</summary>
     /// <param name="plan">What the sheet would write.</param>
@@ -92,6 +92,9 @@ public static class TrackingCsvPlanDigest
             // Whether the place is written or left as the log holds it is a difference in what a
             // commit does to the row, with every other value here the same.
             Put(text, report.KeepsStoredPlace ? "1" : "0");
+            // And the same of the team: "no team" written over a report and the report's team
+            // left alone are one null in the value above and two different writes.
+            Put(text, report.KeepsStoredTeam ? "1" : "0");
 
             if (!report.Replaces) continue;
             if (before is null || !before.TryGetValue((report.CaverId, report.At), out var stood))

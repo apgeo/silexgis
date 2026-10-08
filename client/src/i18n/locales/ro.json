@@ -2075,6 +2075,7 @@
           "CaverNotOnRoster": "Nimeni din această tură nu răspunde la acest nume.",
           "CaverAmbiguous": "Mai multe persoane din această tură răspund la acest nume și doar tu poți spune care.",
           "TeamNotOnTrip": "Nu este una dintre echipele acestei ture, așa că raportul a fost păstrat fără echipă.",
+          "TeamAmbiguous": "Mai multe echipe ale acestei ture au acest nume, deci nu se poate decide care este. Un raport aflat deja în jurnal își păstrează echipa; unul nou este creat fără echipă.",
           "PlaceLabelUnknown": "Peștera nu a declarat niciun loc cu acest nume.",
           "PlaceLabelAmbiguous": "Două declarații ale peșterii au acest nume, deci nu se poate decide care stație este.",
           "StationNotInModel": "Stația nu face parte din ridicarea topografică pe care este această urmărire.",

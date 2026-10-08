@@ -70,6 +70,9 @@ public class TrackingCsvPlanDigestTests
         (nameof(TrackingCsvPlannedReport.Note), true, r => r with { Note = "apa mica" }),
         (nameof(TrackingCsvPlannedReport.Replaces), true, r => r with { Replaces = true }),
         (nameof(TrackingCsvPlannedReport.KeepsStoredPlace), true, r => r with { KeepsStoredPlace = true }),
+        // "No team" written over a report and the report's team left alone are the same null
+        // team on the planned row and two different writes.
+        (nameof(TrackingCsvPlannedReport.KeepsStoredTeam), true, r => r with { KeepsStoredTeam = true }),
         (nameof(TrackingCsvPlannedReport.CaverWritten), false, r => r with { CaverWritten = "Ion P." }),
         (nameof(TrackingCsvPlannedReport.CaverMatched), false, r => r with { CaverMatched = "Ion Popescu-Ionescu" }),
         (nameof(TrackingCsvPlannedReport.MatchedBy), false, r => r with { MatchedBy = CaverNameLadder.Rung.FullName }),
@@ -88,7 +91,7 @@ public class TrackingCsvPlanDigestTests
         // restart of the server, or on another of its instances.
         var plan = PlanOf(Report(), Report() with { Line = 3, CaverId = Maria, TeamId = null, Note = null, DepthM = null });
 
-        plan.Digest().ShouldBe("5f9e408c499aae97ea1065d9ce51c97002f23f4ff26cb60cfa22397a8fc6d91d");
+        plan.Digest().ShouldBe("c7d79a5a5d05fb5349ddafad0243f027d39dd9f4363c2c0187c71de7cc04b835");
         plan.Digest().ShouldBe(TrackingCsvPlanDigest.Of(plan));
     }
 

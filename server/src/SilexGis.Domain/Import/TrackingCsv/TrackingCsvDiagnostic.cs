@@ -99,6 +99,14 @@ public enum TrackingCsvProblem
     /// <summary>The team named is not one of this trip's teams. Dropped; the report still stands.</summary>
     TeamNotOnTrip,
 
+    /// <summary>
+    /// The team named is the name of more than one of this trip's teams. Which of them is meant is
+    /// not the importer's to guess, so the row says nothing about the team: a report the log
+    /// already holds keeps the team it has, a new one is made without a team, and the report
+    /// still stands.
+    /// </summary>
+    TeamAmbiguous,
+
     /// <summary>The cave has declared no place by that name.</summary>
     PlaceLabelUnknown,
 

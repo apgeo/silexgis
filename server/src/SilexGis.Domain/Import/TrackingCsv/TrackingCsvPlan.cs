@@ -150,6 +150,18 @@ public sealed record TrackingCsvPlannedReport
 
     public Guid? TeamId { get; init; }
 
+    /// <summary>
+    /// Whether the row's team cell could not be read as one team because more than one of the
+    /// trip's teams has that name, so that a report the log already holds keeps the team it has.
+    /// </summary>
+    /// <remarks>
+    /// Apart from an empty cell and from a name no team has, which both say "no team" and are
+    /// written as that: this row named a team that is there, twice over, and writing "none" over
+    /// the report's team would take away exactly what the sheet was trying to say. The team
+    /// above is null on such a row, which is what a new report is made with.
+    /// </remarks>
+    public bool KeepsStoredTeam { get; init; }
+
     public required TripPositionEventKind Kind { get; init; }
 
     public string? ViewerStationName { get; init; }
@@ -435,6 +447,7 @@ public static class TrackingCsvPlanner
                     CaverMatched = hit.Name,
                     MatchedBy = hit.By,
                     TeamId = teamId,
+                    KeepsStoredTeam = teamProblem == TrackingCsvProblem.TeamAmbiguous,
                     Kind = row.Kind!.Value,
                     ViewerStationName = stood is null ? placed.ViewerStationName : stood.ViewerStationName,
                     PlaceLabel = stood is null ? placed.PlaceLabel : null,
@@ -469,6 +482,13 @@ public static class TrackingCsvPlanner
     /// A team nobody recognises is a warning and not a refusal, because a team is indicative: the
     /// report belongs to the person on it, and losing the grouping beside them costs a label on a
     /// map, while refusing the row costs the position itself.
+    /// <para>
+    /// <b>A name two of the trip's teams share is told apart from a name none has.</b> Nothing
+    /// stops two teams of one trip being given the same title, and a cell that fits both is not
+    /// "no such team": the sheet named a team that is there. Answered as the same thing, a
+    /// re-import that replaces reports would write "no team" over each of them. So it is its own
+    /// finding, and the row is planned as saying nothing about the team.
+    /// </para>
     /// </remarks>
     private static (Guid? TeamId, TrackingCsvProblem? Problem) MatchTeam(
         string? written, IReadOnlyList<(Guid Id, string Name)> teams)
@@ -480,9 +500,12 @@ public static class TrackingCsvPlanner
 
         var asked = FoldedText.Of(written).Value;
         var found = teams.Where(t => FoldedText.Of(t.Name).Value == asked).ToList();
-        return found.Count == 1
-            ? (found[0].Id, null)
-            : (null, TrackingCsvProblem.TeamNotOnTrip);
+        return found.Count switch
+        {
+            1 => (found[0].Id, null),
+            0 => (null, TrackingCsvProblem.TeamNotOnTrip),
+            _ => (null, TrackingCsvProblem.TeamAmbiguous),
+        };
     }
 
     /// <summary>
