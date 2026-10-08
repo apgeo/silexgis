@@ -327,6 +327,30 @@ const noSidewaysScroll = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
 /**
+ * Waits for the frame's sheet to finish sliding in.
+ *
+ * The sheet arrives by a transition of about a third of a second, and its controls count as on
+ * screen for all of it. A control measured meanwhile is measured where it is passing through: its
+ * box comes back a hair under the height it has at rest (39.99998px for a 40px button, once). So
+ * what is said of the sheet's controls is said of the sheet standing still — waited for by what the
+ * sheet says of itself, never by the clock.
+ */
+async function sheetAtRest(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const sheet = document.querySelector('.public-past-drawer .ant-drawer-content-wrapper');
+          if (sheet === null) return 'absent';
+          const moving = /-motion-/.test(sheet.className) || sheet.getAnimations().length > 0;
+          return moving ? 'moving' : 'at rest';
+        }),
+      { timeout: 20_000 },
+    )
+    .toBe('at rest');
+}
+
+/**
  * How a frame's height is shared out while a past trip is on screen, in CSS pixels.
  *
  * Read in the page in one go, so the figures describe one layout rather than four moments of one.
@@ -602,6 +626,7 @@ test.describe('a cave’s past trips on a phone', () => {
     const handle = page.getByTestId('public-past-scrub').locator('.ant-slider-handle');
     const moment = () => handle.getAttribute('aria-valuenow');
     await expect(handle).toBeInViewport({ timeout: 20_000 });
+    await sheetAtRest(page);
     await fingerSized(page.getByTestId('public-past-report-next'), 'the next report, in the sheet');
     await expect(page.getByTestId('public-past-report-next')).toBeInViewport();
     const standing = await moment();
