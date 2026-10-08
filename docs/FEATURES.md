@@ -460,6 +460,12 @@ feature and walkthroughs of whole jobs.
   in the table, marked, after being taken off the roster, and cannot be taken off it while
   tracking is running. None of this alarms anybody: nothing is sent, the overdue callout is not
   involved, and a published page shows none of it.
+  A report can say somebody is **between two stations** of the survey — the log and the party
+  table print both, and the model draws a dashed line along the survey from the first to the
+  second; a visitor is shown the first station only. And a **note about the cave** — loose rock
+  above a pitch, water rising — is a report about nobody, at a station or at none: it moves no
+  one and is nobody's last word, it stands on the model as a mark of its own and is listed under
+  the party, whoever can read the trip can read it, and no visitor is ever shown one.
   Photographs are hung on a **moment** of the trip rather than on a report, each at the time its
   own file says, with one correction for a camera clock that was out; each can be about a
   different person, and before anything is attached the dialog says, photograph by photograph,

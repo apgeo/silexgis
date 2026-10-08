@@ -69,6 +69,7 @@ The **Record a report** card:
    | **At a depth** | A depth below the datum — or a **Place** the cave has declared (below) |
    | **Note** | Words only |
    | **Came out** | No place |
+   | **About the cave** | Words about the cave itself, with one station or none — about nobody, so nobody needs ticking (*A note about the cave*, below) |
 
 3. Optionally a **Team** and a **Note**.
 4. **When it was said** — left empty, the report is stamped now. Fill it in for word relayed
@@ -93,6 +94,47 @@ recorded under that label. If the card answers that the survey has to be read ag
 was read before such stations could be reported at — press **Read again** on its row under
 **3D survey models** on the cave's page, wait for it to finish, and report again. A Survex survey's
 nameless stations are not on the drawing at all, and a reported depth never lands on one.
+
+**Between two stations.** Word from underground is often "past the pitch, not yet at the sump",
+and either station alone would write down a place nobody reported. On an **At a station** report,
+fill in **Second station, if they are between two** as well; the report then reads *Between A and
+B*. Both are stations of the same survey, offered from its names as you type, and they have to be
+two different stations. The log and the party table print both. On the model the person's marker
+stands at the first station and a dashed line follows the survey to the second, and a replay
+draws the same. Where the drawing has no station by the second name, or the survey's legs do not
+join the two, no line can be drawn and the card over the model says so. A correction opens on
+both stations — empty the second to make it a report at one station. A sheet taken out of the log
+carries both stations — the second in a column of its own, which is there only when the log holds
+such a report — and reading that sheet back leaves the report as it was.
+
+**A visitor is shown the first station only.** On a published page, in a past trip's replay and
+in an embedded frame the person stands at the first station, exactly as though the report had
+named it alone; the second station's name is not sent to them at all. Where a cave's position is
+kept from you, you are shown neither station.
+
+**A note about the cave.** "Loose rock above the second pitch", "the water is up in the meander"
+— things about the cave, not about whoever relayed them. Choose **About the cave**: nobody has to
+be ticked, the words are required, and the **station** is optional — leave it empty for something
+about the cave as a whole. Or press the station on the model, choose **Record here** and pick
+**About the cave**: the note is recorded at the station you pressed.
+
+It is its own kind, rather than a **Note** with people ticked, because a note about people is a
+report about those people: it is their last word and it ends their silence. A note about the
+cave moves nobody, changes nobody's **Last heard**, ends no *No word for over 3 h* and counts as
+nobody's report. In the log it reads **The cave** under *Caver*, with an amber **About the cave**
+tag. On the model each note that names a station stands as an amber mark of its own — never part
+of a team's label — and every note is listed in full under the party, under **About the cave: N**.
+In a replay a note is there from the moment it was said and stays; a hazard does not lapse. Take
+it off the log, like any report, when it no longer holds. Its words, station and moment can be
+corrected, but it cannot be turned into a report about a person, nor a person's report into a
+note about the cave — remove the one and record the other.
+
+**Who can read a note about the cave.** Whoever can read the trip reads its words, in the trip's
+log. The station it names follows the cave's location protection: somebody who is not shown where
+the cave is reads the words without the station. **No visitor is ever shown one** — it is on no
+published page, in no past trip's replay and in no embedded frame. It is also left out of a movie
+made from the trip and of the sheet taken out of the log, and a sheet read in can neither change
+nor duplicate one. With no signal it is kept and sent later, like any new report.
 
 **Writing a report up after the trip.** Once tracking is closed the card says so — *"This
 trip's tracking is closed — a report added now is being written up afterwards"* — and **When it
@@ -543,7 +585,8 @@ with no watch at all has nothing to import onto: choose a survey and save the se
 ### Taking the log out as a sheet
 
 **Download the log (CSV)**, beside the reports, saves the whole log as the sheet the import
-reads — the same columns as the sample, one report on a row, oldest first. Anybody who can read
+reads — the same columns as the sample, and one more for a second station where the log holds a
+report between two, one report on a row, oldest first. Anybody who can read
 the trip can take it. Correct it in a spreadsheet and import it again with **Overwrite what the
 log already holds at these moments** ticked: the rows you changed are corrected, the rest are
 counted as *already as the sheet says* — also where the watch has since been put on another
@@ -553,6 +596,7 @@ survey: a report whose row you left alone stays on the survey it was made on.
 |---|---|
 | **The moment is written whole, with its offset** (`2026-09-12T14:30:07.123456Z`) | A report is found again by the person and the exact moment. Keep that column as text: a spreadsheet that turns it into a date of its own drops the fraction of a second, and the row then comes back as a new report beside the old one — the preview shows it as **New** where you expected **Replaces** |
 | **A station report carries its station, a depth report its depth, never both** | On the way back a station outranks a depth, so a depth written with a station beside it would stop being a depth report |
+| **A report between two stations carries the second in a column headed** `Pana la statia`, **straight after the station** | The column is written only when the log holds such a report, so most sheets do not have it. The import recognises it by that heading or by `to station`, `second station`, `station 2`, `statia 2`, `a doua statie` — and you can add it to a sheet of your own. Where the sheet has the column, an emptied cell makes the report a report at the first station, and a filled one gives the report that second station. A sheet without the column says nothing about second stations: a report between two whose station you left alone stays between two |
 | **The state column says** `intrare`, `iesire` **or** `nota` | A note has a word of its own so that a note with nothing written in it is still a row. A club that writes another word names it under **Column settings**, **Words for a note** |
 | **A place you may not be told is not in the file** | The report is still there, with its time, its person and its note, and `retinut` in the state column. Imported again, that row is refused: a place left out of your copy is never written over the place the log holds |
 | **Text a spreadsheet would run as a formula is kept as text** | A note or a name beginning with `=`, `+`, `-` or `@` is written with a tab in front of it, which the import drops again |

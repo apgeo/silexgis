@@ -169,6 +169,10 @@ odată cu ea — și apoi paginile.
 | Outside the declared parts | În afara părților declarate |
 | Show only the declared parts | Arată doar părțile declarate |
 | No longer on the roster | Nu mai este pe listă |
+| Second station, if they are between two | A doua stație, dacă sunt între două |
+| Between A and B (a position between two stations) | Între A și B |
+| About the cave (a kind of report) | Despre peșteră |
+| The cave (who a note about the cave is about) | Peștera |
 | Last heard | Ultima veste |
 | No word for over N h | Nicio veste de peste N h |
 | Longest silence first | Cea mai lungă tăcere întâi |

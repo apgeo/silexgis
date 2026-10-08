@@ -72,6 +72,7 @@ Cardul **Înregistrează un raport**:
    | **La o adâncime** | O adâncime față de reper — sau un **Loc** declarat de peșteră (mai jos) |
    | **Notă** | Doar cuvinte |
    | **A ieșit** | Niciun loc |
+   | **Despre peșteră** | Cuvinte despre peștera însăși, cu o stație sau fără — despre nimeni, deci nu trebuie bifat nimeni (*O notă despre peșteră*, mai jos) |
 
 3. Opțional o **Echipă** și o **Notă**.
 4. **Când s-a spus** — lăsat gol, raportul este marcat acum. Completați-l pentru un mesaj
@@ -100,6 +101,50 @@ nou, ridicarea a fost citită înainte ca astfel de stații să poată fi raport
 **Citește din nou** pe rândul ei, la **Modele topo 3D** pe pagina peșterii, așteptați să se
 încheie și raportați din nou. Stațiile fără nume ale unei ridicări Survex nu sunt deloc pe desen,
 iar o adâncime raportată nu ajunge niciodată pe una dintre ele.
+
+**Între două stații.** Vestea din peșteră este adesea „am trecut de puț, nu am ajuns încă la
+sifon", iar oricare dintre stații, luată singură, ar nota un loc pe care nu l-a raportat nimeni.
+La un raport **La o stație**, completați și **A doua stație, dacă sunt între două**; raportul se
+citește atunci *Între A și B*. Amândouă sunt stații ale aceleiași ridicări, oferite din numele ei
+pe măsură ce scrieți, și trebuie să fie două stații diferite. Jurnalul și tabelul echipei le
+arată pe amândouă. Pe model, marcajul omului stă la prima stație, iar o linie întreruptă urmează
+ridicarea până la a doua; reluarea desenează același lucru. Dacă desenul nu are nicio stație cu
+al doilea nume sau vizele ridicării nu le leagă pe cele două, linia nu poate fi desenată, iar
+cardul de peste model o spune. O corectare se deschide cu amândouă stațiile — goliți-o pe a doua
+ca să devină un raport la o singură stație. O foaie scoasă din jurnal poartă amândouă
+stațiile — pe a doua într-o coloană a ei, care apare doar când jurnalul are un asemenea raport —
+iar citirea aceleiași foi înapoi lasă raportul așa cum era.
+
+**Un vizitator vede doar prima stație.** Pe o pagină publicată, în reluarea unei ture trecute și
+într-un cadru încorporat, omul stă la prima stație, exact ca și cum raportul ar fi numit-o doar pe
+ea; numele celei de-a doua stații nu le este trimis deloc. Acolo unde poziția unei peșteri nu vă
+este arătată, nu vedeți niciuna dintre stații.
+
+**O notă despre peșteră.** „Piatră instabilă deasupra celui de-al doilea puț", „apa a crescut în
+meandru" — lucruri despre peșteră, nu despre cine le-a transmis. Alegeți **Despre peșteră**: nu
+trebuie bifat nimeni, cuvintele sunt obligatorii, iar **stația** este opțională — lăsați-o goală
+pentru ceva despre peșteră în întregul ei. Sau apăsați stația pe model, alegeți **Înregistrează
+aici** și apoi **Despre peșteră**: nota este înregistrată la stația apăsată.
+
+Este un tip aparte, și nu o **Notă** cu oameni bifați, pentru că o notă despre oameni este un
+raport despre acei oameni: este ultima lor veste și le încheie tăcerea. O notă despre peșteră nu
+mută pe nimeni, nu schimbă **Ultima veste** a nimănui, nu încheie niciun *Nicio veste de peste
+3 h* și nu contează ca raportul nimănui. În jurnal scrie **Peștera** la *Speolog*, cu o etichetă
+portocalie **Despre peșteră**. Pe model, fiecare notă care numește o stație stă ca un semn
+portocaliu al ei — niciodată parte din eticheta unei echipe — iar toate notele sunt trecute
+întregi sub echipă, la **Despre peșteră: N**. Într-o reluare, o notă apare din momentul în care a
+fost spusă și rămâne; un pericol nu expiră. Scoateți-o din jurnal, ca pe orice raport, când nu
+mai este valabilă. Cuvintele, stația și momentul ei pot fi corectate, dar nu poate fi
+transformată într-un raport despre o persoană, nici raportul unei persoane într-o notă despre
+peșteră — scoateți-l pe unul și înregistrați-l pe celălalt.
+
+**Cine poate citi o notă despre peșteră.** Oricine poate citi tura îi citește cuvintele, în
+jurnalul turei. Stația pe care o numește urmează protecția locației peșterii: cine nu vede unde
+este peștera citește cuvintele fără stație. **Niciun vizitator nu vede vreodată una** — nu este pe
+nicio pagină publicată, în reluarea niciunei ture trecute și în niciun cadru încorporat. Este
+lăsată deoparte și dintr-un film făcut din tură, și din foaia scoasă din jurnal, iar o foaie
+citită nu poate nici schimba, nici dubla una. Fără semnal, este păstrată și trimisă mai târziu,
+ca orice raport nou.
 
 **Scrierea unui raport după tură.** După ce urmărirea a fost încheiată, cardul o spune —
 *„Urmărirea acestei ture este încheiată — un raport adăugat acum este completat ulterior"* — iar
@@ -571,7 +616,8 @@ fără nicio urmărire nu are pe ce să importe: alegeți întâi o ridicare și
 ### Scoaterea jurnalului ca foaie
 
 **Descarcă jurnalul (CSV)**, lângă rapoarte, salvează tot jurnalul ca foaia pe care o citește
-importul — aceleași coloane ca foaia exemplu, un raport pe rând, cel mai vechi primul. Oricine
+importul — aceleași coloane ca foaia exemplu, plus una pentru a doua stație acolo unde jurnalul
+are un raport între două, un raport pe rând, cel mai vechi primul. Oricine
 poate citi tura îl poate lua. Corectați-l într-o foaie de calcul și importați-l din nou cu
 **Suprascrie ce are deja jurnalul la aceste momente** bifat: rândurile schimbate sunt corectate,
 restul sunt numărate ca *deja așa cum spune foaia* — și acolo unde urmărirea a fost mutată între
@@ -582,6 +628,7 @@ fost făcut.
 |---|---|
 | **Momentul este scris întreg, cu decalajul lui** (`2026-09-12T14:30:07.123456Z`) | Un raport este regăsit după persoană și după momentul exact. Păstrați coloana ca text: o foaie de calcul care o transformă într-o dată a ei pierde fracțiunea de secundă, iar rândul se întoarce ca raport nou lângă cel vechi — previzualizarea îl arată **Nou** acolo unde așteptați **Înlocuiește** |
 | **Un raport de stație își poartă stația, unul de adâncime adâncimea, niciodată amândouă** | La întoarcere stația trece înaintea adâncimii, așa că o adâncime scrisă cu o stație alături n-ar mai fi un raport de adâncime |
+| **Un raport între două stații o poartă pe a doua într-o coloană numită** `Pana la statia`, **imediat după stație** | Coloana este scrisă doar când jurnalul are un asemenea raport, așa că cele mai multe foi nu o au. Importul o recunoaște după acest nume sau după `a doua statie`, `statia 2`, `to station`, `second station`, `station 2` — și o puteți adăuga într-o foaie a dumneavoastră. Acolo unde foaia are coloana, o celulă golită face din raport un raport la prima stație, iar una completată îi dă raportului acea a doua stație. O foaie fără coloană nu spune nimic despre a doua stație: un raport între două a cărui stație ați lăsat-o neatinsă rămâne între două |
 | **Coloana de stare spune** `intrare`, `iesire` **sau** `nota` | Nota are cuvântul ei pentru ca o notă în care nu s-a scris nimic să rămână un rând. Un club care scrie alt cuvânt îl numește la **Setări coloane**, **Cuvinte pentru o notă** |
 | **Un loc care nu vă poate fi comunicat nu este în fișier** | Raportul rămâne, cu ora, persoana și nota lui, și cu `retinut` în coloana de stare. Importat din nou, rândul este refuzat: un loc lăsat afară din copia dumneavoastră nu este scris niciodată peste locul din jurnal |
 | **Textul pe care o foaie de calcul l-ar rula ca formulă rămâne text** | O notă sau un nume care începe cu `=`, `+`, `-` sau `@` este scris cu un tabulator în față, pe care importul îl înlătură |
