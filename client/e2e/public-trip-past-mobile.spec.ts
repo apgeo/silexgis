@@ -360,6 +360,15 @@ const noSidewaysScroll = (page: Page) =>
  * box comes back a hair under the height it has at rest (39.99998px for a 40px button, once). So
  * what is said of the sheet's controls is said of the sheet standing still — waited for by what the
  * sheet says of itself, never by the clock.
+ *
+ * <b>And a control pressed meanwhile is pressed by something no finger does.</b> A tap sent by this
+ * runner first scrolls its target into view. While the sheet is still on its way up a control of
+ * its lower half is below the frame's edge, and the only thing that can be scrolled to bring it in
+ * is the sheet's own body — which then stays scrolled, by up to 91px in the smallest frame, with
+ * the rail behind the sheet's title. A drag aimed at the handle's box after that lands on the
+ * title and moves nothing. Measured over 46 drags: every one whose touch met the handle moved the
+ * clock, from 39ms after the slide ended onwards, and every one that moved nothing had the body
+ * scrolled this way; a bare touch on the same control at the same moment scrolled nothing.
  */
 async function sheetAtRest(page: Page) {
   await expect
