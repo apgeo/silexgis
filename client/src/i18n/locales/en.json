@@ -1590,6 +1590,7 @@
       "recorded": "Recorded for {{count}}.",
       "outbox": {
         "held": "No answer from the server — not sent yet. The report is kept in this browser and is sent by itself when the connection returns.",
+        "heldBusy": "The server is busy and did not take the report — not sent yet. The report is kept in this browser and is sent by itself a little later.",
         "notKept": "Not sent: no answer came from the server, and this browser would not keep the report to send it later. What you typed is still here — send it again when the connection is back.",
         "heldSignedOut": "Your sign-in has lapsed — not sent yet. The report is kept in this browser and is sent once you have signed in again: open the held reports at the top of the page to sign in.",
         "lapsedTitle": "Your sign-in has lapsed",

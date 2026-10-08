@@ -155,7 +155,10 @@ the callout. A published page shows none of the three.
 
 Whoever relays the calls is often standing at a cave entrance with a phone at the edge of its
 signal. A report recorded there is not lost: if the server gives **no answer at all**, the report
-is kept in the browser and sent by itself when the connection returns.
+is kept in the browser and sent by itself when the connection returns. The same holds when the
+server does answer, but only to say *too many requests* or *busy*: the page says *"The server is
+busy and did not take the report — not sent yet…"*, keeps the report in the same list, and waits
+as long as the server asked before sending it again.
 
 **What you see.** You press **Record for N selected** as always. Instead of *"Recorded for 1."* the page says
 *"No answer from the server — not sent yet. The report is kept in this browser and is sent by
@@ -1193,6 +1196,7 @@ outside, what one link answers. The full table, with the reason word for each ca
 | *"No station matches that depth under this trip's filter…"* | Widen **Where the party said it was going**, or report a station |
 | *"A report cannot be about the future."* | Check the time on it |
 | *"No answer from the server — not sent yet. The report is kept in this browser…"* | Not a refusal: the server could not be reached, and the report is held to be sent when the connection returns — see *Reporting with no signal* |
+| *"The server is busy and did not take the report — not sent yet. The report is kept in this browser…"* | Not a refusal either: the server answered *too many requests* or *busy*, and the report is held and sent again after the wait the server asked for — see *Reporting with no signal* |
 | *"Not sent: no answer came from the server, and this browser would not keep the report…"* | The server could not be reached and the browser stores nothing (a private window, blocked site data). The card still has what you typed: send it again when the connection is back |
 | *"Refused:"* on a held report | The server answered no when the held report was finally sent. It is kept until you **Send again** or **Discard** it |
 | *"That report is on the log again — somebody put it back. Take it off first, then delete it for good."* | Somebody else pressed **Put back** on it while your list of removed reports was open. Nothing was destroyed; if it still has to go, delete it from the log again |

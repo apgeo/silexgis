@@ -14,7 +14,11 @@ import {
   holdReport,
   releaseHeldReport,
 } from './trackingOutbox.ts';
-import { heldReportsSignInLapsed, retryHeldReportsLater } from './trackingOutboxDrain.ts';
+import {
+  heldReportAnsweredLater,
+  heldReportsSignInLapsed,
+  retryHeldReportsLater,
+} from './trackingOutboxDrain.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
 
 /**
@@ -51,11 +55,11 @@ import { trackingProblemMessage } from './trackingProblems.ts';
  * they are.
  *
  * <b>`held` is the third thing that can become of a report, and it is not a refusal.</b> The server
- * gave no answer at all, and the report is kept in this browser to be sent when it can be. For what
- * a surface does with itself that is the same as `recorded` — the report has left the form, so the
- * form clears and the dialog closes; keeping the text on screen as well would invite sending it a
- * second time as a second report. {@link trackingReportLeftTheForm} is that question, asked once.
- * At most one of `recorded` and `held` is true.
+ * gave no answer at all, or answered "later", and the report is kept in this browser to be sent
+ * when it can be. For what a surface does with itself that is the same as `recorded` — the report
+ * has left the form, so the form clears and the dialog closes; keeping the text on screen as well
+ * would invite sending it a second time as a second report. {@link trackingReportLeftTheForm} is
+ * that question, asked once. At most one of `recorded` and `held` is true.
  */
 export interface TrackingReportOutcome {
   recorded: boolean;
@@ -125,6 +129,17 @@ export function trackingStationRules(t: ReturnType<typeof useTranslation>['t']):
 }
 
 /**
+ * Whether the server's answer to a report was "later" rather than "no".
+ *
+ * Two statuses say so in so many words: too many requests, and a service with no room right now.
+ * Other server faults are left out on purpose — they do not say the report was not written, and
+ * the form deals with those by keeping the text and the key it went under.
+ */
+function answeredLater(error: ApiError): boolean {
+  return error.status === 429 || error.status === 503;
+}
+
+/**
  * The one way a report is sent, and the one place its answer is worded.
  *
  * Answers what became of the report, so a surface can decide what to do with itself — the card
@@ -147,8 +162,14 @@ export function trackingStationRules(t: ReturnType<typeof useTranslation>['t']):
  *   to sleep: the kept copy stays, and is sent again under the same key. If the first request did
  *   reach the server after all, the repeat is answered with what it wrote and writes nothing.
  *
- * <b>Only "no answer at all" holds a report.</b> Anything the server said — a validation error, a
- * refusal of permission, a watch that cannot be written — is an answer, however unwelcome.
+ * <b>"No answer at all" holds a report, and so do the two answers that say "later".</b> Too many
+ * requests and a server with no room are not about the report: the identical request is taken a
+ * minute on, and its author — who was shown an error and then reloaded a page that was slow for the
+ * same reason — had lost the text by then. So those two are kept exactly like a request nobody
+ * answered, and the wait the answer names is respected before the report is sent again. Anything
+ * else the server said — a validation error, a refusal of permission, a watch that cannot be
+ * written, a fault of its own that names no "later" — is an answer, however unwelcome, and is
+ * shown.
  *
  * <b>A sign-in that ran out is not an answer about the report.</b> The request was refused as
  * coming from nobody, which a tab meets after any outage longer than its token lasts. The sign-in
@@ -251,6 +272,14 @@ export function useTrackingReport() {
           if (renewal.was === 'noAnswer') retryHeldReportsLater();
           else heldReportsSignInLapsed(true);
           message.warning({ content: t('trips.tracking.outbox.heldSignedOut'), duration: 10 });
+          return { recorded: false, held: true, code: null };
+        }
+        if (answeredLater(error) && kept) {
+          // "Later", not "no": held like a report nobody answered, and handed to the queue with
+          // the wait the answer named.
+          unsettled.current = null;
+          heldReportAnsweredLater(error.retryAfterMs);
+          message.warning({ content: t('trips.tracking.outbox.heldBusy'), duration: 8 });
           return { recorded: false, held: true, code: null };
         }
         if (kept) dropHeldReport(accountId, clientKey);

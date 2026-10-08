@@ -27,9 +27,14 @@ vi.mock('../../auth/renewSignIn.ts', () => ({
 
 const { useTrackingReport } = await import('./trackingReport.ts');
 const { heldReportsOf, refreshHeldReports } = await import('./trackingOutbox.ts');
-const { isHeldReportsSignInLapsed, resetHeldReportsDrain, wakeHeldReportsWith } = await import(
-  './trackingOutboxDrain.ts'
-);
+const {
+  drainHeldReports,
+  heldReportsServerAnswered,
+  heldReportsWaitMs,
+  isHeldReportsSignInLapsed,
+  resetHeldReportsDrain,
+  wakeHeldReportsWith,
+} = await import('./trackingOutboxDrain.ts');
 
 const ANA = 'account-ana';
 const COMPOSED = new Date('2026-05-01T10:15:00.000Z');
@@ -272,17 +277,150 @@ describe('sending a tracking report', () => {
     });
   });
 
+  /**
+   * Too many requests, and a server with no room: the two answers that say "later" rather than
+   * "no". Shown as an error and not kept, the report was left in a form — and a reload in the
+   * crowd of requests that caused the answer took the text with it.
+   */
+  describe('when the server answers "later"', () => {
+    const later = (status: number, code?: string, retryAfterMs?: number) => () =>
+      Promise.reject(new ApiError(status, code, undefined, undefined, retryAfterMs));
+
+    it.each([
+      [429, 'rate_limited'],
+      [503, undefined],
+    ])('keeps a report answered %i, as it keeps one that got no answer', async (status, code) => {
+      recordEvents.mockImplementation(later(status, code));
+      const send = hook().current.send;
+
+      const outcome = await sent(send, 'trip-1', ['caver-1'], AT_STATION);
+
+      // Not a refusal: the report has left the form, and no code is handed to the surface.
+      expect(outcome).toEqual({ recorded: false, held: true, code: null });
+      expect(heldReportsOf(ANA)).toMatchObject([
+        {
+          clientKey: posted().clientKey,
+          tripLogId: 'trip-1',
+          body: { stationName: 'p.g.42', recordedAt: COMPOSED.toISOString() },
+          state: 'held',
+          problemCode: null,
+          attempts: 1,
+        },
+      ]);
+      // Said as what it is: answered, and kept — neither "no answer" nor an error.
+      expect(screen.getByText(/^The server is busy and did not take the report/)).toBeInTheDocument();
+      expect(screen.getByText(/kept in this browser/)).toBeInTheDocument();
+      expect(screen.queryByText(/^No answer from the server/)).toBeNull();
+    });
+
+    it('waits what the answer names before the report is sent again, and then sends it under its own key', async () => {
+      recordEvents.mockImplementation(later(429, 'rate_limited', 30_000));
+      const woken = vi.fn();
+      wakeHeldReportsWith(woken);
+      const send = hook().current.send;
+
+      await sent(send, 'trip-1', ['caver-1'], AT_STATION);
+      const key = posted().clientKey;
+
+      expect(heldReportsWaitMs()).toBe(30_000);
+      // Inside the wait nothing leaves this tab, whoever asks: not on another answer from the
+      // server, and not on a press of "send now".
+      const again = vi.fn(() => Promise.resolve([{}]));
+      vi.setSystemTime(new Date(COMPOSED.getTime() + 29_000));
+      heldReportsServerAnswered();
+      expect(woken).not.toHaveBeenCalled();
+      expect(await drainHeldReports(ANA, again)).toMatchObject({ stopped: 'waiting', sent: 0 });
+      expect(again).not.toHaveBeenCalled();
+
+      vi.setSystemTime(new Date(COMPOSED.getTime() + 30_000));
+      expect(await drainHeldReports(ANA, again)).toMatchObject({ stopped: null, sent: 1 });
+      expect(again).toHaveBeenCalledTimes(1);
+      expect(again).toHaveBeenCalledWith(expect.objectContaining({ clientKey: key }));
+      expect(heldReportsOf(ANA)).toEqual([]);
+    });
+
+    it('wakes the sender when the wait the answer named is over', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      vi.setSystemTime(COMPOSED);
+      recordEvents.mockImplementation(later(503, undefined, 30_000));
+      const woken = vi.fn();
+      wakeHeldReportsWith(woken);
+      const send = hook().current.send;
+
+      await sent(send, 'trip-1', ['caver-1'], AT_STATION);
+
+      vi.advanceTimersByTime(29_999);
+      expect(woken).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(woken).toHaveBeenCalledTimes(1);
+    });
+
+    it('with no wait named, tries again a few seconds later and not on the very next answer', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      vi.setSystemTime(COMPOSED);
+      recordEvents.mockImplementation(later(503));
+      const woken = vi.fn();
+      wakeHeldReportsWith(woken);
+      const send = hook().current.send;
+
+      await sent(send, 'trip-1', ['caver-1'], AT_STATION);
+
+      expect(heldReportsWaitMs()).toBe(0);
+      // The page's other requests are answered in the same second, and each of those answers must
+      // not be a fresh attempt at the report the server has just said it had no room for.
+      heldReportsServerAnswered();
+      expect(woken).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(4_999);
+      expect(woken).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(woken).toHaveBeenCalledTimes(1);
+    });
+
+    it('gives the same words typed again, after one was kept, a key of their own', async () => {
+      recordEvents.mockImplementation(later(429, 'rate_limited'));
+      const send = hook().current.send;
+
+      await sent(send, 'trip-1', ['caver-1'], AT_STATION);
+      await sent(send, 'trip-1', ['caver-1'], AT_STATION);
+
+      expect(posted(1).clientKey).not.toBe(posted(0).clientKey);
+      expect(heldReportsOf(ANA)).toHaveLength(2);
+    });
+
+    /**
+     * Where the browser keeps nothing there is nothing to promise: the answer is shown as the
+     * refusal it always was, and the form keeps what was typed.
+     */
+    it('shows the answer as before, and holds nothing, when the browser will not store the report', async () => {
+      recordEvents.mockImplementation(later(429, 'rate_limited', 30_000));
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('blocked', 'SecurityError');
+      });
+      const send = hook().current.send;
+
+      const outcome = await sent(send, 'trip-1', ['caver-1'], AT_STATION);
+
+      expect(outcome).toEqual({ recorded: false, held: false, code: 'rate_limited' });
+      expect(heldReportsOf(ANA)).toEqual([]);
+      expect(screen.queryByText(/kept in this browser/)).toBeNull();
+      // And no wait is kept for a queue that holds nothing.
+      expect(heldReportsWaitMs()).toBe(0);
+    });
+  });
+
   describe('when the server answers no', () => {
     /**
-     * The other half of "only no answer is held", asserted against the same hook and the same
-     * storage the held case passes through: an answer is not queued, whatever its status.
+     * The other half of "no answer is held", asserted against the same hook and the same storage
+     * the held case passes through: an answer about the report is not queued. A server error that
+     * names no "later" is among them — it does not say whether the report was written, and the
+     * form keeps the text and the key it went under for its author to press again.
      */
     it.each([
       [400, 'tracking.recorded_in_future'],
       [403, 'forbidden'],
       [409, 'tracking.not_writable'],
-      [429, 'rate_limited'],
-      [503, undefined],
+      [500, undefined],
+      [504, undefined],
     ])('does not hold a report refused with %i', async (status, code) => {
       recordEvents.mockImplementation(refusal(status, code));
       const send = hook().current.send;

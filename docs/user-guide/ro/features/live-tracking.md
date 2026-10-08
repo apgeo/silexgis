@@ -165,7 +165,10 @@ urgență. O pagină publicată nu arată niciunul dintre cele trei.
 
 Cine preia mesajele stă adesea la intrarea peșterii, cu telefonul la marginea semnalului. Un
 raport înregistrat acolo nu se pierde: dacă serverul **nu răspunde deloc**, raportul este păstrat
-în browser și se trimite singur când revine conexiunea.
+în browser și se trimite singur când revine conexiunea. La fel se întâmplă când serverul răspunde,
+dar numai ca să spună că primește *prea multe cereri* sau că este *ocupat*: pagina spune
+*„Serverul este ocupat și nu a primit raportul — nu a fost încă trimis…"*, păstrează raportul în
+aceeași listă și așteaptă cât a cerut serverul înainte să-l trimită din nou.
 
 **Ce vedeți.** Apăsați **Înregistrează pentru N selectați** ca de obicei. În loc de *„Înregistrat pentru 1."* pagina
 spune *„Serverul nu a răspuns — raportul nu a fost încă trimis. Este păstrat în acest browser și
@@ -1246,6 +1249,7 @@ instalare](../../../INSTALL.md#when-a-published-page-or-the-article-showing-it-s
 | *„Nicio stație nu corespunde acelei adâncimi sub filtrul acestei ture…"* | Lărgiți **Unde a spus echipa că merge** sau raportați o stație |
 | *„Un raport nu poate fi despre viitor."* | Verificați ora de pe el |
 | *„Serverul nu a răspuns — raportul nu a fost încă trimis. Este păstrat în acest browser…"* | Nu este un refuz: serverul nu a putut fi contactat, iar raportul este păstrat ca să fie trimis când revine conexiunea — vedeți *Raportarea fără semnal* |
+| *„Serverul este ocupat și nu a primit raportul — nu a fost încă trimis. Este păstrat în acest browser…"* | Nici acesta nu este un refuz: serverul a răspuns că primește *prea multe cereri* sau că este *ocupat*, iar raportul este păstrat și trimis din nou după cât a cerut serverul să se aștepte — vedeți *Raportarea fără semnal* |
 | *„Netrimis: serverul nu a răspuns, iar acest browser nu a putut păstra raportul…"* | Serverul nu a putut fi contactat, iar browserul nu stochează nimic (fereastră privată, date de site blocate). Cardul are încă ce ați scris: trimiteți din nou când revine conexiunea |
 | *„Refuzat:"* pe un raport în așteptare | Serverul a răspuns nu când raportul în așteptare a fost în sfârșit trimis. Rămâne păstrat până când apăsați **Trimite din nou** sau **Aruncă** |
 | *„Acel raport este din nou în jurnal — l-a pus cineva înapoi. Scoate-l mai întâi, apoi șterge-l definitiv."* | Altcineva a apăsat **Pune înapoi** pe el cât timp lista dumneavoastră de rapoarte scoase era deschisă. Nu s-a distrus nimic; dacă tot trebuie să dispară, ștergeți-l din nou din jurnal |

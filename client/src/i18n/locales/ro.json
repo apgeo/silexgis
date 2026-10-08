@@ -1590,6 +1590,7 @@
       "recorded": "Înregistrat pentru {{count}}.",
       "outbox": {
         "held": "Serverul nu a răspuns — raportul nu a fost încă trimis. Este păstrat în acest browser și se trimite singur când revine conexiunea.",
+        "heldBusy": "Serverul este ocupat și nu a primit raportul — nu a fost încă trimis. Este păstrat în acest browser și se trimite singur puțin mai târziu.",
         "notKept": "Netrimis: serverul nu a răspuns, iar acest browser nu a putut păstra raportul ca să-l trimită mai târziu. Ce ai scris este încă aici — trimite-l din nou când revine conexiunea.",
         "heldSignedOut": "Nu mai ești autentificat — raportul nu a fost încă trimis. Este păstrat în acest browser și se trimite după ce te autentifici din nou: deschide rapoartele în așteptare din bara de sus ca să te autentifici.",
         "lapsedTitle": "Nu mai ești autentificat",

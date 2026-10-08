@@ -164,6 +164,21 @@ function keepWait(ms: number): void {
 }
 
 /**
+ * A report's first send was answered "later", and the report has been kept: arranges when it goes.
+ *
+ * The same two things a run arranges when a later send meets that answer, for the one send that
+ * is not a run. The wait the answer named is kept — asking sooner is counted against the very
+ * allowance the answer was about — and where it named none the sender is woken a few seconds on.
+ * Either way the next answer to some other request is not taken as a reason to send at once: the
+ * page that has just been told the server has no room is still making its other requests.
+ */
+export function heldReportAnsweredLater(retryAfterMs: number | undefined): void {
+  quietUntil = Date.now() + HELD_REPORTS_RETRY_MS[0];
+  if (retryAfterMs !== undefined && retryAfterMs > 0) keepWait(retryAfterMs);
+  else if (heldReportsWaitMs() === 0) retryHeldReportsLater();
+}
+
+/**
  * Has the sender woken once more, later, unless that is already arranged.
  *
  * For a report that has just become held with nothing set to send it: its first send got no
