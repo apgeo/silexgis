@@ -305,6 +305,38 @@ poate cere doar lucruri care i-au fost deja date cititorului, iar un rând al c�
 dovedește gol pur și simplu dispare, așa că același model produce un document onest și pentru un
 membru, și pentru un editor.
 
+**Jurnalul urmăririi, pentru un model care îl cere.** Un rând care conține doar cuvântul
+`tracking` tipărește jurnalul unei ture care a fost [urmărită de la suprafață](live-tracking.md):
+când a fost începută prima dată urmărirea și când a fost încheiată, fiecare persoană după
+ultimul raport și toate rapoartele în ordinea timpului. **Modelul standard nu îl tipărește** —
+puneți cuvântul într-un model propriu, sub un titlu ales de dumneavoastră
+(`heading: Urmărită în subteran`, apoi `tracking`).
+
+- **Spune ce este.** Blocul începe prin a spune că este un jurnal a ceea ce s-a raportat la
+  suprafață, că nu este o evidență a apelului de urgență și că nu a dat nicio alarmă. Aceste
+  cuvinte sunt ale documentului, în limba dumneavoastră; un model nu le poate scoate.
+- **Un loc este tipărit doar pentru un cititor căruia îi poate fi comunicat.** În copia pe care o
+  descărcați, o stație sau o adâncime care nu vă poate fi comunicată este înlocuită cu *loc
+  reținut*; raportul rămâne, cu ora, persoana și nota lui. În copia **clasată pe tură** — pe care
+  o poate deschide oricine poate citi tura — un loc este tipărit doar acolo unde poate fi
+  comunicat oricărui cont, indiferent cine a apăsat butonul: într-o peșteră protejată copia
+  aceea nu numește nicio stație și spune că o copie descărcată de cineva pentru sine poate spune
+  mai mult.
+- **O copie clasată este un fișier și nu se mai schimbă după ce a fost clasată.** De aceea, când
+  o peșteră primește protecția locației, rapoartele clasate pe turele urmărite în ea sunt
+  **scoase de pe acele ture** în acel moment — cine citește tura nu mai găsește niciunul acolo;
+  cel care l-a clasat îl are în continuare printre documentele sale. Clasați raportul din nou și
+  noua copie nu numește nicio stație.
+- **Un raport scos nu este tipărit.** Jurnalul este cel din momentul în care este făcut
+  documentul: un raport scos *după* ce o copie a fost clasată rămâne în copia aceea, până când
+  raportul turei este clasat din nou.
+- **La o tură care nu a fost urmărită, rândul nu tipărește nimic**, iar un titlu rămas fără nimic
+  sub el dispare odată cu el.
+- **Un jurnal foarte lung este scurtat, iar documentul spune cu cât**: câte rapoarte a tipărit și
+  câte nu. Jurnalul întreg poate fi luat oricând ca foaie din fila de urmărire a turei.
+- **Doar în modelul unei ture.** Modelul unei tabere care folosește cuvântul este refuzat la
+  încărcare.
+
 ### Harta din descărcare
 
 **Descarcă documentul** desenează o hartă a turei și o pune în fișier, acolo unde documentul spune

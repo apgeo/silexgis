@@ -595,6 +595,26 @@ saved the trip — were it only a time typed for one person on its roster — or
 between your looking and your pressing, nothing is written and the times are read again. A trip form that was open while the times were written has to be
 opened again before it can be saved — it would otherwise put the old times back.
 
+### The journal in the trip's write-up
+
+The log can also leave as part of the trip's **write-up** — the Word document (or PDF) made from
+the trip's page. A club's own report layout asks for it with a line holding the one word
+`tracking`; **the standard layout does not print it.** What is printed: when tracking was first
+started and when it was closed, each person as last reported, then every report in time order,
+under a sentence saying that this is a journal of what was reported to the surface — not a
+callout record, and one that raised no alarm.
+
+It is read the way everything else in a write-up is. The copy you **download** says what you
+may be told, with *place withheld* where a station or a depth is kept from you. The copy **filed
+against the trip** is opened by everybody who may read the trip, so it names a place only where every
+account may be told it — in a protected cave, none — whoever filed it. A report already removed
+is in neither.
+
+A filed copy does not change afterwards. Put the cave under location protection later, and the
+copies filed against the trips followed in it are taken off those trips, to be filed again without
+their stations; remove a report later, and it stays in the filed copy until the write-up is filed
+again. [Writing a layout, and the rest of what the word does](trips.md).
+
 ---
 
 ## Publishing a trip

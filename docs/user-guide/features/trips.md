@@ -300,6 +300,36 @@ text file), edit, upload under Configuration → Report layouts, choose it. A la
 ask for things the reader was already given, and a line whose contents turn out empty simply
 disappears, so the same layout produces an honest document for a member and for an editor.
 
+**The tracking journal, for a layout that asks for it.** A line holding the one word `tracking`
+prints the journal of a trip that was [followed from the surface](live-tracking.md): when
+tracking was first started and when it was closed, each person as last reported, and every
+report in time order. **The standard layout does not print it** — put the word in a layout of
+your own, under a heading of your choosing (`heading: Followed underground`, then `tracking`).
+
+- **It says what it is.** The block opens by saying that it is a journal of what was reported to
+  the surface, that it is not a callout record, and that it raised no alarm. Those words are the
+  document's own, in your language; a layout cannot take them out.
+- **A place is printed only to a reader who may be told it.** In the copy you download, a station
+  or a depth you may not be told is replaced by *place withheld*; the report stays, with its
+  time, its person and its note. In the copy **filed against the trip** — which everybody who may read
+  the trip can open — a place is printed only where every account may be told it, whoever
+  pressed the button: in a protected cave that copy names no station at all, and it says that a
+  copy somebody downloads for themselves may say more.
+- **A filed copy is a file, and it does not change after it is filed.** So when a cave is put
+  under location protection, the write-ups filed against the trips that were followed in it are
+  **taken off those trips** at that moment — nobody who reads the trip finds one there any more;
+  whoever filed it still has it among their own documents. File the write-up again and the new
+  copy names no station.
+- **A removed report is not printed.** The journal is the log as it stands when the document is
+  made: a report removed *after* a copy was filed is still in that copy, until the write-up is
+  filed again.
+- **On a trip that was never followed, the line prints nothing**, and a heading left with nothing
+  under it disappears with it.
+- **A very long log is cut short, and the document says by how much**: how many reports it
+  printed and how many it did not. The whole log can always be taken as a sheet from the trip's
+  tracking tab.
+- **Only in a trip's layout.** A camp's layout that uses the word is refused when it is uploaded.
+
 ### The map in the download
 
 **Download document** draws a map of the trip and puts it in the file, where the document says

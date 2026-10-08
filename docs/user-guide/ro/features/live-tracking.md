@@ -624,6 +624,27 @@ salvat tura — fie și numai o oră scrisă pentru o persoană pe lista ei — 
 schimbat, între privit și apăsat, nu se scrie nimic și orele sunt citite din nou. Un formular al turei care era deschis când s-au scris orele trebuie deschis din
 nou înainte de a putea fi salvat — altfel ar pune înapoi orele vechi.
 
+### Jurnalul în raportul turei
+
+Jurnalul poate ieși și ca parte a **raportului** turei — documentul Word (sau PDF) făcut din
+pagina turei. Un model de raport al clubului îl cere printr-un rând care conține doar cuvântul
+`tracking`; **modelul standard nu îl tipărește.** Ce se tipărește: când a fost începută prima
+dată urmărirea și când a fost încheiată, fiecare persoană după ultimul raport, apoi toate
+rapoartele în ordinea timpului, sub o propoziție care spune că este un jurnal a ceea ce s-a
+raportat la suprafață — nu o evidență a apelului de urgență, și unul care nu a dat nicio alarmă.
+
+Este citit la fel ca tot restul unui raport. Copia pe care o **descărcați** spune ce vă poate fi
+comunicat, cu *loc reținut* acolo unde o stație sau o adâncime vă este reținută. Copia **clasată
+pe tură** este deschisă de oricine poate citi tura, așa că numește un loc doar acolo unde poate fi
+comunicat oricărui cont — într-o peșteră protejată, niciunul — indiferent cine a clasat-o. Un
+raport deja scos nu este în niciuna.
+
+O copie clasată nu se mai schimbă după aceea. Dacă peștera primește mai târziu protecția
+locației, copiile clasate pe turele urmărite în ea sunt scoase de pe acele ture, pentru a fi
+clasate din nou fără stații; dacă un raport este scos mai târziu, el rămâne în copia clasată până
+când raportul turei este clasat din nou. [Scrierea unui model și restul a ceea ce face
+cuvântul](trips.md).
+
 ---
 
 ## Publicarea unei ture

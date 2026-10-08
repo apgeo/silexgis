@@ -595,6 +595,14 @@ feature and walkthroughs of whole jobs.
   text file that explains itself in its own comments, edit it, upload it, and choose it. A layout can
   only ask for things the reader was already given, and a line whose contents turn out to be empty
   simply disappears — so the same layout produces an honest document for a member and for an editor.
+  A layout of a club's own may also ask, with the one word `tracking`, for the **journal of a trip
+  that was followed underground** — when tracking ran, each person as last reported, every report
+  in time order, under a sentence saying it is a journal and not a callout record. The standard
+  layout does not print it; a place is printed only to a reader who may be told it, and the copy
+  filed against the trip names a place only where every account may be. A filed copy is a file and
+  does not change: putting a cave under location protection takes the filed write-ups off the
+  trips followed in it, to be filed again, and a report removed later stays in a filed copy until
+  then.
   **A camp writes itself up too**, as one document over the trips it gathered — day by day, team by
   team, in a layout of its own kind — and it carries **what each trip wrote about itself**: the
   trip's account, its results and the answers on its form, under the trip's date and title. Each

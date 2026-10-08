@@ -149,6 +149,9 @@ odată cu ea — și apoi paginile.
 | Correct (a report) | Corectează |
 | Removed reports (taken off the log, still kept) | Rapoarte scoase |
 | Put back (a removed report) / Undo (on the notice) | Pune înapoi / Anulează |
+| Tracking journal (the block a write-up prints; the document's own word, not the interface's) | Jurnalul urmăririi |
+| Place withheld (in a write-up's tracking journal, where a station or a depth is kept back) | Loc reținut |
+| Callout record (what the tracking journal says it is not) | Evidență a apelului de urgență |
 | Delete for good | Șterge definitiv |
 | Held reports (recorded with no answer from the server, kept in the browser) | Rapoarte în așteptare |
 | Send now / Send again / Discard (a held report) | Trimite acum / Trimite din nou / Aruncă |
