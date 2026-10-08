@@ -67,15 +67,34 @@ const observableInternals = Observable.prototype as unknown as {
   onInternal: (type: string, listener: (event: unknown) => unknown) => unknown;
 };
 
-/** The singleclick listener the built map holds, driven directly with a synthetic event. */
-function singleclickHandler(): (event: { coordinate: number[] }) => void {
+/** The listener the built map holds for one of its own events. */
+function listenerOf(type: 'click' | 'singleclick'): (event: { coordinate: number[] }) => void {
   const spy = vi.mocked(observableInternals.onInternal);
-  const call = spy.mock.calls.find(([type]) => type === 'singleclick');
+  const call = spy.mock.calls.find(([registered]) => registered === type);
   if (call === undefined) {
-    throw new Error('no singleclick listener was attached');
+    throw new Error(`no ${type} listener was attached`);
   }
   const listener = call[1];
   return (event) => listener(event);
+}
+
+/**
+ * The two halves of one press, as the map library delivers them: `click` the moment the
+ * pointer comes up, and `singleclick` a quarter of a second later, once it is certain no
+ * second press is making a double one. Driven directly with synthetic events, so a test
+ * can put a redraw between the two.
+ */
+function pressDown(coordinate: number[]): void {
+  listenerOf('click')({ coordinate });
+}
+function pressAnswered(coordinate: number[]): void {
+  listenerOf('singleclick')({ coordinate });
+}
+
+/** A whole press with nothing happening in between. */
+function press(coordinate: number[]): void {
+  pressDown(coordinate);
+  pressAnswered(coordinate);
 }
 
 /** Every point feature handed to any vector source, with its style read back. */
@@ -204,7 +223,7 @@ describe('authoring clicks', () => {
     // A click at OL [1000, 750] on the 4000×1000 picture is a quarter across and — the
     // flip — a quarter DOWN in the stored frame. This is the write-side twin of the
     // marker-drawing assertion above: place at the click, read back at the click.
-    singleclickHandler()({ coordinate: [1000, 750] });
+    press([1000, 750]);
     expect(onMapClick).toHaveBeenCalledWith({ x: 0.25, y: 0.25 });
   });
 
@@ -221,7 +240,7 @@ describe('authoring clicks', () => {
     );
     await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
 
-    singleclickHandler()({ coordinate: [-50, 500] });
+    press([-50, 500]);
     expect(onMapClick).not.toHaveBeenCalled();
   });
 
@@ -242,12 +261,12 @@ describe('authoring clicks', () => {
 
     // Dead on the marker's drawn coordinate (the flip applied): the marker answers,
     // and the click point rides along in stored fractions — here the marker's own.
-    singleclickHandler()({ coordinate: [1000, 750] });
+    press([1000, 750]);
     expect(onMarkerClick).toHaveBeenCalledWith(MARKER, { x: 0.25, y: 0.25 });
     expect(onMapClick).not.toHaveBeenCalled();
 
     // …and far from it, the sheet answers: the split is position, not registration order.
-    singleclickHandler()({ coordinate: [3000, 200] });
+    press([3000, 200]);
     expect(onMapClick).toHaveBeenCalledWith({ x: 0.75, y: 0.8 });
   });
 
@@ -267,7 +286,7 @@ describe('authoring clicks', () => {
     // Near the marker, not on it: within tolerance the marker answers, but the reported
     // point is the click's own fractions — a caller placing a *different* station there
     // must get the spot the author aimed at, never the neighbor's stored point.
-    singleclickHandler()({ coordinate: [1004, 752] });
+    press([1004, 752]);
     expect(onMarkerClick).toHaveBeenCalledWith(MARKER, {
       x: 1004 / IMAGE.width,
       y: (IMAGE.height - 752) / IMAGE.height,
@@ -281,7 +300,7 @@ describe('authoring clicks', () => {
     await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
 
     // The listener is attached but answers nobody — there is nobody to answer.
-    expect(() => singleclickHandler()({ coordinate: [1000, 750] })).not.toThrow();
+    expect(() => press([1000, 750])).not.toThrow();
     expect(screen.getByTestId('rastermap-map').style.cursor).toBe('');
   });
 });
@@ -345,12 +364,12 @@ describe('the party on the sheet', () => {
 
     // On the dot as displaced — 16px up from the pin at this resolution — the person
     // answers, and the pin under the fan does not swallow the press.
-    singleclickHandler()({ coordinate: [1000, 766] });
+    press([1000, 766]);
     expect(onCaverClick).toHaveBeenCalledWith(ANA_DOT.marker);
     expect(onMarkerClick).not.toHaveBeenCalled();
 
     // Dead on the pin itself, outside the dot's reach, the point answers as ever.
-    singleclickHandler()({ coordinate: [1000, 750] });
+    press([1000, 750]);
     expect(onMarkerClick).toHaveBeenCalledWith(MARKER, { x: 0.25, y: 0.25 });
     expect(onCaverClick).toHaveBeenCalledTimes(1);
   });
@@ -373,12 +392,105 @@ describe('the party on the sheet', () => {
     );
     await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
 
-    singleclickHandler()({ coordinate: [1000, 766] });
+    press([1000, 766]);
     expect(onCaverClick).toHaveBeenCalledWith(ANA_DOT.marker);
 
     // Beside the dot, the press still answers nobody — there is nobody else to answer.
-    singleclickHandler()({ coordinate: [3000, 200] });
+    press([3000, 200]);
     expect(onCaverClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers a press with the person who stood under it, though the party was redrawn before the answer', async () => {
+    // A replay playing, or a report arriving, redraws the party between the press and the
+    // quarter second the map takes to be sure it was a single one. The reader pressed the
+    // dot that was on screen; that it has since gone is no reason to answer the pin under
+    // it, or nobody.
+    const onCaverClick = vi.fn();
+    const onMarkerClick = vi.fn();
+    vi.spyOn(View.prototype, 'getResolution').mockReturnValue(1);
+    const sheet = (cavers: SheetCaverDrawnMarker[]) => (
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[MARKER]}
+        cavers={cavers}
+        active
+        onCaverClick={onCaverClick}
+        onMarkerClick={onMarkerClick}
+      />
+    );
+    const { rerender } = render(sheet([ANA_DOT]));
+    await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
+
+    pressDown([1000, 766]);
+    rerender(sheet([]));
+    pressAnswered([1000, 766]);
+
+    expect(onCaverClick).toHaveBeenCalledWith(ANA_DOT.marker);
+    expect(onMarkerClick).not.toHaveBeenCalled();
+  });
+
+  it('does not hand a press on a bare pin to a dot that arrived after it', async () => {
+    // The other direction of the same quarter second: nobody was drawn at the pin when it
+    // was pressed, so the press meant the point. A dot that has moved onto the pin since
+    // would be asked first (the party answers before the pins) and open a card nobody
+    // asked for.
+    const onCaverClick = vi.fn();
+    const onMarkerClick = vi.fn();
+    vi.spyOn(View.prototype, 'getResolution').mockReturnValue(1);
+    const sheet = (cavers: SheetCaverDrawnMarker[]) => (
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[MARKER]}
+        cavers={cavers}
+        active
+        onCaverClick={onCaverClick}
+        onMarkerClick={onMarkerClick}
+      />
+    );
+    const { rerender } = render(sheet([]));
+    await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
+
+    const onThePin: SheetCaverDrawnMarker = {
+      ...ANA_DOT,
+      marker: { ...ANA_DOT.marker, offsetPx: [0, 0] },
+    };
+    pressDown([1000, 750]);
+    rerender(sheet([onThePin]));
+    pressAnswered([1000, 750]);
+
+    expect(onMarkerClick).toHaveBeenCalledWith(MARKER, { x: 0.25, y: 0.25 });
+    expect(onCaverClick).not.toHaveBeenCalled();
+
+    // The positive twin: pressed once the dot is there, the person answers.
+    press([1000, 750]);
+    expect(onCaverClick).toHaveBeenCalledWith(onThePin.marker);
+    expect(onMarkerClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers a press where it was made, though the view has moved on under the pointer', async () => {
+    // The map library works out which point of the picture an event names when it is
+    // asked, from the view as it stands then. A view gliding to a pressed row would have
+    // the late half of a press name a different point of the sheet than the early half.
+    const onCaverClick = vi.fn();
+    vi.spyOn(View.prototype, 'getResolution').mockReturnValue(1);
+    render(
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[MARKER]}
+        cavers={[ANA_DOT]}
+        active
+        onCaverClick={onCaverClick}
+      />,
+    );
+    await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
+
+    pressDown([1000, 766]);
+    pressAnswered([3000, 200]);
+
+    expect(onCaverClick).toHaveBeenCalledWith(ANA_DOT.marker);
   });
 
   it('glides the view to a focus point, and asks for no flight without one', async () => {

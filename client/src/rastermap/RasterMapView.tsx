@@ -83,6 +83,16 @@ export interface SheetCaverDrawnMarker {
   color: string;
 }
 
+/** What lay where on the sheet at the moment of a press, and where the press landed. */
+interface SheetAsPressed {
+  /** The pressed point of the picture, in the map's own pixel frame. */
+  coordinate: number[];
+  resolution: number;
+  markers: readonly MapStationMarker[];
+  size: ImageSize | null;
+  cavers: readonly SheetCaverDrawnMarker[] | undefined;
+}
+
 /**
  * A scanned cave map with station pins over it.
  *
@@ -123,6 +133,9 @@ export default function RasterMapView({
   // reader's pan) to change a callback.
   const clickState = useRef({ onMapClick, onMarkerClick, markers, size, cavers, onCaverClick });
   clickState.current = { onMapClick, onMarkerClick, markers, size, cavers, onCaverClick };
+  // The sheet as it stood when the press now waiting for its answer was made; null when
+  // no press is waiting.
+  const pressed = useRef<SheetAsPressed | null>(null);
 
   const teardown = () => {
     map.current?.setTarget(undefined);
@@ -130,6 +143,8 @@ export default function RasterMapView({
     // the reference alone would leak the whole graph for the life of the page.
     map.current?.dispose();
     map.current = null;
+    // A press still waiting for its answer was made on the map that is gone.
+    pressed.current = null;
   };
 
   // The picture's natural size is the whole coordinate space, and nothing but the picture
@@ -193,34 +208,65 @@ export default function RasterMapView({
       view: new View({ projection, center: [size.width / 2, size.height / 2], zoom: 1 }),
     });
     instance.getView().fit(extent, { padding: [16, 16, 16, 16] });
+    // What a press is judged against is fixed here, the moment the pointer comes up. The
+    // answer itself waits for `singleclick`, which arrives a quarter of a second later so
+    // that a double press can be told apart — and in that quarter second a replay that is
+    // playing, or a report that has just come in, redraws the party, and a view gliding
+    // to a pressed row moves the picture under the pointer. Judged against the sheet as
+    // it stands by then, a press is answered by a dot that has moved in, or misses the
+    // one that was under the finger. So everything that says what lay where — the party,
+    // the pins, the picture's size, the point of the picture pressed and the zoom — is
+    // kept from this moment. (The map library works out an event's point of the picture
+    // when asked, from the view as it stands then, which is why the point is read here.)
+    instance.on('click', (event) => {
+      const now = clickState.current;
+      pressed.current = {
+        coordinate: (event as { coordinate: number[] }).coordinate,
+        resolution: instance.getView().getResolution() ?? 1,
+        markers: now.markers,
+        size: now.size,
+        cavers: now.cavers,
+      };
+    });
     // `singleclick` rather than `click`, so ending a pan or a pinch places nothing.
     instance.on('singleclick', (event) => {
+      // Who is told is decided now — a listener taken away since the press is not called,
+      // and one that was re-made is called as it is today.
       const now = clickState.current;
+      // Every single press was a `click` first, so the sheet as pressed is normally at
+      // hand. The exception is a press made before the map had drawn its first frame,
+      // which the library announces late only: that one is judged as it stands now.
+      const at = pressed.current ?? {
+        coordinate: (event as { coordinate: number[] }).coordinate,
+        resolution: instance.getView().getResolution() ?? 1,
+        markers: now.markers,
+        size: now.size,
+        cavers: now.cavers,
+      };
+      pressed.current = null;
       // A mount with no listener of any kind is a picture and stays one — but any one
       // of the three makes a press meaningful, and a caver's dot answers even where
       // nothing else does (a reader without edit rights, a replay of a disarmed watch).
       if (
-        now.size === null ||
+        at.size === null ||
         (now.onMapClick === undefined &&
           now.onMarkerClick === undefined &&
           now.onCaverClick === undefined)
       ) {
         return;
       }
-      const coordinate = (event as { coordinate: number[] }).coordinate;
       // The same hit generosity the OL interactions give a finger: the pointer is the
       // size it is, whatever the stored point is.
       const tolerance = coarsePointer() ? 12 : 6;
-      const resolution = instance.getView().getResolution() ?? 1;
       // The party is painted over the pins, so it answers the press first — a dot and
       // the pin that placed it share a spot by construction, and a press there means
       // the person, not the point.
-      if (now.onCaverClick !== undefined && now.cavers !== undefined) {
+      if (now.onCaverClick !== undefined && at.cavers !== undefined) {
         const person = sheetCaverHit(
-          now.cavers.map((drawn) => drawn.marker),
-          now.size,
-          coordinate,
-          resolution,
+          at.cavers.map((drawn) => drawn.marker),
+          at.size,
+          at.coordinate,
+          at.resolution,
           tolerance,
         );
         if (person !== null) {
@@ -228,14 +274,14 @@ export default function RasterMapView({
           return;
         }
       }
-      const hit = markerHit(now.markers, now.size, coordinate, resolution, tolerance);
-      const at = fromMapCoordinate(coordinate, now.size);
+      const hit = markerHit(at.markers, at.size, at.coordinate, at.resolution, tolerance);
+      const point = fromMapCoordinate(at.coordinate, at.size);
       if (hit !== null && now.onMarkerClick !== undefined) {
-        now.onMarkerClick(hit, at);
+        now.onMarkerClick(hit, point);
         return;
       }
-      if (at !== null) {
-        now.onMapClick?.(at);
+      if (point !== null) {
+        now.onMapClick?.(point);
       }
     });
     map.current = instance;
