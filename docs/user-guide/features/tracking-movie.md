@@ -295,6 +295,17 @@ size is quicker.
 When the export ends the browser saves the file and the dialog says *"Saved"* with its name. The
 dialog stays open, so the same movie can be made again in another format.
 
+**A long video is written to its file as it is made.** From an estimated size of about 256 MB,
+in a browser that can do it — today Chrome, Edge and the other browsers built on Chromium; not
+Firefox and not Safari — pressing **Export** first asks where to save the file, and the dialog
+says so beforehand in place of the file's name. The movie then goes into that file while it is
+encoded, instead of being held in memory until the end, so a long export does not run out of
+memory; the file is the same one, byte for byte. Closing the question starts nothing. A cancel,
+or an export that fails, leaves no half-written file behind — and when the name chosen was that
+of a file already there, that earlier file is left as it was. In the other browsers, for a GIF,
+and for a shorter video nothing changes: the movie is made in memory and the browser saves it
+when it ends.
+
 ---
 
 ## Cancelling

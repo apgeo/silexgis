@@ -525,7 +525,9 @@ feature and walkthroughs of whole jobs.
   `silexgis-movie` and the day, naming neither trip nor cave. A trip still under way can be
   filmed, and its movie ends when the export starts. An export draws every frame anew — half a
   minute to a few minutes on a computer without a graphics card — so it says how long it has left,
-  **Cancel export** stops it at once, and Escape or the X ask before throwing it away. The size
+  **Cancel export** stops it at once, and Escape or the X ask before throwing it away. A long
+  video — from about 256 MB — is written to a file you choose as it is made, where the browser
+  can do that (Chrome, Edge and their kin), instead of being held in memory to the end. The size
   estimate of a GIF corrects itself from the GIFs you have made. Any moment of the preview can be
   saved as a **picture** (a PNG of that frame, captions and legend included, named by the same
   rule); two **presets** set the file up in one press — a small GIF for a chat, or an HD video as

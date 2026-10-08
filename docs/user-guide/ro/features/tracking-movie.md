@@ -304,6 +304,17 @@ cadre pe secundă sau o dimensiune mai mică merg mai repede.
 Când exportul se termină, browserul salvează fișierul, iar dialogul spune *„S-a salvat"* și
 numele lui. Dialogul rămâne deschis, așa că același film poate fi făcut din nou în alt format.
 
+**Un video lung este scris în fișier pe măsură ce este făcut.** De la o dimensiune estimată de
+aproximativ 256 MB, într-un browser care poate face asta — astăzi Chrome, Edge și celelalte
+browsere construite pe Chromium; nu Firefox și nu Safari — apăsarea pe **Exportă** întreabă mai
+întâi unde să fie salvat fișierul, iar dialogul o spune dinainte, în locul numelui fișierului.
+Filmul ajunge apoi în acel fișier pe măsură ce este codat, în loc să fie ținut în memorie până la
+sfârșit, așa că un export lung nu rămâne fără memorie; fișierul este același, octet cu octet.
+Închiderea întrebării nu pornește nimic. O anulare, sau un export care eșuează, nu lasă în urmă
+un fișier scris pe jumătate — iar când numele ales era al unui fișier deja existent, acel fișier
+mai vechi rămâne așa cum era. În celelalte browsere, pentru un GIF și pentru un video mai scurt
+nu se schimbă nimic: filmul este făcut în memorie, iar browserul îl salvează la sfârșit.
+
 ---
 
 ## Anularea
