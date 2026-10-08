@@ -165,7 +165,8 @@ public static class ExpeditionSurfaceLogEndpoints
         // Only what the count needs of a report: whose it is, what kind, and when. The place a
         // report names, the survey it was measured in, the cave, the team and the note are not
         // selected, so they are not in this process to be sent by mistake. Oldest first, in the
-        // order the trip's own watch folds them.
+        // order the trip's own watch folds them — and the log as that watch reads it: a report
+        // taken off the log is left out of this set by the model, as it is out of every other.
         var reportRows = await db.TripPositionEvents.AsNoTracking()
             .Where(e => tripIds.Contains(e.TripLogId))
             .OrderBy(e => e.RecordedAt).ThenBy(e => e.CreatedAt).ThenBy(e => e.Id)
@@ -174,10 +175,12 @@ public static class ExpeditionSurfaceLogEndpoints
 
         // The name the trip's own page gives this caller for each person, from the one place
         // that decides it — an account's chosen label where there is an account, the roster's
-        // name otherwise, and never an address.
+        // name otherwise, and never an address. Asked for everybody the reports are about as
+        // well as everybody on a list, in the same one question: somebody a log speaks of whom
+        // their trip no longer names is named by this same rule on that trip's own watch.
         var user = await userAccessor.GetAsync(ct);
         var names = await CaverDirectory.ResolveLabelsAsync(
-            db, user, rosterRows.Select(p => p.CaverId), ct);
+            db, user, rosterRows.Select(p => p.CaverId).Concat(reportRows.Select(e => e.CaverId)), ct);
 
         // Rebuilt as reports carrying only their kind and their time, because the standing rule
         // is asked of reports and those two are all it — and "last heard" — read. One rule for
@@ -195,6 +198,9 @@ public static class ExpeditionSurfaceLogEndpoints
                     RecordedAt = e.RecordedAt,
                 }).ToList());
         var rosterByTrip = rosterRows.ToLookup(p => p.TripLogId, p => p.CaverId);
+        // Whom each trip's reports are about, still oldest first: a lookup keeps the order the
+        // rows were read in.
+        var reportedByTrip = reportRows.ToLookup(e => e.TripLogId, e => e.CaverId);
 
         var trips = new List<ExpeditionSurfaceLogTripDto>(rows.Count);
         foreach (var row in rows)
@@ -204,7 +210,19 @@ public static class ExpeditionSurfaceLogEndpoints
             var outOfCave = 0;
             var unheard = 0;
             DateTimeOffset? lastHeard = null;
-            foreach (var caverId in PartyOf(rosterByTrip[row.Id]))
+
+            // Who the party is — the question this read must never answer for itself. The trip's
+            // own watch counts everybody the trip names and everybody its log speaks of, so that
+            // somebody who went in, was reported, and was later taken off the trip's list is
+            // still counted there; a head count that read the list alone told a coordinator one
+            // fewer underground on the camp's log than on the trip. Both ask the one rule that
+            // decides it, so whoever that rule comes to count is counted here by the same change.
+            //
+            // The people the trip names in a stable order, then the ones only its log speaks of
+            // in the order the log first mentions them. Reports are keyed by person above, so
+            // each of them is stood and timed exactly like anybody else.
+            var watched = TripTrackingRules.PartyOf(rosterByTrip[row.Id].Order(), reportedByTrip[row.Id]);
+            foreach (var caverId in watched.Everybody)
             {
                 reportsByMember.TryGetValue((row.Id, caverId), out var own);
                 var standing = TripTrackingRules.StandingOf(own);
@@ -250,16 +268,4 @@ public static class ExpeditionSurfaceLogEndpoints
 
         return TypedResults.Ok(new ExpeditionSurfaceLogDto { Trips = trips, Truncated = truncated });
     }
-
-    /// <summary>
-    /// Who a trip's party is, for this log: the people on the trip's list, in a stable order.
-    /// </summary>
-    /// <remarks>
-    /// The one place this read decides it, on purpose. The trip's own watch lists the same people
-    /// today, and a coordinator must never find one head count on the camp's log and another on
-    /// the trip — so if the watch comes to list anybody else (somebody with reports who was later
-    /// taken off the list), this is the single line that has to follow it, and the rows above
-    /// already key reports by person so nothing else moves.
-    /// </remarks>
-    private static IEnumerable<Guid> PartyOf(IEnumerable<Guid> roster) => roster.Order();
 }

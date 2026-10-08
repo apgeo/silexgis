@@ -24,6 +24,20 @@ public enum TripStanding
 }
 
 /// <summary>
+/// The party a trip's watch counts, as <see cref="TripTrackingRules.PartyOf"/> decides it.
+/// </summary>
+/// <param name="OnRoster">The people the trip names, in the order the caller listed them.</param>
+/// <param name="OffRoster">
+/// The people the trip's log speaks of and the trip no longer names, in the order the log first
+/// mentions each of them.
+/// </param>
+public sealed record TripWatchParty(IReadOnlyList<Guid> OnRoster, IReadOnlyList<Guid> OffRoster)
+{
+    /// <summary>The whole party in the order it is listed: the roster, then the rest.</summary>
+    public IEnumerable<Guid> Everybody => OnRoster.Concat(OffRoster);
+}
+
+/// <summary>
 /// The tracking lifecycle's legality table and the slice's shared limits — one home, so the
 /// API and its tests cannot drift apart on what a tracking state may become.
 /// </summary>
@@ -317,6 +331,55 @@ public static class TripTrackingRules
     /// </remarks>
     public static bool MayLeaveRoster(TripTrackingState state, bool hasReports) =>
         !(state == TripTrackingState.Armed && hasReports);
+
+    /// <summary>
+    /// Who a trip's watch counts as its party: everybody the trip names and everybody its log
+    /// speaks of.
+    /// </summary>
+    /// <param name="roster">The people the trip names now, in the order the caller lists them.</param>
+    /// <param name="reportedOldestFirst">
+    /// Whom each report on the trip's log is about, oldest report first — the log as every reader
+    /// has it, so without the reports taken off it. A person is named once per report about them.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// <b>Nothing recorded is a reason to stop counting somebody.</b> A party read off the roster
+    /// alone drops a person the moment they are taken off it, while every report about them stays
+    /// in the log: somebody who went in and was never reported out vanishes from the count of
+    /// people underground with nobody having come out. So they stay in the party, apart from the
+    /// people the trip names, for a surface to mark as it sees fit.
+    /// </para>
+    /// <para>
+    /// <b>A report taken off the log speaks of nobody</b>, which is why the caller hands over the
+    /// log as it is read and not as it is stored: somebody whose only reports were removed and who
+    /// then left the trip is not in its party.
+    /// </para>
+    /// <para>
+    /// After the roster, in the order the log first mentions each of them. That order is the
+    /// log's own, it does not move when the roster is edited again, and it keeps the people
+    /// nothing more can be recorded for below the ones a coordinator is still working with.
+    /// </para>
+    /// <para>
+    /// <b>One home, because more than one screen counts a party.</b> The trip's own watch and
+    /// anything that sums several watches must list the same people, or a coordinator reads one
+    /// head count in one place and another in the next with nothing to say which is right.
+    /// </para>
+    /// </remarks>
+    public static TripWatchParty PartyOf(IEnumerable<Guid> roster, IEnumerable<Guid> reportedOldestFirst)
+    {
+        List<Guid> onRoster = [.. roster.Distinct()];
+        var seen = onRoster.ToHashSet();
+        var offRoster = new List<Guid>();
+        foreach (var caverId in reportedOldestFirst)
+        {
+            if (seen.Add(caverId))
+            {
+                offRoster.Add(caverId);
+            }
+        }
+
+        return new TripWatchParty(onRoster, offRoster);
+    }
 
     /// <summary>
     /// Whether a stored report has been changed since it was first written down.

@@ -292,6 +292,44 @@ public class TripTrackingDomainTests
         TripTrackingRules.MayLeaveRoster(state, hasReports).ShouldBe(mayLeave);
     }
 
+    // ---- who a watch's party is ----------------------------------------------------------
+
+    [Fact]
+    public void A_watchs_party_is_everybody_the_trip_names_and_then_everybody_else_its_log_speaks_of()
+    {
+        var (ana, bogdan, carmen, dan) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        // The log, oldest first: Dan and Carmen are spoken of and on no list; Bogdan is on the list
+        // and spoken of; Ana is on the list and has never been reported.
+        var party = TripTrackingRules.PartyOf([bogdan, ana], [dan, bogdan, carmen, dan, bogdan]);
+
+        // The roster as it was handed over, not re-sorted, and nobody on it twice for being reported.
+        party.OnRoster.ShouldBe([bogdan, ana]);
+        // The rest once each, in the order the log first mentions them.
+        party.OffRoster.ShouldBe([dan, carmen]);
+        party.Everybody.ShouldBe([bogdan, ana, dan, carmen]);
+    }
+
+    [Fact]
+    public void A_watchs_party_is_the_roster_alone_when_the_log_speaks_of_nobody_else_and_empty_when_there_is_neither()
+    {
+        var (ana, bogdan) = (Guid.NewGuid(), Guid.NewGuid());
+
+        var listedOnly = TripTrackingRules.PartyOf([ana, bogdan], [bogdan, ana, bogdan]);
+        listedOnly.OffRoster.ShouldBeEmpty();
+        listedOnly.Everybody.ShouldBe([ana, bogdan]);
+
+        // A silent watch: the people the trip names are its whole party.
+        TripTrackingRules.PartyOf([ana, bogdan], []).Everybody.ShouldBe([ana, bogdan]);
+
+        // Nobody listed and a log: everybody the log speaks of, and nobody else.
+        var loggedOnly = TripTrackingRules.PartyOf([], [bogdan, bogdan, ana]);
+        loggedOnly.OnRoster.ShouldBeEmpty();
+        loggedOnly.Everybody.ShouldBe([bogdan, ana]);
+
+        TripTrackingRules.PartyOf([], []).Everybody.ShouldBeEmpty();
+    }
+
     // ---- where one member of the party stands --------------------------------------------
     //
     private static readonly DateTimeOffset Noon = new(2026, 9, 12, 12, 0, 0, TimeSpan.Zero);

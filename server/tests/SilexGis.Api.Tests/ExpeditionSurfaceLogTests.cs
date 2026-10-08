@@ -309,6 +309,109 @@ public sealed class ExpeditionSurfaceLogTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
+    /// Somebody the log speaks of and the trip no longer names is still on the head count, as on
+    /// the trip's own watch: the two screens count one party.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The state is built the way the product lets it arise. While a watch runs, a roster edit
+    /// that takes off somebody it has reports about is refused — asserted here, so that the
+    /// removal that follows is known to be the allowed one. Once the watch is closed the trip's
+    /// list may be corrected, and the trip stays on the camp's log for the recently-closed
+    /// window: that is the first reading. Starting the watch again leaves it running with that
+    /// person off its list and still inside the cave, which is the second and the one that
+    /// matters most.
+    /// </para>
+    /// <para>
+    /// Both controls are in the test. Before anybody leaves, the head count and the watch agree
+    /// about the same four people. And somebody whose only report was taken off the log, and who
+    /// was then taken off the trip, is on neither screen — a report taken off the log speaks of
+    /// nobody — beside the person who is on both.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Somebody_the_log_speaks_of_stays_on_the_head_count_after_leaving_the_trips_list_as_on_the_trips_own_watch()
+    {
+        var model = await ModelAsync(await CaveAsync(locationProtected: false));
+        var camp = await CampAsync(owner, "Off the list");
+        var (trip, party) = await TripAsync(owner, "Taken off the list", guests: 4);
+        await JoinAsync(owner, camp, trip);
+        await ArmAsync(owner, trip, model);
+
+        var (stays, leaves, withdrawn, silent) = (party[0].Id, party[1].Id, party[2].Id, party[3].Id);
+        var t0 = Whole(DateTimeOffset.UtcNow.AddHours(-3));
+        await ReportAsync(owner, trip, new { caverIds = new[] { stays, leaves }, kind = "entered" }, t0);
+        await ReportAsync(owner, trip, new { caverIds = new[] { withdrawn }, kind = "entered" }, t0.AddMinutes(5));
+        await ReportAsync(owner, trip, new { caverIds = new[] { leaves }, kind = "note", note = "all well" }, t0.AddMinutes(40));
+
+        // The control: everybody is on the trip's list, and the two screens tell one party.
+        var everybody = await RowAgreeingWithTheWatchAsync(reader, camp, trip);
+        PartyIds(everybody).ShouldBe([stays, leaves, withdrawn, silent], ignoreOrder: true);
+        everybody.GetProperty("underground").GetInt32().ShouldBe(3);
+        everybody.GetProperty("unheard").GetInt32().ShouldBe(1);
+
+        // A report that never happened is taken off the log, and the person it was about may then
+        // leave even a running watch: nothing on the log speaks of them any more.
+        var mistaken = (await owner.GetFromJsonAsync<JsonElement>(
+                $"/api/v1/trip-logs/{trip}/tracking/events?caverId={withdrawn}"))
+            .GetProperty("items").EnumerateArray().Single().GetProperty("id").GetGuid();
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{trip}/tracking/events/{mistaken}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var trimmed = await PutRosterAsync(owner, trip, [stays, leaves, silent]);
+        trimmed.StatusCode.ShouldBe(HttpStatusCode.OK, await trimmed.Content.ReadAsStringAsync());
+
+        // Somebody the log does speak of may not, while the watch runs.
+        var refused = await PutRosterAsync(owner, trip, [stays, silent]);
+        var refusal = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, refusal);
+        refusal.ShouldContain("trip_log.participant_tracked");
+
+        // Closed: the trip's list is corrected, and the trip is still on the camp's log.
+        (await PutConfigAsync(owner, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var removed = await PutRosterAsync(owner, trip, [stays, silent]);
+        removed.StatusCode.ShouldBe(HttpStatusCode.OK, await removed.Content.ReadAsStringAsync());
+
+        foreach (var state in new[] { "closed", "armed" })
+        {
+            if (state == "armed")
+            {
+                // Started again, for a party that turned out to be still underground: a running
+                // watch with somebody inside whom the trip no longer lists.
+                await ArmAsync(owner, trip, model);
+            }
+
+            // The trip's own watch lists them, marked, and still inside.
+            var watch = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{trip}/tracking");
+            var watched = watch.GetProperty("participants").EnumerateArray()
+                .Single(p => p.GetProperty("caverId").GetGuid() == leaves);
+            watched.GetProperty("onRoster").GetBoolean().ShouldBeFalse();
+            Standing(watched).ShouldBe((true, false));
+
+            // And so does the camp's head count, for the same reader.
+            var row = await RowAgreeingWithTheWatchAsync(reader, camp, trip);
+            row.GetProperty("state").GetString().ShouldBe(state);
+            // The people the trip names first, then the one only its log speaks of — and not the
+            // one whose report was taken off it.
+            PartyIds(row).Count.ShouldBe(3);
+            PartyIds(row).Take(2).ShouldBe([stays, silent], ignoreOrder: true);
+            PartyIds(row)[2].ShouldBe(leaves);
+            row.GetProperty("underground").GetInt32().ShouldBe(2);
+            row.GetProperty("out").GetInt32().ShouldBe(0);
+            row.GetProperty("unheard").GetInt32().ShouldBe(1);
+            // Their note is the party's latest word, and it is told as such.
+            row.GetProperty("lastRecordedAt").GetDateTimeOffset().ShouldBe(t0.AddMinutes(40));
+
+            var counted = row.GetProperty("party").EnumerateArray()
+                .Single(p => p.GetProperty("caverId").GetGuid() == leaves);
+            Standing(counted).ShouldBe((true, false));
+            counted.GetProperty("lastRecordedAt").GetDateTimeOffset().ShouldBe(t0.AddMinutes(40));
+            // Named as the watch names them for this reader, since the trip no longer does.
+            counted.GetProperty("name").GetString().ShouldNotBeNullOrWhiteSpace();
+            counted.GetProperty("name").GetString().ShouldBe(watched.GetProperty("name").GetString());
+        }
+    }
+
+    /// <summary>
     /// The load-bearing one. A party in a cave whose position the reader may not be told is
     /// counted on the log like any other, and the answer holds no place — for that reader or for
     /// the one who may place the cave.
@@ -597,6 +700,41 @@ public sealed class ExpeditionSurfaceLogTests : IAsyncLifetime, IDisposable, ICl
     private static (bool In, bool Out) Standing(JsonElement person) =>
         (person.GetProperty("in").GetBoolean(), person.GetProperty("out").GetBoolean());
 
+    /// <summary>The people on one row of the log, in the order the row lists them.</summary>
+    private static List<Guid> PartyIds(JsonElement row) =>
+        [.. row.GetProperty("party").EnumerateArray().Select(p => p.GetProperty("caverId").GetGuid())];
+
+    /// <summary>
+    /// One trip's row on the camp's log, read beside that trip's own watch by the same reader and
+    /// held to it: the same people, each standing as the watch says and last heard when it says,
+    /// and the row's three numbers the watch's party counted.
+    /// </summary>
+    private static async Task<JsonElement> RowAgreeingWithTheWatchAsync(HttpClient client, Guid camp, Guid trip)
+    {
+        var watch = await client.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{trip}/tracking");
+        var watched = watch.GetProperty("participants").EnumerateArray()
+            .ToDictionary(p => p.GetProperty("caverId").GetGuid());
+        var row = Row(await LogAsync(client, camp), trip);
+        var counted = row.GetProperty("party").EnumerateArray()
+            .ToDictionary(p => p.GetProperty("caverId").GetGuid());
+
+        counted.Keys.ShouldBe(
+            watched.Keys, ignoreOrder: true,
+            "the camp's head count and the trip's own watch list the same people");
+        foreach (var (caverId, person) in counted)
+        {
+            Standing(person).ShouldBe(Standing(watched[caverId]));
+            person.GetProperty("lastRecordedAt").ToString()
+                .ShouldBe(watched[caverId].GetProperty("lastRecordedAt").ToString());
+        }
+
+        var standings = watched.Values.Select(Standing).ToList();
+        row.GetProperty("underground").GetInt32().ShouldBe(standings.Count(s => s.In));
+        row.GetProperty("out").GetInt32().ShouldBe(standings.Count(s => s.Out));
+        row.GetProperty("unheard").GetInt32().ShouldBe(standings.Count(s => !s.In && !s.Out));
+        return row;
+    }
+
     private static DateTimeOffset Whole(DateTimeOffset at) => at.AddTicks(-(at.Ticks % TimeSpan.TicksPerSecond));
 
     private static IEnumerable<string> Messages(Exception? failure)
@@ -662,6 +800,19 @@ public sealed class ExpeditionSurfaceLogTests : IAsyncLifetime, IDisposable, ICl
         party.Count.ShouldBe(guests);
         return (body.GetProperty("id").GetGuid(), party);
     }
+
+    /// <summary>
+    /// The trip saved with these people as its whole list — the trip's form sends the roster back
+    /// entire, so leaving somebody out is how a person is taken off a trip.
+    /// </summary>
+    private static Task<HttpResponseMessage> PutRosterAsync(HttpClient client, Guid trip, IEnumerable<Guid> participants) =>
+        client.PutWithIfMatchAsync($"/api/v1/trip-logs/{trip}", new
+        {
+            title = $"Roster {Guid.NewGuid():N}"[..28],
+            tripDate = "2026-09-12",
+            participants = participants.Select(id => new { caverId = id }).ToArray(),
+            visibility = "authenticated",
+        });
 
     /// <summary>
     /// The hour the party planned to be out by, written straight onto the trip: a plain recorded

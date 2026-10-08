@@ -338,20 +338,14 @@ public static class TripTrackingEndpoints
         // them stayed in the log printed under this table: one screen, two answers to who was in
         // the cave. Nothing recorded is a reason to stop showing somebody, so they stay, marked.
         //
-        // After the roster, and in the order the log first mentions each of them. That order is
-        // the log's own (the events above are already oldest first), it does not move when the
-        // roster is edited again, and it keeps the people nothing more can be recorded for below
-        // the ones a coordinator is still working with.
-        var onRoster = rosterCavers.ToHashSet();
-        var offRoster = new List<Guid>();
-        var seenOffRoster = new HashSet<Guid>();
-        foreach (var report in events)
-        {
-            if (!onRoster.Contains(report.CaverId) && seenOffRoster.Add(report.CaverId))
-            {
-                offRoster.Add(report.CaverId);
-            }
-        }
+        // Who that is, and in which order, is Domain's answer rather than a loop here, because
+        // this is not the only read that counts a party: a camp's head count asks the same
+        // question of the same rule, and the two must never list different people. The events
+        // above are the log as it is read — oldest first, without the reports taken off it —
+        // which is what the rule is asked of.
+        var watched = TripTrackingRules.PartyOf(rosterCavers, events.Select(report => report.CaverId));
+        var onRoster = watched.OnRoster.ToHashSet();
+        var offRoster = watched.OffRoster;
 
         // Their names, since the trip this reader holds no longer has them: the label every
         // signed-in surface shows a person under, by the one rule that decides it. Asked only when
@@ -375,7 +369,7 @@ public static class TripTrackingEndpoints
             ct);
 
         var participants = new List<TrackingParticipantDto>();
-        foreach (var caverId in rosterCavers.Concat(offRoster))
+        foreach (var caverId in watched.Everybody)
         {
             var listed = onRoster.Contains(caverId);
             byCaver.TryGetValue(caverId, out var own);
