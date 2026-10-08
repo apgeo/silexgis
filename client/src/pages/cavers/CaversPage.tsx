@@ -103,7 +103,11 @@ export default function CaversPage() {
   const { message } = App.useApp();
   const [search, setSearch] = useState('');
   const debounced = useDebouncedValue(search);
-  const { data: cavers, isFetching } = useCavers(debounced || undefined);
+  // The previous rows stay while a changed search is answered: an emptied table takes with it
+  // whatever stood open on a row — a delete confirmation somebody was about to answer.
+  const { data: cavers, isFetching } = useCavers(debounced || undefined, undefined, {
+    keepRows: true,
+  });
   const createCaver = useCreateCaver();
   const deleteCaver = useDeleteCaver();
   const [creating, setCreating] = useState(false);
@@ -116,6 +120,9 @@ export default function CaversPage() {
   // Contact fields and roster edits sit behind Cavers · Write (the label level every
   // account reads is not this page's business to gate).
   const canKeepRoster = useCan('cavers', 'write');
+  // Deleting a person asks a right of its own, which an account that may edit the roster
+  // need not hold; without it the button could only ever be answered by a refusal.
+  const canDelete = useCan('cavers', 'delete');
   const updateCaver = useUpdateCaver(editing?.id ?? '');
 
   const submit = async () => {
@@ -233,31 +240,33 @@ export default function CaversPage() {
                         onClick={() => setMerging(caver)}
                         title={t('cavers.merge')}
                       />
-                      <Popconfirm
-                        title={t('cavers.deleteConfirm')}
-                        onConfirm={() =>
-                          deleteCaver.mutateAsync(caver.id).catch((error: unknown) => {
-                            // Trips hold them: the refusal says which, and the dialog is where
-                            // something can be done about each.
-                            const by = caverHeldByTrips(error);
-                            if (by) {
-                              setHeld({ caver, by });
-                            } else if (error instanceof ApiError && error.code === CAVER_HELD_BY_CAMP_CODE) {
-                              message.error(t('cavers.deleteRefusedCamp'));
-                            } else {
-                              message.error(t('cavers.deleteRefused'));
-                            }
-                          })
-                        }
-                      >
-                        <Button
-                          size="small"
-                          type="text"
-                          danger
-                          icon={<DeleteOutlined />}
-                          data-testid={`caver-delete-${caver.id}`}
-                        />
-                      </Popconfirm>
+                      {canDelete && (
+                        <Popconfirm
+                          title={t('cavers.deleteConfirm')}
+                          onConfirm={() =>
+                            deleteCaver.mutateAsync(caver.id).catch((error: unknown) => {
+                              // Trips hold them: the refusal says which, and the dialog is where
+                              // something can be done about each.
+                              const by = caverHeldByTrips(error);
+                              if (by) {
+                                setHeld({ caver, by });
+                              } else if (error instanceof ApiError && error.code === CAVER_HELD_BY_CAMP_CODE) {
+                                message.error(t('cavers.deleteRefusedCamp'));
+                              } else {
+                                message.error(t('cavers.deleteRefused'));
+                              }
+                            })
+                          }
+                        >
+                          <Button
+                            size="small"
+                            type="text"
+                            danger
+                            icon={<DeleteOutlined />}
+                            data-testid={`caver-delete-${caver.id}`}
+                          />
+                        </Popconfirm>
+                      )}
                     </Space>
                   ),
                 },

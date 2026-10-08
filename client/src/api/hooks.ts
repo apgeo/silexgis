@@ -5088,12 +5088,20 @@ export function useRemoveCavingGroupMember(cavingGroupId: string) {
   });
 }
 
-/** The roster of people, optionally filtered by name; `unlinked` narrows to those with no account. */
-export function useCavers(search?: string, unlinked?: boolean) {
+/**
+ * The roster of people, optionally filtered by name; `unlinked` narrows to those with no account.
+ *
+ * `keepRows` is for a table that is narrowed while it is on screen: the rows of the previous
+ * search stay until the next answer has come, so the table is never emptied in between — and
+ * whatever stands open on one of its rows is not thrown away with it. A typeahead leaves it
+ * off: the suggestions of the previous spelling are not suggestions for this one.
+ */
+export function useCavers(search?: string, unlinked?: boolean, options: { keepRows?: boolean } = {}) {
   return useQuery({
     queryKey: [...queryKeys.cavers, search ?? '', unlinked ?? false],
     queryFn: () => unwrap(api.GET('/api/v1/cavers', { params: { query: { search, unlinked } } })),
     staleTime: 30_000,
+    placeholderData: options.keepRows ? keepPreviousData : undefined,
   });
 }
 
