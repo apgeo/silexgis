@@ -646,6 +646,25 @@ Pagina spune ce arată, pentru un cititor care nu a mai urmărit niciodată o tu
 - **De când.** Sub titlu, *Urmărită de la 08:40 · 3 ore 10 min.* cât timp urmărirea este pornită,
   și intervalul cât a durat după ce a fost încheiată. Ora este cea la care urmărirea a fost
   **pornită**, nu cea la care a intrat cineva în peșteră.
+- **Ieșire plănuită până la — doar unde instalarea o publică.** O instalare poate alege ca pagina
+  să spună ora până la care echipa și-a plănuit ieșirea; este **oprită** dacă un administrator al
+  serverului nu o pornește (`SILEXGIS__TripTracking__PublishExpectedReturn`, vezi ghidul de
+  instalare). Unde este pornită, un rând sub *Urmărită de la* spune *Ieșire plănuită până la
+  17:00* cât timp cineva din echipă este în peșteră, și *Ieșirea era plănuită până la 17:00* după
+  ce ora a trecut. Spune planul și nimic altceva: nu spune niciodată că cineva întârzie, nu își
+  schimbă culoarea și nu este felul în care este anunțat cineva — veștile din peșteră ajung cu
+  întârziere. Nu apare după ce toată lumea a ieșit, după ce urmărirea a fost încheiată, la
+  reluarea unei ture trecute și nici într-o pagină încadrată. Nimic despre apelul de urgență al
+  turei nu este arătat vreodată unui vizitator.
+- **Numele date de peșteră locurilor — doar unde instalarea le publică.** O peșteră poate declara
+  ce înseamnă adâncimile ei și poate da fiecăreia un nume (vezi *Ce înseamnă adâncimile unei
+  peșteri* mai sus). O instalare poate alege ca o pagină publicată să citească aceste nume; este
+  **oprită** dacă un administrator al serverului nu o pornește
+  (`SILEXGIS__TripTracking__PublishDepthPlaces`, vezi ghidul de instalare). Unde este pornită,
+  cineva raportat la o stație cu nume apare cu numele și cu stația dedesubt — *Sala Mare* peste
+  `p.g.7` — la o tură urmărită și la reluarea unei ture trecute. Sunt publicate doar declarațiile
+  care au un nume și doar pentru stațiile ridicării pe care o desenează pagina. Unde este oprită,
+  și pentru orice stație căreia peștera nu i-a dat un nume, pagina arată doar stația.
 - **Cât de veche este pagina.** *Pagină împrospătată acum 40 de secunde*, iar când o citire
   eșuează *„Pagina nu se mai împrospătează"* spune de când — este despre pagină și conexiune,
   niciodată despre tură. O pagină încadrată spune același lucru într-un singur rând. Aceeași
@@ -744,6 +763,22 @@ care nu deschide niciuna nu află despre nimeni altcineva, iar pagina nu cere se
   ca nu. Un cititor al cărui dispozitiv cere mișcare redusă primește reluarea deschisă la moment
   și oprită, cu **Redă** la o apăsare distanță. Unde browserul refuză clipboardul, linkul este
   arătat într-o casetă, de copiat manual.
+- **Fotografii la momentul lor — doar unde instalarea le publică.** Fotografiile pot fi puse pe
+  momente ale unei ture din fila ei de urmărire (*Fotografii de la acest moment*, mai sus). O
+  instalare poate alege ca reluarea unei ture publicate **încheiate** să le arate; este
+  **oprită** dacă un administrator al serverului nu o pornește
+  (`SILEXGIS__TripPastTracks__PublishMomentPictures`, vezi ghidul de instalare). Unde este
+  pornită, sub linia reluării apare un rând de imagini mici când ceasul ajunge la un moment care
+  are fotografii — *Fotografii de la 14:05* — și rămâne până când un moment ulterior le aduce pe
+  ale lui; apăsarea uneia o deschide mai mare. Sunt arătate doar fotografiile pe care un
+  administrator le-a pus în **galeria publică**, și niciuna legată împreună cu ceva a cărui
+  poziție este protejată. O fotografie despre o singură persoană poartă numele pe care pagina
+  îl dă deja acelei persoane — numele ei, unde pagina publică nume, *Speolog 2* unde nu — iar o
+  fotografie despre cineva scos între timp din tură este arătată ca o imagine a momentului, a
+  nimănui. Legenda este cea din galerie; nota scrisă când fotografia a fost pusă pe tură nu este
+  arătată niciodată unui vizitator. Pagina unei ture încă urmărite nu le arată, iar o pagină
+  încadrată le arată în panoul în care se deschid comenzile ei. Unde este oprită, o reluare nu
+  are deloc un asemenea rând.
 
 Două consecințe bune de știut înainte de publicare:
 

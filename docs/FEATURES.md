@@ -479,7 +479,11 @@ feature and walkthroughs of whole jobs.
   which any of them can be watched on the link's own survey under a banner saying whose party it
   is — and its finished published trips, gathered by camp, each playable as
   a replay on the survey its reports were measured in; any moment of a replay can be copied as a
-  link that opens there, standing or already playing. The page names people as the installation
+  link that opens there, standing or already playing. Three more things are told to a visitor only
+  where the installation turns them on, each by a setting of its own that is off as installed:
+  the hour the party planned to be out by, the names the cave gives its depths, and — on a
+  finished trip's replay — the photographs from the public gallery that were hung on its moments,
+  each beside the place in the party of the person it is of. The page names people as the installation
   decides — real names by default, a caption to keep one person off it; where names are off, a
   person's number (*Caver 3*) is theirs from the moment the trip first names them and does not
   move when the roster is edited — a cave with protected

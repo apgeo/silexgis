@@ -615,6 +615,24 @@ The page says what it is showing, for a reader who has never followed a trip:
 - **Since when.** Under the title, *Followed since 08:40 · 3 hr 10 min* while the watch runs, and
   the span it ran for once it is closed. The hour is when the watch was **started**, not when
   anybody went underground.
+- **Planned out by — only where the installation publishes it.** An installation can choose to
+  let the page say the hour the party planned to be out by; it is **off** unless an administrator
+  of the server turns it on (`SILEXGIS__TripTracking__PublishExpectedReturn`, see the installation
+  guide). Where it is on, a line under *Followed since* reads *Planned out by 17:00* for as long
+  as somebody of that party is underground, and *The plan was to be out by 17:00* once that hour
+  has gone by. It states the plan and nothing else: it never says anybody is late, it changes no
+  colour, and it is not how anyone is alerted — word from underground takes time to arrive. It is
+  not shown once everybody is out, once the watch is closed, in a replay of a past trip, or in a
+  framed page. Nothing about the trip's overdue callout is ever shown to a visitor.
+- **The cave's own names for places — only where the installation publishes them.** A cave can
+  declare what its depths mean and give each a name (see *What a cave's depths mean* above). An
+  installation can choose to let a published page read those names; it is **off** unless an
+  administrator of the server turns it on (`SILEXGIS__TripTracking__PublishDepthPlaces`, see the
+  installation guide). Where it is on, somebody reported at a named station is shown as the name
+  with the station under it — *Sala Mare* over `p.g.7` — on a trip being followed and in a replay
+  of a past trip. Only declarations that have a name are published, and only for stations of the
+  survey the page draws. Where it is off, and for every station the cave has not named, the page
+  shows the station alone.
 - **How old the page is.** *Page updated 40 seconds ago*, and when a read fails *"This page has
   stopped refreshing"* says since when — that is about the page and the connection, never about
   the trip. A framed page says the same in one line. The same notice stands while the phone
@@ -708,6 +726,22 @@ neither is told about nobody else, and the page asks the server for neither.
   no. A reader whose device asks for reduced motion gets the replay opened at the moment and
   standing still, with **Play** one press away. Where the browser refuses the clipboard, the
   link is shown in a box to copy by hand.
+- **Photographs at their moment — only where the installation publishes them.** Photographs can
+  be hung on moments of a trip from its tracking tab (*Photographs of this moment*, above). An
+  installation can choose to let the replay of a **finished** published trip show them; it is
+  **off** unless an administrator of the server turns it on
+  (`SILEXGIS__TripPastTracks__PublishMomentPictures`, see the installation guide). Where it is
+  on, a row of small pictures appears under the replay's rail when the clock reaches a moment
+  that has any — *Photographs from 14:05* — and stays until a later moment brings its own;
+  pressing one opens it larger. Only photographs an administrator has put in the **public
+  gallery** are shown, and none that is linked together with something whose position is
+  protected. A photograph about one person is labelled with what the page already calls that
+  person — their name where the page publishes names, *Caver 2* where it does not — and a
+  photograph about somebody since taken off the trip is shown as a picture of the moment, of
+  nobody. The caption is the gallery's; the note typed when the picture was hung on the trip is
+  never shown to a visitor. The page of a trip that is still being followed does not show these,
+  and a frame shows them in the sheet its controls open in. Where it is off, a replay has no such
+  row at all.
 
 Two consequences worth knowing before you publish:
 
