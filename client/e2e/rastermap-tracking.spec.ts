@@ -244,14 +244,29 @@ test('the watch draws its party on the sheet, and says who the sheet cannot plac
   await page.getByTestId('trip-tracking-replay-open').click();
   await expect(page.getByTestId('trip-tracking-model-panel').getByRole('slider')).toBeVisible();
   // A replay opens at the armed moment, before anybody had said anything: the sheet
-  // draws nobody, and a press where Ana's dot stood answers nothing.
+  // draws nobody, so a press where Ana's dot stood is answered by the pin under it — the
+  // offer to record there — and not by a person. The party is asked before the pins, so
+  // the pin answering is the proof that no dot covers it.
+  //
+  // The offer is waited for before anything else is done, and that wait is the point: the
+  // sheet answers a press a quarter of a second after it is made (it holds it that long to
+  // tell it from a double press) and judges it against the party as drawn THEN. Winding the
+  // replay on inside that quarter second had this press answered by Ana's dot, which had
+  // arrived meanwhile — her card opened by the press meant to find nobody — and the press
+  // further down, meant to open it, pressed the open person again and closed it. "No card"
+  // asserted straight after a press is true before the press has been answered at all.
   await press(PIN_A.x, PIN_A.y);
+  await expect(offer).toBeVisible();
+  await expect(offer).toContainText(/98/);
   await expect(pane.getByTestId('caveview-caver-card')).toHaveCount(0);
   await expect(overlay.getByTestId('caveview-position-not-on-map')).toHaveCount(0);
+  await offer.locator('.ant-alert-close-icon').click();
+  await expect(offer).not.toBeVisible();
 
   // Wound to the end of the log, the party is back — Ana's dot at her pin, Bogdan's
   // message back on his row — through the same fold the 3D replay consumes.
   await page.getByTestId('trip-tracking-model-panel').getByRole('slider').press('End');
+  await expect(overlay.getByTestId('caveview-position-not-on-map')).toBeVisible();
   await press(PIN_A.x, PIN_A.y);
   await expect(pane.getByTestId('caveview-caver-card')).toContainText('E2E Ana');
   await pane.getByTestId('caveview-caver-card-close').click();
