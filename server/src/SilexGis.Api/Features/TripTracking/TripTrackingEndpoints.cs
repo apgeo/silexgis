@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
@@ -10,6 +11,7 @@ using SilexGis.Domain.Surveys;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Persistence.Configurations;
 
 namespace SilexGis.Api.Features.TripTracking;
 
@@ -57,7 +59,11 @@ public static class TripTrackingEndpoints
         tracking.MapPut("/events/{eventId:guid}", UpdateEventAsync).WithValidation<TrackingEventEditRequest>()
             .WithSummary("Correct one report in place — its moment, its place, its team or its note — keeping the row it was written on.");
         tracking.MapDelete("/events/{eventId:guid}", DeleteEventAsync)
-            .WithSummary("Take a report off the log, when what it recorded never happened rather than happened differently.");
+            .WithSummary("Take a report off the log, when what it recorded never happened rather than happened differently — it is kept and can be put back; with permanent=true, destroy one already taken off.");
+        tracking.MapGet("/events/removed", ListRemovedEventsAsync)
+            .WithSummary("The reports taken off the trip's log, latest removal first, for those who may write the log; position fields follow the same withholding as the log.");
+        tracking.MapPost("/events/{eventId:guid}/restore", RestoreEventAsync)
+            .WithSummary("Put a report taken off the log back on it, unchanged and under its own id.");
         tracking.MapGet("/places", ListPlacesAsync)
             .WithSummary("The places the watch's cave has declared, shallowest first — the list a report names instead of a depth.");
         tracking.MapPost("/resolve-depth", ResolveDepthAsync).WithValidation<TrackingResolveDepthRequest>()
@@ -137,16 +143,45 @@ public static class TripTrackingEndpoints
             model.Format, model.RootSurveyName, given, found.Contains);
     }
 
+    /// <summary>
+    /// Whether <paramref name="given"/> is the viewer's label for a station the file gives no name
+    /// and this model's rows still hold under the spelling they used before they took that label.
+    /// Asked only once the name has been refused, to say that the survey wants reading again
+    /// rather than that the station does not exist.
+    /// </summary>
+    private static async Task<bool> HeldUnderEarlierSpellingAsync(
+        SilexGisDbContext db, SurveyModel model, string given, CancellationToken ct)
+    {
+        if (SurveyStationNames.EarlierNamelessSpelling(model.Format, model.RootSurveyName, given) is not { } earlier)
+        {
+            return false;
+        }
+
+        // The row's own number has to be the one in the label: a station somebody really named
+        // with a hash sign and a number is an ordinary station that merely is not the one pressed.
+        var names = earlier.StoredNames;
+        var number = earlier.FileStationId;
+        return await db.SurveyStations.AsNoTracking().AnyAsync(
+            s => s.SurveyModelId == model.Id && names.Contains(s.Name) && s.FileStationId == number,
+            ct);
+    }
+
     internal static async Task<IReadOnlyList<TrackingDepthResolver.Station>> StationsOfAsync(
         SilexGisDbContext db, SurveyModel model, CancellationToken ct)
     {
+        // The altitude alone, taken in the database. Placing a report by depth asks how high each
+        // station is and nothing else about where it is, and a survey has thousands of stations:
+        // reading each one's whole point sent every coordinate of the cave across, to build an
+        // object per station that was then asked for one number. The column is declared as a point
+        // with an altitude, so there is always one to take.
         var rows = await db.SurveyStations.AsNoTracking()
             .Where(s => s.SurveyModelId == model.Id)
-            .Select(s => new { s.Name, s.SurveyName, s.Position, s.Flags })
+            .Select(s => new { s.Name, s.SurveyName, s.Position.Z, s.Flags, s.FileStationId })
             .ToListAsync(ct);
         return [.. rows.Select(r => TrackingDepthResolver.Station.Of(
             model.Format, model.RootSurveyName,
-            r.Name, r.SurveyName, r.Position.Coordinate.Z, (r.Flags & SurveyStationFlags.Entrance) != 0))];
+            r.Name, r.SurveyName, r.Z, (r.Flags & SurveyStationFlags.Entrance) != 0,
+            r.FileStationId))];
     }
 
     // Which caves are open to this caller, whether a row claims a place, and whether that place
@@ -172,7 +207,12 @@ public static class TripTrackingEndpoints
         // The people the trip names, in the order it first named each of them — asked of the same
         // function the published reads number the party by, so the table a coordinator reads and
         // the page a follower reads list the same people in the same order.
-        var rosterCavers = await TripTrackingPublicationEndpoints.RosterOrderAsync(db, tripLogId, ct);
+        var party = await TripTrackingPublicationEndpoints.RosterOrderAsync(db, tripLogId, ct);
+        var rosterCavers = party.Roster.Select(place => place.CaverId).ToList();
+        // The number each of them is shown under on a published page. For the roster it is the
+        // one that page prints; for somebody since taken off the trip it is the number they held,
+        // which the trip keeps for them — and nothing at all for a person the trip never listed.
+        var partyNumbers = party.Roster.ToDictionary(place => place.CaverId, place => place.Number);
         // What a published page calls each of them, where somebody chose. Shown here so the
         // panel that sets the labels can show what it set; nothing about the choice is
         // location data, so it follows the trip's own readability and nothing else.
@@ -366,13 +406,20 @@ public static class TripTrackingEndpoints
                 // On the branch the place itself is told on, and nowhere else: beside a withheld
                 // place the word would say that somebody is at a station, and that it is none of
                 // a set, to a reader who was refused both.
-                positionOpen && lastPositioned is not null && declaredParts.Outside(lastPositioned)));
+                positionOpen && lastPositioned is not null && declaredParts.Outside(lastPositioned),
+                partyNumbers.TryGetValue(caverId, out var number)
+                    ? number
+                    : party.Given.TryGetValue(caverId, out var held) ? held : (int?)null));
         }
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
         return TypedResults.Ok(new TrackingStateDto(
             watchState,
             configOpen ? tracking?.SurveyModelId : null,
+            // Only beside a survey that is being told. Tied to the survey's presence as well as to
+            // the branch, so that a watch which names no survey — and so has nothing withheld, and
+            // nothing by which this caller's right to its cave was ever asked — says no cave.
+            configOpen && tracking?.SurveyModelId is not null ? tracking.CaveFeatureId : null,
             // Said only to a caller who is being told which model it is: to anyone else the id
             // arrives null anyway, and "the survey that watch was on has been deleted" is a fact
             // about a cave whose vocabulary they were just refused.
@@ -380,6 +427,7 @@ public static class TripTrackingEndpoints
             configOpen ? tracking?.ReferenceStationName : null,
             configOpen ? tracking?.DepthFilter ?? [] : [],
             tracking?.ArmedAt,
+            tracking?.FirstArmedAt,
             tracking?.ClosedAt,
             withheldAny,
             // Said on every read of the trip rather than only when a link is minted: the panel that
@@ -419,24 +467,91 @@ public static class TripTrackingEndpoints
             .OrderByDescending(e => e.RecordedAt).ThenByDescending(e => e.CreatedAt).ThenByDescending(e => e.Id)
             .ToPagedAsync(p, ps, e => e, ct);
 
+        var dtos = await ShownToAsync(db, access, protection, ctx, tripLogId, result.Items, ct);
+
+        return TypedResults.Ok(new PagedResult<TrackingEventDto>(dtos, result.Page, result.PageSize, result.TotalItems));
+    }
+
+    /// <summary>
+    /// Stored reports of one trip as <paramref name="ctx"/> reads them, in the order given: each
+    /// through the per-row withholding, a place only where the caller may be told that row's cave.
+    /// </summary>
+    /// <remarks>
+    /// One routine for the log, for the reports taken off it and for the answer to putting one
+    /// back, so that a position kept from a caller on the log is kept from them everywhere a
+    /// stored report is read — a removed report is not a way round the rule the log applies.
+    /// </remarks>
+    private static async Task<List<TrackingEventDto>> ShownToAsync(
+        SilexGisDbContext db, IAccessService access, FeatureProtection protection, AccessContext ctx,
+        Guid tripLogId, IReadOnlyList<TripPositionEvent> rows, CancellationToken ct)
+    {
         // The watch's own cave is asked about together with the rows' caves: its declared parts
         // are station vocabulary of that cave, and whether a row is outside them is said only to
         // a caller who may be told both the row's place and the declaration.
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         var openCaves = await TrackingWithholding.OpenCaveIdsAsync(
             db, access, protection, ctx,
-            [.. result.Items.Where(e => e.CaveFeatureId is not null).Select(e => e.CaveFeatureId!.Value)
+            [.. rows.Where(e => e.CaveFeatureId is not null).Select(e => e.CaveFeatureId!.Value)
                 .Concat(tracking?.CaveFeatureId is { } watchCave ? [watchCave] : Array.Empty<Guid>())
                 .Distinct()],
             ct);
         var declaredParts = await TrackingDeclaredParts.ForAsync(
             db, tracking,
             declarationTold: tracking?.CaveFeatureId is { } declaredFor && openCaves.Contains(declaredFor),
-            result.Items.Where(e => TrackingWithholding.PositionOpen(e, openCaves)),
+            rows.Where(e => TrackingWithholding.PositionOpen(e, openCaves)),
             ct);
-        var dtos = result.Items.Select(e => TrackingWithholding.Shown(e, openCaves, declaredParts)).ToList();
+        return [.. rows.Select(e => TrackingWithholding.Shown(e, openCaves, declaredParts))];
+    }
 
-        return TypedResults.Ok(new PagedResult<TrackingEventDto>(dtos, result.Page, result.PageSize, result.TotalItems));
+    /// <summary>
+    /// The reports taken off one trip's log — one of the two places this slice reads past the
+    /// model's filter on reports; the other finds the reports of one act of reporting.
+    /// </summary>
+    /// <remarks>
+    /// The model hides a removed report from every reader, together with the reports of a deleted
+    /// trip, under a single filter; asking past it lifts both. So the trip half is said again here:
+    /// what comes back is removed reports of a trip that is itself not deleted, and nothing else.
+    /// Every caller has already been through the trip's write guard, which reads the trip through
+    /// the ordinary filtered set — this is the second lock on the same door, not the only one.
+    /// </remarks>
+    private static IQueryable<TripPositionEvent> RemovedReports(SilexGisDbContext db, Guid tripLogId) =>
+        db.TripPositionEvents.IgnoreQueryFilters()
+            .Where(e => e.TripLogId == tripLogId && e.RemovedAt != null && e.TripLog.DeletedAt == null);
+
+    /// <summary>
+    /// The reports taken off the trip's log, the latest removal first — for those who may write
+    /// that log, and nobody else.
+    /// </summary>
+    /// <remarks>
+    /// Reading the trip is not enough. A report is taken off because what it said never happened;
+    /// showing it to every reader of the trip would keep publishing, inside the group, the very
+    /// thing somebody withdrew. Those who may write the log are the ones who can put it back or
+    /// destroy it, so they are the ones it is listed for. No state rule applies: a watch that was
+    /// never started has nothing removed to list, and listing nothing is the true answer.
+    /// </remarks>
+    private static async Task<Results<Ok<PagedResult<TrackingRemovedEventDto>>, ProblemHttpResult>> ListRemovedEventsAsync(
+        Guid tripLogId, int? page, int? pageSize, SilexGisDbContext db, IAccessService access,
+        FeatureProtection protection, IAccessContextAccessor accessAccessor, CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
+        var refusal = ctx is null
+            ? ApiProblems.NotFound("trip_log.not_found")
+            : await WriteGuardAsync(access, ctx, trip, ct);
+        if (refusal is not null) return refusal;
+
+        var (p, ps) = Paging.Normalize(page, pageSize);
+        var result = await RemovedReports(db, tripLogId).AsNoTracking()
+            .OrderByDescending(e => e.RemovedAt).ThenByDescending(e => e.Id)
+            .ToPagedAsync(p, ps, e => e, ct);
+
+        var shown = await ShownToAsync(db, access, protection, ctx!, tripLogId, result.Items, ct);
+        var dtos = result.Items
+            .Select((e, index) => new TrackingRemovedEventDto(shown[index], e.RemovedAt!.Value))
+            .ToList();
+
+        return TypedResults.Ok(
+            new PagedResult<TrackingRemovedEventDto>(dtos, result.Page, result.PageSize, result.TotalItems));
     }
 
     // ---- writes --------------------------------------------------------------------------
@@ -557,6 +672,11 @@ public static class TripTrackingEndpoints
         if (current != TripTrackingState.Armed && target == TripTrackingState.Armed)
         {
             tracking.ArmedAt = stampedAt;
+            // The very first start, written here and nowhere else, and only while it is empty:
+            // starting a closed watch again moves the line above and must not move this one. A
+            // watch an import wrote already closed has never been started, so its first start is
+            // this one.
+            tracking.FirstArmedAt ??= stampedAt;
             tracking.ClosedAt = null;
         }
         if (current != TripTrackingState.Closed && target == TripTrackingState.Closed)
@@ -728,6 +848,19 @@ public static class TripTrackingEndpoints
             return ApiProblems.Conflict(TrackingProblemCodes.NotWritable, LogNotWritable);
         }
 
+        var caverIds = request.CaverIds!.Distinct().ToList();
+
+        // A send whose act is already on record is answered here and goes no further. After the
+        // two guards above, so a repeat is asked the same "may you write this log" as the send it
+        // repeats; before everything below, because a repeat must not be refused over what has
+        // changed since its act was written — a team dissolved, a survey replaced, a person taken
+        // off the roster. Those are reasons not to write, and a repeat writes nothing.
+        if (request.ClientKey is { } repeatedKey
+            && await ReplayAnswerAsync(db, access, protection, ctx!, tripLogId, repeatedKey, caverIds, ct) is { } repeated)
+        {
+            return TypedResults.Ok(repeated);
+        }
+
         var now = DateTimeOffset.UtcNow;
         // Brought to UTC on the way in rather than stored as sent: the column is an instant, and
         // the database refuses a value carrying any other offset outright, so a report written by
@@ -739,7 +872,6 @@ public static class TripTrackingEndpoints
             return ApiProblems.BadRequest(TrackingProblemCodes.RecordedInFuture, "A report cannot be about the future.");
         }
 
-        var caverIds = request.CaverIds!.Distinct().ToList();
         var participants = await db.TripLogParticipants.AsNoTracking()
             .Where(p => p.TripLogId == tripLogId && caverIds.Contains(p.CaverId))
             .Select(p => p.CaverId).Distinct().ToListAsync(ct);
@@ -780,7 +912,30 @@ public static class TripTrackingEndpoints
             });
         }
         db.TripPositionEvents.AddRange(created);
-        await db.SaveChangesAsync(ct);
+        if (request.ClientKey is { } actKey)
+        {
+            foreach (var row in created)
+            {
+                db.Entry(row).Property(TripPositionEvent.ClientKeyProperty).CurrentValue = actKey;
+            }
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (IsSameActRace(e))
+        {
+            // The same act arrived twice at once and the other send was written first: both
+            // looked, both found nothing, and the database let exactly one of them in. The rows
+            // are written in one transaction, so none of this send's are there. Everything this
+            // request meant to save is dropped — the reports and the history rows queued beside
+            // them — and it answers as any later repeat would, with what the other send wrote.
+            db.ChangeTracker.Clear();
+            var written = await ReplayAnswerAsync(
+                db, access, protection, ctx!, tripLogId, request.ClientKey!.Value, caverIds, ct);
+            return TypedResults.Ok(written ?? []);
+        }
 
         // The answer says what the next read of the log will say, this included. A report that
         // names a station got through the gate on placing anybody in the watch's cave, which is
@@ -794,6 +949,53 @@ public static class TripTrackingEndpoints
             placed.Placement))];
         return TypedResults.Ok(dtos);
     }
+
+    /// <summary>
+    /// Every report of one trip written by one act of reporting, the ones taken off the log
+    /// included — the second place this slice reads past the model's filter on reports.
+    /// </summary>
+    /// <remarks>
+    /// Past the filter because a report somebody removed still says its act was received: a
+    /// re-send that could not see it would write the act again and put back, by machine, what a
+    /// person took off on purpose. Asking past the filter lifts the deleted-trip half with it, so
+    /// that half is said again here.
+    /// </remarks>
+    private static IQueryable<TripPositionEvent> ReportsOfAct(SilexGisDbContext db, Guid tripLogId, Guid clientKey) =>
+        db.TripPositionEvents.IgnoreQueryFilters()
+            .Where(e => e.TripLogId == tripLogId
+                && EF.Property<Guid?>(e, TripPositionEvent.ClientKeyProperty) == clientKey
+                && e.TripLog.DeletedAt == null);
+
+    /// <summary>
+    /// What a send under <paramref name="clientKey"/> is answered with when its act is already on
+    /// record, or null when it is not and the send is to be written.
+    /// </summary>
+    /// <remarks>
+    /// Through the same per-row withholding as the log, and not as the first answer is built. The
+    /// first answer follows a write that has just passed the gate on placing anybody in the cave;
+    /// a repeat has passed nothing of the kind — the cave may have been protected since, or the
+    /// repeat may come from another account — so it is told what a read of the log would tell it.
+    /// </remarks>
+    private static async Task<IReadOnlyList<TrackingEventDto>?> ReplayAnswerAsync(
+        SilexGisDbContext db, IAccessService access, FeatureProtection protection, AccessContext ctx,
+        Guid tripLogId, Guid clientKey, IReadOnlyList<Guid> askedCaverIds, CancellationToken ct)
+    {
+        var stored = await ReportsOfAct(db, tripLogId, clientKey).AsNoTracking().ToListAsync(ct);
+        var answer = TripTrackingRules.ReplayAnswer(askedCaverIds, stored);
+        return answer is null ? null : await ShownToAsync(db, access, protection, ctx, tripLogId, answer, ct);
+    }
+
+    /// <summary>
+    /// Whether a save failed because another send of the same act was written first. Told apart
+    /// by the constraint's name, so that no other failure of a save is taken for a repeat and
+    /// answered as a success.
+    /// </summary>
+    private static bool IsSameActRace(DbUpdateException e) =>
+        e.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: TripPositionEventConfiguration.ClientKeyIndex,
+        };
 
     /// <summary>
     /// Where a report puts somebody: the survey it is measured against, the cave that protects it,
@@ -838,8 +1040,17 @@ public static class TripTrackingEndpoints
                 // differently, so a station pressed on the model is a real station under a name a
                 // string comparison against the survey rows would call unknown.
                 resolvedStation = await ResolveStationAsync(db, usable.Value.Model, stationName!, ct);
-                if (resolvedStation is null) return Refused(ApiProblems.BadRequest(TrackingProblemCodes.StationUnknown,
-                    "The station is not one of the chosen model's stations."));
+                if (resolvedStation is null)
+                {
+                    // Said apart from an unknown station, and without naming it: this one exists,
+                    // and what stands between it and a report is the model's stored reading.
+                    return Refused(await HeldUnderEarlierSpellingAsync(db, usable.Value.Model, stationName!, ct)
+                        ? ApiProblems.Conflict(TrackingProblemCodes.StationReadingOutdated,
+                            "That station has no name in the survey file, and the survey was read before such "
+                                + "stations could be reported at. Read the survey again, then report.")
+                        : ApiProblems.BadRequest(TrackingProblemCodes.StationUnknown,
+                            "The station is not one of the chosen model's stations."));
+                }
             }
             else
             {
@@ -1002,15 +1213,110 @@ public static class TripTrackingEndpoints
     /// Removes one report — under the same gate as recording and correcting one.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The gate is here on purpose and not only on the two writes. Without it a log whose watch
     /// was never armed — which is what an archive imported onto an existing trip leaves — could be
-    /// destroyed row by row and never repaired, since the correction route refused it; that is the
-    /// destroyable-and-unrepairable shape one rule for all three acts exists to rule out. Rows an
-    /// import put on such a trip are taken back by undoing the import, which is the act that
+    /// taken apart row by row and never repaired, since the correction route refused it; that is
+    /// the destroyable-and-unrepairable shape one rule for all these acts exists to rule out. Rows
+    /// an import put on such a trip are taken back by undoing the import, which is the act that
     /// answers for them.
+    /// </para>
+    /// <para>
+    /// Taking a report off does not destroy it. The row is marked — when, and by whom — and from
+    /// then on the model leaves it out of every read; it can be put back as it was. Destroying it
+    /// is the same route asked a second time with <paramref name="permanent"/>, and only a report
+    /// already taken off accepts that: two deliberate acts stand between a mis-tap and the loss of
+    /// what may be the only record of where somebody was.
+    /// </para>
+    /// <para>
+    /// <b>Destroying a report also forgets that its act was received.</b> A report taken off the
+    /// log still carries the key of the send that wrote it, which is how a late repeat of that
+    /// send is recognised and writes nothing. Once every report of an act has been destroyed
+    /// nothing carries the key any more, and a repeat arriving after that is a first send as far
+    /// as the log can tell: it is written. Taking a report off is therefore the act that keeps a
+    /// repeat out; destroying it is for a report nobody will send again.
+    /// </para>
     /// </remarks>
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteEventAsync(
-        Guid tripLogId, Guid eventId, SilexGisDbContext db, IAccessService access,
+        Guid tripLogId, Guid eventId, bool? permanent, SilexGisDbContext db, IAccessService access,
+        IAccessContextAccessor accessAccessor, IUserContextAccessor userAccessor, TimeProvider clock,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var user = await userAccessor.GetAsync(ct);
+        var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
+        var refusal = ctx is null || user is null
+            ? ApiProblems.NotFound("trip_log.not_found")
+            : await WriteGuardAsync(access, ctx, trip, ct);
+        if (refusal is not null) return refusal;
+
+        var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
+        if (tracking is null || !TripTrackingRules.MayWriteLog(tracking.State))
+        {
+            return ApiProblems.Conflict(TrackingProblemCodes.NotWritable, LogNotWritable);
+        }
+
+        if (permanent == true)
+        {
+            var removed = await RemovedReports(db, tripLogId).FirstOrDefaultAsync(e => e.Id == eventId, ct);
+            if (removed is null)
+            {
+                // Still on the log, or not there at all: two different things to tell the caller,
+                // and only the first is theirs to act on.
+                var onTheLog = await db.TripPositionEvents.AsNoTracking()
+                    .AnyAsync(e => e.Id == eventId && e.TripLogId == tripLogId, ct);
+                return onTheLog
+                    ? ApiProblems.Conflict(
+                        TrackingProblemCodes.EventNotRemoved,
+                        "A report is destroyed for good only after it has been taken off the log — take it off first.")
+                    : ApiProblems.NotFound(TrackingProblemCodes.EventNotFound);
+            }
+
+            db.TripPositionEvents.Remove(removed);
+            await db.SaveChangesAsync(ct);
+            return TypedResults.NoContent();
+        }
+
+        var row = await db.TripPositionEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.TripLogId == tripLogId, ct);
+        if (row is null) return ApiProblems.NotFound(TrackingProblemCodes.EventNotFound);
+        row.RemovedAt = clock.GetUtcNow();
+        row.RemovedByUserId = user!.UserId;
+        await SaveKeepingChangedMomentAsync(db, row, RemovedReports(db, tripLogId), ct);
+        return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// Puts a report taken off the log back on it: the same row, under the same id, saying what it
+    /// said — under the same gate as recording, correcting and removing one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Nothing is re-resolved. A report recorded against an older survey comes back naming that
+    /// survey, where it came from and who recorded it stay as they were, and anything hung on the
+    /// row never left it. Writing it again instead would lose all of that, which is why putting
+    /// back is an act of its own.
+    /// </para>
+    /// <para>
+    /// A report that is on the log already is answered as it stands and nothing is written: the
+    /// caller asked for it to be there, and it is. The answer goes through the log's own per-row
+    /// withholding — whoever puts a report back has not passed the gate on placing anybody in the
+    /// cave, as whoever recorded it had.
+    /// </para>
+    /// <para>
+    /// <b>One thing is asked again, and only while the watch is running: that the person is still
+    /// on the trip's roster.</b> Recording a report asks it, and a roster save refuses to take
+    /// somebody off a running watch that has reports about them — but that refusal reads the log
+    /// as everybody reads it, without the reports taken off, so somebody whose only reports were
+    /// removed may leave. Putting one of those back would then make exactly the state both rules
+    /// exist to keep out: a running watch that places somebody underground whom the trip, and the
+    /// page published from its roster, no longer lists. So it is refused with the answer recording
+    /// one gets, and the remedy is the same: name them on the trip again first. A closed watch
+    /// asks nothing — its roster may be corrected freely and its log is a record, not a count of
+    /// who is still inside.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<TrackingEventDto>, ProblemHttpResult>> RestoreEventAsync(
+        Guid tripLogId, Guid eventId, SilexGisDbContext db, IAccessService access, FeatureProtection protection,
         IAccessContextAccessor accessAccessor, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -1026,11 +1332,63 @@ public static class TripTrackingEndpoints
             return ApiProblems.Conflict(TrackingProblemCodes.NotWritable, LogNotWritable);
         }
 
-        var row = await db.TripPositionEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.TripLogId == tripLogId, ct);
-        if (row is null) return ApiProblems.NotFound(TrackingProblemCodes.EventNotFound);
-        db.TripPositionEvents.Remove(row);
+        var row = await RemovedReports(db, tripLogId).FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (row is null)
+        {
+            row = await db.TripPositionEvents.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.Id == eventId && e.TripLogId == tripLogId, ct);
+            if (row is null) return ApiProblems.NotFound(TrackingProblemCodes.EventNotFound);
+        }
+        else
+        {
+            if (tracking.State == TripTrackingState.Armed
+                && !await db.TripLogParticipants.AsNoTracking()
+                    .AnyAsync(p => p.TripLogId == tripLogId && p.CaverId == row.CaverId, ct))
+            {
+                return ApiProblems.BadRequest(TrackingProblemCodes.CaverNotParticipant,
+                    "This report is about somebody who is no longer on the trip's roster. "
+                    + "Name them on the trip again first, or close the tracking.");
+            }
+
+            row.RemovedAt = null;
+            row.RemovedByUserId = null;
+            await SaveKeepingChangedMomentAsync(
+                db, row, db.TripPositionEvents.Where(e => e.TripLogId == tripLogId), ct);
+        }
+
+        return TypedResults.Ok((await ShownToAsync(db, access, protection, ctx!, tripLogId, [row], ct))[0]);
+    }
+
+    /// <summary>
+    /// Saves a report whose only change is that it was taken off the log or put back, and leaves
+    /// the moment it was last changed where it was.
+    /// </summary>
+    /// <remarks>
+    /// Whether a report reads as corrected is the comparison of when it was written with when it
+    /// was last changed, and every save moves the second. Being taken off and put back is not a
+    /// correction — the report says exactly what it said — so the stamp the save moved is put back
+    /// in the same transaction, and a report nobody corrected does not come back wearing the mark.
+    /// <paramref name="whereItIsNow"/> is the set the row is found in once saved: past the model's
+    /// filter for one just taken off, the ordinary log for one just put back.
+    /// </remarks>
+    private static async Task SaveKeepingChangedMomentAsync(
+        SilexGisDbContext db, TripPositionEvent row, IQueryable<TripPositionEvent> whereItIsNow, CancellationToken ct)
+    {
+        var changedAt = row.UpdatedAt;
+        var id = row.Id;
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.SaveChangesAsync(ct);
-        return TypedResults.NoContent();
+        await whereItIsNow.Where(e => e.Id == id)
+            .ExecuteUpdateAsync(set => set.SetProperty(e => e.UpdatedAt, changedAt), ct);
+        await transaction.CommitAsync(ct);
+
+        // The tracked copy says what the database now says, for whoever builds an answer from it.
+        // Both halves of the tracked value are set: marking the row unchanged after setting only
+        // the property would be read as a change being abandoned, and would put the save's own
+        // stamp back on the copy.
+        var stamp = db.Entry(row).Property(e => e.UpdatedAt);
+        stamp.OriginalValue = changedAt;
+        stamp.CurrentValue = changedAt;
     }
 
     /// <summary>

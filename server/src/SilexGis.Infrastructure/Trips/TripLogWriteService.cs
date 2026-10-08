@@ -560,6 +560,19 @@ public sealed class TripLogWriteService(
             .Distinct()
             .ToList();
 
+        // A number in the party for everybody the trip names after this write who holds none. In
+        // nearly every write that is the newcomers and nobody else. The people already named come
+        // first, in the order the roster first wrote them down, so that somebody an older path put
+        // on the roster without a number is given the one the reads have been showing for them
+        // rather than one behind tonight's arrivals. Somebody taken off keeps their row, and with
+        // it their number should the trip name them again.
+        var firstNamed = existing
+            .Where(row => staying.Contains(row.CaverId))
+            .GroupBy(row => row.CaverId)
+            .OrderBy(rows => rows.Min(row => row.Id))
+            .Select(rows => rows.Key);
+        await TripPartyNumbers.AssignAsync(db, tripId, firstNamed.Concat(newcomers), ct);
+
         // Only the newly listed people who hold an account: there is nobody to tell for the rest.
         return await db.Cavers
             .Where(c => newcomers.Contains(c.Id) && c.UserId != null)
@@ -589,6 +602,13 @@ public sealed class TripLogWriteService(
     /// Read through the ordinary sets, so a watch this caller's data no longer reaches refuses
     /// nothing, and asked only when the write removes somebody: creating a trip, and every save
     /// that keeps its people, costs no query here.
+    /// </para>
+    /// <para>
+    /// A report taken off the log speaks of nobody. The model hides it from this read as from
+    /// every other, so somebody whose only reports were taken off may leave a running watch. The
+    /// other half of that is kept where a report is put back: while the watch is running, one
+    /// about somebody who has since left the roster is refused there, so the two together still
+    /// keep a running watch from speaking of a person its trip no longer lists.
     /// </para>
     /// <para>
     /// <b>A check, not a lock.</b> The two facts are read here and the roster rows are removed at

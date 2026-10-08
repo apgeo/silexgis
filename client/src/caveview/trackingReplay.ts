@@ -465,13 +465,91 @@ export function placedPicturesAt(
       fold = positionsAt(events, picture.at, surveyModelId);
       folds.set(picture.at, fold);
     }
-    const position = fold.get(picture.caverId);
-    if (position === undefined || position.kind !== 'station') {
+    const placement = placementOf(fold.get(picture.caverId));
+    if (placement.kind !== 'station') {
       continue;
     }
-    byStation.set(position.station, [...(byStation.get(position.station) ?? []), picture.entry]);
+    byStation.set(placement.station, [...(byStation.get(placement.station) ?? []), picture.entry]);
   }
   return byStation;
+}
+
+/**
+ * Where a photograph of one moment is drawn, or which of the reasons it is drawn nowhere.
+ *
+ * Every answer but the first leaves the photograph on the timeline alone. They are kept apart
+ * because each is put right by a different act — naming somebody, waiting for nothing, looking at
+ * the other survey — and one of them cannot be put right by this reader at all.
+ */
+export type PicturePlacement =
+  /** Under this station of the survey in use. */
+  | { kind: 'station'; station: string }
+  /** Its subject was placed then, on a survey other than the one in use. */
+  | { kind: 'otherModel' }
+  /** Its subject had a place then and this reader is not told it. */
+  | { kind: 'withheld' }
+  /** Nothing had placed its subject at a station by then: no report yet, or a depth nobody named a station for. */
+  | { kind: 'unplaced' }
+  /** There is no survey in use to draw it on. */
+  | { kind: 'noModel' }
+  /** It is about nobody in particular, and a party has no single place. */
+  | { kind: 'party' };
+
+/**
+ * Where one photograph would be drawn if it were hung on a moment of this log.
+ *
+ * <b>The same reading the replay draws from, asked before anything is stored.</b> A photograph's
+ * station is never recorded: it is folded out of the log at the photograph's own moment every time
+ * it is drawn. A surface that offers to hang one — and shows where it will land, so that somebody
+ * can correct a camera's clock or name the right person first — has to ask this function rather
+ * than work the answer out again, or the promise it makes and the drawing that follows would be
+ * two readings of one log.
+ *
+ * <b>A place kept from this reader is never a station here.</b> A withheld report arrives with no
+ * station, so there is nothing this could show; what it says instead is that there is a place and
+ * the reader is not told it, which is what the log's own row already says to the same reader.
+ *
+ * @param events the <b>whole</b> log — a first page alone holds only the latest reports and would
+ *   answer "nobody had reported them yet" for most of a trip.
+ * @param at the moment the photograph would be hung on, as epoch milliseconds.
+ * @param caverId who it is about, or null for nobody in particular.
+ * @param surveyModelId the survey in use, or undefined where this reader has none.
+ */
+export function picturePlacementAt(
+  events: readonly TrackingEvent[],
+  at: number,
+  caverId: string | null,
+  surveyModelId: string | undefined,
+): PicturePlacement {
+  if (caverId === null) {
+    return { kind: 'party' };
+  }
+  if (surveyModelId === undefined) {
+    return { kind: 'noModel' };
+  }
+  if (!Number.isFinite(at)) {
+    return { kind: 'unplaced' };
+  }
+  return placementOf(positionsAt(events, at, surveyModelId).get(caverId));
+}
+
+/**
+ * What a folded position means for a photograph of the person standing at it.
+ *
+ * A depth is a place and is not a station: it lies somewhere on a line the survey does not draw, so
+ * a photograph cannot be hung under it any more than a marker can be stood on it.
+ */
+function placementOf(position: TrackedCaverPosition | undefined): PicturePlacement {
+  switch (position?.kind) {
+    case 'station':
+      return { kind: 'station', station: position.station };
+    case 'otherModel':
+      return { kind: 'otherModel' };
+    case 'withheld':
+      return { kind: 'withheld' };
+    default:
+      return { kind: 'unplaced' };
+  }
 }
 
 /**

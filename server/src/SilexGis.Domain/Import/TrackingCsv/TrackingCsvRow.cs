@@ -64,7 +64,7 @@ public sealed record TrackingCsvRow
     /// <summary>Which place column decides, under the order <see cref="TrackingCsvPlaceKind"/> sets out.</summary>
     public TrackingCsvPlaceKind Decides { get; init; }
 
-    /// <summary>Went in or came out, where the row says so; null for the ordinary case.</summary>
+    /// <summary>Went in, came out or a note, where the row says so; null for the ordinary case.</summary>
     public TripPositionEventKind? State { get; init; }
 
     /// <summary>The note, with anything a further details column carried folded in after it.</summary>

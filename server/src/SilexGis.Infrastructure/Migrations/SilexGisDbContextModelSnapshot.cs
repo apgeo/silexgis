@@ -6914,6 +6914,36 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("trip_participant_roles", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.TripPartyNumber", b =>
+                {
+                    b.Property<Guid>("TripLogId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trip_log_id");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer")
+                        .HasColumnName("number");
+
+                    b.Property<Guid?>("CaverId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caver_id");
+
+                    b.HasKey("TripLogId", "Number")
+                        .HasName("pk_trip_party_numbers");
+
+                    b.HasIndex(new[] { "CaverId" }, "ix_trip_party_numbers_caver_id")
+                        .HasDatabaseName("ix_trip_party_numbers_caver_id");
+
+                    b.HasIndex(new[] { "TripLogId", "CaverId" }, "ux_trip_party_numbers_trip_caver")
+                        .IsUnique()
+                        .HasDatabaseName("ux_trip_party_numbers_trip_caver");
+
+                    b.ToTable("trip_party_numbers", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_trip_party_numbers_number_from_one", "number >= 1");
+                        });
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.TripPositionEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6927,6 +6957,10 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<Guid>("CaverId")
                         .HasColumnType("uuid")
                         .HasColumnName("caver_id");
+
+                    b.Property<Guid?>("ClientKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("client_key");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -6953,6 +6987,14 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<Guid?>("RecordedByUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("recorded_by_user_id");
+
+                    b.Property<DateTimeOffset?>("RemovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("removed_at");
+
+                    b.Property<Guid?>("RemovedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("removed_by_user_id");
 
                     b.Property<short>("Source")
                         .ValueGeneratedOnAdd()
@@ -6993,6 +7035,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("RecordedByUserId")
                         .HasDatabaseName("ix_trip_position_events_recorded_by_user_id");
 
+                    b.HasIndex("RemovedByUserId")
+                        .HasDatabaseName("ix_trip_position_events_removed_by_user_id");
+
                     b.HasIndex("SurveyModelId")
                         .HasDatabaseName("ix_trip_position_events_survey_model_id");
 
@@ -7004,6 +7049,11 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("TripLogId", "CaverId", "RecordedAt")
                         .HasDatabaseName("ix_trip_position_events_trip_log_id_caver_id_recorded_at");
+
+                    b.HasIndex(new[] { "TripLogId", "ClientKey", "CaverId" }, "ux_trip_position_events_client_key")
+                        .IsUnique()
+                        .HasDatabaseName("ux_trip_position_events_client_key")
+                        .HasFilter("client_key IS NOT NULL");
 
                     b.ToTable("trip_position_events", (string)null);
                 });
@@ -7067,6 +7117,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text[]")
                         .HasColumnName("depth_filter");
+
+                    b.Property<DateTimeOffset?>("FirstArmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_armed_at");
 
                     b.Property<string>("ReferenceStationName")
                         .HasMaxLength(400)
@@ -9348,6 +9402,24 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Navigation("TripLog");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.TripPartyNumber", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Caver", null)
+                        .WithMany()
+                        .HasForeignKey("CaverId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_trip_party_numbers_cavers_caver_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.TripLog", "TripLog")
+                        .WithMany()
+                        .HasForeignKey("TripLogId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_trip_party_numbers_trip_logs_trip_log_id");
+
+                    b.Navigation("TripLog");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.TripPositionEvent", b =>
                 {
                     b.HasOne("SilexGis.Domain.Entities.Feature", null)
@@ -9368,6 +9440,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasForeignKey("RecordedByUserId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_trip_position_events_users_recorded_by_user_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("RemovedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_trip_position_events_users_removed_by_user_id");
 
                     b.HasOne("SilexGis.Domain.Entities.TripTeam", null)
                         .WithMany()

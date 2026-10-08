@@ -152,6 +152,50 @@ public class TripPositionEvent : ITimestamped, IAuditable, IAuditChild
 
     public DateTimeOffset UpdatedAt { get; set; }
 
+    /// <summary>
+    /// When the report was taken off the log; null while it is on it.
+    ///
+    /// <para>
+    /// A report taken off is kept, not destroyed: it may be the only record of where somebody was,
+    /// and nothing else holds a station once the row is gone — the trip's history deliberately
+    /// keeps no place. So taking one off is this mark, putting it back clears the mark and returns
+    /// the same row with everything hung on it, and destroying it is a second, separate act that
+    /// only a marked row accepts.
+    /// </para>
+    /// <para>
+    /// A marked row is hidden by the model itself, with the rows of a deleted trip, so no fold,
+    /// list, count or published read has to remember to leave it out. The few readers that must
+    /// see it — the list of removed reports, the acts on one, and whatever holds a person in
+    /// place — ask past that on purpose.
+    /// </para>
+    /// </summary>
+    public DateTimeOffset? RemovedAt { get; set; }
+
+    /// <summary>Who took the report off the log; null once that account is gone.</summary>
+    public Guid? RemovedByUserId { get; set; }
+
+    /// <summary>
+    /// The name, in the model, of the key of the act of reporting that wrote this row — the value
+    /// a sender mints once for one press of "record" and sends again with every re-send of it.
+    /// Null on every row no keyed send wrote: imports, and reports sent without one.
+    ///
+    /// <para>
+    /// <b>Deliberately a column the model knows and this class does not carry.</b> The key answers
+    /// exactly one question — "has this act already been written?" — and is nobody's to read:
+    /// whoever learns it can make a send of their own answer with somebody else's rows instead of
+    /// being written. A member here would be copied into the trip's history by the snapshot taken
+    /// of a new row, and would be one careless projection away from every answer built from a
+    /// report. Kept in the model only, it cannot be emitted by anything that maps a report to what
+    /// a caller reads; the write that stamps it and the lookup that asks for it name it through
+    /// this constant.
+    /// </para>
+    /// <para>
+    /// One act writes one row per person, so the key repeats across the rows of one act and is
+    /// unique only together with the trip and the person.
+    /// </para>
+    /// </summary>
+    public const string ClientKeyProperty = "ClientKey";
+
     public string AuditId => Id.ToString();
 
     public string? RootEntityType => nameof(TripLog);

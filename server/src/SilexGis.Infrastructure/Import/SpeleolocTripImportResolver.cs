@@ -266,11 +266,12 @@ public sealed class SpeleolocTripImportResolver(SilexGisDbContext db)
     {
         var rows = await db.SurveyStations.AsNoTracking()
             .Where(s => s.SurveyModelId == model.Id)
-            .Select(s => new { s.Name, s.SurveyName, s.Position, s.Flags })
+            .Select(s => new { s.Name, s.SurveyName, s.Position, s.Flags, s.FileStationId })
             .ToListAsync(ct);
         return [.. rows.Select(r => TrackingDepthResolver.Station.Of(
             model.Format, model.RootSurveyName,
-            r.Name, r.SurveyName, r.Position.Coordinate.Z, (r.Flags & SurveyStationFlags.Entrance) != 0))];
+            r.Name, r.SurveyName, r.Position.Coordinate.Z, (r.Flags & SurveyStationFlags.Entrance) != 0,
+            r.FileStationId))];
     }
 
     private sealed record KnownPlace(string? Name, double? DepthM);

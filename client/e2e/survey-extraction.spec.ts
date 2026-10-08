@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
+import { apiJson, bearerToken } from './rastermapApi.ts';
 
 const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -52,4 +53,54 @@ test('a compiled survey is read in the background and the list follows it there'
   await expect(page.getByRole('table').filter({ hasText: 'Extracted' })).toBeVisible({
     timeout: 30_000,
   });
+
+  // ---- The same file read again, without uploading it again ----
+  // Offered on a model that has been read, asked about first because it replaces what the last
+  // reading produced, and answered by the server with the model still ready — it goes on holding
+  // the reading it has until the next one replaces it — and said to be on its way to being read
+  // again. That second half is what makes the rest mean something: a row that says "Ready"
+  // afterwards was ready before too, so the status alone could not tell a reading that ran from a
+  // press that did nothing.
+  const asked = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      /\/api\/v1\/survey-models\/[0-9a-f-]+\/reading$/.test(new URL(response.url()).pathname),
+  );
+  await models.getByRole('button', { name: 'Read again' }).click();
+  await page.locator('.ant-popconfirm:visible').getByRole('button', { name: 'OK' }).click();
+  const answer = await asked;
+  expect(answer.status()).toBe(200);
+  const queued = (await answer.json()) as { id: string; status: string; readingAgain: boolean };
+  expect(queued.status).toBe('ready');
+  expect(queued.readingAgain).toBe(true);
+  await expect(page.getByText('The reading is queued.', { exact: false })).toBeVisible();
+
+  // The server finishes the second reading: only the job ending stops the model being answered
+  // as read again, and it is ready at every moment on the way.
+  const token = await bearerToken(page);
+  await expect
+    .poll(
+      async () => {
+        const now = (await apiJson(page, token, 'GET', `/api/v1/survey-models/${queued.id}`)) as {
+          status: string;
+          readingAgain: boolean;
+        };
+        expect(now.status).toBe('ready');
+        return now.readingAgain;
+      },
+      { timeout: 90_000, message: 'the second reading never finished' },
+    )
+    .toBe(false);
+  // And the list arrives there by itself, as it did the first time: no reload, nothing left
+  // saying the work is outstanding, the plot viewable throughout.
+  await expect(models.getByText('Being read again')).toHaveCount(0, { timeout: 30_000 });
+  await expect(models.getByText('Waiting its turn')).toHaveCount(0);
+  await expect(models.getByText('In progress')).toHaveCount(0);
+  await expect(models.getByText('Ready')).toBeVisible();
+  await expect(models.getByText('Could not be processed')).toHaveCount(0);
+  await expect(models.getByRole('button', { name: 'View in 3D' })).toBeVisible();
+
+  // A second reading replaces the first one's work rather than adding to it: the cave still has
+  // one centerline drawn from this survey, not two.
+  await expect(page.getByRole('row').filter({ hasText: 'Extracted' })).toHaveCount(1);
 });

@@ -79,6 +79,9 @@ describe("the figures computed from a cave's line work", () => {
     expect(asked).toContain(JSON.stringify(queryKeys.caveSurveyStatistics('cave-2')));
     expect(asked).toContain(JSON.stringify(queryKeys.caveOrientation('cave-2')));
     expect(asked).toContain(JSON.stringify(queryKeys.caveTopology('cave-2')));
+    // Whether each declared place's station is in the current survey is an answer about the
+    // survey too: with the survey gone there is nothing left to mark a declaration against.
+    expect(asked).toContain(JSON.stringify(queryKeys.caveDepthPlaces('cave-2')));
   });
 
   it('are asked for again when an older model is made the current one', async () => {
@@ -96,5 +99,8 @@ describe("the figures computed from a cave's line work", () => {
     expect(asked).toContain(JSON.stringify(queryKeys.caveSurveyStatistics('cave-3')));
     expect(asked).toContain(JSON.stringify(queryKeys.caveOrientation('cave-3')));
     expect(asked).toContain(JSON.stringify(queryKeys.caveTopology('cave-3')));
+    // The card of declared places marks the ones the current survey has no station for, and tells
+    // its reader to check which survey is current. Doing so, one card up, has to move the marks.
+    expect(asked).toContain(JSON.stringify(queryKeys.caveDepthPlaces('cave-3')));
   });
 });

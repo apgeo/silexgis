@@ -82,7 +82,8 @@ compiled Therion model the CaveView.js project publishes as its Cheddar
 demonstration survey: nine surveys and their two ancestors, the stations belonging
 to them and the legs between those stations, read with the format's own reader and
 written back out with its own writer. Nothing else was edited; it is 38 kB of a
-9 MB file. Test fixture only: nothing here is built into a shipped artifact.
+9 MB file. The survey-reader tests read it, and one browser spec uploads this same
+file from here. Test fixture only: nothing here is built into a shipped artifact.
 
   Source:    https://github.com/aardgoose/CaveView.js (docs/surveys/Cheddar.lox)
   License:   MIT (c) 2016 aardgoose — the repository's licence; it states no

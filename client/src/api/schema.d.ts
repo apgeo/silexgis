@@ -896,12 +896,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Stations read out of the survey; withheld without the exact-location permission. */
+        /** Stations read out of the survey, optionally only those whose name begins with `q`; withheld without the exact-location permission. */
         get: {
             parameters: {
                 query?: {
                     page?: number;
                     pageSize?: number;
+                    q?: string;
                 };
                 header?: never;
                 path: {
@@ -1003,6 +1004,44 @@ export interface paths {
             };
         };
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-models/{id}/reading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queues another reading of the model's stored file (Write on the cave). Refused while a reading is queued or running. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurveyModelDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -2228,6 +2267,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/survey-reading-backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueues a sweep that reads every line-plot survey again, so that surveys read by an earlier version get what the present reader produces; requires Execute on the Jobs domain. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProcessingJobDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/export/caves": {
         parameters: {
             query?: never;
@@ -2471,6 +2546,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{tripLogId}/tracking/events/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The whole log as a sheet the import reads back, oldest report first, with every place this caller may not be told left out. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/trips/{token}": {
         parameters: {
             query?: never;
@@ -2498,6 +2609,13 @@ export interface paths {
                     content: {
                         "application/json": components["schemas"]["PublicTripTrackingEnvelopeDto"];
                     };
+                };
+                /** @description Not Modified */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -2575,6 +2693,13 @@ export interface paths {
                         "application/json": components["schemas"]["PublicPastTripListDto"];
                     };
                 };
+                /** @description Not Modified */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         put?: never;
@@ -2614,6 +2739,13 @@ export interface paths {
                         "application/json": components["schemas"]["PublicPastTrackDto"];
                     };
                 };
+                /** @description Not Modified */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         put?: never;
@@ -2651,6 +2783,13 @@ export interface paths {
                     content: {
                         "application/json": components["schemas"]["PublicLiveTripListDto"];
                     };
+                };
+                /** @description Not Modified */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -13945,10 +14084,12 @@ export interface paths {
             };
         };
         post?: never;
-        /** Take a report off the log, when what it recorded never happened rather than happened differently. */
+        /** Take a report off the log, when what it recorded never happened rather than happened differently — it is kept and can be put back; with permanent=true, destroy one already taken off. */
         delete: {
             parameters: {
-                query?: never;
+                query?: {
+                    permanent?: boolean;
+                };
                 header?: never;
                 path: {
                     tripLogId: string;
@@ -13967,6 +14108,86 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/events/removed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The reports taken off the trip's log, latest removal first, for those who may write the log; position fields follow the same withholding as the log. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfTrackingRemovedEventDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Put a report taken off the log back on it, unchanged and under its own id. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    eventId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingEventDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -14548,6 +14769,44 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expeditions/{id}/surface-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Who is underground on one camp's trips: every member trip this caller may read whose watch is armed or was closed recently, with its party counted in, out and not heard from. No station, depth, survey or cave is on this answer. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionSurfaceLogDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -20091,6 +20350,7 @@ export interface components {
             depthM: number;
             stationName: string;
             placeLabel: null | string;
+            stationInSurvey: null | boolean;
         };
         CaveDepthPlaceWriteRequest: {
             /** Format: double */
@@ -21507,6 +21767,44 @@ export interface components {
             id: string;
             title: string;
             reason: components["schemas"]["CascadeSkipReason"];
+        };
+        ExpeditionSurfaceLogDto: {
+            trips: components["schemas"]["ExpeditionSurfaceLogTripDto"][];
+            truncated: boolean;
+        };
+        ExpeditionSurfaceLogPersonDto: {
+            /** Format: uuid */
+            caverId: string;
+            name: string;
+            in: boolean;
+            out: boolean;
+            /** Format: date-time */
+            lastRecordedAt?: null | string;
+        };
+        ExpeditionSurfaceLogTripDto: {
+            /** Format: uuid */
+            tripLogId: string;
+            title: string;
+            /** Format: date */
+            tripDate: string;
+            /** Format: date */
+            tripDateEnd?: null | string;
+            state: components["schemas"]["TripTrackingState"];
+            /** Format: date-time */
+            armedAt?: null | string;
+            /** Format: date-time */
+            closedAt?: null | string;
+            /** Format: date-time */
+            expectedReturnAt?: null | string;
+            /** Format: int32 */
+            underground: number;
+            /** Format: int32 */
+            out: number;
+            /** Format: int32 */
+            unheard: number;
+            /** Format: date-time */
+            lastRecordedAt?: null | string;
+            party: components["schemas"]["ExpeditionSurfaceLogPersonDto"][];
         };
         ExpeditionTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];
@@ -23289,6 +23587,15 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfTrackingRemovedEventDto: {
+            items: components["schemas"]["TrackingRemovedEventDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfTripLogDto: {
             items: components["schemas"]["TripLogDto"][];
             /** Format: int32 */
@@ -24993,6 +25300,7 @@ export interface components {
             mergedStationCount: null | number;
             /** Format: int32 */
             anonymousStationCount: null | number;
+            readingAgain: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -25059,6 +25367,7 @@ export interface components {
         SurveySourceKind: "therionSource" | "therionConfig" | "therionLog" | "survexSource" | "topoDroidArchive";
         SurveyStationDto: {
             name: string;
+            viewerName: string;
             surveyName: null | string;
             /** Format: double */
             longitude: number;
@@ -25645,6 +25954,7 @@ export interface components {
             timeZone?: null | string;
             /** Format: date */
             day?: null | string;
+            notedWords?: null | string[];
         };
         TrackingCsvImportRequest: {
             text: null | string;
@@ -25748,6 +26058,8 @@ export interface components {
             note: null | string;
             /** Format: date-time */
             recordedAt: null | string;
+            /** Format: uuid */
+            clientKey: null | string;
         };
         TrackingParticipantDto: {
             /** Format: uuid */
@@ -25772,6 +26084,8 @@ export interface components {
             name: null | string;
             quiet: boolean;
             outsideDeclaredParts: boolean;
+            /** Format: int32 */
+            ordinal: null | number;
         };
         TrackingParticipantLabelDto: {
             /** Format: uuid */
@@ -25816,6 +26130,11 @@ export interface components {
             placeLabel: null | string;
             stationInModel: boolean;
         };
+        TrackingRemovedEventDto: {
+            report: components["schemas"]["TrackingEventDto"];
+            /** Format: date-time */
+            removedAt: string;
+        };
         TrackingResolveDepthRequest: {
             /** Format: double */
             depthM: null | number;
@@ -25826,11 +26145,15 @@ export interface components {
             state: components["schemas"]["TripTrackingState"];
             /** Format: uuid */
             surveyModelId: null | string;
+            /** Format: uuid */
+            caveFeatureId: null | string;
             surveyModelMissing: boolean;
             referenceStationName: null | string;
             depthFilter: string[];
             /** Format: date-time */
             armedAt: null | string;
+            /** Format: date-time */
+            firstArmedAt: null | string;
             /** Format: date-time */
             closedAt: null | string;
             positionsWithheld: boolean;
@@ -26464,6 +26787,12 @@ export interface components {
             latestTripDate: null | string;
             /** Format: int32 */
             photographs: number;
+            /** Format: int32 */
+            trackedTrips: number;
+            /** Format: int32 */
+            watchUndergroundMinutes: number;
+            /** Format: int32 */
+            watchTimedPersonTrips: number;
         };
         TripStatsBreakdownDto: {
             overlapping: boolean;

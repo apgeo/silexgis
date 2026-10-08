@@ -556,4 +556,106 @@ public class TrackingCsvPlannerTests
         plan.Reports.SelectMany(r => r.Diagnostics)
             .ShouldNotContain(d => d.Problem == TrackingCsvProblem.ClockRunsBackwards);
     }
+
+    [Fact]
+    public void A_row_whose_state_says_note_is_planned_as_a_note_and_claims_no_station()
+    {
+        // No model, and a depth beside the word: the word wins, so nothing is resolved and the
+        // watch having lost its survey costs the row nothing. The row below it is the same depth
+        // without the word, refused for wanting the survey — which is what shows it was missing.
+        var subject = Subject() with { HasModel = false, Stations = [] };
+
+        var plan = PlanOf(
+            "12.09.2026 09:00,105,,,Ion Popescu,Echipa 1,,nota\r\n"
+            + "12.09.2026 10:00,105,,,Ion Popescu,,,", subject);
+
+        var note = plan.Reports.ShouldHaveSingleItem();
+        note.Line.ShouldBe(2);
+        note.Kind.ShouldBe(TripPositionEventKind.Note);
+        note.Note.ShouldBeNull();
+        note.ViewerStationName.ShouldBeNull();
+        note.DepthM.ShouldBeNull();
+        note.TeamId.ShouldBe(TeamOne);
+        plan.Refused.ShouldHaveSingleItem().Problem.ShouldBe(TrackingCsvProblem.ModelMissing);
+    }
+
+    /// <summary>What the log holds for Ion at nine, as a subject that knows it.</summary>
+    private static TrackingCsvSubject Holding(TrackingCsvStoredPlace stood) =>
+        Subject(existing: [(Ion, Nine)]) with
+        {
+            Stored = new Dictionary<(Guid, DateTimeOffset), TrackingCsvStoredPlace> { [(Ion, Nine)] = stood },
+        };
+
+    private static readonly DateTimeOffset Nine = new(2026, 9, 12, 9, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public void A_row_that_repeats_the_depth_a_report_already_holds_keeps_the_station_it_was_placed_at()
+    {
+        // The report was placed at station "9" on a survey the watch has since left; on the one it
+        // is on now, 100 m is station "2". The row says 100 m, which is what the report says, so
+        // nothing is resolved again: the plan carries the stored station and marks the place kept.
+        var subject = Holding(new TrackingCsvStoredPlace(TripPositionEventKind.AtDepth, "9", 100m));
+
+        var kept = PlanOf("12.09.2026 09:00,100,,,Ion Popescu,,,", subject).Reports.ShouldHaveSingleItem();
+        kept.KeepsStoredPlace.ShouldBeTrue();
+        kept.Replaces.ShouldBeTrue();
+        kept.Kind.ShouldBe(TripPositionEventKind.AtDepth);
+        kept.ViewerStationName.ShouldBe("9");
+        kept.DepthM.ShouldBe(100m);
+
+        // The twin: another depth is another statement, and is resolved on the survey in force.
+        var moved = PlanOf("12.09.2026 09:00,150,,,Ion Popescu,,,", subject).Reports.ShouldHaveSingleItem();
+        moved.KeepsStoredPlace.ShouldBeFalse();
+        moved.ViewerStationName.ShouldBe("3");
+        moved.DepthM.ShouldBe(150m);
+    }
+
+    [Fact]
+    public void A_row_that_repeats_a_station_the_present_survey_does_not_have_is_kept_and_not_refused()
+    {
+        var subject = Holding(new TrackingCsvStoredPlace(TripPositionEventKind.AtStation, "old.7", null));
+
+        var plan = PlanOf("12.09.2026 09:00,,old.7,,Ion Popescu,,,", subject);
+        plan.Refused.ShouldBeEmpty();
+        var kept = plan.Reports.ShouldHaveSingleItem();
+        kept.KeepsStoredPlace.ShouldBeTrue();
+        kept.Kind.ShouldBe(TripPositionEventKind.AtStation);
+        kept.ViewerStationName.ShouldBe("old.7");
+        kept.DepthM.ShouldBeNull();
+
+        // The twin, three ways: the same station for somebody whose report the log does not hold,
+        // another station for the one it does, and the same cell on a log that was told nothing —
+        // each is resolved against the survey, which has no such station.
+        PlanOf("12.09.2026 09:00,,old.7,,Maria Pop,,,", subject)
+            .Refused.ShouldHaveSingleItem().Problem.ShouldBe(TrackingCsvProblem.StationNotInModel);
+        PlanOf("12.09.2026 09:00,,old.8,,Ion Popescu,,,", subject)
+            .Refused.ShouldHaveSingleItem().Problem.ShouldBe(TrackingCsvProblem.StationNotInModel);
+        PlanOf("12.09.2026 09:00,,old.7,,Ion Popescu,,,", Subject(existing: [(Ion, Nine)]))
+            .Refused.ShouldHaveSingleItem().Problem.ShouldBe(TrackingCsvProblem.StationNotInModel);
+    }
+
+    [Fact]
+    public void A_row_about_two_people_keeps_the_place_of_the_one_it_repeats_and_refuses_the_other_once()
+    {
+        var subject = Holding(new TrackingCsvStoredPlace(TripPositionEventKind.AtStation, "old.7", null));
+
+        var plan = PlanOf("12.09.2026 09:00,,old.7,,\"Ion Popescu; Maria Pop; Mihai Ionescu\",,,", subject);
+
+        plan.Reports.ShouldHaveSingleItem().CaverId.ShouldBe(Ion);
+        var refused = plan.Refused.ShouldHaveSingleItem();
+        refused.Problem.ShouldBe(TrackingCsvProblem.StationNotInModel);
+        refused.Line.ShouldBe(2);
+    }
+
+    [Fact]
+    public void A_row_that_says_another_kind_of_thing_than_the_stored_report_is_planned_as_any_row_is()
+    {
+        // The log holds a depth report at 100 m; the row names station "2", which is where 100 m
+        // is. That is a station report now and no longer a depth one, so it is written.
+        var subject = Holding(new TrackingCsvStoredPlace(TripPositionEventKind.AtDepth, "2", 100m));
+
+        var report = PlanOf("12.09.2026 09:00,,2,,Ion Popescu,,,", subject).Reports.ShouldHaveSingleItem();
+        report.KeepsStoredPlace.ShouldBeFalse();
+        report.Kind.ShouldBe(TripPositionEventKind.AtStation);
+    }
 }

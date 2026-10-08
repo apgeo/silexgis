@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace SilexGis.Api.Features.TripTracking;
 
 /// <summary>
-/// Refuses to start on a follow-link lifetime or a closing grace that cannot mean anything.
+/// Refuses to start on a follow-link lifetime, a closing grace or a period after a lapse that
+/// cannot mean anything.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Why a refused start and not a quiet correction.</b> Both periods are read on anonymous
+/// <b>Why a refused start and not a quiet correction.</b> These periods are read on anonymous
 /// routes whose every refusal is the same 404 on purpose, so a wrong one does not fail anywhere
 /// an operator would look. The lifetime is counted from the midnight that ends a trip's last
 /// day. At zero a link therefore stops at that midnight — with a party that is late still
@@ -17,6 +19,11 @@ namespace SilexGis.Api.Features.TripTracking;
 /// person who finds out is a family member looking at an empty page. A container that will not
 /// come up, with a line that names the setting, is found by the person who typed it, at the
 /// moment they typed it.
+/// </para>
+/// <para>
+/// The period after a lapse is optional, and unset is its ordinary state. Below zero it would stop
+/// a link listing the cave's other parties before the link's own trip had ended, which nobody can
+/// have meant; zero has a meaning and is let through.
 /// </para>
 /// <para>
 /// <b>What is deliberately not checked here.</b> The size of the list of followed trips is held
@@ -50,7 +57,77 @@ public sealed class TripTrackingOptionsValidator : IValidateOptions<TripTracking
                 + "page stops answering the moment the watch is closed.");
         }
 
+        if (options.SiblingWindowAfterLapse is { } siblings && siblings < TimeSpan.Zero)
+        {
+            failures.Add(
+                $"{Setting(nameof(TripTrackingOptions.SiblingWindowAfterLapse))} must not be negative when it "
+                + $"is set; got {siblings}. It is how long after its own trip is over a published link goes on "
+                + "listing who is being followed in the same cave now, written days.hours:minutes:seconds — "
+                + "90.00:00:00 is ninety days. 00:00:00 is allowed and ends that list with the trip's last day. "
+                + "For no limit, leave it unset.");
+        }
+
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+    }
+
+    /// <summary>
+    /// The periods of these settings, each with the type it is read as — the ones that can be
+    /// written in a way that is no period at all.
+    /// </summary>
+    private static readonly (string Property, Type ReadAs)[] Periods =
+    [
+        (nameof(TripTrackingOptions.ShareLifetime), typeof(TimeSpan)),
+        (nameof(TripTrackingOptions.ShareGraceAfterClose), typeof(TimeSpan)),
+        (nameof(TripTrackingOptions.SiblingWindowAfterLapse), typeof(TimeSpan?)),
+        (nameof(TripTrackingOptions.QuietAfter), typeof(TimeSpan)),
+    ];
+
+    /// <summary>
+    /// Refuses a period that cannot be read as one (<c>3h</c>), naming the setting the way it is
+    /// typed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why this is not one more rule in the check above.</b> That check is handed settings
+    /// that have already been read. A value that is no period never gets that far: reading it is
+    /// what fails, with a message that names a configuration path and a type and says nothing an
+    /// operator can act on — and it fails again wherever the settings are next read, which is on
+    /// the tracking routes and on every published page. So this runs before the settings are
+    /// read, as part of making them, and the start-up check that forces them to be made turns it
+    /// into a refused start with every unreadable period named at once.
+    /// </para>
+    /// <para>
+    /// Whether a value can be read is decided by reading it, with the reader the settings
+    /// themselves are read by, rather than by a second opinion here about what a period looks
+    /// like: the two could only ever disagree. A setting nobody wrote is not looked at.
+    /// </para>
+    /// </remarks>
+    public static void RefuseUnreadablePeriods(IConfiguration configuration)
+    {
+        var failures = new List<string>();
+        foreach (var (property, readAs) in Periods)
+        {
+            var written = configuration.GetSection($"{TripTrackingOptions.SectionName}:{property}");
+            if (written.Value is null) continue;
+            try
+            {
+                _ = written.Get(readAs);
+            }
+            catch (InvalidOperationException)
+            {
+                failures.Add(
+                    $"{Setting(property)} cannot be read as a period of time; got \"{written.Value}\". It is "
+                    + "written days.hours:minutes:seconds — 03:00:00 is three hours, 1.12:00:00 a day and a "
+                    + "half. A bare number is read as that many days, and a letter for the unit (3h, 90m) is "
+                    + "not understood.");
+            }
+        }
+
+        if (failures.Count > 0)
+        {
+            throw new OptionsValidationException(
+                Microsoft.Extensions.Options.Options.DefaultName, typeof(TripTrackingOptions), failures);
+        }
     }
 
     private static string Setting(string property) =>

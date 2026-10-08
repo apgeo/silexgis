@@ -361,6 +361,10 @@ public sealed class ImportCommitService(
         // may itself have been deleted since, and the undo still has to take back what this
         // import wrote there: left behind, the positions would return with the trip the day
         // somebody restored it, as the one part of an undone import that was never undone.
+        //
+        // The same filter hides a position somebody took off the trip's log, and the undo takes
+        // that one too. A removed position is kept so that it can be put back; left behind here it
+        // could be put back onto the log after the import that wrote it had been undone.
         if (eventIds.Count > 0)
         {
             await db.TripPositionEvents.IgnoreQueryFilters()

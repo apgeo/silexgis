@@ -86,6 +86,34 @@ public sealed class TripTrackingOptions
     public TimeSpan ShareGraceAfterClose { get; set; } = TimeSpan.FromDays(2);
 
     /// <summary>
+    /// How long after its own trip is over a link goes on listing the parties being followed in
+    /// its cave right now. <b>Unset, which means no limit.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A link is minted for one trip and lives in an article. When that trip is over the link
+    /// still opens the cave's past trips and, beside them, who is underground in that cave at this
+    /// moment — which is what lets one article show a whole camp while it runs. Left without a
+    /// limit, an article from years ago goes on naming tonight's party. This is the period after
+    /// which it stops, counted from the end of the link's own trip; the past trips themselves stay
+    /// readable for as long as the archive keeps them.
+    /// </para>
+    /// <para>
+    /// <b>Why unset is the default.</b> How long an old address should go on saying who is in a
+    /// cave is a question about a club's readers and the people it names, and no number chosen
+    /// here would be right for both a club that publishes one camp a year and one that wants its
+    /// journal page to work indefinitely. Unset changes nothing for an installation that has not
+    /// decided.
+    /// </para>
+    /// <para>
+    /// A link still following its own party is never affected, whatever this says. Zero is
+    /// allowed: a link then stops listing other parties once its own trip's last day is over and
+    /// its own page has ended.
+    /// </para>
+    /// </remarks>
+    public TimeSpan? SiblingWindowAfterLapse { get; set; }
+
+    /// <summary>
     /// The largest list of concurrently-followed trips this surface will serve however it is
     /// configured.
     /// </summary>
@@ -154,11 +182,11 @@ public sealed class TripTrackingOptions
     /// </para>
     /// <para>
     /// <b>That is the only mistake this absorbs.</b> A value that is not a duration at all
-    /// (<c>3h</c>) never gets here: the configuration binder refuses it when these options are
-    /// first read, and goes on refusing on every read — which fails every request that reads this
-    /// class, the published-trip routes among them, exactly as an unreadable link lifetime or
-    /// grace window above does. And a bare number is a number of days, so <c>3</c> is three days
-    /// and in practice the mark switched off. The accepted form is <c>[d.]hh:mm:ss</c>.
+    /// (<c>3h</c>) never gets here: it cannot be read, and the application refuses to start on
+    /// it, naming the setting — as it does for an unreadable link lifetime, grace window or period
+    /// after a lapse above (see <see cref="TripTrackingOptionsValidator.RefuseUnreadablePeriods"/>).
+    /// And a bare number is a number of days, so <c>3</c> is three days and in practice the mark
+    /// switched off. The accepted form is <c>[d.]hh:mm:ss</c>.
     /// </para>
     /// </remarks>
     public TimeSpan EffectiveQuietAfter => QuietAfter > TimeSpan.Zero ? QuietAfter : TimeSpan.Zero;

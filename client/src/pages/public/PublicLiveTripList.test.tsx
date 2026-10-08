@@ -117,6 +117,57 @@ describe('the parties being followed in the cave now', () => {
     expect(screen.queryByTestId('public-live-empty')).toBeNull();
   });
 
+  it('says a link that still opens the past no longer lists today’s parties, quietly and with no second try', () => {
+    const { rerender } = render(
+      <PublicLiveTripList
+        trips={undefined}
+        more={false}
+        loading={false}
+        failed
+        refused
+        pastOnly
+        ownTripLogId={OWN}
+      />,
+    );
+
+    const notice = screen.getByTestId('public-live-past-only');
+    expect(notice).toHaveTextContent('This link no longer lists who is in the cave today');
+    expect(notice.className).toContain('ant-alert-info');
+    expect(screen.queryByTestId('public-live-failed')).toBeNull();
+    expect(screen.queryByText(/Try opening this list again/)).toBeNull();
+
+    // It wins over the link being over: past trips that answered at about the moment this list
+    // was refused say the link still works. Whether they did is the caller's to establish.
+    rerender(
+      <PublicLiveTripList
+        trips={undefined}
+        more={false}
+        loading={false}
+        failed
+        refused
+        linkEnded
+        pastOnly
+        ownTripLogId={OWN}
+      />,
+    );
+    expect(screen.getByTestId('public-live-past-only')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-live-link-ended')).toBeNull();
+
+    // And it is never said of a list that merely failed, whatever else is claimed beside it.
+    rerender(
+      <PublicLiveTripList
+        trips={undefined}
+        more={false}
+        loading={false}
+        failed
+        pastOnly
+        ownTripLogId={OWN}
+      />,
+    );
+    expect(screen.getByTestId('public-live-failed')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-live-past-only')).toBeNull();
+  });
+
   it('says there are more parties than these, and never how many', () => {
     render(
       <PublicLiveTripList

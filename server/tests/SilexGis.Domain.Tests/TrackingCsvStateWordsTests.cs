@@ -70,4 +70,40 @@ public class TrackingCsvStateWordsTests
         // "intrare" column means something else to that club must not be read as an entry.
         theirs.KindOf("intrare").ShouldBeNull();
     }
+
+    [Fact]
+    public void A_note_has_a_word_too_in_both_languages_and_a_club_can_name_its_own()
+    {
+        Words.KindOf("nota").ShouldBe(TripPositionEventKind.Note);
+        Words.KindOf("Notă").ShouldBe(TripPositionEventKind.Note);
+        Words.KindOf("note").ShouldBe(TripPositionEventKind.Note);
+
+        // Replaced on its own, like the other two: naming the note words says nothing about how
+        // going in and coming out are written.
+        var theirs = new TrackingCsvStateWords { Noted = ["mesaj"] };
+        theirs.KindOf("mesaj").ShouldBe(TripPositionEventKind.Note);
+        theirs.KindOf("nota").ShouldBeNull();
+        theirs.KindOf("intrare").ShouldBe(TripPositionEventKind.Entered);
+    }
+
+    [Fact]
+    public void The_mark_of_a_place_kept_back_is_never_a_listed_word_whatever_the_lists_say()
+    {
+        Words.KindOf(TrackingCsvStateWords.Withheld).ShouldBeNull();
+
+        // Somebody who lists the mark as a word of their own does not get it read as one: a row
+        // carrying it has a place the sheet does not say, and reading it as an entry, an exit or
+        // a note would let a re-import write that over the place the log holds. The same lists
+        // still read their other words, which is what shows the mark is what was refused.
+        var careless = new TrackingCsvStateWords
+        {
+            WentIn = [TrackingCsvStateWords.Withheld, "jos"],
+            CameOut = [TrackingCsvStateWords.Withheld, "sus"],
+            Noted = [TrackingCsvStateWords.Withheld, "mesaj"],
+        };
+        careless.KindOf("RETINUT").ShouldBeNull();
+        careless.KindOf("jos").ShouldBe(TripPositionEventKind.Entered);
+        careless.KindOf("sus").ShouldBe(TripPositionEventKind.Exited);
+        careless.KindOf("mesaj").ShouldBe(TripPositionEventKind.Note);
+    }
 }

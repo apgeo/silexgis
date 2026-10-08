@@ -127,6 +127,19 @@ public sealed class TripPromotionTests : IAsyncLifetime, IDisposable, IClassFixt
         roster.Select(r => r.CaverId).ShouldNotContain(cavers[2]);
         roster.Select(r => r.CaverId).ShouldNotContain(cavers[3]);
         (await ListRowsAsync(trip)).Count.ShouldBe(4);
+
+        // Everybody on the trip's list after this holds a number in its party — the two written
+        // in here, and whoever the plan already named. This path writes roster rows itself, so it
+        // is one that has to remember to; a read would list an unnumbered person anyway, which is
+        // why the rows are counted.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var named = await db.TripLogParticipants.Where(p => p.TripLogId == trip)
+            .Select(p => p.CaverId).Distinct().ToListAsync();
+        var numbered = await db.TripPartyNumbers.Where(n => n.TripLogId == trip)
+            .Select(n => n.CaverId).ToListAsync();
+        named.ShouldContain(cavers[0]);
+        numbered.ShouldBe(named.Select(caver => (Guid?)caver), ignoreOrder: true);
     }
 
     /// <summary>

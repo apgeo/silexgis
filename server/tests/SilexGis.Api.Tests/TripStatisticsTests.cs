@@ -14,6 +14,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Persistence;
+using TripPositionEventKind = SilexGis.Domain.Entities.TripPositionEventKind;
 
 namespace SilexGis.Api.Tests;
 
@@ -719,6 +720,167 @@ public sealed class TripStatisticsTests : IAsyncLifetime, IDisposable, IClassFix
         onScreen.GetProperty("lengthSurveyedM").GetDecimal().ShouldBe((decimal)seen["Metres surveyed"]);
     }
 
+    /// <summary>
+    /// The figures read from tracking logs are bounded by the same walk as every other figure
+    /// here: a log is counted only through a trip this caller may open. A count taken past that
+    /// would say there is a trip — and how long somebody was down it.
+    /// </summary>
+    /// <remarks>
+    /// The withheld side is a Viewer and a private trip it holds nothing over; the same two trips
+    /// are read by their owner in the same test, so the smaller answer is a statement about the
+    /// caller and not about a log that was never written. The file is checked beside the screen
+    /// because it is the copy that leaves.
+    /// </remarks>
+    [Fact]
+    public async Task Tracking_figures_are_counted_only_over_the_trips_the_caller_may_read()
+    {
+        var clubId = await CreateCavingGroupAsync();
+        var open = await CreateTripAsync(new TripSpec
+        {
+            Title = "Tracked openly",
+            TripDate = "2026-09-12",
+            Visibility = "authenticated",
+            OrganizingCavingGroupId = clubId,
+            People = [new PersonSpec("Ana", participantRoleId)],
+        });
+        var anaId = SoleCaverId(open);
+        var closed = await CreateTripAsync(new TripSpec
+        {
+            Title = "Tracked privately",
+            TripDate = "2026-09-13",
+            Visibility = "private",
+            OrganizingCavingGroupId = clubId,
+            People = [new PersonSpec(anaId, participantRoleId)],
+        });
+
+        // Four hours on the trip everybody may read, ten on the one only its owner may.
+        await ReportAsync(open, anaId, TripPositionEventKind.Entered, Moment(12, 9, 0));
+        await ReportAsync(open, anaId, TripPositionEventKind.Exited, Moment(12, 13, 0));
+        await ReportAsync(closed, anaId, TripPositionEventKind.Entered, Moment(13, 8, 0));
+        await ReportAsync(closed, anaId, TripPositionEventKind.Exited, Moment(13, 18, 0));
+
+        var held = await StatsAsync(owner, $"caving-groups/{clubId}");
+        held.GetProperty("trackedTrips").GetInt32().ShouldBe(2);
+        held.GetProperty("watchUndergroundMinutes").GetInt32().ShouldBe(840);
+        held.GetProperty("watchTimedPersonTrips").GetInt32().ShouldBe(2);
+
+        var seen = await StatsAsync(reader, $"caving-groups/{clubId}");
+        seen.GetProperty("trips").GetInt32().ShouldBe(1);
+        seen.GetProperty("trackedTrips").GetInt32().ShouldBe(1);
+        seen.GetProperty("watchUndergroundMinutes").GetInt32().ShouldBe(240);
+        seen.GetProperty("watchTimedPersonTrips").GetInt32().ShouldBe(1);
+
+        // The same bound from the person's own side, so it belongs to the totals rather than to
+        // one subject: her ten hours on the private trip are the owner's to read and not the
+        // reader's.
+        var anaHeld = await StatsAsync(owner, $"cavers/{anaId}");
+        anaHeld.GetProperty("trackedTrips").GetInt32().ShouldBe(2);
+        anaHeld.GetProperty("watchUndergroundMinutes").GetInt32().ShouldBe(840);
+        var anaSeen = await StatsAsync(reader, $"cavers/{anaId}");
+        anaSeen.GetProperty("trackedTrips").GetInt32().ShouldBe(1);
+        anaSeen.GetProperty("watchUndergroundMinutes").GetInt32().ShouldBe(240);
+        anaSeen.GetProperty("watchTimedPersonTrips").GetInt32().ShouldBe(1);
+
+        // The saved file, row for row with the screen and to the same two people.
+        var heldFile = await SheetAsync(owner, $"caving-groups/{clubId}");
+        heldFile["Tracked trips"].ShouldBe(2d);
+        heldFile[WatchHoursRow].ShouldBe(14d);
+        heldFile["Times somebody went, timed by tracking"].ShouldBe(2d);
+
+        var seenFile = await SheetAsync(reader, $"caving-groups/{clubId}");
+        seenFile["Tracked trips"].ShouldBe(1d);
+        seenFile[WatchHoursRow].ShouldBe(4d);
+        seenFile["Times somebody went, timed by tracking"].ShouldBe(1d);
+    }
+
+    /// <summary>
+    /// Two things at once, because they are the two ways this figure could quietly go wrong. An
+    /// entry nobody closed is not a duration — it adds no minutes and is not counted among the
+    /// people the minutes cover. And the log is a second source: the hours the roster's own times
+    /// come to are the same before a log exists and after, and neither figure contains the other.
+    /// </summary>
+    [Fact]
+    public async Task An_entry_with_no_exit_adds_nothing_and_the_rosters_hours_are_left_as_they_were()
+    {
+        var clubId = await CreateCavingGroupAsync();
+        var trip = await CreateTripAsync(new TripSpec
+        {
+            Title = "Timed twice",
+            TripDate = "2026-09-12",
+            EntryTime = "09:00",
+            ExitTime = "15:00",
+            Visibility = "authenticated",
+            OrganizingCavingGroupId = clubId,
+            People =
+            [
+                new PersonSpec("Ana", participantRoleId),
+                new PersonSpec("Bogdan", participantRoleId),
+            ],
+        });
+        var anaId = CaverIdByName(trip, "Ana");
+        var bogdanId = CaverIdByName(trip, "Bogdan");
+
+        // Before anything is in the log: twelve person-hours by the roster, nothing by tracking —
+        // and nothing is a count of zero trips, not a tracked trip with no time on it.
+        var before = await StatsAsync(owner, $"caving-groups/{clubId}");
+        before.GetProperty("undergroundMinutes").GetInt32().ShouldBe(720);
+        before.GetProperty("trackedTrips").GetInt32().ShouldBe(0);
+        before.GetProperty("watchUndergroundMinutes").GetInt32().ShouldBe(0);
+        before.GetProperty("watchTimedPersonTrips").GetInt32().ShouldBe(0);
+
+        // Ana went in and came out, five hours apart. Bogdan went in and nobody wrote that he
+        // came out. The same entry reported twice for Ana is one statement, not two stays.
+        await ReportAsync(trip, anaId, TripPositionEventKind.Entered, Moment(12, 9, 10));
+        await ReportAsync(trip, anaId, TripPositionEventKind.Entered, Moment(12, 9, 10));
+        await ReportAsync(trip, anaId, TripPositionEventKind.Exited, Moment(12, 14, 10));
+        await ReportAsync(trip, bogdanId, TripPositionEventKind.Entered, Moment(12, 9, 10));
+
+        // A second trip whose log holds a remark and nothing else: tracked, and timed for nobody.
+        var remarked = await CreateTripAsync(new TripSpec
+        {
+            Title = "Only a remark",
+            TripDate = "2026-09-14",
+            Visibility = "authenticated",
+            OrganizingCavingGroupId = clubId,
+            People = [new PersonSpec(anaId, participantRoleId)],
+        });
+        await ReportAsync(remarked, anaId, TripPositionEventKind.Note, Moment(14, 10, 0));
+
+        var after = await StatsAsync(owner, $"caving-groups/{clubId}");
+        after.GetProperty("trackedTrips").GetInt32().ShouldBe(2);
+        after.GetProperty("watchUndergroundMinutes").GetInt32().ShouldBe(300);
+        after.GetProperty("watchTimedPersonTrips").GetInt32().ShouldBe(1);
+
+        // The roster's figures, untouched by any of it.
+        after.GetProperty("undergroundMinutes").GetInt32().ShouldBe(720);
+        after.GetProperty("timedPersonTrips").GetInt32().ShouldBe(2);
+        after.GetProperty("personTrips").GetInt32().ShouldBe(3);
+
+        // In the file the same: five hours over one person. And asked about the man whose exit
+        // was never written, the hours cell is empty — not a nought, which would say he was timed
+        // and spent no time inside — while the count of what was covered is an honest nought.
+        var file = await SheetAsync(owner, $"caving-groups/{clubId}");
+        file[WatchHoursRow].ShouldBe(5d);
+        file["Hours underground"].ShouldBe(12d);
+        var bogdanFile = await SheetAsync(owner, $"cavers/{bogdanId}");
+        bogdanFile.ShouldNotContainKey(WatchHoursRow);
+        bogdanFile["Times somebody went, timed by tracking"].ShouldBe(0d);
+        bogdanFile["Tracked trips"].ShouldBe(1d);
+
+        // Asked about one person, the minutes are that person's alone; whether the trip was
+        // tracked stays a fact about the trip.
+        var ana = await StatsAsync(owner, $"cavers/{anaId}");
+        ana.GetProperty("trackedTrips").GetInt32().ShouldBe(2);
+        ana.GetProperty("watchUndergroundMinutes").GetInt32().ShouldBe(300);
+        ana.GetProperty("watchTimedPersonTrips").GetInt32().ShouldBe(1);
+
+        var bogdan = await StatsAsync(owner, $"cavers/{bogdanId}");
+        bogdan.GetProperty("trackedTrips").GetInt32().ShouldBe(1);
+        bogdan.GetProperty("watchUndergroundMinutes").GetInt32().ShouldBe(0);
+        bogdan.GetProperty("watchTimedPersonTrips").GetInt32().ShouldBe(0);
+        bogdan.GetProperty("undergroundMinutes").GetInt32().ShouldBe(360);
+    }
+
     [Fact]
     public async Task The_saved_file_says_whose_figures_it_holds()
     {
@@ -1288,6 +1450,34 @@ public sealed class TripStatisticsTests : IAsyncLifetime, IDisposable, IClassFix
         });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+    }
+
+    /// <summary>The label of the row holding the hours read from tracking logs, as the file words it.</summary>
+    private const string WatchHoursRow =
+        "Hours underground, from tracking (a second count, not added to the hours above)";
+
+    // Typed as a Bucharest wall-clock time and handed over as the instant it is: the log's column
+    // holds instants and takes them at offset nought only.
+    private static DateTimeOffset Moment(int day, int hour, int minute) =>
+        new DateTimeOffset(2026, 9, day, hour, minute, 0, TimeSpan.FromHours(3)).ToUniversalTime();
+
+    /// <summary>
+    /// One line in a trip's tracking log, written straight in. What is under test is how a log
+    /// that exists is added up and for whom, not how a report comes to be recorded — and going
+    /// through the watch would need a survey to arm it on, which no figure here reads.
+    /// </summary>
+    private async Task ReportAsync(JsonElement trip, Guid caverId, TripPositionEventKind kind, DateTimeOffset at)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.TripPositionEvents.Add(new SilexGis.Domain.Entities.TripPositionEvent
+        {
+            TripLogId = TripId(trip),
+            CaverId = caverId,
+            Kind = kind,
+            RecordedAt = at,
+        });
+        await db.SaveChangesAsync();
     }
 
     private static Guid TripId(JsonElement trip) => trip.GetProperty("id").GetGuid();

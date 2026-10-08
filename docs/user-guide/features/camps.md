@@ -63,12 +63,66 @@ Write-ups saved to the camp's trips belong to those trips and stay with them.
 
 ## Tabs
 
-**Trips · Map · Leads · Who was there · Photographs · Files · History**
+**Trips · Who is underground · Map · Leads · Who was there · Photographs · Files · History**
 
 ### Trips
 
 The trips belonging to this camp — *"No trips in this camp that you may read"* if none, and
 *"Showing n of m trips"* if the list is bounded.
+
+### Who is underground
+
+A camp runs several parties on the same day, and the person at the surface has one question
+about all of them. Each trip's own [tracking](live-tracking.md) answers it for one party; this
+tab answers it for the camp, on one screen.
+
+Every trip of the camp that is being tracked, or whose tracking was closed recently, gets a
+card: the trip, whether it is *Tracking* or *Tracking closed*, three numbers —
+**Underground · Out · Not heard from** — and under them each person of the party with the same
+word beside their name and how long ago they were last heard from. The trip's title opens that
+trip's **Tracking** tab.
+
+The tab says what it is: *"Who is underground on this camp's trips, as each trip's own tracking
+tells it — counted over the trips you may read. It records what was reported: it watches no
+clock and raises no alarm."*
+
+- **Which trips are on it.** A trip appears once tracking is started on its Tracking tab, and
+  stays for as long as tracking runs — a watch nobody closed is never dropped for being old.
+  After **Close tracking** it stays for two days, marked *Tracking closed* with the time it was
+  closed, so the party that came out last night is still on the screen in the morning; then it
+  leaves. A trip whose tracking was never started is not on it at all — not as an empty party
+  and not as a row of zeros. Trips being tracked come first, the most recently started on top;
+  then the closed ones, the most recently closed on top.
+- **It shows no place — to anybody.** No station, no depth, no survey and no cave is on this
+  tab, not even for somebody who sees all of them on the trip. It is a head count, not a map.
+  That is what lets it count a party in a cave whose location is protected from you: you are
+  told that Ana is underground, and not where. Where each person was last reported is on the
+  trip's own Tracking tab, one click away, under the trip's and the cave's own rules.
+- **It raises no alarm.** *Expected back* is the hour the trip says its party plans to be out
+  by, printed as a time and nothing more. The tab does not compare it with the clock, does not
+  mark anybody late and notifies nobody. Telling somebody when a party is overdue is the
+  [callout](checklists-and-callout.md), which this tab does not show and does not touch.
+- **Not heard from is a number of its own.** Somebody nobody has reported on yet is counted
+  apart, never as *Out*: a person still at the tents and a person safely back are the two
+  answers a coordinator most needs told apart.
+- **Who sees which trips.** Anybody who may read the camp has the tab. A trip is on it only if
+  you may read that trip; one you may not read is simply absent, and nothing says it was left
+  out — so two people can read different counts on the same camp. The names are the ones the
+  trip's own page shows you.
+- **It keeps itself fresh.** While it is the tab on screen it asks again every half minute —
+  also when it lists nothing or only closed trips, so a trip whose tracking is started from
+  another device appears without anybody reloading the page. Behind another tab it stops
+  asking, and reads afresh when you come back to it.
+
+With nothing to list it says so in full — *"No trip of this camp is being tracked, and none had
+its tracking closed recently — or none you may read. A trip appears here once tracking is
+started on its Tracking tab, and stays for a while after tracking is closed."* A camp with more
+tracked trips than one list carries (fifty) says that too; the ones left off are those closed
+longest ago, never one still being tracked.
+
+An installation can change both the two days and the fifty — see
+`SILEXGIS__ExpeditionSurfaceLog__RecentlyClosed` and `…__MaxRows` in the
+[installation guide](../../INSTALL.md#configuration-reference).
 
 ### Map
 
@@ -214,6 +268,11 @@ club that does not want it takes that line out of its camp layout.
 
 - **Download document** saves it as a Word document, in the standard layout or in one your club
   keeps under **Configuration → Report layouts**.
+  A club's own layout may print **`{watchhours}`**: the person-hours underground that the camp's
+  [tracking logs](live-tracking.md) come to, from each person's *entered* report to the *exited*
+  one that followed. It is a second count beside `{hours}` and is never added to it; an entry
+  nobody closed adds nothing, and the line is left out where no log has a completed stay. The
+  standard layout does not print it.
 - **Download PDF** gives the same document as a PDF. It is there only where your installation
   runs its document converter; where it is not, **Print** and *Save as PDF* in the browser is
   the way. Nothing is kept of the PDF on the server, and the copy saved to the camp is always

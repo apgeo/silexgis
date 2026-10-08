@@ -33,6 +33,9 @@ public static class JobEndpoints
         api.MapPost("/jobs/document-conversion-backfill", EnqueueDocumentConversionBackfillAsync)
             .WithTags("Jobs")
             .WithSummary("Enqueues a sweep that makes a readable copy of every office document that has none yet; requires Execute on the Jobs domain.");
+        api.MapPost("/jobs/survey-reading-backfill", EnqueueSurveyReadingBackfillAsync)
+            .WithTags("Jobs")
+            .WithSummary("Enqueues a sweep that reads every line-plot survey again, so that surveys read by an earlier version get what the present reader produces; requires Execute on the Jobs domain.");
         return api;
     }
 
@@ -53,6 +56,12 @@ public static class JobEndpoints
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
         => EnqueueAsync(ProcessingJobKinds.DocumentConversionBackfill, db, accessAccessor, ct);
+
+    private static Task<Results<Ok<ProcessingJobDto>, UnauthorizedHttpResult, ProblemHttpResult>> EnqueueSurveyReadingBackfillAsync(
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+        => EnqueueAsync(ProcessingJobKinds.SurveyReadingBackfill, db, accessAccessor, ct);
 
     /// <summary>
     /// Queues a maintenance sweep. Each takes no input of its own — the work it does is a

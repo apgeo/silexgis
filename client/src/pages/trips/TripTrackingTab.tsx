@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import {
   DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
   EyeInvisibleOutlined,
   ImportOutlined,
@@ -26,8 +27,10 @@ import {
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isSettledRefusal } from '../../api/client.ts';
+import { downloadFile, trackingLogExportUrl } from '../../api/download.ts';
 import {
   useDeleteTrackingEvent,
+  useRestoreTrackingEvent,
   useTrackingDepthReadings,
   useTripMomentPictureLinks,
   useTripTracking,
@@ -44,6 +47,7 @@ import TrackingMomentPictures from '../../components/trips/TrackingMomentPicture
 import TrackingEventEditDialog from '../../components/trips/TrackingEventEditDialog.tsx';
 import TrackingPicturesDialog from '../../components/trips/TrackingPicturesDialog.tsx';
 import TrackingPublicNameDialog from '../../components/trips/TrackingPublicNameDialog.tsx';
+import TrackingRemovedReports from '../../components/trips/TrackingRemovedReports.tsx';
 import TrackingReportForm from '../../components/trips/TrackingReportForm.tsx';
 import TrackingSharePanel from '../../components/trips/TrackingSharePanel.tsx';
 import {
@@ -84,6 +88,16 @@ import './TripTrackingTab.css';
  * reading; the older ones are asked for a page at a time, by whoever wants them.
  */
 const RECENT_EVENTS = 20;
+
+/**
+ * How long, in seconds, the notice that a report has been taken off the log stays up.
+ *
+ * Longer than a notice that only reports, because this one carries the way back: somebody who
+ * pressed the bin on the wrong row has to read which row went, realise it, and reach the word
+ * Undo — on a phone, with the thumb that just pressed something else. The report is not lost when
+ * the notice goes; it is under the log with the other removed ones.
+ */
+const UNDO_NOTICE_SECONDS = 10;
 
 /**
  * Where the party is, as far as anybody above ground has been told.
@@ -186,9 +200,11 @@ export default function TripTrackingTab({
     setLogView({ ...logView, page: logLastPage });
   }
   const deleteEvent = useDeleteTrackingEvent();
+  const restoreEvent = useRestoreTrackingEvent();
   const [correcting, setCorrecting] = useState<TrackingEvent | null>(null);
   /** Whether the sheet-reading dialog is open. */
   const [importing, setImporting] = useState(false);
+  const [savingLog, setSavingLog] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   /** Whether the stacked party is ordered by silence rather than as the trip names it. */
   const [silenceFirst, setSilenceFirst] = useState(false);
@@ -875,6 +891,33 @@ export default function TripTrackingTab({
   };
 
   /**
+   * A report whose place was measured in a survey this watch has since stopped using.
+   *
+   * <b>The same fact the table of people marks, said more quietly, because here it is history.</b>
+   * Up there it qualifies "where is this person now" and is a warning: the place is not one on the
+   * survey in force. Down here a row is a record of what was said at the time, and a watch pointed
+   * at a corrected survey half-way through leaves every earlier row in this state with nothing
+   * wrong with any of them — so it is a plain tag and not an amber one. Unmarked, the older rows
+   * read as places on the survey the watch uses now, where the same name may be another chamber.
+   *
+   * Asked by the same rule and only where the question has an answer this reader was given: the
+   * watch names its survey to them, and the row arrived with a place. A row whose place is kept
+   * back never reaches this — it carries no place to mark and is drawn as withheld — and a reader
+   * who is not told which survey the watch is on is told nothing about which rows differ from it.
+   */
+  const eventOtherModelTag = (row: TrackingEvent) =>
+    data.surveyModelId !== null && !drawableOn(row.surveyModelId, data.surveyModelId) ? (
+      <Tooltip title={t('trips.tracking.eventOtherModelDetail')}>
+        <Tag
+          className="tracking-position-other-model"
+          data-testid={`trip-tracking-event-other-model-${row.id}`}
+        >
+          {t('trips.tracking.positionOtherModel')}
+        </Tag>
+      </Tooltip>
+    ) : null;
+
+  /**
    * What one report says about a place. A station report and a depth report always carry one, so
    * an empty one on either of those kinds is a withholding and nothing else — there is no second
    * reading of it, unlike the folded position above.
@@ -893,6 +936,7 @@ export default function TripTrackingTab({
             }),
           )}
           {outsideDeclaredTag(row.outsideDeclaredParts, `trip-tracking-event-outside-declared-${row.id}`)}
+          {eventOtherModelTag(row)}
         </>
       );
     }
@@ -959,10 +1003,62 @@ export default function TripTrackingTab({
   /** A confirmation is two more things to press, and they are pressed by the same finger. */
   const confirmSizes = { okButtonProps: { size: controlSize }, cancelButtonProps: { size: controlSize } };
 
+  /**
+   * The whole log as a file. Fetched here and saved by the page, because the route is read with
+   * this account's token, which a plain link cannot carry.
+   */
+  const saveLog = async () => {
+    setSavingLog(true);
+    try {
+      await downloadFile(trackingLogExportUrl(trip.id));
+    } catch (failure) {
+      message.error(trackingProblemMessage(failure, t));
+    } finally {
+      setSavingLog(false);
+    }
+  };
+
+  /** Puts back a report this tab has just taken off the log — what Undo on the notice does. */
+  const onUndoDelete = async (eventId: string) => {
+    try {
+      await restoreEvent.mutateAsync({ tripLogId: trip.id, eventId });
+      message.success(t('trips.tracking.eventRestored'));
+    } catch (failure) {
+      message.error(trackingProblemMessage(failure, t));
+    }
+  };
+
+  /**
+   * Takes a report off the log, and says so with the way back in the same breath.
+   *
+   * The notice is keyed by the report, so the Undo inside it can take its own notice down the
+   * moment it is pressed — a second press on a notice still fading would otherwise be a second
+   * request for something already done.
+   */
   const onDeleteEvent = async (eventId: string) => {
     try {
       await deleteEvent.mutateAsync({ tripLogId: trip.id, eventId });
-      message.success(t('trips.tracking.eventDeleted'));
+      const key = `trip-tracking-event-deleted-${eventId}`;
+      message.success({
+        key,
+        duration: UNDO_NOTICE_SECONDS,
+        content: (
+          <span data-testid="trip-tracking-event-deleted">
+            {t('trips.tracking.eventDeleted')}
+            <Button
+              type="link"
+              size={controlSize}
+              data-testid="trip-tracking-event-undo"
+              onClick={() => {
+                message.destroy(key);
+                void onUndoDelete(eventId);
+              }}
+            >
+              {t('trips.tracking.eventDeleteUndo')}
+            </Button>
+          </span>
+        ),
+      });
     } catch (failure) {
       message.error(trackingProblemMessage(failure, t));
     }
@@ -1127,6 +1223,9 @@ export default function TripTrackingTab({
       <TrackingConfigCard
         tripLogId={trip.id}
         caveIds={trip.caveIds}
+        // The caves the trip names and this reader is not shown, as a count: what lets the card
+        // tell a trip that names no cave from one whose cave is kept from whoever is looking.
+        cavesWithheld={trip.cavesWithheld}
         tracking={data}
         canEdit={canEdit}
         // Whether this trip has an arrangement to notice the party has not come back. Handed down
@@ -1546,6 +1645,9 @@ export default function TripTrackingTab({
         tracking={data}
         participants={trip.participants}
         events={events.data?.items}
+        // What says whether those rows are the whole log — the panel reads the rest only when
+        // they are not, to find which surveys the trip's reports were recorded on.
+        eventsTotal={events.data?.totalItems}
         canEdit={canEdit}
         // The same selection the card below records for. Handed down as an offer rather than as a
         // requirement: pressing a station on the model opens a dialog that asks who it is about,
@@ -1571,6 +1673,10 @@ export default function TripTrackingTab({
           // The state itself rather than a yes or no, because a closed watch changes what the
           // card asks: a report written up afterwards has to say when it was made.
           state={data.state}
+          // The watch's survey and its cave, both null for a reader who is not told them — and
+          // then no station is offered and no cave is pointed at.
+          surveyModelId={data.surveyModelId}
+          caveId={data.caveFeatureId}
           caverIds={chosen}
           teams={data.teams}
           onRecorded={() => setSelected(new Set())}
@@ -1585,16 +1691,32 @@ export default function TripTrackingTab({
               rows it becomes are read. Offered on a closed watch too — a sheet is usually typed up
               after everybody is out, and refusing it then would leave the one case it exists for
               unserved. */}
-          {canEdit && (
-            <Button
-              size={controlSize}
-              icon={<ImportOutlined />}
-              onClick={() => setImporting(true)}
-              data-testid="trip-tracking-csv-open"
-            >
-              {t('trips.tracking.csvImport.open')}
-            </Button>
-          )}
+          <Space wrap>
+            {/* For everybody who reads the trip, not only for whoever may write its log: the
+                sheet is a copy of what this page already lists, and the server leaves out of it
+                exactly what it leaves out of the list for this reader. */}
+            <Tooltip title={t('trips.tracking.csvExport.hint')}>
+              <Button
+                size={controlSize}
+                icon={<DownloadOutlined />}
+                loading={savingLog}
+                onClick={() => void saveLog()}
+                data-testid="trip-tracking-csv-export"
+              >
+                {t('trips.tracking.csvExport.download')}
+              </Button>
+            </Tooltip>
+            {canEdit && (
+              <Button
+                size={controlSize}
+                icon={<ImportOutlined />}
+                onClick={() => setImporting(true)}
+                data-testid="trip-tracking-csv-open"
+              >
+                {t('trips.tracking.csvImport.open')}
+              </Button>
+            )}
+          </Space>
         </Flex>
         {/* How a row is put right — and, on a log whose rows cannot be, why not and what does
             take them back. One or the other, never both: the paragraph describes two controls,
@@ -1803,6 +1925,18 @@ export default function TripTrackingTab({
             </Flex>
           </Flex>
         )}
+        {/* What has been taken off this log, with the way to put each one back. Under the same
+            condition as the bin on a row: the server answers this list only to those who may
+            write the log, and putting a report back is a write to it. */}
+        {rowsWritable && (
+          <TrackingRemovedReports
+            tripLogId={trip.id}
+            nameOf={named}
+            placeOf={eventPlace}
+            when={when}
+            controlSize={controlSize}
+          />
+        )}
       </div>
 
       {/* The trip's photographs, under the log they belong beside and outside the survey panel
@@ -1834,6 +1968,9 @@ export default function TripTrackingTab({
         <TrackingEventEditDialog
           tripLogId={trip.id}
           report={correcting}
+          caverName={correcting === null ? undefined : named(correcting.caverId)}
+          surveyModelId={data?.surveyModelId ?? null}
+          armedAt={data?.armedAt ?? null}
           teams={data?.teams ?? []}
           onClose={() => setCorrecting(null)}
         />
@@ -1863,6 +2000,7 @@ export default function TripTrackingTab({
             caverId: person.caverId,
             name: person.name,
           }))}
+          surveyModelId={data?.surveyModelId ?? null}
           onClose={() => setAttaching(null)}
         />
       )}

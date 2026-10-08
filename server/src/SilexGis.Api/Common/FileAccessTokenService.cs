@@ -70,6 +70,30 @@ public enum FileAccessLifetime
     Session = 1,
 }
 
+/// <summary>
+/// Whether a delivery of a file's stored bytes says what the upload was called.
+/// </summary>
+/// <remarks>
+/// Decided at the mint like everything else a token carries, and for the same reason: the route
+/// that hands the bytes over has no caller to ask and re-decides nothing. It is not a reach — both
+/// values open exactly the same bytes — but a file's name is something its uploader wrote, and
+/// people name files after what is in them, so whether it travels is a disclosure of its own.
+/// </remarks>
+public enum FileNaming
+{
+    /// <summary>
+    /// The download is called what the upload was called. What a member fetching a file to work on
+    /// it needs, and what every mint site gets unless it says otherwise.
+    /// </summary>
+    AsUploaded = 0,
+
+    /// <summary>
+    /// The download carries a fixed name that says nothing. For an address handed to somebody who
+    /// was given the file's contents and nothing about where they came from.
+    /// </summary>
+    Withheld = 1,
+}
+
 public interface IFileAccessTokenService
 {
     /// <summary>
@@ -77,7 +101,15 @@ public interface IFileAccessTokenService
     /// default reach — a mint site that has not thought about whether the caller may have
     /// the original bytes has not thought about the question this type exists to answer.
     /// </summary>
-    string CreateToken(Guid fileId, FileDelivery delivery, FileAccessLifetime lifetime = FileAccessLifetime.Fetch);
+    /// <param name="naming">
+    /// Whether a delivery of the stored bytes under this token is called what the upload was
+    /// called. A token that says nothing about it names the file, as every delivery always did.
+    /// </param>
+    string CreateToken(
+        Guid fileId,
+        FileDelivery delivery,
+        FileAccessLifetime lifetime = FileAccessLifetime.Fetch,
+        FileNaming naming = FileNaming.AsUploaded);
 
     /// <summary>
     /// What the token opens for this file and who it was minted for, or null when it is
@@ -88,17 +120,23 @@ public interface IFileAccessTokenService
 }
 
 /// <summary>
-/// A redeemed delivery token: how far it reaches, and the person it was handed to (null for
+/// A redeemed delivery token: how far it reaches, the person it was handed to (null for
 /// a token minted outside any authenticated request, or one whose subject came back
-/// unreadable). A payload that does not carry a subject at all is not a grant of any reach —
-/// it is refused, which is what happens to every token minted by a build older than this one.
+/// unreadable), and whether the stored bytes go out under the name they were uploaded with. A
+/// payload that does not carry a subject at all is not a grant of any reach — it is refused,
+/// which is what happens to every token minted by a build older than this one.
 /// </summary>
-public sealed record FileAccessGrant(FileDelivery Delivery, Guid? UserId);
+public sealed record FileAccessGrant(FileDelivery Delivery, Guid? UserId, FileNaming Naming);
 
 public sealed class FileAccessTokenService : IFileAccessTokenService
 {
     /// <summary>Long enough for a gallery page, short enough to limit link sharing.</summary>
-    private static readonly TimeSpan FetchLifetime = TimeSpan.FromMinutes(10);
+    /// <remarks>
+    /// Readable by the rest of the application because an answer that hands such an address out
+    /// may be kept by its reader, and whatever decides how long a kept copy may go on being
+    /// confirmed has to be sized against this and not against a second copy of the number.
+    /// </remarks>
+    internal static readonly TimeSpan FetchLifetime = TimeSpan.FromMinutes(10);
 
     /// <summary>
     /// Long enough for a map session over a raster read in ranges. Four hours and not a day: the
@@ -119,9 +157,13 @@ public sealed class FileAccessTokenService : IFileAccessTokenService
         this.currentUser = currentUser;
     }
 
-    public string CreateToken(Guid fileId, FileDelivery delivery, FileAccessLifetime lifetime = FileAccessLifetime.Fetch) =>
+    public string CreateToken(
+        Guid fileId,
+        FileDelivery delivery,
+        FileAccessLifetime lifetime = FileAccessLifetime.Fetch,
+        FileNaming naming = FileNaming.AsUploaded) =>
         protector.Protect(
-            Payload(fileId, delivery, currentUser.UserId),
+            Payload(fileId, delivery, naming, currentUser.UserId),
             DateTimeOffset.UtcNow.Add(lifetime == FileAccessLifetime.Session ? SessionLifetime : FetchLifetime));
 
     public FileAccessGrant? Validate(string? token, Guid fileId)
@@ -148,14 +190,18 @@ public sealed class FileAccessTokenService : IFileAccessTokenService
         }
 
         // Both reaches are spelled out rather than one being the absence of a marker, so a
-        // payload this version does not understand cannot be read as the permissive one.
-        var delivery = parts[1] switch
+        // payload this version does not understand cannot be read as the permissive one. The
+        // same goes for the name: a token that withholds it says so in a word of its own, and a
+        // word this version does not know is no grant at all rather than a grant that names.
+        (FileDelivery Delivery, FileNaming Naming)? reach = parts[1] switch
         {
-            "f" => FileDelivery.Full,
-            "d" => FileDelivery.DerivativesOnly,
-            _ => (FileDelivery?)null,
+            "f" => (FileDelivery.Full, FileNaming.AsUploaded),
+            "fn" => (FileDelivery.Full, FileNaming.Withheld),
+            "d" => (FileDelivery.DerivativesOnly, FileNaming.AsUploaded),
+            "dn" => (FileDelivery.DerivativesOnly, FileNaming.Withheld),
+            _ => null,
         };
-        if (delivery is null)
+        if (reach is null)
         {
             return null;
         }
@@ -164,9 +210,10 @@ public sealed class FileAccessTokenService : IFileAccessTokenService
         // the bytes were promised to is bookkeeping, and losing it must not turn a valid
         // grant into a refusal.
         var subject = Guid.TryParse(parts[2], out var userId) ? userId : (Guid?)null;
-        return new FileAccessGrant(delivery.Value, subject);
+        return new FileAccessGrant(reach.Value.Delivery, subject, reach.Value.Naming);
     }
 
-    private static string Payload(Guid fileId, FileDelivery delivery, Guid? userId) =>
-        $"{fileId:N}.{(delivery == FileDelivery.Full ? "f" : "d")}.{(userId is { } id ? id.ToString("N") : Anonymous)}";
+    private static string Payload(Guid fileId, FileDelivery delivery, FileNaming naming, Guid? userId) =>
+        $"{fileId:N}.{(delivery == FileDelivery.Full ? "f" : "d")}{(naming == FileNaming.Withheld ? "n" : "")}"
+        + $".{(userId is { } id ? id.ToString("N") : Anonymous)}";
 }

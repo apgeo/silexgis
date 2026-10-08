@@ -164,6 +164,9 @@ export const queryKeys = {
   entrances: (caveId: string) => ['entrances', caveId] as const,
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
   surveyModel: (id: string) => ['survey-model', id] as const,
+  // A survey's stations whose names begin with what somebody has typed. Under the survey's own
+  // prefix, so anything that makes the survey be asked for again makes its names be asked again.
+  surveyModelStationSearch: (id: string, q: string) => ['survey-model', id, 'stations', q] as const,
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
   surveyCompilations: (caveId: string) => ['survey-compilations', caveId] as const,
   caveExternalIds: (caveId: string) => ['cave-external-ids', caveId] as const,
@@ -297,6 +300,11 @@ export const queryKeys = {
   // The whole log, under the same prefix so a recorded or deleted report reaches it too. Its own
   // last segment is a word rather than a narrowing, which no narrowing can collide with.
   tripTrackingEventLog: (id: string) => ['trip-logs', 'tracking-events', id, 'log'] as const,
+  // The reports taken off the log, under the same prefix again: taking one off, putting one back
+  // and destroying one each change this list and the log together, and one invalidation reaches
+  // both. The page is a second word-led segment, so no narrowing of the log can collide with it.
+  tripTrackingRemovedEvents: (id: string, page: number) =>
+    ['trip-logs', 'tracking-events', id, 'removed', page] as const,
   tripTrackingShares: (id: string) => ['trip-logs', 'tracking-shares', id] as const,
   // Every published link of the installation, for its administrators. Under the trips' prefix on
   // purpose: a status is read off a trip's watch and its links, so anything that writes a trip or
@@ -421,6 +429,7 @@ export const queryKeys = {
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,
   expeditionMap: (id: string) => ['expeditions', 'map', id] as const,
   expeditionLeads: (id: string) => ['expeditions', 'leads', id] as const,
+  expeditionSurfaceLog: (id: string) => ['expeditions', 'surface-log', id] as const,
   expeditionSharing: (id: string) => ['expeditions', 'sharing', id] as const,
   events: (params: EventListParams) => ['events', 'list', params] as const,
   event: (id: string) => ['events', 'detail', id] as const,
@@ -1302,6 +1311,24 @@ export function surveyModelUnsettled(status: SurveyModelInfo['status']): boolean
 }
 
 /**
+ * A model the server still has work queued or running for, whether or not it has anything to show
+ * meanwhile.
+ *
+ * Wider than {@link surveyModelUnsettled} by one case, and the difference is the point. A model
+ * that has been read and is being read again stays ready: its stations, its figures and its
+ * drawing are all still there until the new reading replaces them, so everything that asks "can
+ * this survey be used" must go on being told yes. What that model shares with an unsettled one is
+ * only that its row will change by itself — so a list watching for that, and an action that would
+ * queue a second reading behind the first, ask this question and nothing else does.
+ */
+export function surveyModelWorkOutstanding(model: {
+  status: SurveyModelInfo['status'];
+  readingAgain?: boolean;
+}): boolean {
+  return surveyModelUnsettled(model.status) || model.readingAgain === true;
+}
+
+/**
  * Whether the embedded survey viewer can read this model itself.
  *
  * The viewer parses the line-plot formats natively, choosing its parser by the extension of the
@@ -1405,9 +1432,9 @@ export function caveHasMeasurableSurvey(
  * seconds to prove it did nothing.
  */
 export function surveyModelPollInterval(
-  models: { status: SurveyModelInfo['status'] }[] | undefined,
+  models: { status: SurveyModelInfo['status']; readingAgain?: boolean }[] | undefined,
 ): number {
-  return (models ?? []).some((model) => surveyModelUnsettled(model.status))
+  return (models ?? []).some(surveyModelWorkOutstanding)
     ? SURVEY_MODEL_CONVERSION_POLL_MS
     : SURVEY_MODEL_URL_REFRESH_MS;
 }
@@ -1429,6 +1456,12 @@ function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveCrossSection(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.cavePattern(caveId) });
+  // Not a figure, and changed by the same events all the same: each declared place is sent with
+  // whether the cave's current survey holds its station. A survey being read, removed or made the
+  // current one changes that answer without a declaration being touched — and the card showing it
+  // tells its reader to go and check which survey is current, on the same page, so a mark that
+  // outlived the change it asked for would contradict the very act it prompted.
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveDepthPlaces(caveId) });
   // Stored beside the survey rather than recomputed per request, but changed by exactly the same
   // events: the figures are rewritten when a file is read, and a cave whose answering upload was
   // deleted is measured from a different one or from none at all.
@@ -1475,6 +1508,77 @@ export function useSurveyModel(id: string | undefined) {
   });
 }
 
+/**
+ * Several models asked for by id, each exactly as {@link useSurveyModel} asks for one.
+ *
+ * For a list of ids read off something else — the surveys a trip's reports were recorded on — where
+ * some may have been deleted since and some belong to a cave this reader may not place. Both answer
+ * 404, and both are simply left out of what comes back: what is returned is the models that still
+ * exist and that this reader may open, which is the only list a chooser may offer. Nothing is
+ * retried and nothing is reported, for the reason given on the single read.
+ *
+ * The same key and the same refresh as the single read, so a model already on screen is not
+ * fetched a second time and its signed address is kept alive the same way.
+ */
+export function useSurveyModelsById(ids: readonly string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.surveyModel(id),
+      queryFn: () => unwrap(api.GET('/api/v1/survey-models/{id}', { params: { path: { id } } })),
+      staleTime: 5 * 60_000,
+      refetchInterval: SURVEY_MODEL_URL_REFRESH_MS,
+      retry: false,
+    })),
+    combine: (results) => results.flatMap((result) => (result.data ? [result.data] : [])),
+  });
+}
+
+export type SurveyStation = components['schemas']['SurveyStationDto'];
+
+/**
+ * How many stations one search asks for. A chooser shows a short list under a field and asks
+ * again on the next keystroke; the answer says how many there are in all, so the list can say
+ * that there are more and that typing further narrows them.
+ */
+export const STATION_SEARCH_PAGE_SIZE = 20;
+
+/**
+ * The stations of one survey whose names begin with what somebody has typed, for a field that
+ * offers them while the name is still being written.
+ *
+ * <b>It offers; it never decides.</b> Whether a station exists is the server's answer when the
+ * report or the declaration is saved. This only saves somebody spelling a name from memory, so a
+ * field fed by it still takes any text at all.
+ *
+ * <b>A reader who may not place the cave gets an empty list, exactly as for a survey that does not
+ * exist</b> — the server answers the same page for both — so the field falls back to plain typing
+ * and says nothing about why. Nothing is asked until something has been typed: a survey holds
+ * tens of thousands of stations, and "all of them" is not a list anybody chooses from.
+ *
+ * The previous answer stays on screen while the next one is fetched, so the list does not blink
+ * shut between two keystrokes — but only an answer about the same survey: names from one survey
+ * offered under a field that is now about another would be wrong names.
+ */
+export function useSurveyModelStationSearch(surveyModelId: string | undefined, q: string) {
+  const asked = q.trim();
+  return useQuery({
+    queryKey: queryKeys.surveyModelStationSearch(surveyModelId ?? '', asked),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/survey-models/{id}/stations', {
+          params: {
+            path: { id: surveyModelId! },
+            query: { q: asked, pageSize: STATION_SEARCH_PAGE_SIZE },
+          },
+        }),
+      ),
+    enabled: !!surveyModelId && asked.length > 0,
+    staleTime: 60_000,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === surveyModelId ? previous : undefined,
+  });
+}
+
 export function useSurveyModels(caveId: string | undefined) {
   const queryClient = useQueryClient();
   const query = useQuery({
@@ -1494,7 +1598,7 @@ export function useSurveyModels(caveId: string | undefined) {
   //
   // Keyed on the transition rather than the state, so a page that arrives after everything has
   // settled — the ordinary visit to a cave whose survey was read weeks ago — asks for nothing.
-  const outstanding = (query.data ?? []).some((model) => surveyModelUnsettled(model.status));
+  const outstanding = (query.data ?? []).some(surveyModelWorkOutstanding);
   const wasOutstanding = useRef(outstanding);
   useEffect(() => {
     if (wasOutstanding.current && !outstanding && caveId) {
@@ -1701,6 +1805,33 @@ export function useMakeSurveyModelCurrent() {
     mutationFn: ({ id }: { id: string; caveId: string }): Promise<SurveyModelInfo> =>
       unwrap(api.PUT('/api/v1/survey-models/{id}/current', { params: { path: { id } } })),
     onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
+/**
+ * Asks for a model's stored file to be read again, replacing what the last reading produced.
+ *
+ * The list is asked for again whichever way the request ends. Accepted, the model has a reading
+ * on its way — waiting if it held nothing, still ready and marked as being read again if it held
+ * one — and the list's own poll takes over until the reading is done. Refused because a reading
+ * is already under way, the row on screen was out of date — or the action would not have been
+ * offered — and saying so without refreshing it would leave the same button inviting the same
+ * refusal.
+ *
+ * The model's own record is asked for again as well. It is what a watch's drawing is built from,
+ * on another page, and it is otherwise read only every few minutes: a model whose failed reading
+ * has just been queued again would go on being described there as unreadable.
+ */
+export function useReadSurveyModelAgain() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: ({ id }: { id: string; caveId: string }): Promise<SurveyModelInfo> =>
+      unwrap(api.POST('/api/v1/survey-models/{id}/reading', { params: { path: { id } } })),
+    onSettled: (_data, _error, { id, caveId }) => {
+      invalidate(caveId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModel(id) });
+    },
   });
 }
 
@@ -8346,6 +8477,7 @@ export type TrackingCsvPreviewRow = components['schemas']['TrackingCsvPreviewRow
 export type TrackingCsvDiagnostic = components['schemas']['TrackingCsvDiagnosticDto'];
 export type CaveDepthPlace = components['schemas']['CaveDepthPlaceDto'];
 export type TrackingEvent = components['schemas']['TrackingEventDto'];
+export type TrackingRemovedEvent = components['schemas']['TrackingRemovedEventDto'];
 export type TrackedTrip = components['schemas']['TrackedTripDto'];
 export type TrackingEventWrite = components['schemas']['TrackingEventRequest'];
 export type TrackingConfigWrite = components['schemas']['TrackingConfigRequest'];
@@ -8432,6 +8564,63 @@ function tripTrackingQuery(tripLogId: string) {
         }),
       ),
     refetchInterval: (query) => trackingPollInterval(query.state.data?.state),
+  });
+}
+
+export type ExpeditionSurfaceLog = components['schemas']['ExpeditionSurfaceLogDto'];
+export type ExpeditionSurfaceLogTrip = components['schemas']['ExpeditionSurfaceLogTripDto'];
+export type ExpeditionSurfaceLogPerson = components['schemas']['ExpeditionSurfaceLogPersonDto'];
+
+/**
+ * How often a camp's head count is asked for again, or `false` for not at all.
+ *
+ * <b>One condition: somebody is looking.</b> The camp page keeps a section mounted once it has been
+ * opened, so a count that polled whenever it was mounted would go on asking every half minute from
+ * behind the map for as long as the camp stayed open. That is the only reason to stop.
+ *
+ * <b>What the last answer held is deliberately not one.</b> A single trip's watch can be left alone
+ * once it is closed, because only a report moves it and a closed watch takes none. This answer is
+ * a list, and the list changes from outside it: a party arms its watch from a phone at the cave,
+ * a watch that was closed is armed again because somebody went back in, a finished trip passes out
+ * of the window it is kept for. A count that stopped asking on an empty list would go on showing a
+ * coordinator "nobody is being followed" over a camp with a party underground, for as long as the
+ * tab stayed in front — and nothing on the screen would say it had stopped. The same holds for a
+ * read that failed: it is asked again at the next interval rather than left as the error it was.
+ *
+ * The interval is the trip's own, on purpose: a camp's count that ran behind the trip it links to
+ * would show a party underground on one screen and out on the next.
+ */
+export function expeditionSurfaceLogPollInterval(shown: boolean) {
+  return shown ? TRACKING_POLL_MS : (false as const);
+}
+
+/**
+ * Who is underground on one camp's trips: every member trip this caller may read whose watch is
+ * running or was closed recently, each with its party counted and named.
+ *
+ * <b>No place is on this answer, and none may be added to it here.</b> It carries who is in, who is
+ * out, who has not been heard from and when each was last heard — not a station, a depth, a survey
+ * or a cave — which is what lets it count a party in a cave whose position this reader may not be
+ * told. Anything a caller wants to know about *where* is the trip's own watch, behind the trip's
+ * own rules.
+ *
+ * Read only while its section is the one on screen, and read afresh each time it becomes so: a
+ * head count somebody comes back to after an hour on another tab must not be the hour-old one
+ * with nothing to say it is. And kept fresh for as long as it stays on screen, by the rule above.
+ */
+export function useExpeditionSurfaceLog(expeditionId: string | undefined, shown = true) {
+  return useQuery({
+    queryKey: queryKeys.expeditionSurfaceLog(expeditionId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/expeditions/{id}/surface-log', {
+          params: { path: { id: expeditionId! } },
+        }),
+      ),
+    enabled: !!expeditionId && shown,
+    staleTime: 0,
+    retry: false,
+    refetchInterval: () => expeditionSurfaceLogPollInterval(shown),
   });
 }
 
@@ -8807,6 +8996,7 @@ export function useRecordTrackingEvents() {
       teamId = null,
       note = null,
       recordedAt = null,
+      clientKey = null,
     }: {
       tripLogId: string;
       caverIds: string[];
@@ -8817,11 +9007,17 @@ export function useRecordTrackingEvents() {
       note?: string | null;
       /** Null means now, on the server's clock — the ordinary case of a report made as it happens. */
       recordedAt?: string | null;
+      /**
+       * The key of this act of reporting, minted once by whoever may have to send it again. A send
+       * repeated under the same key is answered with what the first one wrote and writes nothing.
+       * Null is a send that is an act of its own, which is what every caller here makes today.
+       */
+      clientKey?: string | null;
     }) =>
       unwrap(
         api.POST('/api/v1/trip-logs/{tripLogId}/tracking/events', {
           params: { path: { tripLogId } },
-          body: { caverIds, kind, stationName, depthM, teamId, note, recordedAt },
+          body: { caverIds, kind, stationName, depthM, teamId, note, recordedAt, clientKey },
         }),
       ),
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),
@@ -8992,6 +9188,9 @@ export function useTrackingCsvFields() {
  * at all — somebody else's name typed, a call that turned out to be about another trip. A report
  * that happened differently is corrected rather than removed and re-entered, so that anything
  * hanging off it survives the fix.
+ *
+ * The report is kept, out of every read but the list of removed ones, and can be put back as it
+ * was; destroying it is a second act with a hook of its own.
  */
 export function useDeleteTrackingEvent() {
   const invalidate = useInvalidateTripTracking();
@@ -9000,6 +9199,81 @@ export function useDeleteTrackingEvent() {
       unwrapVoid(
         api.DELETE('/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}', {
           params: { path: { tripLogId, eventId } },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/** How many removed reports one page of their list holds. */
+export const TRACKING_REMOVED_PAGE_SIZE = 20;
+
+/**
+ * The reports taken off one trip's log, the latest removal first, a page at a time.
+ *
+ * Answered only to those who may write the log — anybody else is refused, so the caller asks only
+ * where the log's own controls are offered. The position fields of each report follow the same
+ * per-row withholding as the log: a place this reader may not be told is not told here either.
+ *
+ * Not polled. A removed report is nowhere on the watch, so nothing that has to keep up with the
+ * radio is drawn from this; it is read again when a report is taken off, put back or destroyed in
+ * this browser, and when somebody opens the list.
+ */
+export function useTripTrackingRemovedEvents(
+  tripLogId: string | undefined,
+  page = 1,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.tripTrackingRemovedEvents(tripLogId ?? '', page),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-logs/{tripLogId}/tracking/events/removed', {
+          params: {
+            path: { tripLogId: tripLogId! },
+            query: { page, pageSize: TRACKING_REMOVED_PAGE_SIZE },
+          },
+        }),
+      ),
+    enabled: !!tripLogId && enabled,
+    // The rows stay on screen while the next page arrives, as on the log itself.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Puts a report taken off the log back on it: the same report under the same id, saying what it
+ * said — its place, its moment, who recorded it and everything pinned to it.
+ *
+ * Asked of a report that is on the log already, it answers with that report and changes nothing,
+ * so an undo pressed twice, or pressed after somebody else put the report back, is not an error.
+ */
+export function useRestoreTrackingEvent() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({ tripLogId, eventId }: { tripLogId: string; eventId: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}/restore', {
+          params: { path: { tripLogId, eventId } },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * Destroys a report already taken off the log. Nothing brings it back afterwards.
+ *
+ * Only a removed report accepts this: one still on the log is refused, so the loss of what may be
+ * the only record of where somebody was always stands behind two deliberate acts.
+ */
+export function useDestroyTrackingEvent() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({ tripLogId, eventId }: { tripLogId: string; eventId: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}', {
+          params: { path: { tripLogId, eventId }, query: { permanent: true } },
         }),
       ),
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),

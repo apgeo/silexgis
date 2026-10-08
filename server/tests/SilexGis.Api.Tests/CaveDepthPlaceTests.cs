@@ -4,9 +4,11 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using NetTopologySuite.Geometries;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
@@ -22,6 +24,7 @@ public sealed class CaveDepthPlaceTests : IAsyncLifetime, IDisposable, IClassFix
 
     private HttpClient owner = null!;
     private HttpClient reader = null!;
+    private HttpClient colleague = null!;
     private HttpClient anonymous = null!;
     private long caveTypeId;
 
@@ -42,6 +45,8 @@ public sealed class CaveDepthPlaceTests : IAsyncLifetime, IDisposable, IClassFix
         owner = await AuthHelper.BearerClientAsync(factory, $"dp-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"dp-read-{suffix}@t.local");
         reader = await AuthHelper.BearerClientAsync(factory, $"dp-read-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"dp-col-{suffix}@t.local");
+        colleague = await AuthHelper.BearerClientAsync(factory, $"dp-col-{suffix}@t.local");
         anonymous = factory.CreateClient();
 
         using var scope = factory.Services.CreateScope();
@@ -227,16 +232,265 @@ public sealed class CaveDepthPlaceTests : IAsyncLifetime, IDisposable, IClassFix
         (await ListAsync(owner, hidden)).Count.ShouldBe(1);
     }
 
+    [Fact]
+    public async Task A_declared_place_says_whether_the_caves_survey_holds_its_station()
+    {
+        var cave = await CaveAsync();
+        await DeclareAsync(cave, 45m, "cave.upper.1", "Camp one");
+        await DeclareAsync(cave, 200m, "cave.gone.9", "Old sump");
+
+        // No survey at all: nothing can be said, and nothing is — which is not the same answer as
+        // "the survey does not have it".
+        (await ListAsync(owner, cave)).Select(InSurvey).ShouldBe([null, null]);
+
+        // A survey that has been uploaded and not yet read holds no stations to compare with, and
+        // answers for nothing.
+        var model = await UploadSurveyAsync(cave);
+        (await ListAsync(owner, cave)).Select(InSurvey).ShouldBe([null, null]);
+
+        await ReadSurveyAsync(model);
+        (await ListAsync(owner, cave)).Select(InSurvey).ShouldBe([true, false]);
+
+        // The answer to a write says it too, to the person who has just typed the name.
+        InSurvey(await WriteAsync(owner, cave, 120m, "cave.deep.3")).ShouldBe(true);
+        InSurvey(await WriteAsync(owner, cave, 200m, "cave.gone.10")).ShouldBe(false);
+    }
+
+    [Fact]
+    public async Task A_declared_place_is_judged_against_the_survey_marked_current_and_no_other()
+    {
+        var cave = await CaveAsync();
+        await DeclareAsync(cave, 45m, "cave.upper.1", "Camp one");
+        await DeclareAsync(cave, 200m, "cave.second.7", "Old sump");
+
+        // The first upload takes the cave's mark by arriving, and then cannot be read. It keeps
+        // the mark: the page goes on calling it the current survey.
+        var unreadable = await UploadSurveyAsync(cave);
+        await FailSurveyAsync(unreadable);
+
+        // A second upload is read. It now answers for the cave's figures, standing in for the
+        // marked one — and it is not the survey the page calls current, so nothing is said about
+        // it here: not "there" for the station both hold, not "missing" for the other.
+        var standIn = await UploadSurveyAsync(cave);
+        await ReadSurveyAsync(standIn, "cave.ent.0", "cave.second.7");
+        (await IsCurrentAsync(unreadable)).ShouldBeTrue();
+        (await IsCurrentAsync(standIn)).ShouldBeFalse();
+        (await ListAsync(owner, cave)).Select(InSurvey).ShouldBe([null, null]);
+        InSurvey(await WriteAsync(owner, cave, 45m, "cave.upper.1")).ShouldBeNull();
+
+        // Made the current one on purpose, it is judged — against its own stations.
+        var made = await owner.PutAsync($"/api/v1/survey-models/{standIn}/current", null);
+        made.StatusCode.ShouldBe(HttpStatusCode.OK, await made.Content.ReadAsStringAsync());
+        (await ListAsync(owner, cave)).Select(InSurvey).ShouldBe([false, true]);
+    }
+
+    [Fact]
+    public async Task Whether_the_survey_holds_a_station_is_not_said_to_somebody_who_may_not_place_the_cave()
+    {
+        var cave = await CaveAsync(locationProtected: true);
+        await ReadSurveyAsync(await UploadSurveyAsync(cave));
+        await DeclareAsync(cave, 45m, "cave.upper.1", "Camp one");
+        await DeclareAsync(cave, 200m, "cave.gone.9", "Old sump");
+
+        // The positive half, in the same test: the cave's owner may place it and is told both
+        // answers.
+        (await ListAsync(owner, cave)).Select(InSurvey).ShouldBe([true, false]);
+
+        // A genuine Viewer with no grant at all. They may read the cave, so the declarations
+        // reach them as before; they may not place it, and which names its survey does and does
+        // not hold is that survey's vocabulary — so each row says nothing, exactly as it does for
+        // a cave with no survey.
+        var theirs = await ListAsync(reader, cave);
+        theirs.Count.ShouldBe(2);
+        theirs.Select(InSurvey).ShouldBe([null, null]);
+
+        // Writing the cave is not placing it either: somebody who may change the declarations
+        // and may not see the position is told nothing by the answer to their own write, whether
+        // the name they typed is in the survey or not.
+        InSurvey(await WriteAsync(colleague, cave, 120m, "cave.deep.3")).ShouldBeNull();
+        InSurvey(await WriteAsync(colleague, cave, 130m, "cave.gone.11")).ShouldBeNull();
+        (await ListAsync(colleague, cave)).Select(InSurvey).ShouldBe([null, null, null, null]);
+        (await ListAsync(owner, cave)).Select(InSurvey).ShouldBe([true, true, false, false]);
+    }
+
+    // ---- a station the survey file gives no name ----------------------------------------------
+
+    [Fact]
+    public async Task A_station_the_survey_file_gives_no_name_cannot_be_declared_and_one_somebody_named_can()
+    {
+        var cave = await CaveAsync();
+        // A Survex survey: a named station, a station the file gives no name (called by the number
+        // the file wrote it at), and a station a surveyor really did name with a hash sign.
+        await SeedSurveyAsync(cave, SurveyModelFormat.Survex3d, null,
+            ("cave.a.1", 0), ("#1", 1), ("#5", 2));
+        // And a Therion survey of the same cave, whose nameless station carries the viewer's label.
+        await SeedSurveyAsync(cave, SurveyModelFormat.Lox, "cave", ("cave.a.[3]", 3), ("cave.a.2", 4));
+
+        foreach (var (depth, station) in new[] { (10m, "#1"), (20m, "a.[3]"), (30m, "cave.a.[3]") })
+        {
+            var refused = await owner.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
+                new { depthM = depth, stationName = station, placeLabel = "Sala" });
+            var said = await refused.Content.ReadAsStringAsync();
+            refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, said);
+            JsonDocument.Parse(said).RootElement.GetProperty("code").GetString()
+                .ShouldBe("cave_depth_place.station_nameless");
+        }
+
+        (await ListAsync(owner, cave)).ShouldBeEmpty();
+
+        // Beside each refusal, what is still accepted: a named station of either survey, the
+        // station whose name merely looks like a file number, and a name no survey of the cave
+        // holds at all — which nothing here has ever judged.
+        await DeclareAsync(cave, 10m, "cave.a.1", "Sala");
+        await DeclareAsync(cave, 20m, "a.2", null);
+        await DeclareAsync(cave, 30m, "#5", null);
+        await DeclareAsync(cave, 40m, "#77", null);
+        (await ListAsync(owner, cave)).Count.ShouldBe(4);
+    }
+
+    [Fact]
+    public async Task The_nameless_refusal_tells_nothing_to_somebody_who_may_not_see_the_caves_surveys()
+    {
+        // A cave whose position is protected, with a survey holding a nameless station. Its owner
+        // may see the survey; another editor may write to the cave and may not see where it is.
+        var cave = await CaveAsync(locationProtected: true);
+        var model = await SeedSurveyAsync(cave, SurveyModelFormat.Survex3d, null, ("cave.a.1", 0), ("#1", 1));
+
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"dp-other-{suffix}@t.local");
+        var other = await AuthHelper.BearerClientAsync(factory, $"dp-other-{suffix}@t.local");
+
+        // The state the test stands on, shown rather than assumed: the survey is there for its
+        // owner and is not for the other editor, who can nevertheless declare a depth.
+        (await owner.GetAsync($"/api/v1/survey-models/{model}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await other.GetAsync($"/api/v1/survey-models/{model}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var writes = await other.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
+            new { depthM = 5m, stationName = "cave.a.1", placeLabel = (string?)null });
+        writes.StatusCode.ShouldBe(HttpStatusCode.OK, await writes.Content.ReadAsStringAsync());
+
+        // To that editor a nameless station is answered like any other name: the refusal would
+        // confirm that the survey has a station at that number, and how many it has.
+        var unseen = await other.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
+            new { depthM = 10m, stationName = "#1", placeLabel = (string?)null });
+        unseen.StatusCode.ShouldBe(HttpStatusCode.OK, await unseen.Content.ReadAsStringAsync());
+
+        // The owner, who may see the survey, is told.
+        var seen = await owner.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
+            new { depthM = 20m, stationName = "#1", placeLabel = (string?)null });
+        seen.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonDocument.Parse(await seen.Content.ReadAsStringAsync()).RootElement.GetProperty("code").GetString()
+            .ShouldBe("cave_depth_place.station_nameless");
+    }
+
     // ---- helpers -----------------------------------------------------------------------------
 
-    private async Task<Guid> CaveAsync(string visibility = "authenticated")
+    private static bool? InSurvey(JsonElement row) =>
+        row.GetProperty("stationInSurvey").ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null,
+        };
+
+    private static async Task<JsonElement> WriteAsync(HttpClient client, Guid cave, decimal depth, string station)
+    {
+        var response = await client.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
+            new { depthM = depth, stationName = station, placeLabel = (string?)null });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
+    }
+
+    /// <summary>A survey uploaded the real way and left as the upload leaves it: not yet read.</summary>
+    private async Task<Guid> UploadSurveyAsync(Guid cave)
+    {
+        using var form = new MultipartFormDataContent();
+        var bytes = new ByteArrayContent([1, 2, 3, 4]);
+        bytes.Headers.ContentType = new("application/octet-stream");
+        form.Add(bytes, "file", "places.3d");
+        var created = await owner.PostAsync($"/api/v1/caves/{cave}/survey-models", form);
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        return (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// Marks the survey as read and writes its stations straight into the station table — the job
+    /// that reads a file never runs in this class, and the names here are invented.
+    /// </summary>
+    private async Task ReadSurveyAsync(Guid modelId, params string[] stations)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var model = await db.SurveyModels.SingleAsync(m => m.Id == modelId);
+        model.Status = SurveyModelStatus.Ready;
+        string[] names = stations.Length > 0 ? stations : ["cave.ent.0", "cave.upper.1", "cave.deep.3"];
+        db.SurveyStations.AddRange(names.Select(name => new SurveyStation
+        {
+            SurveyModelId = modelId,
+            Name = name,
+            SurveyName = null,
+            Position = new Point(new CoordinateZ(25.5, 45.5, 300)) { SRID = 4326 },
+            Flags = SurveyStationFlags.Underground,
+        }));
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Leaves the survey as a reading that could not be done leaves it.</summary>
+    private async Task FailSurveyAsync(Guid modelId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var model = await db.SurveyModels.SingleAsync(m => m.Id == modelId);
+        model.Status = SurveyModelStatus.Failed;
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<bool> IsCurrentAsync(Guid modelId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.SurveyModels.Where(m => m.Id == modelId).Select(m => m.IsCurrent).SingleAsync();
+    }
+
+    /// <summary>
+    /// A survey model of the cave as a reading would have left it: uploaded through the door, then
+    /// marked read with the given station rows written straight into the graph table.
+    /// </summary>
+    private async Task<Guid> SeedSurveyAsync(
+        Guid cave, SurveyModelFormat format, string? rootSurveyName, params (string Name, long FileStationId)[] stations)
+    {
+        using var form = new MultipartFormDataContent();
+        var bytes = new ByteArrayContent([1, 2, 3, 4]);
+        bytes.Headers.ContentType = new("application/octet-stream");
+        form.Add(bytes, "file", format == SurveyModelFormat.Lox ? "depth.lox" : "depth.3d");
+        var created = await owner.PostAsync($"/api/v1/caves/{cave}/survey-models", form);
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var modelId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var model = await db.SurveyModels.SingleAsync(m => m.Id == modelId);
+        model.Status = SurveyModelStatus.Ready;
+        model.RootSurveyName = rootSurveyName;
+        db.SurveyStations.AddRange(stations.Select((s, i) => new SurveyStation
+        {
+            SurveyModelId = modelId,
+            Name = s.Name,
+            FileStationId = s.FileStationId,
+            Position = new Point(new CoordinateZ(25.5, 45.5, 300 - (10 * i))) { SRID = 4326 },
+            Flags = SurveyStationFlags.Underground,
+        }));
+        await db.SaveChangesAsync();
+        return modelId;
+    }
+
+    private async Task<Guid> CaveAsync(string visibility = "authenticated", bool locationProtected = false)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/caves", new
         {
             name = $"Depth Cave {Guid.NewGuid():N}"[..30],
             caveTypeId,
             visibility,
-            locationProtected = false,
+            locationProtected,
             explorationStatus = "Unknown",
             isShowCave = false,
         });

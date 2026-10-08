@@ -18,6 +18,7 @@ import type { TrackingMovieDialogProps } from '../../components/caveview/movie/T
 const uploadMutate = vi.fn();
 const deleteMutate = vi.fn();
 const makeCurrentMutate = vi.fn();
+const readAgainMutate = vi.fn();
 
 function model(overrides: Partial<SurveyModelInfo> = {}): SurveyModelInfo {
   return {
@@ -79,12 +80,14 @@ vi.mock('../../api/hooks.ts', async () => {
     // The polling rule itself is the real one: it is what the assertions below are about.
     surveyModelPollInterval: actual.surveyModelPollInterval,
     surveyModelUnsettled: actual.surveyModelUnsettled,
+    surveyModelWorkOutstanding: actual.surveyModelWorkOutstanding,
     surveyModelReadableByViewer: actual.surveyModelReadableByViewer,
     useSurveyModels: () => ({ data: models }),
     useCaveSummary: () => ({ data: summary }),
     useUploadSurveyModel: () => ({ mutateAsync: uploadMutate, isPending: false }),
     useDeleteSurveyModel: () => ({ mutateAsync: deleteMutate, isPending: false }),
     useMakeSurveyModelCurrent: () => ({ mutateAsync: makeCurrentMutate, isPending: false }),
+    useReadSurveyModelAgain: () => ({ mutateAsync: readAgainMutate, isPending: false }),
     // The viewer opened from this section reads the model's links, to show over the model the
     // photographs somebody has hung on its stations. Nothing here is about those, so there are
     // none — but the mock lists what it answers, so a hook left out of it is a crash.
@@ -144,6 +147,7 @@ beforeEach(() => {
   uploadMutate.mockReset().mockResolvedValue(model());
   deleteMutate.mockReset().mockResolvedValue(undefined);
   makeCurrentMutate.mockReset().mockResolvedValue(model());
+  readAgainMutate.mockReset().mockResolvedValue(model({ status: 'ready', readingAgain: true }));
   models = [];
   summary = summaryWith(true);
   navigate.mockClear();
@@ -236,6 +240,107 @@ describe('the survey model list', () => {
 
     expect(screen.getAllByText('Current')).toHaveLength(1);
     expect(screen.queryByText('Make current')).toBeNull();
+  });
+
+  it('offers a writer another reading of a model that is not being read, and asks first', async () => {
+    models = [
+      model({ id: 'done', format: 'lox', name: 'Read plot' }),
+      model({ id: 'broken', format: 'lox', name: 'Unread plot', status: 'failed' }),
+      // A reading of these two is queued or running: a second one would be refused.
+      model({ id: 'queued', format: 'lox', name: 'Waiting plot', status: 'pending' }),
+      model({ id: 'busy', format: 'lox', name: 'Busy plot', status: 'processing' }),
+    ];
+    show();
+    await screen.findByText('Read plot');
+
+    // The finished model and the one that could not be read — the retry a failed reading never
+    // had — and neither of the two that are already on their way.
+    expect(screen.getAllByRole('button', { name: 'Read again' })).toHaveLength(2);
+    expect(screen.getByTestId('survey-model-read-again-done')).toBeInTheDocument();
+    expect(screen.getByTestId('survey-model-read-again-broken')).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-model-read-again-queued')).toBeNull();
+    expect(screen.queryByTestId('survey-model-read-again-busy')).toBeNull();
+
+    // It replaces what the last reading produced, so pressing it is a question, not the act.
+    fireEvent.click(screen.getByTestId('survey-model-read-again-broken'));
+    expect(await screen.findByText('Read this file again?')).toBeInTheDocument();
+    expect(screen.getByText(/Nothing has to be uploaded/)).toBeInTheDocument();
+    expect(readAgainMutate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(readAgainMutate).toHaveBeenCalledWith({ id: 'broken', caveId: 'c1' }));
+    expect(await screen.findByText(/The reading is queued/)).toBeInTheDocument();
+  });
+
+  it('shows a model being read again as ready, says so, and does not offer a second reading', async () => {
+    models = [
+      model({ id: 'again', format: 'lox', name: 'Plot read again', readingAgain: true, triangleCount: null }),
+      model({ id: 'walls', format: 'stl', name: 'Walls converted again', readingAgain: true }),
+      model({ id: 'done', format: 'lox', name: 'Read plot', readingAgain: false, triangleCount: null }),
+    ];
+    show();
+    await screen.findByText('Plot read again');
+
+    // Ready all the same: what the last reading produced is in use until the next replaces it,
+    // so nothing here says the model is waiting or holds nothing.
+    expect(screen.getAllByText('Ready')).toHaveLength(3);
+    expect(screen.queryByText('Waiting its turn')).toBeNull();
+    expect(screen.queryByText('In progress')).toBeNull();
+    expect(screen.getByTestId('survey-model-reading-again-again')).toHaveTextContent('Being read again');
+    expect(screen.getByTestId('survey-model-reading-again-walls')).toHaveTextContent('Being converted again');
+    expect(screen.queryByTestId('survey-model-reading-again-done')).toBeNull();
+
+    // The server would refuse a reading behind the one already queued, so it is not offered.
+    expect(screen.queryByTestId('survey-model-read-again-again')).toBeNull();
+    expect(screen.queryByTestId('survey-model-read-again-walls')).toBeNull();
+    expect(screen.getByTestId('survey-model-read-again-done')).toBeInTheDocument();
+  });
+
+  it('offers another conversion of a wall mesh, converted or not', async () => {
+    models = [
+      model({ id: 'walls', format: 'stl', name: 'Converted walls' }),
+      model({ id: 'broken', format: 'stl', name: 'Unconverted walls', status: 'failed', meshUrl: null }),
+    ];
+    show();
+    await screen.findByText('Converted walls');
+
+    expect(screen.getByTestId('survey-model-read-again-walls')).toBeInTheDocument();
+    expect(screen.getByTestId('survey-model-read-again-broken')).toBeInTheDocument();
+  });
+
+  it('offers another reading to nobody who may not write the cave', async () => {
+    models = [model({ id: 'done', format: 'lox', name: 'Read plot' })];
+    show(false);
+    await screen.findByText('Read plot');
+
+    expect(screen.queryByRole('button', { name: 'Read again' })).toBeNull();
+
+    // The same row for a writer carries it, so its absence above is the permission and not the row.
+    cleanup();
+    show(true);
+    await screen.findByText('Read plot');
+    expect(screen.getByRole('button', { name: 'Read again' })).toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      new ApiError(409, 'survey_model.reading_in_progress', 'server wording'),
+      /already being read/,
+    ],
+    [new ApiError(403, 'acl.forbidden', 'server wording'), /not allowed to change/],
+    // A refusal nobody has worded is a failure of this act, not of an upload.
+    [new ApiError(500, 'something.nobody.wrote'), /The reading could not be started/],
+  ])('says why another reading was refused (%#)', async (refusal, expected) => {
+    models = [model({ id: 'done', format: 'lox', name: 'Read plot' })];
+    readAgainMutate.mockRejectedValue(refusal);
+    show();
+    await screen.findByText('Read plot');
+
+    fireEvent.click(screen.getByTestId('survey-model-read-again-done'));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText(expected)).toBeInTheDocument();
+    expect(screen.queryByText(/The reading is queued/)).toBeNull();
   });
 
   it("shows a failed conversion in the server's own words, which are the only ones that fit", async () => {
@@ -348,6 +453,9 @@ describe('the survey model list', () => {
     expect(surveyModelPollInterval([model({ status: 'processing' })])).toBe(2000);
     expect(surveyModelPollInterval([model({ status: 'ready' })])).toBe(8 * 60_000);
     expect(surveyModelPollInterval([model({ status: 'failed' })])).toBe(8 * 60_000);
+    // A model being read again stays ready, and its row is still about to change by itself.
+    expect(surveyModelPollInterval([model({ status: 'ready', readingAgain: true })])).toBe(2000);
+    expect(surveyModelPollInterval([model({ status: 'ready', readingAgain: false })])).toBe(8 * 60_000);
     expect(surveyModelPollInterval([model({ status: 'ready' }), model({ status: 'processing' })]))
       .toBe(2000);
     expect(surveyModelPollInterval(undefined)).toBe(8 * 60_000);

@@ -327,6 +327,120 @@ describe('stepping between the reports themselves', () => {
   });
 });
 
+/**
+ * The steps narrowed to whoever the reader is keeping up with.
+ *
+ * One trip, three people, and a move between teams in the middle of it — because whose report a
+ * team's is has exactly one hard case, and it is the person who changed team.
+ */
+describe('stepping between the reports of the party being followed', () => {
+  const nine = at('2019-07-06T09:00:00Z');
+  const ten = at('2019-07-06T10:00:00Z');
+  const eleven = at('2019-07-06T11:00:00Z');
+  const noon = at('2019-07-06T12:00:00Z');
+  const one = at('2019-07-06T13:00:00Z');
+  const two = at('2019-07-06T14:00:00Z');
+  const source = track({
+    participants: [
+      {
+        ordinal: 1,
+        label: 'Ana',
+        track: [
+          fix({ recordedAt: '2019-07-06T09:00:00Z', in: true }),
+          fix({ recordedAt: '2019-07-06T10:00:00Z', teamId: TEAM_A, stationName: 'p.g.7', in: true }),
+          // Names no team: Ana is still in the one her last report named.
+          fix({ recordedAt: '2019-07-06T12:00:00Z', stationName: 'p.g.9', in: true }),
+          fix({ recordedAt: '2019-07-06T13:00:00Z', teamId: TEAM_B, stationName: 'p.g.12', in: true }),
+        ],
+      },
+      {
+        ordinal: 2,
+        label: 'Bogdan',
+        track: [
+          fix({ recordedAt: '2019-07-06T11:00:00Z', teamId: TEAM_B, stationName: 'p.g.3', in: true }),
+          fix({ recordedAt: 'not an instant', teamId: TEAM_B, stationName: 'p.g.4', in: true }),
+        ],
+      },
+      { ordinal: 3, label: 'Carmen', track: [fix({ recordedAt: '2019-07-06T14:00:00Z', in: true })] },
+      { ordinal: 4, label: 'Dan', track: [] },
+    ],
+  });
+
+  it('is everybody’s where nobody is followed, said either way', () => {
+    const everybody = [nine, ten, eleven, noon, one, two];
+    expect(pastReportMoments(source)).toEqual(everybody);
+    expect(pastReportMoments(source, null)).toEqual(everybody);
+    expect(pastReportMoments(source, undefined)).toEqual(everybody);
+  });
+
+  it('is one person’s own reports for a followed person, in whatever team they were', () => {
+    expect(pastReportMoments(source, { kind: 'caver', id: '1' })).toEqual([nine, ten, noon, one]);
+    expect(pastReportMoments(source, { kind: 'caver', id: '3' })).toEqual([two]);
+  });
+
+  it('is a team’s reports while each person was in it, by the last team their reports named', () => {
+    // Ana's noon report names no team and is the advance team's: that is the team the drawing has
+    // her in at noon. Her one o'clock report moves her, and is the survey team's with Bogdan's.
+    expect(pastReportMoments(source, { kind: 'team', id: TEAM_A })).toEqual([ten, noon]);
+    expect(pastReportMoments(source, { kind: 'team', id: TEAM_B })).toEqual([eleven, one]);
+  });
+
+  it('is, for the group on no team, each person’s reports before any of theirs named one', () => {
+    // Ana at nine, before she was in a team, and Carmen, who never was. Not Ana's noon report,
+    // though it too carries no team: by then she is in one.
+    expect(pastReportMoments(source, { kind: 'team', id: null })).toEqual([nine, two]);
+  });
+
+  it('is empty, and not everybody’s, for a party of whom the trip holds no report', () => {
+    // Somebody on the roster nobody reported, a place in the party beyond its end, and a team of
+    // another trip. What to step through instead is for whoever draws the arrows to decide.
+    expect(pastReportMoments(source, { kind: 'caver', id: '4' })).toEqual([]);
+    expect(pastReportMoments(source, { kind: 'caver', id: '99' })).toEqual([]);
+    expect(pastReportMoments(source, { kind: 'team', id: 'not-a-team-of-this-trip' })).toEqual([]);
+  });
+
+  it('leaves a report with no readable instant out whole, the team it names included, as the drawing does', () => {
+    // The only report naming the survey team carries an instant that will not parse. The fold of
+    // a moment drops such a report entirely, so the drawing never has Ana in that team — and the
+    // steps must not carry its team forward onto her later reports either.
+    const garbled = track({
+      participants: [
+        {
+          ordinal: 1,
+          label: 'Ana',
+          track: [
+            fix({ recordedAt: '2019-07-06T10:00:00Z', teamId: TEAM_A, stationName: 'p.g.7', in: true }),
+            fix({ recordedAt: 'not an instant', teamId: TEAM_B, stationName: 'p.g.8', in: true }),
+            fix({ recordedAt: '2019-07-06T12:00:00Z', stationName: 'p.g.9', in: true }),
+          ],
+        },
+      ],
+    });
+
+    expect(pastReportMoments(garbled, { kind: 'team', id: TEAM_B })).toEqual([]);
+    expect(pastReportMoments(garbled, { kind: 'team', id: TEAM_A })).toEqual([ten, noon]);
+    // And the two readings agree at every step: whoever the arrows stop for is in that team on
+    // the drawing at that moment.
+    for (const moment of pastReportMoments(garbled, { kind: 'team', id: TEAM_A })) {
+      expect(pastEnvelopeAt(garbled, moment).participants[0].teamId).toBe(TEAM_A);
+    }
+  });
+
+  it('agrees with where a follow opens: the first place drawn is one of the steps', () => {
+    // The opening rule and the steps read the same membership, so pressing "previous" from where a
+    // follow opened never lands on a report that was not that party's.
+    for (const follow of [
+      { kind: 'team', id: TEAM_A },
+      { kind: 'team', id: TEAM_B },
+      { kind: 'caver', id: '1' },
+    ] as const) {
+      const first = firstPlacedMoment(source, follow);
+      expect(first).not.toBeNull();
+      expect(pastReportMoments(source, follow)).toContain(first);
+    }
+  });
+});
+
 describe('keeping the camera on a team or a caver', () => {
   const source = track({
     participants: [

@@ -108,7 +108,11 @@ feature and walkthroughs of whole jobs.
   with it, so the map and the figures never describe two different surveys. Two line plots of one
   cave can be **compared** in the survey viewer: overlaid in two colours where they are in the
   same coordinates, or side by side with linked views where they are not, with each survey's parts
-  shown and hidden together or separately.
+  shown and hidden together or separately. A stored model can be **read again** from its row —
+  after a reading that failed, or after an upgrade that reads surveys better — without uploading
+  it a second time, and an administrator can ask the same of every line plot at once. A station
+  the file gives no name is kept under the label the drawing gives it, so on a Therion survey it
+  can be pressed and reported at like any other.
 - **Survey closure** — archive the compilation log beside the model and the cave page reports how
   well the survey closes, in the compiler's own words: every loop it found, with both its relative
   error and its absolute error in metres, its length, its stations and its per-axis components. The
@@ -236,6 +240,11 @@ feature and walkthroughs of whole jobs.
   A figure that would say nothing is left out rather than drawn: on a cave's own totals every trip
   counted went to that cave, so its places could only ever read one and its first visits could only
   repeat its people, and neither is shown there.
+  Where trips were tracked, the totals also say how many, and the hours underground that their
+  tracking logs come to — each person's reported entry paired with the exit that followed. That is
+  a second source beside the hours typed on the roster, labelled as one and never added to them;
+  an entry nobody closed adds nothing, and a camp's own write-up layout may print the figure on a
+  line of its own.
   Any of the three can be saved as a spreadsheet, which carries exactly what the screen carried and
   says whose totals they are, because a file gets forwarded and read months later.
 - **What a club's trips add up to, on one page** — from the trip list, one button opens the same
@@ -397,8 +406,17 @@ feature and walkthroughs of whole jobs.
   alarm; that is the callout's job. A cave can declare what its depths mean — that 96 m is the
   Meander, at this station — so a depth phoned out lands on the station people mean rather than
   on whichever one arithmetic finds nearest, and the report card warns when a depth sits far from
-  the station it will land on. A report written down wrongly is corrected in place, keeping
-  everything pinned to it, and a finished trip's log stays open for the write-up. A coordinator's
+  the station it will land on. Wherever a station is typed — declaring a place, reporting,
+  correcting — the survey's own station names are offered as the name is typed, and a declared
+  place whose station the survey no longer has is marked rather than silently passed over. A
+  watch moved to a corrected survey part-way through a trip leaves its earlier reports marked
+  **On another survey** in the log, and the model panel can show them on the survey they were
+  made on — for looking only: nothing is recorded while another survey is on screen. A report
+  written down wrongly is corrected in place, keeping
+  everything pinned to it, and a finished trip's log stays open for the write-up. A report
+  deleted from the log is kept: it can be put back exactly as it was — by **Undo** on the
+  notice, or later from **Removed reports** under the log — and is destroyed only by a second,
+  separate **Delete for good**. A coordinator's
   spreadsheet of calls is read onto the log through a preview that says, row by row, what it
   would create, correct or refuse and states how it read the times; each report is filed under
   the person and the moment, so a corrected sheet imported again corrects instead of doubling.
@@ -408,7 +426,11 @@ feature and walkthroughs of whole jobs.
   A row that would replace a report shows the report as it stands beside the report as it would
   be left, a replacement changes only what the sheet has a column for, and the import writes
   what the preview showed or nothing: if the trip changed in between, the sheet is read again
-  instead. The same sheet imported twice writes nothing the second time. The log itself is
+  instead. The same sheet imported twice writes nothing the second time. And the log goes the
+  other way: anybody who reads the trip can download it as that same sheet — one report on a
+  row, each moment written whole with its offset — to correct in a spreadsheet and import
+  again; a place the reader may not be told is left out of the file, and its row is marked so
+  that importing it back is refused rather than writing nowhere over the place. The log itself is
   paged and can be narrowed to one person, a report that was changed after it was written is
   marked **Corrected**, and a report added once tracking is closed has to say when it was made
   rather than being stamped with the hour it was typed.
@@ -420,6 +442,20 @@ feature and walkthroughs of whole jobs.
   in the table, marked, after being taken off the roster, and cannot be taken off it while
   tracking is running. None of this alarms anybody: nothing is sent, the overdue callout is not
   involved, and a published page shows none of it.
+  Photographs are hung on a **moment** of the trip rather than on a report, each at the time its
+  own file says, with one correction for a camera clock that was out; each can be about a
+  different person, and before anything is attached the dialog says, photograph by photograph,
+  **where the replay will draw it** — at which station, on another survey, nowhere yet, or on the
+  timeline only — read from the log by the replay's own rule and worked out again as the clock
+  correction changes. A place withheld from the reader is said to be withheld, never shown.
+  **A camp counts all of its parties on one screen**: the camp's page has a *Who is underground*
+  tab listing every trip of the camp that is being tracked, or was closed in the last two days,
+  with how many of its party are underground, out and not yet heard from, each person by name
+  and when they were last heard. It is a head count and deliberately not a map — it carries no
+  station, depth, survey or cave for anybody, which is what lets it count a party in a cave
+  whose location the reader may not be told — and it raises no alarm: the hour a party plans to
+  be out by is printed as a time and compared with nothing. It lists only the trips its reader
+  may read, and a trip whose tracking was never started is not on it at all.
   A trip can then be **published** with a link: anybody holding it, with no account, sees the
   party on the survey, refreshed while they are underground. The page is written for a reader who
   has never followed a trip: it says that a place is where somebody was last *reported* and not a
@@ -434,7 +470,9 @@ feature and walkthroughs of whole jobs.
   is — and its finished published trips, gathered by camp, each playable as
   a replay on the survey its reports were measured in; any moment of a replay can be copied as a
   link that opens there, standing or already playing. The page names people as the installation
-  decides — real names by default, a caption to keep one person off it — a cave with protected
+  decides — real names by default, a caption to keep one person off it; where names are off, a
+  person's number (*Caver 3*) is theirs from the moment the trip first names them and does not
+  move when the roster is edited — a cave with protected
   coordinates cannot be published at all, and a link ends by itself a short while after the watch
   is closed. A link that has ended up in the wrong place is **replaced** in one act — the old
   address stops answering, a fresh one is shown once, and the trip keeps its place in the cave's

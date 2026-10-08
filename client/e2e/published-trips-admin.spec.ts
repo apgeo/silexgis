@@ -2,7 +2,7 @@
 import { expect, type Page } from '@playwright/test';
 import { ownContext, test } from './consoleGuard.ts';
 import { gotoRoute, login } from './helpers.ts';
-import { tryAsPerson } from './arrange.ts';
+import { surveyRead, tryAsPerson } from './arrange.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
 
 /**
@@ -103,6 +103,9 @@ test('an administrator replaces a published link and then unpublishes the trip, 
       id: string;
     }[];
     modelId = models[0].id;
+    // The report below names a station, and the survey's stations are stored after the upload
+    // answers: named before then, the station is refused as none of the survey's.
+    await surveyRead(page, modelId);
 
     // ---- A trip under way, published through the API as a coordinator's panel would ----
     const trip = (await apiJson(page, auth, 'POST', '/api/v1/trip-logs', {

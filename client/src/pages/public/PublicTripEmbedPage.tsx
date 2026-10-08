@@ -4,6 +4,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -29,10 +30,16 @@ import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import { followedStation, type PastFollow } from './pastTrackReplay.ts';
 import { PAST_LINK_PARAMS, readPastLink } from './pastTripLink.ts';
 import { usePinnedModelUrl } from './pinnedModelUrl.ts';
+import { useRoomyFrame } from './publicEmbedRoom.ts';
 import PublicPastBar from './PublicPastBar.tsx';
 import PublicLiveTripList from './PublicLiveTripList.tsx';
 import PublicPastTripList from './PublicPastTripList.tsx';
-import { publicTripView, shownReadEnded, watchedParty } from './publicLiveWatch.ts';
+import {
+  linkListsPastOnly,
+  publicTripView,
+  shownReadEnded,
+  watchedParty,
+} from './publicLiveWatch.ts';
 import { readNotLanding } from './publicReadFreshness.ts';
 import {
   EMBED_CHANNEL,
@@ -128,16 +135,28 @@ export default function PublicTripEmbedPage() {
   /** The cave's past, and which of it this frame has been asked to play. Reads nothing until asked. */
   const past = usePastTripPlayback(token);
   /**
-   * The list of past trips, which this frame keeps behind a control.
+   * Whether the frame has room for a past trip's whole strip beside its drawing, or only for one
+   * line of it. Asked of the frame's own box, which is the whole of this document.
+   */
+  const roomy = useRoomyFrame();
+  /**
+   * The frame's one sheet, and which of two things its reader opened it for.
    *
    * <b>Where the followed page has room for a section, a frame in somebody's article has a box.</b>
    * A list standing open in a 4:3 embed would take a third of the drawing away from every reader,
    * including every reader who came for the drawing — so it opens over the frame on a press and is
    * fetched on that press, which means an article whose readers never open it costs exactly what it
    * cost before the archive existed.
+   *
+   * <b>`controls` is not `lists`, and the difference is what is asked of the server.</b> In a
+   * frame with room for one line only, the rest of a replay's transport — the rail, the speed, the
+   * steps, whom to follow — stands in this same sheet. A reader who opens it to drag the rail has
+   * asked for a control of the trip already in hand: nothing is read for that, and nobody else in
+   * the cave is listed under it. The cave's two lists are read, and drawn, when the reader presses
+   * the button named for them — on the strip, or inside the sheet beneath the controls.
    */
-  const [picker, setPicker] = useState(false);
-  const pastTrips = usePublicPastTrips(token, picker);
+  const [picker, setPicker] = useState<'lists' | 'controls' | null>(null);
+  const listsAsked = picker === 'lists';
   /**
    * The other party of the cave this frame's reader asked to see, if any — and its name as it
    * stood when they asked, which is what a notice can still say once the party itself is gone from
@@ -146,14 +165,35 @@ export default function PublicTripEmbedPage() {
   const [watch, setWatch] = useState<{ tripLogId: string; title: string } | null>(null);
   /** The party whose watch ended under the reader, by name, until the line saying so is closed. */
   const [watchEnded, setWatchEnded] = useState<string | null>(null);
+  /**
+   * What a reader asked this frame for belongs to the link they asked it under.
+   *
+   * The frame is one component across two links — a club's page that swaps the block's address,
+   * the browser's Back between two of them — and the playback already forgets a replay that way.
+   * A watch of another party has to go with it: its list would be read under the second link
+   * though nobody asked there, and where the two links are of one cave the party would be found
+   * in it, so the second link's frame opened on a party of the first link's choosing. An open
+   * sheet goes too, for the same reason. Forgotten while rendering, so nothing is ever read or
+   * drawn under the new link on the old link's say-so.
+   */
+  const [askedUnder, setAskedUnder] = useState(token);
+  if (askedUnder !== token) {
+    setAskedUnder(token);
+    setWatch(null);
+    setWatchEnded(null);
+    setPicker(null);
+  }
+  const sameLink = askedUnder === token;
+  const pastTrips = usePublicPastTrips(token, sameLink && listsAsked);
   // The other half of the cave's list, behind the same press: the parties being followed now,
   // which the archive deliberately leaves out — the case this frame was built for is an
   // expedition with two parties underground at once, and one of them must not be invisible.
   //
-  // Read on that press and not before, and then for as long as one of those parties is on screen
+  // Read on the press that asks for the lists and not before — never for the replay's own
+  // controls, which share the sheet — and then for as long as one of those parties is on screen
   // with the sheet shut again: the list is where that party's places come from, and where the
   // frame learns that the party is no longer being followed.
-  const liveTrips = usePublicLiveTrips(token, picker || watch !== null);
+  const liveTrips = usePublicLiveTrips(token, sameLink && (listsAsked || watch !== null));
   const watchId = watch?.tripLogId ?? null;
   const ownTripLogId = data?.tripLogId;
   const watched = useMemo(
@@ -186,6 +226,20 @@ export default function PublicTripEmbedPage() {
    */
   const liveFailed =
     liveTrips.isError && (liveTrips.data === undefined || isSettledRefusal(liveTrips.error));
+  /**
+   * Whether this link has stopped listing today's parties while its past trips still answer —
+   * known only where a reader has had the past trips read at about the moment the list of
+   * parties was refused, and never read to find out. A past list merely still in hand from
+   * earlier is not that: a link taken back since leaves the same list behind.
+   */
+  const pastOnly = linkListsPastOnly(
+    { list: pastTrips.data, error: pastTrips.error, readAt: pastTrips.dataUpdatedAt ?? 0 },
+    {
+      error: liveTrips.error,
+      readAt: liveTrips.dataUpdatedAt ?? 0,
+      refusedAt: liveTrips.errorUpdatedAt ?? 0,
+    },
+  );
 
   /**
    * What this frame is showing: the link's own party now, another party of the cave being followed
@@ -278,11 +332,12 @@ export default function PublicTripEmbedPage() {
   /**
    * The parts of the playback this page's message listener reads, named one by one.
    *
-   * <b>Not the object, deliberately.</b> `past` is rebuilt every render, so a listener depending on
-   * it would be torn down and stood up again five times a second while a replay plays — and a
-   * message arriving in that gap is a link in somebody's article that did nothing. The four
-   * callbacks are stable, and the span, the trip and whether its track is still in flight each
-   * change once per trip, which is what this listener actually cares about.
+   * <b>Not the object, deliberately.</b> `past` is rebuilt every render, so anything depending on
+   * it changes five times a second while a replay plays. Opening a trip, leaving the past and
+   * placing the clock are one function each for the life of the frame, and the listener subscribes
+   * against those alone; whom to follow, the span, the trip and whether its track is still in
+   * flight change with the trip, and the listener reads them as of the last render instead of
+   * being rebuilt for them (see where it is subscribed, below).
    */
   const {
     open: openPast,
@@ -313,12 +368,15 @@ export default function PublicTripEmbedPage() {
   const askedOfThePast = PAST_LINK_PARAMS.map((name) => search.get(name) ?? '\u0000').join('\u0001');
   const searchRef = useRef(search);
   searchRef.current = search;
+  // Read again when the link itself changes under the same address: the playback forgets a
+  // replay that belonged to another link, and a frame whose new address names a past trip in the
+  // very same words would otherwise be left on the live party under an address asking for more.
   useEffect(() => {
     const asked = readPastLink(searchRef.current);
     if (asked !== null) {
       openPast(asked.tripLogId, { at: asked.at, follow: asked.follow, play: asked.play });
     }
-  }, [askedOfThePast, openPast]);
+  }, [askedOfThePast, openPast, token]);
 
   const followStation = followedStation(cavers, past.follow);
   useEffect(() => {
@@ -468,9 +526,12 @@ export default function PublicTripEmbedPage() {
    * An article written before the archive existed goes on reading the party exactly as it did; one
    * written after it can print its own words for the past, and must, because the same shape now
    * carries two very different claims about where people are.
+   *
+   * A trip that could not be read is not said here at all — it has no name and no moment to hand
+   * over — and is said beside it instead, where the server has refused it.
    */
   const pastNow = useMemo(
-    () =>
+    (): EmbedReadyMessage['past'] =>
       past.tripLogId === null || past.track === undefined || past.at === null
         ? undefined
         : {
@@ -479,6 +540,25 @@ export default function PublicTripEmbedPage() {
             at: new Date(past.at).toISOString(),
           },
     [past.tripLogId, past.track, past.at],
+  );
+
+  /**
+   * The past trip this frame was asked for and the server refused, said by its id and nothing else.
+   *
+   * <b>Without it the article was told nothing at all</b>: an announcement of nothing loaded and
+   * nobody in the party, which is word for word what a frame still waiting says, so a link to a
+   * trip that has been taken back left the page around the frame waiting for good.
+   *
+   * <b>Only the server's own refusal is said, never a read that merely did not land.</b> A phone
+   * that lost its signal as the link was pressed has learned nothing about the trip, and the read
+   * is made again by itself when the reader comes back to the tab: an article told "this trip
+   * cannot be played" on that evidence would print it beside a frame that then plays the trip.
+   * Such a frame goes on saying what a waiting frame says, which is what it is.
+   */
+  const unreadableNow = useMemo(
+    (): EmbedReadyMessage['pastUnreadable'] =>
+      past.tripLogId !== null && past.refused ? { tripLogId: past.tripLogId } : undefined,
+    [past.tripLogId, past.refused],
   );
 
   /**
@@ -515,8 +595,9 @@ export default function PublicTripEmbedPage() {
   /**
    * Whether this page has said it is listening, which it says once.
    *
-   * The listener below is installed and taken down again as what it closes over changes, and the
-   * word is about the page being able to hear at all, not about any one installation of it.
+   * Kept apart from the listener's own installation because the two are not the same event: the
+   * listener is taken down and stood up again when a development build re-runs its effects, and
+   * the word is about the page being able to hear at all, not about any one installation of it.
    */
   const saidListening = useRef(false);
 
@@ -537,25 +618,27 @@ export default function PublicTripEmbedPage() {
       JSON.stringify({
         loaded,
         party,
-        past:
-          pastNow === undefined ? null : { tripLogId: pastNow.tripLogId, title: pastNow.title },
+        // The trip — never the moment, for the reason above.
+        past: pastNow === undefined ? null : { tripLogId: pastNow.tripLogId, title: pastNow.title },
+        // And the trip the server refused: the one fact that tells a frame with nothing to show
+        // apart from a frame still waiting.
+        pastUnreadable: unreadableNow ?? null,
         // Whose party it is belongs to the statement as much as who is in it: two parties of one
         // cave can stand at the same stations under the same placeholder names, and a move from
         // one to the other that changed nothing else would otherwise never be said.
         watching: watchingNow ?? null,
       }),
-    [loaded, party, pastNow, watchingNow],
+    [loaded, party, pastNow, unreadableNow, watchingNow],
   );
 
   /**
    * What would go out right now, on a ref rather than closed over.
    *
-   * So that {@link announce} never changes identity — the listener below depends on it, and a
-   * listener rebuilt whenever the party or the clock moves is torn down and stood up again while a
-   * message from the article may be arriving, which is a link in somebody's prose that did nothing.
+   * So that {@link announce} never changes identity: the listener below is subscribed against it,
+   * and is subscribed once.
    */
-  const outbound = useRef({ loaded, party, pastNow, watchingNow, statement });
-  outbound.current = { loaded, party, pastNow, watchingNow, statement };
+  const outbound = useRef({ loaded, party, pastNow, unreadableNow, watchingNow, statement });
+  outbound.current = { loaded, party, pastNow, unreadableNow, watchingNow, statement };
 
   const announce = useCallback((origin: string) => {
     const said = outbound.current;
@@ -570,6 +653,7 @@ export default function PublicTripEmbedPage() {
         loaded: said.loaded,
         party: said.party,
         past: said.pastNow,
+        pastUnreadable: said.unreadableNow,
         watching: said.watchingNow,
       } satisfies EmbedReadyMessage,
       origin,
@@ -633,6 +717,41 @@ export default function PublicTripEmbedPage() {
     [cavers, unplacedStations],
   );
 
+  /**
+   * Everything the listener below decides against that changes while the frame is open, as of the
+   * last render.
+   *
+   * <b>So that the listener is subscribed once and never rebuilt.</b> Where a member of the party
+   * or a team is on the drawing changes with every tick of a replay — the party is the party at
+   * that moment — so a listener that closed over the two resolvers was taken off the window and
+   * put back five times a second for the length of a playback, on a phone, inside somebody else's
+   * page. The rest of what is held here changes only with the trip, and is held with them so that
+   * one message is never decided half against one render and half against another.
+   *
+   * Written as the render commits rather than after it paints: a message is delivered between
+   * tasks, never inside a commit, so what it reads is always the frame as it is drawn.
+   */
+  const heard = useRef({
+    stationOfCaver,
+    stationOfTeam,
+    setFollow,
+    pastSpan,
+    pastEngaged,
+    pastTripLogId,
+    pastLoading,
+  });
+  useLayoutEffect(() => {
+    heard.current = {
+      stationOfCaver,
+      stationOfTeam,
+      setFollow,
+      pastSpan,
+      pastEngaged,
+      pastTripLogId,
+      pastLoading,
+    };
+  });
+
   useEffect(() => {
     // Nothing to talk to. A viewer opened directly in a tab is a legitimate thing to do — it is
     // how somebody checks a snippet before pasting it — and it simply has no conversation.
@@ -666,6 +785,16 @@ export default function PublicTripEmbedPage() {
         return;
       }
 
+      // The frame as it stands at this message, read once so every branch below agrees.
+      const {
+        stationOfCaver,
+        stationOfTeam,
+        setFollow,
+        pastSpan,
+        pastEngaged,
+        pastTripLogId,
+        pastLoading,
+      } = heard.current;
       const { kind, ref } = inbound.target;
       const settled = (found: boolean) =>
         reply(event.origin, {
@@ -803,20 +932,7 @@ export default function PublicTripEmbedPage() {
       );
     }
     return () => window.removeEventListener('message', onMessage);
-  }, [
-    announce,
-    stationOfCaver,
-    stationOfTeam,
-    openPast,
-    backToNow,
-    leaveWatch,
-    setFollow,
-    setPastAt,
-    pastSpan,
-    pastEngaged,
-    pastTripLogId,
-    pastLoading,
-  ]);
+  }, [announce, openPast, backToNow, leaveWatch, setPastAt]);
 
   // Antd's tokens reach the stylesheet as custom properties on the page's own root, so the rules
   // there stay readable and the colours still come from the one place they are decided.
@@ -936,17 +1052,29 @@ export default function PublicTripEmbedPage() {
    * that never tells its reader the trip's publication has ended. One banner line, above the
    * strip, only for that final answer: a fault that may clear says nothing, as before.
    */
-  const ended =
-    shownEnded ? (
-      <Alert
-        type="warning"
-        banner
-        showIcon
-        title={t('publicTrip.endedTitle')}
-        className="public-trip-embed-ended"
-        data-testid="public-trip-ended"
-      />
-    ) : null;
+  //
+  // Over another party of the cave, where the past trips are known to answer still, the final
+  // answer is narrower and is said as what it is: the link has stopped listing today's parties.
+  // "Stopped answering" would be false of a link whose past trips are in hand.
+  const ended = !shownEnded ? null : mode === 'watched' && pastOnly ? (
+    <Alert
+      type="info"
+      banner
+      showIcon
+      title={t('publicTrip.live.pastOnlyTitle')}
+      className="public-trip-embed-ended"
+      data-testid="public-trip-past-only"
+    />
+  ) : (
+    <Alert
+      type="warning"
+      banner
+      showIcon
+      title={t('publicTrip.endedTitle')}
+      className="public-trip-embed-ended"
+      data-testid="public-trip-ended"
+    />
+  );
 
   /**
    * When this frame last heard from the server, or null where it cannot say. A read that fails
@@ -1041,7 +1169,7 @@ export default function PublicTripEmbedPage() {
   const watchParty = (tripLogId: string) => {
     if (tripLogId === data.tripLogId) {
       leaveWatch();
-      setPicker(false);
+      setPicker(null);
       return;
     }
     const row = liveTrips.data?.trips.find((trip) => trip.tripLogId === tripLogId);
@@ -1053,8 +1181,28 @@ export default function PublicTripEmbedPage() {
     }
     setWatchEnded(null);
     setWatch({ tripLogId, title: row.title });
-    setPicker(false);
+    setPicker(null);
   };
+
+  /**
+   * Whether a past trip's strip is drawn as one line with the rest of it in the sheet, or whole.
+   *
+   * <b>Decided by the frame's own box, because the strip was measured and it is tall.</b> In the
+   * 260px frame of a phone's article the whole strip left the drawing 106px, all of it under the
+   * viewer's own controls; one line leaves it four fifths of the box. The same holds, less
+   * starkly, in the 4:3 box of an ordinary desktop article: with somebody followed and a record
+   * cut short the whole strip is more than half of it. Only a frame about twice the strip's
+   * height has room for both — and there its reader keeps the rail, the speed, the steps and
+   * whom to follow on screen, and drags the rail while looking at the drawing it moves.
+   */
+  const pastInOneLine = past.engaged && !roomy;
+  // The sheet opened for the replay's controls has nothing to show once they are no longer in it
+  // — the reader was sent back to the party now by a link in the article, or the frame grew — and
+  // must not turn, unasked, into the cave's lists. Shut while rendering, so the lists are never
+  // read on the strength of a press that asked for something else.
+  if (picker === 'controls' && !pastInOneLine) {
+    setPicker(null);
+  }
 
   /**
    * The archive, over the frame rather than beside it.
@@ -1068,50 +1216,77 @@ export default function PublicTripEmbedPage() {
   const archive = (
     <Drawer
       placement="bottom"
-      open={picker}
-      onClose={() => setPicker(false)}
+      open={picker !== null}
+      onClose={() => setPicker(null)}
       // `size` and not `height`: the library renamed this prop, and the old spelling warns on the
       // console of every reader who opens the list — on somebody else's website, where nobody is
       // watching. A share rather than a number, so the sheet is right in a 260px frame and in a
       // 900px one.
       size="80%"
-      title={t('publicTrip.past.sectionTitle')}
+      // While a past trip is on one line the sheet is first of all where its controls are, and it
+      // says so; the lists under them are the "other trips" of the same title.
+      title={t(pastInOneLine ? 'publicTrip.past.controls' : 'publicTrip.past.sectionTitle')}
       // The frame is the whole document; without this the sheet would be hung on the browser's
       // body and drawn over the host page's own content rather than over this viewer.
       getContainer={false}
       rootClassName="public-past-drawer"
       data-testid="public-past-drawer"
     >
-      <PublicLiveTripList
-        trips={liveTrips.data?.trips}
-        more={liveTrips.data?.more ?? false}
-        loading={liveTrips.isPending}
-        failed={liveFailed}
-        refused={isSettledRefusal(liveTrips.error)}
-        // The list's own final refusal counts while it is what the frame is drawn from: the line
-        // above has just said this link stopped answering, and the list must not invite another
-        // try beneath it.
-        linkEnded={linkEnded || shownEnded}
-        ownTripLogId={data.tripLogId}
-        onWatch={watchParty}
-        watchingId={mode === 'watched' ? watchId : null}
-      />
-      <PublicPastTripList
-        trips={pastTrips.data?.trips}
-        more={pastTrips.data?.more ?? false}
-        loading={pastTrips.isPending}
-        failed={archiveFailed}
-        refused={isSettledRefusal(pastTrips.error)}
-        linkEnded={linkEnded}
-        playingId={past.tripLogId}
-        onPlay={(tripLogId) => {
-          // One party at a time: the past trip replaces whoever was on screen, a watched party
-          // included.
-          leaveWatch();
-          past.open(tripLogId, { follow: null });
-          setPicker(false);
-        }}
-      />
+      {/* The other half of the strip. The frame's one line keeps what a reader of a replay must
+          always have — that it is the past, the clock, play and the way back — and the rest of
+          the transport stands here, a press away. */}
+      {pastInOneLine && (
+        <PublicPastBar playback={past} liveState={data.state} cavers={cavers} layout="sheet" />
+      )}
+      {/* The cave's lists under those controls, behind a press of their own: a reader who opened
+          the sheet to move the rail has not asked who else is underground, is not shown it, and
+          the server is not asked on their behalf. Pressed, the lists open here, so a reader in
+          the past can pick another trip without leaving this one first. */}
+      {pastInOneLine && !listsAsked && (
+        <Button
+          size={controlSize}
+          icon={<HistoryOutlined />}
+          onClick={() => setPicker('lists')}
+          data-testid="public-past-lists-open"
+        >
+          {t('publicTrip.past.sectionTitle')}
+        </Button>
+      )}
+      {listsAsked && (
+        <>
+          <PublicLiveTripList
+            trips={liveTrips.data?.trips}
+            more={liveTrips.data?.more ?? false}
+            loading={liveTrips.isPending}
+            failed={liveFailed}
+            refused={isSettledRefusal(liveTrips.error)}
+            // The list's own final refusal counts while it is what the frame is drawn from: the
+            // line above has just said this link stopped answering, and the list must not invite
+            // another try beneath it.
+            linkEnded={linkEnded || shownEnded}
+            pastOnly={pastOnly}
+            ownTripLogId={data.tripLogId}
+            onWatch={watchParty}
+            watchingId={mode === 'watched' ? watchId : null}
+          />
+          <PublicPastTripList
+            trips={pastTrips.data?.trips}
+            more={pastTrips.data?.more ?? false}
+            loading={pastTrips.isPending}
+            failed={archiveFailed}
+            refused={isSettledRefusal(pastTrips.error)}
+            linkEnded={linkEnded}
+            playingId={past.tripLogId}
+            onPlay={(tripLogId) => {
+              // One party at a time: the past trip replaces whoever was on screen, a watched
+              // party included.
+              leaveWatch();
+              past.open(tripLogId, { follow: null });
+              setPicker(null);
+            }}
+          />
+        </>
+      )}
     </Drawer>
   );
 
@@ -1122,8 +1297,11 @@ export default function PublicTripEmbedPage() {
    * a title, a party list and a footer because it is a page; this document is a drawing inside
    * somebody else's article and everything it adds is taken from the drawing. So while the live
    * trip is on screen there is one control, saying what it opens; while a past trip is playing the
-   * strip becomes the statement that it is the past and the controls that move through it, because
-   * at that point the reader has to be told something and there is no cheaper place to tell them.
+   * strip becomes the statement that it is the past, the clock, play and the way back, because at
+   * that point the reader has to be told something and there is no cheaper place to tell them.
+   * In a frame with room for no more it is still one line, with the rest of the transport in the
+   * sheet behind its last button; in a frame with room it is the whole strip, with the way into
+   * the cave's lists as its last button.
    *
    * <b>And while another party of the cave is on screen it says whose party it is, with the way
    * back beside the words.</b> The article around the frame is about one trip and its reader has
@@ -1133,7 +1311,13 @@ export default function PublicTripEmbedPage() {
    * leave it the room.
    */
   const strip = past.engaged ? (
-    <PublicPastBar playback={past} liveState={data.state} cavers={cavers} compact />
+    <PublicPastBar
+      playback={past}
+      liveState={data.state}
+      cavers={cavers}
+      layout={roomy ? 'frame' : 'line'}
+      onMore={() => setPicker(roomy ? 'lists' : 'controls')}
+    />
   ) : (
     <div
       className={
@@ -1156,7 +1340,7 @@ export default function PublicTripEmbedPage() {
           <Button
             size={controlSize}
             icon={<HistoryOutlined />}
-            onClick={() => setPicker(true)}
+            onClick={() => setPicker('lists')}
             aria-label={t('publicTrip.past.sectionTitle')}
             title={t('publicTrip.past.sectionTitle')}
             data-testid="public-past-open"
@@ -1166,7 +1350,7 @@ export default function PublicTripEmbedPage() {
         <Button
           size={controlSize}
           icon={<HistoryOutlined />}
-          onClick={() => setPicker(true)}
+          onClick={() => setPicker('lists')}
           data-testid="public-past-open"
         >
           {t('publicTrip.past.sectionTitle')}
@@ -1192,8 +1376,8 @@ export default function PublicTripEmbedPage() {
           </Typography.Text>
         )}
         {/* Two letters, in the strip that is this frame's only chrome. Not drawn while a past trip
-            is playing: that strip is the replay's own controls and has no room left at the
-            narrowest width a frame is given. */}
+            is playing: that line is the replay's own and has no room left at the narrowest width
+            a frame is given. */}
         <PublicLanguageButton control={language} compact size={controlSize} />
       </span>
     </div>

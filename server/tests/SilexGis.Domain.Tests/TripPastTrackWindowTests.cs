@@ -168,6 +168,17 @@ public class TripPastTrackWindowTests
             endOfTrip + lifetime - TimeSpan.FromSeconds(1), start, end, lifetime).ShouldBeTrue();
     }
 
+    [Fact]
+    public void A_retention_reaching_past_the_last_date_there_is_keeps_every_trip_and_does_not_throw()
+    {
+        // "For ever" typed as a number of days: the sum passes the end of the calendar, and the
+        // plain addition would throw on every read of the archive.
+        var day = new DateOnly(2016, 9, 18);
+
+        TripPastTrackWindow.WithinRetention(Now, day, null, TimeSpan.MaxValue).ShouldBeTrue();
+        TripPastTrackWindow.WithinRetention(Now, day, null, TimeSpan.FromDays(9_999_999)).ShouldBeTrue();
+    }
+
     // ---- the token's two windows -------------------------------------------------------------
 
     private static bool Opens(

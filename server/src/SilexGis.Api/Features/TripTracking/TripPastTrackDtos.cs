@@ -132,9 +132,11 @@ public sealed record PublicPastTrackDto(
 /// One member of a past party and everything that was reported about them, oldest first.
 /// </summary>
 /// <param name="Ordinal">
-/// Their place in the party, counted in the order the roster was written — the same number the
-/// live page shows for the same person on the same trip, because both surfaces derive it in one
-/// place. Across different trips it means nothing and a reader should not be told otherwise.
+/// Their number in the party, given when the trip first named them and never changed since — the
+/// same number the live page shows for the same person on the same trip, because both surfaces
+/// read it in one place. A party's numbers need not run without a break: somebody taken off the
+/// trip leaves a gap. Across different trips it means nothing and a reader should not be told
+/// otherwise.
 /// </param>
 /// <param name="Label">
 /// What this page calls them: the caption an administrator typed, failing that the roster's own

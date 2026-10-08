@@ -4,7 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { build } from 'vite';
 import type { PublicPastTrack, PublicPastTrackFix } from '../api/hooks.ts';
 import { publicTrackedCavers } from '../caveview/publicTrackedCavers.ts';
-import { pastEnvelopeAt } from '../pages/public/pastTrackReplay.ts';
+import {
+  pastEnvelopeAt,
+  pastReportMoments,
+  type PastFollow,
+} from '../pages/public/pastTrackReplay.ts';
 
 /**
  * What holds the second compilation of the fold honest.
@@ -220,6 +224,33 @@ describe('the fold, compiled for a page that has no build step', () => {
         partyThere(foldedThere(TRACK, moment), unnamed),
         `party at ${new Date(moment).toISOString()}`,
       ).toEqual(publicTrackedCavers(pastEnvelopeAt(TRACK, moment), unnamed));
+    }
+  });
+
+  it('lists the reports of a followed team or caver as this application does', async () => {
+    // The second argument is newer than pages already loading this file: left out it must answer
+    // what it always answered, and given it must narrow by the same rule the application's own
+    // arrows step by — the last team a person's reports named, and no team before any did.
+    const { api } = await buildBundle('iife');
+    const momentsThere = api.pastReportMoments as typeof pastReportMoments;
+    const hour = (clock: string) => Date.parse(`2019-07-06T${clock}:00Z`);
+
+    const everybody = ['09:00', '09:30', '10:00', '11:00', '12:00', '13:00'].map(hour);
+    expect(momentsThere(TRACK)).toEqual(everybody);
+    expect(momentsThere(TRACK, null)).toEqual(everybody);
+
+    const follows: { follow: PastFollow; theirs: string[] }[] = [
+      { follow: { kind: 'team', id: TEAM_A }, theirs: ['09:00', '10:00', '12:00'] },
+      { follow: { kind: 'team', id: null }, theirs: ['09:00', '09:30', '11:00', '13:00'] },
+      { follow: { kind: 'caver', id: '2' }, theirs: ['09:30', '11:00'] },
+      { follow: { kind: 'caver', id: '99' }, theirs: [] },
+    ];
+    for (const { follow, theirs } of follows) {
+      const said = `${follow.kind} ${String(follow.id)}`;
+      // Pinned to the instants themselves as well as to this application's answer: two
+      // compilations that both ignored the argument would agree with each other.
+      expect(momentsThere(TRACK, follow), said).toEqual(theirs.map(hour));
+      expect(momentsThere(TRACK, follow), said).toEqual(pastReportMoments(TRACK, follow));
     }
   });
 

@@ -104,6 +104,50 @@ export async function asPerson<T = unknown>(
 }
 
 /**
+ * Waits until an uploaded survey has been read into its stations.
+ *
+ * <b>Why a flow has to wait at all.</b> An upload answers as soon as the file is stored. The
+ * survey's stations are written afterwards, by a job the upload starts, and the survey's own row
+ * says how far that has got: waiting, being read, ready, or failed. Until it is ready the survey
+ * has no stations on the server, so anything the server checks against them is answered as if the
+ * file were empty — a report naming a station is refused as naming no station of the survey, and a
+ * report by depth finds no station to stand at.
+ *
+ * <b>Why it shows only on a busy machine.</b> The steps a flow takes between an upload and its
+ * first report — making a trip, arming its watch — are long enough for the job to finish on a
+ * quiet machine and not on a loaded one, so a flow without this wait passes alone and fails in a
+ * whole run, naming a refusal that has nothing to do with what it tests. A survey's name in the
+ * page's list of models is not this state: the row is listed while it is still being read.
+ *
+ * <b>Waited on by the row's own word</b>, never on the clock and never by trying the report
+ * again: the first would be a guess about the machine, the second would hide a refusal that was
+ * real. A survey that could not be read ends the wait at once, saying so, instead of being
+ * waited on for the whole allowance.
+ *
+ * Needed by a flow that reports at a station or by depth, or publishes a trip, straight after
+ * uploading the survey it is tracked on. Not needed by a flow that only opens the survey in the
+ * viewer: the viewer reads the file itself and asks the server for no station.
+ */
+export async function surveyRead(page: Page, modelId: string): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const { status } = await asPerson<{ status: string }>(
+          page,
+          'GET',
+          `/api/v1/survey-models/${modelId}`,
+        );
+        if (status === 'failed') {
+          throw new Error('the uploaded survey could not be read: its row says it failed');
+        }
+        return status;
+      },
+      { timeout: 90_000, message: 'the uploaded survey was never read into its stations' },
+    )
+    .toBe('ready');
+}
+
+/**
  * The version of a record as last read, for a write the server checks against it.
  *
  * Moving a record from one state to the next is checked against the version the writer read, the

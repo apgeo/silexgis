@@ -302,6 +302,34 @@ public sealed class SurveyModelTrackedTripsTests : IAsyncLifetime, IDisposable, 
         TimeOf(listed[0], "armedAt")!.Value.ShouldBeGreaterThan(At(15, 0));
     }
 
+    /// <summary>
+    /// A report taken off the log is not counted among the reports a trip made on the model, and
+    /// is counted again once put back.
+    /// </summary>
+    [Fact]
+    public async Task A_report_taken_off_the_log_is_not_counted_on_the_model_until_it_is_put_back()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        var (trip, cavers) = await CreateTripAsync("Counted, then not", guests: 1);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var placed = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", AtStation(cavers));
+        placed.StatusCode.ShouldBe(HttpStatusCode.OK, await placed.Content.ReadAsStringAsync());
+        var eventId = (await BodyAsync(placed))[0].GetProperty("id").GetGuid();
+
+        (await TrackedAsync(owner, model)).ShouldHaveSingleItem().GetProperty("reportCount").GetInt32().ShouldBe(1);
+
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{trip}/tracking/events/{eventId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var without = (await TrackedAsync(owner, model)).ShouldHaveSingleItem();
+        without.GetProperty("reportCount").GetInt32().ShouldBe(0);
+        without.GetProperty("lastReportAt").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        (await owner.PostAsync($"/api/v1/trip-logs/{trip}/tracking/events/{eventId}/restore", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await TrackedAsync(owner, model)).ShouldHaveSingleItem().GetProperty("reportCount").GetInt32().ShouldBe(1);
+    }
+
     // ---- helpers -----------------------------------------------------------------------------
 
     private static object AtStation(List<Guid> cavers) =>

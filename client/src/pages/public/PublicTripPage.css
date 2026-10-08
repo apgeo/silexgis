@@ -264,9 +264,10 @@
  *
  * Designed at 360px like everything above it, and with one extra constraint the rest of this page
  * does not have: the same components are drawn inside an iframe that a club chose the size of, and
- * which is routinely 260px tall. So every measurement below is either a token or a share, and the
- * compact variant subtracts rather than re-lays-out — two layouts for one control is how the two
- * surfaces come to disagree about what a reader is looking at.
+ * which is routinely 260px tall. So every measurement below is either a token or a share — and a
+ * frame that small does not draw this strip whole. Whole, it is taller than that frame; so there it
+ * is one line along the bottom edge and a sheet a press away, the two halves of the same component,
+ * each control built once and drawn in exactly one of them. A frame with room draws it whole.
  */
 
 .public-trip-past {
@@ -447,6 +448,10 @@
 
 .public-past-banner-action {
   margin-top: 2px;
+  /* The way back and, in a frame, the way into the cave's lists beside it. */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 /* The scrubber's track, which has to be draggable on a page that also scrolls. `pan-y` hands the
@@ -529,21 +534,99 @@
   border-top: 1px solid var(--silexgis-public-border);
 }
 
-/* The banner and the transport in a box that may be 260px tall: the type comes down, the gaps
-   close, and the strip is allowed to scroll inside itself rather than push the drawing out of an
-   article. Nothing is removed — what the strip says is the whole reason it is there. */
-.public-past-bar-compact {
+/* A past trip's whole strip in a frame with room for it — which frame that is, is decided where
+   the frame's page chooses its layout, on the frame's own width and height. The type comes down
+   and the gaps close; nothing is removed.
+
+   The cap is a floor under the drawing and not a layout: in the smallest frame this is chosen for,
+   the strip at its tallest measured 27px short of it. Should a strip be taller still — a trip or
+   a team with a very long name, a language with longer words — it scrolls inside itself rather
+   than take more than half of somebody's box from the drawing. Half of the box and not half plus
+   the strip's own padding and border, which is why the box is sized by its border. */
+.public-past-bar-frame {
   flex: none;
   gap: 4px;
-  max-height: 55%;
+  box-sizing: border-box;
+  max-height: 50%;
   overflow-y: auto;
   padding: 4px 8px 6px;
   border-top: 1px solid var(--silexgis-public-border);
   font-size: 0.8rem;
 }
 
-.public-past-bar-compact .public-past-banner {
+.public-past-bar-frame .public-past-banner {
   padding-block: 4px;
+}
+
+/* A past trip's strip in a frame without that room: one line.
+
+   It used to be the page's whole strip with the type brought down, capped at 55% of the frame and
+   scrolling inside itself. Measured under a finger in a 260px frame, that left the drawing 106px —
+   all of it under the viewer's own controls, no cave showing — with the play button below the
+   strip's fold. One row of finger-sized controls is 51px, which leaves the drawing four fifths of
+   the same frame.
+
+   It may wrap onto a second row rather than be cut off: a clock that has to name the day, in a
+   language with longer words, at the narrowest width, is wider than the line — and two rows still
+   leave the drawing most of the box, where a clipped row loses the way into the sheet. */
+.public-past-bar-line {
+  flex: none;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 4px 6px;
+  padding: 4px 8px 6px;
+  border-top: 1px solid var(--silexgis-public-border);
+  font-size: 0.8rem;
+}
+
+/* That this is the past, and which trip: the tag keeps its width and the name gives way. */
+.public-past-line-what {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.public-past-line-tag {
+  flex: none;
+}
+
+.public-past-line-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What happened to a trip that is not playing — not read, being read, nothing to play. A sentence
+   and not a name, so it breaks onto a second line of type inside the row rather than be cut. */
+.public-past-line-said {
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.public-past-bar-line .public-past-clock {
+  flex: none;
+}
+
+/* That the record was cut short: a row of its own under the line's controls, wrapping rather
+   than cut — it is a sentence, and half of it says nothing. The mark beside it is in the colour
+   the past is marked in; the words keep the text's own, which that colour is too pale to read in. */
+.public-past-line-truncated {
+  flex: 0 0 100%;
+  line-height: 1.25;
+}
+
+.public-past-line-truncated .anticon {
+  color: var(--silexgis-public-warning);
+}
+
+/* The other half, in the frame's sheet: the statement in full and the rest of the transport,
+   set off from the lists that follow it there. */
+.public-past-bar-sheet {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--silexgis-public-border);
 }
 
 /* An outline costing no height at all, so that a reader who scrolled past the strip still cannot

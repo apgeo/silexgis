@@ -80,7 +80,23 @@ public class TripTracking : ITimestamped, IAuditable, IAuditChild
     /// </summary>
     public string[] DepthFilter { get; set; } = [];
 
+    /// <summary>
+    /// When the watch was last started. A watch closed and then started again — for a party that
+    /// turned out to be still underground — carries the later moment here.
+    /// </summary>
     public DateTimeOffset? ArmedAt { get; set; }
+
+    /// <summary>
+    /// When the watch was started for the very first time. Stamped once, on the first start, and
+    /// never written again.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside <see cref="ArmedAt"/> because starting a closed watch again overwrites that one,
+    /// and it does so at exactly the moment the true beginning matters most: somebody is overdue,
+    /// and "followed since" would otherwise read a few minutes. Null for a watch that has never
+    /// been started, which includes one an import wrote already closed.
+    /// </remarks>
+    public DateTimeOffset? FirstArmedAt { get; set; }
 
     public DateTimeOffset? ClosedAt { get; set; }
 

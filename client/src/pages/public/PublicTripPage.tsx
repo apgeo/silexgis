@@ -47,7 +47,12 @@ import PublicTripAbout from './PublicTripAbout.tsx';
 import PublicLiveTripList from './PublicLiveTripList.tsx';
 import PublicPastTripList from './PublicPastTripList.tsx';
 import PublicWatchBar from './PublicWatchBar.tsx';
-import { publicTripView, shownReadEnded, watchedParty } from './publicLiveWatch.ts';
+import {
+  linkListsPastOnly,
+  publicTripView,
+  shownReadEnded,
+  watchedParty,
+} from './publicLiveWatch.ts';
 import { readNotLanding } from './publicReadFreshness.ts';
 import {
   ageInWords,
@@ -141,7 +146,17 @@ export default function PublicTripPage() {
    * and where the page learns that the party is no longer being followed.
    */
   const [liveOpen, setLiveOpen] = useState(false);
-  const liveTrips = usePublicLiveTrips(token, liveOpen || watch !== null);
+  /**
+   * The link everything a reader asked this page for was asked under.
+   *
+   * The page is one component across two links — the browser's Back and Forward between two of
+   * them, a link on a club's own page — and what a reader chose under the first is not a choice
+   * made under the second: see where it is forgotten, below. Until that has happened, nothing is
+   * read under the new link on the old link's say-so.
+   */
+  const [askedUnder, setAskedUnder] = useState(token);
+  const sameLink = askedUnder === token;
+  const liveTrips = usePublicLiveTrips(token, sameLink && (liveOpen || watch !== null));
   const watchId = watch?.tripLogId ?? null;
   const ownTripLogId = data?.tripLogId;
   const watched = useMemo(
@@ -211,6 +226,11 @@ export default function PublicTripPage() {
   // playing the replay under that address would be showing one thing and naming another. Leaving
   // the past where nothing of it is on screen changes nothing, so the first reading of an address
   // that never named a trip is harmless.
+  //
+  // And read again when the link itself changes under the same words: a replay belongs to the link
+  // it was opened under and the playback drops it with that link, so a second link whose address
+  // names a past trip exactly as the first one's did has to be opened from its own address — it
+  // would otherwise stand on the party now under an address that names a replay.
   const openPast = past.open;
   const leaveThePast = past.backToNow;
   const askedOfThePast = PAST_LINK_PARAMS.map((name) => search.get(name) ?? '\u0000').join('\u0001');
@@ -223,7 +243,7 @@ export default function PublicTripPage() {
     } else {
       leaveThePast();
     }
-  }, [askedOfThePast, openPast, leaveThePast]);
+  }, [askedOfThePast, openPast, leaveThePast, token]);
 
   // The address the viewer is given: held still while it is the same survey, replaced when the
   // survey itself changes. Both halves matter and the reasoning for each lives with the rule,
@@ -353,7 +373,45 @@ export default function PublicTripPage() {
       setPastOpen(true);
     }
   }, [past.engaged]);
-  const pastTrips = usePublicPastTrips(token, pastOpen);
+  /**
+   * The same list, offered a second time directly under the replay's strip — and for which trip.
+   *
+   * <b>The list is the last thing on this page and the replay is the first.</b> A reader going
+   * through a cave's history trip by trip pressed a row at the foot of the page, was carried up to
+   * the strip, and then had a party, a drawing and a table to scroll past to reach the next row —
+   * on a phone, several screens each way, every time. So while a past trip is on screen the way to
+   * another one is one press under the strip.
+   *
+   * <b>Shut until it is pressed, because what belongs under the strip is the drawing.</b> Held as
+   * the trip it was opened under rather than as a switch, so it shuts by itself the moment another
+   * trip is on screen or the past is left by any road — the row was the whole point of opening it,
+   * and a list left standing open would push each replay's drawing a screen down.
+   */
+  const [switchOpenFor, setSwitchOpenFor] = useState<string | null>(null);
+  const switchOpen = switchOpenFor !== null && switchOpenFor === past.tripLogId;
+  // One read for both places: the same link and the same list, so whichever is opened second finds
+  // the rows already in hand.
+  const pastTrips = usePublicPastTrips(token, sameLink && (pastOpen || switchOpen));
+  /**
+   * A second link starts as a page nobody has asked anything of.
+   *
+   * The playback forgets a replay with its link, and the rest of what a reader chose goes the same
+   * way: the party of the cave they asked to watch, the notice that a watch ended, and the two
+   * sections they opened. Kept, the watch would have the second link's list read though nobody
+   * asked under it — and where the two links are of one cave the party would be found there, so
+   * the second link's page opened on a party of the first link's choosing; for a link of another
+   * cave it would open on a notice naming a party of a cave this page is not about.
+   *
+   * Forgotten while rendering rather than in an effect, so no render under the new link is ever
+   * committed with the old link's choices.
+   */
+  if (!sameLink) {
+    setAskedUnder(token);
+    setWatch(null);
+    setWatchEnded(null);
+    setLiveOpen(false);
+    setPastOpen(false);
+  }
   /**
    * Whether this link has been refused for good since the page opened. The cave's lists are read
    * with the same link, so while it is refused a refusal of either list may be nothing more than
@@ -380,6 +438,20 @@ export default function PublicTripPage() {
    */
   const liveFailed =
     liveTrips.isError && (liveTrips.data === undefined || isSettledRefusal(liveTrips.error));
+  /**
+   * Whether this link has stopped listing today's parties while its past trips still answer —
+   * known only where a reader has had the past trips read at about the moment the list of
+   * parties was refused, and never read to find out. A past list merely still in hand from
+   * earlier is not that: a link taken back since leaves the same list behind.
+   */
+  const pastOnly = linkListsPastOnly(
+    { list: pastTrips.data, error: pastTrips.error, readAt: pastTrips.dataUpdatedAt ?? 0 },
+    {
+      error: liveTrips.error,
+      readAt: liveTrips.dataUpdatedAt ?? 0,
+      refusedAt: liveTrips.errorUpdatedAt ?? 0,
+    },
+  );
 
   /**
    * Bringing the statement that this is the past to where the reader is looking.
@@ -994,6 +1066,42 @@ export default function PublicTripPage() {
               cavers={cavers}
               momentAddress={momentAddress}
             />
+            {/* The cave's other past trips, one press from the replay. Its rows are not on the
+                page at all while it is shut — taken out by this page in the same render, not left
+                to the panel's closing animation: the same list stands open at the foot of the page
+                for as long as a past trip is on screen, and two copies of every row would be two
+                controls for one act wherever the page is searched or read aloud. */}
+            <Collapse
+              ghost
+              activeKey={switchOpen ? ['switch'] : []}
+              onChange={(keys) =>
+                setSwitchOpenFor(keys.includes('switch') ? past.tripLogId : null)
+              }
+              items={[
+                {
+                  key: 'switch',
+                  label: (
+                    <span className="public-trip-past-label" data-testid="public-past-switch">
+                      <HistoryOutlined /> {t('publicTrip.past.switchTrip')}
+                    </span>
+                  ),
+                  children: switchOpen && (
+                    <div data-testid="public-past-switch-list">
+                      <PublicPastTripList
+                        trips={pastTrips.data?.trips}
+                        more={pastTrips.data?.more ?? false}
+                        loading={pastTrips.isPending}
+                        failed={archiveFailed}
+                        refused={isSettledRefusal(pastTrips.error)}
+                        linkEnded={linkEnded}
+                        playingId={past.tripLogId}
+                        onPlay={play}
+                      />
+                    </div>
+                  ),
+                },
+              ]}
+            />
           </div>
         )}
 
@@ -1088,19 +1196,40 @@ export default function PublicTripPage() {
             // publication has run out. Said in those words, and without the promise that the
             // page will refresh — the poll has stopped for good, and a reader told "it starts
             // refreshing again by itself" would be waiting for something that cannot happen.
-            <Alert
-              type="warning"
-              showIcon
-              title={t('publicTrip.endedTitle')}
-              description={
-                readAt === null
-                  ? t('publicTrip.endedBody')
-                  : t('publicTrip.endedBodyAt', {
-                      clock: clockInWords(readAt, present, i18n.language),
-                    })
-              }
-              data-testid="public-trip-ended"
-            />
+            //
+            // Over another party of the cave, where the past trips are known to answer still,
+            // the final answer is narrower and is said as what it is: the link has stopped
+            // listing today's parties. "May have been taken back" would be a guess the past
+            // trips in hand speak against.
+            mode === 'watched' && pastOnly ? (
+              <Alert
+                type="info"
+                showIcon
+                title={t('publicTrip.live.pastOnlyTitle')}
+                description={
+                  readAt === null
+                    ? t('publicTrip.live.pastOnlyWatchBody')
+                    : t('publicTrip.live.pastOnlyWatchBodyAt', {
+                        clock: clockInWords(readAt, present, i18n.language),
+                      })
+                }
+                data-testid="public-trip-past-only"
+              />
+            ) : (
+              <Alert
+                type="warning"
+                showIcon
+                title={t('publicTrip.endedTitle')}
+                description={
+                  readAt === null
+                    ? t('publicTrip.endedBody')
+                    : t('publicTrip.endedBodyAt', {
+                        clock: clockInWords(readAt, present, i18n.language),
+                      })
+                }
+                data-testid="public-trip-ended"
+              />
+            )
           ) : (
             <Alert
               type="warning"
@@ -1355,6 +1484,7 @@ export default function PublicTripPage() {
                     // from: the notice above has just said this link stopped answering, and the
                     // list must not invite another try beneath it.
                     linkEnded={linkEnded || shownEnded}
+                    pastOnly={pastOnly}
                     ownTripLogId={data.tripLogId}
                     onWatch={watchParty}
                     watchingId={mode === 'watched' ? watchId : null}

@@ -14,6 +14,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
@@ -511,10 +512,13 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
     /// a trip older than the newest hundred published ones is neither listed nor announced.
     /// </summary>
     /// <remarks>
-    /// A hundred trips of this cave, every one over and still published, all dated after the one
-    /// party still underground: newest first, the bounded read fills up before it reaches that
-    /// party. An empty list is then allowed; saying that there is nothing more is not. The
-    /// archive's bit already read its cap this way, and this one read only the page.
+    /// A hundred trips of this cave whose tracking nobody closed and whose links have run out, all
+    /// dated after the one party still underground: newest first, the bounded read fills up before
+    /// it reaches that party. An empty list is then allowed; saying that there is nothing more is
+    /// not. The archive's bit already read its cap this way, and this one read only the page.
+    /// The hundred are of the one kind the read cannot leave out beforehand — tracking still
+    /// running — because whether a link has run out is the rule's to say; trips that are simply
+    /// over no longer reach the bound at all, which is the test below.
     /// </remarks>
     [Fact]
     public async Task A_party_older_than_the_bounded_read_reaches_is_announced_as_more_rather_than_dropped()
@@ -522,11 +526,176 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
         var cave = await CaveAsync(locationProtected: false);
         var model = await ModelAsync(cave);
         var underground = await PublishedTripAsync("Still underground", cave, model, tripDate: "2026-04-01");
-        await SeedClosedPublishedTripsAsync(cave, model, count: 100, from: new DateOnly(2026, 4, 2), underground.ShareId);
+        await SeedPublishedTripsAsync(
+            cave, model, count: 100, from: new DateOnly(2026, 4, 2), underground.ShareId, Seeded.RunningBehindALapsedLink);
 
         var list = await LiveListAsync(underground.Token);
         ListedIds(list).ShouldBeEmpty();
         list.GetProperty("more").GetBoolean().ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// Trips that are over do not crowd a party still underground out of the list, however many of
+    /// them there are and however much newer they are.
+    /// </summary>
+    /// <remarks>
+    /// A hundred finished trips, all still published and all dated after the one party still
+    /// underground — a cave with a long published history, which is the ordinary case for a club
+    /// that has used this for a few years. They used to fill the bounded read, and the party was
+    /// announced as "more" and shown to nobody. The twin is the test above: a hundred trips the
+    /// read cannot leave out still do fill it, so the bound is real and it is the finished trips
+    /// that no longer count against it.
+    /// </remarks>
+    [Fact]
+    public async Task A_party_older_than_a_hundred_finished_trips_is_still_listed()
+    {
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var underground = await PublishedTripAsync("Still underground", cave, model, tripDate: "2026-04-01");
+        await SeedPublishedTripsAsync(
+            cave, model, count: 100, from: new DateOnly(2026, 4, 2), underground.ShareId, Seeded.LongOver);
+
+        var list = await LiveListAsync(underground.Token);
+        ListedIds(list).ShouldBe([underground.Trip]);
+        list.GetProperty("more").GetBoolean().ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// "More" is said when a trip lies beyond the bounded read and not when the read was merely
+    /// full: exactly as many candidates as the bound is a cave with nothing more.
+    /// </summary>
+    /// <remarks>
+    /// The bound is a hundred on this host. Ninety-nine trips the read cannot leave out, all newer
+    /// than the party underground, make a hundred candidates with it: the party is the last one
+    /// read, it is listed, and there is nothing more. One more such trip makes a hundred and one,
+    /// the party is the one beyond the bound, and the list — now empty — has to say so. The same
+    /// rows give both answers, a single trip apart.
+    /// </remarks>
+    [Fact]
+    public async Task The_list_says_more_only_when_a_trip_lies_beyond_the_bounded_read()
+    {
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var underground = await PublishedTripAsync("Still underground", cave, model, tripDate: "2026-04-01");
+        await SeedPublishedTripsAsync(
+            cave, model, count: 99, from: new DateOnly(2026, 4, 2), underground.ShareId, Seeded.RunningBehindALapsedLink);
+
+        var full = await LiveListAsync(underground.Token);
+        ListedIds(full).ShouldBe([underground.Trip]);
+        full.GetProperty("more").GetBoolean().ShouldBeFalse();
+
+        await SeedPublishedTripsAsync(
+            cave, model, count: 1, from: new DateOnly(2026, 8, 1), underground.ShareId, Seeded.RunningBehindALapsedLink);
+
+        var beyond = await LiveListAsync(underground.Token);
+        ListedIds(beyond).ShouldBeEmpty();
+        beyond.GetProperty("more").GetBoolean().ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// The list costs the database the same for four parties as for one: what a visitor's request
+    /// costs does not grow with how busy the cave is.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each party used to be read by itself — teams, captions, roster, names, reports, and the
+    /// decision about which caves may be shown, per trip — so a page of twenty parties cost twenty
+    /// times one, on a route anybody holding a link may ask as often as the limiter allows.
+    /// </para>
+    /// <para>
+    /// Two caves on one host, one with a single party underground and one with four, built the
+    /// same way so that nothing differs but the number. Equality rather than a number, because how
+    /// many commands a list costs is not the promise; that the number does not depend on the
+    /// parties is. Both are asked once uncounted first, so nothing a host does on its first
+    /// request is counted against either.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_list_costs_the_database_the_same_for_four_parties_as_for_one()
+    {
+        var one = await PublishedTripAsync("Alone");
+        var busyCave = await CaveAsync(locationProtected: false);
+        var busyModel = await ModelAsync(busyCave);
+        var first = await PublishedTripAsync("First of four", busyCave, busyModel);
+        await PublishedTripAsync("Second of four", busyCave, busyModel);
+        await PublishedTripAsync("Third of four", busyCave, busyModel);
+        await PublishedTripAsync("Fourth of four", busyCave, busyModel);
+
+        ListedIds(await LiveListAsync(one.Token)).Count.ShouldBe(1);
+        ListedIds(await LiveListAsync(first.Token)).Count.ShouldBe(4);
+
+        var counter = new CommandCounter();
+        using var counted = new SilexGisApiFactory(connectionString, HostSettings(), services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(counter));
+        });
+        using var client = counted.CreateClient();
+        (await client.GetAsync(LiveList(one.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await client.GetAsync(LiveList(first.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var alone = await CountedAsync(counter, client, LiveList(one.Token));
+        var four = await CountedAsync(counter, client, LiveList(first.Token));
+        alone.Status.ShouldBe(HttpStatusCode.OK);
+        four.Status.ShouldBe(HttpStatusCode.OK);
+        // A count of zero on both sides would mean the interceptor was never attached, and
+        // equality proved nothing.
+        alone.Commands.ShouldBeGreaterThan(0);
+        four.Commands.ShouldBe(alone.Commands);
+    }
+
+    /// <summary>
+    /// An installation that has switched its archive off answers both of the archive's routes
+    /// without asking the database anything, whatever the token.
+    /// </summary>
+    /// <remarks>
+    /// The setting has already answered, so a lookup would be spent arriving at the same refusal —
+    /// once per visitor, on an installation that offers no archive. Nothing is the same for every
+    /// token, so a once-real one still costs what an invented one costs. The twin is the list of
+    /// parties underground on the very same host, which that switch does not close and which does
+    /// read: without it, zero would also be what a counter that was never attached reports.
+    /// </remarks>
+    [Fact]
+    public async Task The_archive_switched_off_costs_the_database_nothing_on_either_of_its_routes()
+    {
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var over = await PublishedTripAsync("Over", cave, model);
+        await CloseAsync(over.Trip, DateTimeOffset.UtcNow.AddDays(-5));
+        var running = await PublishedTripAsync("Underground", cave, model);
+
+        // On this class's own host the archive is on, and both routes open for these very rows.
+        (await anonymous.GetAsync(PastList(over.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await anonymous.GetAsync($"{PastList(over.Token)}/{over.Trip}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var counter = new CommandCounter();
+        var settings = HostSettings();
+        settings["TripPastTracks:Enabled"] = "false";
+        using var off = new SilexGisApiFactory(connectionString, settings, services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(counter));
+        });
+        using var client = off.CreateClient();
+        (await client.GetAsync(LiveList(running.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        foreach (var url in new[]
+        {
+            PastList(over.Token),
+            $"{PastList(over.Token)}/{over.Trip}",
+            PastList(running.Token),
+            PastList("not-a-token-at-all"),
+            $"{PastList("not-a-token-at-all")}/{over.Trip}",
+        })
+        {
+            var asked = await CountedAsync(counter, client, url);
+            asked.Status.ShouldBe(HttpStatusCode.NotFound, url);
+            asked.Commands.ShouldBe(0, url);
+        }
+
+        var stillRead = await CountedAsync(counter, client, LiveList(running.Token));
+        stillRead.Status.ShouldBe(HttpStatusCode.OK);
+        stillRead.Commands.ShouldBeGreaterThan(0);
     }
 
     /// <summary>
@@ -594,6 +763,80 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
         // And the link of a trip still being followed is unaffected by that setting.
         (await boundedAnonymous.GetAsync(LiveList(now.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// An installation may bound how long an old link goes on naming today's parties, and the
+    /// bound takes that list and nothing else: the link's past trips stay readable, and a link
+    /// still following its own party is not asked.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One pair of trips in one cave, read at three instants by moving the reading host's clock:
+    /// a minute inside the period, a minute past it, and — past it — on a host that sets no period
+    /// at all. The rows are the same throughout, so each answer differs from the one before it by
+    /// the clock or by the setting and by nothing else. The last is the state of every
+    /// installation that has not decided, and it has to be what it was before the setting existed.
+    /// </para>
+    /// <para>
+    /// The trips are written through the class's own host, on the machine's clock, and only read
+    /// through the others: an anonymous read carries no session a moved clock could end.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_link_long_past_its_own_trip_stops_listing_the_parties_now_and_keeps_its_past_trips()
+    {
+        var written = DateTimeOffset.UtcNow;
+        var today = DateOnly.FromDateTime(written.UtcDateTime);
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var old = await PublishedTripAsync(
+            "Mine, over", cave, model, tripDate: today.AddDays(-10).ToString("yyyy-MM-dd"));
+        await CloseAsync(old.Trip, written.AddDays(-5));
+        var now = await PublishedTripAsync(
+            "Theirs, underground", cave, model, tripDate: today.ToString("yyyy-MM-dd"));
+
+        // Twenty days from the midnight that ended the old trip's one day.
+        var period = TimeSpan.FromDays(20);
+        var edge = TripPublicationWindow.EndOfTrip(today.AddDays(-10), null) + period;
+        var clock = new TestTimeProvider(edge.AddMinutes(-1));
+        SilexGisApiFactory ClockedHost(params (string Key, string Value)[] settings)
+        {
+            var host = HostSettings();
+            foreach (var (key, value) in settings) host[key] = value;
+            return new SilexGisApiFactory(connectionString, host, services =>
+            {
+                JobWorkers.RemoveFrom(services);
+                services.AddSingleton<TimeProvider>(clock);
+            });
+        }
+
+        using var bounded = ClockedHost(("TripTracking:SiblingWindowAfterLapse", "20.00:00:00"));
+        using var visitor = bounded.CreateClient();
+
+        // Inside the period: the old link's own page is over and it still names today's party.
+        (await visitor.GetAsync(Follow(old.Token))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        ListedIds(await Json(visitor.GetAsync(LiveList(old.Token)))).ShouldBe([now.Trip]);
+
+        // Past it: the list is gone for the old link, as the one answer an invented token gets.
+        clock.Now = edge.AddMinutes(1);
+        var refused = await visitor.GetAsync(LiveList(old.Token));
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await RefusalShapeAsync(refused)).ShouldBe(
+            await RefusalShapeAsync(await visitor.GetAsync(LiveList("not-a-token-at-all"))));
+
+        // Its past trips are not: the same link, the same instant, the same host.
+        var past = await Json(visitor.GetAsync(PastList(old.Token)));
+        past.GetProperty("trips").EnumerateArray().Select(t => t.GetProperty("tripLogId").GetGuid())
+            .ShouldContain(old.Trip);
+
+        // And the link of the party underground is not asked the question at all.
+        ListedIds(await Json(visitor.GetAsync(LiveList(now.Token)))).ShouldBe([now.Trip]);
+
+        // No period set, at that same instant past it: exactly what the old link always did.
+        using var unbounded = ClockedHost();
+        using var unboundedVisitor = unbounded.CreateClient();
+        ListedIds(await Json(unboundedVisitor.GetAsync(LiveList(old.Token)))).ShouldBe([now.Trip]);
     }
 
     [Fact]
@@ -904,17 +1147,34 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
         await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().SaveChangesAsync();
     }
 
+    /// <summary>Which kind of no-longer-followable published trip to seed.</summary>
+    private enum Seeded
+    {
+        /// <summary>
+        /// Tracking closed long ago behind a link that still has time to run. Not followable
+        /// because its grace is over, which the candidate read can tell from the row and leaves out.
+        /// </summary>
+        LongOver,
+
+        /// <summary>
+        /// Tracking nobody closed, behind a link that ran out yesterday. Not followable because the
+        /// link lapsed, which only the rule says: the candidate read has to bring the row back.
+        /// </summary>
+        RunningBehindALapsedLink,
+    }
+
     /// <summary>
-    /// Trips of the cave that are over and still published, written straight into the tables.
+    /// Published trips of the cave that nobody can follow any more, written straight into the
+    /// tables.
     /// </summary>
     /// <remarks>
-    /// The candidate read narrows on the watch's state and the existence of an unrevoked link, and
-    /// a hundred trips armed, published and closed through the API would be a minute of requests
-    /// proving nothing these rows do not. Dated a day apart from the given day on, so all of them
-    /// are newer than that day; closed long ago, so none is still followable.
+    /// The candidate read narrows on the watch's state, on when it closed and on the existence of
+    /// an unrevoked link, and a hundred trips armed, published and closed through the API would be
+    /// a minute of requests proving nothing these rows do not. Dated a day apart from the given day
+    /// on, so all of them are newer than that day.
     /// </remarks>
-    private async Task SeedClosedPublishedTripsAsync(
-        Guid cave, Guid model, int count, DateOnly from, Guid shareOfCreator)
+    private async Task SeedPublishedTripsAsync(
+        Guid cave, Guid model, int count, DateOnly from, Guid shareOfCreator, Seeded kind)
     {
         var trips = new List<Guid>(count);
         for (var i = 0; i < count; i++)
@@ -929,14 +1189,15 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
         var closedAt = new DateTimeOffset(from, TimeOnly.MinValue, TimeSpan.Zero);
         foreach (var trip in trips)
         {
+            var over = kind == Seeded.LongOver;
             db.TripTrackings.Add(new SilexGis.Domain.Entities.TripTracking
             {
                 TripLogId = trip,
-                State = TripTrackingState.Closed,
+                State = over ? TripTrackingState.Closed : TripTrackingState.Armed,
                 SurveyModelId = model,
                 CaveFeatureId = cave,
                 ArmedAt = closedAt.AddHours(-8),
-                ClosedAt = closedAt,
+                ClosedAt = over ? closedAt : null,
             });
             db.TripTrackingShares.Add(new TripTrackingShare
             {
@@ -944,7 +1205,7 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
                 TokenHash = Base64Url.EncodeToString(
                     SHA256.HashData(Encoding.UTF8.GetBytes($"seeded-{Guid.NewGuid():N}"))),
                 CreatedBy = creator,
-                ExpiresAt = DateTimeOffset.UtcNow.AddDays(30),
+                ExpiresAt = over ? DateTimeOffset.UtcNow.AddDays(30) : DateTimeOffset.UtcNow.AddDays(-1),
             });
         }
 

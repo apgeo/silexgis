@@ -153,3 +153,73 @@ export function shownReadEnded(
 ): boolean {
   return isSettledRefusal(mode === 'watched' ? listError : ownError);
 }
+
+/**
+ * How long before the list of parties was refused a past list may have arrived and still count as
+ * an answer of the same moment — see {@link linkListsPastOnly}.
+ *
+ * The time the list of past trips is itself believed for before a returning reader has it read
+ * again: within it the page would not have asked again whatever it was told, so an answer of that
+ * age is the freshest this page could hold without a request made only to find out.
+ */
+export const PAST_ONLY_EVIDENCE_MS = 5 * 60_000;
+
+/**
+ * Whether this link has stopped listing the parties in the cave today while it still opens the
+ * cave's past trips.
+ *
+ * <b>Why the state exists.</b> A link outlives the trip it was published for: once that trip is
+ * a past one, the same link goes on opening the cave's past trips, and by default goes on listing
+ * whoever is being followed there now. An installation may bound the second — an article written
+ * years ago need not name today's parties — and from then on the list of parties is refused for
+ * good while the past trips answer as before.
+ *
+ * <b>Inferred, because the server never says why.</b> Every refusal of a published link is one
+ * answer, on purpose, so there is no reason to read. What a page does hold is which of its reads
+ * answered: the list of past trips in hand, not itself refused for good, and the list of parties
+ * refused for good. That pair is the whole of the evidence and is all this asks for.
+ *
+ * <b>Only a settled refusal counts, and only a past list that was actually read.</b> A request
+ * that did not land, a server that is busy and a wait the server asked for all clear by
+ * themselves, and saying "no longer" of them would be false within the minute. A past list nobody
+ * has asked for is not known to answer, and nothing is read to find out: with it unknown, or
+ * refused as well, a page keeps the wording it had — a link that is over, or a read that failed.
+ *
+ * <b>And the two answers have to belong to one moment, because a list in hand is not a list that
+ * still answers.</b> The past trips are read when a reader opens them and never on a clock, and
+ * the page keeps what it was given long after it stopped asking. A link taken back while the page
+ * is open refuses both lists from then on, yet leaves exactly this pair behind: an old past list,
+ * and a list of parties newly refused. Telling that reader "the past trips are still here" would
+ * be false — every one of them is refused when pressed. So the past list counts only when it
+ * arrived
+ * <ul>
+ *   <li>no earlier than the list of parties last answered (`live.readAt`, zero where it
+ *       never answered through this link — which is the old link, refused from the first ask):
+ *       a list of parties that answered after the past trips were read and is refused now is a
+ *       link that changed since, and nothing in hand says the past trips survived the change;
+ *       and</li>
+ *   <li>after the refusal, or no longer before it than {@link PAST_ONLY_EVIDENCE_MS}: the same
+ *       press in a frame, a section opened a moment earlier on the page.</li>
+ * </ul>
+ * Anything older is no evidence, and the page keeps the wording it had. No request is made to
+ * freshen either answer: where the past trips are read again for a reader's own reasons and
+ * answer, the state is recognised from then on.
+ *
+ * <b>What it still does not prove</b> is that the past list would answer this second — only that
+ * it did at about the moment the list of parties was refused. The sentence drawn from this
+ * therefore says what the link no longer does, and points at the past trips the page was given —
+ * never that anything is being refreshed.
+ */
+export function linkListsPastOnly(
+  past: { list: unknown; error: unknown; readAt: number },
+  live: { error: unknown; readAt: number; refusedAt: number },
+): boolean {
+  return (
+    past.list !== undefined &&
+    !isSettledRefusal(past.error) &&
+    isSettledRefusal(live.error) &&
+    past.readAt > 0 &&
+    past.readAt >= live.readAt &&
+    past.readAt >= live.refusedAt - PAST_ONLY_EVIDENCE_MS
+  );
+}

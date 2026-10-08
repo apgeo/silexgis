@@ -64,13 +64,40 @@ public readonly record struct PublishedLinkWindows(bool Live, bool Past)
     /// <param name="archiveEnabled">Whether this installation serves past trips at all.</param>
     /// <remarks>
     /// Following a party is never switched off; an open past window is worth something only while
-    /// the archive is on. This is the one reading of the two windows under that switch: the route
-    /// that lists the parties underground now is gated by it, and the administrator's list tells a
-    /// link in the archive from one that opens nothing by it. Written in each of those places, a
-    /// change to the route's gate would leave the list describing a link by a rule the route no
-    /// longer applies.
+    /// the archive is on. This is the one reading of the two windows under that switch: the
+    /// administrator's list tells a link in the archive from one that opens nothing by it, and the
+    /// route that lists the parties underground now starts from it in
+    /// <see cref="OpensTheFollowedList"/>. Written in each of those places, a change to the
+    /// route's gate would leave the list describing a link by a rule the route no longer applies.
     /// </remarks>
     public bool OpensAnything(bool archiveEnabled) => Live || (archiveEnabled && Past);
+
+    /// <summary>
+    /// Whether the link opens the list of parties being followed in its cave right now.
+    /// </summary>
+    /// <param name="archiveEnabled">Whether this installation serves past trips at all.</param>
+    /// <param name="withinSiblingWindow">
+    /// Whether the link's own trip ended recently enough for a lapsed link to go on listing others
+    /// — <see cref="TripPublicationWindow.WithinSiblingWindow"/>, true wherever no period is set.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// A link still following its own party opens the list outright, whatever the two arguments
+    /// say: neither the archive's switch nor the period after a lapse is about a party that is
+    /// underground. A link whose trip is over opens it while it opens the archive and is still
+    /// inside that period.
+    /// </para>
+    /// <para>
+    /// <b>Never wider than <see cref="OpensAnything"/></b>, and that is what keeps the
+    /// administrator's list honest: every link this opens the followed list for is one that list
+    /// calls open. The converse does not hold once a period is set — a link past it still opens its
+    /// cave's past trips and is described as in the archive, which it is; what it has lost is the
+    /// view of who is underground now, and the installation's log says so under a reason of its
+    /// own.
+    /// </para>
+    /// </remarks>
+    public bool OpensTheFollowedList(bool archiveEnabled, bool withinSiblingWindow) =>
+        Live || (archiveEnabled && Past && withinSiblingWindow);
 }
 
 /// <summary>

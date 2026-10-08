@@ -309,6 +309,54 @@ public static class TripTrackingRules
         updatedAt > createdAt;
 
     /// <summary>
+    /// What a send answers when the key it carries may already be on the trip's log: the stored
+    /// reports to answer with, or null when the log has never heard of this act and the send is
+    /// to be written.
+    /// </summary>
+    /// <param name="askedCaverIds">The people the send names, in the order it names them.</param>
+    /// <param name="storedUnderKey">
+    /// Every report of the trip that carries the send's key — <b>those taken off the log
+    /// included</b>, which is the point of asking for them.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// <b>The act is either on record or it is not; it is never completed.</b> Any stored report
+    /// under the key makes the send a repeat, and a repeat writes nothing — not even for a person
+    /// the first send wrote and somebody has since taken off the log. That report was removed on
+    /// purpose by a person looking at it; a re-send is a machine that never heard its answer, and
+    /// it must not undo the person. So a partly removed act answers what is left of it, and an act
+    /// removed entirely answers an empty list, which is still success: the sender's report was
+    /// received, and what became of it afterwards is on the log for anybody to read.
+    /// </para>
+    /// <para>
+    /// What the repeat says is not compared with what was written. The key names the act; a
+    /// sender that reuses one for different content is answered with the first content, and can
+    /// see that it was.
+    /// </para>
+    /// <para>
+    /// The answer is ordered as the send names its people, so a repeat reads like the answer it
+    /// replaces; a stored report about somebody the repeat does not name comes after those, in
+    /// the order the reports were written.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<TripPositionEvent>? ReplayAnswer(
+        IReadOnlyList<Guid> askedCaverIds, IReadOnlyCollection<TripPositionEvent> storedUnderKey)
+    {
+        if (storedUnderKey.Count == 0) return null;
+
+        var asked = new Dictionary<Guid, int>();
+        for (var index = 0; index < askedCaverIds.Count; index++)
+        {
+            asked.TryAdd(askedCaverIds[index], index);
+        }
+
+        return [.. storedUnderKey
+            .Where(e => e.RemovedAt is null)
+            .OrderBy(e => asked.GetValueOrDefault(e.CaverId, int.MaxValue))
+            .ThenBy(e => e.Id)];
+    }
+
+    /// <summary>
     /// Where one member of the party stands, folded from every report about them.
     /// </summary>
     /// <param name="reports">

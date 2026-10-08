@@ -39,8 +39,13 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
         // Where a party was is read from the model's side and from a person's side as well as
         // from the trip's, so the reports of a deleted trip are hidden here rather than by every
-        // reader remembering to ask the trip first.
-        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null);
+        // reader remembering to ask the trip first. A report taken off the log is hidden by the
+        // same filter, for the same reason: it is in no fold, no list and no published read
+        // because the model leaves it out, not because each of them was told to. One filter and
+        // not two, so a reader who asks past it has asked past both and must say which rows it
+        // then wants — there is no way to see removed reports that silently also keeps a deleted
+        // trip's rows out.
+        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null && x.RemovedAt == null);
         // Being tracked is a fact about the person; it blocks deleting the person, like the roster.
         builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<TripTeam>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.SetNull);
@@ -52,13 +57,41 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         // saying that plainly is the whole point. Protection continues to hang off CaveFeatureId.
         builder.HasOne<Feature>().WithMany().HasForeignKey(x => x.CaveFeatureId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.RecordedByUserId).OnDelete(DeleteBehavior.SetNull);
+        // Who took a report off the log is a courtesy on the row; the account going must not take
+        // the report, nor block the account's removal.
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.RemovedByUserId).OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => new { x.TripLogId, x.CaverId, x.RecordedAt });
         builder.HasIndex(x => new { x.TripLogId, x.RecordedAt });
         // Which trips reported against a survey model is asked from the model's side (which trips
         // a movie of that model can show); without this it reads every report of every trip.
         builder.HasIndex(x => x.SurveyModelId);
+
+        // The key of the act of reporting that wrote the row. A column of the model with no member
+        // on the class, so that nothing which reads a report can hand it out and the snapshot the
+        // history takes of a new row never holds it.
+        builder.Property<Guid?>(TripPositionEvent.ClientKeyProperty);
+        // What makes a second send of one act write nothing: the same act cannot hold two rows
+        // about the same person on the same trip. One act writes a row per person, so the key
+        // alone is not unique. Rows no keyed send wrote are outside the index altogether, which
+        // is what leaves two typed reports about one person at one instant possible — they are
+        // two acts. A report taken off the log stays inside it: a late re-send must not write
+        // again what somebody removed on purpose. Named, in the model and in the database,
+        // because the write that loses a race to its own duplicate recognises this constraint by
+        // its name.
+        builder.HasIndex(
+                [nameof(TripPositionEvent.TripLogId), TripPositionEvent.ClientKeyProperty, nameof(TripPositionEvent.CaverId)],
+                ClientKeyIndex)
+            .IsUnique()
+            .HasFilter("client_key IS NOT NULL")
+            .HasDatabaseName(ClientKeyIndex);
     }
+
+    /// <summary>
+    /// The database's name for the constraint that keeps one act of reporting from being written
+    /// twice — what a write that lost a race to its own duplicate is told it violated.
+    /// </summary>
+    public const string ClientKeyIndex = "ux_trip_position_events_client_key";
 }
 
 public sealed class TripTrackingConfiguration : IEntityTypeConfiguration<TripTracking>
@@ -131,5 +164,51 @@ public sealed class TripTrackingParticipantConfiguration : IEntityTypeConfigurat
         // person's entry is gone; and a merge moves the caption to the survivor before the
         // duplicate is removed, so the ordinary path does not lose the choice either.
         builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class TripPartyNumberConfiguration : IEntityTypeConfiguration<TripPartyNumber>
+{
+    /// <summary>
+    /// The database name of the rule that one person holds one number on one trip. Named, and
+    /// named here, because a writer that loses a race is recognised by the constraint it broke.
+    /// </summary>
+    public const string OnePerPersonIndex = "ux_trip_party_numbers_trip_caver";
+
+    /// <summary>
+    /// The database name of the table's key — the rule that one number is given once on one trip.
+    /// Named here for the same reason: two writers that reach for the same next number are told
+    /// apart from every other failed save by this name.
+    /// </summary>
+    public const string KeyName = "pk_trip_party_numbers";
+
+    public void Configure(EntityTypeBuilder<TripPartyNumber> builder)
+    {
+        builder.ToTable("trip_party_numbers", table =>
+            table.HasCheckConstraint("ck_trip_party_numbers_number_from_one", "number >= 1"));
+
+        // The trip and the number are the row: a number is given once and never changes, which is
+        // what a key is, and it makes "no two people share a number on a trip" the table's own
+        // shape rather than a second index beside an invented id.
+        builder.HasKey(x => new { x.TripLogId, x.Number }).HasName(KeyName);
+        builder.Property(x => x.Number).ValueGeneratedNever();
+
+        // One number per person per trip. A number whose holder is gone has no person, and any
+        // number of those may stand on one trip — which is what an index over an empty value
+        // allows by itself.
+        builder.HasIndex(x => new { x.TripLogId, x.CaverId }, OnePerPersonIndex)
+            .IsUnique()
+            .HasDatabaseName(OnePerPersonIndex);
+        builder.HasIndex(x => x.CaverId, "ix_trip_party_numbers_caver_id")
+            .HasDatabaseName("ix_trip_party_numbers_caver_id");
+
+        builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // Hidden while its trip is deleted, like everything else a trip's tracking holds.
+        builder.HasQueryFilter(x => x.TripLog.DeletedAt == null);
+        // Emptied, where the roster restricts and a caption goes with its person. The row holds
+        // nobody in place — whether somebody was on a trip is the roster's and the log's to say —
+        // but the number must outlive them, or the next person the trip names would be given it
+        // and a page already showing "Caver 3" would come to mean somebody else.
+        builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.SetNull);
     }
 }

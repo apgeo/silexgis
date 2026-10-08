@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import {
   Alert,
+  App,
   Checkbox,
   DatePicker,
   Empty,
@@ -12,16 +13,17 @@ import {
   Spin,
   Tag,
   Typography,
-  message,
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
   useAttachTrackingPictures,
   usePhotos,
+  useTripTrackingEventLog,
   type PhotoInfo,
   type TrackingPictureInput,
 } from '../../api/hooks.ts';
+import { picturePlacementAt, type PicturePlacement } from '../../caveview/trackingReplay.ts';
 import { trackingProblemCodeMessage, trackingProblemMessage } from './trackingProblems.ts';
 
 export interface TrackingPicturesDialogProps {
@@ -35,8 +37,15 @@ export interface TrackingPicturesDialogProps {
   defaultAt: number;
   /** Who the moment is about by default, or null for a picture of the party. */
   defaultCaverId: string | null;
-  /** The trip's roster, for the subject chooser. */
+  /** The trip's roster, for the subject choosers. */
   cavers: readonly { caverId: string; name: string }[];
+  /**
+   * The survey the watch is on, as this reader is told it, or null where they are told none.
+   *
+   * What a chosen photograph's place is previewed against. It is the watch's own survey and not
+   * whichever one a panel elsewhere happens to be showing: that is the survey a replay opens on.
+   */
+  surveyModelId: string | null;
   onClose(): void;
   onAttached?(): void;
 }
@@ -80,6 +89,15 @@ const STRAY_MOMENT_MS = 30 * 24 * 60 * 60_000;
  * It falls back to the moment the dialog was opened with, which is right often enough to offer and
  * wrong often enough that saving it silently would be how a photograph ends up dated to whenever
  * somebody happened to press a button.
+ *
+ * <b>Where each photograph will be drawn is shown before it is stored, and it is not worked out
+ * here.</b> A photograph's station is never recorded — the replay folds it out of the log at the
+ * photograph's own moment, for the person it is about — so a wrong clock or a wrong name shows up
+ * only afterwards, as a picture under a station nobody photographed, or on no station at all. The
+ * preview asks the replay's own rule the same question for each chosen photograph and asks it
+ * again whenever the clock correction or the person changes; it is told the whole log or it says
+ * nothing, because a first page of a log answers "nobody had reported them yet" for most of a trip.
+ * A reader from whom a place is kept is told that it is kept, never a station.
  */
 export default function TrackingPicturesDialog({
   open,
@@ -87,17 +105,32 @@ export default function TrackingPicturesDialog({
   defaultAt,
   defaultCaverId,
   cavers,
+  surveyModelId,
   onClose,
   onAttached,
 }: TrackingPicturesDialogProps) {
   const { t } = useTranslation();
+  // The application's own message surface, not the library's static one: that one is drawn outside
+  // the theme and warns about it on the console of every browser that attaches a photograph.
+  const { message } = App.useApp();
   const [selected, setSelected] = useState<readonly string[]>([]);
   /** Minutes the camera's clock was ahead of the truth; negative when it was behind. */
   const [offsetMinutes, setOffsetMinutes] = useState<number>(0);
   const [fallback, setFallback] = useState<Dayjs>(() => dayjs(defaultAt));
+  /** Who the chosen photographs are about, unless one of them says otherwise below. */
   const [caverId, setCaverId] = useState<string | null>(defaultCaverId);
+  /**
+   * The photographs that are about somebody other than everybody else's subject, by document.
+   *
+   * Held as the exceptions rather than as a subject per photograph, so that the chooser above goes
+   * on meaning "all of them": choosing there clears this, which is the whole of "apply to all".
+   */
+  const [subjects, setSubjects] = useState<ReadonlyMap<string, string | null>>(() => new Map());
 
   const photos = usePhotos({ tripLogId, pageSize: PAGE_SIZE }, open);
+  // The whole log, read once for the preview. Not asked for where there is no survey to place
+  // anything on: every answer is then the same and none of them needs a report.
+  const log = useTripTrackingEventLog(tripLogId, open && surveyModelId !== null);
   const attach = useAttachTrackingPictures();
 
   const items = useMemo(() => photos.data?.items ?? [], [photos.data]);
@@ -123,6 +156,46 @@ export default function TrackingPicturesDialog({
 
   const guessedCount = moments.filter((moment) => moment.guessed).length;
 
+  const subjectOf = (documentId: string): string | null =>
+    subjects.has(documentId) ? (subjects.get(documentId) ?? null) : caverId;
+
+  /**
+   * Where one chosen photograph would be drawn, or that it cannot be said yet.
+   *
+   * A photograph about nobody, and one with no survey to stand on, need no log to answer; every
+   * other answer waits for the whole of it and is not given from part of it.
+   */
+  const placementOf = (documentId: string, at: number): PicturePlacement | 'reading' | 'unread' => {
+    const subject = subjectOf(documentId);
+    if (subject !== null && surveyModelId !== null && log.data === undefined) {
+      return log.isError ? 'unread' : 'reading';
+    }
+    return picturePlacementAt(log.data ?? [], at, subject, surveyModelId ?? undefined);
+  };
+
+  const placementText = (placement: PicturePlacement | 'reading' | 'unread'): string => {
+    if (placement === 'reading') {
+      return t('trips.tracking.pictures.placeReading');
+    }
+    if (placement === 'unread') {
+      return t('trips.tracking.pictures.placeUnread');
+    }
+    switch (placement.kind) {
+      case 'station':
+        return t('trips.tracking.pictures.willDrawAt', { station: placement.station });
+      case 'otherModel':
+        return t('trips.tracking.pictures.onOtherSurvey');
+      case 'withheld':
+        return t('trips.tracking.pictures.placeWithheld');
+      case 'unplaced':
+        return t('trips.tracking.pictures.noPlaceThen');
+      case 'noModel':
+        return t('trips.tracking.pictures.noSurvey');
+      case 'party':
+        return t('trips.tracking.pictures.timelineOnly');
+    }
+  };
+
   /**
    * The ones whose file puts them nowhere near this trip — measured against the moment this dialog
    * was opened at, which is a report of the trip or the instant on the scrubber. Never counted
@@ -140,7 +213,9 @@ export default function TrackingPicturesDialog({
     const payload: TrackingPictureInput[] = moments.map((moment) => ({
       documentId: moment.documentId,
       at: new Date(moment.at).toISOString(),
-      caverId,
+      // Each photograph's own person: a memory card holds pictures of several people, and the
+      // station each is drawn at is the station of whoever it is about.
+      caverId: subjectOf(moment.documentId),
       caption: null,
     }));
     attach.mutate(
@@ -168,6 +243,7 @@ export default function TrackingPicturesDialog({
             void message.warning(sentence);
           }
           setSelected([]);
+          setSubjects(new Map());
           onAttached?.();
           onClose();
         },
@@ -202,14 +278,18 @@ export default function TrackingPicturesDialog({
           allowClear
           style={{ minWidth: 200 }}
           value={caverId}
-          onChange={(value) => setCaverId(value ?? null)}
+          onChange={(value) => {
+            // Chosen here it is everybody's, so whatever was said about one photograph alone goes.
+            setCaverId(value ?? null);
+            setSubjects(new Map());
+          }}
           placeholder={t('trips.tracking.pictures.subjectNobody')}
           options={cavers.map((caver) => ({ value: caver.caverId, label: caver.name }))}
           data-testid="trip-tracking-pictures-subject"
         />
       </Flex>
       <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
-        {t('trips.tracking.pictures.subjectHint')}
+        {t('trips.tracking.pictures.subjectHint')} {t('trips.tracking.pictures.subjectApplyAll')}
       </Typography.Paragraph>
 
       <Flex gap="small" wrap align="center" style={{ marginBottom: 12 }}>
@@ -262,6 +342,61 @@ export default function TrackingPicturesDialog({
               </Flex>
             </Checkbox>
           ))}
+        </Flex>
+      )}
+
+      {moments.length > 0 && (
+        <Flex
+          vertical
+          gap="small"
+          style={{ marginTop: 12 }}
+          data-testid="trip-tracking-pictures-preview"
+        >
+          <Typography.Text strong>{t('trips.tracking.pictures.previewTitle')}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t('trips.tracking.pictures.previewHint')}
+          </Typography.Text>
+          {moments.map((moment) => {
+            const placement = placementOf(moment.documentId, moment.at);
+            return (
+              <Flex
+                key={moment.documentId}
+                gap="small"
+                align="center"
+                wrap
+                data-testid={`trip-tracking-pictures-row-${moment.documentId}`}
+              >
+                <Typography.Text>{moment.title}</Typography.Text>
+                <Typography.Text type="secondary">
+                  {t('trips.tracking.pictures.filedAt', { at: new Date(moment.at) })}
+                </Typography.Text>
+                <Select
+                  allowClear
+                  size="small"
+                  style={{ minWidth: 160 }}
+                  value={subjectOf(moment.documentId)}
+                  onChange={(value) =>
+                    setSubjects((held) => new Map(held).set(moment.documentId, value ?? null))
+                  }
+                  placeholder={t('trips.tracking.pictures.subjectNobody')}
+                  options={cavers.map((caver) => ({ value: caver.caverId, label: caver.name }))}
+                  aria-label={t('trips.tracking.pictures.rowSubject', { title: moment.title })}
+                  data-testid={`trip-tracking-pictures-row-subject-${moment.documentId}`}
+                />
+                <Typography.Text
+                  type={
+                    typeof placement === 'object' && placement.kind === 'station'
+                      ? undefined
+                      : 'secondary'
+                  }
+                  data-placement={typeof placement === 'object' ? placement.kind : placement}
+                  data-testid={`trip-tracking-pictures-row-place-${moment.documentId}`}
+                >
+                  {placementText(placement)}
+                </Typography.Text>
+              </Flex>
+            );
+          })}
         </Flex>
       )}
 

@@ -327,6 +327,57 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     }
 
     /// <summary>
+    /// The drawing a stranger downloads says nothing about the upload it came from: not what
+    /// somebody called the file, and not the number the file store keeps it under.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A survey file is named by whoever uploaded it, and surveyors name files after caves. The
+    /// published envelope is built to carry no cave or survey identity, so a download that
+    /// announced <c>filename=…</c> would hand over, in a header nobody looks at, the one thing the
+    /// body was kept clear of.
+    /// </para>
+    /// <para>
+    /// <b>The same file fetched by a signed-in member keeps its name</b> — that is the half that
+    /// shows the first assertion is about the published address and not about a route that has
+    /// simply stopped naming anything. A member downloading a survey to work on it needs the file
+    /// to arrive called what it is called.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_published_drawing_arrives_without_the_uploads_name_and_a_members_download_keeps_it()
+    {
+        var trip = await TrackedTripAsync("Nameless", locationProtected: false);
+        var (_, token) = await PublishAsync(trip.Trip);
+        var fileId = await FileIdOfModelAsync(trip.Model);
+
+        var modelUrl = (await FollowAsync(token)).GetProperty("model").GetProperty("modelUrl").GetString()!;
+        using var published = await anonymous.GetAsync(modelUrl);
+        published.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await published.Content.ReadAsByteArrayAsync()).ShouldBe(
+            new byte[] { 1, 2, 3, 4 }, "the bytes are the survey's own, or this proves nothing about delivering it");
+
+        // Every header of the answer, read as text: the name could travel in more than one of
+        // them, and in more than one spelling of the same header.
+        var headers = string.Join(
+            '\n',
+            published.Headers.Concat(published.Content.Headers)
+                .Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"));
+        headers.ShouldNotContain("publication", Case.Insensitive);
+        headers.ShouldNotContain(fileId.ToString("D"), Case.Insensitive);
+        headers.ShouldNotContain(fileId.ToString("N"), Case.Insensitive);
+        // Still a download and not a page: these are bytes somebody uploaded, and a browser sent
+        // to this address must save them rather than render them under the application's origin.
+        published.Content.Headers.ContentDisposition.ShouldNotBeNull().DispositionType.ShouldBe("attachment");
+
+        var own = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{trip.Model}");
+        using var members = await owner.GetAsync(own.GetProperty("modelUrl").GetString()!);
+        members.StatusCode.ShouldBe(HttpStatusCode.OK);
+        members.Content.Headers.ContentDisposition.ShouldNotBeNull()
+            .FileName.ShouldNotBeNull().Trim('"').ShouldBe("publication.3d");
+    }
+
+    /// <summary>
     /// Revoked, unknown, malformed and oversized tokens are one answer, and the live link beside
     /// them is the half that says the answer means something.
     /// </summary>
@@ -835,6 +886,9 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         party.Count.ShouldBe(2);
         party.ShouldAllBe(p => p.EnumerateObject().Select(m => m.Name).Order()
             .SequenceEqual(participantMembers.Order()));
+        party.Select(p => p.GetProperty("ordinal").GetInt32()).ShouldBe([1, 2]);
+        var numberOfThePlaced = party.Single(p => p.GetProperty("stationName").GetString() == "cave.upper.2")
+            .GetProperty("ordinal").GetInt32();
 
         // The watch closes and the second person is taken off the trip; their reports remain.
         (await PutConfigAsync(owner, trip.Trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -853,16 +907,157 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         signedIn.Single(p => !p.GetProperty("onRoster").GetBoolean())
             .GetProperty("caverId").GetGuid().ShouldBe(other);
 
-        // Published: the roster, numbered from one, in the shape it always had.
+        // Published: the roster, in the shape it always had — and the one who stayed under the
+        // number they already had, whichever of the two that was.
         var raw = await (await anonymous.GetAsync(Follow(token))).Content.ReadAsStringAsync();
         raw.Contains("onRoster", StringComparison.OrdinalIgnoreCase).ShouldBeFalse();
         var after = JsonDocument.Parse(raw).RootElement;
         after.EnumerateObject().Select(m => m.Name).ShouldBe(envelopeMembers, ignoreOrder: true);
         var published = after.GetProperty("participants").EnumerateArray().ToList();
         published.Count.ShouldBe(1);
-        published[0].GetProperty("ordinal").GetInt32().ShouldBe(1);
+        published[0].GetProperty("ordinal").GetInt32().ShouldBe(numberOfThePlaced);
         published[0].GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
         published[0].EnumerateObject().Select(m => m.Name).ShouldBe(participantMembers, ignoreOrder: true);
+    }
+
+    /// <summary>
+    /// A person's number in the party is given once and stays theirs through everything a roster
+    /// goes through: a change of job, somebody else leaving, their own leaving and coming back,
+    /// and two entries for one person being folded into one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The number is what a follower reads back over a telephone and what a published page keys
+    /// its markers and its "follow this person" choice on. It used to be a rank among the roster's
+    /// rows, and a row is rewritten when a job changes — so giving the first person a different
+    /// job sent them to the end of the party and renumbered everybody.
+    /// </para>
+    /// <para>
+    /// <b>The last part proves the fixture.</b> With the stored numbers taken away behind the
+    /// application, the same roster is listed by the old rule, and the person whose job changed is
+    /// no longer first: so the roster built here is one the old rule really did renumber, and what
+    /// holds the numbers still above is the stored number and nothing else. It also shows what a
+    /// writer that forgot to number somebody costs — a moving number, never a missing person —
+    /// and that the next save of the roster writes down the numbers the page had been showing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_number_in_the_party_is_given_once_and_survives_every_change_to_the_roster()
+    {
+        var trip = await ArmedTripAsync("Numbers", locationProtected: false, guests: 3);
+        var roster = await RosterAsync(trip.Trip);
+        var (first, second, third) = (roster[0], roster[1], roster[2]);
+        await CaptionAsync(trip.Trip, first, "First");
+        await CaptionAsync(trip.Trip, second, "Second");
+        await CaptionAsync(trip.Trip, third, "Third");
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        async Task<List<string>> PublishedAsync() =>
+            [.. (await FollowAsync(token)).GetProperty("participants").EnumerateArray()
+                .Select(p => $"{p.GetProperty("ordinal").GetInt32()}={p.GetProperty("label").GetString()}")];
+
+        async Task<List<string>> SignedInAsync() =>
+            [.. (await StateAsync(owner, trip.Trip)).GetProperty("participants").EnumerateArray()
+                .Select(p => $"{p.GetProperty("ordinal").GetInt32()}={p.GetProperty("caverId").GetGuid()}")];
+
+        async Task RewriteAsync(IEnumerable<Guid> participants, IEnumerable<Guid> proposers)
+        {
+            var rewritten = await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{trip.Trip}", new
+            {
+                title = $"Numbers {Guid.NewGuid():N}"[..28],
+                tripDate = "2026-09-12",
+                participants = participants.Select(id => new { caverId = id }).ToArray(),
+                proposers = proposers.Select(id => new { caverId = id }).ToArray(),
+                visibility = "authenticated",
+            });
+            rewritten.StatusCode.ShouldBe(HttpStatusCode.OK, await rewritten.Content.ReadAsStringAsync());
+            await EveryoneOnTheRosterHoldsANumberAsync(trip.Trip);
+        }
+
+        (await PublishedAsync()).ShouldBe(["1=First", "2=Second", "3=Third"]);
+        (await SignedInAsync()).ShouldBe([$"1={first}", $"2={second}", $"3={third}"]);
+        await EveryoneOnTheRosterHoldsANumberAsync(trip.Trip);
+
+        // A change of job and nothing else: the first person stops being listed as having gone and
+        // is listed as having proposed the trip, which removes one roster row and writes another.
+        await RewriteAsync([second, third], proposers: [first]);
+        (await PublishedAsync()).ShouldBe(["1=First", "2=Second", "3=Third"]);
+        (await SignedInAsync()).ShouldBe([$"1={first}", $"2={second}", $"3={third}"]);
+
+        // Somebody leaves: a gap where they were, and nobody after them moves up.
+        await RewriteAsync([third], proposers: [first]);
+        (await PublishedAsync()).ShouldBe(["1=First", "3=Third"]);
+
+        // They come back to the number they had, and a newcomer takes the next one — not the gap.
+        var newcomer = (await CreateTripAsync("Numbers newcomer", guests: 1)).Cavers[0];
+        await RewriteAsync([third, newcomer], proposers: [first]);
+        (await SignedInAsync()).ShouldBe([$"1={first}", $"3={third}", $"4={newcomer}"]);
+        await RewriteAsync([third, newcomer, second], proposers: [first]);
+        (await SignedInAsync()).ShouldBe([$"1={first}", $"2={second}", $"3={third}", $"4={newcomer}"]);
+        (await PublishedAsync()).Take(3).ShouldBe(["1=First", "2=Second", "3=Third"]);
+
+        // Two entries for one person are folded into one. The survivor here is the newcomer, who
+        // holds the higher number; they keep the lower of the two, and the higher is given to
+        // nobody afterwards.
+        var merged = await publisher.PostAsJsonAsync($"/api/v1/cavers/{newcomer}/merge", new
+        {
+            sourceCaverId = second,
+        });
+        merged.StatusCode.ShouldBe(HttpStatusCode.OK, await merged.Content.ReadAsStringAsync());
+        (await SignedInAsync()).ShouldBe([$"1={first}", $"2={newcomer}", $"3={third}"]);
+        await EveryoneOnTheRosterHoldsANumberAsync(trip.Trip);
+        var afterTheMerge = (await CreateTripAsync("Numbers later", guests: 1)).Cavers[0];
+        await RewriteAsync([third, newcomer, afterTheMerge], proposers: [first]);
+        (await SignedInAsync()).ShouldBe(
+            [$"1={first}", $"2={newcomer}", $"3={third}", $"5={afterTheMerge}"]);
+
+        // The stored numbers taken away: the same roster, listed by the order its rows were first
+        // written in — the old rule. Nobody is missing, and the first person is first no longer.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripPartyNumbers.Where(n => n.TripLogId == trip.Trip).ExecuteDeleteAsync())
+                .ShouldBe(5);
+        }
+        var unnumbered = await SignedInAsync();
+        unnumbered.Count.ShouldBe(4);
+        unnumbered[0].ShouldBe($"1={third}");
+        unnumbered.ShouldContain(entry => entry.EndsWith($"={first}", StringComparison.Ordinal));
+        unnumbered.ShouldNotContain($"1={first}");
+
+        // And the next save of the roster writes down exactly what was being shown.
+        await RewriteAsync([third, newcomer, afterTheMerge], proposers: [first]);
+        (await SignedInAsync()).ShouldBe(unnumbered);
+    }
+
+    /// <summary>The people a trip names, in the order it first named each of them.</summary>
+    private async Task<List<Guid>> RosterAsync(Guid trip)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var rows = await db.TripLogParticipants.Where(p => p.TripLogId == trip)
+            .OrderBy(p => p.Id).Select(p => p.CaverId).ToListAsync();
+        return [.. rows.Distinct()];
+    }
+
+    /// <summary>
+    /// Counts numbers against people: everybody on the trip's roster holds exactly one, and no two
+    /// rows of the trip share a number. Asked after each path that writes a roster, because a path
+    /// that forgets is invisible on a read — the read lists the person anyway.
+    /// </summary>
+    private async Task EveryoneOnTheRosterHoldsANumberAsync(Guid trip)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var onRoster = await db.TripLogParticipants.Where(p => p.TripLogId == trip)
+            .Select(p => p.CaverId).Distinct().ToListAsync();
+        var numbers = await db.TripPartyNumbers.Where(n => n.TripLogId == trip)
+            .Select(n => new { n.CaverId, n.Number }).ToListAsync();
+        onRoster.Count.ShouldBeGreaterThan(0);
+        numbers.Where(n => n.CaverId is not null).Select(n => n.CaverId!.Value)
+            .Intersect(onRoster).Count().ShouldBe(onRoster.Count);
+        numbers.Select(n => n.Number).Distinct().Count().ShouldBe(numbers.Count);
+        numbers.ShouldAllBe(n => n.Number >= 1);
     }
 
     /// <summary>
@@ -1910,6 +2105,61 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
                 && n.TargetId == tripLogId)
             .Select(n => n.RecipientUserId)
             .ToListAsync();
+    }
+
+    /// <summary>
+    /// A report taken off the log leaves the published page with it, and the page's validator
+    /// changes — a follower holding the earlier answer is sent the new one, not told that nothing
+    /// changed. Put back, it is published again.
+    /// </summary>
+    [Fact]
+    public async Task A_report_taken_off_the_log_leaves_the_published_page_and_changes_its_validator()
+    {
+        var trip = await ArmedTripAsync("Published, then taken off", locationProtected: false);
+        await CaptionAsync(trip.Trip, trip.Cavers[0], "Placed");
+        var (_, token) = await PublishAsync(trip.Trip);
+        await ReportAsync(trip.Trip, new { caverIds = trip.Cavers, kind = "entered" }, At(9, 0));
+        await ReportAsync(
+            trip.Trip, new { caverIds = trip.Cavers, kind = "atStation", stationName = "cave.upper.2" }, At(9, 30));
+        var log = await BodyAsync(await owner.GetAsync($"/api/v1/trip-logs/{trip.Trip}/tracking/events"));
+        var eventId = log.GetProperty("items").EnumerateArray()
+            .Single(e => e.GetProperty("kind").GetString() == "atStation").GetProperty("id").GetGuid();
+
+        // Positive half: the report is published, and the answer carries a validator that holds.
+        var before = await anonymous.GetAsync(Follow(token));
+        before.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var validatorBefore = before.Headers.ETag.ShouldNotBeNull().ToString();
+        Member(await BodyAsync(before), "Placed").GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        (await ConditionalAsync(token, validatorBefore)).StatusCode.ShouldBe(HttpStatusCode.NotModified);
+
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{trip.Trip}/tracking/events/{eventId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Negative half: the earlier validator no longer holds, and the answer names no station —
+        // nor carries the removed report in any other form.
+        var after = await ConditionalAsync(token, validatorBefore);
+        after.StatusCode.ShouldBe(HttpStatusCode.OK, "a follower holding the earlier answer must be sent the new one");
+        after.Headers.ETag.ShouldNotBeNull().ToString().ShouldNotBe(validatorBefore);
+        var afterText = await after.Content.ReadAsStringAsync();
+        afterText.ShouldNotContain("cave.upper.2");
+        afterText.ShouldNotContain(eventId.ToString());
+        var placed = Member(JsonDocument.Parse(afterText).RootElement, "Placed");
+        placed.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        TimeOf(placed, "positionRecordedAt").ShouldBeNull();
+        TimeOf(placed, "lastRecordedAt").ShouldBe(At(9, 0));
+
+        var restored = await owner.PostAsync(
+            $"/api/v1/trip-logs/{trip.Trip}/tracking/events/{eventId}/restore", null);
+        restored.StatusCode.ShouldBe(HttpStatusCode.OK, await restored.Content.ReadAsStringAsync());
+        Member(await FollowAsync(token), "Placed").GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+    }
+
+    /// <summary>The followed page asked for by somebody who already holds an answer to it.</summary>
+    private async Task<HttpResponseMessage> ConditionalAsync(string token, string validator)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, Follow(token));
+        request.Headers.TryAddWithoutValidation("If-None-Match", validator);
+        return await anonymous.SendAsync(request);
     }
 
     private static string Shares(Guid trip) => $"/api/v1/trip-logs/{trip}/tracking/shares";

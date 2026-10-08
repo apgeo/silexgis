@@ -28,6 +28,7 @@ import {
   useRevokeEveryPublishedLink,
   useRevokeTripPublishedLinks,
   type PublishedLink,
+  type PublishedLinks,
   type PublishedLinkSort,
   type PublishedLinkStatus,
 } from '../../api/hooks.ts';
@@ -66,6 +67,21 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * held to it so that a number the server would refuse is never sent.
  */
 const MAX_ARMED_DAYS = 3650;
+
+/** How long the answer naming a larger number than the list showed stays up, in seconds. */
+const MORE_THAN_LISTED_SECONDS = 12;
+
+/**
+ * How many links the list counts as still standing: every status but the one that says a link was
+ * taken back. <b>The list's figure, not the installation's</b> — the list hides the links of
+ * deleted trips, so withdrawing everything can take back more than this.
+ */
+function standingLinks(counts: PublishedLinks['counts'] | undefined): number {
+  return PUBLISHED_LINK_STATUSES.filter((each) => each !== 'revoked').reduce(
+    (sum, each) => sum + (counts?.find((count) => count.status === each)?.count ?? 0),
+    0,
+  );
+}
 
 /** What is waiting for somebody to say they mean it. */
 type Pending =
@@ -177,11 +193,28 @@ export default function PublishedTripsPage() {
   };
 
   const confirmEverything = async () => {
+    // What the list showed when the act was confirmed, kept before the answer redraws it.
+    const listed = standingLinks(links.data?.counts);
     try {
       const done = await revokeEverything.mutateAsync();
-      message.success(
-        t('publishedTrips.everything.done', { links: done.revokedLinks, trips: done.trips }),
-      );
+      if (done.revokedLinks > listed) {
+        // More was taken back than the list showed, and the list is where an administrator would
+        // look to check the figure. The act also withdraws the links of deleted trips, which the
+        // list leaves out, so the answer says both numbers and why they may differ — and stays up
+        // long enough to be read, being three figures and a sentence.
+        message.success(
+          t('publishedTrips.everything.doneMoreThanListed', {
+            links: done.revokedLinks,
+            trips: done.trips,
+            listed,
+          }),
+          MORE_THAN_LISTED_SECONDS,
+        );
+      } else {
+        message.success(
+          t('publishedTrips.everything.done', { links: done.revokedLinks, trips: done.trips }),
+        );
+      }
     } catch {
       message.error(t('publishedTrips.failed'));
     } finally {
@@ -232,10 +265,7 @@ export default function PublishedTripsPage() {
   const data = links.data;
   const countOf = (wanted: PublishedLinkStatus) =>
     data?.counts.find((each) => each.status === wanted)?.count ?? 0;
-  const standing = PUBLISHED_LINK_STATUSES.filter((each) => each !== 'revoked').reduce(
-    (sum, each) => sum + countOf(each),
-    0,
-  );
+  const standing = standingLinks(data?.counts);
   const anyWarned = (data?.items ?? []).some((item) => item.protectedCaveWithinSurveyBounds);
   // Whole days between two instants the server gave: when the tracking was started, and the one
   // moment every status in this answer was decided at. This browser's clock is not consulted.
@@ -360,8 +390,11 @@ export default function PublishedTripsPage() {
         </Space>
         <Button
           danger
-          // Nothing standing means nothing this act could take back; offered anyway it would be
-          // a confirmation of the application's one irreversible act that then does nothing.
+          // Nothing standing in the list means nothing a reader could open that this act would
+          // take back; offered anyway it would mostly be a confirmation of the application's one
+          // irreversible act that then does nothing. The list leaves out the links of deleted
+          // trips, which the act does withdraw, so with only those standing the act is not on
+          // offer here: they answer nobody while their trip is deleted.
           disabled={standing === 0}
           onClick={() => setPending({ kind: 'everything' })}
           data-testid="published-trips-revoke-everything"
@@ -631,6 +664,11 @@ export default function PublishedTripsPage() {
       >
         <Typography.Paragraph>
           {t('publishedTrips.everything.stops', { links: standing })}
+        </Typography.Paragraph>
+        {/* The figure above is the list's, and the act reaches further than the list: said here,
+            before the press, so that a larger number in the answer is not a surprise. */}
+        <Typography.Paragraph data-testid="published-trips-revoke-everything-deleted">
+          {t('publishedTrips.everything.deletedToo')}
         </Typography.Paragraph>
         <Typography.Paragraph>{t('publishedTrips.everything.leavesHistory')}</Typography.Paragraph>
         <Typography.Paragraph strong>{t('publishedTrips.irreversible')}</Typography.Paragraph>

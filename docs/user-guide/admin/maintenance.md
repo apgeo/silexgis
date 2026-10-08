@@ -13,7 +13,7 @@ reading, a photograph's position is taken off its camera data.
 Which leaves a question every growing archive eventually asks: *what about everything that
 arrived before that worked?*
 
-Three **backfill sweeps** answer it. Each one walks the installation's existing rows and does
+Four **backfill sweeps** answer it. Each one walks the installation's existing rows and does
 the work that was not done at the time.
 
 ---
@@ -24,7 +24,7 @@ the work that was not done at the time.
 
 ---
 
-## The three sweeps
+## The four sweeps
 
 ### Text extraction
 
@@ -68,6 +68,32 @@ Puts the **position a camera recorded** onto photographs already stored without 
 It reads what is in the files. It does not invent positions, and it does not write anything
 back into your image files.
 
+### Survey reading
+
+Reads **every line-plot survey model** (`.lox` / `.3d`) of the installation again, from the file
+that is already stored.
+
+**Run it when:**
+
+- you have upgraded to a version whose release notes say surveys are read differently — a
+  station named another way, a figure newly recorded, walls newly built from a plot,
+- survey models uploaded before such an upgrade behave differently from ones uploaded after it.
+
+**Start it with** `POST /api/v1/jobs/survey-reading-backfill`, as an account holding the
+job-execution right.
+
+It replaces what each earlier reading produced; nothing is uploaded and no model changes its
+identity, so trips tracked on a model stay on it. A model does not record which version read it,
+so this sweep takes **all** of them rather than only the old ones — expect it to take as long as
+reading every survey once. Models that could not be read are tried again too; wall meshes (`.stl`)
+are left alone. For one model, **Read again** on its row in the cave's list does the same thing —
+see [Surveys and models](../features/surveys-and-models.md).
+
+**Nothing is out of use while it runs.** A survey that has been read stays **Ready** while it
+waits its turn and while it is read: its cave keeps its figures and a watch following a party on
+it keeps its drawing, from the earlier reading, until the new one replaces it in one step. If a
+survey cannot be read this time, it keeps the reading it had.
+
 ---
 
 ## What they have in common
@@ -79,7 +105,9 @@ back into your image files.
 - **They need the *Run* right on the Jobs domain** — see
   [Permissions](permissions.md#actions).
 - **They are safe to run more than once.** A sweep does work that has not been done; it does
-  not redo work that has.
+  not redo work that has. The survey-reading sweep is the exception in cost only: it has no way
+  to tell which surveys an older version read, so each run reads them all again — to the same
+  result. Run twice in a row, it queues nothing for a survey whose reading is still waiting.
 
 ## Watching one
 

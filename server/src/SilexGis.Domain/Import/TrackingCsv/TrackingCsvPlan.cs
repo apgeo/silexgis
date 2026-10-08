@@ -18,9 +18,16 @@ public sealed record TrackingCsvSubject
 {
     /// <summary>Who a written name may be matched against, as (id, full name).</summary>
     /// <remarks>
+    /// <para>
     /// The caller decides who is in it. Narrowed to the trip's own participants, a sheet cannot
     /// name somebody who was not there; widened to the instance, it can — which is a decision
     /// about what an import is allowed to assert, not a matching detail, so it is made outside.
+    /// </para>
+    /// <para>
+    /// A person may be in it under more than one name, with one id: the roster's own entry and
+    /// the name the person's account goes by are two spellings of one person, and a sheet may
+    /// have been written in either.
+    /// </para>
     /// </remarks>
     public IReadOnlyList<(Guid Key, string? Name)> Roster { get; init; } = [];
 
@@ -82,6 +89,28 @@ public sealed record TrackingCsvSubject
         new HashSet<(Guid, DateTimeOffset)>();
 
     /// <summary>
+    /// What each report the log holds once says about where the person was, as far as the reader
+    /// of the sheet may be told it, under the key an import upserts on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Given so that a row which says of a stored report exactly what that report already says is
+    /// planned as leaving its place alone. A report is anchored to the survey it was made on, and
+    /// a station name or a depth read again later is read against whatever survey, datum and
+    /// declared places the watch has by then: resolving an unchanged statement a second time would
+    /// move a report nobody touched onto another survey, or refuse it for a station that survey
+    /// does not have.
+    /// </para>
+    /// <para>
+    /// A report whose place the caller may not be told is left out of this, and so is planned as
+    /// any other row is. Otherwise a station or a depth tried against the key would be answered
+    /// differently when it was the right one.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyDictionary<(Guid CaverId, DateTimeOffset At), TrackingCsvStoredPlace> Stored { get; init; } =
+        new Dictionary<(Guid, DateTimeOffset), TrackingCsvStoredPlace>();
+
+    /// <summary>
     /// The clock a row's moment is measured against, so a report about the future is refused here
     /// and shown in the preview rather than discovered at the write.
     /// </summary>
@@ -92,6 +121,15 @@ public sealed record TrackingCsvSubject
     /// </remarks>
     public DateTimeOffset Now { get; init; } = DateTimeOffset.UtcNow;
 }
+
+/// <summary>Where a report the log already holds says somebody was.</summary>
+/// <param name="Kind">What the stored report is.</param>
+/// <param name="ViewerStationName">The station it is anchored to, as the log keeps it.</param>
+/// <param name="DepthM">The depth it was given as, for a depth report.</param>
+public sealed record TrackingCsvStoredPlace(
+    TripPositionEventKind Kind,
+    string? ViewerStationName,
+    decimal? DepthM);
 
 /// <summary>One report a sheet's row turned into, ready to be written.</summary>
 public sealed record TrackingCsvPlannedReport
@@ -134,6 +172,17 @@ public sealed record TrackingCsvPlannedReport
 
     /// <summary>Whether a report with this key already exists, so importing would change it.</summary>
     public bool Replaces { get; init; }
+
+    /// <summary>
+    /// Whether the row says where the person was in the words the stored report already says it,
+    /// so that the report's kind, station, depth and the survey it is anchored to are left as the
+    /// log holds them.
+    /// </summary>
+    /// <remarks>
+    /// The station and the depth above are then the stored report's own, not a second resolution
+    /// of them: only the team and the note of such a row can change anything.
+    /// </remarks>
+    public bool KeepsStoredPlace { get; init; }
 
     /// <summary>Things worth saying about this report that did not stop it.</summary>
     public IReadOnlyList<TrackingCsvDiagnostic> Diagnostics { get; init; } = [];
@@ -293,11 +342,28 @@ public static class TrackingCsvPlanner
             }
 
             var placed = Place(row, subject, stored);
-            if (placed.Problem is { } placeProblem)
+
+            // A place that cannot be resolved costs the row, once, before anybody on it is looked
+            // for — unless the row only repeats, for somebody on it, what the log already holds
+            // for them at that moment. Such a statement is not resolved at all, so it cannot fail
+            // to resolve: the people it holds for keep their reports, and the refusal is said once
+            // for whoever else the row names.
+            var placeRefused = false;
+            void RefusePlace(TrackingCsvProblem problem)
             {
+                if (placeRefused) return;
+                placeRefused = true;
                 refused.Add(new TrackingCsvDiagnostic(
-                    TrackingCsvSeverity.Error, placeProblem, row.Line,
+                    TrackingCsvSeverity.Error, problem, row.Line,
                     Detail: row.StationName ?? row.PlaceLabel ?? row.DepthM?.ToString()));
+            }
+
+            if (placed.Problem is { } unplaced
+                && !row.Cavers.Any(name =>
+                    CaverNameLadder.Match(name, subject.Roster) is [var only]
+                    && StoodAs(row, subject, (only.Key, row.At!.Value)) is not null))
+            {
+                RefusePlace(unplaced);
                 continue;
             }
 
@@ -339,6 +405,15 @@ public static class TrackingCsvPlanner
                     continue;
                 }
 
+                // What the log holds under this key, where the row says the same of it. Asked
+                // before the place the row resolved to is used, because it replaces that place.
+                var stood = StoodAs(row, subject, key);
+                if (stood is null && placed.Problem is { } placeProblem)
+                {
+                    RefusePlace(placeProblem);
+                    continue;
+                }
+
                 var notes = rowNotes;
                 if (claimed.TryGetValue(key, out var earlier))
                 {
@@ -361,11 +436,12 @@ public static class TrackingCsvPlanner
                     MatchedBy = hit.By,
                     TeamId = teamId,
                     Kind = row.Kind!.Value,
-                    ViewerStationName = placed.ViewerStationName,
-                    PlaceLabel = placed.PlaceLabel,
-                    DepthM = placed.DepthM,
+                    ViewerStationName = stood is null ? placed.ViewerStationName : stood.ViewerStationName,
+                    PlaceLabel = stood is null ? placed.PlaceLabel : null,
+                    DepthM = stood is null ? placed.DepthM : stood.DepthM,
                     Note = row.Note,
                     Replaces = subject.Existing.Contains(key),
+                    KeepsStoredPlace = stood is not null,
                     Diagnostics = notes,
                 };
                 claimed[key] = report;
@@ -407,6 +483,47 @@ public static class TrackingCsvPlanner
         return found.Count == 1
             ? (found[0].Id, null)
             : (null, TrackingCsvProblem.TeamNotOnTrip);
+    }
+
+    /// <summary>
+    /// The place the log already holds under a key, where the row says exactly that of it; null
+    /// where the log holds nothing the row can be compared with, or the row says something else.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Compared in the words a log written out as a sheet uses, which are the stored report's own:
+    /// the station under the name the log keeps, or the depth as a number. A station is compared
+    /// as text and not resolved, because resolving is done against the survey the watch is on now
+    /// and the stored report may have been made on another — where the row names the station by
+    /// another of its spellings it is simply resolved as any row is, and on the survey the report
+    /// was made on that arrives at the same station.
+    /// </para>
+    /// <para>
+    /// Only a row that names a station outright or gives a depth can say the same as a stored
+    /// report. One that names a place the cave declared is always resolved: the name is not kept
+    /// on a report, so there is nothing stored for it to be the same as. Going in, coming out and
+    /// a note claim no place, and are written as they always were.
+    /// </para>
+    /// </remarks>
+    private static TrackingCsvStoredPlace? StoodAs(
+        TrackingCsvRow row, TrackingCsvSubject subject, (Guid CaverId, DateTimeOffset At) key)
+    {
+        if (!subject.Stored.TryGetValue(key, out var stood) || row.Kind != stood.Kind)
+        {
+            return null;
+        }
+
+        var same = (row.Kind, row.Decides) switch
+        {
+            (TripPositionEventKind.AtStation, TrackingCsvPlaceKind.Station) =>
+                stood.ViewerStationName is not null
+                && string.Equals(
+                    row.StationName, TripCsv.TripCsvValues.Tidy(stood.ViewerStationName), StringComparison.Ordinal),
+            (TripPositionEventKind.AtDepth, TrackingCsvPlaceKind.Depth) =>
+                stood.DepthM is not null && row.DepthM == stood.DepthM,
+            _ => false,
+        };
+        return same ? stood : null;
     }
 
     /// <summary>Where a row puts somebody, under the fixed order station, place, depth.</summary>

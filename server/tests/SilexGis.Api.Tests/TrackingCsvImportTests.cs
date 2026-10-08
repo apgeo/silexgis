@@ -9,6 +9,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Import.TrackingCsv;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
@@ -1490,6 +1491,571 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
             .OrderBy(e => e.RecordedAt).ThenBy(e => e.Id)
             .Select(e => e.Note)
             .ToListAsync();
+    }
+
+    // ---- the log as a sheet ----------------------------------------------------------------
+
+    [Fact]
+    public async Task A_log_taken_out_as_a_sheet_reads_back_with_nothing_to_say_and_committing_it_changes_nothing()
+    {
+        var trip = await ArmedTripAsync();
+        var cavers = await CaversOfAsync(trip);
+        var (ion, maria) = (cavers[0], cavers[1]);
+        var nine = new DateTimeOffset(2026, 9, 12, 9, 0, 0, TimeSpan.Zero);
+
+        // One of every kind of report, typed the ordinary way: both going in at one instant, a
+        // station with a note a spreadsheet would run, a depth, a moment with digits below the
+        // second, a note, a note with nothing in it, and both coming out.
+        await TypeAsync(trip, new { caverIds = cavers, kind = "entered", recordedAt = nine });
+        await TypeAsync(trip, new
+        {
+            caverIds = new[] { ion }, kind = "atStation", stationName = "deep.4",
+            note = "=SUM(1;2) la baza puitului", recordedAt = nine.AddMinutes(40),
+        });
+        await TypeAsync(trip, new
+        {
+            caverIds = new[] { maria }, kind = "atDepth", depthM = 73.5,
+            recordedAt = nine.AddMinutes(45).AddTicks(1_234_560),
+        });
+        await TypeAsync(trip, new
+        {
+            caverIds = new[] { ion }, kind = "note", note = "apa in crestere, ne intoarcem",
+            recordedAt = nine.AddMinutes(60),
+        });
+        await TypeAsync(trip, new { caverIds = new[] { maria }, kind = "note", recordedAt = nine.AddMinutes(61) });
+        await TypeAsync(trip, new { caverIds = cavers, kind = "exited", recordedAt = nine.AddMinutes(120) });
+
+        var before = await StoredReportsAsync(trip);
+        before.Count.ShouldBe(8);
+
+        var download = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events/export");
+        download.StatusCode.ShouldBe(HttpStatusCode.OK, await download.Content.ReadAsStringAsync());
+        download.Content.Headers.ContentType!.MediaType.ShouldBe("text/csv");
+        // Named by the trip's id and the day, and by nothing a person called anything: a file's
+        // name is read by everything the file passes through.
+        var name = download.Content.Headers.ContentDisposition!.FileName!.Trim('"');
+        name.ShouldStartWith($"tracking-log-{trip.ToString("N")[..8]}-");
+        name.ShouldMatch(@"^tracking-log-[0-9a-f]{8}-\d{8}\.csv$");
+        var sheet = await download.Content.ReadAsStringAsync();
+
+        // Oldest first, one report on a row.
+        sheet.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length.ShouldBe(1 + before.Count);
+        sheet.IndexOf("deep.4", StringComparison.Ordinal).ShouldBeLessThan(sheet.IndexOf("apa in crestere", StringComparison.Ordinal));
+
+        // Read back by an importer told nothing: every row is a report the log already holds, and
+        // there is nothing to say about the file or about any row of it.
+        var preview = await PreviewAsync(trip, sheet);
+        preview.GetProperty("fileDiagnostics").EnumerateArray().ShouldBeEmpty();
+        preview.GetProperty("unmappedColumns").EnumerateArray().ShouldBeEmpty();
+        preview.GetProperty("unmatchedCavers").EnumerateArray().ShouldBeEmpty();
+        preview.GetProperty("refused").EnumerateArray().ShouldBeEmpty();
+        preview.GetProperty("rowsRead").GetInt32().ShouldBe(before.Count);
+        preview.GetProperty("creates").GetInt32().ShouldBe(0);
+        preview.GetProperty("replaces").GetInt32().ShouldBe(before.Count);
+        var rows = preview.GetProperty("rows").EnumerateArray().ToList();
+        rows.Count.ShouldBe(before.Count);
+        rows.ShouldAllBe(r => r.GetProperty("diagnostics").GetArrayLength() == 0);
+
+        // And written over the log, it leaves the log as it was: the same rows, by id, each with
+        // the kind, the place, the note, the moment and the anchors it had.
+        var commit = await CommitAsync(trip, sheet, replaceExisting: true);
+        commit.GetProperty("created").GetInt32().ShouldBe(0);
+        commit.GetProperty("refused").EnumerateArray().ShouldBeEmpty();
+        (commit.GetProperty("updated").GetInt32() + commit.GetProperty("unchanged").GetInt32()).ShouldBe(before.Count);
+        (await StoredReportsAsync(trip)).ShouldBe(before);
+    }
+
+    [Fact]
+    public async Task A_person_whose_account_goes_by_another_name_than_the_roster_has_reads_back_under_either()
+    {
+        // An account, its roster entry as whoever keeps the roster typed it, and a display name of
+        // its own that is another: the state every account reaches the moment either is edited.
+        // Written straight to the database because what is set up is the disagreement itself.
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var rosterName = $"Dana Vlad {suffix}";
+        var accountName = $"Dănuța V. {suffix}";
+        var userId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"csvimp-member-{suffix}@t.local");
+        Guid member;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Users.FirstAsync(u => u.Id == userId)).DisplayName = accountName;
+            var entry = await db.Cavers.FirstAsync(c => c.UserId == userId);
+            entry.FullName = rosterName;
+            member = entry.Id;
+            await db.SaveChangesAsync();
+        }
+
+        var (trip, cavers) = await CreateTripAsync();
+        var joined = await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{trip}", new
+        {
+            title = $"Csv import {Guid.NewGuid():N}"[..28],
+            tripDate = "2026-09-12",
+            participants = cavers.Append(member).Select(id => new { caverId = id }).ToArray(),
+            visibility = "authenticated",
+        });
+        joined.StatusCode.ShouldBe(HttpStatusCode.OK, await joined.Content.ReadAsStringAsync());
+        var (model, _) = await SeedModelAsync();
+        (await ArmAsync(trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var nine = new DateTimeOffset(2026, 9, 12, 9, 0, 0, TimeSpan.Zero);
+        await TypeAsync(trip, new { caverIds = new[] { member, cavers[0] }, kind = "entered", recordedAt = nine });
+        await TypeAsync(trip, new
+        {
+            caverIds = new[] { member }, kind = "atStation", stationName = "deep.4", recordedAt = nine.AddMinutes(30),
+        });
+        var before = await StoredReportsAsync(trip);
+        before.Count.ShouldBe(3);
+
+        // The sheet names the member as the screen does — by the account's name, not the roster's.
+        var sheet = await SheetAsync(owner, trip);
+        sheet.ShouldContain(accountName);
+        sheet.ShouldNotContain(rosterName);
+
+        // And reads back whole: nobody unrecognised, nothing refused, every row found on the log.
+        var preview = await PreviewAsync(trip, sheet);
+        preview.GetProperty("unmatchedCavers").EnumerateArray().ShouldBeEmpty();
+        preview.GetProperty("refused").EnumerateArray().ShouldBeEmpty();
+        preview.GetProperty("creates").GetInt32().ShouldBe(0);
+        preview.GetProperty("replaces").GetInt32().ShouldBe(3);
+
+        var commit = await CommitAsync(trip, sheet, replaceExisting: true);
+        commit.GetProperty("refused").EnumerateArray().ShouldBeEmpty();
+        commit.GetProperty("updated").GetInt32().ShouldBe(0);
+        commit.GetProperty("unchanged").GetInt32().ShouldBe(3);
+        (await StoredReportsAsync(trip)).ShouldBe(before);
+
+        // The twin: a sheet somebody wrote from the roster finds the same person, on the same rows.
+        var byRoster = await PreviewAsync(trip, sheet.Replace(accountName, rosterName));
+        byRoster.GetProperty("refused").EnumerateArray().ShouldBeEmpty();
+        byRoster.GetProperty("replaces").GetInt32().ShouldBe(3);
+        // And a name that is neither is still nobody on this trip.
+        var byNeither = await PreviewAsync(trip, sheet.Replace(accountName, $"Altcineva {suffix}"));
+        ProblemsOf(byNeither.GetProperty("refused")).ShouldBe(["CaverNotOnRoster", "CaverNotOnRoster"]);
+    }
+
+    /// <summary>
+    /// A second survey of a cave, ready, with the stations given — the survey a watch is moved to.
+    /// </summary>
+    private async Task<Guid> SeedSecondModelAsync(Guid cave, params SurveyStation[] stations)
+    {
+        Guid second;
+        using (var form = new MultipartFormDataContent())
+        {
+            var bytes = new ByteArrayContent([1, 2, 3, 4]);
+            bytes.Headers.ContentType = new("application/octet-stream");
+            form.Add(bytes, "file", "tracking-again.3d");
+            var created = await owner.PostAsync($"/api/v1/caves/{cave}/survey-models", form);
+            created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+            second = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        }
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.SurveyModels.SingleAsync(m => m.Id == second)).Status = SurveyModelStatus.Ready;
+        foreach (var station in stations)
+        {
+            station.SurveyModelId = second;
+        }
+
+        db.SurveyStations.AddRange(stations);
+        await db.SaveChangesAsync();
+        return second;
+    }
+
+    [Fact]
+    public async Task A_log_that_spans_two_surveys_reads_back_with_every_report_on_the_survey_it_was_made_on()
+    {
+        var (trip, _) = await CreateTripAsync();
+        var (first, cave) = await SeedModelAsync();
+        (await ArmAsync(trip, first)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var cavers = await CaversOfAsync(trip);
+        var (ion, maria) = (cavers[0], cavers[1]);
+        var nine = new DateTimeOffset(2026, 9, 12, 9, 0, 0, TimeSpan.Zero);
+
+        // Made on the first survey: a station the second also has a station called, a station
+        // only the first has, and a depth.
+        await TypeAsync(trip, new
+        {
+            caverIds = new[] { ion }, kind = "atStation", stationName = "deep.4", recordedAt = nine,
+        });
+        await TypeAsync(trip, new
+        {
+            caverIds = new[] { ion }, kind = "atStation", stationName = "deep.3", recordedAt = nine.AddMinutes(10),
+        });
+        await TypeAsync(trip, new
+        {
+            caverIds = new[] { maria }, kind = "atDepth", depthM = 100, recordedAt = nine.AddMinutes(20),
+        });
+
+        // The watch is moved to a corrected survey of the same cave. It has a "deep.4" too, and
+        // its station nearest 100 m below the entrance is one the first survey never had; it has
+        // no "deep.3" at all.
+        var second = await SeedSecondModelAsync(
+            cave,
+            Station(Guid.Empty, "ent.0", "ent", 350, SurveyStationFlags.Entrance),
+            Station(Guid.Empty, "deep.4", "deep", 300, SurveyStationFlags.Underground),
+            Station(Guid.Empty, "new.9", "new", 250, SurveyStationFlags.Underground));
+        (await PutConfigAsync(trip, new { state = "armed", surveyModelId = second }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // And one more report, made on the second.
+        await TypeAsync(trip, new
+        {
+            caverIds = new[] { maria }, kind = "atDepth", depthM = 100, recordedAt = nine.AddMinutes(30),
+        });
+
+        var before = await StoredReportsAsync(trip);
+        before.Count.ShouldBe(4);
+        before.Count(line => line.Contains(first.ToString())).ShouldBe(3);
+        before.Count(line => line.Contains(second.ToString())).ShouldBe(1);
+        // The fixture is what the claim rests on: the same 100 m is another station on each survey.
+        (await StoredNamesAsync(trip)).ShouldBe(["deep.4", "deep.3", "deep.3", "new.9"]);
+
+        var sheet = await SheetAsync(owner, trip);
+
+        // Nothing to say about any row — the station the second survey lacks included.
+        var preview = await PreviewAsync(trip, sheet);
+        preview.GetProperty("refused").EnumerateArray().ShouldBeEmpty();
+        preview.GetProperty("creates").GetInt32().ShouldBe(0);
+        preview.GetProperty("replaces").GetInt32().ShouldBe(4);
+
+        // Written over the log, no report moves: each keeps its station and the survey it was
+        // made on, none is written and none becomes corrected.
+        var stamps = await ChangeStampsAsync(trip);
+        var commit = await CommitAsync(trip, sheet, replaceExisting: true);
+        commit.GetProperty("refused").EnumerateArray().ShouldBeEmpty();
+        commit.GetProperty("updated").GetInt32().ShouldBe(0);
+        commit.GetProperty("unchanged").GetInt32().ShouldBe(4);
+        (await StoredReportsAsync(trip)).ShouldBe(before);
+        (await ChangeStampsAsync(trip)).ShouldBe(stamps);
+
+        // One note corrected in the sheet is one row written — its note, and nothing of where it is.
+        var lines = sheet.Split("\r\n");
+        lines[2].ShouldContain("deep.3");
+        var noted = string.Join("\r\n", lines.Select((line, i) => i == 2 ? NotedAs(line, "la sifon") : line));
+        var corrected = await CommitAsync(trip, noted, replaceExisting: true);
+        corrected.GetProperty("updated").GetInt32().ShouldBe(1);
+        corrected.GetProperty("unchanged").GetInt32().ShouldBe(3);
+        var after = await StoredReportsAsync(trip);
+        after.Select(WithoutNote).ShouldBe(before.Select(WithoutNote));
+        after.Count(line => line.Contains("la sifon")).ShouldBe(1);
+
+        // The twin, which shows the survey in force is still what a changed place is read on: the
+        // same row given another station is placed on the second survey, and a station only the
+        // first has is refused there as it is for a typed report.
+        lines = noted.Split("\r\n");
+        var moved = await CommitAsync(
+            trip, string.Join("\r\n", lines.Select((line, i) => i == 1 ? line.Replace("deep.4", "new.9") : line)),
+            replaceExisting: true);
+        moved.GetProperty("updated").GetInt32().ShouldBe(1);
+        var movedRow = (await StoredReportsAsync(trip)).Single(line => line.Contains("|AtStation|new.9|"));
+        movedRow.ShouldContain(second.ToString());
+        var lost = await PreviewAsync(
+            trip, string.Join("\r\n", lines.Select((line, i) => i == 1 ? line.Replace("deep.4", "deep.3") : line)));
+        ProblemsOf(lost.GetProperty("refused")).ShouldBe(["StationNotInModel"]);
+    }
+
+    /// <summary>A written row with its note cell, the one before the state, set.</summary>
+    private static string NotedAs(string line, string note)
+    {
+        var cells = line.Split(',');
+        cells.Length.ShouldBe(8, "the row holds no cell with a comma in it");
+        cells[6] = note;
+        return string.Join(',', cells);
+    }
+
+    /// <summary>One line of <see cref="StoredReportsAsync"/> with its note taken out.</summary>
+    private static string WithoutNote(string stored)
+    {
+        var values = stored.Split('|');
+        values[6] = string.Empty;
+        return string.Join('|', values);
+    }
+
+    [Fact]
+    public async Task A_note_kept_as_it_was_typed_is_not_rewritten_by_the_sheet_that_carries_it()
+    {
+        var trip = await ArmedTripAsync();
+        var cavers = await CaversOfAsync(trip);
+        var nine = new DateTimeOffset(2026, 9, 12, 9, 0, 0, TimeSpan.Zero);
+
+        // Notes as a text area takes them: two lines, a doubled space, spaces at either end, and
+        // one that is nothing but a mark a sheet reads as an empty cell.
+        string[] typed = ["apa in crestere\nne intoarcem", "la  baza   puitului", "  asteptam  ", "?"];
+        for (var i = 0; i < typed.Length; i++)
+        {
+            await TypeAsync(trip, new
+            {
+                caverIds = new[] { cavers[0] }, kind = "note", note = typed[i], recordedAt = nine.AddMinutes(i),
+            });
+        }
+
+        await TypeAsync(trip, new
+        {
+            caverIds = new[] { cavers[1] }, kind = "atDepth", depthM = 50, note = "-", recordedAt = nine,
+        });
+
+        (await NotesAsync(trip)).ShouldBe((string?[])[.. typed, "-"], ignoreOrder: true);
+        var before = await StoredReportsAsync(trip);
+        var stamps = await ChangeStampsAsync(trip);
+
+        var sheet = await SheetAsync(owner, trip);
+        var commit = await CommitAsync(trip, sheet, replaceExisting: true);
+        commit.GetProperty("refused").EnumerateArray().ShouldBeEmpty();
+        commit.GetProperty("updated").GetInt32().ShouldBe(0);
+        commit.GetProperty("unchanged").GetInt32().ShouldBe(5);
+        (await StoredReportsAsync(trip)).ShouldBe(before);
+        (await ChangeStampsAsync(trip)).ShouldBe(stamps);
+
+        // The twin: a note that reads differently is written, so the comparison is not a way of
+        // never writing one.
+        var changed = await CommitAsync(trip, sheet.Replace("asteptam", "plecam"), replaceExisting: true);
+        changed.GetProperty("updated").GetInt32().ShouldBe(1);
+        changed.GetProperty("unchanged").GetInt32().ShouldBe(4);
+        (await NotesAsync(trip)).ShouldContain("plecam");
+    }
+
+    [Fact]
+    public async Task A_place_tried_against_a_report_whose_place_is_withheld_is_answered_the_same_right_or_wrong()
+    {
+        var (model, cave) = await SeedModelAsync();
+        var guideEmail = $"csvimp-guide-{Guid.NewGuid():N}"[..22] + "@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, guideEmail);
+        var guide = await AuthHelper.BearerClientAsync(factory, guideEmail);
+        var (trip, cavers) = await CreateTripAsync(client: guide);
+        (await ArmAsync(trip, model, guide)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var at = new DateTimeOffset(2026, 9, 12, 9, 40, 0, TimeSpan.Zero);
+        var typed = await guide.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", new
+        {
+            caverIds = new[] { cavers[0] }, kind = "atStation", stationName = "upper.2", recordedAt = at,
+        });
+        typed.StatusCode.ShouldBe(HttpStatusCode.OK, await typed.Content.ReadAsStringAsync());
+
+        static string Naming(string station) =>
+            $"Data si ora,Statie,Speologi\r\n12.09.2026 09:40,{station},Ion Popescu\r\n";
+
+        async Task<JsonElement> ReadAsync(string station)
+        {
+            var response = await guide.PostAsJsonAsync(
+                $"/api/v1/trip-logs/{trip}/tracking/csv-import/preview", new { text = Naming(station) });
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+            return await BodyAsync(response);
+        }
+
+        // While the cave is open to this writer, repeating the stored station is a row that
+        // replaces a report — which is what makes the refusal below the protection's doing.
+        (await ReadAsync("upper.2")).GetProperty("replaces").GetInt32().ShouldBe(1);
+
+        await SetLocationProtectedAsync(cave, true);
+
+        // Protected, the station the report really is at and one it is not are told the same
+        // thing: neither is planned, for the same reason, and the plan has one name for both.
+        var right = await ReadAsync("upper.2");
+        var wrong = await ReadAsync("deep.3");
+        right.GetProperty("replaces").GetInt32().ShouldBe(0);
+        ProblemsOf(right.GetProperty("refused")).ShouldBe(ProblemsOf(wrong.GetProperty("refused")));
+        ProblemsOf(right.GetProperty("refused")).ShouldHaveSingleItem();
+        right.GetProperty("planDigest").GetString().ShouldBe(wrong.GetProperty("planDigest").GetString());
+    }
+
+    [Fact]
+    public async Task A_reader_who_may_not_be_told_where_gets_a_sheet_without_the_places_and_that_sheet_cannot_write_nowhere_over_them()
+    {
+        var (trip, cave) = await ArmedTripWithCaveAsync();
+        var cavers = await CaversOfAsync(trip);
+        var nine = new DateTimeOffset(2026, 9, 12, 9, 0, 0, TimeSpan.Zero);
+        await TypeAsync(trip, new
+        {
+            caverIds = new[] { cavers[0] }, kind = "atStation", stationName = "deep.4",
+            note = "la baza puitului", recordedAt = nine,
+        });
+        await TypeAsync(trip, new
+        {
+            caverIds = new[] { cavers[1] }, kind = "atDepth", depthM = 73.5, recordedAt = nine.AddMinutes(5),
+        });
+        var before = await StoredReportsAsync(trip);
+        string[] places = ["deep.4", "73.5", "upper.2", "deep.3"];
+
+        // The same reader, the same route, while the cave is open: the places are in the file.
+        // This is what makes their absence below the protection's doing and not the route's.
+        var open = await SheetAsync(reader, trip);
+        open.ShouldContain("deep.4");
+        open.ShouldContain("73.5");
+        open.ShouldNotContain(TrackingCsvStateWords.Withheld);
+
+        await SetLocationProtectedAsync(cave, true);
+
+        var withheld = await SheetAsync(reader, trip);
+        foreach (var place in places)
+        {
+            withheld.ShouldNotContain(place);
+        }
+        // Still two reports, with who, when and what was said — that is the trip's, and the
+        // reader reads the trip — each marked as having a place this sheet does not say.
+        withheld.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length.ShouldBe(3);
+        withheld.ShouldContain("la baza puitului");
+        withheld.ShouldContain("Ion Popescu");
+        withheld.Split(TrackingCsvStateWords.Withheld).Length.ShouldBe(3);
+
+        // The cave's own author, the same moment: the places are there.
+        var whole = await SheetAsync(owner, trip);
+        whole.ShouldContain("deep.4");
+        whole.ShouldContain("73.5");
+        whole.ShouldNotContain(TrackingCsvStateWords.Withheld);
+
+        // Brought back by somebody who may write the log, the reader's sheet is refused row by
+        // row: a place left out is not a place given up, and nothing is written over either report.
+        var preview = await PreviewAsync(trip, withheld);
+        preview.GetProperty("creates").GetInt32().ShouldBe(0);
+        preview.GetProperty("replaces").GetInt32().ShouldBe(0);
+        preview.GetProperty("refused").EnumerateArray()
+            .Select(d => (d.GetProperty("problem").GetString(), d.GetProperty("line").GetInt32()))
+            .ShouldBe([("NoPlaceAndNoState", 2), ("NoPlaceAndNoState", 3)]);
+        var commit = await CommitAsync(trip, withheld, replaceExisting: true);
+        commit.GetProperty("created").GetInt32().ShouldBe(0);
+        commit.GetProperty("updated").GetInt32().ShouldBe(0);
+        (await StoredReportsAsync(trip)).ShouldBe(before);
+    }
+
+    [Fact]
+    public async Task Two_reports_about_one_person_at_one_instant_are_both_written_out_and_both_refused_on_the_way_back()
+    {
+        var trip = await ArmedTripAsync();
+        var cavers = await CaversOfAsync(trip);
+        var at = new DateTimeOffset(2026, 9, 12, 9, 0, 0, TimeSpan.Zero);
+        await TypeAsync(trip, new { caverIds = new[] { cavers[0] }, kind = "note", note = "prima", recordedAt = at });
+        await TypeAsync(trip, new { caverIds = new[] { cavers[0] }, kind = "note", note = "a doua", recordedAt = at });
+        var before = await StoredReportsAsync(trip);
+        before.Count.ShouldBe(2);
+
+        // The log holds two, so the sheet says two: the file is the log, not a tidied copy of it.
+        var sheet = await SheetAsync(owner, trip);
+        sheet.ShouldContain("prima");
+        sheet.ShouldContain("a doua");
+
+        // And the importer, which finds a report by the person and the instant, cannot tell which
+        // of the two a row is: it says so and writes neither.
+        var preview = await PreviewAsync(trip, sheet);
+        preview.GetProperty("rowsRead").GetInt32().ShouldBe(2);
+        preview.GetProperty("creates").GetInt32().ShouldBe(0);
+        preview.GetProperty("replaces").GetInt32().ShouldBe(0);
+        // Each row is refused for the same reason, and before the importer ever compares the two
+        // rows with each other: the log already holds that person at that instant more than once.
+        ProblemsOf(preview.GetProperty("refused")).Order()
+            .ShouldBe(["AlreadyRecordedSeveralTimes", "AlreadyRecordedSeveralTimes"]);
+        var commit = await CommitAsync(trip, sheet, replaceExisting: true);
+        commit.GetProperty("created").GetInt32().ShouldBe(0);
+        commit.GetProperty("updated").GetInt32().ShouldBe(0);
+        (await StoredReportsAsync(trip)).ShouldBe(before);
+    }
+
+    [Fact]
+    public async Task The_sheet_of_a_trip_is_given_to_whoever_may_read_the_trip_and_to_nobody_else()
+    {
+        // Private to its author, so the reader below genuinely cannot read it: a Viewer, with no
+        // grant on it. (An Editor would read past visibility by design and prove nothing.)
+        var created = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Csv import {Guid.NewGuid():N}"[..28],
+            tripDate = "2026-09-12",
+            participants = new[] { new { newCaverName = "Ion Popescu" } },
+            visibility = "private",
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var hidden = (await BodyAsync(created)).GetProperty("id").GetGuid();
+        var path = $"/api/v1/trip-logs/{hidden}/tracking/events/export";
+
+        var refused = await reader.GetAsync(path);
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await BodyAsync(refused)).GetProperty("code").GetString().ShouldBe("trip_log.not_found");
+        (await factory.CreateClient().GetAsync(path)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // Its author is given it — a header and nothing else, since nothing was ever reported, and
+        // a trip that was never followed is not a reason to refuse its (empty) log.
+        var own = await owner.GetAsync(path);
+        own.StatusCode.ShouldBe(HttpStatusCode.OK, await own.Content.ReadAsStringAsync());
+        (await own.Content.ReadAsStringAsync()).TrimStart('\uFEFF').ShouldBe(TrackingCsvWriter.HeaderLine);
+
+        // A trip that does not exist answers as the unreadable one does.
+        (await owner.GetAsync($"/api/v1/trip-logs/{Guid.NewGuid()}/tracking/events/export"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // And a readable one is given to the reader who was refused above.
+        var shared = await ArmedTripAsync();
+        (await reader.GetAsync($"/api/v1/trip-logs/{shared}/tracking/events/export"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_club_can_name_its_own_word_for_a_note()
+    {
+        var trip = await ArmedTripAsync();
+        const string Sheet =
+            "Data si ora,Speologi,Nota,Stare\r\n"
+            + "12.09.2026 09:40,Ion Popescu,,mesaj\r\n";
+
+        // Unlisted, the word is one nobody recognises and the row says nothing about anybody.
+        var unread = await PreviewAsync(trip, Sheet);
+        unread.GetProperty("creates").GetInt32().ShouldBe(0);
+        ProblemsOf(unread.GetProperty("refused")).ShouldBe(["NoPlaceAndNoState"]);
+
+        // Listed, the same row is a note.
+        var read = await PreviewAsync(trip, Sheet, new { notedWords = new[] { "mesaj" } });
+        read.GetProperty("refused").EnumerateArray().ShouldBeEmpty();
+        read.GetProperty("rows").EnumerateArray().Single().GetProperty("kind").GetString().ShouldBe("note");
+
+        // And the list is held to the same bounds as the other two.
+        var blank = await owner.PostAsJsonAsync(
+            $"/api/v1/trip-logs/{trip}/tracking/csv-import/preview",
+            new { text = Sheet, options = new { notedWords = new[] { "" } } });
+        blank.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>The trip's two people, Ion first.</summary>
+    private async Task<Guid[]> CaversOfAsync(Guid trip)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.TripLogParticipants.Where(p => p.TripLogId == trip)
+            .Join(db.Cavers, p => p.CaverId, c => c.Id, (p, c) => new { c.Id, c.FullName })
+            .Distinct()
+            .OrderByDescending(c => c.FullName == "Ion Popescu")
+            .Select(c => c.Id)
+            .ToArrayAsync();
+    }
+
+    /// <summary>A report typed the ordinary way, by the trip's author.</summary>
+    private async Task TypeAsync(Guid trip, object report)
+    {
+        var typed = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", report);
+        typed.StatusCode.ShouldBe(HttpStatusCode.OK, await typed.Content.ReadAsStringAsync());
+    }
+
+    private static async Task<string> SheetAsync(HttpClient client, Guid trip)
+    {
+        var download = await client.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events/export");
+        var sheet = await download.Content.ReadAsStringAsync();
+        download.StatusCode.ShouldBe(HttpStatusCode.OK, sheet);
+        return sheet;
+    }
+
+    /// <summary>
+    /// Every stored report of a trip as one line of what a re-import must not change, by id.
+    /// </summary>
+    private async Task<List<string>> StoredReportsAsync(Guid trip)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var rows = await db.TripPositionEvents.AsNoTracking()
+            .Where(e => e.TripLogId == trip).OrderBy(e => e.Id).ToListAsync();
+        return
+        [
+            .. rows.Select(e => string.Join('|',
+                e.Id, e.CaverId, e.TeamId, e.Kind, e.ViewerStationName, e.DepthEnteredM?.ToString("0.####"), e.Note,
+                e.RecordedAt.UtcTicks, e.SurveyModelId, e.CaveFeatureId))
+        ];
     }
 
     // ---- plumbing --------------------------------------------------------------------------

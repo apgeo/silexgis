@@ -21,6 +21,10 @@ const depthReading = vi.fn();
  */
 const depthReadings = vi.fn();
 const deleteEvent = vi.fn();
+/** Putting back a report taken off the log — what Undo on the notice asks for. */
+const restoreEvent = vi.fn();
+/** The reports taken off the log, as the fold under it reads them. */
+const removedQuery = vi.fn();
 const setTracking = vi.fn();
 const setLabel = vi.fn();
 /** The trip's links, where a photograph hung on one of its moments lives. */
@@ -41,10 +45,17 @@ vi.mock('../../api/hooks.ts', async () => ({
   // Nothing declared, which is every cave until somebody declares something — so the place
   // chooser is absent here and the cases below are drawn as they were.
   useTrackingPlaces: () => ({ data: [] }),
+  useSurveyModelStationSearch: () => ({ data: undefined }),
   // Arguments passed straight through, because which depths the tab decides to ask about is itself
   // a thing worth asserting: a report the screen cannot honestly measure must not cost a request.
   useTrackingDepthReadings: (...args: unknown[]) => depthReadings(...args),
   useDeleteTrackingEvent: () => ({ mutateAsync: deleteEvent, isPending: false }),
+  useRestoreTrackingEvent: () => ({ mutateAsync: restoreEvent, isPending: false }),
+  // The fold of removed reports under the log. What it does with a report has its own tests; what
+  // this suite asks is who it is asked on behalf of, so the question is passed through.
+  TRACKING_REMOVED_PAGE_SIZE: 20,
+  useTripTrackingRemovedEvents: (...asked: unknown[]) => removedQuery(...asked),
+  useDestroyTrackingEvent: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useSetTripTracking: () => ({ mutateAsync: setTracking, isPending: false }),
   useCreateTrackingTeam: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useRenameTrackingTeam: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -94,10 +105,21 @@ vi.mock('../../api/hooks.ts', async () => ({
   useSetTrackingParticipantLabel: () => ({ mutateAsync: setLabel, isPending: false }),
 }));
 
+// Saving a file is the browser's business; what this suite asks is which address was asked for.
+const saveFile = vi.fn();
+vi.mock('../../api/download.ts', async (original) => ({
+  ...(await original<typeof import('../../api/download.ts')>()),
+  downloadFile: (url: string) => saveFile(url),
+}));
+
 // The dialog that picks photographs off the trip's gallery has its own tests; what this suite asks
 // is what it is opened with, so it is recorded rather than driven.
 vi.mock('../../components/trips/TrackingPicturesDialog.tsx', () => ({
-  default: (props: { defaultAt: number; defaultCaverId: string | null }) => {
+  default: (props: {
+    defaultAt: number;
+    defaultCaverId: string | null;
+    surveyModelId: string | null;
+  }) => {
     pictureDialogProps(props);
     return <div data-testid="trip-tracking-pictures-dialog" />;
   },
@@ -117,13 +139,17 @@ vi.mock('../../components/trips/TrackingPicturesDialog.tsx', () => ({
 let answerUnplaced: ((stations: ReadonlySet<string>) => void) | undefined;
 /** The reports the panel was last handed — which have to stay the newest page of the whole log. */
 let panelEvents: readonly { id: string }[] | undefined;
+/** How many reports the panel was told the log holds — what tells it those rows are not all of it. */
+let panelEventsTotal: number | undefined;
 vi.mock('../../components/trips/TrackingModelPanel.tsx', () => ({
   default: (props: {
     onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
     events?: readonly { id: string }[];
+    eventsTotal?: number;
   }) => {
     answerUnplaced = props.onUnplacedStationsChange;
     panelEvents = props.events;
+    panelEventsTotal = props.eventsTotal;
     return <div data-testid="trip-tracking-model-panel" />;
   },
 }));
@@ -146,10 +172,12 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
   return {
     state: 'armed',
     surveyModelId: null,
+    caveFeatureId: null,
     surveyModelMissing: false,
     referenceStationName: null,
     depthFilter: [],
     armedAt: '2026-09-12T06:00:00Z',
+    firstArmedAt: '2026-09-12T06:00:00Z',
     closedAt: null,
     positionsWithheld: false,
     // What the published page would call the party. The panel that mints a link words its notice
@@ -179,6 +207,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         name: null,
         quiet: false,
         outsideDeclaredParts: false,
+        ordinal: null,
       },
       {
         caverId: BOGDAN,
@@ -197,6 +226,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         name: null,
         quiet: false,
         outsideDeclaredParts: false,
+        ordinal: null,
       },
     ],
     ...overrides,
@@ -249,9 +279,18 @@ beforeEach(() => {
   });
   eventsQuery.mockReturnValue({ data: { items: [], page: 1, pageSize: 20, totalItems: 0 }, isPending: false });
   recordEvents.mockReset().mockResolvedValue([{}, {}]);
+  saveFile.mockReset().mockResolvedValue(undefined);
   depthReading.mockReset().mockReturnValue({ data: undefined, isFetching: false, error: null });
   depthReadings.mockReset().mockReturnValue(new Map());
   deleteEvent.mockReset().mockResolvedValue(undefined);
+  restoreEvent.mockReset().mockResolvedValue({});
+  removedQuery.mockReset().mockReturnValue({
+    data: { items: [], page: 1, pageSize: 20, totalItems: 0 },
+    isPending: false,
+    isPlaceholderData: false,
+    error: null,
+    refetch: vi.fn(),
+  });
   pictureLinks.mockReset().mockReturnValue({ data: undefined, isPending: false, error: null });
   detachPicture.mockReset().mockResolvedValue(undefined);
   pictureDialogProps.mockReset();
@@ -259,6 +298,7 @@ beforeEach(() => {
   narrow = false;
   answerUnplaced = undefined;
   panelEvents = undefined;
+  panelEventsTotal = undefined;
   setTracking.mockReset().mockResolvedValue(state());
   setLabel.mockReset().mockResolvedValue({ caverId: ANA, label: null });
 });
@@ -296,6 +336,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       }),
@@ -340,6 +381,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: CARMEN,
@@ -358,6 +400,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       }),
@@ -401,6 +444,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: BOGDAN,
@@ -421,6 +465,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       }),
@@ -443,7 +488,9 @@ describe('TripTrackingTab', () => {
     show();
 
     const sentence = screen.getByText(/corrected in place/);
-    expect(sentence).toHaveTextContent('One that should not be there at all is deleted.');
+    expect(sentence).toHaveTextContent('One that should not be there at all is deleted');
+    // And a deleted one is not lost: the sentence says where it can be put back from.
+    expect(sentence).toHaveTextContent('can be put back from Removed reports under the log');
     expect(sentence).not.toHaveTextContent(/never edited/);
   });
 
@@ -518,6 +565,30 @@ describe('TripTrackingTab', () => {
    * says. The pencil and the bin drawn there were two controls that could only fail, on rows whose
    * real way back is undoing the import.
    */
+  describe('the log as a sheet', () => {
+    it('is offered to somebody who can only read the trip, beside no import', async () => {
+      // The sheet is a copy of what this page lists, so reading the trip is what it takes; bringing
+      // a sheet in writes the log, and that button stays with whoever may write it.
+      show(false);
+
+      expect(screen.queryByTestId('trip-tracking-csv-open')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-export'));
+
+      await waitFor(() => expect(saveFile).toHaveBeenCalledOnce());
+      expect(saveFile).toHaveBeenCalledWith('/api/v1/trip-logs/trip-1/tracking/events/export');
+    });
+
+    it('stands beside the import for somebody who may write the log, and says when it failed', async () => {
+      saveFile.mockRejectedValue(new Error('offline'));
+      show();
+
+      expect(screen.getByTestId('trip-tracking-csv-open')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-export'));
+
+      expect(await screen.findByText('The operation failed. Please try again.')).toBeInTheDocument();
+    });
+  });
+
   describe('a log whose rows cannot be changed one at a time', () => {
     const importedRow = {
       id: 'event-1',
@@ -721,7 +792,8 @@ describe('TripTrackingTab', () => {
   // say — while a report merely written down wrongly is corrected in place beside it. The delete
   // still has to be reachable, or such a report stays on the log for good — and its confirmation
   // is the last place to send a coordinator who only meant to fix a typo to the Correct control
-  // instead, since a deleted report takes whatever was pinned to its moment with it.
+  // instead. It also says where the report goes: it is kept and can be put back, so the sentence
+  // that used to say it was gone for good would now be untrue.
   it('takes a report that should not be there off the log, and points a mistyped one at Correct', async () => {
     eventsQuery.mockReturnValue({
       data: {
@@ -749,11 +821,162 @@ describe('TripTrackingTab', () => {
     fireEvent.click(screen.getByTestId('trip-tracking-event-delete-event-1'));
     const confirm = await screen.findByText(/Delete this report\?/);
     expect(confirm).toHaveTextContent('is corrected instead, with Correct beside it');
+    expect(confirm).toHaveTextContent('kept under Removed reports');
+    expect(confirm).toHaveTextContent('can be put back');
+    expect(confirm).not.toHaveTextContent(/for good/);
     expect(confirm).not.toHaveTextContent(/no other/);
     fireEvent.click(await screen.findByText('OK'));
 
     await waitFor(() => expect(deleteEvent).toHaveBeenCalledTimes(1));
     expect(deleteEvent.mock.calls[0][0]).toMatchObject({ tripLogId: 'trip-1', eventId: 'event-1' });
+  });
+
+  // The way back is on the notice that says the report went: the commonest wrong delete is the
+  // bin pressed on the row above the one that was meant, noticed at once.
+  it('offers Undo on the notice that a report is off the log, and puts that very report back', async () => {
+    eventsQuery.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: 'event-1',
+            caverId: ANA,
+            teamId: null,
+            kind: 'atStation',
+            surveyModelId: null,
+            stationName: 'P12',
+            depthEnteredM: null,
+            note: null,
+            recordedAt: '2026-09-12T07:00:00Z',
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        totalItems: 1,
+      },
+      isPending: false,
+    });
+    show();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-event-delete-event-1'));
+    fireEvent.click(await screen.findByText('OK'));
+
+    const notice = await screen.findByTestId('trip-tracking-event-deleted');
+    expect(notice).toHaveTextContent('The report is off the log.');
+    // Nothing is put back by the delete itself.
+    expect(restoreEvent).not.toHaveBeenCalled();
+
+    fireEvent.click(within(notice).getByRole('button', { name: 'Undo' }));
+
+    await waitFor(() => expect(restoreEvent).toHaveBeenCalledTimes(1));
+    expect(restoreEvent.mock.calls[0][0]).toEqual({ tripLogId: 'trip-1', eventId: 'event-1' });
+    expect(await screen.findByText('The report is back on the log, as it was.')).toBeTruthy();
+    // And nothing was deleted a second time by putting it back.
+    expect(deleteEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when a report cannot be put back, in the words of the refusal', async () => {
+    eventsQuery.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: 'event-1',
+            caverId: ANA,
+            teamId: null,
+            kind: 'note',
+            surveyModelId: null,
+            stationName: null,
+            depthEnteredM: null,
+            note: 'wrong trip',
+            recordedAt: '2026-09-12T07:00:00Z',
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        totalItems: 1,
+      },
+      isPending: false,
+    });
+    restoreEvent.mockRejectedValue(new ApiError(404, 'tracking.event_not_found', 'server words'));
+    show();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-event-delete-event-1'));
+    fireEvent.click(await screen.findByText('OK'));
+    fireEvent.click(await screen.findByTestId('trip-tracking-event-undo'));
+
+    expect(await screen.findByText(/That report is no longer on the log/)).toBeTruthy();
+  });
+
+  describe('the reports taken off the log', () => {
+    const oneRemoved = () =>
+      removedQuery.mockReturnValue({
+        data: {
+          items: [
+            {
+              report: {
+                id: 'event-9',
+                caverId: ANA,
+                teamId: null,
+                // A station report with no station: withheld from this reader, and nothing else.
+                kind: 'atStation',
+                surveyModelId: null,
+                stationName: null,
+                depthEnteredM: null,
+                note: null,
+                recordedAt: '2026-09-12T07:00:00Z',
+                corrected: false,
+                outsideDeclaredParts: false,
+              },
+              removedAt: '2026-09-12T08:00:00Z',
+            },
+          ],
+          page: 1,
+          pageSize: 20,
+          totalItems: 1,
+        },
+        isPending: false,
+        isPlaceholderData: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+    it('are listed under the log for somebody who may write it, a withheld place still withheld', async () => {
+      oneRemoved();
+      show();
+
+      const fold = screen.getByTestId('trip-tracking-removed');
+      expect(fold).toHaveTextContent('Removed reports: 1');
+      expect(removedQuery).toHaveBeenCalledWith('trip-1', 1);
+
+      fireEvent.click(screen.getByTestId('trip-tracking-removed-count'));
+      const place = await screen.findByTestId('trip-tracking-removed-place-event-9');
+      // Drawn by the function the log draws its own places with, so the withholding is the log's.
+      expect(within(place).getByTestId('trip-tracking-position-withheld')).toBeTruthy();
+      expect(within(fold).getByText('Ana Popescu')).toBeTruthy();
+    });
+
+    it('are not asked for on behalf of a reader who may not write the log', () => {
+      oneRemoved();
+      show(false);
+
+      // The server refuses this list to a reader, so the question is never put — and nothing is
+      // drawn of a list that, in this test, the stub would have answered.
+      expect(removedQuery).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('trip-tracking-removed')).toBeNull();
+    });
+
+    it('are not offered on a log that cannot be written, where putting one back would be refused', () => {
+      oneRemoved();
+      trackingQuery.mockReturnValue({
+        data: state({ state: 'off', armedAt: null, firstArmedAt: null }),
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show();
+
+      expect(removedQuery).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('trip-tracking-removed')).toBeNull();
+    });
   });
 
   it('shows a report whose position was withheld as withheld on the log too', () => {
@@ -881,6 +1104,7 @@ describe('TripTrackingTab', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
           ],
         }),
@@ -1406,6 +1630,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: BOGDAN,
@@ -1424,6 +1649,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             // Nobody has said a single word about her. This is the row the whole change is for.
@@ -1443,6 +1669,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       });
@@ -1576,6 +1803,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: BOGDAN,
@@ -1596,6 +1824,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: CARMEN,
@@ -1614,6 +1843,7 @@ describe('TripTrackingTab', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       });
@@ -1842,6 +2072,7 @@ describe('TripTrackingTab', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
           ],
         }),
@@ -1879,6 +2110,7 @@ describe('TripTrackingTab', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
             {
               caverId: BOGDAN,
@@ -1897,6 +2129,7 @@ describe('TripTrackingTab', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
           ],
         }),
@@ -2026,6 +2259,7 @@ describe('TripTrackingTab', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
           ],
         }),
@@ -2331,6 +2565,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       }),
@@ -2484,6 +2719,9 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
       expect(pictureDialogProps).toHaveBeenLastCalledWith(
         expect.objectContaining({ defaultAt: Date.parse(AT), defaultCaverId: ANA }),
       );
+      // …and with the survey the watch is on, as this reader is told it: what the dialog previews
+      // each photograph's place against.
+      expect(pictureDialogProps.mock.calls.at(-1)![0]).toHaveProperty('surveyModelId', 'model-1');
       // The negative twin, and the reason the whole design is shaped this way: nothing the dialog
       // was opened with names the report that supplied the clock.
       expect(JSON.stringify(pictureDialogProps.mock.calls.at(-1))).not.toContain('event-1');
@@ -2575,6 +2813,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: BOGDAN,
@@ -2595,6 +2834,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       });
@@ -2648,6 +2888,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
           ],
         }),
@@ -2658,6 +2899,93 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
       show();
 
       expect(screen.getByTestId(`trip-tracking-position-other-model-${ANA}`)).toBeTruthy();
+    });
+
+    /** One report on the log, at a station, against a named survey — or none, for a deleted one. */
+    const reported = (id: string, stationName: string | null, surveyModelId: string | null) => ({
+      id,
+      caverId: ANA,
+      teamId: null,
+      kind: 'atStation',
+      surveyModelId,
+      stationName,
+      depthEnteredM: null,
+      note: null,
+      recordedAt: '2026-09-12T07:00:00Z',
+      outsideDeclaredParts: false,
+    });
+    const logOf = (items: unknown[]) =>
+      eventsQuery.mockReturnValue({
+        data: { items, page: 1, pageSize: 20, totalItems: items.length },
+        isPending: false,
+      });
+
+    /**
+     * The table of people marks where somebody is; the log under it is the record of what was
+     * said, row by row. A watch pointed at a corrected survey half-way through a trip leaves every
+     * earlier row naming a station of the survey it left — and unmarked, those rows read as places
+     * on the survey in use, where the same name may be another chamber.
+     */
+    for (const layout of ['wide', 'stacked'] as const) {
+      it(`marks a report made on a survey the watch has left, and no other row (${layout})`, () => {
+        narrow = layout === 'stacked';
+        logOf([
+          reported('ev-now', 'P12', MODEL),
+          reported('ev-before', 'cave.deep.3', OTHER),
+          // What a deleted survey leaves on a row: the name, and no survey to read it in.
+          reported('ev-orphan', 'cave.deep.4', null),
+          { ...reported('ev-word', null, null), kind: 'note', note: 'all well' },
+        ]);
+        show();
+
+        const log = within(screen.getByTestId('trip-tracking-events'));
+        const mark = log.getByTestId('trip-tracking-event-other-model-ev-before');
+        expect(mark).toHaveTextContent('On another survey');
+        // The station stays: it is what was said, and the mark qualifies it rather than replacing it.
+        expect(log.getByText('cave.deep.3')).toBeTruthy();
+        // Quiet. On the table of people this fact is a warning about where somebody is now; on a
+        // row of the log it is history, and a trip re-pointed once would otherwise be half amber.
+        expect(mark.querySelector('.anticon-warning')).toBeNull();
+        expect(
+          screen
+            .getByTestId(`trip-tracking-position-other-model-${ANA}`)
+            .querySelector('.anticon-warning'),
+        ).not.toBeNull();
+        expect(log.getByTestId('trip-tracking-event-other-model-ev-orphan')).toBeTruthy();
+        // And the twins that keep it a rule about the survey: a place on the survey in use, and a
+        // report that names no place at all.
+        expect(log.queryByTestId('trip-tracking-event-other-model-ev-now')).toBeNull();
+        expect(log.queryByTestId('trip-tracking-event-other-model-ev-word')).toBeNull();
+      });
+    }
+
+    /**
+     * What a reader who may not place the cave is sent: a watch that does not say which survey it
+     * is on, and station reports with neither a station nor a survey. Neither is a difference
+     * between two surveys this page was told about, so neither is marked as one — the row says
+     * its place is not shown, and stops there.
+     */
+    it('marks nothing for a reader who is told neither the place nor the survey', () => {
+      const rows = [reported('ev-before', 'cave.deep.3', OTHER)];
+      logOf(rows);
+      show();
+      // The same row, to somebody who is told both: marked.
+      expect(screen.getByTestId('trip-tracking-event-other-model-ev-before')).toBeTruthy();
+      cleanup();
+
+      trackingQuery.mockReturnValue({
+        data: state({ surveyModelId: null, positionsWithheld: true }),
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      logOf([reported('ev-before', null, null)]);
+      show();
+
+      const log = within(screen.getByTestId('trip-tracking-events'));
+      expect(log.queryByTestId('trip-tracking-event-other-model-ev-before')).toBeNull();
+      expect(log.getByTestId('trip-tracking-position-withheld')).toBeTruthy();
+      expect(log.queryByText('On another survey')).toBeNull();
     });
   });
 
@@ -2697,6 +3025,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
           {
             caverId: BOGDAN,
@@ -2715,6 +3044,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             name: null,
             quiet: false,
             outsideDeclaredParts: false,
+            ordinal: null,
           },
         ],
       });
@@ -2802,6 +3132,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               name: null,
               quiet: false,
               outsideDeclaredParts: false,
+              ordinal: null,
             },
           ],
         }),
@@ -2948,6 +3279,9 @@ describe('TripTrackingTab, reaching the whole log', () => {
     expect(firstReads.every(([, params]) => JSON.stringify(params) === '{"pageSize":20}')).toBe(true);
     expect(panelEvents?.[0]?.id).toBe('ev-1');
     expect(panelEvents).toHaveLength(20);
+    // And it is told how long the log really is, which is what lets it know those twenty rows
+    // cannot say which surveys the older reports were made on.
+    expect(panelEventsTotal).toBe(45);
 
     fireEvent.click(document.querySelector('.ant-pagination-item-3')!);
     expect(table().getByText('word 45')).toBeTruthy();

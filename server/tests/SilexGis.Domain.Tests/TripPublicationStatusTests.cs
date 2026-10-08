@@ -201,6 +201,59 @@ public class TripPublicationStatusTests
     }
 
     [Fact]
+    public void The_followed_list_opens_for_a_live_link_always_and_for_a_lapsed_one_inside_its_period()
+    {
+        var live = new PublishedLinkWindows(Live: true, Past: false);
+        var lapsed = new PublishedLinkWindows(Live: false, Past: true);
+
+        // A link still following its own party: neither lever is about it.
+        foreach (var archive in new[] { true, false })
+        {
+            foreach (var within in new[] { true, false })
+            {
+                live.OpensTheFollowedList(archive, within).ShouldBeTrue();
+            }
+        }
+
+        // A link whose trip is over: the archive on, and still inside the period.
+        lapsed.OpensTheFollowedList(archiveEnabled: true, withinSiblingWindow: true).ShouldBeTrue();
+        lapsed.OpensTheFollowedList(archiveEnabled: true, withinSiblingWindow: false).ShouldBeFalse();
+        lapsed.OpensTheFollowedList(archiveEnabled: false, withinSiblingWindow: true).ShouldBeFalse();
+
+        // And a link that opens nothing opens this neither, whatever is passed.
+        default(PublishedLinkWindows).OpensTheFollowedList(archiveEnabled: true, withinSiblingWindow: true)
+            .ShouldBeFalse();
+    }
+
+    [Fact]
+    public void The_followed_list_never_opens_for_a_link_the_administrators_list_would_call_shut()
+    {
+        // Every combination there is. The list of published links describes a link by
+        // OpensAnything; a followed list that opened where that says "nothing" would be served by
+        // a link the administrator is told has lapsed.
+        var bits = new[] { false, true };
+        var opened = 0;
+        foreach (var isLive in bits)
+        {
+            foreach (var isPast in bits)
+            {
+                foreach (var archive in bits)
+                {
+                    foreach (var within in bits)
+                    {
+                        var windows = new PublishedLinkWindows(isLive, isPast);
+                        if (!windows.OpensTheFollowedList(archive, within)) continue;
+                        opened++;
+                        windows.OpensAnything(archive).ShouldBeTrue();
+                    }
+                }
+            }
+        }
+
+        opened.ShouldBeGreaterThan(0, "a rule that opened nothing would satisfy the line above for free");
+    }
+
+    [Fact]
     public void Every_status_is_the_one_the_window_rules_imply_and_every_status_is_reached()
     {
         var seen = new HashSet<PublishedLinkStatus>();

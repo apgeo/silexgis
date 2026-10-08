@@ -9,6 +9,9 @@ const recordEvents = vi.fn();
 
 vi.mock('../../api/hooks.ts', () => ({
   useRecordTrackingEvents: () => ({ mutateAsync: recordEvents, isPending: false }),
+  // What the station field offers once the pressed spelling has been refused. Nothing found here:
+  // the field takes any text, and what it offers is tested with the field itself.
+  useSurveyModelStationSearch: () => ({ data: undefined }),
 }));
 
 // What decides how big every target in this dialog is drawn. False by default: the machine this
@@ -41,6 +44,7 @@ function show(
         tripLogId="trip-1"
         state={props.state ?? 'armed'}
         station={props.station ?? 'p.g.42'}
+        surveyModelId="model-1"
         cavers={CAVERS}
         teams={props.teams ?? []}
         defaultCaverIds={props.defaultCaverIds ?? ['caver-1']}
@@ -151,6 +155,22 @@ describe('TrackingReportDialog', () => {
     expect(recordEvents).toHaveBeenLastCalledWith(
       expect.objectContaining({ kind: 'atStation', stationName: 'pestera.p.g.42' }),
     );
+  });
+
+  /**
+   * A pressed station the survey file gives no name, on a survey read before such stations took
+   * the drawing's label, is refused for a reason no retyping cures. The refusal says to read the
+   * survey again, and the station stays a statement — a field would invite a correction that
+   * cannot exist. The unknown-station case above is the other half: there the field appears.
+   */
+  it('tells the reader to read the survey again, and offers no field to retype the station in', async () => {
+    recordEvents.mockRejectedValueOnce(new ApiError(409, 'tracking.station_reading_outdated'));
+    show();
+    await accept();
+
+    expect(await screen.findByText(/Read the survey again/)).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('trip-tracking-dialog-station')).toBeNull();
   });
 
   /** And once it is a field it carries the card's own rule, so an emptied one is refused. */

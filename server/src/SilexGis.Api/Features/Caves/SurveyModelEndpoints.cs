@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using FluentValidation;
 using NetTopologySuite.Geometries;
-using SilexGis.Infrastructure.Jobs;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +10,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
@@ -101,6 +101,12 @@ public sealed record SurveyModelDto(
     /// </para>
     /// </summary>
     int? AnonymousStationCount,
+    /// <summary>
+    /// Another reading of the stored file is queued or running, and the model goes on answering
+    /// from the reading it holds until that one replaces it. Only ever true of a model that is
+    /// ready: one that holds nothing says it is waiting through <see cref="Status"/> instead.
+    /// </summary>
+    bool ReadingAgain,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -113,12 +119,20 @@ public sealed record SurveyModelDto(
 /// wrote it at: one of the two formats assigns those by file order and reassigns them on every
 /// re-export.
 /// </param>
+/// <param name="ViewerName">
+/// What the drawing calls the same station. One of the two formats names its stations under the
+/// file's root survey and the drawing leaves that part out, so the two spellings differ there and
+/// are equal everywhere else. This is the spelling a report and a declared place keep, which is
+/// why a chooser offers this one and not <paramref name="Name"/>: the name somebody picks is the
+/// name they will then see on the model and in the log.
+/// </param>
 /// <param name="Flags">
 /// What the file says about the station, one name per flag it set. A list rather than a single
 /// value because these combine — an entrance station is above ground and underground at once.
 /// </param>
 public sealed record SurveyStationDto(
     string Name,
+    string ViewerName,
     string? SurveyName,
     double Longitude,
     double Latitude,
@@ -298,7 +312,7 @@ public static class SurveyModelEndpoints
             .WithSummary("Single survey model with a fresh file delivery URL.");
         api.MapGet("/survey-models/{id:guid}/stations", StationsAsync)
             .WithTags("SurveyModels")
-            .WithSummary("Stations read out of the survey; withheld without the exact-location permission.");
+            .WithSummary("Stations read out of the survey, optionally only those whose name begins with `q`; withheld without the exact-location permission.");
         api.MapGet("/survey-models/{id:guid}/shots", ShotsAsync)
             .WithTags("SurveyModels")
             .WithSummary("Legs read out of the survey; withheld without the exact-location permission.");
@@ -309,6 +323,9 @@ public static class SurveyModelEndpoints
         api.MapPut("/survey-models/{id:guid}/current", MakeCurrentAsync)
             .WithTags("SurveyModels")
             .WithSummary("Makes this the model its cave is represented by, among the cave's models of the same kind (Write on the cave).");
+        api.MapPost("/survey-models/{id:guid}/reading", ReadAgainAsync)
+            .WithTags("SurveyModels")
+            .WithSummary("Queues another reading of the model's stored file (Write on the cave). Refused while a reading is queued or running.");
         api.MapDelete("/survey-models/{id:guid}", DeleteAsync)
             .WithTags("SurveyModels")
             .WithSummary("Deletes the survey model (Write on the cave); the stored file is kept. Refused while a trip's live tracking is armed on it.");
@@ -343,7 +360,8 @@ public static class SurveyModelEndpoints
             .OrderBy(m => m.CreatedAt)
             .ToListAsync(ct);
         var sizes = await MeshSizesAsync(db, models, ct);
-        return TypedResults.Ok(models.Select(m => m.ToDto(tokens, sizes)).ToList());
+        var outstanding = await SurveyModelReading.OutstandingAsync(db, ct);
+        return TypedResults.Ok(models.Select(m => m.ToDto(tokens, sizes, outstanding)).ToList());
     }
 
     private static async Task<Results<Created<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
@@ -463,21 +481,7 @@ public static class SurveyModelEndpoints
         // 3D scene draws, and a line plot has to be read into the station and shot rows that carry
         // its own flags. The row and the job are written in one save, so a model can never be
         // stored in a state that says work is coming with nothing queued to do it.
-        var kind = model.Format switch
-        {
-            SurveyModelFormat.Stl => ProcessingJobKinds.SurveyMesh,
-            _ => ProcessingJobKinds.SurveyGraph,
-        };
-
-        model.Status = SurveyModelStatus.Pending;
-        db.ProcessingJobs.Add(new ProcessingJob
-        {
-            Kind = kind,
-            Payload = kind == ProcessingJobKinds.SurveyMesh
-                ? JsonSerializer.Serialize(new SurveyMeshPayload(model.Id), JsonSerializerOptions.Web)
-                : JsonSerializer.Serialize(new SurveyGraphPayload(model.Id), JsonSerializerOptions.Web),
-            RequestedBy = ctx.UserId,
-        });
+        SurveyModelReading.QueueFirst(db, model, ctx.UserId);
 
         // The first model of a kind is the one the cave is represented by; a later one takes over
         // only when somebody says so. Arriving is not choosing: a second line plot may be a
@@ -495,7 +499,7 @@ public static class SurveyModelEndpoints
             await db.SaveChangesAsync(ct);
         }
 
-        return TypedResults.Created($"/api/v1/survey-models/{model.Id}", model.ToDto(tokens, null));
+        return TypedResults.Created($"/api/v1/survey-models/{model.Id}", model.ToDto(tokens, null, null));
     }
 
     private static async Task<Results<Ok<SurveyModelDto>, ProblemHttpResult>> GetAsync(
@@ -517,30 +521,96 @@ public static class SurveyModelEndpoints
         }
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.SurveyModels, model.Id, ct);
-        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct)));
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
     }
+
+    /// <summary>
+    /// The most stations one search answers with, whatever page size was asked for.
+    /// </summary>
+    /// <remarks>
+    /// A search exists to feed a chooser, which shows a short list under the field and asks again
+    /// on the next keystroke. A surveyed cave holds tens of thousands of stations and a one-letter
+    /// beginning can match most of them, so the list's own ceiling would send hundreds of rows per
+    /// keystroke that nobody reads. The total is still reported, so a surface can say that there
+    /// are more and that typing further narrows them.
+    /// </remarks>
+    internal const int MaxStationSearchPageSize = 50;
+
+    /// <summary>The longest beginning a search is asked with: the longest name a station can have.</summary>
+    private const int MaxStationSearchLength = 400;
 
     private static async Task<Ok<PagedResult<SurveyStationDto>>> StationsAsync(
         Guid id,
         int? page,
         int? pageSize,
+        string? q,
         SilexGisDbContext db,
         IAccessService access,
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
+        // The gate first and the search after it, never the other way round: a withheld survey
+        // answers one empty page whatever was asked, so no beginning somebody tries can be told
+        // apart from any other and the names cannot be felt out a letter at a time.
         var (paging, model) = await ReadableAsync(id, page, pageSize, db, access, protection, accessAccessor, ct);
+        var search = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+        if (search is not null)
+        {
+            paging = (paging.Page, Math.Min(paging.PageSize, MaxStationSearchPageSize));
+        }
+
         if (model is null)
         {
             return TypedResults.Ok(EmptyPage<SurveyStationDto>(paging));
         }
 
-        return TypedResults.Ok(await db.SurveyStations.AsNoTracking()
-            .Where(s => s.SurveyModelId == model.Id)
+        var stations = db.SurveyStations.AsNoTracking().Where(s => s.SurveyModelId == model.Id);
+        if (search is not null)
+        {
+            if (search.Length > MaxStationSearchLength)
+            {
+                // Longer than any name can be, so it begins none of them. Answered rather than
+                // refused: this is a field being typed into, not a form being submitted.
+                return TypedResults.Ok(EmptyPage<SurveyStationDto>(paging));
+            }
+
+            // Somebody types the name they read off the drawing, and the rows may hold it under
+            // the file's root survey. The spelling rule already says which stored names a given
+            // name can mean, best reading first; a beginning is read the same way, so the search
+            // finds a station under the name the drawing shows and under the name the rows hold.
+            var readings = SurveyStationNames.StoredCandidates(model.Format, model.RootSurveyName, search);
+            var asDrawn = BeginningWith(readings[0]);
+            var asStored = BeginningWith(readings[^1]);
+
+            // Case and accents are folded, as the application's other name searches fold them: a
+            // name is typed from memory or from a relayed message, and surveys are not consistent
+            // about capitals among themselves.
+            stations = stations.Where(s =>
+                EF.Functions.ILike(EF.Functions.Unaccent(s.Name), EF.Functions.Unaccent(asDrawn), LikeEscape)
+                || EF.Functions.ILike(EF.Functions.Unaccent(s.Name), EF.Functions.Unaccent(asStored), LikeEscape));
+        }
+
+        return TypedResults.Ok(await stations
             .OrderBy(s => s.Name)
-            .ToPagedAsync(paging.Page, paging.PageSize, ToDto, ct));
+            .ToPagedAsync(paging.Page, paging.PageSize, s => ToDto(s, model), ct));
     }
+
+    private const string LikeEscape = "\\";
+
+    /// <summary>
+    /// The pattern matching every name that begins with <paramref name="typed"/>, read literally.
+    /// </summary>
+    /// <remarks>
+    /// Escaped because the characters a pattern treats as wildcards are ordinary in station names —
+    /// an underscore separates the parts of a great many of them — and an unescaped one would turn
+    /// "a_1" into a search for "ab1" as well.
+    /// </remarks>
+    private static string BeginningWith(string typed) =>
+        typed.Replace(LikeEscape, LikeEscape + LikeEscape, StringComparison.Ordinal)
+            .Replace("%", LikeEscape + "%", StringComparison.Ordinal)
+            .Replace("_", LikeEscape + "_", StringComparison.Ordinal)
+        + "%";
 
     private static async Task<Ok<PagedResult<SurveyShotDto>>> ShotsAsync(
         Guid id,
@@ -635,7 +705,7 @@ public static class SurveyModelEndpoints
         model.Description = request.Description;
         model.SurveyedAt = request.SurveyedAt;
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct)));
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
     }
 
     /// <summary>
@@ -716,7 +786,90 @@ public static class SurveyModelEndpoints
             await transaction.CommitAsync(ct);
         }
 
-        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct)));
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
+    }
+
+    /// <summary>
+    /// Queues another reading of the file this model was uploaded as, and answers the model as it
+    /// now stands: being read again if it held a reading, and otherwise waiting, with whatever the
+    /// last reading complained of cleared.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A stored file is read once, when it arrives, and what that reading produced is what every
+    /// later screen uses. So when the reader itself improves, or a reading failed for a reason
+    /// that has since gone, the only way to a better answer used to be uploading the same file a
+    /// second time — which makes a second model, with a second set of rows, and leaves every trip
+    /// that was followed on the first one pointing at the old reading. This asks the question again
+    /// of the model that is already there.
+    /// </para>
+    /// <para>
+    /// The same gates as choosing the current model, and for the same reason: it is a write to the
+    /// cave's surveys, so the cave must be visible with its exact location open, and writable. A
+    /// caller who may not place the cave is told the model does not exist, and no answer of this
+    /// route names a station, a survey or a position.
+    /// </para>
+    /// <para>
+    /// A model that could not be read may be read again — that is the retry a failed reading never
+    /// had — and goes back to waiting, since it holds nothing. A model that has been read stays
+    /// ready and is answered as being read again: it goes on drawing, measuring and placing from
+    /// the reading it holds until the new one replaces it, and keeps that reading if the new one
+    /// fails. A model whose reading is queued or running is refused instead of queued a second
+    /// time: the second job would read the same bytes into the same rows, and the person asking
+    /// would learn nothing from being told it had been accepted.
+    /// </para>
+    /// <para>
+    /// A watch running on the model does not stand in the way, and loses nothing while the reading
+    /// waits. What it can lose is narrow and is the price of the correction: a reading by a newer
+    /// reader may store a station under a different name than the earlier one did — a station its
+    /// file gives no name is the case, stored under the label the viewer shows it by where it used
+    /// to be stored under the file's number for it. A position already recorded at such a station
+    /// keeps the name it was recorded under and no longer finds a row, so it stays on the record
+    /// and is no longer drawn. Every station the file names keeps its name.
+    /// </para>
+    /// <para>
+    /// A wall mesh is converted again by the same request, and its earlier conversion is replaced.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> ReadAgainAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IAccessService access,
+        FeatureProtection protection,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
+        var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
+        if (model is null || cave is null
+            || !await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct))
+        {
+            return ApiProblems.NotFound("survey_model.not_found");
+        }
+
+        if (!await SurveyModelAccess.WritableAsync(access, ctx, cave, ct))
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        // Asked of the database and not of the row loaded above: two requests arriving together
+        // both loaded a finished model, and only one of them may queue the reading.
+        if (await SurveyModelReading.QueueAgainAsync(db, model, ctx.UserId, ct)
+            == SurveyReadingRequest.AlreadyInProgress)
+        {
+            return ApiProblems.Conflict(
+                "survey_model.reading_in_progress",
+                "This model is already being read. Wait for that reading to finish before asking for another.");
+        }
+
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
@@ -891,7 +1044,10 @@ public static class SurveyModelEndpoints
     }
 
     private static SurveyModelDto ToDto(
-        this SurveyModel m, IFileAccessTokenService tokens, IReadOnlyDictionary<Guid, long>? meshSizes) => new(
+        this SurveyModel m,
+        IFileAccessTokenService tokens,
+        IReadOnlyDictionary<Guid, long>? meshSizes,
+        IReadOnlySet<Guid>? readingOutstanding) => new(
         m.Id,
         m.CaveFeatureId,
         m.Name,
@@ -913,11 +1069,13 @@ public static class SurveyModelEndpoints
         m.DroppedShotCount,
         m.MergedStationCount,
         m.AnonymousStationCount,
+        m.Status == SurveyModelStatus.Ready && readingOutstanding is not null && readingOutstanding.Contains(m.Id),
         m.CreatedAt,
         m.UpdatedAt);
 
-    private static SurveyStationDto ToDto(SurveyStation s) => new(
+    private static SurveyStationDto ToDto(SurveyStation s, SurveyModel model) => new(
         s.Name,
+        SurveyStationNames.ViewerName(model.Format, model.RootSurveyName, s.Name),
         s.SurveyName,
         s.Position.X,
         s.Position.Y,

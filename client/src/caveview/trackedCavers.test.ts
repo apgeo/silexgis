@@ -39,6 +39,7 @@ function participant(overrides: Partial<TrackingParticipant> = {}): TrackingPart
     name: null,
     quiet: false,
     outsideDeclaredParts: false,
+    ordinal: null,
     ...overrides,
   };
 }
@@ -47,10 +48,12 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
   return {
     state: 'armed',
     surveyModelId: MODEL,
+    caveFeatureId: null,
     surveyModelMissing: false,
     referenceStationName: null,
     depthFilter: [],
     armedAt: '2026-09-12T08:00:00Z',
+    firstArmedAt: '2026-09-12T08:00:00Z',
     closedAt: null,
     positionsWithheld: false,
     publishesRealNames: true,

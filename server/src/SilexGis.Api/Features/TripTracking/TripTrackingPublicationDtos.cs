@@ -331,9 +331,11 @@ internal sealed record PublicParty(
 /// One member of the party as followers see them.
 /// </summary>
 /// <param name="Ordinal">
-/// Their place in the party, counted in the order the roster was written. The identity this
-/// response is keyed by — a number that means nothing outside this page — and the only thing a
-/// follower is told about somebody the envelope carries no name for.
+/// Their number in the party, given when the trip first named them and never changed since: a
+/// later arrival takes the next number, and somebody taken off the trip leaves a gap, so the
+/// numbers of a party need not run without a break. The identity this response is keyed by — a
+/// number that means nothing outside this trip — and the only thing a follower is told about
+/// somebody the envelope carries no name for.
 /// </param>
 /// <param name="Label">
 /// What this page calls them: the label an administrator typed, failing that the roster's own

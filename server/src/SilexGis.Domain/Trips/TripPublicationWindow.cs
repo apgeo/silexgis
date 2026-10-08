@@ -209,6 +209,55 @@ public static class TripPublicationWindow
         && IsOpen(now, revokedAt: null, expiry, state, closedAt, graceAfterClose);
 
     /// <summary>
+    /// Whether a link whose own trip is over is still recent enough to go on listing the parties
+    /// that are in its cave now.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>What it bounds.</b> A link is handed out for one trip and put into an article. Once that
+    /// trip is over the link still opens the cave's past trips, and with them the list of who is
+    /// being followed in the cave at this moment — which is what lets one article show a whole
+    /// camp. Unbounded, it also means that an address published years ago goes on naming tonight's
+    /// party to whoever still has it, and the people named tonight had no part in that old
+    /// publication. This is the period after which an old link stops doing that. It takes nothing
+    /// else away: the past trips stay readable for as long as the archive keeps them.
+    /// </para>
+    /// <para>
+    /// <b>Counted from the end of the link's own trip</b>, through the same
+    /// <see cref="EndOfTrip"/> the link's expiry and the archive's retention count from, so that
+    /// one configured number means the same thing for an afternoon and for a three-week camp and
+    /// the three periods cannot disagree about when the trip was over. Not from the moment the
+    /// watch closed: a watch somebody forgot to close would then keep its link listing others for
+    /// ever, which is the case this exists for.
+    /// </para>
+    /// <para>
+    /// <b>No period means no bound</b>, which is how an installation that has not chosen one
+    /// behaves. And it is a question about a link that has lapsed only: a link still following its
+    /// own party is never asked this — <see cref="PublishedLinkWindows.OpensTheFollowedList"/> puts
+    /// the two together.
+    /// </para>
+    /// </remarks>
+    /// <param name="siblingWindowAfterLapse">The period, or null for no bound.</param>
+    public static bool WithinSiblingWindow(
+        DateTimeOffset now, DateOnly tripDate, DateOnly? tripDateEnd, TimeSpan? siblingWindowAfterLapse) =>
+        siblingWindowAfterLapse is not { } window
+        || IsBeforeEndOfPeriod(now, EndOfTrip(tripDate, tripDateEnd), window);
+
+    /// <summary>
+    /// Whether <paramref name="now"/> is before the end of a period counted from
+    /// <paramref name="from"/>, for a period of any length.
+    /// </summary>
+    /// <remarks>
+    /// A configured period is somebody's typing, and "practically for ever" gets typed as a number
+    /// of days that, added to a date, passes the last date there is. The plain sum throws there,
+    /// and it would throw on every read of every good link while the application had started
+    /// cleanly. A period that reaches past the end of the calendar has no end to be before, so it
+    /// is answered as what its author meant: no bound.
+    /// </remarks>
+    internal static bool IsBeforeEndOfPeriod(DateTimeOffset now, DateTimeOffset from, TimeSpan period) =>
+        period >= DateTimeOffset.MaxValue - from || now < from + period;
+
+    /// <summary>
     /// Whether a link may be exchanged for a fresh one: only while nobody has taken it back.
     /// </summary>
     /// <remarks>

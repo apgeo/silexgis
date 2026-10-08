@@ -214,11 +214,42 @@ public sealed record TrackingParticipantDto(
     /// published page carries it.
     /// </para>
     /// </remarks>
-    bool OutsideDeclaredParts);
+    bool OutsideDeclaredParts,
+    /// <summary>
+    /// The number this person holds in the trip's party — the "Caver 3" a published page prints
+    /// for somebody it does not name — or null for a person the trip never listed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Given once, when the trip first names somebody, and never changed: a change of job moves
+    /// nobody, and a person taken off the trip leaves a gap rather than renumbering the people
+    /// after them, so the numbers of a party need not run 1, 2, 3 without a break. Somebody since
+    /// taken off the roster still carries the number they held, which they get back if the trip
+    /// names them again.
+    /// </para>
+    /// <para>
+    /// It identifies nobody outside this trip and is the same number every published read of the
+    /// trip uses, which is what lets a coordinator on the telephone and a follower on the page
+    /// mean the same person by it.
+    /// </para>
+    /// </remarks>
+    int? Ordinal);
 
 public sealed record TrackingStateDto(
     TripTrackingState State,
     Guid? SurveyModelId,
+    /// <summary>
+    /// The cave the watch's survey belongs to, or null wherever <see cref="SurveyModelId"/> is null.
+    /// </summary>
+    /// <remarks>
+    /// Sent so that a surface can point at the cave whose declared places the watch offers without
+    /// first fetching the survey to learn whose it is. It is told on exactly the branch the survey
+    /// is told on and nowhere else: a caller being told which survey a watch is on can already read
+    /// that survey, which names its cave, so this says nothing new to them — and a caller from whom
+    /// the survey is withheld is not told the cave either, because "this trip is being watched in
+    /// that cave" is the fact the withholding exists to keep.
+    /// </remarks>
+    Guid? CaveFeatureId,
     /// <summary>
     /// True when the watch names a survey model this server no longer holds — somebody deleted it.
     /// </summary>
@@ -240,7 +271,17 @@ public sealed record TrackingStateDto(
     bool SurveyModelMissing,
     string? ReferenceStationName,
     IReadOnlyList<string> DepthFilter,
+    /// <summary>
+    /// When the watch was last started. A watch closed and started again carries the later moment
+    /// here; <see cref="FirstArmedAt"/> keeps the earlier one.
+    /// </summary>
     DateTimeOffset? ArmedAt,
+    /// <summary>
+    /// When the watch was started for the very first time, or null when it never has been — which
+    /// includes a watch an import wrote already closed. Stamped once; starting a closed watch
+    /// again does not move it.
+    /// </summary>
+    DateTimeOffset? FirstArmedAt,
     DateTimeOffset? ClosedAt,
     /// <summary>True when at least one position existed but was withheld from this caller.</summary>
     bool PositionsWithheld,
@@ -350,6 +391,18 @@ public sealed record TrackingEventDto(
     bool Corrected,
     bool OutsideDeclaredParts,
     TrackingDepthPlacementOutcome? DepthPlacement = null);
+
+/// <summary>
+/// A report that was taken off the log and is still kept: what it said, read under the same
+/// withholding as the log, and when it was taken off.
+/// </summary>
+/// <remarks>
+/// Who took it off is on the trip's history with every other act on the log, and is not repeated
+/// here. Listed only for those who may write the log; nothing a visitor without an account reads
+/// carries a removed report in any form.
+/// </remarks>
+public sealed record TrackingRemovedEventDto(TrackingEventDto Report, DateTimeOffset RemovedAt);
+
 
 /// <summary>
 /// One place the watch's cave has declared: what it is called, which station it is, how deep.
@@ -467,6 +520,30 @@ public interface ITrackingReportFields
     DateTimeOffset? RecordedAt { get; }
 }
 
+/// <summary>
+/// One act of reporting: who it is about, what it says, and — optionally — the key of the act.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>The key is what lets a send be repeated safely.</b> A sender that never heard the answer
+/// cannot know whether its report was written; it mints <paramref name="ClientKey"/> once for the
+/// act and sends the same value again. The first send to arrive is written; every later one under
+/// the same key is answered with the reports of that act still on the log and writes nothing —
+/// success, not a refusal, because from where the sender stands the report it wanted is there.
+/// </para>
+/// <para>
+/// The key names the act, not its content: what a later send says is not compared with what the
+/// first one wrote, and two acts with the same content under different keys are two reports.
+/// Without a key every send is an act of its own, as it has always been. The key is taken in and
+/// never given out — no read of a report carries it.
+/// </para>
+/// <para>
+/// <b>How long an act is remembered.</b> For as long as any report it wrote exists, on the log or
+/// taken off it: a repeat of an act whose reports were all removed is still answered — with an
+/// empty list — and writes nothing. A report destroyed for good takes its key with it, so once
+/// every report of an act has been destroyed a repeat of that act is written as a first send.
+/// </para>
+/// </remarks>
 public sealed record TrackingEventRequest(
     IReadOnlyList<Guid>? CaverIds,
     TripPositionEventKind? Kind,
@@ -474,7 +551,8 @@ public sealed record TrackingEventRequest(
     decimal? DepthM,
     Guid? TeamId,
     string? Note,
-    DateTimeOffset? RecordedAt) : ITrackingReportFields;
+    DateTimeOffset? RecordedAt,
+    Guid? ClientKey) : ITrackingReportFields;
 
 /// <summary>
 /// A correction to one report already on the log.
@@ -537,6 +615,11 @@ public sealed class TrackingEventRequestValidator : AbstractValidator<TrackingEv
         RuleFor(x => x.CaverIds).NotEmpty();
         RuleFor(x => x.CaverIds!.Count).LessThanOrEqualTo(TripTrackingRules.MaxCaversPerWrite)
             .When(x => x.CaverIds is not null);
+        // No key is the ordinary send. The all-zero key is what a sender that forgot to mint one
+        // serialises, and every such sender would share it: taken as a key it would answer one
+        // person's report with another's and write nothing, so it is refused instead.
+        RuleFor(x => x.ClientKey).NotEqual((Guid?)Guid.Empty)
+            .WithMessage("The key of a report cannot be the empty key; leave it out or send a fresh one.");
 
         TrackingReportFieldRules.Apply(this);
     }

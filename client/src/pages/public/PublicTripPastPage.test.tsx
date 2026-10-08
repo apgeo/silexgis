@@ -63,8 +63,10 @@ vi.mock('../../api/hooks.ts', () => ({
 
 let address = new URLSearchParams();
 const setAddress = vi.fn();
+/** The link the page is opened under, which a test can change under a page already drawn. */
+let linkToken = 'follow-token';
 vi.mock('react-router-dom', () => ({
-  useParams: () => ({ token: 'follow-token' }),
+  useParams: () => ({ token: linkToken }),
   useSearchParams: () => [address, setAddress],
 }));
 
@@ -217,6 +219,7 @@ beforeEach(() => {
   trackReads = [];
   given = undefined;
   address = new URLSearchParams();
+  linkToken = 'follow-token';
   setAddress.mockClear();
 });
 
@@ -874,6 +877,130 @@ describe('a link to a moment of a past trip', () => {
  * is not something trying again will change. The one sentence that must not be printed under it is
  * the invitation to try again.
  */
+describe('the cave’s other past trips while one of them is on screen', () => {
+  const TRIP_2021 = 'aaaaaaaa-0000-0000-0000-000000000021';
+  const switchList = () => screen.queryByTestId('public-past-switch-list');
+
+  beforeEach(() => {
+    list.data?.trips.push({
+      tripLogId: TRIP_2021,
+      expedition: null,
+      title: 'Peștera Demo Mare, the 2021 survey',
+      tripDate: '2021-08-12',
+      tripDateEnd: null,
+      closedAt: '2021-08-12T19:00:00Z',
+      participantCount: 3,
+      playable: true,
+    });
+  });
+
+  it('are not offered under the title while the party now is what is on screen', () => {
+    render(<PublicTripPage />);
+    expect(screen.queryByTestId('public-past-switch')).toBeNull();
+
+    // The positive twin: the same page, with a past trip on screen.
+    openArchive();
+    fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
+    expect(screen.getByTestId('public-past-switch')).toHaveTextContent(
+      'Play another trip of this cave',
+    );
+  });
+
+  it('are one press under the strip, shut until then, and hold every row once', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}`);
+    render(<PublicTripPage />);
+
+    // Shut: the only rows on the page are the ones at its foot.
+    expect(switchList()).toBeNull();
+    expect(screen.getAllByTestId('public-past-list')).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId('public-past-switch'));
+
+    const rows = switchList();
+    expect(rows).not.toBeNull();
+    // Directly under the strip, and before the drawing: nothing of the page stands between them.
+    const strip = screen.getByTestId('public-past-bar');
+    expect(strip.compareDocumentPosition(rows!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      rows!.compareDocumentPosition(screen.getByTestId('viewer'))
+        & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(within(rows!).getByTestId(`public-past-trip-${TRIP_2019}`)).toHaveTextContent('Playing');
+    expect(within(rows!).getByTestId(`public-past-trip-${TRIP_2021}`)).toBeTruthy();
+    expect(within(rows!).getByTestId(`public-past-trip-${TRIP_EMPTY}`)).toHaveTextContent(
+      'Nothing to play',
+    );
+  });
+
+  it('play the trip pressed there as a new step in the address, and the section shuts behind the press', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}`);
+    render(<PublicTripPage />);
+    fireEvent.click(screen.getByTestId('public-past-switch'));
+
+    fireEvent.click(within(switchList()!).getByTestId(`public-past-trip-${TRIP_2021}`));
+
+    expect(trackReads).toContain(TRIP_2021);
+    const written = setAddress.mock.calls.at(-1)?.[0] as URLSearchParams;
+    expect(written.get('past')).toBe(TRIP_2021);
+    expect(setAddress.mock.calls.at(-1)?.[1]).toEqual({ replace: false, flushSync: true });
+    // Shut again, so the drawing of the trip just picked is what stands under the strip.
+    expect(switchList()).toBeNull();
+    expect(screen.getAllByTestId('public-past-list')).toHaveLength(1);
+  });
+
+  it('are read once for both places, and still read with the section at the foot shut', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}`);
+    render(<PublicTripPage />);
+    // The section at the foot was opened for the reader; they shut it.
+    openArchive();
+    expect(screen.queryByTestId('public-past-list')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('public-past-switch'));
+
+    expect(within(switchList()!).getByTestId(`public-past-trip-${TRIP_2021}`)).toBeTruthy();
+  });
+});
+
+describe('a second published link opened in the same tab', () => {
+  const clock = () =>
+    screen.getByTestId('public-past-scrub').querySelector('[role="slider"]')?.getAttribute('aria-valuenow');
+
+  it('does not show the first link’s replay', () => {
+    const { rerender } = render(<PublicTripPage />);
+    openArchive();
+    fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
+    // The replay that must not be carried over really is on screen under the first link.
+    expect(screen.getByTestId('public-past-banner')).toBeTruthy();
+    expect(((given?.trackedCavers ?? []) as { name: string }[]).map((caver) => caver.name)).toContain(
+      'Mircea',
+    );
+
+    linkToken = 'second-link';
+    rerender(<PublicTripPage />);
+
+    expect(screen.queryByTestId('public-past-banner')).toBeNull();
+    expect(screen.queryByTestId('public-past-switch')).toBeNull();
+    expect(((given?.trackedCavers ?? []) as { name: string }[]).map((caver) => caver.name)).toEqual([
+      'Ana',
+    ]);
+  });
+
+  it('opens the past trip its own address names, from that address and not from where the first link was left', () => {
+    // Both links are opened on an address naming the same trip and the same moment — two links of
+    // one cave, sent by one person. What the first reader did to the clock belongs to the first.
+    address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T09:30:00Z`);
+    const { rerender } = render(<PublicTripPage />);
+    fireEvent.click(screen.getByTestId('public-past-report-next'));
+    expect(clock()).toBe(String(Date.parse('2019-07-06T10:00:00Z')));
+
+    linkToken = 'second-link';
+    rerender(<PublicTripPage />);
+
+    expect(screen.getByTestId('public-past-banner')).toBeTruthy();
+    expect(clock()).toBe(String(Date.parse('2019-07-06T09:30:00Z')));
+  });
+});
+
 describe('an archive this installation does not offer', () => {
   it('says so rather than asking the reader to try again', () => {
     list = { data: undefined, isPending: false, isError: true, error: new ApiError(404, 'not_found') };

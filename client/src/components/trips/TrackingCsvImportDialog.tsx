@@ -182,6 +182,7 @@ export default function TrackingCsvImportDialog({
   const [mapping, setMapping] = useState<FieldMapping>({});
   const [wentIn, setWentIn] = useState('');
   const [cameOut, setCameOut] = useState('');
+  const [noted, setNoted] = useState('');
   const [preview, setPreview] = useState<TrackingCsvPreview | null>(null);
   /**
    * Whether the table on screen is a second reading, made because the first could not be imported.
@@ -247,10 +248,11 @@ export default function TrackingCsvImportDialog({
       dateOrder: dateOrder === 'auto' ? null : dateOrder,
       wentInWords: words(wentIn).length > 0 ? words(wentIn) : null,
       cameOutWords: words(cameOut).length > 0 ? words(cameOut) : null,
+      notedWords: words(noted).length > 0 ? words(noted) : null,
       timeZone: zone === SHEET_ZONE_AS_WRITTEN ? null : zone,
       day: asksForDay && day.length > 0 ? day : null,
     };
-  }, [mapping, wentIn, cameOut, effectiveDelimiter, dateOrder, zone, asksForDay, day]);
+  }, [mapping, wentIn, cameOut, noted, effectiveDelimiter, dateOrder, zone, asksForDay, day]);
 
   // The zones offered, the importer's own first: it is the answer for nearly every sheet, and
   // nobody should have to know how their own zone is spelled to find it in a list of hundreds.
@@ -307,6 +309,7 @@ export default function TrackingCsvImportDialog({
   const chooseDay = rereadWith(setDay);
   const typeWentIn = rereadWith(setWentIn);
   const typeCameOut = rereadWith(setCameOut);
+  const typeNoted = rereadWith(setNoted);
   const mapField = (field: string, headerName: string | undefined) => {
     setMapping((current) => ({ ...current, [field]: headerName ?? '' }));
     setPreview(null);
@@ -365,6 +368,7 @@ export default function TrackingCsvImportDialog({
     setMapping({});
     setWentIn('');
     setCameOut('');
+    setNoted('');
     onClose();
   };
 
@@ -1029,6 +1033,19 @@ export default function TrackingCsvImportDialog({
                         value={cameOut}
                         onChange={(event) => typeCameOut(event.target.value)}
                         placeholder={t('trips.tracking.csvImport.cameOutPlaceholder')}
+                        aria-describedby={fieldId('state-words-help')}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={t('trips.tracking.csvImport.notedWords')}
+                      htmlFor={fieldId('noted')}
+                      className="tracking-csv-field tracking-csv-field-wide"
+                    >
+                      <Input
+                        id={fieldId('noted')}
+                        value={noted}
+                        onChange={(event) => typeNoted(event.target.value)}
+                        placeholder={t('trips.tracking.csvImport.notedPlaceholder')}
                         aria-describedby={fieldId('state-words-help')}
                       />
                     </Form.Item>

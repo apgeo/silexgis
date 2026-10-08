@@ -49,6 +49,51 @@ O topografie compilată nu este lăsată ca un fișier pe care îl desenează br
 [statisticile](measurements-and-statistics.md). Graficul poate fi privit în timp ce asta se
 întâmplă; lista se actualizează singură când citirea s-a terminat.
 
+Un model este citit o singură dată, la sosire. **Citește din nou**, pe rândul lui, cere ca fișierul
+păstrat să fie citit a doua oară, iar ce a produs ultima citire — stațiile, vizările, poligonația
+extrasă, pereții construiți din grafic — este înlocuit cu ce produce aceasta. Nu se încarcă nimic,
+modelul rămâne același model, iar turele urmărite pe el rămân pe el. Există pentru două situații:
+o citire care **a eșuat** dintr-un motiv care între timp a dispărut și o **actualizare** care
+citește topografiile mai bine decât versiunea care le-a citit pe ale dumneavoastră. Trebuie să
+puteți modifica peștera; acțiunea nu este oferită cât timp o citire așteaptă sau este în curs. Un
+administrator poate cere același lucru pentru toate poligonațiile deodată — vedeți
+[Operațiuni de întreținere](../admin/maintenance.md).
+
+Un model care a fost citit rămâne **Gata** cât este citit din nou, cu **Se citește din nou** alături:
+peștera își păstrează cifrele, iar o tură urmărită pe model își păstrează desenul, din citirea
+anterioară, până când cea nouă o înlocuiește într-un singur pas. Dacă noua citire eșuează, modelul
+păstrează citirea pe care o avea, iar cine a cerut-o este înștiințat de ce. Doar un model care nu
+conține nimic — unul a cărui citire a eșuat — se întoarce la **Așteaptă la rând**. Pereții (`.stl`) pot fi
+convertiți din nou în același fel, iar conversia anterioară este înlocuită.
+
+**Stațiile cărora fișierul nu le dă nume.** O topografie compilată poate conține o stație pentru
+care fișierul nu a scris niciun nume — doar un număr, locul pe care stația îl are în acel fișier.
+Este o stație ca oricare alta și este citită ca oricare alta. Cum se numește urmează desenul, astfel
+încât o stație apăsată pe model și aceeași stație dintre rânduri să poarte un singur nume:
+
+| Topografie | O stație fără nume se numește | Pe desen |
+| --- | --- | --- |
+| Therion (`.lox`) | numărul ei între paranteze drepte — `[42]`, după partea de topografie din care face parte | Da, sub aceeași etichetă; poate fi apăsată și se poate raporta la ea |
+| Survex (`.3d`) | numărul ei după un diez — `#42` | Nu; desenul lasă deoparte o stație fără etichetă, așa că numele există doar printre rânduri |
+
+Aceasta nu este capătul îndepărtat al unei vizări trase la peretele galeriei, pe care o topografie
+îl scrie `-` sau `.`: acela nu este deloc o stație și nu se păstrează nimic pentru el.
+
+Din faptul că numărul este **al fișierului și nu al peșterii** — următorul export al topografiei
+îl dă altei stații — decurg două lucruri:
+
+- [Ce înseamnă o adâncime](live-tracking.md#ce-înseamnă-adâncimile-unei-peșteri) se declară pentru
+  peșteră și trăiește mai mult decât orice model, așa că **o adâncime nu poate fi declarată la o
+  stație fără nume**; iar o adâncime raportată nu este pusă niciodată pe o stație pe care desenul nu
+  o poate arăta.
+- Un model Therion citit de o versiune mai veche decât această denumire își ține stațiile fără nume
+  sub altă scriere, pe care nicio apăsare pe desen nu o potrivește. **Citește din nou** îndreaptă
+  asta; un raport refuzat din acest motiv o spune. O poziție deja înregistrată la o asemenea stație
+  sub vechea scriere nu este rescrisă: rămâne în jurnalul turei sub numele cu care a fost
+  înregistrată, căruia nu îi mai răspunde nicio stație, așa că nu este desenată. Corectați-o pe
+  rândul ei din fila de urmărire a turei, dacă are importanță. Fiecare stație căreia fișierul îi dă
+  nume își păstrează numele, iar pozițiile înregistrate la acelea rămân neatinse.
+
 ### Unde stă o topografie în lume
 
 Aici greșesc oamenii, așa că formularele sunt explicite.

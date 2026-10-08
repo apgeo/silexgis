@@ -202,6 +202,10 @@ try
     // alike, so a lifetime of zero or less would not fail anywhere — links would simply read
     // "not found" to the people they were handed to, at or before the midnight their trip ends.
     builder.Services.AddOptions<TripTrackingOptions>()
+        // Before the binding, and it has to be: a period written as no period at all (3h) fails
+        // the binding itself, with a message naming a configuration path, and the check after it
+        // is never reached. Asked first, it is refused under the name the operator typed.
+        .Configure<IConfiguration>((_, configuration) => TripTrackingOptionsValidator.RefuseUnreadablePeriods(configuration))
         .BindConfiguration(TripTrackingOptions.SectionName)
         .ValidateOnStart();
     builder.Services.AddSingleton<IValidateOptions<TripTrackingOptions>, TripTrackingOptionsValidator>();
@@ -220,6 +224,13 @@ try
         .BindConfiguration(SilexGis.Api.Features.Calendar.CalendarOptions.SectionName);
     builder.Services.AddOptions<SilexGis.Api.Features.Expeditions.ExpeditionMapOptions>()
         .BindConfiguration(SilexGis.Api.Features.Expeditions.ExpeditionMapOptions.SectionName);
+    // A camp's surface log: how long a finished watch stays on it and how many trips it carries.
+    // Checked while starting, unlike the sizes above, because a wrong value here does not fail —
+    // it answers an empty log, which a coordinator reads as "nobody is underground".
+    builder.Services.AddOptions<ExpeditionSurfaceLogOptions>()
+        .BindConfiguration(ExpeditionSurfaceLogOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<ExpeditionSurfaceLogOptions>, ExpeditionSurfaceLogOptionsValidator>();
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<AdminTestSendThrottle>();
 builder.Services.AddScoped<GroupAnnouncementThrottle>();
@@ -261,8 +272,8 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // own so that a group scanning labels from behind one connection cannot spend the sign-in
     // allowance of everyone else behind it.
     var qrPermitLimit = PerMinuteLimit.Read(builder.Configuration, "Qr:RateLimitPerMinute", 60);
-    // Cost control on the published-trip surface, which is anonymous, uncached, and backs a whole
-    // envelope folded out of a trip's report log — see PublicTripRateLimits for why it is a window
+    // Cost control on the published-trip surface, which is anonymous, read from the database on
+    // every request, and backs a whole envelope folded out of a trip's report log — see PublicTripRateLimits for why it is a window
     // of its own and why it is not a confidentiality control.
     var publicTripPermitLimit = PerMinuteLimit.Read(
         builder.Configuration, PublicTripRateLimits.ConfigurationKey, PublicTripRateLimits.DefaultPerMinute);
@@ -477,6 +488,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapSurveyModelTrackedTripsEndpoints();
     api.MapTripPastTrackEndpoints();
     api.MapTripLiveSiblingEndpoints();
+    api.MapExpeditionSurfaceLogEndpoints();
     api.MapTripChecklistEndpoints();
     api.MapChecklistEndpoints();
     api.MapExpeditionEndpoints();

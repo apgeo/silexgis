@@ -8,13 +8,10 @@ import type {
   TripTrackingState,
 } from '../../api/hooks.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
+import { TrackingStationField } from './TrackingPlaceFields.tsx';
 import TrackingWhenField from './TrackingWhenField.tsx';
 import { COARSE_CONTROL_HEIGHT, useTrackingPanelTheme } from './trackingControlSizes.ts';
-import {
-  trackingStationRules,
-  useTrackingReport,
-  type TrackingReportValues,
-} from './trackingReport.ts';
+import { useTrackingReport, type TrackingReportValues } from './trackingReport.ts';
 import { trackingLogWritable } from './trackingWatch.ts';
 import './TrackingReportDialog.css';
 
@@ -55,6 +52,13 @@ interface Props {
   state: TripTrackingState;
   /** The station the model was pressed at, as the viewer spells it. Null while nothing is picked. */
   station: string | null;
+  /**
+   * The watch's own survey. Once the server has refused the pressed spelling, the field that
+   * appears offers that survey's stations as a name is typed: the names the server does hold are
+   * exactly what somebody needs at that moment. Null where the reader is not told which survey it
+   * is, and the field is then a plain text box.
+   */
+  surveyModelId: string | null;
   /** Everybody the watch names, in the roster's words. */
   cavers: readonly { caverId: string; name: string }[];
   teams: readonly TrackingTeam[];
@@ -110,6 +114,7 @@ export default function TrackingReportDialog({
   tripLogId,
   state,
   station,
+  surveyModelId,
   cavers,
   teams,
   defaultCaverIds,
@@ -280,17 +285,14 @@ export default function TrackingReportDialog({
             />
           </Form.Item>
 
-          {/* Only after the server has refused the pressed spelling. The rule is the card's own, so
+          {/* Only after the server has refused the pressed spelling. The field is the card's own, so
               a correction this dialog accepts cannot be one the card would have refused. */}
           {kind === 'atStation' && stationDisputed && (
-            <Form.Item
-              name="stationName"
-              label={t('trips.tracking.reportStation')}
-              extra={t('trips.tracking.reportStationCorrect')}
-              rules={trackingStationRules(t)}
-            >
-              <Input data-testid="trip-tracking-dialog-station" />
-            </Form.Item>
+            <TrackingStationField
+              idPrefix="trip-tracking-dialog"
+              surveyModelId={surveyModelId}
+              help={t('trips.tracking.reportStationCorrect')}
+            />
           )}
 
           {teams.length > 0 && (

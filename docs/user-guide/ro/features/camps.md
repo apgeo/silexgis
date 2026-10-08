@@ -65,12 +65,71 @@ la altceva. Rapoartele salvate la turele taberei aparțin acelor ture și rămâ
 
 ## File
 
-**Ture · Hartă · Continuări · Cine a fost · Fotografii · Fișiere · Istoric**
+**Ture · Cine e în peșteră · Hartă · Continuări · Cine a fost · Fotografii · Fișiere · Istoric**
 
 ### Ture
 
 Turele care aparțin acestei tabere — *„Nicio tură din această tabără pe care să o puteți citi"*
 dacă nu există, și *„Se afișează n din m ture"* dacă lista este limitată.
+
+### Cine e în peșteră
+
+O tabără are mai multe echipe în aceeași zi, iar cel de la suprafață are o singură întrebare
+despre toate. [Urmărirea](live-tracking.md) fiecărei ture răspunde pentru o echipă; această filă
+răspunde pentru tabără, pe un singur ecran.
+
+Fiecare tură a taberei aflată în urmărire, sau a cărei urmărire a fost încheiată de curând,
+primește un card: tura, dacă este *În urmărire* sau *Urmărire încheiată*, trei numere —
+**În peșteră · Ieșit · Fără nicio veste** — și, sub ele, fiecare om din echipă cu același cuvânt
+lângă nume și cu cât timp în urmă s-a auzit ultima dată de el. Titlul turei deschide fila
+**Urmărire** a acelei ture.
+
+Fila spune ce este: *„Cine este în peșteră în turele acestei tabere, așa cum o spune urmărirea
+fiecărei ture — numărat peste turele pe care le puteți citi. Înregistrează ce s-a raportat: nu
+urmărește niciun ceas și nu dă nicio alarmă."*
+
+- **Ce ture apar.** O tură apare după ce urmărirea este pornită din fila ei Urmărire și rămâne
+  cât timp urmărirea este în curs — o urmărire pe care nu a încheiat-o nimeni nu este scoasă
+  niciodată pentru că este veche. După **Încheie urmărirea** rămâne două zile, marcată
+  *Urmărire încheiată*, cu ora la care a fost încheiată, astfel încât echipa care a ieșit aseară
+  să fie încă pe ecran dimineața; apoi pleacă. O tură a cărei urmărire nu a fost pornită
+  niciodată nu apare deloc — nici ca echipă goală, nici ca un rând de zerouri. Turele în
+  urmărire sunt primele, cea pornită cel mai recent sus; apoi cele încheiate, cea încheiată cel
+  mai recent sus.
+- **Nu arată niciun loc — nimănui.** Nicio stație, nicio adâncime, nicio ridicare și nicio
+  peșteră nu se află pe această filă, nici măcar pentru cineva care le vede pe toate pe tură.
+  Este o numărătoare, nu o hartă. Tocmai de aceea poate număra o echipă dintr-o peșteră a cărei
+  locație vă este protejată: vi se spune că Ana este în peșteră, nu și unde. Locul în care a
+  fost raportat ultima dată fiecare om este pe fila Urmărire a turei, la un clic distanță, după
+  regulile turei și ale peșterii.
+- **Nu dă nicio alarmă.** *Ieșire estimată* este ora la care tura spune că echipa plănuiește să
+  fie afară, tipărită ca oră și nimic mai mult. Fila nu o compară cu ceasul, nu marchează pe
+  nimeni ca întârziat și nu anunță pe nimeni. A anunța pe cineva când o echipă întârzie este
+  treaba [apelului de urgență](checklists-and-callout.md), pe care această filă nu îl arată și
+  nu îl atinge.
+- **Fără nicio veste este un număr aparte.** Cineva despre care nu a raportat încă nimeni este
+  numărat separat, niciodată ca *Ieșit*: un om aflat încă la corturi și un om întors cu bine
+  sunt cele două răspunsuri pe care un coordonator are cea mai mare nevoie să le deosebească.
+- **Cine vede ce ture.** Oricine poate citi tabăra are fila. O tură apare pe ea doar dacă
+  puteți citi acea tură; una pe care nu o puteți citi pur și simplu lipsește și nimic nu spune
+  că a fost lăsată deoparte — așa că doi oameni pot citi numere diferite la aceeași tabără.
+  Numele sunt cele pe care vi le arată pagina turei.
+- **Se ține singură la zi.** Cât timp este fila de pe ecran, întreabă din nou la fiecare
+  jumătate de minut — și atunci când nu listează nimic sau doar ture cu urmărirea încheiată,
+  astfel că o tură a cărei urmărire este pornită de pe alt dispozitiv apare fără ca cineva să
+  reîncarce pagina. În spatele altei file nu mai întreabă și citește din nou când reveniți la
+  ea.
+
+Când nu are ce lista, o spune în întregime — *„Nicio tură a acestei tabere nu este în urmărire
+și niciuna nu a avut urmărirea încheiată de curând — sau niciuna pe care să o puteți citi. O
+tură apare aici după ce urmărirea este pornită din fila ei Urmărire și rămâne o vreme după ce
+urmărirea este încheiată."* O tabără cu mai multe ture urmărite decât încap într-o listă
+(cincizeci) spune și asta; lipsesc cele încheiate cel mai demult, niciodată una aflată încă în
+urmărire.
+
+O instalare poate schimba atât cele două zile, cât și cele cincizeci — vedeți
+`SILEXGIS__ExpeditionSurfaceLog__RecentlyClosed` și `…__MaxRows` în
+[ghidul de instalare](../../../INSTALL.md#configuration-reference).
 
 ### Hartă
 
@@ -221,6 +280,12 @@ rândul `accounts` din model; un club care nu o dorește scoate acel rând din m
 
 - **Descarcă documentul** îl salvează ca document Word, în modelul standard sau într-unul pe
   care clubul îl ține la **Configurare → Modele de raport**.
+  Un model al clubului poate tipări **`{watchhours}`**: orele-persoană în subteran la care ajung
+  [jurnalele de urmărire](live-tracking.md) ale taberei, de la raportul *a intrat* al fiecărei
+  persoane până la raportul *a ieșit* care i-a urmat. Este o a doua numărătoare pe lângă
+  `{hours}` și nu se adună niciodată la ea; o intrare pe care nu a închis-o nimeni nu adaugă
+  nimic, iar rândul lipsește acolo unde niciun jurnal nu are o ședere încheiată. Modelul standard
+  nu o tipărește.
 - **Descarcă PDF** dă același document ca PDF. Apare doar acolo unde instalarea rulează
   convertorul de documente; unde lipsește, **Tipărește** și *Salvează ca PDF* din browser este
   calea. Nimic din PDF nu se păstrează pe server, iar copia salvată la tabără este întotdeauna

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CompressOutlined, ExpandOutlined, PushpinOutlined, VideoCameraOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Flex, Switch, Tabs, Typography } from 'antd';
+import { Alert, Button, Card, Flex, Select, Switch, Tabs, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   surveyModelReadableByViewer,
   useSurveyModel,
+  useSurveyModelsById,
   useTripMomentPictureLinks,
   useTripTrackingEventLog,
   type TrackingEvent,
@@ -46,6 +47,16 @@ export interface TrackingModelPanelProps {
   participants: readonly TripParticipant[];
   /** The reports on screen, newest first — where the moment somebody went in is read from. */
   events: readonly TrackingEvent[] | undefined;
+  /**
+   * How many reports the log holds in all, where the page knows.
+   *
+   * It is what says whether the reports handed in above are the whole log. Which surveys a trip's
+   * reports were recorded on can only be read off every report, and the rows on the page are the
+   * newest few — so on a log longer than those, the whole of it is read once the model is opened,
+   * and on a log they cover nothing more is asked for at all. Absent, the rows are taken as they
+   * come and no extra read is made for this.
+   */
+  eventsTotal?: number;
   /** Whether this reader may write to the log at all. */
   canEdit: boolean;
   /**
@@ -86,6 +97,10 @@ export interface TrackingModelPanelProps {
 
 /** The key of the one pane of the drawing strip that is not a declared map. */
 const TAB_3D = '3d';
+
+/** No survey to ask for, and no declared part to narrow to — each the same list on every render. */
+const NO_MODEL_IDS: readonly string[] = [];
+const NO_DECLARED_PARTS: readonly string[] = [];
 
 /**
  * Whether the drawing can be narrowed to the declared parts: it has answered, it has a survey for
@@ -222,6 +237,7 @@ export default function TrackingModelPanel({
   tracking,
   participants,
   events,
+  eventsTotal,
   canEdit,
   selectedCaverIds,
   onRecorded,
@@ -267,6 +283,16 @@ export default function TrackingModelPanel({
    */
   const [onlyDeclared, setOnlyDeclared] = useState(false);
   const [declaredView, setDeclaredView] = useState<DeclaredPartsView | null>(null);
+  /**
+   * Another survey the reader asked to look at this trip's reports on, or null for the watch's own.
+   *
+   * <b>A way of looking, and nothing else.</b> A watch is on one survey and every report is
+   * measured against that one, whatever is on screen: so while this is set the panel offers no way
+   * to record anything, and says so. It is an id rather than a model because the list it was chosen
+   * from can lose the entry under it — the survey deleted, the watch pointed at it — and a choice
+   * that no longer names anything on the list is the watch's own survey again.
+   */
+  const [viewedModelId, setViewedModelId] = useState<string | null>(null);
   const movieTrips = useMemo(() => [tripLogId], [tripLogId]);
   const { data: model } = useSurveyModel(tracking.surveyModelId ?? undefined);
   // Rendered on every path out of this panel, so that the model going unready under an open dialog
@@ -290,7 +316,62 @@ export default function TrackingModelPanel({
   // Asked for only once somebody wants a replay, and only while the model is on screen: it is
   // several requests on a long trip, and this tab is opened routinely by somebody who wants to
   // record that the party went in and nothing else.
-  const log = useTripTrackingEventLog(tripLogId, open && replaying);
+  //
+  // And once more for a second question: which surveys this trip's reports were recorded on. The
+  // rows the page is holding answer that when they are the whole log; when the log is longer than
+  // they are, the older reports — the ones most likely to have been made on an earlier survey —
+  // are exactly the ones missing, so the whole log is read as soon as the model is on screen.
+  const rowsAreTheWholeLog = eventsTotal === undefined || eventsTotal <= (events?.length ?? 0);
+  const log = useTripTrackingEventLog(tripLogId, open && (replaying || !rowsAreTheWholeLog));
+
+  /**
+   * The other surveys this trip's reports name, as ids.
+   *
+   * Read off what this reader was already sent: a report whose place is kept from them arrives
+   * without its survey as well, so a survey of a cave they may not place is never on this list to
+   * begin with. Sorted, so that the same surveys are the same list in whatever order the reports
+   * came — the list is what the reads below are keyed on.
+   */
+  const otherModelIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of [...(log.data ?? []), ...(events ?? [])]) {
+      if (row.surveyModelId != null) {
+        ids.add(row.surveyModelId);
+      }
+    }
+    for (const person of tracking.participants) {
+      if (person.positionSurveyModelId != null) {
+        ids.add(person.positionSurveyModelId);
+      }
+    }
+    if (tracking.surveyModelId !== null) {
+      ids.delete(tracking.surveyModelId);
+    }
+    return [...ids].sort();
+  }, [log.data, events, tracking.participants, tracking.surveyModelId]);
+
+  /**
+   * Those of them that can be drawn for this reader: still on the server, read through, and of a
+   * kind the viewer opens.
+   *
+   * Asked for only while the model is open, like everything else this panel draws. A survey that
+   * was deleted and one this reader may not open both simply fail to arrive, and neither is
+   * offered — the reports made on them stay marked on the table above, in words.
+   */
+  const otherModels = useSurveyModelsById(open ? otherModelIds : NO_MODEL_IDS);
+  const viewable = otherModels.filter(
+    (other) => other.status === 'ready' && surveyModelReadableByViewer(other),
+  );
+  /** The other survey on screen, or null while the panel shows the watch's own. */
+  const elsewhere =
+    viewedModelId === null ? null : (viewable.find((other) => other.id === viewedModelId) ?? null);
+  /**
+   * The survey every marker, picture and map below is folded against.
+   *
+   * One id, read by all of them, so that the party, the replay, the station pictures and the map
+   * sheets can never be about two different surveys at once.
+   */
+  const drawnModelId = elsewhere?.id ?? model?.id;
 
   /**
    * The photographs linked to this model's stations, shown over the model where they were taken.
@@ -303,7 +384,7 @@ export default function TrackingModelPanel({
    * The same source the cave's own survey viewer reads, rather than a second reading of it: what a
    * photograph is anchored to, and how far a reader may reach for it, are one rule and have one home.
    */
-  const stationMedia = useStationMedia(model?.id, open);
+  const stationMedia = useStationMedia(drawnModelId, open);
 
   /**
    * The model's declared raster maps, one tab each beside the 3D scene.
@@ -313,10 +394,10 @@ export default function TrackingModelPanel({
    * in, and a closed panel has no drawing to hang a map beside — so the link read costs
    * nothing until the model is asked for, and stops being asked when it is hidden again.
    */
-  const { data: mapLinks } = useRasterMapLinks(model?.id, open);
+  const { data: mapLinks } = useRasterMapLinks(drawnModelId, open);
   const maps = useMemo(
-    () => rasterMapsFromLinks(mapLinks ?? [], model?.id ?? ''),
-    [mapLinks, model?.id],
+    () => rasterMapsFromLinks(mapLinks ?? [], drawnModelId ?? ''),
+    [mapLinks, drawnModelId],
   );
 
   // A tab whose map was undeclared while somebody watched cannot stay active: the pane it
@@ -372,9 +453,9 @@ export default function TrackingModelPanel({
           name: nameOf(caverId),
           enteredAt: enteredAt.get(caverId) ?? null,
         }),
-        model?.id,
+        drawnModelId,
       ),
-    [tracking, nameOf, enteredAt, model?.id],
+    [tracking, nameOf, enteredAt, drawnModelId],
   );
 
   /**
@@ -389,8 +470,8 @@ export default function TrackingModelPanel({
     () =>
       replayAt === null || log.data === undefined
         ? null
-        : trackedCaversAt(tracking, log.data, replayAt, nameOf, model?.id),
-    [tracking, log.data, replayAt, nameOf, model?.id],
+        : trackedCaversAt(tracking, log.data, replayAt, nameOf, drawnModelId),
+    [tracking, log.data, replayAt, nameOf, drawnModelId],
   );
 
   /**
@@ -446,8 +527,8 @@ export default function TrackingModelPanel({
     if (!replaying || replayAt === null || log.data === undefined) {
       return new Map<string, CaveViewMediaEntry[]>();
     }
-    return placedPicturesAt(momentPictures, log.data, replayAt, model?.id);
-  }, [replaying, replayAt, log.data, momentPictures, model?.id]);
+    return placedPicturesAt(momentPictures, log.data, replayAt, drawnModelId);
+  }, [replaying, replayAt, log.data, momentPictures, drawnModelId]);
 
   /**
    * What the viewer is told about a station's pictures — a <b>function</b>, and one whose identity
@@ -564,7 +645,31 @@ export default function TrackingModelPanel({
    * the refusal itself — a press that produced an offer that produced a refusal is three acts
    * spent learning something the page already knew.
    */
-  const canRecord = canEdit && trackingLogWritable(tracking.state);
+  //
+  // And never while another survey is on screen. A report is measured against the watch's own
+  // survey whatever this panel is showing, so a station pressed on an earlier one would be looked
+  // up, by name, in a survey it was not pressed on — and a name the two share would be recorded as
+  // a place nobody pointed at.
+  const canRecord = canEdit && trackingLogWritable(tracking.state) && elsewhere === null;
+  /** The survey on screen: the one the reader chose to look at, or the watch's own. */
+  const drawn = elsewhere ?? model;
+
+  /**
+   * Looking at another survey, or back at the watch's own.
+   *
+   * Everything standing over the drawing belongs to the survey that was on screen — the offer a
+   * press raised, an open dialog, which map was up, the narrowing to declared parts — so all of
+   * it is let go, exactly as hiding the model lets it go. The replay is kept: its window is the
+   * trip's, and scrubbing the same moments over the other survey is the point of looking.
+   */
+  const onViewOn = (id: string) => {
+    setViewedModelId(id === model.id ? null : id);
+    setPicked(null);
+    setRecording(null);
+    setAttachingAt(null);
+    setActiveTab(TAB_3D);
+    setOnlyDeclared(false);
+  };
 
   /**
    * A pinned station pressed on a map sheet, raised as the very offer a 3D press raises.
@@ -596,6 +701,9 @@ export default function TrackingModelPanel({
       // The strip opens on the 3D scene, as the panel opens: which map somebody had up
       // belongs to the model that was on screen, exactly like the size and the offer.
       setActiveTab(TAB_3D);
+      // And it opens on the watch's own survey, where a press can record. Left on another one, the
+      // next opening would be a panel that takes no report for a reason chosen some time ago.
+      setViewedModelId(null);
     }
     setOpen(!open);
   };
@@ -648,6 +756,44 @@ export default function TrackingModelPanel({
     >
       {open ? (
         <>
+          {/* Offered only where there is something else to look at: a trip whose every report was
+              made on the watch's own survey has no second reading, and a chooser of one entry is a
+              control that does nothing. */}
+          {viewable.length > 0 && (
+            <Flex gap="small" align="center" wrap style={{ marginBottom: 8 }}>
+              <Typography.Text>{t('trips.tracking.viewOnLabel')}</Typography.Text>
+              <Select
+                size={coarse ? 'large' : 'middle'}
+                value={drawn.id}
+                onChange={onViewOn}
+                popupMatchSelectWidth={false}
+                aria-label={t('trips.tracking.viewOnLabel')}
+                data-testid="trip-tracking-view-on"
+                options={[
+                  { value: model.id, label: t('trips.tracking.viewOnWatch', { name: model.name }) },
+                  ...viewable.map((other) => ({
+                    value: other.id,
+                    // Two surveys of one cave are very often one file exported twice under one
+                    // name, so the day each arrived is what tells them apart.
+                    label: t('trips.tracking.viewOnOther', {
+                      name: other.name,
+                      date: new Date(other.createdAt).toLocaleDateString(i18n.language),
+                    }),
+                  })),
+                ]}
+              />
+            </Flex>
+          )}
+          {elsewhere !== null && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 8 }}
+              data-testid="trip-tracking-view-on-readonly"
+              title={t('trips.tracking.viewOnReadOnlyTitle', { name: elsewhere.name })}
+              description={t('trips.tracking.viewOnReadOnlyBody', { watch: model.name })}
+            />
+          )}
           {/* Above the model rather than over it. The viewer's own corners are spoken for — the
               toolbar, the list of who is where, a station's pictures — and a control that has to be
               dragged has no business sharing an edge with a scene that is dragged to be turned. */}
@@ -671,7 +817,10 @@ export default function TrackingModelPanel({
             // Offered to whoever may write the log, and to nobody else. Unlike recording a report
             // this is not gated on the watch still being armed: the act it exists for happens after
             // the party is out, when somebody empties a memory card and turns the log into a report.
-            onAttachHere={canEdit ? (moment) => setAttachingAt(moment) : undefined}
+            // And not while another survey is on screen: the panel records nothing there.
+            onAttachHere={
+              canEdit && elsewhere === null ? (moment) => setAttachingAt(moment) : undefined
+            }
           />
           {/* Offered only on a watch that declared something, and only on the drawing that has
               surveys to hide. The switch says what it did rather than leaving an emptier picture
@@ -679,7 +828,7 @@ export default function TrackingModelPanel({
               taking half of one off the screen would hide passage the party said it was going to.
               Whoever is reported outside the declared parts keeps their marker either way; that
               is told on the table above, by the server, and not by what is drawn here. */}
-          {tracking.depthFilter.length > 0 && activeTab === TAB_3D && (
+          {tracking.depthFilter.length > 0 && activeTab === TAB_3D && elsewhere === null && (
             <Flex gap="small" align="center" wrap>
               <Switch
                 size="small"
@@ -752,16 +901,28 @@ export default function TrackingModelPanel({
                 label: t('rastermap.tab3d'),
                 children: (
                   <CaveViewPanel
-                    fileUrl={model.modelUrl}
-                    fileName={viewerFileName(model)}
+                    // One viewer per survey. Another survey is another file, parsed afresh either
+                    // way; a viewer of its own is what makes everything the last one answered —
+                    // which stations it could not place, which parts it could hide — go with it
+                    // instead of being read as an answer about the drawing that replaced it.
+                    key={drawn.id}
+                    fileUrl={drawn.modelUrl}
+                    fileName={viewerFileName(drawn)}
                     height={modelHeight(narrow, large)}
-                    surveyModelId={model.id}
+                    surveyModelId={drawn.id}
                     trackedCavers={shown}
                     trackedMomentInWords={momentInWords}
                     // Handed straight through, replay or no replay: what comes back names stations of the
                     // drawing, which is the one thing about this panel a scrubbed moment cannot change.
-                    onUnplacedStationsChange={onUnplacedStationsChange}
-                    declaredParts={tracking.depthFilter}
+                    //
+                    // Only for the watch's own survey. The table above reads this against the
+                    // places reported on that survey, so an answer about another drawing would
+                    // mark its rows for stations of a file they were never measured in. The viewer
+                    // being replaced answers "nothing missing" as it goes, which is what clears it.
+                    onUnplacedStationsChange={elsewhere === null ? onUnplacedStationsChange : undefined}
+                    // The declared parts are names of the watch's own survey and mean nothing in
+                    // another one.
+                    declaredParts={elsewhere === null ? tracking.depthFilter : NO_DECLARED_PARTS}
                     onlyDeclaredParts={onlyDeclared}
                     onDeclaredPartsView={setDeclaredView}
                     // A leg or a splay names no single place to report from, so it clears the offer rather
@@ -793,7 +954,7 @@ export default function TrackingModelPanel({
                   <RasterMapTrackingPane
                     declaration={declaration}
                     links={mapLinks ?? []}
-                    surveyModelId={model.id}
+                    surveyModelId={drawn.id}
                     active={open && activeTab === declaration.linkId}
                     height={modelHeight(narrow, large)}
                     // The one source of truth for who is where: the same fold the 3D pane
@@ -813,6 +974,9 @@ export default function TrackingModelPanel({
               tripLogId={tripLogId}
               state={tracking.state}
               station={recording}
+              // The watch's own survey, always: it is the one a report is measured against, and
+              // so the only one whose station names are worth offering when a spelling is refused.
+              surveyModelId={tracking.surveyModelId}
               cavers={dialogCavers}
               teams={tracking.teams}
               defaultCaverIds={selectedCaverIds}
@@ -830,6 +994,9 @@ export default function TrackingModelPanel({
               defaultAt={attachingAt}
               defaultCaverId={selectedCaverIds[0] ?? null}
               cavers={dialogCavers}
+              // The watch's own survey here too, whichever one is on screen: the preview says
+              // where a photograph lands on the survey a replay of this trip opens on.
+              surveyModelId={tracking.surveyModelId}
               onClose={() => setAttachingAt(null)}
             />
           )}

@@ -69,6 +69,13 @@ public static class ProcessingJobKinds
     public const string SurveyGraph = "survey-graph";
 
     /// <summary>
+    /// Queue another reading of every line-plot survey the installation holds, so that surveys
+    /// read by an earlier version of the reader get what the present one produces. Started by an
+    /// operator; it only queues, and each reading is a <see cref="SurveyGraph"/> job of its own.
+    /// </summary>
+    public const string SurveyReadingBackfill = "survey-reading-backfill";
+
+    /// <summary>
     /// Read an archived compilation log into the quality figures it reports: how the run ended,
     /// what it ran as, and how well each of the survey's loops closed.
     /// </summary>

@@ -96,4 +96,92 @@ public class TrackingDepthPlacementsTests
             DeclaredDepthPlaces.Key(depth).ShouldBe(Math.Abs(TripTrackingRules.RecordedDepthM(depth)));
         }
     }
+
+    // ---- stations the viewer cannot draw -------------------------------------------------------
+
+    // The same cave read from a Survex file that also holds two stations it gives no name: one
+    // exactly 100 m down, where the gallery is only near, and one above the entrance. The viewer
+    // leaves both out of its drawing.
+    private static readonly TrackingDepthResolver.Station[] WithNameless =
+    [
+        .. Stations,
+        TrackingDepthResolver.Station.Of(SurveyModelFormat.Survex3d, null, "#4", null, 250.5, false, 4),
+        TrackingDepthResolver.Station.Of(SurveyModelFormat.Survex3d, null, "#5", null, 360, false, 5),
+    ];
+
+    [Fact]
+    public void A_depth_never_lands_on_a_station_the_viewer_cannot_draw()
+    {
+        // 99.5 m down is exactly the nameless station at 250.5 m; the shaft station at 250 m is
+        // half a metre off. The report lands on the shaft station, because a report stamped with
+        // the other would be drawn nowhere.
+        WithNameless[4].NoViewerLabel.ShouldBeTrue();
+        var placed = TrackingDepthPlacements.For([], WithNameless, null, [], 99.5m);
+        placed.Outcome.ShouldBe(TrackingDepthPlacementOutcome.Measured);
+        placed.ViewerStationName.ShouldBe("cave.shaft.9");
+
+        TrackingDepthResolver.Resolve(WithNameless, 350, 99.5, [], take: 10)
+            .ShouldAllBe(c => !c.Name.StartsWith('#'));
+
+        // The positive twin: the very same row, were it a station somebody named "#4" — the file
+        // wrote it at some other number — is an ordinary station and the nearest one, so it wins.
+        // What is passed over is the nameless row, not the look of its name.
+        TrackingDepthResolver.Station[] named =
+        [
+            .. Stations,
+            TrackingDepthResolver.Station.Of(SurveyModelFormat.Survex3d, null, "#4", null, 250.5, false, 11),
+        ];
+        named[4].NoViewerLabel.ShouldBeFalse();
+        TrackingDepthPlacements.For([], named, null, [], 99.5m).ViewerStationName.ShouldBe("#4");
+    }
+
+    [Fact]
+    public void A_nameless_station_of_a_Therion_model_is_a_place_like_any_other()
+    {
+        // The viewer labels these itself and the rows carry that label, so a depth may land on one
+        // and it will be drawn. Until the survey is read again an earlier reading holds the same
+        // station under a spelling the viewer does not use, and that one is passed over.
+        TrackingDepthResolver.Station[] read =
+        [
+            .. Stations,
+            TrackingDepthResolver.Station.Of(SurveyModelFormat.Lox, "cave", "cave.shaft.[4]", "cave.shaft", 250.5, false, 4),
+        ];
+        read[4].NoViewerLabel.ShouldBeFalse();
+        TrackingDepthPlacements.For([], read, null, [], 99.5m).ViewerStationName.ShouldBe("shaft.[4]");
+
+        TrackingDepthResolver.Station[] readBefore =
+        [
+            .. Stations,
+            TrackingDepthResolver.Station.Of(SurveyModelFormat.Lox, "cave", "cave.shaft.#4", "cave.shaft", 250.5, false, 4),
+        ];
+        readBefore[4].NoViewerLabel.ShouldBeTrue();
+        TrackingDepthPlacements.For([], readBefore, null, [], 99.5m).ViewerStationName.ShouldBe("cave.shaft.9");
+    }
+
+    [Fact]
+    public void A_declaration_naming_a_station_the_viewer_cannot_draw_is_passed_over()
+    {
+        // Declared against the nameless row, the place is not one a report can land on: the
+        // declaration is listed as naming no station of the model, and the depth is measured.
+        DeclaredDepthPlaces.Declared onNameless = new(100m, "#4", "Sala");
+        TrackingDepthPlacements.NamesAStationOf(WithNameless, onNameless).ShouldBeFalse();
+        var placed = TrackingDepthPlacements.For([onNameless], WithNameless, null, [], 100m);
+        placed.Outcome.ShouldBe(TrackingDepthPlacementOutcome.Measured);
+        placed.ViewerStationName.ShouldBe("cave.shaft.9");
+
+        // Beside it, a declaration on a station that has a name is honoured from the same list.
+        DeclaredDepthPlaces.Declared onNamed = new(100m, "cave.gallery.7", "Galeria");
+        TrackingDepthPlacements.NamesAStationOf(WithNameless, onNamed).ShouldBeTrue();
+        TrackingDepthPlacements.For([onNamed], WithNameless, null, [], 100m).Outcome
+            .ShouldBe(TrackingDepthPlacementOutcome.Declared);
+    }
+
+    [Fact]
+    public void A_nameless_station_still_measures_as_the_depth_datum()
+    {
+        // The datum is an altitude, not a place anybody is drawn at, so a watch whose depths are
+        // measured from a nameless station keeps working: 110 m below 360 m is the shaft at 250 m.
+        TrackingDepthResolver.ReferenceZ(WithNameless, "#5").ShouldBe(360);
+        TrackingDepthPlacements.For([], WithNameless, "#5", [], 110m).ViewerStationName.ShouldBe("cave.shaft.9");
+    }
 }

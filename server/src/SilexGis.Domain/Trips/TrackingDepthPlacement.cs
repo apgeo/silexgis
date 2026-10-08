@@ -113,6 +113,10 @@ public static class TrackingDepthPlacements
         DeclaredDepthPlaces.Declared declaration)
     {
         ArgumentNullException.ThrowIfNull(stations);
-        return stations.Any(s => s.ViewerName == declaration.ViewerStationName);
+
+        // A station the viewer has no label for is not one a report can land on, whatever the
+        // declaration says: honouring it would stamp a name the drawing cannot resolve, which is
+        // the very fault this test exists to pass over.
+        return stations.Any(s => !s.NoViewerLabel && s.ViewerName == declaration.ViewerStationName);
     }
 }

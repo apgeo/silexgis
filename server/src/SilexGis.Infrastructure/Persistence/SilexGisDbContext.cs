@@ -146,6 +146,9 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
     /// <summary>What a published page calls each participant, where an admin chose a name.</summary>
     public DbSet<TripTrackingParticipant> TripTrackingParticipants => Set<TripTrackingParticipant>();
 
+    /// <summary>The number each person holds in a trip's party, given once and never moved.</summary>
+    public DbSet<TripPartyNumber> TripPartyNumbers => Set<TripPartyNumber>();
+
     public DbSet<Expedition> Expeditions => Set<Expedition>();
 
     public DbSet<ExpeditionTrip> ExpeditionTrips => Set<ExpeditionTrip>();

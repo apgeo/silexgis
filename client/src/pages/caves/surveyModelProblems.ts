@@ -28,6 +28,9 @@ export const SURVEY_MODEL_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   // purpose, and says nothing about the two ways forward.
   'survey_model.tracking_armed': 'surveyModels.problems.trackingArmed',
   'survey_model.not_ready': 'surveyModels.problems.notReady',
+  // Asking for a model to be read again while a reading of it is queued or running. The list on
+  // screen was a moment behind; the sentence says what is true now rather than that something failed.
+  'survey_model.reading_in_progress': 'surveyModels.problems.readingInProgress',
   'cave.not_found': 'surveyModels.problems.caveNotFound',
   'acl.forbidden': 'surveyModels.problems.forbidden',
 };

@@ -134,6 +134,10 @@ odată cu ea — și apoi paginile.
 | First visits | Primele vizite |
 | Leads | Continuări |
 | Who was there | Cine a fost |
+| Who is underground (a camp's tab) | Cine e în peșteră |
+| Head count (what that tab is) | Numărătoare |
+| Out / Not heard from (where somebody stands) | Ieșit / Fără nicio veste |
+| Expected back | Ieșire estimată |
 | Add a stay / Edit stay / Remove stay | Adaugă o ședere / Editare ședere / Șterge șederea |
 | Who / Role / Days / Note (a stay) | Cine / Rol / Zilele / Notă |
 | Tracking (the tab) | Urmărire |
@@ -143,6 +147,10 @@ odată cu ea — și apoi paginile.
 | Record a report | Înregistrează un raport |
 | Went in / Came out | A intrat / A ieșit |
 | Correct (a report) | Corectează |
+| Removed reports (taken off the log, still kept) | Rapoarte scoase |
+| Put back (a removed report) / Undo (on the notice) | Pune înapoi / Anulează |
+| Delete for good | Șterge definitiv |
+| First started / Started again (a watch) | Începută prima dată / Începută din nou |
 | Import a sheet | Importă o foaie |
 | What this cave's depths mean | Ce înseamnă adâncimile acestei peșteri |
 | Declare a depth | Declară o adâncime |
@@ -164,6 +172,7 @@ odată cu ea — și apoi paginile.
 | Last heard | Ultima veste |
 | Replay the trip / Play | Reia tura / Redă |
 | A replay | Reluare |
+| The replay's rail (the line its handle is dragged along) | Linia reluării |
 | Language the page opens in | Limba în care se deschide pagina |
 | Being followed now | Urmărite acum |
 | Published trips (the administration page) | Ture publicate |

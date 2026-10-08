@@ -185,21 +185,33 @@ mărimile relative tocmai ale lucrului pe care răspunsul a refuzat să îl spun
 O persoană, o peșteră, un grup de speologie și o tabără își primesc fiecare totalurile:
 
 **Ture · Persoane · Locuri · Primele vizite · Ore în subteran · Cartat · Coardă · Stații
-topografice · Ture cu incident · Fotografii**
+topografice · Ture cu incident · Fotografii · Ture urmărite · Ore în subteran, din urmărire**
 
-Citiți cele două avertismente pe care le tipărește:
+Citiți avertismentele pe care le tipărește:
 
 - **„Numărat peste turele pe care le puteți citi."** Cineva cu alt acces vede totaluri diferite
   pentru același subiect, **și amândoi au dreptate**.
 - **„Orele acoperă cele n din m dăți când cineva a mers și s-au notat orele de intrare și
   ieșire."**
+- **„Orele din urmărire sunt o a doua numărătoare … Nu se adună la orele în subteran de mai
+  sus."** Apare de îndată ce o tură numărată a fost [urmărită](live-tracking.md).
+
+**Cele două cifre de ore sunt două surse și nimeni nu le adună.** *Ore în subteran* vine din
+orele de intrare și de ieșire scrise pe tură și pe oamenii ei. *Ore în subteran, din urmărire*
+vine din jurnalul de urmărire: raportul *a intrat* al fiecărei persoane, pus în pereche cu
+raportul *a ieșit* care i-a urmat, și peste miezul nopții dacă a durat atât. Unde o tură le are
+pe amândouă, ele descriu aceleași ore — așa că suma lor nu este o cifră. O intrare pe care nu a
+închis-o nicio ieșire nu adaugă **nimic**: nici zero, nici „încă în subteran". Unde niciun
+jurnal nu are o ședere încheiată, caseta arată o liniuță, nu *0 h*, iar propoziția spune pe
+câte participări se sprijină cifra. *Ture urmărite* numără turele care au ceva, orice, în
+jurnalul lor.
 
 Nimic nu este stocat. Orele se calculează din orele înregistrate, peste câte zile a durat efectiv
 tura. O **primă vizită** este pur și simplu cea mai veche tură care a dus pe cineva undeva — așa
 că tastarea unei ture mai vechi din arhivă *corectează* cifrele, în loc să lase în urmă un
 indicator învechit.
 
-**Nu orice subiect le arată pe toate zece:**
+**Nu orice subiect le arată pe toate douăsprezece:**
 
 | Ale cui sunt totalurile | Ce lipsește | De ce |
 |---|---|---|

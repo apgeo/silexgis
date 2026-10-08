@@ -107,7 +107,7 @@ before(async () => {
     if (link === 'unknown') return refusal(response);
 
     if (route === '') {
-      if (link === 'archive') return refusal(response);
+      if (link === 'archive' || link === 'liveLapsed') return refusal(response);
       return json(response, 200, {
         tripLogId: '7d0c1a52-0000-4000-8000-0000000000aa',
         title: 'An invented trip',
@@ -118,7 +118,10 @@ before(async () => {
         participants: [],
       });
     }
-    if (route === '/live') return json(response, 200, { trips: link === 'archive' ? [] : [{}], more: false });
+    if (route === '/live') {
+      if (link === 'liveLapsed') return refusal(response);
+      return json(response, 200, { trips: link === 'archive' ? [] : [{}], more: false });
+    }
     if (route === '/past') {
       return link === 'archiveOff' ? refusal(response) : json(response, 200, { trips: [{}, {}], more: false });
     }
@@ -279,6 +282,20 @@ describe('what a reader who sees nothing is seeing', () => {
     assert.equal(failed, false);
     assert.match(text, /note\s+party: the link no longer follows its own trip/);
     assert.match(text, /ok\s+past trips: answered, trips listed: 2/);
+    assert.match(text, /it opens its cave's lists, above/);
+    assert.doesNotMatch(text, /followed now: not offered/, 'both lists answered');
+  });
+
+  it('an old link past the period for listing current parties: past trips only, and why', async () => {
+    const { failed, text } = await run({ link: 'liveLapsed' });
+    assert.equal(failed, false);
+    assert.match(text, /ok\s+past trips: answered, trips listed: 2/);
+    assert.match(text, /note\s+followed now: not offered through this link/);
+    assert.match(text, /SILEXGIS__TripTracking__SiblingWindowAfterLapse/);
+    assert.match(text, /past_sibling_window/);
+    assert.match(text, /it opens its cave's past trips, above, and nothing else/);
+    assert.doesNotMatch(text, /its cave's lists/, 'one of the two lists was refused');
+    assert.doesNotMatch(text, /ok\s+followed now/);
   });
 
   it('past trips switched off: a note beside a followed party', async () => {

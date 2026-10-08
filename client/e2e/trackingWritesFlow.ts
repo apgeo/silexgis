@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, type Page } from '@playwright/test';
 import { chooseOption, gotoRoute, login } from './helpers.ts';
-import { apiJson, bearerToken } from './rastermapApi.ts';
+import { apiJson, bearerToken, uploadMapPng } from './rastermapApi.ts';
 
 /**
  * The three ways a coordinator writes a tracking log other than reporting live: correcting a report
@@ -10,8 +10,9 @@ import { apiJson, bearerToken } from './rastermapApi.ts';
  * from a file and from rows pasted in, and declaring what the cave's depths mean so that a report
  * can be made by the name of a place. And what follows from each: a sheet imported twice writes
  * nothing the second time, a sheet that corrects one cell changes that cell and nothing else, the
- * log can be narrowed to one person, and a report added once the watch is closed has to say when
- * it was made.
+ * log taken out as a sheet reads straight back with nothing to do, a photograph is shown where it
+ * will be drawn before it is attached, the log can be narrowed to one person, and a report added
+ * once the watch is closed has to say when it was made.
  *
  * <b>Why this is a browser flow and not only a component suite.</b> Each of these has a component
  * suite, and each suite stubs every write — which is how a sentence looked up with its arguments
@@ -83,7 +84,9 @@ const LATE_NOTE = 'E2E written up after the watch was closed';
 interface Report {
   id: string;
   caverId: string;
+  teamId: string | null;
   kind: string;
+  surveyModelId: string | null;
   stationName: string | null;
   depthEnteredM: number | null;
   note: string | null;
@@ -116,21 +119,57 @@ export async function correctImportAndReportByPlace(page: Page) {
   await uploadModal.getByRole('button', { name: 'Upload model' }).click();
   await expect(page.getByText('Survex .3d')).toBeVisible({ timeout: 30_000 });
 
+  // The stations are read out of the file by a job behind the upload, and the card below offers
+  // names only from a survey that has been read and is the cave's current one. Waited for on the
+  // server and the page then read afresh, so the walk is not a race against that job.
+  const token = await bearerToken(page);
+  const surveysOf = async () =>
+    (await apiJson(page, token, 'GET', `/api/v1/caves/${caveId}/survey-models`)) as {
+      id: string;
+      status: string;
+      isCurrent: boolean;
+    }[];
+  await expect
+    .poll(async () => (await surveysOf()).some((m) => m.isCurrent && m.status === 'ready'), {
+      timeout: 60_000,
+    })
+    .toBe(true);
+  const modelId = (await surveysOf())[0].id;
+  await expect
+    .poll(
+      async () =>
+        (
+          (await apiJson(
+            page,
+            token,
+            'GET',
+            `/api/v1/survey-models/${modelId}/stations?q=${DECLARED_STATION}&pageSize=5`,
+          )) as { items: { viewerName: string }[] }
+        ).items.some((station) => station.viewerName === DECLARED_STATION),
+      { timeout: 60_000 },
+    )
+    .toBe(true);
+  await page.reload();
+
   // ---- What the cave's depths mean, declared on the cave's own page ----
   const places = page.getByTestId('cave-depth-places');
   await places.scrollIntoViewIfNeeded();
   await places.getByTestId('cave-depth-place-add').click();
   await places.getByTestId('cave-depth-place-depth').fill(String(PLACE.depthM));
-  await places.getByTestId('cave-depth-place-station').fill(DECLARED_STATION);
+  // The station is chosen rather than spelled: typed the way a relayed message arrives — in
+  // capitals — and taken from the survey's own names offered under the box, which is what puts
+  // the survey's spelling in the field.
+  const declaredStation = places.getByTestId('cave-depth-place-station');
+  await declaredStation.fill(DECLARED_STATION.toUpperCase());
+  await page
+    .locator(`.ant-select-dropdown:visible .ant-select-item-option[title="${DECLARED_STATION}"]`)
+    .click();
+  await expect(declaredStation).toHaveValue(DECLARED_STATION);
   await places.getByTestId('cave-depth-place-label').fill(PLACE.label);
   await places.getByTestId('cave-depth-place-save').click();
   await expect(places.getByRole('cell', { name: PLACE.label })).toBeVisible({ timeout: 15_000 });
-
-  const token = await bearerToken(page);
-  const models = (await apiJson(page, token, 'GET', `/api/v1/caves/${caveId}/survey-models`)) as {
-    id: string;
-  }[];
-  const modelId = models[0].id;
+  // A station of the cave's survey, so the row carries no mark saying the survey lacks it.
+  await expect(places.locator('[data-testid^="cave-depth-place-not-in-survey-"]')).toHaveCount(0);
 
   // ---- A trip with the sheet's two people, its watch armed on the survey ----
   const participant = (name: string) => ({
@@ -246,7 +285,8 @@ export async function correctImportAndReportByPlace(page: Page) {
   await expect(page.getByTestId(`trip-tracking-off-roster-${maria}`)).toHaveCount(0);
 
   // ---- Correcting a report in place ----
-  const correction = page.getByRole('dialog', { name: 'Correct this report' });
+  // The dialog is titled with whose report it is and of when, so it is found by how that begins.
+  const correction = page.getByRole('dialog', { name: /^Correct the report about / });
   const note = correction.getByTestId('trip-tracking-edit-note');
 
   // Opened on each row in turn, it carries that row's own report — not the last one it was filled
@@ -300,6 +340,144 @@ export async function correctImportAndReportByPlace(page: Page) {
       (await logOf()).find((row) => row.caverId === ion && row.kind === 'atDepth')?.stationName,
     )
     .toBe(DECLARED_STATION);
+
+  // ---- Taking a report off the log, and putting it back ----
+  // The report just made, because it is the one with the most to lose: a station, the depth that
+  // was asked for, and the survey both were read on. Held whole, as the log answers it, so that
+  // "back as it was" below is a comparison of every member rather than of the ones listed here.
+  const placed = (await logOf()).find((row) => row.caverId === ion && row.kind === 'atDepth')!;
+  const ionOnWatch = party.getByRole('row', { name: new RegExp(ION) });
+  const binOf = page.getByTestId(`trip-tracking-event-delete-${placed.id}`);
+  const removedFold = page.getByTestId('trip-tracking-removed');
+  // The watch places Ion where that report said, and nothing has been taken off this log yet.
+  await expect(ionOnWatch).toContainText(DECLARED_STATION, { timeout: 15_000 });
+  await expect(removedFold).toHaveCount(0);
+
+  const takeOff = async () => {
+    await binOf.click();
+    const asked = page.locator('.ant-popconfirm:visible');
+    // The confirmation says where the report goes, and no longer that it is gone for good.
+    await expect(asked).toContainText('can be put back');
+    await expect(asked).not.toContainText('for good');
+    await asked.getByRole('button', { name: 'OK' }).click();
+    // Gone from the log on the screen, from the log as the server answers it, and from the fold of
+    // the watch: Ion is no longer placed by a report that is not there.
+    await expect(binOf).toHaveCount(0, { timeout: 15_000 });
+    expect((await logOf()).some((row) => row.id === placed.id)).toBe(false);
+    await expect(ionOnWatch).not.toContainText(DECLARED_STATION, { timeout: 15_000 });
+  };
+  const isBackAsItWas = async () => {
+    await expect(binOf).toBeVisible({ timeout: 15_000 });
+    // The same report under the same id, every member as it was — its place, its moment, and not
+    // marked as corrected, since nobody corrected it.
+    expect((await logOf()).find((row) => row.id === placed.id)).toEqual(placed);
+    await expect(page.getByTestId(`trip-tracking-event-corrected-${placed.id}`)).toHaveCount(0);
+    await expect(ionOnWatch).toContainText(DECLARED_STATION, { timeout: 15_000 });
+  };
+
+  // Once by the Undo on the notice that says it went…
+  await takeOff();
+  await page.getByTestId('trip-tracking-event-undo').click();
+  await isBackAsItWas();
+  await expect(removedFold).toHaveCount(0, { timeout: 15_000 });
+
+  // …and once from the removed reports under the log, where it waits after the notice has gone.
+  await takeOff();
+  await expect(page.getByTestId('trip-tracking-removed-count')).toHaveText('Removed reports: 1', {
+    timeout: 15_000,
+  });
+  await page.getByTestId('trip-tracking-removed-count').click();
+  const waiting = page.getByTestId(`trip-tracking-removed-${placed.id}`);
+  // Shown there with the place it had: the station and the depth that was asked for.
+  await expect(waiting).toContainText(DECLARED_STATION);
+  await expect(waiting).toContainText(`Reported as ${PLACE.depthM} m down`);
+  // Destroying it is offered beside putting it back, as an act of its own. Not pressed here.
+  await expect(
+    page.getByTestId(`trip-tracking-removed-destroy-${placed.id}`),
+  ).toHaveText('Delete for good');
+  await page.getByTestId(`trip-tracking-removed-restore-${placed.id}`).click();
+  await isBackAsItWas();
+  // Nothing is left waiting, so the fold is gone with its last report.
+  await expect(removedFold).toHaveCount(0, { timeout: 15_000 });
+
+  // ---- The same place block in the correction dialog ----
+  // A correction asks where the report is with the fields the card above asks with: the declared
+  // places, the depth, and a station box that offers the survey's names.
+  const ionBelow = (await logOf()).find((row) => row.caverId === ion && row.kind === 'atDepth')!;
+  await page.getByTestId(`trip-tracking-event-edit-${ionBelow.id}`).click();
+  await expect(correction).toBeVisible();
+  // It opens on the report as it stands: the depth that was entered, read as the place it names.
+  await expect(correction.getByTestId('trip-tracking-edit-depth')).toHaveValue(
+    String(PLACE.depthM),
+  );
+  await expect(correction.getByTestId('trip-tracking-edit-place')).toContainText(
+    `${PLACE.label} — ${PLACE.depthM} m`,
+  );
+  // Re-read as a station report, the station chosen from the survey's names as on the cave's card.
+  await chooseOption(page, correction.getByTestId('trip-tracking-edit-kind'), 'At a station');
+  const correctedStation = correction.getByTestId('trip-tracking-edit-station');
+  await correctedStation.fill(DECLARED_STATION.toUpperCase());
+  await page
+    .locator(`.ant-select-dropdown:visible .ant-select-item-option[title="${DECLARED_STATION}"]`)
+    .click();
+  await expect(correctedStation).toHaveValue(DECLARED_STATION);
+  await correction.getByRole('button', { name: 'Save the correction' }).click();
+  await expect(correction).toBeHidden();
+  await expect
+    .poll(async () => {
+      const row = (await logOf()).find((entry) => entry.id === ionBelow.id);
+      return [row?.kind, row?.stationName, row?.corrected];
+    })
+    .toEqual(['atStation', DECLARED_STATION, true]);
+
+  // ---- A photograph, shown where it will be drawn before it is attached ----
+  // Noise of this run's own, filed on the trip the way its gallery files one. It carries no time
+  // of its own, so the dialog offers the moment it was opened at — the report it was opened from.
+  const photo = await uploadMapPng(page, token, `e2e-tracking-photo-${stamp}.png`, 24);
+  await apiJson(page, token, 'POST', '/api/v1/attachments', {
+    fileId: photo.id,
+    entityType: 'tripLog',
+    entityId: trip.id,
+    role: 'photoInterior',
+    caption: null,
+    sortOrder: 0,
+  });
+  // The gallery lists it once it has been read as a picture; the dialog asks once, on opening.
+  await expect
+    .poll(
+      async () =>
+        (
+          (await apiJson(
+            page,
+            token,
+            'GET',
+            `/api/v1/photos?tripLogId=${trip.id}&pageSize=60`,
+          )) as { items: { documentId: string }[] }
+        ).items.some((item) => item.documentId === photo.documentId),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+
+  await page.getByTestId(`trip-tracking-event-picture-${ionBelow.id}`).click();
+  const hanging = page.getByRole('dialog', { name: 'Photographs of this moment' });
+  await expect(hanging).toBeVisible();
+  await hanging.getByTestId(`trip-tracking-pictures-pick-${photo.documentId}`).check();
+  // Opened from Ion's report at the declared station, so it is about Ion at that moment — and the
+  // answer is read out of the real log by the rule the replay draws with.
+  const willBeDrawn = hanging.getByTestId(`trip-tracking-pictures-row-place-${photo.documentId}`);
+  const about = hanging.getByTestId(`trip-tracking-pictures-row-subject-${photo.documentId}`);
+  await expect(willBeDrawn).toHaveText(`Drawn at station ${DECLARED_STATION}`, {
+    timeout: 15_000,
+  });
+  // About Maria it has nowhere to go: she had gone in and nobody had said where she was.
+  await chooseOption(page, about, MARIA);
+  await expect(willBeDrawn).toHaveAttribute('data-placement', 'unplaced');
+  await expect(willBeDrawn).toContainText('on the timeline only');
+  await chooseOption(page, about, ION);
+  await expect(willBeDrawn).toHaveText(`Drawn at station ${DECLARED_STATION}`);
+  await hanging.getByRole('button', { name: 'Attach photographs (1)' }).click();
+  await expect(page.getByText('Attached: 1. Not attached: 0.')).toBeVisible({ timeout: 15_000 });
+  await expect(hanging).toBeHidden();
 
   // ---- Importing the sample sheet the dialog offers ----
   const beforeImport = await logOf();
@@ -511,6 +689,51 @@ export async function correctImportAndReportByPlace(page: Page) {
   const timed = (await logOf()).find((row) => row.note === TIMES_ONLY.note && row.caverId === ion);
   expect(timed).toBeTruthy();
   expect(Date.parse(timed!.recordedAt)).toBe(Date.parse(`${tripDate}T00:00:00Z`));
+
+  // ---- The log taken out as a sheet, and read straight back ----
+  // Everything written so far — typed, corrected, imported from a file, pasted on another zone's
+  // clocks, placed on a day the dialog asked for — leaves as one sheet for anybody who reads the
+  // trip, and that sheet is the importer's own: read back, every row is one the log already holds.
+  const beforeExport = await logOf();
+  const taken = page.waitForEvent('download');
+  await page.getByTestId('trip-tracking-csv-export').click();
+  const sheet = await taken;
+  // Named by what it is, a fragment of the trip's id and the day — never by the cave or the trip.
+  expect(sheet.suggestedFilename()).toMatch(/^tracking-log-[0-9a-f]{8}-\d{8}\.csv$/);
+  const sheetBytes = readFileSync((await sheet.path())!);
+  const sheetText = sheetBytes.toString('utf8');
+  // The sample's own header, and a line for every report under it. No note in this walk holds a
+  // line break, so lines are rows.
+  expect(sheetText).toContain('Data si ora');
+  expect(sheetText).not.toContain(caveName);
+  expect(sheetText.trim().split('\r\n')).toHaveLength(beforeExport.length + 1);
+
+  await page.getByTestId('trip-tracking-csv-open').click();
+  await expect(importing).toBeVisible();
+  await importing.locator('input[type="file"]').setInputFiles({
+    name: sheet.suggestedFilename(),
+    mimeType: 'text/csv',
+    buffer: sheetBytes,
+  });
+  await importing.getByTestId('trip-tracking-csv-preview').click();
+  await expect(rows).toBeVisible({ timeout: 15_000 });
+  // Nothing new, and every report found again: each moment was written to the instant with its
+  // offset, so no row comes back as a second report beside the first.
+  await expect(importing.getByTestId('trip-tracking-csv-creates')).toHaveText(/\D0$/);
+  await expect(importing.getByTestId('trip-tracking-csv-replaces')).toHaveText(
+    new RegExp(`\\D${beforeExport.length}$`),
+  );
+  // Given leave to overwrite, it overwrites nothing: the sheet says what the log says, row for
+  // row, and the log afterwards is the same reports under the same ids with none newly marked.
+  await overwrite.check();
+  await importing.getByTestId('trip-tracking-csv-commit').click();
+  await expect(
+    page.getByText(
+      `0 recorded, 0 corrected, ${beforeExport.length} already as the sheet says, 0 left out.`,
+    ),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(importing).toBeHidden({ timeout: 15_000 });
+  expect(await logOf()).toEqual(beforeExport);
 
   // ---- One person's reports ----
   // The log is everybody's, newest first, and the report to put right is nearly always one

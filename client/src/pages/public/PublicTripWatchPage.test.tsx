@@ -34,11 +34,26 @@ type ListAnswer = {
   error?: unknown;
   /** When the last list that was read arrived, as the query reports it. */
   dataUpdatedAt?: number;
+  /** When the last read that failed did so. */
+  errorUpdatedAt?: number;
 };
 
 let live: { data?: PublicTripEnvelope; isPending: boolean; error: unknown; dataUpdatedAt?: number };
 let liveList: ListAnswer;
-let archive: { data?: PublicPastTripList; isPending: boolean; isError: boolean };
+let archive: {
+  data?: PublicPastTripList;
+  isPending: boolean;
+  isError: boolean;
+  error?: unknown;
+  /** When the list of past trips in hand arrived. */
+  dataUpdatedAt?: number;
+};
+/** Whether the list of past trips is being asked for at this moment. */
+let pastAsked = false;
+/** Every link the list of past trips was ever read under, which is what keeps it in hand. */
+let pastReadUnder = new Set<string | undefined>();
+/** Longer ago than a past list may have been read and still speak for the link as it is now. */
+const LONG_AGO_MS = 10 * 60_000;
 let trackAnswer: { data?: PublicPastTrack; isPending: boolean; isError: boolean };
 /** Whether the page is asking for the list of parties at this moment, and whether it ever did. */
 let liveAsked = false;
@@ -48,14 +63,26 @@ vi.mock('../../api/hooks.ts', () => ({
   usePublicTrip: () => live,
   useResLinksForTarget: () => ({ data: undefined, isPending: false, error: null }),
   useSurveyModel: () => ({ data: undefined, isPending: false, error: null }),
-  usePublicPastTrips: (_token: string | undefined, enabled: boolean) =>
-    enabled ? archive : { data: undefined, isPending: false, isError: false },
-  usePublicLiveTrips: (_token: string | undefined, enabled: boolean) => {
+  // As the real query answers: a list that was read stays in hand after it stops being asked
+  // for, under the link it was read with. A fake that forgot it on the spot would let a test
+  // stand in a state the application cannot reach.
+  usePublicPastTrips: (token: string | undefined, enabled: boolean) => {
+    pastAsked = enabled;
+    if (enabled) {
+      pastReadUnder.add(token);
+    }
+    return pastReadUnder.has(token) ? archive : { data: undefined, isPending: false, isError: false };
+  },
+  usePublicLiveTrips: (token: string | undefined, enabled: boolean) => {
     liveAsked = enabled;
     if (enabled) {
       liveReads++;
+      liveAskedUnder.push(token);
     }
-    return enabled ? liveList : { data: undefined, isPending: false, isError: false };
+    // A read that failed always carries when it failed, as the real query's does.
+    return enabled
+      ? { ...liveList, errorUpdatedAt: liveList.errorUpdatedAt ?? (liveList.isError ? Date.now() : 0) }
+      : { data: undefined, isPending: false, isError: false };
   },
   usePublicPastTrack: (_token: string | undefined, tripLogId: string | undefined) =>
     tripLogId === undefined ? { data: undefined, isPending: false, isError: false } : trackAnswer,
@@ -63,8 +90,12 @@ vi.mock('../../api/hooks.ts', () => ({
 
 const address = new URLSearchParams();
 const setAddress = vi.fn();
+/** The link the page is opened under, which a test can change under a page already drawn. */
+let linkToken = 'follow-token';
+/** Every link the list of parties was asked for under, while it was being asked for. */
+let liveAskedUnder: (string | undefined)[] = [];
 vi.mock('react-router-dom', () => ({
-  useParams: () => ({ token: 'follow-token' }),
+  useParams: () => ({ token: linkToken }),
   useSearchParams: () => [address, setAddress],
 }));
 
@@ -173,6 +204,8 @@ const answered = (...trips: PublicLiveTrip[]): ListAnswer => ({
   isError: false,
 });
 
+const REFUSED = new ApiError(404, 'tracking.share_not_found');
+
 const toggleParties = () =>
   fireEvent.click(screen.getByText('Also in this cave now', { selector: 'span' }));
 const openArchive = () =>
@@ -206,6 +239,8 @@ beforeEach(() => {
     },
     isPending: false,
     isError: false,
+    // Read a good while ago, unless a test says when: a list merely still in hand.
+    dataUpdatedAt: Date.now() - LONG_AGO_MS,
   };
   trackAnswer = {
     data: {
@@ -242,7 +277,11 @@ beforeEach(() => {
     isError: false,
   };
   liveAsked = false;
+  pastAsked = false;
+  pastReadUnder = new Set();
   liveReads = 0;
+  liveAskedUnder = [];
+  linkToken = 'follow-token';
   given = undefined;
   viewersBuilt = 0;
   setAddress.mockClear();
@@ -524,6 +563,169 @@ describe('watching another party of the cave from a published link', () => {
     expect(screen.getByTestId('public-live-failed')).toBeTruthy();
   });
 
+  /**
+   * A link outlives its trip, and an installation may stop an old one from listing today's
+   * parties while it goes on opening the cave's past trips. The server gives no reason — every
+   * refusal is one answer — so the page has only which of its reads answered to go on.
+   */
+  it('says quietly that the link no longer lists today’s parties once the past trips answered and the list is refused for good', () => {
+    liveList = { isPending: false, isError: true, error: REFUSED };
+    // Read on this visit, moments before the list of parties was asked for and refused.
+    archive = { ...archive, dataUpdatedAt: Date.now() };
+    render(<PublicTripPage />);
+    openArchive();
+    expect(screen.getByTestId('public-past-list')).toBeTruthy();
+    toggleParties();
+
+    const notice = screen.getByTestId('public-live-past-only');
+    expect(notice).toHaveTextContent('This link no longer lists who is in the cave today');
+    expect(notice).toHaveTextContent('past trips are still here');
+    // Neither a failure that promises to recover, nor a try that cannot succeed, nor a link
+    // said to be over while its past trips are on the page.
+    expect(screen.queryByTestId('public-live-failed')).toBeNull();
+    expect(screen.queryByTestId('public-live-link-ended')).toBeNull();
+    expect(screen.queryByText(/Try opening this list again/)).toBeNull();
+    // The past trips are untouched by it.
+    expect(screen.getByTestId('public-past-list')).toBeTruthy();
+  });
+
+  it('keeps the failure wording for a list of parties that did not land, was busy or was told to wait, past trips answered or not', () => {
+    liveList = { isPending: false, isError: true, error: new TypeError('Failed to fetch') };
+    archive = { ...archive, dataUpdatedAt: Date.now() };
+    const { rerender } = render(<PublicTripPage />);
+    openArchive();
+    toggleParties();
+    expect(screen.getByTestId('public-live-failed')).toBeTruthy();
+    expect(screen.queryByTestId('public-live-past-only')).toBeNull();
+
+    for (const fault of [
+      new ApiError(503),
+      new ApiError(429),
+      new ApiError(429, undefined, undefined, undefined, 30_000),
+    ]) {
+      liveList = { isPending: false, isError: true, error: fault };
+      rerender(<PublicTripPage />);
+      expect(screen.getByTestId('public-live-failed')).toBeTruthy();
+      expect(screen.queryByTestId('public-live-past-only')).toBeNull();
+    }
+
+    // The positive case on the same page: the refusal the server settled is the quiet state.
+    liveList = { isPending: false, isError: true, error: REFUSED };
+    rerender(<PublicTripPage />);
+    expect(screen.getByTestId('public-live-past-only')).toBeTruthy();
+  });
+
+  it('keeps today’s wording when the past trips are refused as well', () => {
+    liveList = { isPending: false, isError: true, error: REFUSED };
+    archive = { data: undefined, isPending: false, isError: true, error: REFUSED };
+    render(<PublicTripPage />);
+    openArchive();
+    toggleParties();
+
+    expect(screen.queryByTestId('public-live-past-only')).toBeNull();
+    expect(screen.getByTestId('public-live-failed')).toBeTruthy();
+    expect(screen.getByTestId('public-past-not-offered')).toBeTruthy();
+  });
+
+  it('reads nothing to find out: with the past trips never asked for, the list’s refusal is worded as before', () => {
+    liveList = { isPending: false, isError: true, error: REFUSED };
+    render(<PublicTripPage />);
+    toggleParties();
+
+    // The refusal did not make the page ask for the past trips, and with them unknown the page
+    // claims nothing about them.
+    expect(pastAsked).toBe(false);
+    expect(screen.queryByTestId('public-live-past-only')).toBeNull();
+    expect(screen.getByTestId('public-live-failed')).toBeTruthy();
+
+    // Asked for by the reader, and answered after the refusal: the same refusal is now the
+    // quiet state.
+    archive = { ...archive, dataUpdatedAt: Date.now() };
+    openArchive();
+    expect(pastAsked).toBe(true);
+    expect(screen.getByTestId('public-live-past-only')).toBeTruthy();
+    expect(screen.queryByTestId('public-live-failed')).toBeNull();
+  });
+
+  /**
+   * A link taken back while the page is open refuses both lists from then on, and leaves behind
+   * exactly what an old link does: a past list in hand, and a list of parties refused for good.
+   * What tells them apart is when the past list arrived. Read before the list of parties last
+   * answered, it says nothing of the link as it is now — and "the past trips are still here"
+   * would be false, since every one of them is refused when pressed.
+   */
+  it('goes on saying the link stopped answering over a watched party when the past trips were read before the list last answered', () => {
+    const listReadAt = Date.now();
+    archive = { ...archive, dataUpdatedAt: listReadAt - 60_000 };
+    liveList = { ...answered(ownRow(), row()), dataUpdatedAt: listReadAt };
+    const { rerender } = render(<PublicTripPage />);
+    openArchive();
+    watchOther();
+
+    // Unpublished, replaced or run out: the next read of the list is refused for good.
+    liveList = { ...liveList, isError: true, error: REFUSED, errorUpdatedAt: listReadAt + 60_000 };
+    rerender(<PublicTripPage />);
+
+    expect(screen.getByTestId('public-trip-ended')).toHaveTextContent('stopped answering');
+    expect(screen.queryByTestId('public-trip-past-only')).toBeNull();
+    expect(screen.queryByTestId('public-live-past-only')).toBeNull();
+    // The past list is still on the page — in hand, which is all it is.
+    expect(screen.getByTestId('public-past-list')).toBeTruthy();
+  });
+
+  it('does not take a past list read long before the refusal for one that still answers, though the list of parties never answered', () => {
+    const refusedAt = Date.now();
+    archive = { ...archive, dataUpdatedAt: refusedAt - LONG_AGO_MS };
+    liveList = { isPending: false, isError: true, error: REFUSED, errorUpdatedAt: refusedAt };
+    const { rerender } = render(<PublicTripPage />);
+    openArchive();
+    toggleParties();
+
+    expect(screen.queryByTestId('public-live-past-only')).toBeNull();
+    expect(screen.getByTestId('public-live-failed')).toBeTruthy();
+
+    // The twin: the same past list, read within the time it is believed for.
+    archive = { ...archive, dataUpdatedAt: refusedAt - 60_000 };
+    rerender(<PublicTripPage />);
+    expect(screen.getByTestId('public-live-past-only')).toBeTruthy();
+  });
+
+  it('says the same over a watched party once the past trips answered after the list was refused for good, instead of that the link stopped answering', () => {
+    const listReadAt = Date.now();
+    archive = { ...archive, dataUpdatedAt: listReadAt - 60_000 };
+    liveList = { ...answered(ownRow(), row()), dataUpdatedAt: listReadAt };
+    const { rerender } = render(<PublicTripPage />);
+    openArchive();
+    watchOther();
+
+    liveList = { ...liveList, isError: true, error: REFUSED, errorUpdatedAt: listReadAt + 60_000 };
+    rerender(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-ended')).toBeTruthy();
+    const readsBefore = liveReads;
+
+    // The past trips read again for the reader's own reasons — a return to the tab — and
+    // answered: the link still opens them, so only its list of parties has ended.
+    archive = { ...archive, dataUpdatedAt: listReadAt + 120_000 };
+    rerender(<PublicTripPage />);
+
+    const notice = screen.getByTestId('public-trip-past-only');
+    expect(notice).toHaveTextContent('This link no longer lists who is in the cave today');
+    expect(notice).toHaveTextContent('will not be refreshed again');
+    expect(notice).toHaveTextContent('past trips are still here');
+    expect(screen.queryByTestId('public-trip-ended')).toBeNull();
+    expect(screen.queryByTestId('public-trip-stale')).toBeNull();
+    expect(screen.getByTestId('public-live-past-only')).toBeTruthy();
+    // One render, one more reading of the hook — the state asked for nothing of its own.
+    expect(liveReads).toBe(readsBefore + 1);
+
+    // The twin: with the past trips refused too, the link is said to have stopped answering.
+    archive = { data: undefined, isPending: false, isError: true, error: REFUSED };
+    rerender(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-ended')).toBeTruthy();
+    expect(screen.queryByTestId('public-trip-past-only')).toBeNull();
+    expect(screen.getByTestId('public-live-link-ended')).toBeTruthy();
+  });
+
   it('says a trip is over about the party on screen, not about this link’s own', () => {
     live = {
       data: envelope({ state: 'closed', closedAt: '2026-09-14T12:00:00Z' }),
@@ -597,5 +799,44 @@ describe('watching another party of the cave from a published link', () => {
     const written = setAddress.mock.calls.at(-1)?.[0] as URLSearchParams;
     expect(written.has('past')).toBe(false);
     expect(setAddress.mock.calls.at(-1)?.[1]).toEqual({ replace: true, flushSync: true });
+  });
+});
+
+describe('a second published link opened in the same tab, while another party was being watched', () => {
+  it('starts on its own party, with its sections shut and nobody else’s list read under it', () => {
+    // Two links of one cave, moved between with the browser's Back and Forward: the party watched
+    // under the first is in the second link's list too, so a watch left standing would be found
+    // there and the second link's page would open on it.
+    const { rerender } = render(<PublicTripPage />);
+    watchOther();
+    expect(drawn()).toEqual(['Mircea', 'Ileana', 'Radu']);
+    expect(screen.getByTestId('public-watch-banner')).toBeInTheDocument();
+
+    linkToken = 'second-link';
+    rerender(<PublicTripPage />);
+
+    expect(drawn()).toEqual(['Ana']);
+    expect(screen.queryByTestId('public-watch-banner')).toBeNull();
+    expect(screen.queryByTestId('public-watch-ended')).toBeNull();
+    expect(screen.getByTestId('public-trip-title')).toHaveTextContent('E1, the deep end');
+    // Nobody asked under the second link who else is in its cave.
+    expect(liveAsked).toBe(false);
+    expect(liveAskedUnder).not.toContain('second-link');
+    expect(screen.queryByTestId(`public-live-watch-${OTHER}`)).toBeNull();
+  });
+
+  it('does not carry over the notice that a watch ended under the first link', () => {
+    const { rerender } = render(<PublicTripPage />);
+    watchOther();
+    liveList = answered(ownRow());
+    rerender(<PublicTripPage />);
+    expect(screen.getByTestId('public-watch-ended')).toBeInTheDocument();
+
+    linkToken = 'second-link';
+    rerender(<PublicTripPage />);
+
+    // A link of another cave would otherwise open on a notice naming a party of the first's.
+    expect(screen.queryByTestId('public-watch-ended')).toBeNull();
+    expect(drawn()).toEqual(['Ana']);
   });
 });

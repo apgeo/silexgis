@@ -68,6 +68,12 @@ internal sealed record ExpeditionReportStay(
 /// party, which is the count of one afternoon. The camp's own roll-up counts it this way, and the
 /// document must not state a different figure for the same reading.
 /// </param>
+/// <param name="WatchMinutes">
+/// Person-minutes underground as the tracking logs of those same member trips have them, or null
+/// where no log holds an entry that an exit followed. Counted by the query every page of totals
+/// asks, over exactly the trips listed here — so it is the figure the camp's own statistics state
+/// to this reader, and a trip this reading may not open adds nothing to it.
+/// </param>
 internal sealed record ExpeditionReportContent(
     ExpeditionDto Camp,
     string? OrganizingGroupName,
@@ -75,10 +81,15 @@ internal sealed record ExpeditionReportContent(
     int TripPeople,
     IReadOnlyList<ExpeditionReportStay> Roster,
     int RosterPeople,
-    IReadOnlyList<ExpeditionReportPlate> Plates);
+    IReadOnlyList<ExpeditionReportPlate> Plates,
+    int? WatchMinutes);
 
-/// <summary>The member trips this reading may see, with the people they come to across all of them.</summary>
-internal sealed record ExpeditionReportTrips(IReadOnlyList<ExpeditionReportTrip> Trips, int People);
+/// <summary>
+/// The member trips this reading may see, with the people they come to across all of them and the
+/// time underground their tracking logs come to (null where no log has a completed stay).
+/// </summary>
+internal sealed record ExpeditionReportTrips(
+    IReadOnlyList<ExpeditionReportTrip> Trips, int People, int? WatchMinutes);
 
 /// <summary>
 /// A camp, arranged as the document a club circulates, under the layout the club asked for.
@@ -421,6 +432,7 @@ internal static class ExpeditionReportDocument
             case "caves": return Caves(content);
             case "people": return PeopleCount(content);
             case "hours": return UndergroundHours(content);
+            case "watchhours": return WatchHours(content);
             case "depth": return Metres(content.Trips.Max(t => t.DepthReachedM));
             case "length": return Metres(Sum(content.Trips.Select(t => t.LengthSurveyedM)));
             case "stations":
@@ -521,6 +533,23 @@ internal static class ExpeditionReportDocument
             ? null
             : string.Create(CultureInfo.InvariantCulture, $"{minutes / 60d:0.#} h");
     }
+
+    /// <summary>
+    /// The time underground the member trips' tracking logs come to, in person-hours.
+    /// </summary>
+    /// <remarks>
+    /// A different figure from the one above and not a refinement of it: that one adds up each
+    /// trip's own two clock times, this one adds up every person's reported entries and exits. A
+    /// layout prints it on a line of its own that says where it came from; nothing here adds the
+    /// two, because where a trip has both they are the same hours counted from two records.
+    ///
+    /// Nothing is printed where no log holds a completed stay — a party whose exits were never
+    /// written down was underground for a time the log does not know, and "0 h" would state one.
+    /// </remarks>
+    private static string? WatchHours(ExpeditionReportContent content) =>
+        content.WatchMinutes is not { } minutes || minutes <= 0
+            ? null
+            : string.Create(CultureInfo.InvariantCulture, $"{minutes / 60d:0.#} h");
 
     private static decimal? Sum(IEnumerable<decimal?> values)
     {

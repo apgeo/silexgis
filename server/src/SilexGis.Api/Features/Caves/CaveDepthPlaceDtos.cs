@@ -12,11 +12,20 @@ namespace SilexGis.Api.Features.Caves;
 /// described in and the order a chooser has to offer: somebody picking where a party is thinks
 /// downwards from the entrance, not alphabetically.
 /// </remarks>
+/// <param name="StationInSurvey">
+/// Whether the survey marked as this cave's current one holds a station of that name: true or false
+/// where that can be said, and null where it cannot — the cave has no current survey that has been
+/// read (another upload standing in for it does not count), or this caller may not be told about
+/// the cave's survey. A surface marks only an outright false. It is a
+/// statement about the cave's survey and not about any watch: a watch says the same of its own
+/// survey when it lists the places it can offer.
+/// </param>
 public sealed record CaveDepthPlaceDto(
     Guid Id,
     decimal DepthM,
     string StationName,
-    string? PlaceLabel);
+    string? PlaceLabel,
+    bool? StationInSurvey);
 
 /// <summary>
 /// A declaration being written. The depth identifies it, so writing one that already exists

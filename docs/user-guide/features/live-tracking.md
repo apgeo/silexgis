@@ -2,7 +2,7 @@
 
 🇬🇧 **English** · 🇷🇴 [Română](../ro/features/live-tracking.md)
 
-[← Feature reference](README.md) · Related: [Trips](trips.md) ·
+[← Feature reference](README.md) · Related: [Trips](trips.md) · [Camps](camps.md) ·
 [Checklists and the callout](checklists-and-callout.md) ·
 [Sharing, QR codes and public pages](sharing-and-public-pages.md)
 
@@ -44,7 +44,9 @@ Then **Start tracking**. The trip now shows *Tracking*, and reports can be recor
   being followed; a published page says the trip is over, and stops showing it once the grace
   period after closing has run out. **The log itself stays open** — reports can still be
   recorded, corrected or removed afterwards, so the write-up does not have to be finished
-  first. **Start tracking again** reopens the watch.
+  first. **Start tracking again** reopens the watch. A watch that was started again shows both
+  moments on the setup card — **First started** and **Started again** — so the hour the party
+  was first followed from is not lost to the restart.
 - **A trip where tracking was never started takes no reports** — a report names a place on a
   survey, and there is no survey yet. The tab says so and points at **Start tracking**.
 
@@ -84,6 +86,13 @@ puts it some metres away — in which case check the number or the cave's declar
 
 **From the drawing.** **Show the model** opens the survey with everybody on it; press a station
 and choose **Record here** to report at exactly that station.
+
+A station the survey file gives no name can be pressed too, on a Therion survey: the drawing
+labels it with the number the file wrote it at, in square brackets (`[42]`), and the report is
+recorded under that label. If the card answers that the survey has to be read again, the survey
+was read before such stations could be reported at — press **Read again** on its row under
+**3D survey models** on the cave's page, wait for it to finish, and report again. A Survex survey's
+nameless stations are not on the drawing at all, and a reported depth never lands on one.
 
 **Writing a report up after the trip.** Once tracking is closed the card says so — *"This
 trip's tracking is closed — a report added now is being written up afterwards"* — and **When it
@@ -165,9 +174,66 @@ every survey of it is declared. Turning it off brings back exactly what it hid.
 **Back to live** returns. Photographs can be hung on **a moment** of the trip (*Photographs of
 this moment*) rather than on a report, so correcting or deleting a report never loses them.
 
+**Where each photograph will be drawn is shown before you attach it.** Tick photographs in the
+dialog and each one gets a line: the moment it will be filed at, whom it is about, and where the
+replay will draw it. Nothing about that place is stored — the replay reads it out of the log at
+the photograph's own moment, for the person it is about — so the line is the log's answer, and
+it changes as you change what it depends on:
+
+| The line says | What it means | What changes it |
+|---|---|---|
+| **Drawn at station …** | The person it is about had been reported at that station by that moment | — |
+| **No station had been reported for them by then** | Nothing had placed them yet, or only a depth nobody named a station for | Usually the camera's clock: correct **The camera's clock was ahead by** and every line is worked out again. Or it is about somebody else |
+| **They were placed on another survey then** | Their place at that moment was reported on a survey the watch has since left | Nothing here; the photograph is drawn when that survey is the one being looked at |
+| **Their place at that moment is not shown to you** | That report's place is withheld from you, so you are told no station | Nothing here — a reader who may see the cave sees it drawn |
+| **This trip has no survey you can see it drawn on** | The cave's location is withheld from you and you are not told which survey the watch is on — or that survey has been deleted | Nothing here |
+| **On the timeline only — name somebody to place it** | It is about nobody in particular | Choose a person on its line |
+
+**About** at the top of the dialog names one person for every chosen photograph; the chooser on
+a photograph's own line makes that one about somebody else — a memory card holds pictures of
+several people — and choosing at the top again applies to all of them. A photograph that is
+drawn nowhere is still attached and still on the timeline at its moment. The lines are read
+against the survey the watch is on, from the whole log; while the log is being read, or if it
+cannot be, the line says so rather than guessing, and attaching still works.
+
+**Look at the reports on** — a chooser above the model, offered only on a trip whose reports were
+not all recorded on one survey: the watch was moved to a corrected survey part-way through, say,
+and the earlier reports name stations of the one it left. It lists the watch's own survey and
+every other survey a report of this trip was recorded on that is still on the server and that
+you may open; two surveys of one name are told apart by the day each was added. Choose another
+one and the markers, the replay, the station photographs and the map sheets are those of the
+reports recorded on *it* — somebody whose last place is on the watch's survey is then the one
+listed as *On another survey*.
+
+**While another survey is on screen the panel records nothing, and says so**: pressing a station
+offers no report, and no photograph can be hung on a moment. A report is always measured against
+the survey the watch uses, so a station pressed on an earlier survey would be looked up, by name,
+in the wrong one. Choose the watch's survey again — or hide the model, which always reopens on
+it — to record. A survey deleted since, or one of a cave whose location is withheld from you, is
+not on the list; the reports made on it stay marked in the table, in words.
+
 **Make a movie**, on the same panel, saves the replay as a file — a GIF or a video of the party
 moving through the survey, of this trip or of several. See
 [A movie of a tracked trip](tracking-movie.md).
+
+### Several parties at once: a camp's head count
+
+A trip that belongs to a [camp](camps.md) is also counted on the camp's **Who is underground**
+tab: every trip of the camp being tracked, or closed in the last two days, with its
+**Underground · Out · Not heard from** numbers and its people, on one screen. Nothing has to be
+switched on — starting tracking on the trip is what puts it there.
+
+That tab is the count and nothing else:
+
+- **It shows no place.** No station, depth, survey or cave is on it, for anybody — so it can
+  tell somebody that a person is underground in a cave whose location is withheld from them,
+  exactly as this tab's *Not shown to you* does. Where people are stays here, on the trip.
+- **It raises no alarm either.** It prints the hour the party plans to be out by as a time, and
+  compares it with nothing. The [callout](checklists-and-callout.md) is not on it.
+- **It lists only the trips its reader may read**, and names people as the trip's own page
+  names them to that reader.
+
+See [Camps → Who is underground](camps.md#who-is-underground).
 
 ---
 
@@ -180,10 +246,39 @@ Each row of **Reports** offers two controls, and they mean different things:
   person cannot be changed: a report about somebody else is a different report, so delete this
   one and record that one. The dialog says plainly that this changes what the log says
   happened — the replay and the published page follow it.
-- **Delete this report** — only for a report that should not be there at all. It leaves the log
-  for good.
+
+  The dialog's title says whose report it is and of when — *Correct the report about Ana of
+  12 May, 14:05* — so the row pressed is the row being changed. **The place is asked with the
+  same block as the report card**: the cave's declared places to choose from, a station whose
+  names are offered as you type, or a depth with **Which station is that?** under it. A depth
+  that is far from the station it lands on is warned about **as soon as the dialog opens**,
+  without the number being touched — a report recorded past that warning still carries it.
+  A moment earlier than the start of the watch brings *This moment is before the watch was
+  started*, with the hour the watch began: it is a warning and not a bar, and the correction
+  is saved as written — check the day and the hour first.
+- **Delete this report** — only for a report that should not be there at all. It comes off the
+  log, and off everything drawn from the log: the party table, the survey, a replay, a
+  published page. **It is not destroyed** — see *Putting a deleted report back* below.
 
 Both work on a **closed** watch as well as a running one.
+
+**Putting a deleted report back.** The notice that says *The report is off the log* carries
+**Undo** for a few seconds — for the bin pressed on the wrong row. After that the report waits
+under the log, in **Removed reports** (the heading carries the count, *Removed reports: 2*, and
+is not drawn while there are none). Open it and each removed report is listed with its moment,
+its person, its place and when it was taken off, beside two buttons:
+
+- **Put back** — the report returns to the log exactly as it was: the same moment, the same
+  place on the same survey, the same note. It is not marked **Corrected**, because nobody
+  corrected it.
+- **Delete for good** — destroys the report. The confirmation says so: **this cannot be
+  undone**, and nothing in the application brings the report back afterwards. Only a report
+  already taken off the log can be deleted for good, so losing one always takes two separate
+  acts.
+
+A removed report is kept for as long as its trip exists; deleting the trip for good takes its
+removed reports with it. *Removed reports* is shown to those who may write the trip's log, and
+a place you may not be told on the log is not told there either.
 
 **Reaching the report.** **Reports** shows twenty at a time, the most recent first, and the
 whole log is behind it: the page numbers under the table, or on a phone **Show older reports**
@@ -198,6 +293,14 @@ recent reports.
 report (below), and after the roster entry it is about was merged into another. A correction
 that changed nothing leaves no mark. The word says *that* the report was changed — not when,
 and not by whom — and it is shown on this log only: nothing on a published page carries it.
+
+**On another survey.** In **Reports**, a place carries this grey tag when it was recorded on a
+survey the watch has since stopped using — the watch was moved to another survey after that
+report, or the survey it was measured in has been deleted. Nothing is wrong with the report: it
+is what was said at the time. The tag is there because the same station name can be another
+place on the survey in use. It is the quiet twin of the amber tag in the table of people, which
+says the same thing about where somebody is *now*. To see such a report where it was made, open
+the model and use **Look at the reports on** (above).
 
 **Some imported positions cannot be corrected one by one.** A SpeleoLoc recording imported onto
 a trip that already existed puts its positions on that trip's log and leaves its tracking as it
@@ -222,8 +325,12 @@ section **What this cave's depths mean** → **Declare a depth**:
 | Field | |
 |---|---|
 | **Depth** | The depth being declared. Kept to one decimal; the sign is ignored |
-| **Station** | Which station that depth is, spelled the way the survey spells it |
+| **Station** | Which station that depth is. As you type, the stations of the cave's current survey whose names begin that way are offered under the box — capitals and accents do not matter — and choosing one fills in the survey's own spelling. Any name is still taken: the list is a help, not a rule |
 | **Place name** | Optional — the name people use for it ("Meander") |
+
+The list under **Station** offers nothing where the cave has no survey that has been read yet,
+or where the cave's exact location is withheld from you; the box is then a plain text box. When
+there are more names than it shows, its last line says how many — type more of the name.
 
 - **One declaration per depth.** Declaring a depth again replaces what it said. Editing a
   declaration to a different depth writes the new one and then withdraws the old.
@@ -233,7 +340,26 @@ section **What this cave's depths mean** → **Declare a depth**:
   and the tab says which of the two happened.
 - **A place name becomes something to report by.** The report card offers the declared places
   by name, shallowest first; choosing one reports its depth, which lands on the declared station.
+  Where the cave has declared none the card says so — *This cave has declared no places, so a
+  place is reported as a station or as a depth* — with a link, **Declare them on the cave's
+  page**, that opens this card. The correction dialog says the same.
+- **Not in the current survey.** A declared place carries this amber tag when the survey marked
+  as the cave's **current** one has no station of that name — a mistyped name, or a survey
+  exported again with its stations renamed and then **made the current one**. The declaration
+  is not followed there: a report of that depth lands on the nearest station instead. Correct
+  the station's name (the list offers the current survey's), or check which survey is the cave's
+  current one. **A survey that has only been uploaded is not judged here**: uploading does not
+  take the mark from the survey that has it, so a corrected file shows no tags until it is made
+  current — and no tags then is not a sign the declarations suit it. A watch pointed at another
+  survey says so itself: the report card judges each place against the survey the watch uses,
+  in its list of places — *Meander — station not in this survey*. No tag is not a promise
+  either way: where the current survey has not been read (even if another upload has), or the
+  cave's location is withheld from you, nothing is said.
 - **Withdraw** removes a declaration. Reports already recorded keep the station they were given.
+- **A station the survey file gives no name cannot be declared.** It is known only by the number
+  its file wrote it at, and the next export of the survey gives that number to another station —
+  so the declaration would come to mean a different place without anybody changing it. Declare
+  the depth at a station that has a name.
 
 Declaring needs the right to write to the cave. A declared station is a position, so the list
 carries the cave's own protection.
@@ -264,7 +390,8 @@ started takes no sheet: reading one says so at once, as importing it would.
    **After the import**. Where the place of the report in the log is one you may not be told,
    it reads *Not shown to you* rather than being left blank.
 4. **Column settings** — point a field at a header only where the detection got it wrong. The
-   **Words for going in** and **Words for coming out** replace the usual lists for that side.
+   **Words for going in**, **Words for coming out** and **Words for a note** replace the usual
+   lists for that side.
 5. **Untick** any row you do not want (a line naming several people is taken or left out
    whole), tick **Overwrite what the log already holds at these moments** if you mean to, and
    **Import**.
@@ -287,7 +414,7 @@ made for the whole sheet, each time it is read; nothing about it is remembered o
 | Rule | Why |
 |---|---|
 | **A report is filed under the person and the moment** | A corrected sheet imported again corrects the rows it corrected instead of doubling them |
-| **Overwriting changes only what the sheet has a column for** | Where the log already holds the report, where the person was is always written; the team only if the sheet has a team column, and the note only if it has a note or a details column — an empty cell under such a column clears it. A sheet of times and depths leaves a note typed by hand standing. Reports that already say what the sheet says are not written again, and are counted apart as *already as the sheet says* |
+| **Overwriting changes only what the sheet has a column for** | Where the log already holds the report, where the person was is written when the row says something else than the report does; the team only if the sheet has a team column, and the note only if it has a note or a details column — an empty cell under such a column clears it. A sheet of times and depths leaves a note typed by hand standing. Reports that already say what the sheet says are not written again, and are counted apart as *already as the sheet says* |
 | **Import does what the table showed, or nothing** | The sheet is read again when you press **Import**. If the trip changed in between — somebody typed a report at one of the sheet's moments or corrected one the sheet would replace, a team or a participant changed, a place was declared in the cave, the watch was put on another survey — nothing is written, the sheet is read again and the dialog says so: check the rows, tick the overwrite again if you still mean to, and press **Import** |
 | **The same sheet imported a second time writes nothing** | Every one of its rows is found on the log already. Without the overwrite tick they are all *left out*; with it, each is compared with the report the log holds and, saying the same, is counted as *already as the sheet says* — no report is added, none is rewritten, and none becomes **Corrected**. So a sheet you are still adding to can be imported again as often as you like: only its new rows and its changed ones are written |
 | **A time written without a zone is read as UTC, exactly as written — unless you name the sheet's time zone** | A sheet's 14:30 becomes 14:30 UTC, shown in your own zone. Choose **Sheet's time zone** under **File settings** — your own zone is offered by name and any other can be searched — and 14:30 is read on that zone's clocks, summer and winter time included; the preview says which zone was used and shows each row on its clocks. A cell that writes its own offset (`2026-09-12T14:30+03:00`) is read as it says under either choice |
@@ -296,7 +423,9 @@ made for the whole sheet, each time it is read; nothing about it is remembered o
 | **A sheet of times with no dates asks for its day** | The dialog asks for **The day the sheet was kept on** and offers the trip's date: check it and read the sheet again. A time earlier than one further up the sheet is flagged, whoever the two rows are about, because a sheet kept in order that does this ran past midnight and that row belongs to the next day — leave it out, or give the sheet a date column |
 | **A date with no time is refused** | Filed at midnight, a whole day's reports would collapse onto one moment |
 | **The date and the time may be in two separate columns** | They are joined and read as one moment, under the same rules as a single column. A row that leaves its date blank is refused — the date is not carried down from the row above |
-| **Names are matched against this trip's roster only** | Full name, then given name and initial ("Ion P."), then given name. A name matching nobody, or two people, is refused rather than guessed |
+| **Names are matched against this trip's roster only** | Full name, then given name and initial ("Ion P."), then given name. A name matching nobody, or two people, is refused rather than guessed. Somebody whose account goes by another name than the roster has for them is found by either |
+| **A row that repeats the station or the depth a report already holds leaves that report where it is** | A station name or a depth is read against the survey the watch is on *now*, with the reference station, the filter and the declared places it has *now*. A report made earlier — on a survey the watch has since left, or before a declared place was changed — is therefore not read again when the row only says what it already says: it keeps its station and the survey it was made on. Write another station or another depth in the row and that row is placed afresh, on the survey in force. To have a depth read again under changed declarations, correct the report itself |
+| **A note is compared the way a cell is read** | Line breaks and doubled spaces in a typed note count as single spaces, and a note that is only `-`, `?` or `n/a` counts as empty. A note that reads the same is left exactly as it was typed |
 | **A row's place: station, then declared place, then depth** | Going in and coming out claim no station |
 | **A row with a note and no place is a note — if the place cells are empty** | A call that said "water rising" and no place is a report all the same. A depth that is not a number (*96 cm*) or a standing word neither list knows is not an empty cell: that row is refused, with the cell named, rather than filed as its note — correct the cell, or add the word under **Column settings** |
 | **Two rows for the same person at the same moment are one report** | The last one wins, and both lines say so |
@@ -305,6 +434,27 @@ made for the whole sheet, each time it is read; nothing about it is remembered o
 
 A sheet can be imported onto a **closed** watch — that is usually when it is typed up. A trip
 with no watch at all has nothing to import onto: choose a survey and save the setup first.
+
+### Taking the log out as a sheet
+
+**Download the log (CSV)**, beside the reports, saves the whole log as the sheet the import
+reads — the same columns as the sample, one report on a row, oldest first. Anybody who can read
+the trip can take it. Correct it in a spreadsheet and import it again with **Overwrite what the
+log already holds at these moments** ticked: the rows you changed are corrected, the rest are
+counted as *already as the sheet says* — also where the watch has since been put on another
+survey: a report whose row you left alone stays on the survey it was made on.
+
+| What the sheet does | Why |
+|---|---|
+| **The moment is written whole, with its offset** (`2026-09-12T14:30:07.123456Z`) | A report is found again by the person and the exact moment. Keep that column as text: a spreadsheet that turns it into a date of its own drops the fraction of a second, and the row then comes back as a new report beside the old one — the preview shows it as **New** where you expected **Replaces** |
+| **A station report carries its station, a depth report its depth, never both** | On the way back a station outranks a depth, so a depth written with a station beside it would stop being a depth report |
+| **The state column says** `intrare`, `iesire` **or** `nota` | A note has a word of its own so that a note with nothing written in it is still a row. A club that writes another word names it under **Column settings**, **Words for a note** |
+| **A place you may not be told is not in the file** | The report is still there, with its time, its person and its note, and `retinut` in the state column. Imported again, that row is refused: a place left out of your copy is never written over the place the log holds |
+| **Text a spreadsheet would run as a formula is kept as text** | A note or a name beginning with `=`, `+`, `-` or `@` is written with a tab in front of it, which the import drops again |
+| **People are named as the application shows them to you** | Where somebody's account goes by another name than the roster has for them, the sheet carries the account's. The import finds the person by either |
+| **A station or a depth is written as the report holds it, without its survey** | The sheet does not say which survey a report was made on, and does not need to: imported again, a row whose station or depth you left alone leaves the report on its survey. Change the station or the depth and the row is read on the survey the watch is on now — where the same station name can be another place, and a station that survey does not have is refused |
+| **Two reports about one person at one moment are both written, and both refused on the way back** | The import cannot tell which of the two a row would correct |
+| **The file is named by the trip's number and the day** | Never by the trip's title or the cave |
 
 ---
 
@@ -327,7 +477,12 @@ with no watch at all has nothing to import onto: choose a survey and save the se
   can miss, is under [Everything published](#everything-published-for-full-administrators).
 
 **Who the page names.** By default this installation publishes **real names**; an operator can
-switch that off for everybody, after which people appear as *Caver 1*, *Caver 2*. The
+switch that off for everybody, after which people appear as *Caver 1*, *Caver 2*. **A person's
+number stays theirs**: it is given when the trip first names them and does not move when the
+roster is edited afterwards — giving somebody another role, or taking somebody else off the
+trip, renumbers nobody. Somebody taken off leaves a gap (*Caver 1*, *Caver 3*) rather than
+handing their number to the next person, and gets the same number back if the trip names them
+again. The
 **On the public page** column shows, for each person, what the page will call them. A
 **caption** outranks that setting in both directions — *"third of the party"* keeps one person
 off a page that would otherwise name them, without turning names off for the club.
@@ -440,9 +595,18 @@ neither is told about nobody else, and the page asks the server for neither.
   be opened from here, and the lists cannot be narrowed to one camp.
 - **The cave's finished published trips** — **Play** replays one on the survey its reports were
   measured in, under a banner that says plainly *"You are looking at a past trip"*. The view can
-  keep up with one team or person, and **Back to the party now** returns — as does the
-  browser's own Back button, since picking a trip is a step in the page's history. The address
-  follows what is on screen (`?past=…&team=…`), so a reader can send somebody that exact view.
+  keep up with one team or person; while it does, the two arrows that step from one report to
+  the next step through that team's or person's own reports and pass over everybody else's (the
+  marks on the rail stay the whole trip's, and where nothing was ever reported about the party
+  followed the arrows go on stepping through every report). **Back to the party now** returns —
+  as does the browser's own Back button, since picking a trip is a step in the page's history.
+  The address follows what is on screen (`?past=…&team=…`), so a reader can send somebody that
+  exact view. While a past trip is on screen, **Play another trip of this cave** directly under
+  the replay's controls opens the same list there, so going through a cave's history trip by
+  trip does not mean scrolling to the foot of the page and back. A replay belongs to the link it
+  was opened under, and so does everything else a reader chose there — another party they asked
+  to watch, the lists they opened: a second published link opened in the same tab starts on its
+  own party with both lists shut, or on the past trip its own address names.
 - **A link to one moment of a replay** — under the replay's rail, **Copy link to this moment**
   copies an address that opens the same trip, following the same team or person, with the clock
   at the moment showing; **Copy link that plays from here** copies one that also starts the replay
@@ -463,8 +627,9 @@ Two consequences worth knowing before you publish:
   lasts after the live page has ended, for as long as the installation keeps past trips
   readable (by default, indefinitely).
 - **An old link keeps showing who is in the cave now**, through *Being followed now*, for as
-  long as its own trip stays readable as a past trip. An operator who does not want that turns
-  past trips off or sets how long they are kept; see the [install
+  long as its own trip stays readable as a past trip. An operator who does not want that sets
+  how long after its own trip an old link goes on doing so — the past trips stay readable — or
+  turns past trips off, or sets how long they are kept; see the [install
   guide](../../INSTALL.md#configuration-reference).
 
 The whole rule — how long each of these lasts, what a past trip hands over and how a trip is
@@ -497,6 +662,32 @@ full page's: add `past=<trip>`, and where wanted `team=` or `caver=`, `at=<insta
 `play=1`, to the address inside the block (`…/embed?lang=en&past=…&at=…&play=1`) and the frame
 opens on that trip, at that moment, playing. The values are the ones **Copy link to this
 moment** puts into the address it copies.
+
+**What the frame shows while a past trip plays** depends on the room the frame has — its own
+width and height, not the screen's.
+
+- **A frame at least 800 px wide and 760 px tall** (the block's 4:3 box in a column about 1,020 px
+  wide, or a box you made taller) shows the whole strip under the drawing: the statement that this
+  is a past trip, the clock, play and pause, the speed, the steps from one report to the next, whom
+  the view keeps up with, the rail and the way back, all on screen at once, so the rail is dragged
+  while looking at the drawing it moves. Beside the way back, **Past trips in this cave** opens a
+  sheet over the frame with the cave's two lists.
+- **A smaller frame** — the 4:3 box in an ordinary article's column as well as a phone's — shows
+  one line along its bottom edge: a **Past trip** tag and the trip's name, the clock, play and
+  pause, the way back (**Now** where the block's own party is underground, **Back** where it is
+  not) and one last button. That button opens a sheet over the frame with the rest: the rail, the
+  speed, the steps from one report to the next, whom the view keeps up with and the statement in
+  full. On a phone the frame is about 260 px tall, and the line is what leaves the drawing four
+  fifths of it; the whole strip, with somebody followed and everything it can have to say, is about
+  350 px tall under a finger and 300 under a mouse, and is shown only where the drawing still keeps
+  half the frame beside it. Under those controls, **Past trips in this cave** opens the cave's two
+  lists in the same sheet, so a reader can change trip without leaving the replay first.
+
+In both, moving through a replay asks the server for nothing: the cave's lists — who else is
+underground now, and the finished trips — are read only when a reader presses the button named
+for them, exactly as while the party of now is on screen. A replay whose record was cut short
+says so on the frame itself, in either layout, so a clock that stops early is not taken for the
+end of the trip. The frame keeps its amber outline for as long as the past is on screen.
 
 **Links in your own prose can drive the viewer** — one attribute on an ordinary link:
 
@@ -537,6 +728,14 @@ this one can be pasted as it is:
 <script>
 document.addEventListener('silexgis:ready', function (event) {
   var said = event.detail;
+  if (said.pastUnreadable) {
+    // The server REFUSED the past trip the frame was asked for: it has been taken back, or is
+    // older than this installation keeps. said.pastUnreadable.tripLogId says which trip; there
+    // is no title and no moment, and said.past is absent. Say so in your own words and offer a
+    // link with data-silexgis-trip="live" - and take the words down again on the next
+    // announcement, which no longer carries it. Checked BEFORE loaded, which stays false.
+    return;
+  }
   if (!said.loaded) return;   // nothing has arrived yet - not the same as "nobody"
   if (said.past) {
     // A REPLAY of a past trip: said.past.title, said.past.tripLogId, and said.past.at
@@ -573,8 +772,24 @@ What to rely on:
 - **Wait for `loaded: true`.** The first announcement usually arrives before the party has,
   with `loaded: false` and an empty party. An empty party with `loaded: true` is a trip with
   nobody on it.
-- **`past` present means a replay.** Absent, the party is the block's own trip as it stands
-  now. Never print a replayed party as where people are.
+- **`past` present means a replay**, and always carries `tripLogId`, `title` and `at`. Absent,
+  and with `loaded: true`, the party is the block's own trip as it stands now. Never print a
+  replayed party as where people are.
+- **`pastUnreadable` present means the server refused the past trip asked for** — its link was
+  taken back, it is older than the installation keeps, or it was never a trip of this cave. It
+  carries `tripLogId` and nothing else; beside it `past` is absent, `party` is empty and
+  `loaded` is `false`, because nothing is on screen — so read it **before** the `loaded` check,
+  as the example does. It is said once and stands until the next announcement, which no longer
+  carries it: the reader went to another trip or back to the party now, or — rarely — the trip
+  was published again and a later read was answered, in which case that announcement is an
+  ordinary `past`. It is **not** sent for a read that merely did not arrive (a phone without
+  signal, a server fault): the frame then goes on announcing `loaded: false` with nothing
+  beside it, tells its own reader that the trip could not be read, and reads again when they
+  return to the tab. The frame keeps its way back on screen either way; a link with
+  `data-silexgis-trip="live"` brings it back from your own prose. A listener written before
+  this member existed is not affected by it: `past` is untouched, and it stops at
+  `loaded: false` exactly as it did before, when a refused trip was announced as nothing at
+  all.
 - **`watching` present means another party of the cave.** The reader opened the frame's list
   of parties being followed in the cave and pressed **Watch** on one of them. That party is
   underground now and its members are numbered from 1 exactly as your trip's are, so a page
@@ -659,13 +874,30 @@ opened afresh shows *"Nothing to show for this link"* and offers no list. What s
 is the list and the replays behind it — to a page that was already open when the link ended,
 and to a website that reads the published-trip addresses itself.
 
+**An old link and today's parties.** The same link also lists the parties being followed in
+the cave now. Where an installation has stopped an old link from doing that while leaving the
+cave's past trips open, a page that was given the past trips and was refused the list of
+parties for good says *"This link no longer lists who is in the cave today"* where the list
+would be. It is said quietly, as a fact about the link and not as a failure: nothing is tried
+again, and the past trips are still there to read and play. The server gives no reason for a
+refusal, so the page says this only on that evidence — past trips answered, the list of
+parties refused for good — and only when the two answers belong to one moment: the past trips
+read after the list was refused or a few minutes before it at most, and not before the list
+last answered. A list of past trips that is merely still on the page from earlier does not
+count, because a link taken back while the page is open leaves exactly that behind; such a
+page goes on saying that the link has stopped answering, and says the quieter thing only if
+the past trips are read again and answer. Nothing is read just to find out. A list that merely
+could not be read just now keeps the wording that invites another try, and where the past
+trips are refused as well the page says what it says of any link that has stopped answering.
+
 **What a past trip hands over.** In the list: its name, its dates, the camp it belonged to, how
 many were on it, and when its watch was closed. In the replay: the party, the reports with
 their times, and the survey they were measured on. **Nothing is copied when a trip is
 published** — the replay is read from the trip's own tracking log every time. So people are
 named by the rule in force *today* (a caption added now keeps that person's name out of a
 replay of last year's trip, and switching names off for the installation does so for
-everybody) and a report corrected or deleted in the log is corrected or gone in the replay.
+everybody) and a report corrected or deleted in the log is corrected or gone in the replay —
+and back in it when the report is put back.
 
 **Running out removes nothing.** A link that has ended, and a trip that has aged out of the
 past trips, are only no longer *shown to visitors*: the trip, its tracking log and its reports
@@ -676,7 +908,7 @@ stay in the installation exactly as they were, for the members who may read them
 | You want | Do this |
 |---|---|
 | One person's name off the page and the replay | Give them a **caption** on the trip — it applies from the next read |
-| One report gone | Delete it in the tracking log |
+| One report gone | Delete it in the tracking log: it leaves the page and the replay at once. It is still kept under **Removed reports** for the trip's coordinators — **Delete for good** there if it must not exist at all |
 | The live page closed now | **Take it back**, on each link in **Publish this trip** |
 | The trip out of the cave's past trips | **Take back every link the panel lists for that trip**, the ones marked **Not open** included. With none left the trip is no longer listed or replayable, at once |
 | Everything of that trip gone | Delete the trip: its links end with it |
@@ -745,7 +977,7 @@ place of a link's address, so a line in the log can be matched with a row; it op
 |---|---|---|
 | **Replace link** | The old address stops answering at once and a fresh one is shown, **once**, in a window that closes only on *I have copied it*. Same expiry as the old one; the trip stays in its cave's past trips; nobody is told | The old address is gone for good. An address closed before it was copied is gone too — replace the link again |
 | **Unpublish this trip** | Takes back **every** link of that trip in one act, and says how many | Everything below |
-| **Unpublish everything** | Takes back every link of the installation — every trip, every cave. The confirmation states how many links are still standing and asks you to type a word before the button works | Everything below, for every trip at once |
+| **Unpublish everything** | Takes back every link of the installation — every trip, every cave. The confirmation states how many links the list shows as still standing, says that the links of **deleted trips** are taken back as well, and asks you to type a word before the button works | Everything below, for every trip at once |
 
 **What goes with taking a link back, and is not obvious.** The page stops answering for
 everybody holding the address, on this installation and on any website showing it in a frame.
@@ -753,6 +985,21 @@ And a finished trip whose last link is gone **leaves its cave's public list of p
 which other trips' links were showing too. There is no way to put a taken-back link back. A
 trip is published again only by **starting its watch again** and creating a new link, one trip
 at a time, and the new address has to be handed out afresh to everyone who had the old one.
+
+**Why "everything" can take back more links than the list shows.** The list leaves out the
+links of deleted trips: nobody can open them while their trip is deleted. But a deleted trip
+can be restored, and its links would answer again with it exactly as they stood — so
+**Unpublish everything** takes those back too, and an administrator told that every link is
+gone is told the truth. The confirmation says so before you type the word. When more links
+were taken back than the list showed, the result gives both figures — *Links taken back* and
+*Links this list showed* — and the reason; the first is the one to trust about what was
+withdrawn. **Unpublish this trip** does not reach a deleted trip: its links are not in the
+list.
+
+**The button is offered only while the list shows a standing link.** With none shown it is
+greyed out — so when the only links left standing belong to deleted trips, this page cannot
+take them back, and they answer again if such a trip is restored. A restored trip is back in
+the list, where **Unpublish this trip** takes its links back.
 
 That is also why there is **no "pause" switch**: an address that might start answering again
 is not one anybody can call withdrawn. If the aim is to stop showing past trips without
@@ -822,6 +1069,7 @@ outside, what one link answers. The full table, with the reason word for each ca
 | *"That survey belongs to a different cave…"* | A running watch stays in its cave — close it first |
 | *"No station matches that depth under this trip's filter…"* | Widen **Where the party said it was going**, or report a station |
 | *"A report cannot be about the future."* | Check the time on it |
+| *"That report is on the log again — somebody put it back. Take it off first, then delete it for good."* | Somebody else pressed **Put back** on it while your list of removed reports was open. Nothing was destroyed; if it still has to go, delete it from the log again |
 | *"Say when this was said. The tracking is closed, so the report cannot be stamped with the present time."* | A report added to a closed watch is being written up afterwards: fill in **When it was said** with the moment it was made during the trip |
 | *"This trip has no watch to import reports onto."* | Choose a survey and save the tracking setup first |
 | *"Nothing was imported. The trip or its log changed after this sheet was read…"* (headed *The trip changed while this sheet was being checked*) | Between your reading the sheet and pressing **Import**, something the import depends on changed — somebody recorded a report at one of the sheet's moments, a team or a participant was changed, a place was declared in the cave — so the sheet no longer matches what you were shown. Nothing was written and the sheet has been read again: check the rows, tick the overwrite again if you still mean it, and press **Import** |
@@ -830,6 +1078,7 @@ outside, what one link answers. The full table, with the reason word for each ca
 | *"That link has already been taken back, so there is nothing to replace. Publish the trip again instead."* | Somebody took it back first — possibly a moment ago, from another screen |
 | *"Nothing to show for this link"* (on the public page) | Taken back, replaced, ended, or the cave has been protected since |
 | *"Past trips are not offered through this link"* | The installation has switched past trips off |
+| *"This link no longer lists who is in the cave today"* (on the public page) | An old link: the list of parties being followed now is refused for good while the cave's past trips, read at about the same moment, still answer. There is nothing to try again — the past trips are still there |
 
 ---
 

@@ -204,6 +204,56 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
     }
 
     /// <summary>
+    /// A club's own layout may print the time underground that the member trips' tracking logs
+    /// come to, on a line of its own. Three things hold it in place: it is counted only over the
+    /// trips this reader may open; a log with an entry nobody closed prints nothing rather than
+    /// "0 h"; and the layout the application ships does not print it at all, so no existing
+    /// write-up changes.
+    /// </summary>
+    /// <remarks>
+    /// The withheld side is a Viewer holding nothing over the private trip, and the owner's copy
+    /// of the same camp through the same layout carries the larger figure — so the smaller one is
+    /// the filter at work and not a log that was never written.
+    /// </remarks>
+    [Fact]
+    public async Task A_layout_may_print_the_hours_from_tracking_and_the_shipped_layout_does_not()
+    {
+        var campId = await CreateCampAsync(owner, Visibility.Authenticated);
+        var (open, cavers) = await CreateTripWithPeopleAsync(
+            "Tracked openly", new DateOnly(2026, 7, 3), ["Ana Pop", "Barbu Ilie"]);
+        var closed = await CreateTripAsync(owner, "Tracked privately", new DateOnly(2026, 7, 4), Visibility.Private);
+        await JoinAsync(owner, campId, open);
+        await JoinAsync(owner, campId, closed);
+        var layoutId = await CreateLayoutAsync(
+            "expedition", "title: {title}\nfield: Trips = {trips}\nfield: By tracking = {watchhours}\n");
+
+        // An entry and nothing after it: the log exists and says nothing usable about time.
+        await ReportAsync(open, cavers[1], TripPositionEventKind.Entered, new DateTimeOffset(2026, 7, 3, 9, 0, 0, TimeSpan.Zero));
+        (await DocumentTextAsync(owner, campId, layoutId)).ShouldNotContain("By tracking");
+
+        // Three and a half hours on the trip anybody may read, five on the private one.
+        await ReportAsync(open, cavers[0], TripPositionEventKind.Entered, new DateTimeOffset(2026, 7, 3, 9, 0, 0, TimeSpan.Zero));
+        await ReportAsync(open, cavers[0], TripPositionEventKind.Exited, new DateTimeOffset(2026, 7, 3, 12, 30, 0, TimeSpan.Zero));
+        await ReportAsync(closed, cavers[0], TripPositionEventKind.Entered, new DateTimeOffset(2026, 7, 4, 10, 0, 0, TimeSpan.Zero));
+        await ReportAsync(closed, cavers[0], TripPositionEventKind.Exited, new DateTimeOffset(2026, 7, 4, 15, 0, 0, TimeSpan.Zero));
+
+        var entitled = await DocumentTextAsync(owner, campId, layoutId);
+        entitled.ShouldContain("By tracking");
+        entitled.ShouldContain("8.5 h");
+
+        var withheld = await DocumentTextAsync(reader, campId, layoutId);
+        withheld.ShouldContain("By tracking");
+        withheld.ShouldContain("3.5 h");
+        withheld.ShouldNotContain("8.5 h");
+
+        // The shipped layout, for the caller who may read everything: no such line, no such figure.
+        var shipped = await DocumentTextAsync(owner, campId);
+        shipped.ShouldContain("2 trips");
+        shipped.ShouldNotContain("By tracking");
+        shipped.ShouldNotContain("8.5 h");
+    }
+
+    /// <summary>
     /// The people on a camp are counted distinctly across its trips, which is what the camp's own
     /// roll-up counts — not the biggest single party, and not the parties added up.
     /// </summary>
@@ -599,9 +649,12 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
     }
 
     /// <summary>The words of a generated camp document, as a word processor would read them.</summary>
-    private static async Task<string> DocumentTextAsync(HttpClient client, Guid campId)
+    private static async Task<string> DocumentTextAsync(HttpClient client, Guid campId, Guid? templateId = null)
     {
-        using var response = await client.GetAsync($"/api/v1/expeditions/{campId}/report");
+        using var response = await client.GetAsync(
+            templateId is { } layout
+                ? $"/api/v1/expeditions/{campId}/report?templateId={layout}"
+                : $"/api/v1/expeditions/{campId}/report");
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         response.Content.Headers.ContentType!.MediaType.ShouldBe(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
@@ -775,6 +828,39 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
         using var response = await client.PostAsJsonAsync(
             $"/api/v1/expeditions/{campId}/trips", new { tripLogId = tripId });
         response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>A layout a club wrote itself, stored under a name of its own.</summary>
+    private async Task<Guid> CreateLayoutAsync(string kind, string body)
+    {
+        using var response = await admin.PostAsJsonAsync("/api/v1/report-templates/", new
+        {
+            name = $"{kind} layout {Guid.NewGuid():N}",
+            body,
+            isDefault = false,
+            kind,
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return created.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// One line in a trip's tracking log, written straight in: what is under test is what a log
+    /// that exists adds up to in a document, not how a report comes to be recorded.
+    /// </summary>
+    private async Task ReportAsync(Guid tripId, Guid caverId, TripPositionEventKind kind, DateTimeOffset at)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.TripPositionEvents.Add(new TripPositionEvent
+        {
+            TripLogId = tripId,
+            CaverId = caverId,
+            Kind = kind,
+            RecordedAt = at,
+        });
+        await db.SaveChangesAsync();
     }
 
     private async Task<Guid> CreateTemplateAsync(string kind, bool isDefault = false)

@@ -48,8 +48,12 @@ public static class TrackingCsvImportEndpoints
     /// both of them coming out — so the shape of an entry row and of an exit row is visible rather
     /// than described.
     /// </remarks>
-    private const string SampleCsv =
-        "Data si ora,Adancime,Statie,Loc,Speologi,Echipa,Nota,Stare\r\n"
+    /// <remarks>
+    /// Its first line is the one a log written out as a sheet begins with, taken from the same
+    /// place, so the sample and an exported log cannot come to describe two layouts.
+    /// </remarks>
+    private static readonly string SampleCsv =
+        TrackingCsvWriter.HeaderLine
         + "12.09.2026 08:15,0,,,\"Ion Popescu; Maria Pop\",Echipa 1,intrat in pestera,intrare\r\n"
         + "12.09.2026 09:40,96,,,\"Ion Popescu; Maria Pop\",Echipa 1,,\r\n"
         + "12.09.2026 10:05,,,Meandru,Maria Pop,Echipa 1,apa mare in meandru,\r\n"
@@ -73,6 +77,10 @@ public static class TrackingCsvImportEndpoints
             .WithSummary("The column roles a tracking sheet can carry, and the header spellings each one is detected under.");
         fields.MapGet("/template", GetTemplate)
             .WithSummary("A sample sheet with invented rows, in the spellings this installation detects.");
+
+        api.MapGet("/trip-logs/{tripLogId:guid}/tracking/events/export", ExportAsync)
+            .WithTags("TripTracking")
+            .WithSummary("The whole log as a sheet the import reads back, oldest report first, with every place this caller may not be told left out.");
 
         return api;
     }
@@ -111,13 +119,94 @@ public static class TrackingCsvImportEndpoints
     /// <summary>What the sample sheet is saved as. Named once, because a test asserts it.</summary>
     public const string TemplateFileName = "tracking-reports-sample.csv";
 
+    // ---- the log as a sheet ---------------------------------------------------------------
+
+    /// <summary>The trip's whole log, written as the sheet the import reads.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A file leaves the installation, so what goes into it is decided here and nowhere
+    /// later.</b> It is gated by reading the trip, exactly as the log's list is, and each report
+    /// passes through the same per-row rule the list answers by: a place this caller may not be
+    /// told is not in the bytes. Such a row is still written — that somebody reported at that
+    /// moment, and what they said, is the trip's — with its place marked as kept back, in a way
+    /// the import refuses, so that the sheet brought back cannot write "nowhere" over the place
+    /// the log holds.
+    /// </para>
+    /// <para>
+    /// <b>People are named as this caller is shown them</b> on every other signed-in screen, by
+    /// the one rule that decides it, and not by the roster's own entry: a file is not a way to
+    /// read a name the screen does not show. The import finds a person by that name as well as by
+    /// the roster's entry, so the sheet reads back whichever of the two it was written in.
+    /// </para>
+    /// <para>
+    /// <b>A station or a depth is written as the report holds it, with nothing saying which survey
+    /// it was made on.</b> It does not need to: the import leaves the place of a report alone
+    /// where the row says of it what the report already says, so a report made on a survey the
+    /// watch has since left comes back as itself and is not read again against another.
+    /// </para>
+    /// <para>
+    /// <b>Named by the trip's id and the day it was taken</b>, never by the trip's title or its
+    /// cave: a file's name is read by everything the file passes through.
+    /// </para>
+    /// <para>
+    /// Oldest first, which is the order a coordinator's own sheet is kept in, with the same
+    /// tie-break the list uses so that two reports stamped with one instant keep their order from
+    /// one download to the next.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<FileContentHttpResult, ProblemHttpResult>> ExportAsync(
+        Guid tripLogId, SilexGisDbContext db, IAccessService access, FeatureProtection protection,
+        IAccessContextAccessor accessAccessor, IUserContextAccessor userAccessor, CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null) return ApiProblems.NotFound("trip_log.not_found");
+        var trip = await TripTrackingEndpoints.ReadableTripAsync(db, access, ctx, tripLogId, ct);
+        if (trip is null) return ApiProblems.NotFound("trip_log.not_found");
+
+        var events = await db.TripPositionEvents.AsNoTracking()
+            .Where(e => e.TripLogId == tripLogId)
+            .OrderBy(e => e.RecordedAt).ThenBy(e => e.CreatedAt).ThenBy(e => e.Id)
+            .ToListAsync(ct);
+        var openCaves = await TrackingWithholding.OpenCavesOfAsync(db, access, protection, ctx, events, ct);
+        var names = await CaverDirectory.ResolveLabelsAsync(
+            db, await userAccessor.GetAsync(ct), events.Select(e => e.CaverId), ct);
+        var teamIds = events.Where(e => e.TeamId is not null).Select(e => e.TeamId!.Value).Distinct().ToList();
+        var teams = teamIds.Count == 0
+            ? []
+            : await db.TripTeams.AsNoTracking()
+                .Where(t => teamIds.Contains(t.Id))
+                .ToDictionaryAsync(t => t.Id, t => t.Title, ct);
+
+        var sheet = TrackingCsvWriter.Write(events.Select(e =>
+        {
+            // The place comes from the one rule that turns a stored report into what a caller
+            // reads, not from the stored row: what it leaves null is what this file leaves out.
+            var shown = TrackingWithholding.Shown(e, openCaves);
+            return new TrackingCsvExportRow(
+                shown.RecordedAt,
+                names.GetValueOrDefault(e.CaverId) ?? string.Empty,
+                e.TeamId is { } team ? teams.GetValueOrDefault(team) : null,
+                shown.Kind,
+                shown.StationName,
+                shown.DepthEnteredM,
+                shown.Note);
+        }));
+
+        return TypedResults.File(
+            Encoding.UTF8.GetBytes("\uFEFF" + sheet),
+            "text/csv; charset=utf-8",
+            $"tracking-log-{tripLogId.ToString("N")[..8]}-{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
     // ---- preview ------------------------------------------------------------------------
 
     private static async Task<Results<Ok<TrackingCsvPreviewDto>, ProblemHttpResult>> PreviewAsync(
         Guid tripLogId, TrackingCsvImportRequest request, SilexGisDbContext db, IAccessService access,
-        FeatureProtection protection, IAccessContextAccessor accessAccessor, CancellationToken ct)
+        FeatureProtection protection, IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor, CancellationToken ct)
     {
-        var loaded = await LoadAsync(tripLogId, forWriting: false, db, access, protection, accessAccessor, ct);
+        var loaded = await LoadAsync(
+            tripLogId, forWriting: false, db, access, protection, accessAccessor, userAccessor, ct);
         if (loaded.Refusal is { } refusal) return refusal;
 
         if (Read(request.Options, out var options, out var mapping) is { } unreadable) return unreadable;
@@ -158,7 +247,8 @@ public static class TrackingCsvImportEndpoints
         FeatureProtection protection, IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor, CancellationToken ct)
     {
-        var loaded = await LoadAsync(tripLogId, forWriting: true, db, access, protection, accessAccessor, ct);
+        var loaded = await LoadAsync(
+            tripLogId, forWriting: true, db, access, protection, accessAccessor, userAccessor, ct);
         if (loaded.Refusal is { } refusal) return refusal;
 
         var user = await userAccessor.GetAsync(ct);
@@ -257,19 +347,40 @@ public static class TrackingCsvImportEndpoints
                 // with a new identity, so anything hanging off the old one is orphaned by a fixed
                 // typo — and the change is audited either way.
                 //
-                // Only what the sheet carries is written. The place and the kind always are — a
-                // row is a statement of where somebody was. The team and the note are written
-                // where the sheet has a column for them, an empty cell included; a sheet with no
-                // such column says nothing about them, and a note typed onto the report by hand
-                // is not something a sheet of times and depths was asked to erase. Who recorded
-                // the report first is left as it is: the audit names who changed it.
-                row.Kind = report.Kind;
-                row.SurveyModelId = report.ViewerStationName is null ? null : plan.SurveyModelId;
-                row.CaveFeatureId = report.ViewerStationName is null ? null : plan.CaveFeatureId;
-                row.ViewerStationName = report.ViewerStationName;
-                row.DepthEnteredM = report.Kind == TripPositionEventKind.AtDepth ? report.DepthM : null;
+                // Only what the sheet carries is written. The place and the kind are — a row is
+                // a statement of where somebody was — unless the row says of the report exactly
+                // what the report already says. Then the place is left as the log holds it, with
+                // the survey and the cave it is anchored to: the report may have been made on a
+                // survey the watch has since left, or under a datum and declared places that have
+                // changed, and writing it again would read an untouched statement against all of
+                // that and move it. The team and the note are written where the sheet has a
+                // column for them, an empty cell included; a sheet with no such column says
+                // nothing about them, and a note typed onto the report by hand is not something a
+                // sheet of times and depths was asked to erase. Who recorded the report first is
+                // left as it is: the audit names who changed it.
+                if (!report.KeepsStoredPlace)
+                {
+                    row.Kind = report.Kind;
+                    row.SurveyModelId = report.ViewerStationName is null ? null : plan.SurveyModelId;
+                    row.CaveFeatureId = report.ViewerStationName is null ? null : plan.CaveFeatureId;
+                    row.ViewerStationName = report.ViewerStationName;
+                    row.DepthEnteredM = report.Kind == TripPositionEventKind.AtDepth ? report.DepthM : null;
+                }
+
                 if (plan.CarriesTeam) row.TeamId = report.TeamId;
-                if (plan.CarriesNote) row.Note = report.Note;
+
+                // A note is written only where it reads differently. A cell is tidied as it is
+                // read — a line break and a doubled space become one space, and a cell that only
+                // ever said "nothing here" becomes no note — while a typed note is stored as it
+                // was typed. So the stored note is read the way its own cell would be before the
+                // two are compared, and a note nobody touched keeps its line breaks instead of
+                // being rewritten as its tidied self and marked as corrected.
+                if (plan.CarriesNote
+                    && !string.Equals(
+                        TripCsvValues.Single(row.Note, options.SkipTokens), report.Note, StringComparison.Ordinal))
+                {
+                    row.Note = report.Note;
+                }
 
                 // Counted as changed only where a stored value really is another one, asked of the
                 // same comparison that decides whether the row is written at all — so the count is
@@ -409,7 +520,8 @@ public static class TrackingCsvImportEndpoints
     /// </param>
     private static async Task<Loaded> LoadAsync(
         Guid tripLogId, bool forWriting, SilexGisDbContext db, IAccessService access,
-        FeatureProtection protection, IAccessContextAccessor accessAccessor, CancellationToken ct)
+        FeatureProtection protection, IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var trip = ctx is null
@@ -444,6 +556,25 @@ public static class TrackingCsvImportEndpoints
             .Distinct()
             .ToListAsync(ct);
 
+        // Each person under the roster's own entry and, where it is another, under the name this
+        // caller is shown for them everywhere else — which is the name a log written out as a
+        // sheet carries. An account's name can change after the roster entry was made, and the
+        // entry can be renamed by whoever keeps the roster, so the two drift; a sheet may have
+        // been written in either, and both mean the one person. Nothing is disclosed by matching
+        // the second: it is the name this caller already reads on the trip.
+        var labels = await CaverDirectory.ResolveLabelsAsync(
+            db, await userAccessor.GetAsync(ct), roster.Select(r => r.Id), ct);
+        List<(Guid Key, string? Name)> names = [];
+        foreach (var person in roster)
+        {
+            names.Add((person.Id, person.FullName));
+            if (labels.TryGetValue(person.Id, out var label)
+                && !string.Equals(label, person.FullName, StringComparison.Ordinal))
+            {
+                names.Add((person.Id, label));
+            }
+        }
+
         var teams = await db.TripTeams.AsNoTracking()
             .Where(t => t.TripLogId == tripLogId)
             .Select(t => new { t.Id, Name = t.Title })
@@ -474,9 +605,21 @@ public static class TrackingCsvImportEndpoints
             .GroupBy(e => (e.CaverId, At: e.RecordedAt))
             .ToDictionary(g => g.Key, g => g.Count() == 1 ? g.First() : null);
 
+        // Where each report held once says the person was, for the rows that only repeat it —
+        // as far as this caller may be told. A report whose place is withheld from them is left
+        // out, so a station or a depth tried against it is planned as any other row is and the
+        // answer does not depend on whether it was the right one.
+        var placedRows = stored.Values.OfType<TripPositionEvent>().Where(TrackingWithholding.HasPosition).ToList();
+        var openCaves = await TrackingWithholding.OpenCavesOfAsync(db, access, protection, ctx, placedRows, ct);
+        var storedPlaces = placedRows
+            .Where(e => TrackingWithholding.PositionOpen(e, openCaves))
+            .ToDictionary(
+                e => (e.CaverId, At: e.RecordedAt),
+                e => new TrackingCsvStoredPlace(e.Kind, e.ViewerStationName, e.DepthEnteredM));
+
         var subject = new TrackingCsvSubject
         {
-            Roster = [.. roster.Select(r => (r.Id, (string?)r.FullName))],
+            Roster = names,
             Teams = [.. teams.Select(t => (t.Id, t.Name))],
             Declarations = declarations,
             Stations = stations,
@@ -489,6 +632,7 @@ public static class TrackingCsvImportEndpoints
             DepthFilter = tracking.DepthFilter,
             Existing = stored.Keys.ToHashSet(),
             ExistingSeveralTimes = stored.Where(e => e.Value is null).Select(e => e.Key).ToHashSet(),
+            Stored = storedPlaces,
             Now = DateTimeOffset.UtcNow,
         };
 
@@ -585,7 +729,8 @@ public static class TrackingCsvImportEndpoints
         // Named words replace the shipped list rather than adding to it, and each side is replaced
         // on its own: a club that writes "down" for going in may still write "iesire" for coming
         // out, and a caller naming one list has said nothing about the other.
-        if (dto.WentInWords is { Count: > 0 } || dto.CameOutWords is { Count: > 0 })
+        if (dto.WentInWords is { Count: > 0 } || dto.CameOutWords is { Count: > 0 }
+            || dto.NotedWords is { Count: > 0 })
         {
             var shipped = TrackingCsvStateWords.Default;
             options = options with
@@ -594,6 +739,7 @@ public static class TrackingCsvImportEndpoints
                 {
                     WentIn = dto.WentInWords is { Count: > 0 } wentIn ? wentIn : shipped.WentIn,
                     CameOut = dto.CameOutWords is { Count: > 0 } cameOut ? cameOut : shipped.CameOut,
+                    Noted = dto.NotedWords is { Count: > 0 } noted ? noted : shipped.Noted,
                 },
             };
         }

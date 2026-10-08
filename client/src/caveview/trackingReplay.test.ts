@@ -5,6 +5,7 @@ import {
   noteAfter,
   noteAt,
   noteBefore,
+  picturePlacementAt,
   picturesAt,
   placedPicturesAt,
   replayNotes,
@@ -27,9 +28,11 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
   return {
     state: 'armed',
     surveyModelId: MODEL,
+    caveFeatureId: null,
     referenceStationName: null,
     depthFilter: [],
     armedAt: '2026-09-12T08:00:00Z',
+    firstArmedAt: '2026-09-12T08:00:00Z',
     closedAt: null,
     positionsWithheld: false,
     teams: [
@@ -67,6 +70,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         name: null,
         quiet: false,
         outsideDeclaredParts: false,
+        ordinal: null,
       },
     ],
     ...overrides,
@@ -376,6 +380,7 @@ describe('trackedCaversAt', () => {
           name: null,
           quiet: false,
           outsideDeclaredParts: false,
+          ordinal: null,
         },
       ],
     });
@@ -772,6 +777,77 @@ describe('picturesAt and where a picture is drawn', () => {
     // camera fired, and a panel that does not know which survey it is drawing.
     expect(placedPicturesAt(pictures, [], at('2026-09-12T09:30:00Z'), MODEL).size).toBe(0);
     expect(placedPicturesAt(pictures, log, at('2026-09-12T09:30:00Z'), undefined).size).toBe(0);
+  });
+
+  /**
+   * The answer a surface gives <em>before</em> a photograph is hung, so that a camera's clock or a
+   * wrong name can be put right first. It is asked of the same fold the drawing reads, and the last
+   * assertion below holds the two together: whatever this promises is what is then drawn.
+   */
+  it('says beforehand where a photograph would be drawn, moment by moment', () => {
+    // Before anybody had reported her there is no station to hang it under…
+    expect(picturePlacementAt(log, at('2026-09-12T08:30:00Z'), ANA, MODEL)).toEqual({
+      kind: 'unplaced',
+    });
+    // …then the pitch head, then the sump: the moment decides, which is what makes a clock
+    // correction move a photograph from one station to another.
+    expect(picturePlacementAt(log, at('2026-09-12T09:05:00Z'), ANA, MODEL)).toEqual({
+      kind: 'station',
+      station: 'cave.upper.2',
+    });
+    expect(picturePlacementAt(log, at('2026-09-12T10:45:00Z'), ANA, MODEL)).toEqual({
+      kind: 'station',
+      station: 'cave.sump.1',
+    });
+    // Somebody the log never mentions, and nobody in particular: each its own answer, because
+    // only the second is put right by naming a person.
+    expect(picturePlacementAt(log, at('2026-09-12T09:05:00Z'), BOGDAN, MODEL)).toEqual({
+      kind: 'unplaced',
+    });
+    expect(picturePlacementAt(log, at('2026-09-12T09:05:00Z'), null, MODEL)).toEqual({
+      kind: 'party',
+    });
+    // A place measured in a survey other than the one in use, and no survey in use at all.
+    expect(picturePlacementAt(log, at('2026-09-12T09:05:00Z'), ANA, OTHER_MODEL)).toEqual({
+      kind: 'otherModel',
+    });
+    expect(picturePlacementAt(log, at('2026-09-12T09:05:00Z'), ANA, undefined)).toEqual({
+      kind: 'noModel',
+    });
+    // A depth nobody named a station for is a place and not a station.
+    const deep = newestFirst([
+      event({ recordedAt: '2026-09-12T09:00:00Z', kind: 'atDepth', depthEnteredM: 120 }),
+    ]);
+    expect(picturePlacementAt(deep, at('2026-09-12T09:05:00Z'), ANA, MODEL)).toEqual({
+      kind: 'unplaced',
+    });
+
+    // One reading: the station promised for a picture's own moment is the station it is drawn at.
+    const promised = picturePlacementAt(log, pictures[0].at, pictures[0].caverId, MODEL);
+    expect(promised.kind).toBe('station');
+    expect([...placedPicturesAt(pictures, log, at('2026-09-12T09:30:00Z'), MODEL).keys()]).toEqual([
+      promised.kind === 'station' ? promised.station : '',
+    ]);
+  });
+
+  /**
+   * A reader from whom the place is kept is sent the report with no station on it. The answer
+   * beforehand must not be a station — there is none to give — and must not be "nobody had
+   * reported them yet" either, which would tell a coordinator that nobody knows where a caver was.
+   */
+  it('never promises a station for a position this reader was not told', () => {
+    const withheld = newestFirst([
+      event({ recordedAt: '2026-09-12T09:00:00Z', stationName: null, surveyModelId: null }),
+    ]);
+    expect(picturePlacementAt(withheld, at('2026-09-12T09:05:00Z'), ANA, MODEL)).toEqual({
+      kind: 'withheld',
+    });
+    // The positive twin: the same moment and the same person, with the place this reader may be
+    // told.
+    expect(picturePlacementAt(log, at('2026-09-12T09:05:00Z'), ANA, MODEL)).toEqual({
+      kind: 'station',
+      station: 'cave.upper.2',
+    });
   });
 
   it('widens the window so a picture off the end of the log can still be reached', () => {

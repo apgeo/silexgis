@@ -12,9 +12,11 @@ namespace SilexGis.Api.Features.TripTracking;
 /// <remarks>
 /// <para>
 /// <b>What this is, and what it is deliberately not.</b> It is cost control on the only routes in
-/// this application that are anonymous, uncached and back a whole database-derived envelope — a
-/// party, its teams, every one of their positions folded from the trip's report log, and for the
-/// followed route a freshly signed delivery URL. The workflow this application hands out puts such
+/// this application that are anonymous, answered from the database on every request and back a
+/// whole database-derived envelope — a party, its teams, every one of their positions folded from
+/// the trip's report log, and for the followed route a freshly signed delivery URL. A reader that
+/// already holds the answer is spared its bytes and none of that work, because the answer is built
+/// before it can be compared. The workflow this application hands out puts such
 /// an address into a club's own article, which is indexable and archivable, so the request rate is
 /// set by strangers and crawlers rather than by anything this installation controls. Before this
 /// existed, a single unauthenticated address could be read as fast as a network allowed.
@@ -82,7 +84,11 @@ internal static class PublicTripRateLimits
     /// that long is certain to find a fresh one. Rounded up, never down, and never zero.
     /// </para>
     /// <para>
-    /// <b>A header and nothing else.</b> The refusal's body is the problem document the status-code
+    /// <b>Kept by nobody.</b> Like every other refusal on these routes it says so, since the route's
+    /// own filter never sees a request that was turned away before reaching the route.
+    /// </para>
+    /// <para>
+    /// <b>Headers and nothing else.</b> The refusal's body is the problem document the status-code
     /// pages write after this returns; writing one here would replace it.
     /// </para>
     /// </remarks>
@@ -100,6 +106,8 @@ internal static class PublicTripRateLimits
             var seconds = Math.Max(1, (long)Math.Ceiling(retryAfter.TotalSeconds));
             http.Response.Headers[HeaderNames.RetryAfter] = seconds.ToString(CultureInfo.InvariantCulture);
         }
+
+        http.Response.Headers.CacheControl = PublicTripValidatorFilter.NotKept;
 
         http.RequestServices.GetRequiredService<PublicTripDiagnostics>()
             .Limited(endpoint.Metadata.GetMetadata<PublicTripRoute>() ?? PublicTripRoute.Unnamed);

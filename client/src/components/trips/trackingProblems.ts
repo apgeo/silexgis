@@ -41,11 +41,16 @@ export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'tracking.model_other_cave': 'trips.tracking.problems.modelOtherCave',
   'tracking.reference_unknown': 'trips.tracking.problems.referenceUnknown',
   'tracking.station_unknown': 'trips.tracking.problems.stationUnknown',
+  // A pressed station the survey file gives no name, on a survey whose stored reading still holds
+  // it under a spelling the drawing does not use. Not the refusal above: that one is answered by
+  // choosing another station, this one by reading the survey again, and nothing typed would help.
+  'tracking.station_reading_outdated': 'trips.tracking.problems.stationReadingOutdated',
   'tracking.no_station_at_depth': 'trips.tracking.problems.noStationAtDepth',
   'tracking.caver_not_participant': 'trips.tracking.problems.caverNotParticipant',
   'tracking.recorded_in_future': 'trips.tracking.problems.recordedInFuture',
   'tracking.team_not_found': 'trips.tracking.problems.teamNotFound',
   'tracking.event_not_found': 'trips.tracking.problems.eventNotFound',
+  'tracking.event_not_removed': 'trips.tracking.problems.eventNotRemoved',
   'tracking.concurrent_write': 'trips.tracking.problems.concurrentWrite',
   // Publishing. The two refusals are deliberately different things — one is about this caller's
   // rights over the cave, the other about the cave itself — and are worded as two, because the

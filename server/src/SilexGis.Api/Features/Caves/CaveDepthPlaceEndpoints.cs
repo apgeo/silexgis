@@ -5,9 +5,11 @@ using Npgsql;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Surveys;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Features.Caves;
 
@@ -31,10 +33,26 @@ namespace SilexGis.Api.Features.Caves;
 /// told the other. A cave nobody may read answers the same not-found an absent cave answers.
 /// </para>
 /// <para>
-/// <b>Location protection does not reach it, and the reason is worth stating.</b> These rows carry
-/// no coordinate: a depth is a distance below an entrance and a station name is a label inside a
-/// survey, neither of which places a cave on the earth. What protects a survey's geometry is the
-/// gate on the survey model itself, which is untouched here.
+/// <b>Location protection does not reach the rows, and the reason is worth stating.</b> These rows
+/// carry no coordinate: a depth is a distance below an entrance and a station name is a label
+/// inside a survey, neither of which places a cave on the earth. What protects a survey's geometry
+/// is the gate on the survey model itself, which is untouched here.
+/// </para>
+/// <para>
+/// <b>It does reach the one thing said here about the survey.</b> Each row is sent with whether the
+/// cave's survey holds its station, and that is not a fact about the declaration: it says the cave
+/// has a survey that has been read, and which names are and are not in it. So it is answered on
+/// the survey's terms — Read on the cave and its exact position open — and is null for everybody
+/// else, exactly as it is for a cave with no survey at all.
+/// </para>
+/// <para>
+/// <b>A station the survey file gives no name cannot be declared.</b> Such a station is known only
+/// by the number its file wrote it at, and the next export of the survey hands that number to some
+/// other station. A position reported on one model can live with that, because it is only ever
+/// drawn on that model; a declaration is the cave's, outlives every model, and would silently come
+/// to mean a different place. It is refused under its own code. The refusal is the one answer of
+/// this slice that says something about a survey, so it is given only to a caller who may see the
+/// cave's surveys: to anybody else the write behaves as it always has, and learns nothing.
 /// </para>
 /// </remarks>
 public static class CaveDepthPlaceEndpoints
@@ -74,20 +92,32 @@ public static class CaveDepthPlaceEndpoints
             // offer, because somebody picking where a party is thinks downwards from the entrance.
             .OrderBy(x => x.DepthM)
             .ThenBy(x => x.Id)
-            .Select(x => new CaveDepthPlaceDto(x.Id, x.DepthM, x.ViewerStationName, x.PlaceLabel))
             .ToListAsync(ct);
 
-        return TypedResults.Ok(rows);
+        var inSurvey = await InSurveyAsync(db, ctx, caveId, [.. rows.Select(x => x.ViewerStationName)], ct);
+        return TypedResults.Ok(rows
+            .Select(x => new CaveDepthPlaceDto(
+                x.Id, x.DepthM, x.ViewerStationName, x.PlaceLabel, inSurvey(x.ViewerStationName)))
+            .ToList());
     }
 
     private static async Task<Results<Ok<CaveDepthPlaceDto>, ProblemHttpResult>> WriteAsync(
         Guid caveId, CaveDepthPlaceWriteRequest request, SilexGisDbContext db, IAccessService access,
-        IAccessContextAccessor accessAccessor, CancellationToken ct)
+        FeatureProtection protection, IAccessContextAccessor accessAccessor, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
-        if (await CaveAsync(db, access, ctx, caveId, AccessAction.Write, ct) is null)
+        if (await CaveAsync(db, access, ctx, caveId, AccessAction.Write, ct) is not { } cave)
         {
             return ApiProblems.NotFound("cave.not_found");
+        }
+
+        if (await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct)
+            && await NamesOnlyAFileNumberAsync(db, caveId, request.StationName!.Trim(), ct))
+        {
+            return ApiProblems.BadRequest(StationNamelessCode,
+                "That station has no name in the survey file, only the number the file wrote it at, and "
+                    + "the next export of the survey gives that number to another station. Declare the "
+                    + "depth at a station that has a name.");
         }
 
         // Keyed the way the table keys it — magnitude, one decimal — before it is looked up or
@@ -136,8 +166,133 @@ public static class CaveDepthPlaceEndpoints
                 "That depth was declared by somebody else while this was being written. Read the list and write again.");
         }
 
-        return TypedResults.Ok(
-            new CaveDepthPlaceDto(existing.Id, existing.DepthM, existing.ViewerStationName, existing.PlaceLabel));
+        // Said on the answer to a write as it is on the list, under the same terms: the person
+        // who has just typed a station name is the one who can act on being told the survey does
+        // not have it, and somebody who may write the cave but not place it is told nothing.
+        var inSurvey = await InSurveyAsync(db, ctx, caveId, [existing.ViewerStationName], ct);
+        return TypedResults.Ok(new CaveDepthPlaceDto(
+            existing.Id, existing.DepthM, existing.ViewerStationName, existing.PlaceLabel,
+            inSurvey(existing.ViewerStationName)));
+    }
+
+    /// <summary>
+    /// For each of these station names, whether the cave's current survey holds it — or null for
+    /// all of them where that may not be said to this caller, or there is no such survey.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// "Current" is the survey carrying the cave's mark, once it has been read, and nothing else:
+    /// a survey that merely stands in for an unreadable marked one answers for the cave's figures
+    /// but not here. The page that shows these answers offers station names out of the marked
+    /// survey and tells its reader to check which survey is the current one, so an answer judged
+    /// against any other upload would contradict both.
+    /// </para>
+    /// <para>
+    /// The survey and the caller's right to hear about it are asked together, in one statement,
+    /// so there is no path through here on which the names are compared for somebody who was not
+    /// first found entitled to the survey.
+    /// </para>
+    /// <para>
+    /// The comparison itself is the one a watch makes before it honours a declaration, asked of
+    /// the same function: a declaration keeps the name the drawing shows, a station row may hold
+    /// it under the file's root survey, and "is it there" has to mean the same thing on the cave's
+    /// page as it does at the moment a report is placed. Only the rows either reading could mean
+    /// are fetched — a cave declares a handful of places and its survey holds tens of thousands
+    /// of stations.
+    /// </para>
+    /// </remarks>
+    private static async Task<Func<string, bool?>> InSurveyAsync(
+        SilexGisDbContext db, AccessContext? ctx, Guid caveId, IReadOnlyList<string> viewerNames,
+        CancellationToken ct)
+    {
+        if (ctx is null || viewerNames.Count == 0)
+        {
+            return _ => null;
+        }
+
+        var survey = await ChosenSurveyModelSql.CurrentForCaveAsync(db, ctx, caveId, ct);
+        if (survey is null)
+        {
+            return _ => null;
+        }
+
+        var readings = viewerNames
+            .SelectMany(name => SurveyStationNames.StoredCandidates(survey.Format, survey.RootSurveyName, name))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var held = await db.SurveyStations.AsNoTracking()
+            .Where(s => s.SurveyModelId == survey.Id && readings.Contains(s.Name))
+            .Select(s => new { s.Name, s.SurveyName })
+            .ToListAsync(ct);
+
+        // Altitude and the entrance flag play no part in whether a name is there, so neither is read.
+        var stations = held
+            .Select(s => TrackingDepthResolver.Station.Of(
+                survey.Format, survey.RootSurveyName, s.Name, s.SurveyName, z: 0, isEntrance: false))
+            .ToList();
+
+        return name => TrackingDepthPlacements.NamesAStationOf(
+            stations, new DeclaredDepthPlaces.Declared(0, name, null));
+    }
+
+    /// <summary>The station a declaration names is one its survey file gives no name.</summary>
+    public const string StationNamelessCode = "cave_depth_place.station_nameless";
+
+    /// <summary>
+    /// Whether <paramref name="given"/> is, in the surveys this cave holds, a station known only by
+    /// the number its file wrote it at — in at least one of them, and a named station in none.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the rows rather than of the look of the name, because a surveyor may call a station
+    /// by a hash sign and a number, and that is a name like any other; what makes a station
+    /// nameless is that the name is the file's own number for that very row. A name no survey of
+    /// the cave holds is not judged at all — nothing here has ever required a declared station to
+    /// exist, since the survey it was read off may arrive later.
+    /// </remarks>
+    private static async Task<bool> NamesOnlyAFileNumberAsync(
+        SilexGisDbContext db, Guid caveId, string given, CancellationToken ct)
+    {
+        var linePlots = SurveyModelKinds.FormatsOf(SurveyModelKind.LinePlot);
+        var models = await db.SurveyModels.AsNoTracking()
+            .Where(m => m.CaveFeatureId == caveId && linePlots.Contains(m.Format))
+            .Select(m => new { m.Id, m.Format, m.RootSurveyName })
+            .ToListAsync(ct);
+        if (models.Count == 0)
+        {
+            return false;
+        }
+
+        var byModel = models.ToDictionary(
+            m => m.Id,
+            m => (m.Format, Names: SurveyStationNames.StoredCandidates(m.Format, m.RootSurveyName, given)));
+        var modelIds = models.Select(m => m.Id).ToList();
+        var names = byModel.Values.SelectMany(m => m.Names).Distinct().ToList();
+
+        var rows = await db.SurveyStations.AsNoTracking()
+            .Where(s => modelIds.Contains(s.SurveyModelId) && names.Contains(s.Name))
+            .Select(s => new { s.SurveyModelId, s.Name, s.FileStationId })
+            .ToListAsync(ct);
+
+        var nameless = false;
+        foreach (var row in rows)
+        {
+            var (format, candidates) = byModel[row.SurveyModelId];
+            if (!candidates.Contains(row.Name))
+            {
+                continue;
+            }
+
+            if (!SurveyStationNames.IsNameless(format, row.Name, row.FileStationId))
+            {
+                // Somebody named a station this in one of the cave's surveys, so the name is one
+                // that can be come back to.
+                return false;
+            }
+
+            nameless = true;
+        }
+
+        return nameless;
     }
 
     /// <summary>The unique index on (cave, depth) refused the write, and nothing else did.</summary>

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page, type Route } from '@playwright/test';
-import { asPerson, tripBody, tryAsPerson } from './arrange.ts';
+import { asPerson, surveyRead, tripBody, tryAsPerson } from './arrange.ts';
 import { ownContext, test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 import { bearerToken } from './rastermapApi.ts';
@@ -142,6 +142,9 @@ test('a published trip stays on screen, and says it is not being refreshed, whil
   });
   expect(uploaded.status(), await uploaded.text()).toBe(201);
   const models = await asPerson<{ id: string }[]>(page, 'GET', `/api/v1/caves/${caveId}/survey-models`);
+  // The reports below name stations, and the survey's stations are stored after the upload
+  // answers: named before then, a station is refused as none of the survey's.
+  await surveyRead(page, models[0].id);
 
   const trip = await asPerson<{ id: string; participants: { caverId: string; name: string }[] }>(
     page,

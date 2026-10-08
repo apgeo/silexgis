@@ -36,6 +36,7 @@ function participant(label: string | null): TrackingParticipant {
     name: null,
     quiet: false,
     outsideDeclaredParts: false,
+    ordinal: null,
   };
 }
 

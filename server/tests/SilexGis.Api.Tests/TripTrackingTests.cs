@@ -224,6 +224,10 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         var (trip, cavers) = await CreateTripAsync("Protected", guests: 1, visibility: "authenticated");
         var cave = await CreateCaveAsync(locationProtected: true);
         var model = await SeedModelWithStationsAsync(cave);
+
+        // A watch that names no survey names no cave, to anybody.
+        (await StateAsync(owner, trip)).GetProperty("caveFeatureId").ValueKind.ShouldBe(JsonValueKind.Null);
+
         (await PutConfigAsync(owner, trip, new
         {
             state = "armed",
@@ -248,6 +252,9 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
             .ShouldNotBeNull("the placer gets the station and the hour it was reported at");
         mine.GetProperty("referenceStationName").GetString().ShouldBe("cave.ent.0");
         mine.GetProperty("depthFilter").GetArrayLength().ShouldBe(1);
+        // The cave the survey belongs to is told beside the survey, to the one who is told the survey.
+        mine.GetProperty("surveyModelId").GetGuid().ShouldBe(model);
+        mine.GetProperty("caveFeatureId").GetGuid().ShouldBe(cave);
 
         // Negative half: the reader may read the trip and still learns no station and no depth
         // — not from the fold, not from the event log, and not from the config either, whose
@@ -270,6 +277,8 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         folded.GetProperty("in").GetBoolean().ShouldBeTrue();
         theirs.GetProperty("referenceStationName").ValueKind.ShouldBe(JsonValueKind.Null);
         theirs.GetProperty("surveyModelId").ValueKind.ShouldBe(JsonValueKind.Null);
+        // Nor which cave the watch is in: withheld with the survey, on the same branch.
+        theirs.GetProperty("caveFeatureId").ValueKind.ShouldBe(JsonValueKind.Null);
         theirs.GetProperty("depthFilter").GetArrayLength().ShouldBe(0);
 
         var log = await BodyAsync(await reader.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events"));
@@ -1801,11 +1810,871 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         client.PutAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events/{eventId}", body);
 
     /// <summary>
+    /// The moment a watch was first started is kept when the watch is closed and started again.
+    /// </summary>
+    /// <remarks>
+    /// Starting a closed watch again exists for a party that turns out to be still underground,
+    /// and it overwrites the start it reports — at the one moment the true beginning matters,
+    /// because somebody is overdue. So the first start is a fact of its own: stamped once, sent on
+    /// the signed-in read beside the latest start, and moved by nothing afterwards. The latest
+    /// start is asserted to have moved in the same breath, so that the first one is shown to stay
+    /// put against a clock that demonstrably went on.
+    /// </remarks>
+    [Fact]
+    public async Task The_first_start_of_a_watch_is_kept_when_it_is_closed_and_started_again()
+    {
+        var (trip, _) = await CreateTripAsync("First start", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+
+        var firstStart = new DateTimeOffset(DateTimeOffset.UtcNow.Ticks / TimeSpan.TicksPerSecond * TimeSpan.TicksPerSecond, TimeSpan.Zero);
+        var clock = new TestTimeProvider(firstStart);
+        using var host = new SilexGisApiFactory(connectionString, HostSettings(), services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.AddSingleton<TimeProvider>(clock);
+        });
+
+        // Signed in afresh after every move of the clock: how long a sign-in lasts is measured on
+        // the same clock, and this test is not about that.
+        async Task<JsonElement> AtAsync(DateTimeOffset moment, object? write)
+        {
+            clock.Now = moment;
+            var coordinator = await AuthHelper.BearerClientAsync(host, ownerEmail);
+            if (write is not null)
+            {
+                var written = await PutConfigAsync(coordinator, trip, write);
+                written.StatusCode.ShouldBe(HttpStatusCode.OK, await written.Content.ReadAsStringAsync());
+            }
+            return await StateAsync(coordinator, trip);
+        }
+
+        var never = await AtAsync(firstStart, write: null);
+        TimeOf(never, "armedAt").ShouldBeNull();
+        TimeOf(never, "firstArmedAt").ShouldBeNull();
+
+        var started = await AtAsync(firstStart, new { state = "armed", surveyModelId = model });
+        TimeOf(started, "armedAt").ShouldBe(firstStart);
+        TimeOf(started, "firstArmedAt").ShouldBe(firstStart);
+
+        var closed = await AtAsync(firstStart.AddHours(4), new { state = "closed" });
+        TimeOf(closed, "firstArmedAt").ShouldBe(firstStart);
+
+        var again = await AtAsync(firstStart.AddHours(5), new { state = "armed" });
+        TimeOf(again, "armedAt").ShouldBe(firstStart.AddHours(5));
+        TimeOf(again, "firstArmedAt").ShouldBe(firstStart);
+        TimeOf(again, "closedAt").ShouldBeNull();
+
+        // And a third time, so that "kept" is not merely "kept once".
+        await AtAsync(firstStart.AddHours(6), new { state = "closed" });
+        var thirdTime = await AtAsync(firstStart.AddHours(7), new { state = "armed" });
+        TimeOf(thirdTime, "armedAt").ShouldBe(firstStart.AddHours(7));
+        TimeOf(thirdTime, "firstArmedAt").ShouldBe(firstStart);
+    }
+
+    /// <summary>
+    /// A watch that an import wrote already closed has never been started, and says so; the first
+    /// time somebody starts it is its first start.
+    /// </summary>
+    /// <remarks>
+    /// The row is written here as the import writes it — closed, with a closing moment and no
+    /// start — because that is the only way a watch comes to be closed without ever having run.
+    /// </remarks>
+    [Fact]
+    public async Task A_watch_written_closed_by_an_import_gets_its_first_start_when_it_is_first_started()
+    {
+        var (trip, _) = await CreateTripAsync("Imported closed", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.TripTrackings.Add(new TripTracking
+            {
+                TripLogId = trip,
+                State = TripTrackingState.Closed,
+                SurveyModelId = model,
+                CaveFeatureId = cave,
+                ClosedAt = DateTimeOffset.UtcNow.AddDays(-2),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var imported = await StateAsync(owner, trip);
+        imported.GetProperty("state").GetString().ShouldBe("closed");
+        TimeOf(imported, "armedAt").ShouldBeNull();
+        TimeOf(imported, "firstArmedAt").ShouldBeNull();
+
+        var before = DateTimeOffset.UtcNow.AddSeconds(-1);
+        (await PutConfigAsync(owner, trip, new { state = "armed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var started = await StateAsync(owner, trip);
+        TimeOf(started, "firstArmedAt").ShouldNotBeNull();
+        TimeOf(started, "firstArmedAt")!.Value.ShouldBeGreaterThan(before);
+        TimeOf(started, "firstArmedAt").ShouldBe(TimeOf(started, "armedAt"));
+    }
+
+    /// <summary>
     /// Writes a watch's state directly, for the one state no request moves a watch into. The state
     /// is a plain recorded fact with nothing derived from it, which is what makes writing it this
     /// way faithful — unlike protection, which goes through the service that maintains its derived
     /// columns.
     /// </summary>
+    // ---- a report taken off the log is kept ---------------------------------------------------
+
+    /// <summary>
+    /// Taking a report off the log does not destroy it: it leaves the log and the fold, stays
+    /// listed for those who may write the log, and comes back as the same row saying what it said.
+    /// </summary>
+    [Fact]
+    public async Task A_report_taken_off_the_log_leaves_every_signed_in_read_and_comes_back_as_it_was()
+    {
+        var (trip, cavers) = await CreateTripAsync("Taken off", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ReportAsync(trip, new { caverIds = cavers, kind = "entered" }, At(9, 0));
+        var placed = await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers, kind = "atStation", stationName = "cave.upper.2", recordedAt = At(10, 0),
+        });
+        placed.StatusCode.ShouldBe(HttpStatusCode.OK, await placed.Content.ReadAsStringAsync());
+        var eventId = (await BodyAsync(placed))[0].GetProperty("id").GetGuid();
+
+        // Before: on the log, in the fold, and nothing is listed as removed.
+        (await LogAsync(owner, trip)).Select(e => e.GetProperty("id").GetGuid()).ShouldContain(eventId);
+        Participant(await StateAsync(owner, trip), cavers[0]).GetProperty("stationName").GetString()
+            .ShouldBe("cave.upper.2");
+        (await RemovedAsync(owner, trip)).ShouldBeEmpty();
+
+        (await owner.DeleteAsync(EventOf(trip, eventId))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Off the log and out of the fold, which falls back to the entry that is left.
+        var log = await LogAsync(owner, trip);
+        log.Count.ShouldBe(1);
+        log.Select(e => e.GetProperty("id").GetGuid()).ShouldNotContain(eventId);
+        var folded = Participant(await StateAsync(owner, trip), cavers[0]);
+        folded.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        folded.GetProperty("lastKind").GetString().ShouldBe("entered");
+        folded.GetProperty("in").GetBoolean().ShouldBeTrue();
+
+        // Kept, and listed with what it said and when it was taken off.
+        var removed = (await RemovedAsync(owner, trip)).ShouldHaveSingleItem();
+        removed.GetProperty("report").GetProperty("id").GetGuid().ShouldBe(eventId);
+        removed.GetProperty("report").GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        removed.GetProperty("report").GetProperty("corrected").GetBoolean().ShouldBeFalse();
+        TimeOf(removed, "removedAt").ShouldNotBeNull();
+        Guid recordedBy;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripPositionEvents.CountAsync(e => e.Id == eventId)).ShouldBe(0, "the model hides it");
+            var row = await db.TripPositionEvents.IgnoreQueryFilters().SingleAsync(e => e.Id == eventId);
+            row.RemovedAt.ShouldNotBeNull();
+            row.RemovedByUserId.ShouldNotBeNull("the mark says who");
+            row.RemovedByUserId.ShouldBe(row.RecordedByUserId, "the same account recorded it and took it off");
+            recordedBy = row.RecordedByUserId!.Value;
+        }
+
+        // A report that is off the log is not there to correct or to take off a second time.
+        (await PutEventAsync(owner, trip, eventId, new { kind = "atStation", stationName = "cave.deep.3" }))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var again = await owner.DeleteAsync(EventOf(trip, eventId));
+        again.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await again.Content.ReadAsStringAsync()).ShouldContain("tracking.event_not_found");
+
+        // Put back: the same id, the same place, and not marked as corrected — nobody corrected it.
+        var restored = await owner.PostAsync(RestoreOf(trip, eventId), null);
+        restored.StatusCode.ShouldBe(HttpStatusCode.OK, await restored.Content.ReadAsStringAsync());
+        var back = await BodyAsync(restored);
+        back.GetProperty("id").GetGuid().ShouldBe(eventId);
+        back.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        back.GetProperty("corrected").GetBoolean().ShouldBeFalse();
+        TimeOf(back, "recordedAt").ShouldBe(At(10, 0));
+
+        var relisted = (await LogAsync(owner, trip)).Single(e => e.GetProperty("id").GetGuid() == eventId);
+        relisted.GetProperty("corrected").GetBoolean().ShouldBeFalse();
+        Participant(await StateAsync(owner, trip), cavers[0]).GetProperty("stationName").GetString()
+            .ShouldBe("cave.upper.2");
+        (await RemovedAsync(owner, trip)).ShouldBeEmpty();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var row = await db.TripPositionEvents.SingleAsync(e => e.Id == eventId);
+            row.RemovedAt.ShouldBeNull();
+            row.RemovedByUserId.ShouldBeNull();
+            row.RecordedByUserId.ShouldBe(recordedBy);
+            row.UpdatedAt.ShouldBe(row.CreatedAt, "being taken off and put back is not a change to the report");
+        }
+
+        // Asked again, it is answered as it stands: the caller wanted it on the log, and it is.
+        var twice = await owner.PostAsync(RestoreOf(trip, eventId), null);
+        twice.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await BodyAsync(twice)).GetProperty("id").GetGuid().ShouldBe(eventId);
+    }
+
+    /// <summary>
+    /// Destroying a report takes two acts. Asked of a report that is still on the log it is
+    /// refused by name; asked of one already taken off it leaves nothing behind.
+    /// </summary>
+    [Fact]
+    public async Task A_report_is_destroyed_for_good_only_after_it_has_been_taken_off_the_log()
+    {
+        var (trip, cavers) = await CreateTripAsync("For good", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var placed = await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers, kind = "atStation", stationName = "cave.upper.2",
+        });
+        var eventId = (await BodyAsync(placed))[0].GetProperty("id").GetGuid();
+
+        // Straight to "for good" is refused, and the report is still on the log.
+        var early = await owner.DeleteAsync($"{EventOf(trip, eventId)}?permanent=true");
+        early.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await early.Content.ReadAsStringAsync()).ShouldContain("tracking.event_not_removed");
+        (await LogAsync(owner, trip)).ShouldHaveSingleItem().GetProperty("id").GetGuid().ShouldBe(eventId);
+
+        (await owner.DeleteAsync(EventOf(trip, eventId))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await RemovedAsync(owner, trip)).Count.ShouldBe(1);
+
+        // The acts on a removed report are under the log's own rule: an off watch takes none.
+        await SetStateAsync(trip, TripTrackingState.Off);
+        var offRestore = await owner.PostAsync(RestoreOf(trip, eventId), null);
+        offRestore.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await offRestore.Content.ReadAsStringAsync()).ShouldContain("tracking.not_writable");
+        (await owner.DeleteAsync($"{EventOf(trip, eventId)}?permanent=true"))
+            .StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        await SetStateAsync(trip, TripTrackingState.Closed);
+
+        (await owner.DeleteAsync($"{EventOf(trip, eventId)}?permanent=true"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await RemovedAsync(owner, trip)).ShouldBeEmpty();
+        (await LogAsync(owner, trip)).ShouldBeEmpty();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripPositionEvents.IgnoreQueryFilters().CountAsync(e => e.Id == eventId)).ShouldBe(0);
+        }
+
+        // Nothing is left to put back or to destroy again.
+        var gone = await owner.PostAsync(RestoreOf(trip, eventId), null);
+        gone.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await gone.Content.ReadAsStringAsync()).ShouldContain("tracking.event_not_found");
+        (await owner.DeleteAsync($"{EventOf(trip, eventId)}?permanent=true"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// Removed reports are shown to those who may write the trip's log and to nobody else: a
+    /// reader of the trip keeps the log and is refused the removed list and both acts on it, and
+    /// a caller with no account gets nothing at all.
+    /// </summary>
+    [Fact]
+    public async Task Somebody_who_may_not_write_the_log_is_never_shown_a_removed_report()
+    {
+        var (trip, cavers) = await CreateTripAsync("Whose to see", guests: 1, visibility: "authenticated");
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ReportAsync(trip, new { caverIds = cavers, kind = "entered" }, At(9, 0));
+        var placed = await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers, kind = "note", note = "removed-note-marker", recordedAt = At(10, 0),
+        });
+        var eventId = (await BodyAsync(placed))[0].GetProperty("id").GetGuid();
+        (await owner.DeleteAsync(EventOf(trip, eventId))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Positive half: the writer is listed the removed report, and the reader really does read
+        // this trip's log — what they are refused below is not the trip.
+        (await RemovedAsync(owner, trip)).ShouldHaveSingleItem()
+            .GetProperty("report").GetProperty("note").GetString().ShouldBe("removed-note-marker");
+        var theirLog = await reader.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events");
+        theirLog.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var theirLogText = await theirLog.Content.ReadAsStringAsync();
+        theirLogText.ShouldContain("entered");
+        theirLogText.ShouldNotContain("removed-note-marker");
+        theirLogText.ShouldNotContain(eventId.ToString());
+        (await (await reader.GetAsync($"/api/v1/trip-logs/{trip}/tracking")).Content.ReadAsStringAsync())
+            .ShouldNotContain("removed-note-marker");
+
+        // Negative half: a reader of the trip, with no right to write it.
+        var refusedList = await reader.GetAsync(RemovedOf(trip));
+        refusedList.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await refusedList.Content.ReadAsStringAsync()).ShouldNotContain("removed-note-marker");
+        (await reader.PostAsync(RestoreOf(trip, eventId), null)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await reader.DeleteAsync($"{EventOf(trip, eventId)}?permanent=true"))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // No account: none of the three routes exists for them.
+        (await anonymous.GetAsync(RemovedOf(trip))).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.PostAsync(RestoreOf(trip, eventId), null)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.DeleteAsync($"{EventOf(trip, eventId)}?permanent=true"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // And the refusals changed nothing: it is still there for the writer to put back.
+        (await RemovedAsync(owner, trip)).Count.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A position kept from a caller on the log is kept from them in the removed list and in the
+    /// answer to putting the report back. The caller here may write the trip — it is theirs — and
+    /// loses the right to place the cave only when the cave is protected, so the same account
+    /// reads the station before and is refused it after.
+    /// </summary>
+    [Fact]
+    public async Task A_withheld_position_stays_withheld_in_the_removed_list_and_on_being_put_back()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        var guideEmail = $"trk-rmv-{Guid.NewGuid():N}"[..20] + "@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, guideEmail);
+        var guide = await AuthHelper.BearerClientAsync(factory, guideEmail);
+        var (trip, cavers) = await CreateTripAsync("Guided, removed", guests: 1, client: guide);
+        (await ArmAsync(guide, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var placed = await PostEventAsync(guide, trip, new
+        {
+            caverIds = cavers, kind = "atStation", stationName = "cave.upper.2",
+        });
+        placed.StatusCode.ShouldBe(HttpStatusCode.OK, await placed.Content.ReadAsStringAsync());
+        var eventId = (await BodyAsync(placed))[0].GetProperty("id").GetGuid();
+        (await guide.DeleteAsync(EventOf(trip, eventId))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Positive half: while the cave is open the writer is told where the removed report was.
+        var open = (await RemovedAsync(guide, trip)).ShouldHaveSingleItem().GetProperty("report");
+        open.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        open.GetProperty("surveyModelId").GetGuid().ShouldBe(model);
+
+        await SetLocationProtectedAsync(cave, true);
+
+        // Negative half: the same writer, now with no right to the cave's exact location. That the
+        // report exists and when it was taken off are still theirs; where it was is not.
+        var listed = await guide.GetAsync(RemovedOf(trip));
+        listed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await listed.Content.ReadAsStringAsync()).ShouldNotContain("cave.upper");
+        var closed = (await BodyAsync(listed)).GetProperty("items").EnumerateArray().ShouldHaveSingleItem();
+        closed.GetProperty("report").GetProperty("id").GetGuid().ShouldBe(eventId);
+        closed.GetProperty("report").GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        closed.GetProperty("report").GetProperty("surveyModelId").ValueKind.ShouldBe(JsonValueKind.Null);
+        closed.GetProperty("report").GetProperty("depthEnteredM").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var restored = await guide.PostAsync(RestoreOf(trip, eventId), null);
+        restored.StatusCode.ShouldBe(HttpStatusCode.OK, await restored.Content.ReadAsStringAsync());
+        (await restored.Content.ReadAsStringAsync()).ShouldNotContain("cave.upper");
+        (await BodyAsync(restored)).GetProperty("id").GetGuid().ShouldBe(eventId);
+
+        // The place was withheld, not lost: with the cave open again the log names it.
+        await SetLocationProtectedAsync(cave, false);
+        (await LogAsync(guide, trip)).ShouldHaveSingleItem()
+            .GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+    }
+
+    /// <summary>
+    /// A removed report still holds its person in place: deleting them is refused with a reason
+    /// rather than failing on the constraint, and merging them moves the removed report to the
+    /// survivor, where putting it back finds it.
+    /// </summary>
+    [Fact]
+    public async Task A_removed_report_still_blocks_deleting_its_person_and_follows_them_through_a_merge()
+    {
+        var (trip, cavers) = await CreateTripAsync("Held by a removed report", guests: 2);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (stays, leaves) = (cavers[0], cavers[1]);
+        var placed = await PostEventAsync(owner, trip, new
+        {
+            caverIds = new[] { leaves }, kind = "atStation", stationName = "cave.upper.2",
+        });
+        var eventId = (await BodyAsync(placed))[0].GetProperty("id").GetGuid();
+        (await owner.DeleteAsync(EventOf(trip, eventId))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // With their only report off the log, nothing the watch shows speaks of them, and they
+        // may be taken off the roster — which leaves the removed report as all that names them.
+        var rewritten = await PutRosterAsync(trip, [stays]);
+        rewritten.StatusCode.ShouldBe(HttpStatusCode.OK, await rewritten.Content.ReadAsStringAsync());
+
+        // Which is as far as it goes while the watch runs: putting the report back would have a
+        // running watch speak of somebody its trip no longer lists, and is refused as recording
+        // one about them would be. The report stays where it was, kept.
+        var offRoster = await owner.PostAsync(RestoreOf(trip, eventId), null);
+        offRoster.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await offRoster.Content.ReadAsStringAsync());
+        (await offRoster.Content.ReadAsStringAsync()).ShouldContain("tracking.caver_not_participant");
+        (await LogAsync(owner, trip)).ShouldBeEmpty();
+        (await RemovedAsync(owner, trip)).ShouldHaveSingleItem()
+            .GetProperty("report").GetProperty("id").GetGuid().ShouldBe(eventId);
+
+        // A closed watch asks nothing of the roster: its log is a record, and the same report
+        // goes back onto it about the same person.
+        await SetStateAsync(trip, TripTrackingState.Closed);
+        var onceClosed = await owner.PostAsync(RestoreOf(trip, eventId), null);
+        onceClosed.StatusCode.ShouldBe(HttpStatusCode.OK, await onceClosed.Content.ReadAsStringAsync());
+        (await BodyAsync(onceClosed)).GetProperty("caverId").GetGuid().ShouldBe(leaves);
+        (await owner.DeleteAsync(EventOf(trip, eventId))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        await SetStateAsync(trip, TripTrackingState.Armed);
+
+        var keeperEmail = $"trk-keep-{Guid.NewGuid():N}"[..20] + "@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, keeperEmail);
+        var keeper = await AuthHelper.BearerClientAsync(factory, keeperEmail);
+
+        var refused = await keeper.DeleteAsync($"/api/v1/cavers/{leaves}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        var refusal = await refused.Content.ReadAsStringAsync();
+        refusal.ShouldContain("caver.referenced_by_trips");
+        refusal.ShouldContain("tracking history");
+
+        var merged = await keeper.PostAsJsonAsync($"/api/v1/cavers/{stays}/merge", new { sourceCaverId = leaves });
+        merged.StatusCode.ShouldBe(HttpStatusCode.OK, await merged.Content.ReadAsStringAsync());
+
+        var removed = (await RemovedAsync(owner, trip)).ShouldHaveSingleItem();
+        removed.GetProperty("report").GetProperty("id").GetGuid().ShouldBe(eventId);
+        removed.GetProperty("report").GetProperty("caverId").GetGuid().ShouldBe(stays);
+        // The watch is running again, and the report is now about somebody the trip does list.
+        var restored = await owner.PostAsync(RestoreOf(trip, eventId), null);
+        restored.StatusCode.ShouldBe(HttpStatusCode.OK, await restored.Content.ReadAsStringAsync());
+        (await BodyAsync(restored)).GetProperty("caverId").GetGuid().ShouldBe(stays);
+    }
+
+    // ---- a report that cannot be written twice ------------------------------------------------
+
+    /// <summary>
+    /// A send repeated under its key answers the reports already written and writes nothing; the
+    /// repeat is asked "may you write this log" like the send it repeats; and the key itself is
+    /// in no answer, no read and no history row.
+    /// </summary>
+    [Fact]
+    public async Task A_report_sent_again_under_its_key_answers_what_was_written_and_writes_nothing()
+    {
+        var (trip, cavers) = await CreateTripAsync("Sent twice", guests: 2);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var key = Guid.NewGuid();
+        var body = new
+        {
+            caverIds = cavers, kind = "atStation", stationName = "cave.upper.2", recordedAt = At(10, 0),
+            clientKey = key,
+        };
+
+        var first = await PostEventAsync(owner, trip, body);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        var written = (await BodyAsync(first)).EnumerateArray().Select(e => e.GetProperty("id").GetGuid()).ToList();
+        written.Count.ShouldBe(2);
+
+        var again = await PostEventAsync(owner, trip, body);
+        again.StatusCode.ShouldBe(HttpStatusCode.OK, await again.Content.ReadAsStringAsync());
+        var answered = (await BodyAsync(again)).EnumerateArray().ToList();
+        // The same rows, in the order the send names its people — and the place with them, since
+        // this caller may be told it.
+        answered.Select(e => e.GetProperty("id").GetGuid()).ShouldBe(written);
+        answered.Select(e => e.GetProperty("caverId").GetGuid()).ShouldBe(cavers);
+        answered.ShouldAllBe(e => e.GetProperty("stationName").GetString() == "cave.upper.2");
+        (await LogAsync(owner, trip)).Count.ShouldBe(2);
+
+        // The key names the act, not what it says: a repeat saying something else is answered
+        // with what was written and changes nothing.
+        var different = await PostEventAsync(owner, trip, new
+        {
+            caverIds = new[] { cavers[0] }, kind = "exited", recordedAt = At(11, 0), clientKey = key,
+        });
+        different.StatusCode.ShouldBe(HttpStatusCode.OK, await different.Content.ReadAsStringAsync());
+        (await BodyAsync(different)).EnumerateArray().Select(e => e.GetProperty("id").GetGuid())
+            .ShouldBe(written, ignoreOrder: true);
+        var log = await LogAsync(owner, trip);
+        log.Count.ShouldBe(2);
+        log.ShouldAllBe(e => e.GetProperty("kind").GetString() == "atStation");
+
+        // Somebody who reads the trip and may not write its log is refused on a repeat exactly as
+        // on a first send, and is handed nothing of what the key would have answered; a caller
+        // with no account is not let in at all. The owner's repeat above is the positive half.
+        var byReader = await PostEventAsync(reader, trip, body);
+        byReader.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await byReader.Content.ReadAsStringAsync());
+        var refusal = await byReader.Content.ReadAsStringAsync();
+        written.ShouldAllBe(id => !refusal.Contains(id.ToString()));
+        refusal.ShouldNotContain("cave.upper");
+        (await PostEventAsync(anonymous, trip, body)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // The key is taken in and never given out: not in an answer, not on the log, not on the
+        // watch, not in what the trip's history kept of the new rows.
+        var keyText = key.ToString();
+        (await first.Content.ReadAsStringAsync()).ShouldNotContain(keyText);
+        (await again.Content.ReadAsStringAsync()).ShouldNotContain(keyText);
+        (await LogTextAsync(trip)).ShouldNotContain(keyText);
+        (await StateAsync(owner, trip)).GetRawText().ShouldNotContain(keyText);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var eventIds = written.Select(id => id.ToString()).ToList();
+        var history = await db.AuditEntries.AsNoTracking()
+            .Where(a => a.EntityId != null && eventIds.Contains(a.EntityId)).Select(a => a.Changes).ToListAsync();
+        // The rows are in the history — so "the key is not there" is said about something.
+        history.Count.ShouldBe(2);
+        history.ShouldAllBe(changes => changes != null && !changes.Contains(keyText));
+        // And it is stored, on both rows: what was proved above is a repeat recognised by its
+        // key, not two sends that happened to be told apart some other way.
+        (await db.TripPositionEvents.CountAsync(e => e.TripLogId == trip
+            && EF.Property<Guid?>(e, TripPositionEvent.ClientKeyProperty) == key)).ShouldBe(2);
+    }
+
+    /// <summary>
+    /// A repeat does not put back what somebody took off the log: a partly removed act answers
+    /// what is left, an act removed entirely answers nothing, and neither writes.
+    /// </summary>
+    [Fact]
+    public async Task A_repeat_answers_what_is_left_of_its_act_and_never_rewrites_a_report_taken_off()
+    {
+        var (trip, cavers) = await CreateTripAsync("Sent twice, partly removed", guests: 3);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = new { caverIds = cavers, kind = "entered", recordedAt = At(9, 0), clientKey = Guid.NewGuid() };
+        var first = await PostEventAsync(owner, trip, body);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        var rows = (await BodyAsync(first)).EnumerateArray()
+            .ToDictionary(e => e.GetProperty("caverId").GetGuid(), e => e.GetProperty("id").GetGuid());
+        rows.Count.ShouldBe(3);
+
+        (await owner.DeleteAsync(EventOf(trip, rows[cavers[1]]))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var partial = await PostEventAsync(owner, trip, body);
+        partial.StatusCode.ShouldBe(HttpStatusCode.OK, await partial.Content.ReadAsStringAsync());
+        (await BodyAsync(partial)).EnumerateArray().Select(e => e.GetProperty("id").GetGuid())
+            .ShouldBe([rows[cavers[0]], rows[cavers[2]]]);
+        (await LogAsync(owner, trip)).Count.ShouldBe(2);
+        (await RemovedAsync(owner, trip)).ShouldHaveSingleItem()
+            .GetProperty("report").GetProperty("id").GetGuid().ShouldBe(rows[cavers[1]]);
+
+        (await owner.DeleteAsync(EventOf(trip, rows[cavers[0]]))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await owner.DeleteAsync(EventOf(trip, rows[cavers[2]]))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Nothing of the act is left on the log. The repeat is still a success — its report was
+        // received — and still writes nothing; the three removed reports are the same three rows.
+        var none = await PostEventAsync(owner, trip, body);
+        none.StatusCode.ShouldBe(HttpStatusCode.OK, await none.Content.ReadAsStringAsync());
+        (await BodyAsync(none)).GetArrayLength().ShouldBe(0);
+        (await LogAsync(owner, trip)).ShouldBeEmpty();
+        (await RemovedAsync(owner, trip)).Select(e => e.GetProperty("report").GetProperty("id").GetGuid())
+            .ShouldBe(rows.Values, ignoreOrder: true);
+
+        // Put back, a report answers a repeat again: it was hidden, not forgotten.
+        (await owner.PostAsync(RestoreOf(trip, rows[cavers[1]]), null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var afterRestore = await PostEventAsync(owner, trip, body);
+        (await BodyAsync(afterRestore)).EnumerateArray().ShouldHaveSingleItem()
+            .GetProperty("id").GetGuid().ShouldBe(rows[cavers[1]]);
+        (await LogAsync(owner, trip)).Count.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// Two acts that say the same thing are two reports: under two keys, and under none.
+    /// </summary>
+    [Fact]
+    public async Task Two_acts_saying_the_same_thing_write_two_reports()
+    {
+        var (trip, cavers) = await CreateTripAsync("Twins", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        object Saying(Guid? key) => new
+        {
+            caverIds = cavers, kind = "atStation", stationName = "cave.deep.3", recordedAt = At(12, 0), clientKey = key,
+        };
+        var ids = new List<Guid>();
+        foreach (var key in new Guid?[] { Guid.NewGuid(), Guid.NewGuid(), null, null })
+        {
+            var sent = await PostEventAsync(owner, trip, Saying(key));
+            sent.StatusCode.ShouldBe(HttpStatusCode.OK, await sent.Content.ReadAsStringAsync());
+            ids.Add((await BodyAsync(sent)).EnumerateArray().ShouldHaveSingleItem().GetProperty("id").GetGuid());
+        }
+
+        ids.Distinct().Count().ShouldBe(4);
+        (await LogAsync(owner, trip)).Count.ShouldBe(4);
+    }
+
+    /// <summary>
+    /// A repeat is told what a read of the log would tell its caller, not what the first answer
+    /// said. The caller owns the trip, so may write its log throughout; they are told the place
+    /// while the cave is open and not once it is protected.
+    /// </summary>
+    [Fact]
+    public async Task A_repeat_withholds_the_place_from_a_caller_who_may_no_longer_be_told_it()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        var guideEmail = $"trk-rpl-{Guid.NewGuid():N}"[..20] + "@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, guideEmail);
+        var guide = await AuthHelper.BearerClientAsync(factory, guideEmail);
+        var (trip, cavers) = await CreateTripAsync("Guided, sent twice", guests: 1, client: guide);
+        (await ArmAsync(guide, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = new
+        {
+            caverIds = cavers, kind = "atDepth", depthM = 120m, clientKey = Guid.NewGuid(),
+        };
+        var first = await PostEventAsync(guide, trip, body);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        var eventId = (await BodyAsync(first))[0].GetProperty("id").GetGuid();
+
+        // Positive half: with the cave open, the repeat names the place.
+        var open = (await BodyAsync(await PostEventAsync(guide, trip, body))).EnumerateArray().ShouldHaveSingleItem();
+        open.GetProperty("id").GetGuid().ShouldBe(eventId);
+        open.GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        open.GetProperty("surveyModelId").GetGuid().ShouldBe(model);
+        open.GetProperty("depthEnteredM").GetDecimal().ShouldBe(120m);
+
+        await SetLocationProtectedAsync(cave, true);
+
+        // Negative half: the same account, the same key, the cave now protected. The report is
+        // still theirs to be told of; where it was is not.
+        var repeated = await PostEventAsync(guide, trip, body);
+        repeated.StatusCode.ShouldBe(HttpStatusCode.OK, await repeated.Content.ReadAsStringAsync());
+        (await repeated.Content.ReadAsStringAsync()).ShouldNotContain("cave.deep");
+        var closed = (await BodyAsync(repeated)).EnumerateArray().ShouldHaveSingleItem();
+        closed.GetProperty("id").GetGuid().ShouldBe(eventId);
+        closed.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        closed.GetProperty("surveyModelId").ValueKind.ShouldBe(JsonValueKind.Null);
+        closed.GetProperty("depthEnteredM").ValueKind.ShouldBe(JsonValueKind.Null);
+        (await LogAsync(guide, trip)).Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task The_empty_key_is_refused_and_nothing_is_written()
+    {
+        var (trip, cavers) = await CreateTripAsync("Empty key", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var refused = await PostEventAsync(owner, trip, new { caverIds = cavers, kind = "entered", clientKey = Guid.Empty });
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("clientKey", Case.Insensitive);
+        (await LogAsync(owner, trip)).ShouldBeEmpty();
+
+        // Beside it, the two sends that are not refused: a real key, and none.
+        (await PostEventAsync(owner, trip, new { caverIds = cavers, kind = "entered", clientKey = Guid.NewGuid() }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PostEventAsync(owner, trip, new { caverIds = cavers, kind = "exited" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await LogAsync(owner, trip)).Count.ShouldBe(2);
+    }
+
+    /// <summary>
+    /// One act sent many times at once is written once, and every send is answered with that one
+    /// report — whichever of them got there first, and whether the others found it by looking or
+    /// were stopped at the constraint.
+    /// </summary>
+    [Fact]
+    public async Task One_act_sent_many_times_at_once_leaves_one_report_and_every_send_succeeds()
+    {
+        var (trip, cavers) = await CreateTripAsync("Sent at once", guests: 2);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = new
+        {
+            caverIds = cavers, kind = "atStation", stationName = "cave.upper.1", recordedAt = At(13, 0),
+            clientKey = Guid.NewGuid(),
+        };
+
+        var sends = await Task.WhenAll(Enumerable.Range(0, 12).Select(_ => PostEventAsync(owner, trip, body)));
+
+        var answers = new List<List<Guid>>();
+        foreach (var send in sends)
+        {
+            send.StatusCode.ShouldBe(HttpStatusCode.OK, await send.Content.ReadAsStringAsync());
+            answers.Add([.. (await BodyAsync(send)).EnumerateArray().Select(e => e.GetProperty("id").GetGuid())]);
+        }
+
+        var log = (await LogAsync(owner, trip)).Select(e => e.GetProperty("id").GetGuid()).ToList();
+        log.Count.ShouldBe(2);
+        answers.ShouldAllBe(ids => ids.Count == 2 && ids.All(id => log.Contains(id)));
+        // No history row was left behind by a send that lost: one "created" per report, no more.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var logIds = log.Select(id => id.ToString()).ToList();
+        (await db.AuditEntries.CountAsync(a => a.RootEntityId == trip.ToString()
+            && a.EntityType == nameof(TripPositionEvent))).ShouldBe(2);
+        (await db.AuditEntries.CountAsync(a => a.EntityId != null && logIds.Contains(a.EntityId))).ShouldBe(2);
+    }
+
+    /// <summary>
+    /// Two people named by one act can be folded into one: the report that moves stops claiming
+    /// the act, so the fold does not fail on "one act, one report per person", and a later repeat
+    /// is still recognised by the survivor's own report and still writes nothing. An act that
+    /// named only the entry merged away keeps its key on the report that moved, so its repeat —
+    /// which still names an entry that no longer exists — is answered with that report too.
+    /// </summary>
+    [Fact]
+    public async Task Folding_together_two_people_named_by_one_act_keeps_both_reports_and_the_act_recognised()
+    {
+        var (trip, cavers) = await CreateTripAsync("Folded after one act", guests: 2);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (stays, leaves) = (cavers[0], cavers[1]);
+        var body = new { caverIds = new[] { stays, leaves }, kind = "entered", recordedAt = At(9, 0), clientKey = Guid.NewGuid() };
+        var first = await PostEventAsync(owner, trip, body);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        var rows = (await BodyAsync(first)).EnumerateArray()
+            .ToDictionary(e => e.GetProperty("caverId").GetGuid(), e => e.GetProperty("id").GetGuid());
+        var alone = new
+        {
+            caverIds = new[] { leaves }, kind = "atStation", stationName = "cave.upper.2",
+            recordedAt = At(10, 0), clientKey = Guid.NewGuid(),
+        };
+        var sent = await PostEventAsync(owner, trip, alone);
+        sent.StatusCode.ShouldBe(HttpStatusCode.OK, await sent.Content.ReadAsStringAsync());
+        var aloneId = (await BodyAsync(sent))[0].GetProperty("id").GetGuid();
+
+        var keeperEmail = $"trk-fold-{Guid.NewGuid():N}"[..20] + "@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, keeperEmail);
+        var keeper = await AuthHelper.BearerClientAsync(factory, keeperEmail);
+        var merged = await keeper.PostAsJsonAsync($"/api/v1/cavers/{stays}/merge", new { sourceCaverId = leaves });
+        merged.StatusCode.ShouldBe(HttpStatusCode.OK, await merged.Content.ReadAsStringAsync());
+
+        var log = await LogAsync(owner, trip);
+        log.Select(e => e.GetProperty("id").GetGuid()).ShouldBe([.. rows.Values, aloneId], ignoreOrder: true);
+        log.ShouldAllBe(e => e.GetProperty("caverId").GetGuid() == stays);
+
+        var repeat = await PostEventAsync(owner, trip, body);
+        repeat.StatusCode.ShouldBe(HttpStatusCode.OK, await repeat.Content.ReadAsStringAsync());
+        (await BodyAsync(repeat)).EnumerateArray().ShouldHaveSingleItem()
+            .GetProperty("id").GetGuid().ShouldBe(rows[stays]);
+        (await LogAsync(owner, trip)).Count.ShouldBe(3);
+
+        // The act that named only the entry merged away. Its repeat names somebody the register
+        // no longer holds, which a first send would be refused for; it is a repeat, so it is
+        // answered with the report it wrote, now about the survivor, and writes nothing.
+        var late = await PostEventAsync(owner, trip, alone);
+        late.StatusCode.ShouldBe(HttpStatusCode.OK, await late.Content.ReadAsStringAsync());
+        var answered = (await BodyAsync(late)).EnumerateArray().ShouldHaveSingleItem();
+        answered.GetProperty("id").GetGuid().ShouldBe(aloneId);
+        answered.GetProperty("caverId").GetGuid().ShouldBe(stays);
+        (await LogAsync(owner, trip)).Count.ShouldBe(3);
+
+        // The fixture half: without its key that same send is a first one, and is refused.
+        var unkeyed = await PostEventAsync(owner, trip, new { caverIds = new[] { leaves }, kind = "atStation", stationName = "cave.upper.2" });
+        unkeyed.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await unkeyed.Content.ReadAsStringAsync()).ShouldContain("tracking.caver_not_participant");
+    }
+
+    /// <summary>
+    /// How long an act is remembered: as long as any report it wrote exists. Taken off the log,
+    /// its repeat is answered and writes nothing; destroyed for good, the key went with the
+    /// report, and a repeat arriving after that is written as a first send.
+    /// </summary>
+    [Fact]
+    public async Task An_act_is_remembered_while_its_report_is_kept_and_forgotten_once_it_is_destroyed()
+    {
+        var (trip, cavers) = await CreateTripAsync("Destroyed, then sent again", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = new { caverIds = cavers, kind = "entered", recordedAt = At(9, 0), clientKey = Guid.NewGuid() };
+        var first = await PostEventAsync(owner, trip, body);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        var eventId = (await BodyAsync(first))[0].GetProperty("id").GetGuid();
+
+        // Taken off: the act is still on record, so its repeat succeeds with nothing and writes nothing.
+        (await owner.DeleteAsync(EventOf(trip, eventId))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var kept = await PostEventAsync(owner, trip, body);
+        kept.StatusCode.ShouldBe(HttpStatusCode.OK, await kept.Content.ReadAsStringAsync());
+        (await BodyAsync(kept)).GetArrayLength().ShouldBe(0);
+        (await LogAsync(owner, trip)).ShouldBeEmpty();
+
+        // Destroyed: nothing carries the key any more, and the same send is a new report.
+        (await owner.DeleteAsync($"{EventOf(trip, eventId)}?permanent=true"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var forgotten = await PostEventAsync(owner, trip, body);
+        forgotten.StatusCode.ShouldBe(HttpStatusCode.OK, await forgotten.Content.ReadAsStringAsync());
+        var written = (await BodyAsync(forgotten)).EnumerateArray().ShouldHaveSingleItem();
+        written.GetProperty("id").GetGuid().ShouldNotBe(eventId);
+        (await LogAsync(owner, trip)).ShouldHaveSingleItem()
+            .GetProperty("id").GetGuid().ShouldBe(written.GetProperty("id").GetGuid());
+    }
+
+    // ---- a party number is given once -----------------------------------------------------------
+
+    /// <summary>
+    /// Two writes that name somebody new on one trip at the same moment reach for the same next
+    /// party number, and the table lets one of them in. The other is answered as a conflict with a
+    /// code, has written nothing, and succeeds when it is repeated.
+    /// </summary>
+    /// <remarks>
+    /// The other writer is played here by a transaction that has taken the next number and not
+    /// yet committed: the save cannot see it, picks the same number, and waits on it. Committing
+    /// is the other writer winning. The wait is observed before the commit, so the test cannot
+    /// pass by the save simply having finished first.
+    /// </remarks>
+    [Fact]
+    public async Task A_roster_save_that_loses_the_race_for_the_next_party_number_is_a_conflict_and_can_be_repeated()
+    {
+        var (trip, cavers) = await CreateTripAsync("Numbered at once", guests: 1);
+        var (_, registered) = await CreateTripAsync("Numbered at once, the register", guests: 1);
+        var newcomer = registered[0];
+
+        Task<HttpResponseMessage> save;
+        int taken;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            taken = await db.TripPartyNumbers.Where(n => n.TripLogId == trip).MaxAsync(n => n.Number) + 1;
+            await using var winner = await db.Database.BeginTransactionAsync();
+            db.TripPartyNumbers.Add(new TripPartyNumber { TripLogId = trip, Number = taken });
+            await db.SaveChangesAsync();
+
+            save = PutRosterAsync(trip, [cavers[0], newcomer]);
+            using (var watching = factory.Services.CreateScope())
+            {
+                var observer = watching.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+                var waiting = false;
+                for (var attempt = 0; attempt < 300 && !waiting && !save.IsCompleted; attempt++)
+                {
+                    await Task.Delay(100);
+                    waiting = await observer.Database
+                        .SqlQuery<int>($"""
+                            SELECT count(*)::int AS "Value" FROM pg_stat_activity
+                            WHERE datname = current_database() AND wait_event_type = 'Lock'
+                            """)
+                        .SingleAsync() > 0;
+                }
+
+                waiting.ShouldBeTrue("the save never came to wait on the number the other writer holds");
+            }
+
+            await winner.CommitAsync();
+        }
+
+        var lost = await save;
+        var refusal = await lost.Content.ReadAsStringAsync();
+        lost.StatusCode.ShouldBe(HttpStatusCode.Conflict, refusal);
+        refusal.ShouldContain("trip_log.concurrent_roster_write");
+        (await RosterAsync(trip)).ShouldBe([cavers[0]], "the save that lost wrote nothing");
+
+        var repeated = await PutRosterAsync(trip, [cavers[0], newcomer]);
+        repeated.StatusCode.ShouldBe(HttpStatusCode.OK, await repeated.Content.ReadAsStringAsync());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripPartyNumbers.Where(n => n.TripLogId == trip && n.CaverId == newcomer)
+                .Select(n => n.Number).SingleAsync())
+                .ShouldBe(taken + 1, "the number the other writer took stays taken");
+        }
+    }
+
+    private static string EventOf(Guid trip, Guid eventId) => $"/api/v1/trip-logs/{trip}/tracking/events/{eventId}";
+
+    private static string RestoreOf(Guid trip, Guid eventId) => $"{EventOf(trip, eventId)}/restore";
+
+    private static string RemovedOf(Guid trip) => $"/api/v1/trip-logs/{trip}/tracking/events/removed";
+
+    /// <summary>The reports taken off a trip's log, as this caller is listed them.</summary>
+    private static async Task<List<JsonElement>> RemovedAsync(HttpClient client, Guid trip)
+    {
+        var response = await client.GetAsync(RemovedOf(trip));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        return [.. (await BodyAsync(response)).GetProperty("items").EnumerateArray()];
+    }
+
     private async Task SetStateAsync(Guid trip, TripTrackingState state)
     {
         using var scope = factory.Services.CreateScope();

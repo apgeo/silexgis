@@ -181,7 +181,14 @@ public class TripSoftDeleteGuardTests
             ["server/src/SilexGis.Api/Features/Import/ImportBatchEndpoints.cs"] =
                 (1, "an import's own page says which of its trips are deleted and can be put back"),
             ["server/src/SilexGis.Api/Features/Cavers/CaverEndpoints.cs"] =
-                (9, "a person is held in place by the rows of a deleted trip, and a merge has to move them"),
+                (12, "a person is held in place by the rows of a deleted trip, and a merge has to move them "
+                    + "— the roster, the answers, the reports, the captions and the party numbers. The two "
+                    + "reads of reports (refusing a delete, moving them in a merge) must see the reports taken "
+                    + "off a log as well, which the same filter hides: a removed report still holds its person "
+                    + "by the foreign key, and put back after a merge it has to be about the survivor. One more "
+                    + "read finds the acts of reporting the survivor already holds a report of, removed ones "
+                    + "included, so that a moved report gives up its act's key only where keeping it would "
+                    + "break the table's rule"),
             ["server/src/SilexGis.Api/Features/Taxonomies/TripParticipantRoleEndpoints.cs"] =
                 (1, "a role held on a deleted trip's roster is still in use"),
             ["server/src/SilexGis.Api/Features/Permissions/AccessEntryMapping.cs"] =
@@ -193,11 +200,19 @@ public class TripSoftDeleteGuardTests
             ["server/src/SilexGis.Infrastructure/Jobs/TripPurgeHandler.cs"] =
                 (3, "the pass that removes deleted trips: selecting them, claiming one, loading it"),
             ["server/src/SilexGis.Infrastructure/Import/ImportCommitService.cs"] =
-                (1, "an undo takes back the positions an import wrote, onto a deleted trip as onto a live one"),
+                (1, "an undo takes back the positions an import wrote, onto a deleted trip as onto a live one "
+                    + "— and one since taken off the trip's log as much as one still on it, which the same "
+                    + "filter hides: left behind, it could be put back onto the log of an undone import"),
             ["server/src/SilexGis.Infrastructure/Features/FeatureIntegrityVerifier.cs"] =
                 (2, "a deleted trip still anchors the rules, files, tags and links kept on it"),
             ["server/src/SilexGis.Infrastructure/Permissions/PhotoPositionDisclosure.cs"] =
                 (1, "a picture filed under a camp stays guarded by the places a deleted member trip names"),
+            ["server/src/SilexGis.Api/Features/TripTracking/TripTrackingEndpoints.cs"] =
+                (2, "a report taken off the log is hidden by the same filter as a deleted trip's rows; listing "
+                    + "the removed ones to those who may write the log, putting one back and destroying one "
+                    + "all start from a single set that asks past it and says again that the trip is not deleted; "
+                    + "and a repeated send has to see that its act was received even where its report was since "
+                    + "taken off, or it would write again what somebody removed — one more set, saying the same"),
             ["server/src/SilexGis.Api/Features/TripTracking/PublishedLinksAdminEndpoints.cs"] =
                 (1, "withdrawing every published link takes a deleted trip's links too, so that restoring "
                     + "the trip reopens no address an administrator was told had been taken back"),

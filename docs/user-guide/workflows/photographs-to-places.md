@@ -118,5 +118,31 @@ They land in the [gallery](../features/photographs.md). From there you can:
 
 ---
 
+## Photographs from underground: placed by the hour, not by GPS
+
+Everything above places a photograph by the position its file carries, and a camera underground
+records none. A photograph taken on a **tracked trip** is placed another way: by *when* it was
+taken and *whom* it is about, read against the trip's [tracking log](../features/live-tracking.md).
+
+1. Put the photographs on the trip (its **Files** tab), as for any trip.
+2. On the trip's **Tracking** tab choose **Add photographs** — or the picture button on a
+   report's row, which opens at that report's moment.
+3. Tick the photographs. Each is filed at the moment its own file says; one whose file says
+   nothing is flagged and offered the moment the dialog was opened at.
+4. Say whom they are about, once at the top or per photograph on its own line.
+5. **Read the line under each one before attaching**: it names the station the replay will draw
+   that photograph at. If the lines say *No station had been reported for them by then*, or name
+   a station the picture plainly was not taken at, the camera's clock was out — correct it once
+   under **The camera's clock was ahead by** and every line follows.
+
+A photograph about nobody in particular is kept on the timeline at its moment and drawn under no
+station: a party that has split is in two places. Nothing here writes a place onto the
+photograph — correct a report afterwards and the photograph moves with it. And nothing here
+tells you a station you could not already see: where the cave's location is withheld from you,
+the line says so. The lines are explained one by one under
+[The party on the survey](../features/live-tracking.md#the-party-on-the-survey).
+
+---
+
 Next: [Plan and log a trip](plan-and-log-a-trip.md) ·
 Reference: [Photographs](../features/photographs.md)

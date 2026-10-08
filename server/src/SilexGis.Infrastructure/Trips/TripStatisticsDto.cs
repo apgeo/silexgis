@@ -65,6 +65,22 @@ namespace SilexGis.Infrastructure.Trips;
 /// picture on two of the trips is one picture. A figure assembled from the pins instead would
 /// state how many pictures were being withheld.
 /// </param>
+/// <param name="TrackedTrips">
+/// How many of the trips have a tracking log — at least one report of any kind. A fact about the
+/// trip, like an incident, so it is the same number whether the subject is a person or a club.
+/// </param>
+/// <param name="WatchUndergroundMinutes">
+/// Person-minutes underground as the tracking logs have them: each person's entries paired with
+/// the exits that followed. A second source beside <paramref name="UndergroundMinutes"/> and
+/// never added to it — the two describe the same hours where a trip has both, so their sum counts
+/// those hours twice. An entry nobody closed adds nothing.
+/// </param>
+/// <param name="WatchTimedPersonTrips">
+/// How many (person, trip) pairs those minutes cover: the ones with at least one entry that an
+/// exit followed. Stated for the reason <paramref name="TimedPersonTrips"/> is — a small figure
+/// beside a large trip count is owed its explanation, which is logs with no exit rather than
+/// withheld rows.
+/// </param>
 public sealed record TripStatisticsDto(
     int Trips,
     int People,
@@ -79,9 +95,12 @@ public sealed record TripStatisticsDto(
     int SurveyStations,
     DateOnly? EarliestTripDate,
     DateOnly? LatestTripDate,
-    int Photographs)
+    int Photographs,
+    int TrackedTrips,
+    int WatchUndergroundMinutes,
+    int WatchTimedPersonTrips)
 {
     /// <summary>What a scope with nothing readable in it adds up to.</summary>
     public static TripStatisticsDto Empty { get; } =
-        new(0, 0, 0, 0, 0, 0, 0, 0, 0m, 0m, 0, null, null, 0);
+        new(0, 0, 0, 0, 0, 0, 0, 0, 0m, 0m, 0, null, null, 0, 0, 0, 0);
 }

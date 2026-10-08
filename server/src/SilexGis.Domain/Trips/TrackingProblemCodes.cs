@@ -72,8 +72,18 @@ public static class TrackingProblemCodes
     /// <summary>The report named is not, or is no longer, on this trip's log.</summary>
     public const string EventNotFound = "tracking.event_not_found";
 
+    /// <summary>A report was to be destroyed for good while it is still on the log.</summary>
+    public const string EventNotRemoved = "tracking.event_not_removed";
+
     /// <summary>The survey has no station by the name a report gave.</summary>
     public const string StationUnknown = "tracking.station_unknown";
+
+    /// <summary>
+    /// The station a report gave is one the file gives no name, and the survey's stored reading
+    /// still holds it under an earlier spelling the survey viewer does not use. Told apart from an
+    /// unknown station because the remedy is different: the survey is read again, nothing is retyped.
+    /// </summary>
+    public const string StationReadingOutdated = "tracking.station_reading_outdated";
 
     /// <summary>No station matches the depth a report gave under the watch's depth filter.</summary>
     public const string NoStationAtDepth = "tracking.no_station_at_depth";

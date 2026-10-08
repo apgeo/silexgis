@@ -196,6 +196,29 @@ export interface EmbedReadyMessage {
     at: string;
   };
   /**
+   * The past trip the frame was asked for and the server refused: one that has been taken back,
+   * has outlived what the installation keeps, or was never a trip of this cave.
+   *
+   * <b>A member of its own, beside `past` and never inside it.</b> `past` has meant a replay on
+   * screen, with a name and a moment, for as long as it has existed, and listeners pasted into
+   * articles read `past.title` and `past.at` on the strength of that; a second shape under the
+   * same name would hand them neither. So `past` is absent here, exactly as it always was for a
+   * trip that could not be read, the announcement stays `loaded: false` with nobody in the party
+   * — nothing is being shown — and a page written before this member existed goes on doing what
+   * it did: waiting. One written since can say that the trip cannot be played and offer its
+   * reader the way back. The frame itself says so in words and keeps its way back on screen.
+   *
+   * <b>Only for the server's own refusal.</b> A read that did not land — a phone without signal,
+   * a server fault, a request asked to wait — is not announced as this: it says nothing about the
+   * trip, and the frame reads again by itself when its reader comes back to it. Such a frame
+   * goes on announcing what a frame still waiting announces.
+   *
+   * <b>It stands until the next announcement, which no longer carries it</b>: the reader left for
+   * another trip or for the party now — or, rarely, a later read of the same trip was answered
+   * after all (it was published again), and that announcement is an ordinary `past`.
+   */
+  pastUnreadable?: { tripLogId: string };
+  /**
    * Which other party of the cave the party above is, while the frame's reader is watching one.
    *
    * <b>Announced for the reason `past` is, and the hazard is the sharper of the two.</b> A reader

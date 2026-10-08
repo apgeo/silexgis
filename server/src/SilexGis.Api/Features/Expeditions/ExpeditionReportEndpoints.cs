@@ -309,7 +309,8 @@ internal static class ExpeditionReportEndpoints
             trips.People,
             await RosterAsync(id, db, reading, user, ct),
             await RosterPeopleAsync(id, db, reading, ct),
-            await PlatesAsync(id, db, reading, thumbnails, ct));
+            await PlatesAsync(id, db, reading, thumbnails, ct),
+            trips.WatchMinutes);
 
         var fileName = $"{ExpeditionReportNaming.GeneratedPrefix(id)}{DateTime.UtcNow:yyyyMMdd}.{writer.Extension}";
         return new BuiltReport(writer.Write(ExpeditionReportDocument.Blocks(content, parts)), fileName, null);
@@ -340,13 +341,15 @@ internal static class ExpeditionReportEndpoints
         // decided over the trip — who may change it is a question about the row, not about a
         // projection of it. A trip that has been deleted is not among them: the trip table hides
         // those from every read that does not ask for them by name, and this one does not.
-        var rows = await db.TripLogs.AsNoTracking()
+        var readableTrips = db.TripLogs.AsNoTracking()
             .VisibleTo(reading, AccessDomain.TripLogs)
-            .Where(x => memberTripIds.Contains(x.Id))
+            .Where(x => memberTripIds.Contains(x.Id));
+
+        var rows = await readableTrips
             .ToListAsync(ct);
         if (rows.Count == 0)
         {
-            return new ExpeditionReportTrips([], 0);
+            return new ExpeditionReportTrips([], 0, null);
         }
 
         var tripIds = rows.Select(x => x.Id).ToList();
@@ -429,7 +432,13 @@ internal static class ExpeditionReportEndpoints
                     ? titles
                     : NoSectionTitles)));
 
-        return new ExpeditionReportTrips(trips, distinctPeople);
+        // The tracking logs of the same trips, through the same statement that selected them: the
+        // narrowing to what this reading may open is inside the query that counts, not applied to
+        // a list on the way in. Null rather than zero where no log has an entry an exit followed.
+        var watch = await TripStatisticsQuery.WatchAsync(db, readableTrips.Select(x => x.Id), null, ct);
+
+        return new ExpeditionReportTrips(
+            trips, distinctPeople, watch.TimedPersonTrips == 0 ? null : watch.UndergroundMinutes);
     }
 
     /// <summary>

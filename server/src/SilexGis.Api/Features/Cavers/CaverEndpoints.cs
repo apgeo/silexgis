@@ -10,6 +10,7 @@ using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Profiles;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Api.Features.Cavers;
 
@@ -277,7 +278,8 @@ public static class CaverEndpoints
         // roster so that putting it back is exact, and the foreign key that holds a person in
         // place does not know the trip is hidden: asked through the filter, this would answer
         // "named on nothing" and the delete would fail on the constraint this check exists to
-        // speak for.
+        // speak for. In the tracking check the same filter also hides reports taken off a log,
+        // and those count too, for the same reason.
         if (await db.TripLogParticipants.IgnoreQueryFilters().AnyAsync(p => p.CaverId == id, ct))
         {
             return ApiProblems.BadRequest(
@@ -299,7 +301,9 @@ public static class CaverEndpoints
 
         // Tracking history outlives the roster — a trip edit can drop somebody from the
         // participant list while their position reports stay — so it blocks the delete on
-        // its own, not only through the roster check above.
+        // its own, not only through the roster check above. Asked past the filter so that it
+        // sees what the foreign key sees: the reports of a deleted trip, and a report somebody
+        // took off a log, which is kept so that it can be put back and still names this person.
         if (await db.TripPositionEvents.IgnoreQueryFilters().AnyAsync(e => e.CaverId == id, ct))
         {
             return ApiProblems.BadRequest(
@@ -565,11 +569,40 @@ public static class CaverEndpoints
         // dated fact about where the person was, two entries' reports interleave into one
         // timeline, and there is no uniqueness to collide with. Dropping any of them would
         // erase the safety record the log exists to keep.
+        //
+        // Read past the model's filter, which hides two things at once and both have to be seen
+        // here: the reports of a deleted trip, and the reports somebody took off a log. A removed
+        // report still holds its person by the foreign key and is still theirs — put back
+        // tomorrow, it has to come back about the entry that survived, and the duplicate could not
+        // be removed at all while a row this read missed went on naming it.
         var sourceReports = await db.TripPositionEvents.IgnoreQueryFilters()
             .Where(e => e.CaverId == source.Id).ToListAsync(ct);
+        // The acts of reporting the survivor already holds a report of, trip by trip — removed
+        // reports and deleted trips included, for the reason above and because the rule they are
+        // read for is the table's, which knows nothing of either.
+        var survivorActs = (await db.TripPositionEvents.IgnoreQueryFilters()
+                .Where(e => e.CaverId == target.Id
+                    && EF.Property<Guid?>(e, TripPositionEvent.ClientKeyProperty) != null)
+                .Select(e => new { e.TripLogId, Act = EF.Property<Guid?>(e, TripPositionEvent.ClientKeyProperty) })
+                .ToListAsync(ct))
+            .Select(x => (x.TripLogId, x.Act))
+            .ToHashSet();
         foreach (var report in sourceReports)
         {
             report.CaverId = target.Id;
+            // One act of reporting writes a row per person and may not hold two about the same
+            // one. Where both entries were named by the same act, moving the row as it is would
+            // make exactly that pair, and the fold would fail on the constraint. Only there does
+            // the row that moves stop claiming its act; the survivor's own row of that act still
+            // does, so a late re-send is still recognised and still writes nothing. Everywhere
+            // else the row keeps its key: it may be the only report of its act, and a re-send
+            // that could not find it would be refused for naming an entry that no longer exists
+            // although what it sent is on the log.
+            var act = db.Entry(report).Property<Guid?>(TripPositionEvent.ClientKeyProperty);
+            if (act.CurrentValue is not null && survivorActs.Contains((report.TripLogId, act.CurrentValue)))
+            {
+                act.CurrentValue = null;
+            }
         }
 
         // What a published trip page called the duplicate follows them, unless the survivor is
@@ -596,6 +629,16 @@ public static class CaverEndpoints
                 label.CaverId = target.Id;
             }
         }
+
+        // The number each of them holds in a trip's party folds too, by the rule its one writer
+        // owns: the survivor takes over a number only the duplicate held, and keeps the lower
+        // where both held one. Read past the deleted-trip filter like the rows above, and for the
+        // same reason — a trip put back afterwards must come back numbered as it was.
+        var sourceNumbers = await db.TripPartyNumbers.IgnoreQueryFilters()
+            .Where(n => n.CaverId == source.Id).ToListAsync(ct);
+        var targetNumbers = await db.TripPartyNumbers.IgnoreQueryFilters()
+            .Where(n => n.CaverId == target.Id).ToListAsync(ct);
+        TripPartyNumbers.Fold(sourceNumbers, targetNumbers, target.Id);
 
         var sourceMemberships = await db.CavingGroupMemberships.Where(m => m.CaverId == source.Id).ToListAsync(ct);
         var targetGroups = await db.CavingGroupMemberships
