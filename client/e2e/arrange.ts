@@ -229,3 +229,43 @@ export async function removePurpose(page: Page, purpose: PlannedPurpose): Promis
   await tryAsPerson(page, 'DELETE', `/api/v1/trip-types/${purpose.tripTypeId}`);
   await tryAsPerson(page, 'DELETE', `/api/v1/checklists/${purpose.checklistId}`);
 }
+
+/**
+ * Trips nobody but the flow that asked for them wrote, for a flow that follows a count of trips.
+ *
+ * Every flow writes and deletes trips while the others read, so a count of the installation's
+ * trips read twice a few seconds apart is two numbers on any run busier than one file — off by
+ * the trip somebody else just made. A count narrowed to a word only this run's titles hold is
+ * not: nothing else writes a trip that word finds, so the number stands still for as long as the
+ * flow looks at it, and comparing it with itself means what it says.
+ *
+ * One trip for each day named, written as a draft; a day marked done is moved on to that state,
+ * so the trips differ in state and a narrowing by one leaves some of them and not all. Each trip
+ * is pushed onto `made` the moment it exists, so the flow's clean-up reaches whatever was
+ * written before a failure half-way.
+ */
+export async function tripsOfItsOwn(
+  page: Page,
+  word: string,
+  made: string[],
+  days: { day: string; done?: boolean }[],
+): Promise<void> {
+  for (const [index, { day, done }] of days.entries()) {
+    const trip = await asPerson<{ id: string }>(
+      page,
+      'POST',
+      '/api/v1/trip-logs',
+      tripBody(`E2E Counted ${word} ${index + 1}`, day),
+    );
+    made.push(trip.id);
+    if (done) {
+      await asPerson(
+        page,
+        'POST',
+        `/api/v1/trip-logs/${trip.id}/state`,
+        { state: 'done' },
+        { 'If-Match': await versionOf(page, `/api/v1/trip-logs/${trip.id}`) },
+      );
+    }
+  }
+}
