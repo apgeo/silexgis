@@ -182,7 +182,11 @@ public class TripSoftDeleteGuardTests
                 (1, "an import's own page says which of its trips are deleted and can be put back"),
             ["server/src/SilexGis.Api/Features/Cavers/CaverEndpoints.cs"] =
                 (12, "a person is held in place by the rows of a deleted trip, and a merge has to move them "
-                    + "— the roster, the answers, the reports, the captions and the party numbers. The two "
+                    + "— the roster, the answers, the reports, the captions and the party numbers. Refusing "
+                    + "a delete reads the roster and the reports per trip, as the foreign keys see them, so "
+                    + "that it is true of a deleted trip too; what it then names is read back through the "
+                    + "filter and the caller's own visibility, and a deleted trip is only ever part of "
+                    + "\"something else holds this person\". The two "
                     + "reads of reports (refusing a delete, moving them in a merge) must see the reports taken "
                     + "off a log as well, which the same filter hides: a removed report still holds its person "
                     + "by the foreign key, and put back after a merge it has to be about the survivor. One more "

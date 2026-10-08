@@ -232,6 +232,115 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable, IClassFixtur
 
     // ---- merge: the remedy the RESTRICT points at ----
 
+    /// <summary>
+    /// The refusal names the trips the caller may read and says of everything else only that
+    /// there is something: a trip they may not read and a deleted trip are neither named nor
+    /// counted. Somebody who reads every trip is named the hidden one — so its absence above is
+    /// the rule and not an empty answer — and a person held by nothing out of sight gets a
+    /// refusal that says so.
+    /// </summary>
+    [Fact]
+    public async Task The_refusal_names_the_trips_the_caller_may_read_and_only_says_that_others_exist()
+    {
+        var open = await CreateTripWithGuestAsync(editor, $"Held Guest {suffix}", visibility: "authenticated");
+        Guid guestId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            guestId = await db.Cavers.Where(c => c.FullName == $"Held Guest {suffix}").Select(c => c.Id).SingleAsync();
+        }
+
+        var hidden = await CreateTripNamingAsync(editor, guestId, null, "private");
+        var deleted = await CreateTripNamingAsync(editor, guestId, null, "authenticated");
+        (await editor.DeleteAsync($"/api/v1/trip-logs/{deleted}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        // A second person, named on the open trip and nowhere else.
+        var plainId = await CreateCaverAsync($"Plainly Held {suffix}");
+        var alsoOpen = await CreateTripNamingAsync(editor, plainId, null, "authenticated");
+
+        // Somebody who may delete people and holds no rule over trips: an ordinary account with
+        // one rule over the roster. They read a trip open to every signed-in account and do not
+        // read a private one.
+        var rulesId = await CreatePermissionGroupAsync($"Roster Only {suffix}");
+        (await admin.PostAsJsonAsync($"/api/v1/permission-groups/{rulesId}/members", new
+        {
+            memberKind = "user",
+            memberId = viewerId,
+        })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await admin.PutAsJsonAsync($"/api/v1/permission-groups/{rulesId}/entries", new
+        {
+            entries = new[]
+            {
+                new { effect = "allow", domain = "cavers", actions = "read, delete", scopeKind = "all" },
+            },
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.GetAsync($"/api/v1/trip-logs/{open}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.GetAsync($"/api/v1/trip-logs/{hidden}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var refused = await viewer.DeleteAsync($"/api/v1/cavers/{guestId}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        var text = await refused.Content.ReadAsStringAsync();
+        var problem = JsonDocument.Parse(text).RootElement;
+        problem.GetProperty("code").GetString().ShouldBe("caver.referenced_by_trips");
+        var named = problem.GetProperty("trips").EnumerateArray().ToList().ShouldHaveSingleItem();
+        named.GetProperty("id").GetGuid().ShouldBe(open);
+        named.GetProperty("title").GetString()!.ShouldStartWith("Roster Trip ");
+        named.GetProperty("tripDate").GetString().ShouldBe("2026-05-01");
+        named.GetProperty("onRoster").GetBoolean().ShouldBeTrue();
+        named.GetProperty("reports").GetInt32().ShouldBe(0);
+        named.GetProperty("reportsRemovable").GetBoolean().ShouldBeFalse();
+        problem.GetProperty("heldElsewhere").GetBoolean().ShouldBeTrue();
+        text.ShouldNotContain(hidden.ToString());
+        text.ShouldNotContain(deleted.ToString());
+
+        // The full administrator reads the private trip and is named it; a deleted trip is named
+        // to nobody, and is what "something else" still means for them.
+        var all = await admin.DeleteAsync($"/api/v1/cavers/{guestId}");
+        all.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var everything = JsonDocument.Parse(await all.Content.ReadAsStringAsync()).RootElement;
+        everything.GetProperty("trips").EnumerateArray().Select(t => t.GetProperty("id").GetGuid())
+            .ShouldBe([open, hidden], ignoreOrder: true);
+        everything.GetProperty("heldElsewhere").GetBoolean().ShouldBeTrue();
+
+        // Nothing out of sight: the same caller is told so.
+        var plain = await viewer.DeleteAsync($"/api/v1/cavers/{plainId}");
+        plain.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var plainly = JsonDocument.Parse(await plain.Content.ReadAsStringAsync()).RootElement;
+        plainly.GetProperty("trips").EnumerateArray().ToList().ShouldHaveSingleItem()
+            .GetProperty("id").GetGuid().ShouldBe(alsoOpen);
+        plainly.GetProperty("heldElsewhere").GetBoolean().ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A stay at a camp is refused exactly as it was: its own code, and neither of the members
+    /// the refusal over trips carries.
+    /// </summary>
+    [Fact]
+    public async Task The_refusal_over_a_camp_names_and_counts_nothing()
+    {
+        var personId = await CreateCaverAsync($"Camp Only {suffix}");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var camp = NewCamp(db, $"Quiet Camp {suffix}");
+            db.ExpeditionRoster.Add(new ExpeditionRosterEntry
+            {
+                ExpeditionId = camp.Id,
+                CaverId = personId,
+                RoleId = await RoleIdAsync(db, "cook"),
+                FromDate = new DateOnly(2026, 7, 18),
+                ToDate = new DateOnly(2026, 8, 1),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var refused = await admin.DeleteAsync($"/api/v1/cavers/{personId}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = JsonDocument.Parse(await refused.Content.ReadAsStringAsync()).RootElement;
+        problem.GetProperty("code").GetString().ShouldBe("caver.referenced_by_expeditions");
+        problem.TryGetProperty("trips", out _).ShouldBeFalse();
+        problem.TryGetProperty("heldElsewhere", out _).ShouldBeFalse();
+    }
+
     [Fact]
     public async Task Trip_history_blocks_deletion_and_merge_is_the_remedy()
     {
@@ -731,15 +840,21 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable, IClassFixtur
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 
-    private static async Task<Guid> CreateTripWithGuestAsync(HttpClient author, string guestName)
+    private static Task<Guid> CreateTripWithGuestAsync(
+        HttpClient author, string guestName, string visibility = "private") =>
+        CreateTripNamingAsync(author, null, guestName, visibility);
+
+    /// <summary>A trip whose roster names one person: one who exists, or a guest typed by name.</summary>
+    private static async Task<Guid> CreateTripNamingAsync(
+        HttpClient author, Guid? caverId, string? guestName, string visibility)
     {
         var response = await author.PostAsJsonAsync("/api/v1/trip-logs/", new
         {
             title = $"Roster Trip {Guid.NewGuid():N}"[..30],
             tripDate = "2026-05-01",
             caveIds = Array.Empty<Guid>(),
-            participants = new[] { new { caverId = (Guid?)null, newCaverName = (string?)guestName } },
-            visibility = "private",
+            participants = new[] { new { caverId, newCaverName = guestName } },
+            visibility,
         });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);

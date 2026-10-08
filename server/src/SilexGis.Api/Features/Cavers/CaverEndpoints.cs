@@ -8,6 +8,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Profiles;
+using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Trips;
@@ -31,6 +32,23 @@ public sealed record CaverWriteRequest(string FullName, string? Email, string? P
 public sealed record CaverAccountLinkRequest(Guid UserId);
 
 public sealed record CaverMergeRequest(Guid SourceCaverId);
+
+/// <summary>
+/// One trip that holds a person in place, as the refusal to delete them names it — and only ever
+/// a trip the caller may read.
+/// </summary>
+/// <param name="OnRoster">The trip's roster names the person; taken off by editing the trip.</param>
+/// <param name="Reports">
+/// How many reports of the trip's tracking log are about the person, as far as this caller may be
+/// told: those on the log, and — for somebody who may write that log, who is the only reader the
+/// removed ones are ever listed for — those taken off it and kept.
+/// </param>
+/// <param name="ReportsRemovable">
+/// The caller may remove those reports from here: they may write the trip, and its tracking log is
+/// in a state that takes writes.
+/// </param>
+public sealed record CaverHeldByTripDto(
+    Guid Id, string Title, DateOnly TripDate, bool OnRoster, int Reports, bool ReportsRemovable);
 
 public sealed class CaverWriteRequestValidator : AbstractValidator<CaverWriteRequest>
 {
@@ -79,7 +97,7 @@ public static class CaverEndpoints
         cavers.MapPut("/{id:guid}", UpdateAsync).WithValidation<CaverWriteRequest>()
             .WithSummary("Edits a person's roster entry.");
         cavers.MapDelete("/{id:guid}", DeleteAsync)
-            .WithSummary("Removes a person, refused while trips or a camp's roster still name them.");
+            .WithSummary("Removes a person, refused while trips or a camp's roster still name them; the refusal over trips lists those the caller may read ('trips') and says whether anything else holds the person ('heldElsewhere').");
         cavers.MapPost("/{id:guid}/account-link", LinkAccountAsync).WithValidation<CaverAccountLinkRequest>()
             .WithSummary("Attaches a user account to this person.");
         cavers.MapDelete("/{id:guid}/account-link", UnlinkAccountAsync)
@@ -251,8 +269,8 @@ public static class CaverEndpoints
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
-        Guid id, SilexGisDbContext db, IAccessContextAccessor accessAccessor, FullAdminGuard fullAdminGuard,
-        CancellationToken ct)
+        Guid id, SilexGisDbContext db, IAccessService access, IAccessContextAccessor accessAccessor,
+        FullAdminGuard fullAdminGuard, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null)
@@ -280,11 +298,19 @@ public static class CaverEndpoints
         // "named on nothing" and the delete would fail on the constraint this check exists to
         // speak for. In the tracking check the same filter also hides reports taken off a log,
         // and those count too, for the same reason.
-        if (await db.TripLogParticipants.IgnoreQueryFilters().AnyAsync(p => p.CaverId == id, ct))
+        //
+        // The refusal says which trips, because "merge the duplicate" is no remedy for somebody
+        // who is not a duplicate and has asked to be removed: whoever answers that request needs
+        // to know where the person still stands. What it may say is decided in one place below.
+        var rosters = await db.TripLogParticipants.IgnoreQueryFilters()
+            .Where(p => p.CaverId == id).Select(p => p.TripLogId).Distinct().ToListAsync(ct);
+        if (rosters.Count > 0)
         {
-            return ApiProblems.BadRequest(
-                "caver.referenced_by_trips",
-                "This person is named on trips. Merge their duplicate entry instead of deleting it.");
+            return await HeldByTripsAsync(
+                db, access, ctx, rosters, await ReportsHoldingAsync(db, id, ct),
+                "This person is named on trips. Take them off those trips, or merge their duplicate "
+                + "entry instead of deleting it.",
+                ct);
         }
 
         // A stay at a camp is the same kind of fact and gets the same refusal: it records where
@@ -304,11 +330,14 @@ public static class CaverEndpoints
         // its own, not only through the roster check above. Asked past the filter so that it
         // sees what the foreign key sees: the reports of a deleted trip, and a report somebody
         // took off a log, which is kept so that it can be put back and still names this person.
-        if (await db.TripPositionEvents.IgnoreQueryFilters().AnyAsync(e => e.CaverId == id, ct))
+        var reports = await ReportsHoldingAsync(db, id, ct);
+        if (reports.Count > 0)
         {
-            return ApiProblems.BadRequest(
-                "caver.referenced_by_trips",
-                "This person has trip tracking history. Merge their duplicate entry instead of deleting it.");
+            return await HeldByTripsAsync(
+                db, access, ctx, [], reports,
+                "This person has trip tracking history. Remove their reports from those trips, or merge "
+                + "their duplicate entry instead of deleting it.",
+                ct);
         }
 
         // Deleting the person cascades their memberships, which can sever an account's
@@ -329,6 +358,107 @@ public static class CaverEndpoints
 
         await transaction.CommitAsync(ct);
         return TypedResults.NoContent();
+    }
+
+    /// <summary>How many trips the refusal to delete a person names at most.</summary>
+    private const int HeldByTripsCap = 50;
+
+    /// <summary>The reports of one trip that are about a person: on its log, and taken off it and kept.</summary>
+    private sealed record ReportsHolding(Guid TripLogId, int OnLog, int Kept);
+
+    /// <summary>
+    /// Every report that holds a person in place, counted per trip — asked past the model's
+    /// filter, so that it sees what the foreign key sees: a deleted trip's reports, and a report
+    /// taken off a log, which is kept so that it can be put back and still names the person.
+    /// </summary>
+    private static Task<List<ReportsHolding>> ReportsHoldingAsync(
+        SilexGisDbContext db, Guid caverId, CancellationToken ct) =>
+        db.TripPositionEvents.IgnoreQueryFilters()
+            .Where(e => e.CaverId == caverId)
+            .GroupBy(e => e.TripLogId)
+            .Select(g => new ReportsHolding(
+                g.Key, g.Count(e => e.RemovedAt == null), g.Count(e => e.RemovedAt != null)))
+            .ToListAsync(ct);
+
+    /// <summary>
+    /// The refusal to delete a person whom trips hold in place: which trips, and nothing the
+    /// caller may not know.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>What holds a person is decided past the model's filters, and what is said about it is
+    /// decided inside them.</b> The two lists handed in were read as the foreign keys see them,
+    /// which is what makes the refusal true. The trips named are read back through the ordinary
+    /// set and the caller's own visibility, so a deleted trip and a trip the caller may not read
+    /// are simply not there to name.
+    /// </para>
+    /// <para>
+    /// Everything left over is one boolean: a trip the caller may not read, a deleted trip, more
+    /// trips than the cap, reports taken off a log the caller may not write. It is a boolean and
+    /// not a count on purpose. A count would tell somebody who keeps the roster how many trips
+    /// they cannot see name this person; the boolean tells them only what the refusal already
+    /// implies once everything named has been dealt with — that something else still holds the
+    /// person, and that somebody who can see it has to be asked.
+    /// </para>
+    /// <para>
+    /// A report taken off a log is listed, inside a trip, only for those who may write that log;
+    /// its count follows the same rule here. For anybody else such reports are part of the
+    /// boolean, and a trip that holds the person by nothing else is left out of the list.
+    /// </para>
+    /// </remarks>
+    private static async Task<ProblemHttpResult> HeldByTripsAsync(
+        SilexGisDbContext db, IAccessService access, AccessContext ctx,
+        IReadOnlyCollection<Guid> rosters, IReadOnlyCollection<ReportsHolding> reports, string detail,
+        CancellationToken ct)
+    {
+        var reportsOf = reports.ToDictionary(r => r.TripLogId);
+        var holding = rosters.Concat(reportsOf.Keys).Distinct().ToArray();
+
+        // One more than the cap, so that "there are more" is known without counting them.
+        var readable = await db.TripLogs.AsNoTracking()
+            .VisibleTo(ctx, AccessDomain.TripLogs)
+            .Where(t => holding.Contains(t.Id))
+            .OrderByDescending(t => t.TripDate).ThenBy(t => t.Id)
+            .Take(HeldByTripsCap + 1)
+            .ToListAsync(ct);
+        var heldElsewhere = readable.Count < holding.Length || readable.Count > HeldByTripsCap;
+
+        var named = readable.Take(HeldByTripsCap).ToList();
+        var namedIds = named.Select(t => t.Id).ToArray();
+        var watches = await db.TripTrackings.AsNoTracking()
+            .Where(t => namedIds.Contains(t.TripLogId))
+            .ToDictionaryAsync(t => t.TripLogId, t => t.State, ct);
+
+        var trips = new List<CaverHeldByTripDto>(named.Count);
+        foreach (var trip in named)
+        {
+            var mayWrite = (await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed;
+            var held = reportsOf.GetValueOrDefault(trip.Id);
+            var kept = held?.Kept ?? 0;
+            var told = (held?.OnLog ?? 0) + (mayWrite ? kept : 0);
+            heldElsewhere |= !mayWrite && kept > 0;
+
+            var onRoster = rosters.Contains(trip.Id);
+            if (!onRoster && told == 0)
+            {
+                continue;
+            }
+
+            trips.Add(new CaverHeldByTripDto(
+                trip.Id, trip.Title, trip.TripDate, onRoster, told,
+                ReportsRemovable: told > 0 && mayWrite
+                    && watches.TryGetValue(trip.Id, out var state) && TripTrackingRules.MayWriteLog(state)));
+        }
+
+        return TypedResults.Problem(
+            detail: detail,
+            statusCode: StatusCodes.Status400BadRequest,
+            extensions: new Dictionary<string, object?>
+            {
+                ["code"] = "caver.referenced_by_trips",
+                ["trips"] = trips,
+                ["heldElsewhere"] = heldElsewhere,
+            });
     }
 
     private static async Task<Results<Ok<CaverDto>, UnauthorizedHttpResult, ProblemHttpResult>> LinkAccountAsync(
