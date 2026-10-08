@@ -92,6 +92,7 @@ const MODEL = {
   sourceEpsg: null,
   pictures: [],
   rasterMaps: [],
+  places: [],
 } as unknown as PublicTripEnvelope['model'];
 
 function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelope {

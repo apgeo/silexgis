@@ -982,6 +982,7 @@ describe('the drawing on a followed page', () => {
     proj4: '+proj=sterea +lat_0=46',
     pictures: [],
     rasterMaps: [],
+    places: [],
   };
 
   /** One published photograph, as the envelope hands it over: a rendering URL and nothing else. */
@@ -1089,6 +1090,57 @@ describe('the drawing on a followed page', () => {
     // The twin, on the same render: a reader watching somebody the drawing can place is told
     // nothing new about them.
     expect(screen.getByTestId('public-trip-caver-3')).not.toHaveTextContent('Not on the drawing');
+  });
+
+  it('puts what the cave calls a station over the station, where the survey came with that name', () => {
+    // An installation that publishes the names a cave has given its depths sends them with the
+    // survey. Ana is at a station the cave has named; the name leads and the station stays under
+    // it, because the station is what the drawing labels.
+    ready({
+      model: {
+        ...model,
+        places: [
+          { station: 'p.g.2', depthM: 40, label: 'Balconul' },
+          { station: 'p.g.7', depthM: 120, label: 'Sala Mare' },
+        ],
+      },
+    });
+    render(<PublicTripPage />);
+
+    const card = screen.getByTestId('public-trip-caver-1');
+    expect(within(card).getByTestId('public-trip-place-1')).toHaveTextContent('Sala Mare');
+    expect(within(card).getByTestId('public-trip-place-station-1')).toHaveTextContent('p.g.7');
+    // A name for a station nobody is at is printed nowhere on the page.
+    expect(document.body).not.toHaveTextContent('Balconul');
+  });
+
+  it('shows the station alone, as it always did, where the survey came with no names', () => {
+    // What every installation sends until it chooses otherwise: the list is there and empty.
+    ready({ model: { ...model, places: [] } });
+    render(<PublicTripPage />);
+
+    const card = screen.getByTestId('public-trip-caver-1');
+    expect(card).toHaveTextContent('p.g.7');
+    expect(within(card).queryByTestId('public-trip-place-1')).toBeNull();
+    expect(within(card).queryByTestId('public-trip-place-station-1')).toBeNull();
+    expect(document.body).not.toHaveTextContent('Sala Mare');
+  });
+
+  it('keeps the station and its warning, unnamed, where the drawing does not hold it', () => {
+    // The name is for a station the drawing can show. Where the drawing this browser parsed has
+    // no such station the row says that and nothing softer.
+    ready({
+      model: { ...model, places: [{ station: 'p.g.7', depthM: 120, label: 'Sala Mare' }] },
+    });
+    render(<PublicTripPage />);
+    act(() => {
+      (given!.onUnplacedStationsChange as (stations: ReadonlySet<string>) => void)(new Set(['p.g.7']));
+    });
+
+    const card = screen.getByTestId('public-trip-caver-1');
+    expect(within(card).getByTestId('public-trip-position-not-on-model-1')).toBeInTheDocument();
+    expect(card).toHaveTextContent('p.g.7');
+    expect(within(card).queryByTestId('public-trip-place-1')).toBeNull();
   });
 
   /**

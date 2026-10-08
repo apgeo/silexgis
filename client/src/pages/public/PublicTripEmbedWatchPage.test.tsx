@@ -138,6 +138,7 @@ const MODEL = {
   proj4: null,
   pictures: [],
   rasterMaps: [],
+  places: [],
 };
 
 function person(

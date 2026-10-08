@@ -107,6 +107,7 @@ const model = {
   proj4: '+proj=sterea',
   pictures: [],
   rasterMaps: [],
+  places: [],
 };
 
 /** One published photograph, as the envelope hands it over: a rendering URL and nothing else. */

@@ -9569,6 +9569,16 @@ export type PublicTripStationPicture = components['schemas']['PublicTripStationP
 export type PublicTripRasterMap = components['schemas']['PublicTripRasterMapDto'];
 
 /**
+ * One place a cave has named, as a published survey comes with it: a station of that survey, the
+ * depth the cave declared it at — a magnitude, never negative — and what people call it.
+ *
+ * The list is on the model and is empty on every installation that has not chosen to publish
+ * these names, which is how one is installed. Read through `placeLabelFor`; there is deliberately
+ * no declaration id and nothing about who declared it.
+ */
+export type PublicTripPlace = components['schemas']['PublicTripPlaceDto'];
+
+/**
  * The trip's follow links — when each was minted, by whom, and whether it has been taken back.
  *
  * Deliberately carries no token. A token exists in one response, the one that minted it, and is

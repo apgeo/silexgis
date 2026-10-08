@@ -32,6 +32,7 @@ const MODEL = {
   sourceEpsg: null,
   pictures: [],
   rasterMaps: [],
+  places: [],
 } as unknown as PublicTripEnvelope['model'];
 
 function person(ordinal: number, label: string, stationName: string | null) {

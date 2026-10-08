@@ -24339,6 +24339,12 @@ export interface components {
             in: boolean;
             out: boolean;
         };
+        PublicTripPlaceDto: {
+            station: string;
+            /** Format: double */
+            depthM: number;
+            label: string;
+        };
         PublicTripRasterMapDto: {
             title: null | string;
             viewKind: components["schemas"]["PublicTripMapViewKind"];
@@ -24365,6 +24371,7 @@ export interface components {
             proj4: null | string;
             pictures: components["schemas"]["PublicTripStationPictureDto"][];
             rasterMaps: components["schemas"]["PublicTripRasterMapDto"][];
+            places: components["schemas"]["PublicTripPlaceDto"][];
         };
         PublicTripTeamDto: {
             /** Format: uuid */

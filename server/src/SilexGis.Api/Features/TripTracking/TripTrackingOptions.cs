@@ -70,6 +70,33 @@ public sealed class TripTrackingOptions
     public bool PublishExpectedReturn { get; set; }
 
     /// <summary>
+    /// Whether a published trip's survey comes with the names the cave has given its depths.
+    /// <b>Off unless an installation turns it on.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off, because the names are words a club typed for its own members — what it calls a pitch,
+    /// where it camps — and nothing published has carried them before; whether people without an
+    /// account are to read them is the club's to decide. Turned off, the member is there and
+    /// empty whatever the cave has declared, no declaration is read on a published route at all,
+    /// and the answer is otherwise exactly what it was.
+    /// </para>
+    /// <para>
+    /// What it widens, exactly: for each declaration that has a name and names a station of the
+    /// survey being handed over, that name, the station and the declared depth — on the two reads
+    /// that hand a survey over, a trip being followed and a finished trip's replay. The station
+    /// and its altitude are already in the survey file those reads serve; the name is what is new.
+    /// Which declarations qualify is decided by
+    /// <see cref="SilexGis.Domain.Trips.TrackingDepthPlacements.PublishedPlaces"/>.
+    /// </para>
+    /// <para>
+    /// <b>It opens nothing about a protected cave.</b> A cave whose position is protected has no
+    /// published page for these to appear on, whichever way this is set.
+    /// </para>
+    /// </remarks>
+    public bool PublishDepthPlaces { get; set; }
+
+    /// <summary>
     /// How long a follow link goes on working after the trip it is about. <b>Two weeks unless an
     /// installation says otherwise.</b>
     /// </summary>

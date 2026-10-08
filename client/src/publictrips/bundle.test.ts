@@ -3,6 +3,7 @@ import { createContext, runInContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { build } from 'vite';
 import type { PublicPastTrack, PublicPastTrackFix } from '../api/hooks.ts';
+import { placeLabelFor } from '../caveview/publicPlaces.ts';
 import { publicTrackedCavers } from '../caveview/publicTrackedCavers.ts';
 import {
   pastEnvelopeAt,
@@ -43,6 +44,7 @@ const PUBLISHED_NAMES = [
   'pastEnvelopeAt',
   'pastReplayWindow',
   'pastReportMoments',
+  'placeLabelFor',
   'placeOnModel',
   'plannedReturn',
   'publicPlaceReported',
@@ -226,6 +228,24 @@ describe('the fold, compiled for a page that has no build step', () => {
         `party at ${new Date(moment).toISOString()}`,
       ).toEqual(publicTrackedCavers(pastEnvelopeAt(TRACK, moment), unnamed));
     }
+  });
+
+  it('names a station as this application does, and names nothing from an empty list', async () => {
+    const { api } = await buildBundle('iife');
+    const labelThere = api.placeLabelFor as typeof placeLabelFor;
+    const places = [
+      { station: 'cave.upper.2', depthM: 50, label: 'Sala Mare' },
+      { station: 'cave.deep.3', depthM: 120, label: 'Sifonul' },
+    ];
+
+    for (const station of ['cave.upper.2', 'cave.deep.3', 'cave.mid.1', '', null]) {
+      expect(labelThere(station, places), String(station)).toBe(placeLabelFor(station, places));
+      // What every installation that publishes no names sends, and what an older answer lacks.
+      expect(labelThere(station, []), String(station)).toBeNull();
+      expect(labelThere(station, undefined), String(station)).toBeNull();
+    }
+    // Pinned to the words as well: two compilations that both answered null would agree.
+    expect(labelThere('cave.deep.3', places)).toBe('Sifonul');
   });
 
   it('lists the reports of a followed team or caver as this application does', async () => {

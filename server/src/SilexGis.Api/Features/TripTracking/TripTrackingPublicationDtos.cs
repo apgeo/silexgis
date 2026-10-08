@@ -176,7 +176,44 @@ public sealed record PublicTripSurveyModelDto(
     int? SourceEpsg,
     string? Proj4,
     IReadOnlyList<PublicTripStationPictureDto> Pictures,
-    IReadOnlyList<PublicTripRasterMapDto> RasterMaps);
+    IReadOnlyList<PublicTripRasterMapDto> RasterMaps,
+    /// <summary>
+    /// What the cave calls some of its depths, for the stations of this survey: shallowest first.
+    /// </summary>
+    /// <remarks>
+    /// <b>Always present, and empty far more often than not</b> — on every installation that does
+    /// not publish these names, which is how one is installed, and for every cave that has
+    /// declared none. An empty list is "nothing to add": a page shows each reported station under
+    /// the name the survey gives it, exactly as it did before this member existed.
+    /// </remarks>
+    IReadOnlyList<PublicTripPlaceDto> Places);
+
+/// <summary>
+/// One place a cave has named: a station of the survey being handed over, the depth the cave
+/// declared it at, and what people call it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Declared apart from the signed-in shape of a declaration and never to be merged with it: that
+/// one carries the declaration's id and whether the cave's current survey holds the station, both
+/// of which are for the people who maintain the list.
+/// </para>
+/// <para>
+/// Only declarations that have a name are ever here, and only those naming a station this survey
+/// holds — so every entry is a name a page can put beside a station it can draw.
+/// </para>
+/// </remarks>
+/// <param name="Station">
+/// The station, in the spelling the viewer and every reported <c>stationName</c> of this answer
+/// use, so the two compare as written.
+/// </param>
+/// <param name="DepthM">
+/// Metres below the entrance datum as the cave declared them: <b>a magnitude, never negative</b>.
+/// A person's own reported depth elsewhere in this answer keeps the sign it was reported with, so
+/// the two are not compared without taking that into account.
+/// </param>
+/// <param name="Label">What the cave calls the place, as it was typed. Never empty.</param>
+public sealed record PublicTripPlaceDto(string Station, decimal DepthM, string Label);
 
 /// <summary>
 /// The view a published map sheet declares itself to be — its seeded relation code read out,

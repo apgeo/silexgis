@@ -12,6 +12,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.ResLinks;
+using SilexGis.Domain.Surveys;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
@@ -482,7 +483,9 @@ public static class TripTrackingPublicationEndpoints
         var camps = await ExpeditionsOfAsync(db, [trip.Id], ct);
         // Read before the answer is built rather than inside it, so that the read is counted as
         // served only once nothing is left that could fail.
-        var model = await ModelAsync(db, protection, crs, tokens, tracking.SurveyModelId, configCave, ct);
+        var model = await ModelAsync(
+            db, protection, crs, tokens, tracking.SurveyModelId, configCave,
+            options.Value.PublishDepthPlaces, ct);
 
         diagnostics.Served(PublicTripRoute.Follow);
         return TypedResults.Ok(new PublicTripTrackingEnvelopeDto(
@@ -888,9 +891,14 @@ public static class TripTrackingPublicationEndpoints
     /// useful as its own bytes — which is exactly why a protected cave may not be published at
     /// all rather than published without its drawing.
     /// </remarks>
+    /// <param name="publishDepthPlaces">
+    /// Whether this installation tells visitors the names its caves give their depths. False sends
+    /// the member empty and reads no declaration.
+    /// </param>
     internal static async Task<PublicTripSurveyModelDto?> ModelAsync(
         SilexGisDbContext db, FeatureProtection protection, ICrsRegistry crs,
-        IFileAccessTokenService tokens, Guid? surveyModelId, Guid configCave, CancellationToken ct)
+        IFileAccessTokenService tokens, Guid? surveyModelId, Guid configCave,
+        bool publishDepthPlaces, CancellationToken ct)
     {
         if (surveyModelId is null) return null;
         var model = await db.SurveyModels.AsNoTracking()
@@ -913,7 +921,80 @@ public static class TripTrackingPublicationEndpoints
             // On the same branch for the same reason: a sheet declared on this model is a
             // drawing of a cave already established to carry no protection, re-decided on
             // every read exactly as the envelope itself is.
-            await RasterMapsAsync(db, protection, tokens, model.Id, ct));
+            await RasterMapsAsync(db, protection, tokens, model.Id, ct),
+            // And here for the same reason again: these are names for stations of this model, of
+            // the cave the publication was decided about. A trip whose survey answers to another
+            // cave never reaches this line, so no cave's names travel with a drawing that is not
+            // its own.
+            publishDepthPlaces ? await DepthPlacesAsync(db, model, configCave, ct) : []);
+    }
+
+    /// <summary>
+    /// The places <paramref name="configCave"/> has named that are stations of
+    /// <paramref name="model"/>, as a visitor is told them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Two bounded reads, and one of them only when there is something to ask about.</b> This
+    /// runs on a route anybody holding a link may call and every open page calls once a minute,
+    /// so it never loads a survey's stations: it reads the cave's named declarations — the
+    /// shallowest <see cref="TrackingDepthPlacements.MaxPublishedPlaces"/> of them — and then asks
+    /// the station table only for the rows those names could mean. A cave that has named nothing,
+    /// which is most caves, costs the first read and not the second.
+    /// </para>
+    /// <para>
+    /// <b>The bound is on what is looked at, not only on what is sent.</b> A declaration among
+    /// those looked at that names no station of this survey is left out and is not replaced by a
+    /// deeper one from beyond the bound: doing that would mean reading every declaration a cave
+    /// has, on an anonymous route, to serve a list no real cave is long enough to fill.
+    /// </para>
+    /// <para>
+    /// Which of them are told is not decided here but by the rule that also decides whether a
+    /// report may land on a declared place; this only fetches what that rule is asked about. Each
+    /// station row is read with the number its file gave it, because that is what says whether the
+    /// viewer can draw it at all.
+    /// </para>
+    /// </remarks>
+    private static async Task<IReadOnlyList<PublicTripPlaceDto>> DepthPlacesAsync(
+        SilexGisDbContext db, SurveyModel model, Guid configCave, CancellationToken ct)
+    {
+        var rows = await db.CaveDepthPlaces.AsNoTracking()
+            .Where(p => p.CaveFeatureId == configCave && p.PlaceLabel != null && p.PlaceLabel != "")
+            .OrderBy(p => p.DepthM)
+            .Take(TrackingDepthPlacements.MaxPublishedPlaces)
+            .Select(p => new { p.DepthM, p.ViewerStationName, p.PlaceLabel })
+            .ToListAsync(ct);
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        var declared = rows
+            .Select(r => new DeclaredDepthPlaces.Declared(r.DepthM, r.ViewerStationName, r.PlaceLabel))
+            .ToList();
+
+        // Both readings of each declared name, because a declaration keeps the spelling the
+        // drawing shows and a station row may hold it under the file's root survey.
+        var readings = declared
+            .SelectMany(d => SurveyStationNames.StoredCandidates(
+                model.Format, model.RootSurveyName, d.ViewerStationName))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var held = await db.SurveyStations.AsNoTracking()
+            .Where(s => s.SurveyModelId == model.Id && readings.Contains(s.Name))
+            .Select(s => new { s.Name, s.SurveyName, s.FileStationId })
+            .ToListAsync(ct);
+
+        // Altitude and the entrance flag play no part in whether a name is there, so neither is read.
+        var stations = held
+            .Select(s => TrackingDepthResolver.Station.Of(
+                model.Format, model.RootSurveyName, s.Name, s.SurveyName, z: 0, isEntrance: false,
+                s.FileStationId))
+            .ToList();
+
+        return [.. TrackingDepthPlacements
+            .PublishedPlaces(declared, stations, TrackingDepthPlacements.MaxPublishedPlaces)
+            .Select(p => new PublicTripPlaceDto(p.ViewerStationName, p.DepthM, p.PlaceLabel!.Trim()))];
     }
 
     // ---- the pictures a follower is shown ----------------------------------------------------

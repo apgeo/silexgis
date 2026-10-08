@@ -102,6 +102,7 @@ const model = {
   proj4: null,
   pictures: [],
   rasterMaps: [],
+  places: [],
 };
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();

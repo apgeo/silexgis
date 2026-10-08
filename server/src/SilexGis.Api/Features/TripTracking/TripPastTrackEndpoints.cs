@@ -499,8 +499,11 @@ public static class TripPastTrackEndpoints
         var trackCamps = await TripTrackingPublicationEndpoints.ExpeditionsOfAsync(db, [trip.Id], ct);
         // Read before the answer is built rather than inside it, so that the read is counted as
         // served only once nothing is left that could fail.
+        // The names of depths ride with the survey under the setting the followed page reads: one
+        // switch says whether this installation tells them, wherever that survey is handed over.
         var model = await TripTrackingPublicationEndpoints.ModelAsync(
-            db, protection, crs, tokens, tracking.SurveyModelId, configCave, ct);
+            db, protection, crs, tokens, tracking.SurveyModelId, configCave,
+            live.Value.PublishDepthPlaces, ct);
 
         diagnostics.Served(PublicTripRoute.PastTrip);
         return TypedResults.Ok(new PublicPastTrackDto(

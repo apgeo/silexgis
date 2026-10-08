@@ -104,6 +104,7 @@ const model = {
   proj4: null,
   pictures: [],
   rasterMaps: [],
+  places: [],
 };
 
 function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelope {

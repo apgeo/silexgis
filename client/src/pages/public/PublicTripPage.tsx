@@ -32,6 +32,7 @@ import CaveViewPanel, {
   type CaveViewFocusRequest,
 } from '../../components/caveview/CaveViewPanel.tsx';
 import { noStationsMissing } from '../../caveview/placedOnModel.ts';
+import { placeLabelFor } from '../../caveview/publicPlaces.ts';
 import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
@@ -888,6 +889,34 @@ export default function PublicTripPage() {
       };
     }
     if (participant.stationName !== null && participant.stationName.length > 0) {
+      // What the cave calls this station, where it has said and this installation publishes it.
+      //
+      // <b>Read off the survey being drawn, live or replayed</b>: the names travel with the model
+      // the server hands over, having been checked against that model's own stations, so a replay
+      // of an old trip on an older survey is named by what that survey holds. On an installation
+      // that publishes none — which is how one is installed — the list is empty, this is null, and
+      // the row below is the station alone, exactly as it was before the names existed.
+      //
+      // <b>The station stays, under the name.</b> It is what the drawing labels and what a link
+      // to this moment carries, and a reader told only "Sala Mare" could find neither.
+      const called = placeLabelFor(participant.stationName, view?.model?.places);
+      if (called !== null) {
+        return {
+          shown: (
+            <>
+              <span data-testid={`public-trip-place-${participant.ordinal}`}>{called}</span>
+              <Typography.Text
+                type="secondary"
+                className="public-trip-position-station"
+                data-testid={`public-trip-place-station-${participant.ordinal}`}
+              >
+                {participant.stationName}
+              </Typography.Text>
+            </>
+          ),
+          placedAt: participant.positionRecordedAt,
+        };
+      }
       return { shown: participant.stationName, placedAt: participant.positionRecordedAt };
     }
     if (participant.depthM !== null) {

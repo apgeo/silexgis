@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import type { PublicPastTrack, PublicPastTrackFix } from '../../api/hooks.ts';
+import { placeLabelFor } from '../../caveview/publicPlaces.ts';
 import { publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
 import {
   firstPlacedMoment,
@@ -110,6 +111,38 @@ describe('winding a published past trip back to a moment', () => {
     // And a track that somehow carried such a member would still not have it read.
     const carrying = { ...source, expectedReturnAt: '2019-07-06T15:00:00Z' };
     expect(pastEnvelopeAt(carrying, at('2019-07-06T11:00:00Z')).expectedReturnAt).toBeNull();
+  });
+
+  it('names a replayed place by the names the replayed survey came with', () => {
+    // The names a cave gives its depths travel with the survey a track is drawn on — which for an
+    // old trip is the survey it was followed on. The fold hands that survey on whole, so a replay
+    // is named by its own list at every moment, and by nothing where the list is empty.
+    const model = {
+      format: 'survex3d' as const,
+      modelUrl: '/api/v1/files/abc/content?token=t',
+      meshUrl: null,
+      anchorLongitude: null,
+      anchorLatitude: null,
+      anchorHeightM: null,
+      sourceEpsg: null,
+      proj4: null,
+      pictures: [],
+      rasterMaps: [],
+      places: [{ station: 'p.g.7', depthM: 120, label: 'Sala Mare' }],
+    };
+    const source = track({
+      model,
+      participants: [
+        { ordinal: 1, label: 'Ana', track: [fix({ recordedAt: '2019-07-06T09:00:00Z', stationName: 'p.g.7', in: true })] },
+      ],
+    });
+
+    const folded = pastEnvelopeAt(source, at('2019-07-06T11:00:00Z'));
+    expect(placeLabelFor(folded.participants[0].stationName, folded.model?.places)).toBe('Sala Mare');
+
+    const unnamed = pastEnvelopeAt({ ...source, model: { ...model, places: [] } }, at('2019-07-06T11:00:00Z'));
+    expect(unnamed.participants[0].stationName).toBe('p.g.7');
+    expect(placeLabelFor(unnamed.participants[0].stationName, unnamed.model?.places)).toBeNull();
   });
 
   it('never says a past trip is armed, whatever the trip did', () => {

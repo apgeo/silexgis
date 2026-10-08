@@ -184,4 +184,70 @@ public class TrackingDepthPlacementsTests
         TrackingDepthResolver.ReferenceZ(WithNameless, "#5").ShouldBe(360);
         TrackingDepthPlacements.For([], WithNameless, "#5", [], 110m).ViewerStationName.ShouldBe("cave.shaft.9");
     }
+
+    // ---- which declared places a visitor may be told -----------------------------------------
+
+    [Fact]
+    public void Only_named_declarations_on_a_station_of_the_survey_are_published_shallowest_first()
+    {
+        DeclaredDepthPlaces.Declared[] declared =
+        [
+            new(120m, "cave.shaft.10", "Sifonul"),
+            // Named, and on a station this survey does not have: it belonged to an earlier one.
+            new(80m, "cave.old.4", "Tabăra veche"),
+            // On a station of the survey, and nobody gave it a name — nor a name that is only spaces.
+            new(60m, "cave.gallery.7", null),
+            new(70m, "cave.shaft.9", "   "),
+            new(50m, "cave.gallery.7", "Galeria"),
+            new(100m, "cave.shaft.9", "Puțul"),
+        ];
+
+        var published = TrackingDepthPlacements.PublishedPlaces(
+            declared, Stations, TrackingDepthPlacements.MaxPublishedPlaces);
+
+        published.Select(p => (p.DepthM, p.ViewerStationName, p.PlaceLabel)).ShouldBe(
+        [
+            (50m, "cave.gallery.7", "Galeria"),
+            (100m, "cave.shaft.9", "Puțul"),
+            (120m, "cave.shaft.10", "Sifonul"),
+        ]);
+
+        // The one left out for its station is left out by the test a report passes, and is a
+        // declaration that would otherwise have been published: it has a name.
+        TrackingDepthPlacements.NamesAStationOf(Stations, declared[1]).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void The_published_places_are_capped_and_the_deepest_are_the_ones_left_out()
+    {
+        DeclaredDepthPlaces.Declared[] declared =
+        [
+            new(120m, "cave.shaft.10", "Sifonul"),
+            new(50m, "cave.gallery.7", "Galeria"),
+            new(100m, "cave.shaft.9", "Puțul"),
+        ];
+
+        TrackingDepthPlacements.PublishedPlaces(declared, Stations, 3).Count.ShouldBe(3);
+        TrackingDepthPlacements.PublishedPlaces(declared, Stations, 2)
+            .Select(p => p.PlaceLabel).ShouldBe(["Galeria", "Puțul"]);
+        TrackingDepthPlacements.PublishedPlaces(declared, Stations, 0).ShouldBeEmpty();
+        TrackingDepthPlacements.PublishedPlaces(declared, Stations, -1).ShouldBeEmpty();
+
+        // The cap a published read uses is a real bound and not "everything".
+        TrackingDepthPlacements.MaxPublishedPlaces.ShouldBeInRange(1, 1000);
+    }
+
+    [Fact]
+    public void A_named_place_on_a_station_the_viewer_cannot_draw_is_not_published_and_nothing_is_without_stations()
+    {
+        DeclaredDepthPlaces.Declared onNameless = new(100m, "#4", "Sala");
+        DeclaredDepthPlaces.Declared onNamed = new(50m, "cave.gallery.7", "Galeria");
+
+        TrackingDepthPlacements.PublishedPlaces([onNameless, onNamed], WithNameless, 10)
+            .ShouldBe([onNamed]);
+
+        // A survey whose stations were never read holds none of them.
+        TrackingDepthPlacements.PublishedPlaces([onNameless, onNamed], [], 10).ShouldBeEmpty();
+        TrackingDepthPlacements.PublishedPlaces([], Stations, 10).ShouldBeEmpty();
+    }
 }

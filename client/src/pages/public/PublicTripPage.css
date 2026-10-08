@@ -161,6 +161,18 @@
   font-size: 0.72rem;
 }
 
+/* The survey's own name for a station, under what the cave calls the place.
+
+   Its own line for the reason the age below is on one: at 360px a fact is a column 130px wide, and
+   a station path left to run on after a name reads as part of the name. The label size is the
+   age's, so the three lines read as one place — what it is called, which station that is, how
+   long ago. */
+.public-trip-position-station {
+  display: block;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
 /* The mark that says the drawing above holds no station of the name beside it.
 
    Its own line, under the station and over the age, for the reason the age itself is on one: at
