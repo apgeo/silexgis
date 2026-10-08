@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { TripInvitationInfo, TripInvitationList, TripLogInfo } from '../../api/hooks.ts';
 
 const list = vi.fn();
@@ -189,6 +190,38 @@ describe('TripInvitationsTab', () => {
     cleanup();
     show(trip({ state: 'done' }));
     expect(screen.getByTestId('trip-invitations-promote')).toBeTruthy();
+  });
+
+  /**
+   * Writing the list onto the trip and saving the trip's own form both change who is on it. Done
+   * in the same moment the later one is refused whole — and the button has to say that, and what
+   * to do, rather than the sentence it has for a refusal nobody can name. The refusal with no
+   * words of its own is asserted beside it, so the worded one is known to be chosen by its code.
+   */
+  it('says that somebody else changed who is on the trip when writing people onto it loses a race', async () => {
+    const refetch = vi.fn();
+    list.mockReturnValue({ data: answers(), isPending: false, error: null, refetch });
+    const worded =
+      'Somebody else changed who is on this trip at the same moment, so nobody was written onto it. Reload the trip and write these people onto it again.';
+    const pressPromote = async () => {
+      fireEvent.click(screen.getByTestId('trip-invitations-promote'));
+      fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+    };
+
+    promote.mockRejectedValue(new ApiError(409, 'trip_log.concurrent_roster_write'));
+    show(trip({ state: 'done' }));
+    await pressPromote();
+    expect(await screen.findByText(worded)).toBeTruthy();
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    // The list is read again: what is on screen is from before the other change.
+    expect(refetch).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    promote.mockRejectedValue(new ApiError(409, 'trip_log.something_else'));
+    show(trip({ state: 'done' }));
+    await pressPromote();
+    expect(await screen.findByText('The operation failed. Please try again.')).toBeTruthy();
+    expect(screen.queryByText(worded)).toBeNull();
   });
 
   /** Nobody who cannot write the trip is offered the acts that belong to whoever runs it. */

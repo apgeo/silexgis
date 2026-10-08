@@ -457,11 +457,21 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
       // form opened before somebody was added — takes that person off the trip. While the trip's
       // tracking is running and has reports about them the server refuses, and "could not be
       // saved" would leave whoever is coordinating to guess which of a page of fields was wrong.
-      message.error(
-        error instanceof ApiError && error.code === 'trip_log.participant_tracked'
-          ? t('trips.participantTracked')
-          : t('common.saveFailed'),
-      );
+      //
+      // A second is worded because nobody did anything wrong: two people saved who is on this
+      // trip in the same moment, and the later of the two was refused whole. Said as a warning
+      // rather than an error, and with what to do — the form still holds the roster as it was
+      // before the other save, so saving it again unread would undo what the other person did.
+      const code = error instanceof ApiError ? error.code : undefined;
+      if (code === 'trip_log.concurrent_roster_write') {
+        message.warning({ content: t('trips.rosterChangedMeanwhile'), duration: 8 });
+      } else {
+        message.error(
+          code === 'trip_log.participant_tracked'
+            ? t('trips.participantTracked')
+            : t('common.saveFailed'),
+        );
+      }
     }
   };
 

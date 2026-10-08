@@ -75,6 +75,14 @@ export default function TripInvitationsTab({
       case 'trip_invitation.promote_too_early':
         message.error(t('trips.invitations.promoteTooEarly'));
         return;
+      // Writing the list onto the trip changes who is on it, and so does somebody saving the
+      // trip's own form: done in the same moment, the later of the two is refused whole. Nobody's
+      // mistake, so a warning — and it says what to do, because the trip on screen is the one from
+      // before the other change.
+      case 'trip_log.concurrent_roster_write':
+        void refetch();
+        message.warning({ content: t('trips.invitations.rosterChangedMeanwhile'), duration: 8 });
+        return;
       case 'trip_invitation.note_invalid':
         message.error(t('trips.invitations.noteInvalid'));
         return;

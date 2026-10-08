@@ -666,6 +666,23 @@ describe('TripFormModal when a save is refused', () => {
     expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
   });
 
+  it('says that somebody else changed the roster at the same moment, and what to do about it', async () => {
+    // Two people saving who is on one trip at once: the later one is refused whole, by nobody's
+    // mistake, and the general sentence would send them hunting through the form for one.
+    updateTrip.mockRejectedValue(new ApiError(409, 'trip_log.concurrent_roster_write'));
+    show(trip());
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    expect(
+      await screen.findByText(
+        'Somebody else changed who is on this trip at the same moment, so this save was not written. Reload the trip and save again.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    expect(screen.queryByText(/has reports on this trip's tracking/)).toBeNull();
+  });
+
   it('keeps the general sentence for a refusal it has no words for', async () => {
     updateTrip.mockRejectedValue(new ApiError(400, 'trip_log.type_unknown'));
     show(trip());
