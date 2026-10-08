@@ -58,6 +58,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
 
     private HttpClient owner = null!;
     private HttpClient curator = null!;
+    private HttpClient reader = null!;
     private HttpClient visitor = null!;
     private HttpClient visitorOfPublishing = null!;
     private HttpClient visitorOfUnnamed = null!;
@@ -102,6 +103,9 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         _ = await AuthHelper.CreateUserAsync(asInstalled, GlobalRoles.Admin, $"pics-adm-{suffix}@t.local");
         owner = await AuthHelper.BearerClientAsync(asInstalled, $"pics-own-{suffix}@t.local");
         curator = await AuthHelper.BearerClientAsync(asInstalled, $"pics-adm-{suffix}@t.local");
+        // An account that may read the trips below — they are open to every account — and edit none.
+        _ = await AuthHelper.CreateUserAsync(asInstalled, GlobalRoles.Viewer, $"pics-read-{suffix}@t.local");
+        reader = await AuthHelper.BearerClientAsync(asInstalled, $"pics-read-{suffix}@t.local");
         visitor = asInstalled.CreateClient();
         visitorOfPublishing = publishing.CreateClient();
         visitorOfUnnamed = publishingUnnamed.CreateClient();
@@ -348,6 +352,159 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
             }
         }
     }
+
+    /// <summary>
+    /// What a published replay shows at a moment, and of whom, is said by somebody who may edit
+    /// the trip — by whichever route it is said. An account that can only read the trip can relate
+    /// a photograph to one of its moments through the general link route, as anybody may relate
+    /// two things they can read; what it cannot do is give that link the shape a replay draws
+    /// from, at once or in two steps. The trip's editor can, by the same route with the same body.
+    /// </summary>
+    [Fact]
+    public async Task A_photograph_reaches_the_published_replay_only_through_somebody_who_may_edit_the_trip()
+    {
+        var cave = await PublishedCaveAsync();
+        var then = cave.Then.Trip;
+        var ana = (await PeopleOfAsync(then))[Ana];
+        var start = Stamp(clock.Now.AddDays(-6));
+        var at = start.AddHours(2);
+
+        var smuggled = await PhotographAsync("smuggled");
+        var sidelong = await PhotographAsync("sidelong");
+        var hung = await PhotographAsync("hung");
+        var related = await PhotographAsync("related");
+        foreach (var photograph in new[] { smuggled, sidelong, hung, related })
+        {
+            await PutInGalleryAsync(photograph.Document);
+        }
+
+        // A photograph is born private to whoever uploaded it. These two are opened to every
+        // account, so that the account below may name them in a link at all — and what it is then
+        // refused is the trip's say, not the sight of a picture.
+        await OpenToEveryAccountAsync(smuggled.Document);
+        await OpenToEveryAccountAsync(sidelong.Document);
+
+        await FinishAsync(then, start, start.AddHours(8));
+
+        long documenting;
+        using (var scope = asInstalled.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            documenting = await db.ResLinkRelationTypes.AsNoTracking()
+                .Where(r => r.Code == TripMomentPictures.RelationCode).Select(r => r.Id).FirstAsync();
+        }
+
+        // ---- somebody who can only read the trip ---------------------------------------------
+        // Straight: the trip's moment as what the link is about, a photograph, a person.
+        var straight = await reader.PostAsJsonAsync(
+            "/api/v1/reslinks/", MomentLink(documenting, then, at, smuggled.Document, ana, aboutTheTrip: true));
+        straight.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await straight.Content.ReadAsStringAsync());
+
+        // Roundabout: the same three things with the photograph as what the link is about. That
+        // much is this account's to say — which is what makes the refusals around it refusals of
+        // a right, and not of an account that may name none of these things.
+        var beside = await reader.PostAsJsonAsync(
+            "/api/v1/reslinks/", MomentLink(documenting, then, at, sidelong.Document, ana, aboutTheTrip: false));
+        beside.StatusCode.ShouldBe(HttpStatusCode.Created, await beside.Content.ReadAsStringAsync());
+        var link = JsonDocument.Parse(await beside.Content.ReadAsStringAsync()).RootElement;
+        var linkId = link.GetProperty("id").GetGuid();
+        var moment = link.GetProperty("members").EnumerateArray()
+            .Single(m => m.GetProperty("targetType").GetString() == "tripLog")
+            .GetProperty("id").GetGuid();
+
+        // …and then the marker moved onto the trip's moment, by either of the two writes that move it.
+        var promoted = await reader.PatchAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members/{moment}", new { isMain = true, sortOrder = 1, note = (string?)null });
+        promoted.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await promoted.Content.ReadAsStringAsync());
+        var remade = await reader.PatchAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}",
+            new { description = (string?)null, relationTypeId = documenting, mainMemberId = moment });
+        remade.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await remade.Content.ReadAsStringAsync());
+
+        // ---- somebody who may edit it, by the route built for this and by the general one ------
+        await AttachAsync(then,
+            new { documentId = hung.Document, at, caverId = (Guid?)ana, caption = (string?)null });
+        var general = await owner.PostAsJsonAsync(
+            "/api/v1/reslinks/", MomentLink(documenting, then, at.AddHours(1), related.Document, ana, aboutTheTrip: true));
+        general.StatusCode.ShouldBe(HttpStatusCode.Created, await general.Content.ReadAsStringAsync());
+
+        // ---- the replay an installation publishes carries the editor's two and neither other ---
+        var replay = await ReadAsync(visitorOfPublishing, cave.PastTrip);
+        var number = NumbersByLabel(replay)[Ana];
+        PicturesOf(replay).ShouldBe(Expecting(
+            (at, number, hung.File),
+            (at.AddHours(1), number, related.File)));
+        ShouldNotHold(replay.Body, smuggled.File, "replay");
+        ShouldNotHold(replay.Body, sidelong.File, "replay");
+    }
+
+    /// <summary>Widens a photograph's document from its uploader to every signed-in account.</summary>
+    private async Task OpenToEveryAccountAsync(Guid documentId)
+    {
+        var response = await owner.GetAsync($"/api/v1/documents/{documentId}");
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        var current = JsonDocument.Parse(body).RootElement;
+
+        var updated = await owner.PutAsJsonAsync($"/api/v1/documents/{documentId}", new
+        {
+            title = current.GetProperty("title").GetString(),
+            documentTypeId = current.GetProperty("documentTypeId").ValueKind == JsonValueKind.Number
+                ? current.GetProperty("documentTypeId").GetInt64()
+                : (long?)null,
+            metadata = (object?)null,
+            visibility = "authenticated",
+            cavingGroupId = (Guid?)null,
+        });
+        updated.StatusCode.ShouldBe(HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// The body of a link relating a moment of a trip, a photograph and a person, with either the
+    /// trip's moment or the photograph as the member the link is about.
+    /// </summary>
+    private static object MomentLink(
+        long relation, Guid trip, DateTimeOffset at, Guid document, Guid caver, bool aboutTheTrip) => new
+        {
+            relationTypeId = relation,
+            description = (string?)null,
+            members = new object[]
+            {
+                new
+                {
+                    targetType = "tripLog",
+                    targetId = trip,
+                    isMain = aboutTheTrip,
+                    sortOrder = 0,
+                    note = (string?)null,
+                    anchorKind = "tripMoment",
+                    anchor = new { at = at.ToString("O") },
+                    anchorFileId = (Guid?)null,
+                },
+                new
+                {
+                    targetType = "document",
+                    targetId = document,
+                    isMain = !aboutTheTrip,
+                    sortOrder = 1,
+                    note = (string?)null,
+                    anchorKind = "whole",
+                    anchor = (object?)null,
+                    anchorFileId = (Guid?)null,
+                },
+                new
+                {
+                    targetType = "caver",
+                    targetId = caver,
+                    isMain = false,
+                    sortOrder = 2,
+                    note = (string?)null,
+                    anchorKind = "whole",
+                    anchor = (object?)null,
+                    anchorFileId = (Guid?)null,
+                },
+            },
+        };
 
     // ---- what a reader sees ------------------------------------------------------------------
 

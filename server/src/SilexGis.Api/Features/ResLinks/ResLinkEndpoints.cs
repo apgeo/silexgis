@@ -185,6 +185,13 @@ public static class ResLinkEndpoints
             }
         }
 
+        // After the floor, so a trip the caller may not read was already answered as missing.
+        if (await TripMomentProblemAsync(targets, ctx, relation, members.FirstOrDefault(m => m.IsMain), ct)
+            is { } momentProblem)
+        {
+            return momentProblem;
+        }
+
         // Pin provenance only after the floor: whether a stored file belongs to a
         // document is a fact about the document, so the answer's shape must never
         // differ for a caller who may not read it.
@@ -322,6 +329,12 @@ public static class ResLinkEndpoints
         if (ResLinkRules.MainMarkerProblem(directed, members.Count, resultingMains) is { } problem)
         {
             return MainProblem(problem);
+        }
+
+        var resultingMain = promote ?? (directed ? members.FirstOrDefault(m => m.IsMain) : null);
+        if (await TripMomentProblemAsync(targets, ctx, relation, resultingMain, ct) is { } momentProblem)
+        {
+            return momentProblem;
         }
 
         var demotions = members
@@ -588,6 +601,17 @@ public static class ResLinkEndpoints
             AddedBy = ctx.UserId,
         };
 
+        // Whichever member ends up main: the arriving one, the one that was, or the one the
+        // marker is handed back to. Asked for every arrival and not only for one that claims the
+        // marker, because a photograph or a person added to a link already about a trip's moment
+        // changes what is said of that moment just as much.
+        if (await TripMomentProblemAsync(
+                targets, ctx, relation, request.IsMain ? member : currentMain ?? incumbent, ct)
+            is { } momentProblem)
+        {
+            return momentProblem;
+        }
+
         // The current main is demoted in its own statement first because the single-main
         // partial unique index is checked per statement.
         if (request.IsMain && currentMain is not null)
@@ -663,6 +687,14 @@ public static class ResLinkEndpoints
             return MainProblem(problem);
         }
 
+        var resultingMain = request.IsMain
+            ? member
+            : currentMain is not null && currentMain.Id != member.Id ? currentMain : null;
+        if (await TripMomentProblemAsync(targets, ctx, relation, resultingMain, ct) is { } momentProblem)
+        {
+            return momentProblem;
+        }
+
         if (request.IsMain && currentMain is not null && currentMain.Id != member.Id)
         {
             currentMain.IsMain = false;
@@ -728,12 +760,21 @@ public static class ResLinkEndpoints
                 "The last member cannot be removed; delete the link instead.");
         }
 
-        var directed = (await RelationAsync(db, link.RelationTypeId, ct))?.Directed ?? false;
+        var relation = await RelationAsync(db, link.RelationTypeId, ct);
+        var directed = relation?.Directed ?? false;
         var remaining = members.Count - 1;
         if (member.IsMain && directed && remaining >= 2)
         {
             return ApiProblems.BadRequest(
                 ResLinkRules.MainRequiredCode, "Promote another member before removing the main one.");
+        }
+
+        // What is left is still read as a statement about the trip's moment when its main member
+        // stays — and taking away one of two people a picture was about leaves it about the other.
+        var survivingMain = remaining >= 2 ? members.FirstOrDefault(m => m.IsMain && m.Id != member.Id) : null;
+        if (await TripMomentProblemAsync(targets, ctx, relation, survivingMain, ct) is { } momentProblem)
+        {
+            return momentProblem;
         }
 
         db.ResLinkMembers.Remove(member);
@@ -1029,6 +1070,51 @@ public static class ResLinkEndpoints
         var curated = await CuratedLinkIdsAsync(
             targets, ctx, [link], main is null ? [] : [main], ct);
         return curated.Contains(link.Id);
+    }
+
+    /// <summary>
+    /// Refuses a write that would leave a link saying "this moment of this trip is documented
+    /// by…" unless the caller may write the trip.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one place this route asks for more than Read on what a link names. Everywhere else a
+    /// link is its author's assertion, shown as such to whoever can read both ends. A link of
+    /// this shape is not shown as an assertion: the trip's replay draws its photographs at that
+    /// moment as the trip's own, and an installation may publish that replay to people without an
+    /// account, with a photograph about one person shown under that person's place in the party.
+    /// Left at the ordinary floor, any account that can read a trip — on a trip visible to every
+    /// account, any account at all — could decide what a public page shows of it and of whom.
+    /// </para>
+    /// <para>
+    /// Asked about the state a write would leave behind rather than about the member it names, so
+    /// that the shape cannot be reached in two steps: a link made about something else and its
+    /// marker then moved onto the trip, a relation changed afterwards, a photograph or a person
+    /// added to a link that already has the shape. Removing a whole link is not asked — it can
+    /// only take a statement back.
+    /// </para>
+    /// <para>
+    /// Called after the read floor, so a trip the caller may not read has already been answered
+    /// as missing and the refusal here tells them only what the trip's own page does.
+    /// </para>
+    /// </remarks>
+    /// <param name="resultingMain">The member that will be main once the write lands, if any.</param>
+    private static async Task<ProblemHttpResult?> TripMomentProblemAsync(
+        ResLinkTargetDirectory targets,
+        AccessContext ctx,
+        ResLinkRelationType? relation,
+        ResLinkMember? resultingMain,
+        CancellationToken ct)
+    {
+        if (!TripMomentPictures.IsStatedBy(relation?.Code, resultingMain))
+        {
+            return null;
+        }
+
+        return await targets.CanWriteAsync(ctx, AttachedEntityType.TripLog, resultingMain!.EntityId!.Value, ct)
+            ? null
+            : ApiProblems.Forbidden(
+                detail: "Saying what documents a moment of a trip takes the right to edit that trip.");
     }
 
     private static Task<ResLinkRelationType?> RelationAsync(

@@ -119,6 +119,13 @@ public sealed class TripPastTrackOptions
     /// the public gallery is not sent whichever way this is set.
     /// </para>
     /// <para>
+    /// <b>Who decides what is shown at a moment is whoever may edit the trip.</b> A photograph
+    /// comes to hang on a moment as the trip's own statement only by a write that asked for write
+    /// on the trip, whether it came by the trip's own route or by the general link route; an
+    /// account that can merely read the trip can relate a photograph to it, and that relation is
+    /// not one of these.
+    /// </para>
+    /// <para>
     /// It lives here rather than with the settings of a trip being followed because it is a fact
     /// about the archive: no page of a party still underground carries these.
     /// </para>

@@ -73,6 +73,25 @@ public sealed class TripMomentPictures(SilexGisDbContext db)
     /// by this photograph".</summary>
     public const string RelationCode = "documents";
 
+    /// <summary>
+    /// Whether a link of this relation with this main member is one of these: the documenting
+    /// relation, about a trip at a moment.
+    /// </summary>
+    /// <remarks>
+    /// <b>Every surface that draws these picks them out by this shape and by nothing else</b> — the
+    /// replay a member watches, and the one an installation may publish to somebody without an
+    /// account, where a photograph about one person is shown under that person's place in the
+    /// party. So the shape is the statement, and whoever may give a link this shape decides what
+    /// those surfaces say about the trip. A write that would leave a link in this shape therefore
+    /// answers to write on the trip, whichever route it came by: the general link route asks this
+    /// to know when its ordinary floor — being able to read what a link names — is not enough.
+    /// </remarks>
+    /// <param name="relationCode">The code of the link's relation, or null for none.</param>
+    /// <param name="main">The member that is, or is about to be, the link's main one.</param>
+    public static bool IsStatedBy(string? relationCode, ResLinkMember? main) =>
+        relationCode == RelationCode
+        && main is { EntityType: AttachedEntityType.TripLog, EntityId: not null, AnchorKind: AnchorKind.TripMoment };
+
     /// <summary>Links opened earlier in this same unit of work, by the moment they are for —
     /// they have no row to find yet, and a bulk attach of one memory card lands thirty pictures
     /// on a handful of moments.</summary>
