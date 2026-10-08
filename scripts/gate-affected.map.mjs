@@ -37,7 +37,7 @@ export const groups = {
     'OptionsDocumentationTests', 'PerMinuteLimitTests', 'ProxyHopsCheckTests', 'StartupSettingsTests',
     'TripOrganizingGroupGuardTests', 'TripsOfTheCallerTests',
     'EnumBindingTests', 'TripPurgeTests', 'TripTrackImportTests', 'TripWriteShapeTests',
-    'TripReportMapTests',
+    'TripReportMapTests', 'TripRosterTimesFromTrackingTests',
     // A deleted trip is hidden from every read and kept whole until it is removed for good:
     // what leaves and returns with it, who may put it back, and what the rest of the
     // application does about the rows it still holds.
@@ -421,10 +421,10 @@ export const crossCutting = {
     'TripCalloutStandDownTests', 'TripChecklistTickTests', 'TripImportCommitTests',
     'TripImportSessionTests', 'TripInvitationTests', 'TripOrganizingGroupGuardTests',
     'TripParticipantRoleVocabularyTests', 'TripPromotionTests', 'TripReportDocumentTests',
-    'TripReportMapTests', 'TripRestoreTests', 'TripStatisticsTests', 'TripTrackImportTests',
-    'TripTrackingPicturesTests', 'TripTrackingPublicationTests', 'TripTrackingTests',
-    'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
-    'UserAdministrationTests',
+    'TripReportMapTests', 'TripRestoreTests', 'TripRosterTimesFromTrackingTests',
+    'TripStatisticsTests', 'TripTrackImportTests', 'TripTrackingPicturesTests',
+    'TripTrackingPublicationTests', 'TripTrackingTests', 'TripTypeVocabularyTests',
+    'UiDefaultsTests', 'UploadDestinationTests', 'UserAdministrationTests',
   ],
   locationClasses: [
     'AccessHistoryTests', 'AclAndCavingGroupTests', 'AreaKarstStatisticsTests',

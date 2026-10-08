@@ -81,6 +81,18 @@ public static class TrackingProblemCodes
     /// </summary>
     public const string NoReportsOfPerson = "tracking.no_reports_of_person";
 
+    /// <summary>
+    /// Entry and exit times were to be read from the log on a zone's clocks, and the zone named
+    /// is missing or is not one this server knows.
+    /// </summary>
+    public const string RosterTimesZoneUnknown = "tracking.roster_times_zone_unknown";
+
+    /// <summary>
+    /// Times reviewed from the log were to be written to the roster, and what the log says about
+    /// one of those people — or whether the roster can hold it — is no longer what was reviewed.
+    /// </summary>
+    public const string RosterTimesChanged = "tracking.roster_times_changed";
+
     /// <summary>The survey has no station by the name a report gave.</summary>
     public const string StationUnknown = "tracking.station_unknown";
 

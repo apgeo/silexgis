@@ -28,6 +28,55 @@ public readonly record struct TrackingStay(DateTimeOffset Entered, DateTimeOffse
 }
 
 /// <summary>
+/// What a tracking log says about when one person went in and came out, as the two moments a
+/// roster has room for: the first report that they went in, and the last that they came out.
+/// </summary>
+/// <param name="Entered">The first report that the person went in, or null when there is none.</param>
+/// <param name="Exited">
+/// The last report that the person came out, or null when there is none — or when a later report
+/// says they went in again and nothing has closed that.
+/// </param>
+/// <param name="Stays">
+/// How many completed stays lie between the two. More than one means the pair spans time spent on
+/// the surface, which a roster's two times cannot leave out.
+/// </param>
+public readonly record struct TrackingEntryExit(DateTimeOffset? Entered, DateTimeOffset? Exited, int Stays);
+
+/// <summary>Why a roster cannot hold what a tracking log says about one person's times.</summary>
+public enum TrackingRosterTimesProblem
+{
+    /// <summary>No report says the person went in.</summary>
+    NoEntry,
+
+    /// <summary>No report says the person came out after they last went in.</summary>
+    NoExit,
+
+    /// <summary>The moment they came out is before the moment they went in.</summary>
+    ExitBeforeEntry,
+
+    /// <summary>They went in on a day that is not the trip's first: a roster time has no day of its own.</summary>
+    EntryOffTripDate,
+
+    /// <summary>They came out on a day the trip's dates do not reach.</summary>
+    ExitOffTripDate,
+
+    /// <summary>
+    /// The clocks of the zone changed between the two moments, so the two readings are an hour
+    /// further apart, or closer, than the time that passed.
+    /// </summary>
+    ClockChanged,
+}
+
+/// <summary>
+/// One person's entry and exit as a roster would hold them — two readings of a clock, with no day
+/// and no zone — or the reason it cannot.
+/// </summary>
+/// <param name="Entry">The reading for the moment they went in, wherever there is such a moment — also beside a problem, so that a reviewer sees what was found.</param>
+/// <param name="Exit">The reading for the moment they came out, likewise.</param>
+/// <param name="Problem">Null when the pair may be written to a roster as it stands.</param>
+public readonly record struct TrackingRosterTimes(TimeOnly? Entry, TimeOnly? Exit, TrackingRosterTimesProblem? Problem);
+
+/// <summary>
 /// How long one person was underground on one trip, read from that trip's tracking log.
 /// </summary>
 /// <remarks>
@@ -90,6 +139,118 @@ public static class TrackingAttendance
         }
 
         return stays;
+    }
+
+    /// <summary>
+    /// The first report that somebody went in and the last that they came out.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A roster holds one entry and one exit per person, so somebody who went in twice is given the
+    /// outer pair, and <see cref="TrackingEntryExit.Stays"/> says that the pair covers more than
+    /// one stay.
+    /// </para>
+    /// <para>
+    /// <b>An exit followed by another entry is not the last word.</b> Somebody who came out at
+    /// noon and went back in at one is, as far as the log knows, still inside; offering noon as
+    /// the time they came out would write a finished stay over an unfinished one. So the exit is
+    /// null there, exactly as it is for an entry nobody ever closed, and for the same reason an
+    /// exit that only precedes the first entry is no exit at all.
+    /// </para>
+    /// <para>Reports are read in the order <see cref="StaysOf"/> reads them.</para>
+    /// </remarks>
+    public static TrackingEntryExit EntryExitOf(IEnumerable<TrackingPassage>? reports)
+    {
+        if (reports is null) return default;
+
+        DateTimeOffset? entered = null;
+        DateTimeOffset? exited = null;
+        var inside = false;
+        var stays = 0;
+
+        foreach (var report in reports.OrderBy(r => r.At.UtcTicks))
+        {
+            switch (report.Kind)
+            {
+                case TripPositionEventKind.Entered:
+                    entered ??= report.At;
+                    inside = true;
+                    break;
+                case TripPositionEventKind.Exited when entered is not null:
+                    // Counted as StaysOf counts: an exit closes a stay only while one is open.
+                    if (inside) stays++;
+                    exited = report.At;
+                    inside = false;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        return new TrackingEntryExit(entered, inside ? null : exited, stays);
+    }
+
+    /// <summary>
+    /// What a roster would hold for <paramref name="watch"/>: the two moments read on
+    /// <paramref name="zone"/>'s clocks, each to the minute, or the reason the roster cannot say it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A roster's times carry no day. The day of the entry is the trip's first, and the day of the
+    /// exit is the trip's last — or, on a trip recorded as a single day, the morning after when the
+    /// exit reads earlier than the entry, which is the one night <see cref="TripDuration"/> infers.
+    /// Moments that fall on any other day would be read back as a different length of time, so
+    /// they are answered as a problem and never as a pair.
+    /// </para>
+    /// <para>
+    /// <b>The pair is offered only when the roster would then count the same minutes as the two
+    /// moments are apart.</b> That is checked against the roster's own rule and not re-derived
+    /// here, which is what catches the one case the days do not: clocks that changed while the
+    /// person was underground. Two true readings an hour further apart than the time that passed
+    /// would put a wrong hour into every total the roster feeds, silently, and a person can still
+    /// type those two times by hand knowing what they mean.
+    /// </para>
+    /// <para>
+    /// Each moment is read at the offset the zone kept at that moment, so a trip in July and one
+    /// in January are each right without anybody stating an offset. Seconds are dropped, as the
+    /// roster drops them.
+    /// </para>
+    /// </remarks>
+    public static TrackingRosterTimes RosterTimesOf(
+        TrackingEntryExit watch, DateOnly tripDate, DateOnly? tripDateEnd, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(zone);
+
+        var entered = watch.Entered is { } a ? TimeZoneInfo.ConvertTime(a, zone) : (DateTimeOffset?)null;
+        var exited = watch.Exited is { } b ? TimeZoneInfo.ConvertTime(b, zone) : (DateTimeOffset?)null;
+        TimeOnly? entry = entered is { } e ? new TimeOnly(e.Hour, e.Minute) : null;
+        TimeOnly? exit = exited is { } x ? new TimeOnly(x.Hour, x.Minute) : null;
+
+        TrackingRosterTimes Refused(TrackingRosterTimesProblem problem) => new(entry, exit, problem);
+
+        if (entered is not { } wentIn) return Refused(TrackingRosterTimesProblem.NoEntry);
+        if (exited is not { } cameOut) return Refused(TrackingRosterTimesProblem.NoExit);
+        if (cameOut < wentIn) return Refused(TrackingRosterTimesProblem.ExitBeforeEntry);
+
+        if (DateOnly.FromDateTime(wentIn.DateTime) != tripDate)
+        {
+            return Refused(TrackingRosterTimesProblem.EntryOffTripDate);
+        }
+
+        var lastDay = tripDateEnd ?? tripDate;
+        var exitDay = DateOnly.FromDateTime(cameOut.DateTime);
+        var theMorningAfter = lastDay == tripDate
+            && exitDay.DayNumber == tripDate.DayNumber + 1
+            && exit < entry;
+        if (exitDay != lastDay && !theMorningAfter)
+        {
+            return Refused(TrackingRosterTimesProblem.ExitOffTripDate);
+        }
+
+        var onTheRoster = TripDuration.UndergroundMinutes(tripDate, tripDateEnd, entry, exit);
+        return onTheRoster == new TrackingStay(wentIn, cameOut).Minutes
+            ? new TrackingRosterTimes(entry, exit, null)
+            : Refused(TrackingRosterTimesProblem.ClockChanged);
     }
 
     /// <summary>

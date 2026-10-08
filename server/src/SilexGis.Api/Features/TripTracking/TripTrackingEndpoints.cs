@@ -66,6 +66,11 @@ public static class TripTrackingEndpoints
             .WithSummary("The reports taken off the trip's log, latest removal first, for those who may write the log; position fields follow the same withholding as the log.");
         tracking.MapPost("/events/{eventId:guid}/restore", RestoreEventAsync)
             .WithSummary("Put a report taken off the log back on it, unchanged and under its own id.");
+        tracking.MapGet("/roster-times", TrackingRosterTimesEndpoints.PreviewAsync)
+            .WithSummary("What the log says about when each person went in and came out, on a named zone's clocks, beside what the roster holds — a proposal; nothing is written.");
+        tracking.MapPost("/roster-times", TrackingRosterTimesEndpoints.TakeAsync)
+            .WithValidation<TrackingRosterTimesTakeRequest>()
+            .WithSummary("Write the reviewed entry and exit times of the people named to every roster row of each (trip write access, If-Match against the trip).");
         tracking.MapGet("/places", ListPlacesAsync)
             .WithSummary("The places the watch's cave has declared, shallowest first — the list a report names instead of a depth.");
         tracking.MapPost("/resolve-depth", ResolveDepthAsync).WithValidation<TrackingResolveDepthRequest>()

@@ -14273,6 +14273,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{tripLogId}/tracking/roster-times": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the log says about when each person went in and came out, on a named zone's clocks, beside what the roster holds — a proposal; nothing is written. */
+        get: {
+            parameters: {
+                query?: {
+                    timeZone?: string;
+                };
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingRosterTimesDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Write the reviewed entry and exit times of the people named to every roster row of each (trip write access, If-Match against the trip). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackingRosterTimesTakeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingRosterTimesTakenDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-logs/{tripLogId}/tracking/places": {
         parameters: {
             query?: never;
@@ -26258,6 +26324,58 @@ export interface components {
             depthM: null | number;
             /** Format: int32 */
             take: null | number;
+        };
+        TrackingRosterTimesDto: {
+            timeZone: string;
+            people: components["schemas"]["TrackingRosterTimesPersonDto"][];
+        };
+        TrackingRosterTimesPersonDto: {
+            /** Format: uuid */
+            caverId: string;
+            onRoster: boolean;
+            /** Format: date-time */
+            enteredAt: null | string;
+            /** Format: date-time */
+            exitedAt: null | string;
+            /** Format: int32 */
+            stays: number;
+            /** Format: time */
+            entry: null | string;
+            /** Format: time */
+            exit: null | string;
+            /** Format: time */
+            currentEntry: null | string;
+            /** Format: time */
+            currentExit: null | string;
+            changes: boolean;
+            overwrites: boolean;
+            problem: null | components["schemas"]["TrackingRosterTimesProblemKind"];
+        };
+        /** @enum {unknown} */
+        TrackingRosterTimesProblemKind: "notOnRoster" | "noEntry" | "noExit" | "exitBeforeEntry" | "entryOffTripDate" | "exitOffTripDate" | "clockChanged" | null;
+        TrackingRosterTimesTakeDto: {
+            /** Format: uuid */
+            caverId: null | string;
+            /** Format: time */
+            entry: null | string;
+            /** Format: time */
+            exit: null | string;
+            /** Format: time */
+            currentEntry: null | string;
+            /** Format: time */
+            currentExit: null | string;
+            overwrites: null | boolean;
+        };
+        TrackingRosterTimesTakenDto: {
+            /** Format: int32 */
+            people: number;
+            /** Format: int32 */
+            rows: number;
+            times: components["schemas"]["TrackingRosterTimesDto"];
+        };
+        TrackingRosterTimesTakeRequest: {
+            timeZone: null | string;
+            people: null | components["schemas"]["TrackingRosterTimesTakeDto"][];
         };
         TrackingStateDto: {
             state: components["schemas"]["TripTrackingState"];

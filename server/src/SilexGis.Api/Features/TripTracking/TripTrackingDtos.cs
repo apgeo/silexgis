@@ -414,6 +414,160 @@ public sealed record TrackingReportsRemovedDto(int Removed);
 
 
 /// <summary>
+/// Why one person's times cannot be taken from the log onto the roster. One list on the wire for
+/// both kinds of reason — the roster has no row for them, or its two clock readings cannot say
+/// what the log says — because a screen has one thing to do with either: say it, and not offer
+/// the tick.
+/// </summary>
+public enum TrackingRosterTimesProblemKind
+{
+    /// <summary>The person has reports on this trip and no row on its roster to hold a time.</summary>
+    NotOnRoster,
+
+    /// <summary>No report says they went in.</summary>
+    NoEntry,
+
+    /// <summary>No report says they came out after they last went in.</summary>
+    NoExit,
+
+    /// <summary>The moment they came out is before the moment they went in.</summary>
+    ExitBeforeEntry,
+
+    /// <summary>They went in on a day that is not the trip's first.</summary>
+    EntryOffTripDate,
+
+    /// <summary>They came out on a day the trip's dates do not reach.</summary>
+    ExitOffTripDate,
+
+    /// <summary>The zone's clocks changed between the two moments.</summary>
+    ClockChanged,
+}
+
+/// <summary>
+/// What a trip's tracking log says about when each person went in and came out, beside what the
+/// roster holds now — a proposal for somebody to review, which writes nothing.
+/// </summary>
+/// <param name="TimeZone">
+/// The zone whose clocks the times are read on, under the name the caller chose it by.
+/// </param>
+/// <param name="People">
+/// Everybody on the roster, in the party's order, then everybody the log speaks of who is not on
+/// it. Reports taken off the log say nothing here.
+/// </param>
+public sealed record TrackingRosterTimesDto(string TimeZone, IReadOnlyList<TrackingRosterTimesPersonDto> People);
+
+/// <summary>One person of a <see cref="TrackingRosterTimesDto"/>.</summary>
+/// <param name="CaverId">The person.</param>
+/// <param name="OnRoster">Whether the trip's roster has a row for them.</param>
+/// <param name="EnteredAt">The first report that they went in, as the instant it speaks of.</param>
+/// <param name="ExitedAt">
+/// The last report that they came out, or null when there is none or when a later report says
+/// they went in again.
+/// </param>
+/// <param name="Stays">
+/// How many completed stays lie between the two. More than one means the pair spans time on the
+/// surface, which the roster's two times cannot leave out.
+/// </param>
+/// <param name="Entry">The moment they went in on the zone's clocks, to the minute — present beside a problem too.</param>
+/// <param name="Exit">The moment they came out, likewise.</param>
+/// <param name="CurrentEntry">
+/// The entry time the roster holds for them now: the earliest across their rows, null when none
+/// of their rows has one and the trip's own time stands for them.
+/// </param>
+/// <param name="CurrentExit">The exit time the roster holds now: the latest across their rows.</param>
+/// <param name="Changes">Whether taking the times would change any of their roster rows.</param>
+/// <param name="Overwrites">
+/// Whether taking them would replace a time already on one of their rows with a different one —
+/// something a person typed. A row with no time of its own is filled, not overwritten.
+/// </param>
+/// <param name="Problem">Why the times cannot be taken, or null when they can.</param>
+public sealed record TrackingRosterTimesPersonDto(
+    Guid CaverId,
+    bool OnRoster,
+    DateTimeOffset? EnteredAt,
+    DateTimeOffset? ExitedAt,
+    int Stays,
+    TimeOnly? Entry,
+    TimeOnly? Exit,
+    TimeOnly? CurrentEntry,
+    TimeOnly? CurrentExit,
+    bool Changes,
+    bool Overwrites,
+    TrackingRosterTimesProblemKind? Problem);
+
+/// <summary>
+/// The people whose times, as reviewed, are to be written to the roster.
+/// </summary>
+/// <remarks>
+/// <b>Each person carries what was reviewed, not only their id</b> — the pair the log gave, and
+/// what the roster was shown to hold. Either side can change between the review and the press
+/// without the trip's own version moving: a report corrected or taken off, or a time typed for
+/// one participant on the trip's form and saved with nothing else changed. A request naming only
+/// people would then write times nobody was shown, or replace a typed time nobody was warned
+/// about; one that repeats what was shown can be refused when it is no longer so.
+/// </remarks>
+/// <param name="TimeZone">The zone the review was made in. Required: the server never guesses whose clocks a roster is kept on.</param>
+/// <param name="People">The people ticked.</param>
+public sealed record TrackingRosterTimesTakeRequest(string? TimeZone, IReadOnlyList<TrackingRosterTimesTakeDto>? People);
+
+/// <summary>One ticked person, the two times they were reviewed with and what the roster held then.</summary>
+/// <param name="CaverId">The person.</param>
+/// <param name="Entry">The entry time the review proposed for them.</param>
+/// <param name="Exit">The exit time the review proposed for them.</param>
+/// <param name="CurrentEntry">The entry time the review showed the roster holding; null when it showed none.</param>
+/// <param name="CurrentExit">The exit time the review showed the roster holding; null when it showed none.</param>
+/// <param name="Overwrites">Whether the review marked them as replacing a time somebody typed.</param>
+public sealed record TrackingRosterTimesTakeDto(
+    Guid? CaverId,
+    TimeOnly? Entry,
+    TimeOnly? Exit,
+    TimeOnly? CurrentEntry,
+    TimeOnly? CurrentExit,
+    bool? Overwrites);
+
+public sealed class TrackingRosterTimesTakeRequestValidator : AbstractValidator<TrackingRosterTimesTakeRequest>
+{
+    /// <summary>
+    /// More people than one request may name. A bound on the request, far above any party: the
+    /// roster itself decides who can be written to.
+    /// </summary>
+    public const int MaxPeople = 500;
+
+    public TrackingRosterTimesTakeRequestValidator()
+    {
+        // A bound and a presence only: whether the name is a zone is answered by the one rule
+        // that resolves it, under a code of its own.
+        RuleFor(x => x.TimeZone).NotEmpty().MaximumLength(Domain.Import.TrackingCsv.TrackingCsvZones.MaxNameLength);
+        RuleFor(x => x.People).NotEmpty();
+        RuleFor(x => x.People!.Count).LessThanOrEqualTo(MaxPeople).When(x => x.People is not null);
+        // An element that is no person at all is refused here by name: the rules for a person's
+        // own fields are not run for one, and everything after this reads those fields.
+        RuleForEach(x => x.People!).NotNull().ChildRules(person =>
+        {
+            person.RuleFor(p => p.CaverId).NotEmpty();
+            person.RuleFor(p => p.Entry).NotNull();
+            person.RuleFor(p => p.Exit).NotNull();
+            // Said outright rather than assumed: left out, it would read as "nothing typed is
+            // being replaced", which is the one statement this field exists to check.
+            person.RuleFor(p => p.Overwrites).NotNull();
+        }).When(x => x.People is not null);
+        // Somebody named twice could be named with two different pairs, and which one was meant
+        // is not a thing to decide here.
+        RuleFor(x => x.People!)
+            .Must(people => people.Select(p => p?.CaverId).Distinct().Count() == people.Count
+                || people.Any(p => p is null))
+            .WithMessage("A person can be named once.")
+            .When(x => x.People is not null);
+    }
+}
+
+/// <summary>What writing reviewed times to a roster did.</summary>
+/// <param name="People">How many of the people named had a roster row changed.</param>
+/// <param name="Rows">How many roster rows were changed — a person with two jobs has two.</param>
+/// <param name="Times">The proposal as it stands after the write.</param>
+public sealed record TrackingRosterTimesTakenDto(int People, int Rows, TrackingRosterTimesDto Times);
+
+/// <summary>
 /// One place the watch's cave has declared: what it is called, which station it is, how deep.
 /// </summary>
 /// <remarks>
