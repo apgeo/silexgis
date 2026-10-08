@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import i18n from '../i18n';
 import {
   ApiError,
   isSettledRefusal,
   lastReadETag,
+  onServerAnswered,
   RETRY_AFTER_CEILING_MS,
   retryAfterOf,
   retryDelay,
   retryQuery,
   sendsTheReadingLanguage,
+  tellsWhenTheServerAnswered,
   threadsVersions,
 } from './client.ts';
 
@@ -223,5 +225,71 @@ describe('the wait a refusal names', () => {
       expect([0, 1, 2].map((attempt) => retryDelay(attempt, error))).toEqual([1000, 2000, 4000]);
     }
     expect(retryDelay(10, new ApiError(503))).toBe(30_000);
+  });
+});
+
+/**
+ * What something waiting for the server goes by. The browser's own word about its connection does
+ * not change through a weak signal or a restarting server, so an answered request is the evidence.
+ */
+describe('telling whoever is waiting that the server answered', () => {
+  const answers = (status: number) => {
+    const response = new Response(null, { status });
+    return { response, passedOn: tellsWhenTheServerAnswered.onResponse({ response }) };
+  };
+
+  it('tells every listener on a yes, and hands the answer on untouched', () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const stopFirst = onServerAnswered(first);
+    const stopSecond = onServerAnswered(second);
+    try {
+      const { response, passedOn } = answers(200);
+
+      expect(passedOn).toBe(response);
+      expect(first).toHaveBeenCalledTimes(1);
+      expect(second).toHaveBeenCalledTimes(1);
+    } finally {
+      stopFirst();
+      stopSecond();
+    }
+  });
+
+  it('tells nobody on a refusal or a failure', () => {
+    const listener = vi.fn();
+    const stop = onServerAnswered(listener);
+    try {
+      for (const status of [401, 403, 404, 429, 500, 503]) answers(status);
+
+      expect(listener).not.toHaveBeenCalled();
+    } finally {
+      stop();
+    }
+  });
+
+  it('tells a listener nothing more once it has stopped listening', () => {
+    const listener = vi.fn();
+    onServerAnswered(listener)();
+
+    answers(204);
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('still hands the answer on when a listener throws', () => {
+    const after = vi.fn();
+    const stopThrowing = onServerAnswered(() => {
+      throw new Error('a listener of somebody else’s');
+    });
+    const stopAfter = onServerAnswered(after);
+    try {
+      const { response, passedOn } = answers(200);
+
+      expect(passedOn).toBe(response);
+      expect(after).toHaveBeenCalledTimes(1);
+    } finally {
+      stopThrowing();
+      stopAfter();
+    }
   });
 });

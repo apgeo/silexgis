@@ -282,6 +282,45 @@ export const threadsVersions = {
 
 api.use(threadsVersions);
 
+const whenAnswered = new Set<() => void>();
+
+/**
+ * Tells `listener` each time the server answers one of this client's requests with a yes.
+ *
+ * <b>For something that is waiting for the server to be there again.</b> What the browser says
+ * about its connection is not that: it goes on calling itself online through a signal too weak to
+ * carry a request, through a network with no way out of it, and through a server that is
+ * restarting. A request that was just answered is the one thing that does show the server can be
+ * reached — so whatever is waiting is told here, rather than asking on a clock of its own.
+ *
+ * Only a yes counts. A refusal is an answer too, but the commonest one after an outage is that the
+ * sign-in ran out, and whatever is waiting would meet the same refusal.
+ */
+export function onServerAnswered(listener: () => void): () => void {
+  whenAnswered.add(listener);
+  return () => {
+    whenAnswered.delete(listener);
+  };
+}
+
+export const tellsWhenTheServerAnswered = {
+  onResponse({ response }: { response: Response }) {
+    if (response.ok) {
+      for (const listener of whenAnswered) {
+        try {
+          listener();
+        } catch {
+          // Somebody waiting on the server must never be the reason an answer is lost to the
+          // caller it was for.
+        }
+      }
+    }
+    return response;
+  },
+};
+
+api.use(tellsWhenTheServerAnswered);
+
 /**
  * The version last read for a resource, for a write the replay above cannot thread by itself.
  *
