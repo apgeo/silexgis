@@ -47,6 +47,7 @@ import TrackingMomentPictures from '../../components/trips/TrackingMomentPicture
 import TrackingEventEditDialog from '../../components/trips/TrackingEventEditDialog.tsx';
 import TrackingPicturesDialog from '../../components/trips/TrackingPicturesDialog.tsx';
 import TrackingPublicNameDialog from '../../components/trips/TrackingPublicNameDialog.tsx';
+import TrackingHeldReports from '../../components/trips/TrackingHeldReports.tsx';
 import TrackingRemovedReports from '../../components/trips/TrackingRemovedReports.tsx';
 import TrackingReportForm from '../../components/trips/TrackingReportForm.tsx';
 import TrackingSharePanel from '../../components/trips/TrackingSharePanel.tsx';
@@ -1661,6 +1662,17 @@ export default function TripTrackingTab({
         // The page's one instant, so the card over the model and the row above it for the same
         // person word one silence the same way.
         now={now}
+      />
+
+      {/* What this account composed for this trip and the server has not answered for. Directly
+          above the card it was composed on, and absent while nothing is held. Not under the
+          condition of the card below: somebody who may no longer write this log can still be
+          holding a report typed while they could, and must be able to see it and throw it away. */}
+      <TrackingHeldReports
+        tripLogId={trip.id}
+        nameOf={named}
+        when={when}
+        controlSize={controlSize}
       />
 
       {canEdit && (

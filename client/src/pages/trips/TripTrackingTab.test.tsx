@@ -41,6 +41,9 @@ vi.mock('../../api/hooks.ts', async () => ({
   useTripTracking: () => trackingQuery(),
   useTripTrackingEvents: (...asked: unknown[]) => eventsQuery(...asked),
   useRecordTrackingEvents: () => ({ mutateAsync: recordEvents, isPending: false }),
+  // What the notice of held reports sends with. Nothing is held in this file — the tab here is
+  // signed in as nobody — so the notice is absent and this is never called.
+  useSendHeldTrackingReport: () => vi.fn(),
   useTrackingDepthReading: () => depthReading(),
   // Nothing declared, which is every cave until somebody declares something — so the place
   // chooser is absent here and the cases below are drawn as they were.
@@ -166,7 +169,16 @@ vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: () => coar
 let narrow = false;
 vi.mock('../../hooks/useIsMobile.ts', () => ({ useIsMobile: () => narrow }));
 
+// Who the tab is signed in as: nobody, unless a test is about what this browser is holding for an
+// account. Stood in for because the sign-in lives in memory behind a redirect to the server.
+let signedInAs: string | null = null;
+vi.mock('../../auth/accountId.ts', () => ({
+  signedInAccountId: () => Promise.resolve(signedInAs),
+  useSignedInAccountId: () => signedInAs,
+}));
+
 const { default: TripTrackingTab } = await import('./TripTrackingTab.tsx');
+const { holdReport, refreshHeldReports } = await import('../../components/trips/trackingOutbox.ts');
 
 function state(overrides: Partial<TrackingState> = {}): TrackingState {
   return {
@@ -294,6 +306,9 @@ beforeEach(() => {
   pictureLinks.mockReset().mockReturnValue({ data: undefined, isPending: false, error: null });
   detachPicture.mockReset().mockResolvedValue(undefined);
   pictureDialogProps.mockReset();
+  signedInAs = null;
+  window.localStorage.clear();
+  refreshHeldReports();
   coarse = false;
   narrow = false;
   answerUnplaced = undefined;
@@ -3814,5 +3829,74 @@ describe('TripTrackingTab, a long silence and a late return', () => {
 
     fireEvent.click(control);
     expect(order()).toEqual([BOGDAN, ANA]);
+  });
+});
+
+describe('TripTrackingTab, reports this browser is holding', () => {
+  function holdOne(tripLogId: string) {
+    act(() => {
+      holdReport({
+        clientKey: `key-${tripLogId}`,
+        accountId: 'account-1',
+        tripLogId,
+        body: {
+          caverIds: [ANA],
+          kind: 'note',
+          stationName: null,
+          depthM: null,
+          teamId: null,
+          note: 'typed with no signal',
+          recordedAt: '2026-05-01T10:15:00.000Z',
+        },
+        composedAt: '2026-05-01T10:15:00.000Z',
+        state: 'held',
+        problemCode: null,
+        attempts: 1,
+      });
+    });
+  }
+
+  it('says so directly above the report card, naming who each is about from the trip’s own roster', () => {
+    signedInAs = 'account-1';
+    holdOne('trip-1');
+    holdOne('trip-elsewhere');
+    show();
+
+    const notice = screen.getByTestId('trip-tracking-outbox');
+    // This trip's only: the other is counted in the page header, not here.
+    expect(screen.getByTestId('trip-tracking-outbox-count')).toHaveTextContent('Held reports: 1');
+    const record = screen.getByTestId('trip-tracking-record');
+    expect(notice.compareDocumentPosition(record) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const log = screen.getByTestId('trip-tracking-events');
+    expect(notice.compareDocumentPosition(log) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-outbox-open'));
+    const row = within(screen.getByTestId('trip-tracking-outbox-key-trip-1'));
+    expect(row.getByText('Ana Popescu')).toBeInTheDocument();
+    expect(row.getByText('typed with no signal')).toBeInTheDocument();
+  });
+
+  /**
+   * The same held report, the same tab. Somebody who may no longer write the log is still shown
+   * what they typed while they could; a tab signed in as anybody else is shown nothing of it.
+   */
+  it('shows it to its author even without the report card, and to nobody else', () => {
+    holdOne('trip-1');
+
+    signedInAs = 'account-1';
+    const asAuthor = show(false);
+    expect(screen.queryByTestId('trip-tracking-record')).toBeNull();
+    expect(screen.getByTestId('trip-tracking-outbox')).toBeInTheDocument();
+    asAuthor.unmount();
+
+    signedInAs = 'account-2';
+    const asAnother = show();
+    expect(screen.getByTestId('trip-tracking-record')).toBeInTheDocument();
+    expect(screen.queryByTestId('trip-tracking-outbox')).toBeNull();
+    asAnother.unmount();
+
+    signedInAs = null;
+    show();
+    expect(screen.queryByTestId('trip-tracking-outbox')).toBeNull();
   });
 });

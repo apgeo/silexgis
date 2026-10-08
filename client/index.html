@@ -6,7 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Installable to a phone's home screen: standalone window, own icon, no browser
          chrome. No service worker and nothing offline — a cave registry is useless without
-         its server, and the field-work story belongs to a native app. -->
+         its server, and the field-work story belongs to a native app. One narrow exception:
+         a tracking report the server never answered for waits in the browser's own storage
+         and is sent when the connection returns. An unsent write of that one kind only — no
+         service worker, no background sync, and no page, code or read is kept, so without the
+         server there is still nothing to open. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <!-- Tints the system UI around the app. Keep in step with the theme's primary colour
          and the manifest's theme_color; nothing derives one from the others. -->

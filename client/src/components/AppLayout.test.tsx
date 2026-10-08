@@ -24,6 +24,7 @@ const saveLocale = vi.fn();
 let me: { avatarUrl: null; displayName?: string | null; email?: string } = { avatarUrl: null };
 // Typed from the wire so the stub cannot drift from the shape the bell actually reads.
 let unreadNotifications: UnreadNotificationCount | undefined;
+const sendHeldReport = vi.fn();
 vi.mock('../api/hooks.ts', () => ({
   useMe: () => ({ data: me }),
   useUpdateLocale: () => ({ mutate: saveLocale }),
@@ -34,6 +35,9 @@ vi.mock('../api/hooks.ts', () => ({
   // The header's bell reads this; the mock replaces the module wholesale, so a hook left out
   // here is undefined at the call site and every test in this file dies on the render.
   useUnreadNotificationCount: () => ({ data: unreadNotifications }),
+  // The header's sender of held tracking reports reads this. Nothing is held in this file, so it
+  // is never called: a call would be a request the shell made with nothing to send.
+  useSendHeldTrackingReport: () => sendHeldReport,
   // The rail asks whether this installation has a neighbouring photo library the reader may look
   // through. Answered as an installation that runs none of these products, which is the shipped
   // shape: what this file is about is the destinations the capabilities carry, and the photo

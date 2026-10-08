@@ -18,6 +18,7 @@ import {
 } from '../api/hooks.ts';
 import { useAuth } from '../auth/auth.tsx';
 import NotificationBell from './NotificationBell.tsx';
+import HeldReportsSentinel from './trips/HeldReportsSentinel.tsx';
 import { useIsFullAdmin } from './reslinks/permissions.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import { buildNavItems, isNavGroup } from './navItems.tsx';
@@ -169,6 +170,12 @@ export default function AppLayout() {
           </Typography.Title>
         </Flex>
         <Flex gap={16} align="center">
+          {/* Sends the tracking reports this browser kept when a send got no answer, and counts
+              them while there are any. Here because this is mounted for the whole of a session: a
+              report has to leave when the connection returns, whichever page is on screen. Told
+              whose session it is from the sign-in already in memory, which asks the server
+              nothing — the account's own id, never its name. */}
+          <HeldReportsSentinel accountId={user?.profile.sub ?? null} />
           <NotificationBell />
           <Select
             size="small"
