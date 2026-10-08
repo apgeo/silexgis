@@ -2104,10 +2104,13 @@ export default function TripTrackingTab({
           tripLogId={trip.id}
           defaultAt={attaching.at}
           defaultCaverId={attaching.caverId}
-          cavers={trip.participants.map((person) => ({
-            caverId: person.caverId,
-            name: person.name,
-          }))}
+          // One entry per person: the roster holds a row per person per job, so somebody who
+          // leads and also surveys would otherwise be offered twice under one value. Only the
+          // people on the roster are offered, as before — a map keyed by the person folds the
+          // rows and keeps the roster's order.
+          cavers={[
+            ...new Map(trip.participants.map((person) => [person.caverId, person.name])),
+          ].map(([caverId, name]) => ({ caverId, name }))}
           surveyModelId={data?.surveyModelId ?? null}
           onClose={() => setAttaching(null)}
         />

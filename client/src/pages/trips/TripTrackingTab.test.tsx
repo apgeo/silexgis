@@ -130,6 +130,7 @@ vi.mock('../../components/trips/TrackingPicturesDialog.tsx', () => ({
     defaultAt: number;
     defaultCaverId: string | null;
     surveyModelId: string | null;
+    cavers: { caverId: string; name: string }[];
   }) => {
     pictureDialogProps(props);
     return <div data-testid="trip-tracking-pictures-dialog" />;
@@ -2177,8 +2178,10 @@ describe('TripTrackingTab', () => {
       expect(screen.getByTestId('trip-tracking-published-since')).toHaveTextContent(
         /anybody holding the link can open a page/,
       );
+      // Following is what ends then; the address still opens the trip among the past trips,
+      // which the people named on it are the ones to be told.
       expect(screen.getByTestId('trip-tracking-published-until')).toHaveTextContent(
-        /stops working on/,
+        /stops following the party on .* it then still opens this trip among its cave’s past trips until it is taken back/,
       );
       // And it hands over no way to open it: the token is the whole of a follower's claim and
       // exists in one response, so a surface shown to every reader of the trip must report the
@@ -2890,6 +2893,50 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
       // The negative twin, and the reason the whole design is shaped this way: nothing the dialog
       // was opened with names the report that supplied the clock.
       expect(JSON.stringify(pictureDialogProps.mock.calls.at(-1))).not.toContain('event-1');
+    });
+
+    it('hands the photographs dialog each person once, though the roster holds a row per job', () => {
+      // The roster is a row per person per job: the leader who also surveys is two rows and one
+      // person. Handed on row by row, she is in the dialog's list of people twice under one
+      // value — a subject somebody can pick in two places and tick in neither.
+      eventsQuery.mockReturnValue({
+        data: {
+          items: [
+            {
+              id: 'event-1',
+              caverId: ANA,
+              teamId: null,
+              kind: 'atStation',
+              surveyModelId: null,
+              stationName: 'P12',
+              depthEnteredM: null,
+              note: null,
+              recordedAt: AT,
+            },
+          ],
+          page: 1,
+          pageSize: 20,
+          totalItems: 1,
+        },
+        isPending: false,
+      });
+      show(
+        true,
+        trip({
+          participants: [
+            { caverId: ANA, name: 'Ana Popescu' },
+            { caverId: BOGDAN, name: 'Bogdan Ilie' },
+            { caverId: ANA, name: 'Ana Popescu' },
+          ],
+        } as unknown as Partial<TripLogInfo>),
+      );
+
+      fireEvent.click(screen.getByTestId('trip-tracking-event-picture-event-1'));
+
+      expect(pictureDialogProps.mock.calls.at(-1)![0].cavers).toEqual([
+        { caverId: ANA, name: 'Ana Popescu' },
+        { caverId: BOGDAN, name: 'Bogdan Ilie' },
+      ]);
     });
 
     it('offers nothing to write to a reader who may not write the log', () => {
