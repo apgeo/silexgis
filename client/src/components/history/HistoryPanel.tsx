@@ -5,7 +5,14 @@ import { App, Button, Card, Empty, Spin, Table, Tag, Timeline, Tooltip, Typograp
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useHistory, type HistoryEvent } from '../../api/hooks.ts';
-import { changeRows, formatValue, restorableProps, toWriteField, type HistoryFieldRow } from './historyModel.ts';
+import {
+  changeRows,
+  formatValue,
+  restorableProps,
+  rosterTimesAct,
+  toWriteField,
+  type HistoryFieldRow,
+} from './historyModel.ts';
 
 /** Enables per-field restore for updated rows of the given CLR entity type (e.g. "Cave"). */
 export interface HistoryRestore {
@@ -78,7 +85,10 @@ function HistoryEventItem({ event, restore }: { event: HistoryEvent; restore?: H
   const { message } = App.useApp();
   const [restoring, setRestoring] = useState<string | null>(null);
 
-  const rows = changeRows(event.changes, event.redactedProperties);
+  // An entry that records an act is worded as one; only a real set of changed fields is
+  // drawn as a table of before and after.
+  const act = rosterTimesAct(event.changes);
+  const rows = act === null ? changeRows(event.changes, event.redactedProperties) : [];
   const handlers = restore === undefined ? [] : Array.isArray(restore) ? restore : [restore];
   const handler = event.action === 'updated'
     ? handlers.find((h) => h.entityType === event.entityType)
@@ -114,6 +124,19 @@ function HistoryEventItem({ event, restore }: { event: HistoryEvent; restore?: H
         {' · '}
         <Typography.Text type="secondary">{dayjs(event.at).format('YYYY-MM-DD HH:mm')}</Typography.Text>
       </Typography.Text>
+
+      {act !== null && (
+        <Typography.Paragraph
+          type="secondary"
+          style={{ marginTop: 6, marginBottom: 0 }}
+          data-testid="history-roster-times"
+        >
+          {t('history.rosterTimes.written')}
+          {act.people !== null && <> {t('history.rosterTimes.people', { n: act.people })}.</>}
+          {act.rows !== null && <> {t('history.rosterTimes.rows', { n: act.rows })}.</>}
+          {act.timeZone !== null && <> {t('history.rosterTimes.zone', { zone: act.timeZone })}</>}
+        </Typography.Paragraph>
+      )}
 
       {rows.length > 0 && (
         <Table<HistoryFieldRow>

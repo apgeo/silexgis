@@ -7,9 +7,37 @@ import {
   changeRows,
   formatValue,
   restorableProps,
+  rosterTimesAct,
   toWriteField,
   toWriteValue,
 } from './historyModel.ts';
+
+describe('the entry for roster times taken from the tracking log', () => {
+  it('is read as the act it records', () => {
+    expect(
+      rosterTimesAct({
+        RosterTimes: { new: 'fromTracking' },
+        TimeZone: { new: 'Europe/Bucharest' },
+        People: { new: 2 },
+        Rows: { new: 3 },
+      }),
+    ).toEqual({ timeZone: 'Europe/Bucharest', people: 2, rows: 3 });
+  });
+
+  it('leaves out a fact the entry does not state, rather than inventing one', () => {
+    expect(rosterTimesAct({ RosterTimes: { new: 'fromTracking' }, People: { new: 'two' } })).toEqual({
+      timeZone: null,
+      people: null,
+      rows: null,
+    });
+  });
+
+  it('is not seen in an ordinary change, nor in nothing', () => {
+    expect(rosterTimesAct({ Description: { old: 'a', new: 'b' } })).toBeNull();
+    expect(rosterTimesAct({ RosterTimes: { old: 'x', new: 'somethingElse' } })).toBeNull();
+    expect(rosterTimesAct(null)).toBeNull();
+  });
+});
 
 describe('historyModel', () => {
   it('builds change rows and appends a redacted row for stripped properties', () => {

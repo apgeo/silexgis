@@ -47,6 +47,39 @@ export function changeRows(changes: unknown, redactedProperties: string[]): Hist
   return rows;
 }
 
+/** The act of writing roster times from the tracking log, as its history entry states it. */
+export interface RosterTimesAct {
+  /** The zone the roster's times were read in; null when the entry does not say. */
+  timeZone: string | null;
+  /** How many people's times were written. */
+  people: number | null;
+  /** How many roster rows that was — a person holds one per job. */
+  rows: number | null;
+}
+
+/**
+ * Reads a history entry as "roster times were taken from the tracking log", or null when it is
+ * anything else.
+ *
+ * That entry records an act on the trip rather than fields of it that changed: its members
+ * carry no earlier value, and their names are the server's own. It is told apart by the one
+ * member that names the act, so that it can be worded as a sentence instead of being drawn as
+ * a table of changes from nothing to a keyword.
+ */
+export function rosterTimesAct(changes: unknown): RosterTimesAct | null {
+  const set = asChangeSet(changes);
+  if (set.RosterTimes?.new !== 'fromTracking') {
+    return null;
+  }
+  const text = (value: unknown) => (typeof value === 'string' && value !== '' ? value : null);
+  const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+  return {
+    timeZone: text(set.TimeZone?.new),
+    people: count(set.People?.new),
+    rows: count(set.Rows?.new),
+  };
+}
+
 /** Props of an updated event a user may restore: present, non-redacted, with a real old value. */
 export function restorableProps(rows: HistoryFieldRow[]): string[] {
   return rows.filter((r) => !r.redacted && r.old !== undefined).map((r) => r.prop);
