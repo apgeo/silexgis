@@ -416,7 +416,15 @@ feature and walkthroughs of whole jobs.
   everything pinned to it, and a finished trip's log stays open for the write-up. A report
   deleted from the log is kept: it can be put back exactly as it was — by **Undo** on the
   notice, or later from **Removed reports** under the log — and is destroyed only by a second,
-  separate **Delete for good**. A coordinator's
+  separate **Delete for good**, with one exception made on purpose. **When somebody asks to be
+  removed**, one confirmed act on their row destroys every report the trip holds about them, the
+  kept ones included, because a report that can be put back is not a removal; the confirmation
+  says how many reports go and what stays (their name on the roster until the trip is edited,
+  and the trip's history). Nobody else's reports are touched. And a person who cannot be deleted
+  because trips still hold them is refused **with the trips named** — each trip the reader may
+  open, its date, whether the person is on its roster, how many tracking reports it has about
+  them and whether those can be removed from there — and with one line, never a count or a name,
+  for anything else that holds them. A coordinator's
   spreadsheet of calls is read onto the log through a preview that says, row by row, what it
   would create, correct or refuse and states how it read the times; each report is filed under
   the person and the moment, so a corrected sheet imported again corrects instead of doubling.
@@ -466,6 +474,11 @@ feature and walkthroughs of whole jobs.
   whose location the reader may not be told — and it raises no alarm: the hour a party plans to
   be out by is printed as a time and compared with nothing. It lists only the trips its reader
   may read, and a trip whose tracking was never started is not on it at all.
+  **The log's times can be taken onto the trip's roster**: once somebody has come out, a dialog
+  shows each person's first going in and last coming out beside the entry and exit time the
+  roster holds, on a stated time zone; only the people ticked are written, a time somebody typed
+  is marked and left unticked, and a moment the roster cannot hold — another day than the
+  trip's, clocks that changed in between — is said rather than written.
   A trip can then be **published** with a link: anybody holding it, with no account, sees the
   party on the survey, refreshed while they are underground. The page is written for a reader who
   has never followed a trip: it says that a place is where somebody was last *reported* and not a

@@ -365,12 +365,25 @@ its person, its place and when it was taken off, beside two buttons:
   corrected it.
 - **Delete for good** — destroys the report. The confirmation says so: **this cannot be
   undone**, and nothing in the application brings the report back afterwards. Only a report
-  already taken off the log can be deleted for good, so losing one always takes two separate
-  acts.
+  already taken off the log can be deleted for good, so losing one this way always takes two
+  separate acts. (The one act that destroys reports still on the log is the removal of
+  everything about one person, described below.)
 
 A removed report is kept for as long as its trip exists; deleting the trip for good takes its
 removed reports with it. *Removed reports* is shown to those who may write the trip's log, and
 a place you may not be told on the log is not told there either.
+
+**Removing everything about one person.** When somebody asks that what this trip's log says
+about them be removed, taking their reports off the log is not enough — a kept report can be
+put back. In the party table, the **⋯** menu on that person's row has **Remove their reports
+from this trip**. It destroys every report the trip holds about them, the ones on the log and
+the ones already under *Removed reports*, after a confirmation that says so and how many
+reports that is; it cannot be undone. The replay and any published page of the trip change with it. Their name stays on the
+trip's roster until the trip is edited, and the trip's **History** records that the reports were
+removed and still shows what each one said. The menu is there for whoever may write the log,
+once tracking has been started. The same act is offered from **People → Cavers** when deleting
+the person is refused — see
+[When somebody asks to be removed](people-and-clubs.md#when-somebody-asks-to-be-removed).
 
 **Reaching the report.** **Reports** shows twenty at a time, the most recent first, and the
 whole log is behind it: the page numbers under the table, or on a phone **Show older reports**
@@ -547,6 +560,40 @@ survey: a report whose row you left alone stays on the survey it was made on.
 | **A station or a depth is written as the report holds it, without its survey** | The sheet does not say which survey a report was made on, and does not need to: imported again, a row whose station or depth you left alone leaves the report on its survey. Change the station or the depth and the row is read on the survey the watch is on now — where the same station name can be another place, and a station that survey does not have is refused |
 | **Two reports about one person at one moment are both written, and both refused on the way back** | The import cannot tell which of the two a row would correct |
 | **The file is named by the trip's number and the day** | Never by the trip's title or the cave |
+
+### Entry and exit times for the roster, from the log
+
+A followed trip ends with two records of when each person was underground: the log, with the
+moment somebody reported them going in and coming out, and the trip's roster, with whatever was
+typed on the trip's form — usually nothing. **Roster times from the log**, beside the reports,
+shows the two side by side so the log's can be taken across. It appears once somebody has come
+out, for whoever may edit the trip, and works on a closed watch as well as a running one.
+
+For each person the table shows the first *Went in* and the last *Came out* the log holds, what
+the roster holds now, and a tick. Nothing is written until you press **Write to the roster**,
+and only for the people ticked:
+
+- **A time somebody typed is never replaced by itself.** A row where the log's times differ
+  from times already on the roster is marked *Replaces a time somebody typed* and starts
+  unticked. Tick it if the log is right.
+- **The time zone is stated.** A report is a moment; a time on a roster is what a clock showed,
+  with no zone of its own. The dialog starts on your own time zone and says which zone the
+  times were read in — choose the cave's if it is another.
+- **Some times cannot be taken, and the row says why**: no report that the person came out (or
+  they went in again afterwards); a moment on a day the trip's dates do not cover — correct the
+  trip's dates first; clocks that changed while they were underground, where the two times
+  would be an hour out; or somebody who has reports but is no longer on the roster.
+- **Somebody who went in more than once** gets the first going in and the last coming out, and
+  the row says so: the roster has room for one pair, so the time on the surface in between is
+  counted.
+- **Reports taken off the log do not count**, and a person with two jobs on the trip gets the
+  times on both of their rows.
+
+The write is recorded in the trip's **History** — each changed row with its old and new times,
+and a line saying the times came from the tracking log and in which zone. If somebody else
+saved the trip — were it only a time typed for one person on its roster — or the log changed,
+between your looking and your pressing, nothing is written and the times are read again. A trip form that was open while the times were written has to be
+opened again before it can be saved — it would otherwise put the old times back.
 
 ---
 

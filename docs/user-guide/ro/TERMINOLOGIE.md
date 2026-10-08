@@ -153,6 +153,11 @@ odată cu ea — și apoi paginile.
 | Held reports (recorded with no answer from the server, kept in the browser) | Rapoarte în așteptare |
 | Send now / Send again / Discard (a held report) | Trimite acum / Trimite din nou / Aruncă |
 | Open the trip / Sign in again (in the top bar's list of held reports) | Deschide tura / Autentifică-te din nou |
+| Remove their reports from this trip / Remove for good | Șterge rapoartele ei din această tură / Șterge definitiv |
+| Roster times from the log / Write to the roster | Ore pe listă din jurnal / Scrie pe listă |
+| Replaces a time somebody typed | Înlocuiește o oră scrisă de cineva |
+| On the roster (what holds a person on a trip) | Pe listă |
+| Remove this person / Merge a duplicate instead | Eliminați persoana / Unificați un duplicat în loc |
 | First started / Started again (a watch) | Începută prima dată / Începută din nou |
 | Import a sheet | Importă o foaie |
 | What this cave's depths mean | Ce înseamnă adâncimile acestei peșteri |

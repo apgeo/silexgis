@@ -385,11 +385,25 @@ momentul, persoana, locul lui și momentul în care a fost scos, lângă două b
   aceeași ridicare, aceeași notă. Nu este marcat **Corectat**, pentru că nu l-a corectat nimeni.
 - **Șterge definitiv** — distruge raportul. Confirmarea o spune: **acțiunea nu poate fi
   anulată**, iar nimic din aplicație nu mai aduce raportul înapoi. Doar un raport deja scos din
-  jurnal poate fi șters definitiv, așa că pierderea unuia cere întotdeauna două acte separate.
+  jurnal poate fi șters definitiv, așa că pierderea unuia pe această cale cere întotdeauna două
+  acte separate. (Singurul act care distruge rapoarte aflate încă în jurnal este ștergerea a
+  tot ce privește o persoană, descrisă mai jos.)
 
 Un raport scos se păstrează cât timp există tura lui; eliminarea definitivă a turei îi ia și
 rapoartele scoase. *Rapoarte scoase* este arătat celor care pot scrie în jurnalul turei, iar un
 loc care nu vă poate fi spus în jurnal nu vă este spus nici acolo.
+
+**Ștergerea a tot ce privește o persoană.** Când cineva cere ca ce spune jurnalul acestei ture
+despre el să fie eliminat, scoaterea rapoartelor din jurnal nu ajunge — un raport păstrat poate
+fi pus înapoi. În tabelul echipei, meniul **⋯** de pe rândul persoanei are **Șterge rapoartele
+ei din această tură**. Distruge toate rapoartele pe care tura le are despre ea, cele din jurnal
+și cele deja aflate la *Rapoarte scoase*, după o confirmare care spune asta și câte rapoarte sunt; acțiunea nu poate
+fi anulată. Reluarea și orice pagină publicată a turei se schimbă odată cu ea. Numele persoanei
+rămâne pe lista turei până când tura este editată, iar **Istoricul** turei consemnează că
+rapoartele au fost șterse și arată în continuare ce spunea fiecare. Meniul există pentru cine
+poate scrie în jurnal, după ce urmărirea a fost pornită. Același act este oferit din
+**Persoane → Speologi** când ștergerea persoanei este refuzată — vedeți
+[Când cineva cere să fie eliminat](people-and-clubs.md#când-cineva-cere-să-fie-eliminat).
 
 **Cum ajungeți la raport.** **Rapoarte** arată câte douăzeci, cele mai recente întâi, iar în
 spatele lor este tot jurnalul: numerele de pagină de sub tabel sau, pe telefon, **Arată
@@ -575,6 +589,40 @@ fost făcut.
 | **O stație sau o adâncime este scrisă așa cum o are raportul, fără ridicarea ei** | Foaia nu spune pe ce ridicare a fost făcut un raport și nici nu are nevoie: importat din nou, un rând a cărui stație sau adâncime ați lăsat-o neatinsă lasă raportul pe ridicarea lui. Schimbați stația sau adâncimea și rândul este citit pe ridicarea pe care este urmărirea acum — unde același nume de stație poate fi alt loc, iar o stație pe care acea ridicare nu o are este refuzată |
 | **Două rapoarte despre aceeași persoană la același moment sunt scrise amândouă și refuzate amândouă la întoarcere** | Importul nu poate ști pe care dintre cele două l-ar corecta un rând |
 | **Fișierul este numit după numărul turei și zi** | Niciodată după titlul turei sau după peșteră |
+
+### Orele de intrare și de ieșire pentru listă, din jurnal
+
+O tură urmărită se încheie cu două consemnări ale timpului petrecut de fiecare sub pământ:
+jurnalul, cu momentul în care s-a raportat că a intrat și că a ieșit, și lista turei, cu ce s-a
+scris în formularul turei — de obicei nimic. **Ore pe listă din jurnal**, lângă rapoarte, le
+arată alături, ca orele din jurnal să poată fi trecute pe listă. Apare după ce a ieșit cineva,
+pentru cine poate edita tura, și funcționează pe o urmărire încheiată la fel ca pe una în curs.
+
+Pentru fiecare persoană, tabelul arată primul *A intrat* și ultimul *A ieșit* din jurnal, ce
+are lista acum și o bifă. Nu se scrie nimic până nu apăsați **Scrie pe listă**, și numai pentru
+persoanele bifate:
+
+- **O oră scrisă de cineva nu este înlocuită de la sine.** Un rând în care orele din jurnal
+  diferă de orele aflate deja pe listă este marcat *Înlocuiește o oră scrisă de cineva* și
+  pornește nebifat. Bifați-l dacă jurnalul are dreptate.
+- **Fusul orar este spus.** Un raport este un moment; o oră de pe listă este ce arăta un ceas,
+  fără fus orar al ei. Dialogul pornește pe fusul dumneavoastră orar și spune în ce fus au fost
+  citite orele — alegeți-l pe al peșterii dacă este altul.
+- **Unele ore nu pot fi luate, iar rândul spune de ce**: niciun raport că persoana a ieșit (sau
+  a intrat din nou după aceea); un moment într-o zi pe care datele turei nu o acoperă —
+  corectați întâi datele turei; ora schimbată cât timp era sub pământ, când cele două ore ar
+  greși cu o oră; sau cineva care are rapoarte, dar nu mai este pe listă.
+- **Cine a intrat de mai multe ori** primește prima intrare și ultima ieșire, iar rândul o
+  spune: lista are loc pentru o singură pereche, așa că timpul petrecut la suprafață între ele
+  este numărat.
+- **Rapoartele scoase din jurnal nu se iau în seamă**, iar o persoană cu două roluri în tură
+  primește orele pe ambele ei rânduri.
+
+Scrierea este consemnată în **Istoricul** turei — fiecare rând schimbat, cu orele vechi și noi,
+și o linie care spune că orele au venit din jurnalul de urmărire și în ce fus. Dacă altcineva a
+salvat tura — fie și numai o oră scrisă pentru o persoană pe lista ei — sau jurnalul s-a
+schimbat, între privit și apăsat, nu se scrie nimic și orele sunt citite din nou. Un formular al turei care era deschis când s-au scris orele trebuie deschis din
+nou înainte de a putea fi salvat — altfel ar pune înapoi orele vechi.
 
 ---
 

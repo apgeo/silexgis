@@ -45,9 +45,48 @@ scris în două feluri înseamnă doi, și de aici vin cele mai multe duplicate.
 Listele acumulează duplicate — *Ion Popescu*, *I. Popescu*, *Popescu Ion*. **Contopește** pliază o
 fișă în alta: turele și grupurile lor trec dincolo, iar duplicatul este eliminat.
 
-Nu puteți pur și simplu să ștergeți pe cineva numit pe ture. Aplicația refuză și vă spune să
-contopiți în schimb fișa duplicat — ceea ce este răspunsul corect, pentru că ștergerea ar
-rescrie tacit evidența cine a fost în subteran.
+Nu puteți pur și simplu să ștergeți pe cineva numit pe ture: ștergerea ar rescrie tacit
+evidența cine a fost în subteran. Aplicația refuză — iar pentru un duplicat, răspunsul este
+unificarea.
+
+### Când cineva cere să fie eliminat
+
+O persoană care nu este un duplicat și care cere ca ce ține aplicația despre ea să fie eliminat
+nu poate fi unificată cu altcineva. De aceea refuzul spune ce o ține. Apăsați coșul de pe rândul
+ei și, dacă încă apare în ture, se deschide un dialog — ***nume* nu poate fi eliminat(ă) încă** —
+care enumeră **fiecare tură pe care o puteți deschide**, ca legătură, cu ce ține persoana acolo:
+
+- **Pe listă** — tura o numește. Deschideți tura și scoateți persoana de pe lista ei.
+- **Rapoarte de urmărire: 3** — [jurnalul de urmărire](live-tracking.md) al turei are rapoarte
+  despre ea, numărându-le și pe cele deja scoase din jurnal și păstrate. Acolo unde puteți edita
+  tura și urmărirea ei a fost pornită, alături apare **Șterge rapoartele ei din această tură: 3**.
+
+**Șterge rapoartele ei din această tură** distruge toate rapoartele pe care tura le are despre
+persoană — cele din jurnal și cele de la *Rapoarte scoase* — și întreabă mai întâi, spunând exact
+asta. Acțiunea nu poate fi anulată și nu rămâne nimic de pus înapoi. Reluarea turei se schimbă,
+la fel și o pagină publicată a ei. **Ce rămâne:** numele persoanei pe lista turei, până când
+editați tura, și **Istoricul** turei, care consemnează că rapoartele au fost șterse și arată în
+continuare ce spunea fiecare.
+
+**Ce arată apoi o pagină publicată.** O pagină publicată a turei — cea urmărită acum sau
+reluarea unei ture trecute a peșterii — enumeră lista turei și desenează fiecare persoană după
+rapoartele ei. După ștergere, persoana rămâne în lista echipei de acolo, sub numele sau eticheta
+pe care pagina o folosea deja, fără nimic raportat despre ea: niciun loc, niciun *A intrat*,
+niciun *A ieșit* și niciun punct în vreun moment al reluării. O pagină pe care cineva o are
+deschisă arată asta la următoarea reîmprospătare, la fel și una încadrată pe alt site. Ca să
+dispară și numele de pe pagină, editați tura și scoateți persoana de pe lista ei — ceea ce o
+urmărire în curs refuză pentru cineva cu rapoarte și permite după ce rapoartele au dispărut.
+Nimic din toate acestea nu ajunge la ce a salvat deja cineva: o captură de ecran sau un film
+făcut din reluare.
+
+Când persoana este ținută și de ceva ce nu vi se arată — o tură pe care nu o puteți deschide, o
+tură ștearsă care își așteaptă termenul de păstrare, mai multe ture decât cuprinde lista —
+dialogul spune doar atât: *Persoana este ținută și de ceva ce nu apare aici… Întrebați un
+administrator.* Nu spune niciodată câte, nici care.
+
+Când nimic din listă nu o mai ține, în dialog apare **Eliminați persoana**; nimic nu se șterge
+până nu apăsați. **Unificați un duplicat în loc** rămâne acolo ca cealaltă cale. O persoană de pe
+[lista unei tabere](camps.md#cine-a-fost) este refuzată separat, cu o propoziție care spune asta.
 
 ---
 

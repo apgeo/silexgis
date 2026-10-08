@@ -46,9 +46,47 @@ Rosters accumulate duplicates — *Ion Popescu*, *I. Popescu*, *Popescu Ion*. **
 one entry into another: their trips and caving groups move across, and the duplicate is
 removed.
 
-You cannot simply delete somebody named on trips. The application refuses and tells you to
-merge their duplicate entry instead — which is the right answer, because deleting would
-silently rewrite the record of who was underground.
+You cannot simply delete somebody named on trips: deleting would silently rewrite the record
+of who was underground. The application refuses — and for a duplicate, merging is the answer.
+
+### When somebody asks to be removed
+
+A person who is not a duplicate, and who asks for what the application holds about them to be
+removed, cannot be merged away. So the refusal says what holds them. Press the bin on their row
+and, when trips still name them, a dialog opens — ***name* cannot be removed yet** — listing
+**each trip you may open**, as a link, with what holds the person there:
+
+- **On the roster** — the trip names them. Open the trip and take them off its roster.
+- **Tracking reports: 3** — the trip's [tracking log](live-tracking.md) has reports about them,
+  counting the ones already taken off the log and kept. Where you may edit that trip and its
+  tracking has been started, **Remove their reports from this trip: 3** is offered beside it.
+
+**Remove their reports from this trip** destroys every report that trip holds about the person —
+the ones on the log and the ones under *Removed reports* — and asks first, saying exactly that.
+It cannot be undone and nothing is left to put back. The trip's replay changes, and so does a
+published page of it. **What stays:** their name on the trip's roster until you edit the trip,
+and the trip's **History**, which records that the reports were removed and still shows what
+each one said.
+
+**What a published page shows afterwards.** A page published for the trip — the one being
+followed now, or the replay of a past trip of the cave — lists the trip's roster and draws each
+person from their reports. After the removal the person is still in the party list there, under
+the name or caption the page already used, with nothing reported about them: no place, no *Went
+in*, no *Came out*, and no dot at any moment of the replay. A page somebody has open shows this
+at its next refresh, and so does one framed on another website. To take the name off the page as
+well, edit the trip and take the person off its roster — which a running watch refuses for
+somebody with reports, and allows once the reports are gone. None of this reaches what somebody
+has already saved: a screenshot, or a movie made from the replay.
+
+When something you are not shown also holds the person — a trip you may not open, a deleted
+trip still waiting out its retention, more trips than the list names — the dialog says only
+that: *Something not shown here also holds this person… Ask an administrator.* It never says
+how many, or which.
+
+Once nothing listed holds them, **Remove this person** appears in the dialog; nothing is
+deleted until you press it. **Merge a duplicate instead** stays there as the other way out. A
+person on a [camp's roster](camps.md#who-was-there) is refused separately, with a sentence
+saying so.
 
 ---
 
