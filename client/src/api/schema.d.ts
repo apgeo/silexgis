@@ -21767,6 +21767,7 @@ export interface components {
             id: string;
             title: string;
             reason: components["schemas"]["CascadeSkipReason"];
+        };
         ExpeditionSurfaceLogDto: {
             trips: components["schemas"]["ExpeditionSurfaceLogTripDto"][];
             truncated: boolean;
