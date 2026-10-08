@@ -41,6 +41,7 @@ public static class SurveyModelTrackedTripsEndpoints
         api.MapGet("/survey-models/{surveyModelId:guid}/tracked-trips", ListAsync)
             .WithTags("TripTracking")
             .WithSummary("The trips tracked on this survey model that the caller may read — watching it now, or with reports recorded against it — latest activity first; report counts follow the event log's per-report withholding.");
+        api.MapSurveyModelTrackedTripReplayEndpoints();
         return api;
     }
 

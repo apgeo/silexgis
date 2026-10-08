@@ -2665,6 +2665,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-models/{surveyModelId}/tracked-trips/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Up to fifty trips' titles, rosters, tracking states and whole logs in one answer, in the order asked — each exactly as the trip's own tracking reads answer the caller; a trip the caller may not read is left out. */
+        get: {
+            parameters: {
+                query?: {
+                    tripLogIds?: string[];
+                };
+                header?: never;
+                path: {
+                    surveyModelId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackedTripReplayDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/trips/{token}/past": {
         parameters: {
             query?: never;
@@ -25904,6 +25944,20 @@ export interface components {
             firstReportAt: null | string;
             /** Format: date-time */
             lastReportAt: null | string;
+        };
+        TrackedTripPersonDto: {
+            /** Format: uuid */
+            caverId: string;
+            name: string;
+        };
+        TrackedTripReplayDto: {
+            /** Format: uuid */
+            tripLogId: string;
+            title: string;
+            participants: components["schemas"]["TrackedTripPersonDto"][];
+            tracking: components["schemas"]["TrackingStateDto"];
+            events: components["schemas"]["TrackingEventDto"][];
+            eventsComplete: boolean;
         };
         TrackingConfigRequest: {
             state: null | components["schemas"]["TripTrackingState"];

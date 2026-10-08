@@ -4166,10 +4166,7 @@ export function useMyTripLogs(params: MyTripLogListParams) {
   });
 }
 
-/**
- * The one definition of how a trip is read, used by the single-trip hook and the many-trip one so
- * both hold the answer under the same key — a trip already open elsewhere is not read twice.
- */
+/** How one trip is read and under which key it is held. */
 function tripLogQuery(id: string) {
   return queryOptions({
     queryKey: queryKeys.tripLog(id),
@@ -4179,16 +4176,6 @@ function tripLogQuery(id: string) {
 
 export function useTripLog(id: string | undefined) {
   return useQuery({ ...tripLogQuery(id ?? ''), enabled: !!id });
-}
-
-/**
- * Several trips at once, each under the key the single-trip read holds it by. For a surface that
- * shows several trips' parties together and needs each trip's roster names.
- */
-export function useTripLogsById(tripLogIds: readonly string[]) {
-  return useQueries({
-    queries: tripLogIds.map((id) => ({ ...tripLogQuery(id), enabled: id !== '' })),
-  });
 }
 
 function useInvalidateTripLogs() {
@@ -8549,11 +8536,7 @@ export function useTripTracking(tripLogId: string | undefined, enabled = true) {
   return useQuery({ ...tripTrackingQuery(tripLogId ?? ''), enabled: !!tripLogId && enabled });
 }
 
-/**
- * The one definition of the tracking-state read — its key, its fetch and its polling — shared by
- * the single-trip hook and the many-trip one, so the two hold one cache entry per trip and keep it
- * fresh on the same condition.
- */
+/** The tracking-state read of one trip: its key, its fetch and its polling. */
 function tripTrackingQuery(tripLogId: string) {
   return queryOptions({
     queryKey: queryKeys.tripTracking(tripLogId),
@@ -8621,13 +8604,6 @@ export function useExpeditionSurfaceLog(expeditionId: string | undefined, shown 
     staleTime: 0,
     retry: false,
     refetchInterval: () => expeditionSurfaceLogPollInterval(shown),
-  });
-}
-
-/** Several trips' tracking states, each under the key and polling the single-trip read uses. */
-export function useTripTrackings(tripLogIds: readonly string[]) {
-  return useQueries({
-    queries: tripLogIds.map((id) => ({ ...tripTrackingQuery(id), enabled: id !== '' })),
   });
 }
 
@@ -8701,10 +8677,7 @@ export function useTripTrackingEventLog(tripLogId: string | undefined, enabled =
   });
 }
 
-/**
- * The one definition of the whole-log read, shared by the single-trip hook and the many-trip one so
- * a log already read for one trip's replay is the same cache entry a several-trip surface reads.
- */
+/** How one trip's whole log is read and under which key it is held. */
 function tripTrackingEventLogQuery(tripLogId: string) {
   return queryOptions({
     queryKey: queryKeys.tripTrackingEventLog(tripLogId),
@@ -8732,33 +8705,6 @@ function tripTrackingEventLogQuery(tripLogId: string) {
 }
 
 /**
- * Several trips' whole logs, each under the key the single-trip read holds it by, and like it not
- * polled — a replay of several trips reads their history once.
- */
-export function useTripTrackingEventLogs(tripLogIds: readonly string[]) {
-  return useQueries({
-    queries: tripLogIds.map((id) => ({ ...tripTrackingEventLogQuery(id), enabled: id !== '' })),
-  });
-}
-
-/**
- * Reads one trip's whole log again, now, and answers with it — whatever is already held.
- *
- * The whole log is not kept fresh by itself, and for a replay of a finished trip it has no need to
- * be. A surface that is about to commit to what the log says of a trip still under way — a file made
- * from it, which outlives the screen — asks through this first, and learns from the refusal when the
- * log could not be read to its end. The answer also replaces what is held, so everything else
- * drawn from the log follows. A read already on its way is waited for rather than started again.
- */
-export function useRereadTripTrackingEventLog() {
-  const queryClient = useQueryClient();
-  return useCallback(
-    (tripLogId: string) => queryClient.fetchQuery({ ...tripTrackingEventLogQuery(tripLogId), staleTime: 0 }),
-    [queryClient],
-  );
-}
-
-/**
  * The trips tracked on one survey model that this reader may read: those whose watch points at it
  * now, and those with reports recorded against it — a watch re-pointed at a newer survey keeps its
  * earlier reports on the older one. Latest activity first.
@@ -8779,6 +8725,84 @@ export function useSurveyModelTrackedTrips(surveyModelId: string | undefined, en
       ),
     enabled: !!surveyModelId && enabled,
   });
+}
+
+export type TrackedTripReplay = components['schemas']['TrackedTripReplayDto'];
+
+/** How many trips one replay read may name; a longer list is asked for in several reads. */
+const TRACKED_TRIP_REPLAY_MAX_TRIPS = 50;
+
+/**
+ * The one definition of the several-trip replay read — its key and its fetch — shared by the hook
+ * that holds it and the callback that reads it again.
+ *
+ * Held under the tracked-trips list of the model, so everything that already says "what was tracked
+ * on this model may have changed" — a report recorded, corrected or removed in this browser, a
+ * watch re-pointed — reaches it too.
+ */
+function trackedTripReplaysQuery(surveyModelId: string, tripLogIds: readonly string[]) {
+  return queryOptions({
+    queryKey: [...queryKeys.surveyModelTrackedTrips(surveyModelId), 'replay', [...tripLogIds]] as const,
+    queryFn: async () => {
+      const trips: TrackedTripReplay[] = [];
+      for (let from = 0; from < tripLogIds.length; from += TRACKED_TRIP_REPLAY_MAX_TRIPS) {
+        trips.push(
+          ...(await unwrap(
+            api.GET('/api/v1/survey-models/{surveyModelId}/tracked-trips/replay', {
+              params: {
+                path: { surveyModelId },
+                query: { tripLogIds: tripLogIds.slice(from, from + TRACKED_TRIP_REPLAY_MAX_TRIPS) },
+              },
+            }),
+          )),
+        );
+      }
+      return trips;
+    },
+    // Never served from an earlier visit without asking: a trip under way has moved on since.
+    staleTime: 0,
+  });
+}
+
+/**
+ * Several trips as a replay of them together needs each: its title, its roster's names, its
+ * tracking state and its whole log, newest first — in one read, in the order asked.
+ *
+ * Each trip is answered exactly as its own tracking reads answer this reader, positions withheld
+ * as they withhold them. <b>A trip this reader may not read is simply not in the answer</b>, and a
+ * trip whose log is longer than one answer carries arrives with `eventsComplete` false and only the
+ * newest part of it: neither is a trip to replay.
+ *
+ * Kept fresh while any of the trips is under way, on the condition every tracking read is kept
+ * fresh on, unless `polled` is false. While a different set of trips is being read the previous
+ * answer stays in hand as a placeholder, so ticking one more trip does not empty the screen.
+ */
+export function useTrackedTripReplays(surveyModelId: string, tripLogIds: readonly string[], polled = true) {
+  return useQuery({
+    ...trackedTripReplaysQuery(surveyModelId, tripLogIds),
+    enabled: surveyModelId !== '' && tripLogIds.length > 0,
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) =>
+      polled && (query.state.data ?? []).some((trip) => trackingPollInterval(trip.tracking.state) !== false)
+        ? TRACKING_POLL_MS
+        : false,
+  });
+}
+
+/**
+ * Reads several trips' replays again, now, and answers with them — whatever is already held.
+ *
+ * For a surface about to commit to what the logs say of trips still under way — a file made from
+ * them, which outlives the screen. The answer replaces what is held, so everything else drawn
+ * from it follows. A read already on its way is waited for rather than started again.
+ */
+export function useRereadTrackedTripReplays() {
+  const queryClient = useQueryClient();
+  return useCallback(
+    (surveyModelId: string, tripLogIds: readonly string[]) =>
+      queryClient.fetchQuery({ ...trackedTripReplaysQuery(surveyModelId, tripLogIds), staleTime: 0 }),
+    [queryClient],
+  );
 }
 
 /**

@@ -201,6 +201,25 @@ public static class TripTrackingEndpoints
         var trip = await ReadableTripAsync(db, access, ctx, tripLogId, ct);
         if (trip is null) return ApiProblems.NotFound("trip_log.not_found");
 
+        var state = await StateShownToAsync(db, access, protection, ctx, tripLogId, options, clock, userAccessor, ct);
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
+        return TypedResults.Ok(state);
+    }
+
+    /// <summary>
+    /// One trip's tracking state as <paramref name="ctx"/> reads it — the whole of what the state
+    /// read answers, for a trip the caller has already been found able to read.
+    /// </summary>
+    /// <remarks>
+    /// A routine of its own so that a read of several trips at once answers each of them by running
+    /// this, and what is withheld from whom is decided in one place whichever way a trip is asked
+    /// for. The trip's version is not part of it: that is a header of the answer about one trip.
+    /// </remarks>
+    internal static async Task<TrackingStateDto> StateShownToAsync(
+        SilexGisDbContext db, IAccessService access, FeatureProtection protection, AccessContext ctx,
+        Guid tripLogId, IOptions<TripTrackingOptions> options, TimeProvider clock,
+        IUserContextAccessor userAccessor, CancellationToken ct)
+    {
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         var teams = await db.TripTeams.AsNoTracking()
             .Where(t => t.TripLogId == tripLogId).OrderBy(t => t.Title).ToListAsync(ct);
@@ -412,8 +431,7 @@ public static class TripTrackingEndpoints
                     : party.Given.TryGetValue(caverId, out var held) ? held : (int?)null));
         }
 
-        await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
-        return TypedResults.Ok(new TrackingStateDto(
+        return new TrackingStateDto(
             watchState,
             configOpen ? tracking?.SurveyModelId : null,
             // Only beside a survey that is being told. Tied to the survey's presence as well as to
@@ -441,7 +459,7 @@ public static class TripTrackingEndpoints
             // here", which is a different answer from a number nobody happens to have crossed.
             watchState == TripTrackingState.Armed && quietAfter > TimeSpan.Zero
                 ? (int)Math.Min(quietAfter.TotalSeconds, int.MaxValue)
-                : null));
+                : null);
     }
 
     private static async Task<Results<Ok<PagedResult<TrackingEventDto>>, ProblemHttpResult>> ListEventsAsync(
@@ -454,23 +472,36 @@ public static class TripTrackingEndpoints
         var trip = await ReadableTripAsync(db, access, ctx, tripLogId, ct);
         if (trip is null) return ApiProblems.NotFound("trip_log.not_found");
 
-        var query = db.TripPositionEvents.AsNoTracking().Where(e => e.TripLogId == tripLogId);
+        var query = LogOf(db, tripLogId);
         if (caverId is not null) query = query.Where(e => e.CaverId == caverId);
         if (from is not null) query = query.Where(e => e.RecordedAt >= from);
         if (to is not null) query = query.Where(e => e.RecordedAt <= to);
 
         var (p, ps) = Paging.Normalize(page, pageSize);
-        // The id is v7 (time-ordered) and unique: a batch write stamps many rows with one
-        // recorded_at and one created_at, and without a unique tiebreaker page boundaries
-        // repeat or drop rows.
-        var result = await query
-            .OrderByDescending(e => e.RecordedAt).ThenByDescending(e => e.CreatedAt).ThenByDescending(e => e.Id)
-            .ToPagedAsync(p, ps, e => e, ct);
+        var result = await NewestFirst(query).ToPagedAsync(p, ps, e => e, ct);
 
         var dtos = await ShownToAsync(db, access, protection, ctx, tripLogId, result.Items, ct);
 
         return TypedResults.Ok(new PagedResult<TrackingEventDto>(dtos, result.Page, result.PageSize, result.TotalItems));
     }
+
+    /// <summary>
+    /// The rows that are one trip's log: the ordinary filtered set, so a report taken off the log
+    /// is not among them. Every read of a trip's log starts here, whoever it is answered to.
+    /// </summary>
+    internal static IQueryable<TripPositionEvent> LogOf(SilexGisDbContext db, Guid tripLogId) =>
+        db.TripPositionEvents.AsNoTracking().Where(e => e.TripLogId == tripLogId);
+
+    /// <summary>
+    /// A trip's log in the order it is read in, newest first.
+    /// </summary>
+    /// <remarks>
+    /// The id is v7 (time-ordered) and unique: a batch write stamps many rows with one
+    /// recorded_at and one created_at, and without a unique tiebreaker page boundaries
+    /// repeat or drop rows.
+    /// </remarks>
+    internal static IQueryable<TripPositionEvent> NewestFirst(IQueryable<TripPositionEvent> log) =>
+        log.OrderByDescending(e => e.RecordedAt).ThenByDescending(e => e.CreatedAt).ThenByDescending(e => e.Id);
 
     /// <summary>
     /// Stored reports of one trip as <paramref name="ctx"/> reads them, in the order given: each
@@ -481,7 +512,7 @@ public static class TripTrackingEndpoints
     /// back, so that a position kept from a caller on the log is kept from them everywhere a
     /// stored report is read — a removed report is not a way round the rule the log applies.
     /// </remarks>
-    private static async Task<List<TrackingEventDto>> ShownToAsync(
+    internal static async Task<List<TrackingEventDto>> ShownToAsync(
         SilexGisDbContext db, IAccessService access, FeatureProtection protection, AccessContext ctx,
         Guid tripLogId, IReadOnlyList<TripPositionEvent> rows, CancellationToken ct)
     {
