@@ -74,36 +74,44 @@ public static class SurveyModelTrackedTripsEndpoints
             .Where(t => tripIds.Contains(t.TripLogId))
             .ToDictionaryAsync(t => t.TripLogId, ct);
 
-        // Only the columns the withholding test and the aggregates read. Every row here carries
-        // this model's id, so every row claims a place and every row is subject to the test.
-        var reports = await db.TripPositionEvents.AsNoTracking()
+        // Counted where the rows are: one line per trip and cave snapshot, with how many reports
+        // it stands for and the first and last of them, so what comes back grows with the number
+        // of trips and of caves and never with the length of a log. The grouping is by cave
+        // snapshot because that is the one column on which rows of the same trip can differ in
+        // what a caller may be told — every row here names this model, so every row claims a
+        // place, and whether a claimed place is open is decided by the cave it was claimed in.
+        // The set is the ordinary filtered one: a report taken off the log and a deleted trip's
+        // reports are not in it, here as everywhere.
+        var reportGroups = await db.TripPositionEvents.AsNoTracking()
             .Where(e => e.SurveyModelId == surveyModelId && tripIds.Contains(e.TripLogId))
-            .Select(e => new TripPositionEvent
-            {
-                Id = e.Id,
-                TripLogId = e.TripLogId,
-                SurveyModelId = e.SurveyModelId,
-                CaveFeatureId = e.CaveFeatureId,
-                ViewerStationName = e.ViewerStationName,
-                DepthEnteredM = e.DepthEnteredM,
-                RecordedAt = e.RecordedAt,
-            })
+            .GroupBy(e => new { e.TripLogId, e.CaveFeatureId })
+            .Select(g => new ReportGroup(
+                g.Key.TripLogId,
+                g.Key.CaveFeatureId,
+                g.Count(),
+                g.Min(e => e.RecordedAt),
+                g.Max(e => e.RecordedAt)))
             .ToListAsync(ct);
 
         // One pass over the union of anchors — the reports' cave snapshots and the watches' — so
         // the access checks are per cave, never per trip.
-        var caveIds = reports.Where(e => e.CaveFeatureId is not null).Select(e => e.CaveFeatureId!.Value)
+        var caveIds = reportGroups.Where(g => g.CaveFeatureId is not null).Select(g => g.CaveFeatureId!.Value)
             .Concat(trackings.Values.Where(t => t.CaveFeatureId is not null).Select(t => t.CaveFeatureId!.Value))
             .Distinct().ToList();
         var openCaves = await TrackingWithholding.OpenCaveIdsAsync(db, access, protection, ctx, caveIds, ct);
 
-        var openReports = reports
-            .Where(e => TrackingWithholding.PositionOpen(e, openCaves))
-            .GroupBy(e => e.TripLogId)
+        // The withholding rule is asked, not restated: of one row standing for its whole group,
+        // carrying the two columns every row of the group shares. A group whose cave snapshot is
+        // gone therefore answers closed for everyone, as each of its rows would.
+        var openReports = reportGroups
+            .Where(g => TrackingWithholding.PositionOpen(
+                new TripPositionEvent { SurveyModelId = surveyModelId, CaveFeatureId = g.CaveFeatureId },
+                openCaves))
+            .GroupBy(g => g.TripLogId)
             .ToDictionary(g => g.Key, g => (
-                Count: g.Count(),
-                First: g.Min(e => e.RecordedAt),
-                Last: g.Max(e => e.RecordedAt)));
+                Count: g.Sum(x => x.Count),
+                First: g.Min(x => x.First),
+                Last: g.Max(x => x.Last)));
 
         var dtos = new List<TrackedTripDto>();
         foreach (var trip in trips)
@@ -140,6 +148,13 @@ public static class SurveyModelTrackedTripsEndpoints
             .ThenBy(t => t.TripLogId)
             .ToList());
     }
+
+    /// <summary>
+    /// The reports one trip made on the model inside one cave snapshot: how many, and the first
+    /// and the last of them.
+    /// </summary>
+    private sealed record ReportGroup(
+        Guid TripLogId, Guid? CaveFeatureId, int Count, DateTimeOffset First, DateTimeOffset Last);
 
     private static DateTimeOffset ActivityOf(TrackedTripDto trip) =>
         trip.LastReportAt
