@@ -47,6 +47,12 @@ public enum ReportTemplateDirective
     /// answers on its form.
     /// </summary>
     Accounts = 12,
+
+    /// <summary>
+    /// The trip's tracking journal: what the watch was, where each person stood when last heard
+    /// from, and what was reported, in time order.
+    /// </summary>
+    Tracking = 13,
 }
 
 /// <summary>
@@ -282,6 +288,7 @@ public static class ReportTemplateFormat
                 case ReportTemplateDirective.Days:
                 case ReportTemplateDirective.Teams:
                 case ReportTemplateDirective.Accounts:
+                case ReportTemplateDirective.Tracking:
                     if (rest.Length > 0)
                     {
                         errors.Add($"Line {number}: '{word}' stands on its own and takes nothing after it.");
@@ -393,6 +400,10 @@ public static class ReportTemplateFormat
             ["roster"] = ReportTemplateDirective.Roster,
             ["photographs"] = ReportTemplateDirective.Photographs,
             ["section"] = ReportTemplateDirective.Section,
+            // A trip's alone, and last so that the list a refusal prints keeps its order. A camp
+            // has no watch of its own: its layout reaches its trips' logs through the hours they
+            // come to, and a journal per trip belongs in that trip's own write-up.
+            ["tracking"] = ReportTemplateDirective.Tracking,
         };
 
     /// <remarks>
@@ -450,6 +461,10 @@ public static class ReportTemplateFormat
         "#   section: observations   every answer recorded in that part of the trip's form",
         "#   section: logistics",
         "#   section: safety",
+        "#   tracking                the trip's tracking journal, where it was followed: when the",
+        "#                           watch ran, each person's last report, and every report in time",
+        "#                           order. Not printed unless a line here asks for it; a place a",
+        "#                           reader of the document may not be told is printed as withheld",
         "#",
         "# Anything in braces is filled in from the trip:",
         "#",

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
+using SilexGis.Api.Common;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Trips;
@@ -53,7 +54,15 @@ internal sealed record TripReportContent(
     // Present only in a copy somebody downloads for themselves, and only when they sent one.
     // Appended, and defaulted to nothing, so the copy filed against the trip — which is built
     // without ever naming this member — cannot come to carry one by an argument slipping along.
-    TripReportMap? Map = null);
+    TripReportMap? Map = null,
+    // The trip's tracking journal as the reading this document is built from may be told it, read
+    // only when the layout asks for it; null for a trip nobody followed, and for every layout that
+    // does not print one. It arrives with its places already told or kept back.
+    TripTrackingJournal? Tracking = null,
+    // The language the document's own lines under that journal are written in, as two letters;
+    // null is English, like the rest of a write-up's own words. Asked of whoever produced the
+    // document, as its layout is, and deciding nothing about what the document says.
+    string? Language = null);
 
 /// <summary>
 /// One trip, arranged as the document a club circulates, under the layout the club asked for.
@@ -155,6 +164,11 @@ internal static class TripReportDocument
 
                 case ReportTemplateDirective.Photographs:
                     AppendPlates(blocks, content);
+                    break;
+
+                case ReportTemplateDirective.Tracking:
+                    TripReportJournal.Append(
+                        blocks, content.Tracking, TripJournalWording.For(content.Language));
                     break;
 
                 default:

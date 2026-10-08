@@ -73,8 +73,7 @@ public sealed class NotificationInboxRenderer(
         CancellationToken ct)
     {
         var reader = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == readerId, ct);
-        var language = AcceptLanguage.Preferred(acceptLanguage)
-            ?? MessageTemplateCatalog.Normalise(reader?.Locale);
+        var language = ReadingLanguage.Of(acceptLanguage, reader?.Locale);
 
         var titles = new Dictionary<long, string>();
         foreach (var row in rows)

@@ -11,6 +11,7 @@ using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Files;
+using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -125,6 +126,7 @@ internal static class TripReportEndpoints
         Guid id,
         Guid? templateId,
         string? format,
+        HttpRequest request,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -133,13 +135,14 @@ internal static class TripReportEndpoints
         ThumbnailService thumbnails,
         IDocumentWriter writer,
         WriteUpPdfConverter pdf,
+        ITripTrackingJournal tracking,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var built = await BuildAsync(
             id, templateId, db, access, ctx, ctx, userAccessor, protection, thumbnails, writer, null,
             () => ReportDownloads.RefusalBeforeBuilding(format, pdf),
-            ct);
+            tracking, LanguageOf(request), ct);
         if (built.Problem is { } problem)
         {
             return problem;
@@ -213,6 +216,7 @@ internal static class TripReportEndpoints
         IDocumentWriter writer,
         WriteUpPdfConverter pdf,
         IOptions<ReportOptions> options,
+        ITripTrackingJournal tracking,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -220,7 +224,7 @@ internal static class TripReportEndpoints
             id, templateId, db, access, ctx, ctx, userAccessor, protection, thumbnails, writer,
             () => ReadMapAsync(request, options.Value, ct),
             () => ReportDownloads.RefusalBeforeBuilding(format, pdf),
-            ct);
+            tracking, LanguageOf(request), ct);
         if (built.Problem is { } problem)
         {
             return problem;
@@ -274,6 +278,7 @@ internal static class TripReportEndpoints
         ContentIntake intake,
         UploadIngestService ingest,
         IFileStore fileStore,
+        ITripTrackingJournal tracking,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -317,9 +322,16 @@ internal static class TripReportEndpoints
         // trip anybody may read.
         var everyReader = await AccessContextResolver.ResolveForAnyAccountAsync(db, ct);
         // No picture, and no way to pass one: this is the copy every reader of the trip opens.
+        // The tracking journal, where the layout asks for one, is read under that same reading —
+        // so it names a station only where any account may be told it, whoever is filing this.
+        // That is the answer of the day it is filed, and a file does not ask again: when a cave
+        // comes under protection, the copies kept on the trips followed in it are taken off them
+        // by the write that protects it.
+        // The language is the filer's, as the layout is: it changes how a line is worded and
+        // nothing a line says.
         var built = await BuildAsync(
             id, templateId, db, access, ctx, everyReader, userAccessor, protection, thumbnails, writer,
-            null, null, ct);
+            null, null, tracking, LanguageOf(request), ct);
         if (built.Problem is { } problem)
         {
             return problem;
@@ -571,6 +583,8 @@ internal static class TripReportEndpoints
         IDocumentWriter writer,
         Func<Task<MapReading>>? readMap,
         Func<ProblemHttpResult?>? formatRefusal,
+        ITripTrackingJournal tracking,
+        string? acceptLanguage,
         CancellationToken ct)
     {
         // A picture shows what its sender may see, so it may only ever go into a document that
@@ -672,6 +686,13 @@ internal static class TripReportEndpoints
                 .Where(r => roleIds.Contains(r.Id))
                 .ToDictionaryAsync(r => r.Id, r => r.Name, ct);
 
+        // Only a document that prints a journal has lines of its own to word, so only that one
+        // asks which language they are in.
+        var journal = await JournalAsync(id, parts, tracking, reading, user, ct);
+        var language = journal is null
+            ? null
+            : await ReadingLanguage.ForAccountAsync(db, user?.UserId, acceptLanguage, ct);
+
         var content = new TripReportContent(
             dto,
             tripType?.Name,
@@ -680,11 +701,59 @@ internal static class TripReportEndpoints
             roleNames,
             TripNarrativeComposition.SectionTitles(tripType),
             await PlatesAsync(id, db, reading, thumbnails, ct),
-            map);
+            map,
+            journal,
+            language);
 
         var fileName = $"{TripReportNaming.GeneratedPrefix(id)}{DateTime.UtcNow:yyyyMMdd}.{writer.Extension}";
         return new BuiltReport(writer.Write(TripReportDocument.Blocks(content, parts)), fileName, null);
     }
+
+    /// <summary>
+    /// The trip's tracking journal for this document, or null when its layout prints none.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asked of the tracking area, which answers with what its own screen would tell
+    /// <paramref name="reading"/> — the one context every other question about this document was
+    /// put to. So the copy somebody downloads states the places they may be told, and the copy
+    /// kept on the trip states a place only where any account may be told it; there is no rule
+    /// about places on this side to keep in step with that one.
+    /// </para>
+    /// <para>
+    /// People are named for <paramref name="namedFor"/>, the account the trip's own roster in
+    /// this same document is named for, so that a person is not called one thing in the list of
+    /// who was there and another in the journal under it.
+    /// </para>
+    /// <para>
+    /// Not read at all unless the layout asks: the shipped layout does not, and a write-up that
+    /// prints no journal should cost no read of one.
+    /// </para>
+    /// </remarks>
+    private static async Task<TripTrackingJournal?> JournalAsync(
+        Guid id,
+        IReadOnlyList<ReportTemplatePart> parts,
+        ITripTrackingJournal tracking,
+        AccessContext reading,
+        UserContext namedFor,
+        CancellationToken ct) =>
+        parts.Any(part => part.Directive == ReportTemplateDirective.Tracking)
+            ? await tracking.ReadAsync(id, reading, namedFor, ct)
+            : null;
+
+    /// <summary>
+    /// What the request said about the language it wants to be answered in, as it was sent.
+    /// </summary>
+    /// <remarks>
+    /// The page says the language its reader has chosen on every request, a download included.
+    /// It is one of two things the journal's wording is picked by — the other is the language the
+    /// account has stored, asked when this names none this application writes — and the order
+    /// between them is the one a notification's wording is picked by, kept where both ask it.
+    /// Only the journal's own lines follow it: everything else a write-up says in fixed words is
+    /// the layout's, and a club writes its layout in the language it circulates in.
+    /// </remarks>
+    private static string? LanguageOf(HttpRequest request) =>
+        request.Headers.AcceptLanguage.ToString();
 
     /// <summary>
     /// What every generated write-up of this trip is called, up to the day it was produced.

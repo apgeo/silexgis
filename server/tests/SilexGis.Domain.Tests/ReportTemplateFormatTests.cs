@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Security.Cryptography;
+using System.Text;
 using Shouldly;
 using SilexGis.Domain.Trips;
 
@@ -145,5 +147,72 @@ public class ReportTemplateFormatTests
             (true, "dates"),
             (false, " on foot"),
         ]);
+    }
+
+    /// <summary>
+    /// A trip's layout may ask for the trip's tracking journal with one word that stands alone,
+    /// like the roster — and a camp's layout may not, because a camp has no watch of its own.
+    /// </summary>
+    [Fact]
+    public void The_tracking_journal_is_a_word_of_a_trips_layout_that_stands_alone_and_a_camp_has_none()
+    {
+        var asked = ReportTemplateFormat.Parse("title: {title}\nheading: Tracking\ntracking");
+        asked.Ok.ShouldBeTrue(string.Join(" ", asked.Errors));
+        var word = asked.Parts.Single(p => p.Directive == ReportTemplateDirective.Tracking);
+        word.Line.ShouldBe(3);
+        word.Label.ShouldBeNull();
+        word.Text.ShouldBeEmpty();
+
+        // It takes nothing after it: not a colon and a choice, not a name in braces.
+        foreach (var trailing in new[] { "tracking: all", "tracking: {title}" })
+        {
+            var refused = ReportTemplateFormat.Parse($"title: {{title}}\n{trailing}");
+            refused.Ok.ShouldBeFalse(trailing);
+            refused.Errors.ShouldHaveSingleItem().ShouldContain("Line 2");
+            refused.Errors[0].ShouldContain("'tracking' stands on its own");
+        }
+
+        // The same line that is a layout for a trip is refused for a camp, by its line — so the
+        // refusal is about the kind and not about the word being unreadable.
+        var onACamp = ReportTemplateFormat.Parse("title: {title}\ntracking", ReportTemplateKind.Expedition);
+        onACamp.Ok.ShouldBeFalse();
+        onACamp.Errors.ShouldHaveSingleItem().ShouldContain("Line 2");
+        onACamp.Errors[0].ShouldContain("'tracking' is not something a template can ask for");
+        ReportTemplateFormat.Parse("title: {title}\ntracking", ReportTemplateKind.Trip).Ok.ShouldBeTrue();
+
+        // And a refusal on a trip's layout now offers it among the words that may be written.
+        ReportTemplateFormat.Parse("title: {title}\nphoto: x").Errors.ShouldHaveSingleItem().ShouldContain("tracking");
+    }
+
+    /// <summary>
+    /// The layout the system ships says how to ask for the journal and does not ask for it: what
+    /// it prints is, line for line, what it printed before the word existed.
+    /// </summary>
+    /// <remarks>
+    /// Whether a write-up carries the journal by default is a decision about what every club's
+    /// documents say, not something to arrive with a new word. So the printed half of the shipped
+    /// layout — every line that is not a note to its editor — is pinned by its digest, taken
+    /// before the word was added. A deliberate change to what the shipped layout prints changes
+    /// this number on purpose; nothing else should.
+    /// </remarks>
+    [Fact]
+    public void The_shipped_layout_documents_the_tracking_word_and_prints_exactly_what_it_printed_before()
+    {
+        var lines = ReportTemplateFormat.Default.Split('\n');
+
+        // Documented where the person editing a layout reads the vocabulary…
+        lines.ShouldContain(line => line.StartsWith("#   tracking ", StringComparison.Ordinal));
+        // …and asked for nowhere, in the text or in what it parses to.
+        lines.ShouldNotContain(line => line.TrimStart().StartsWith("tracking", StringComparison.Ordinal));
+        ReportTemplateFormat.Parse(ReportTemplateFormat.Default).Parts
+            .ShouldNotContain(p => p.Directive == ReportTemplateDirective.Tracking);
+
+        var printed = string.Join('\n', lines.Where(line => !line.StartsWith('#')));
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(printed)))
+            .ShouldBe("73c1f6e1d543403eac7cee5cb80cdb52aca9ed372f0dfaf9e7b0ae7eccca69cf");
+
+        // A camp's layout neither documents the word nor could use it.
+        ReportTemplateFormat.ExpeditionDefault.Split('\n')
+            .ShouldNotContain(line => line.StartsWith("#   tracking ", StringComparison.Ordinal));
     }
 }

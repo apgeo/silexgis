@@ -6,6 +6,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Infrastructure.Features;
 
@@ -603,13 +604,31 @@ public sealed class FeatureWriteService(
             byId[local.Id] = local;
         }
 
+        var newlyProtectedCaves = new List<Guid>();
         foreach (var feature in byId.Values)
         {
             var ancestors = ancestorSets[feature.Id];
             feature.AncestorIds = [.. ancestors.OrderBy(a => a)];
+            var wasProtected = feature.IsProtectedEffective;
             feature.IsProtectedEffective =
                 FeatureHierarchyRules.IsProtectedEffective(ancestors, protectedIds.Contains);
+
+            // A cave that is only now being created has had no trip followed in it.
+            if (!wasProtected
+                && feature.IsProtectedEffective
+                && feature.Kind == FeatureKind.Cave
+                && db.Entry(feature).State != EntityState.Added)
+            {
+                newlyProtectedCaves.Add(feature.Id);
+            }
         }
+
+        // A write-up kept on a trip is a file and cannot ask again what its readers may be told.
+        // Where it printed the trip's tracking journal it names stations of a cave that has just
+        // come under protection — by its own flag or by one set anywhere above it, which is why
+        // this is asked here, where both arrive — so it comes off the trip in the same unit of
+        // work, and writing the trip up again reads the journal under the cave as it now stands.
+        await FiledTripWriteUps.TakeOffTripsFollowedInAsync(db, newlyProtectedCaves, ct);
     }
 
     // ---------- internals ----------

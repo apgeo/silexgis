@@ -201,6 +201,10 @@ public class TripSoftDeleteGuardTests
                 (1, "removing a trip for good removes its place in a camp"),
             ["server/src/SilexGis.Infrastructure/Trips/TripTypeWriteService.cs"] =
                 (1, "a purpose a deleted trip names is still in use"),
+            ["server/src/SilexGis.Infrastructure/Trips/FiledTripWriteUps.cs"] =
+                (1, "a cave coming under protection takes the kept write-ups off every trip followed in it: "
+                    + "a deleted trip can be put back with the file still on it, and a report since taken off "
+                    + "the log, which the same filter hides, may be in a file made before it was"),
             ["server/src/SilexGis.Infrastructure/Jobs/TripPurgeHandler.cs"] =
                 (3, "the pass that removes deleted trips: selecting them, claiming one, loading it"),
             ["server/src/SilexGis.Infrastructure/Import/ImportCommitService.cs"] =

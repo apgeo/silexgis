@@ -21,6 +21,7 @@ export const groups = {
     'TripCaveReachTests', 'TripChecklistTickTests', 'TripInvitationTests',
     'TripInvitationSubjectTests', 'TripMeetingPointTests', 'TripParticipantRoleVocabularyTests',
     'TripPlanNotificationTests', 'TripPromotionTests', 'TripReportDocumentTests',
+    'TripReportJournalTests', 'TripReportTrackingTests',
     'TripListGroupingTests', 'ReportTemplateTests', 'TripRoleLinkUnitOfWorkTests',
     'TripSectionSchemaTests', 'TripSilentWriteTests', 'TripStatisticsTests',
     'TripTypeVocabularyTests', 'TripTrackingTests', 'TripTrackingPublicationTests',
@@ -459,10 +460,11 @@ export const crossCutting = {
     'TripImportCommitTests', 'TripImportPreviewResolutionTests', 'TripImportResolutionTests',
     'TripListFacetTests', 'TripLiveSiblingTests', 'TripMapDerivedPositionTests',
     'TripMeetingPointTests', 'TripPastTrackTests', 'TripPlanNotificationTests',
-    'TripPurgeTests', 'TripReportDocumentTests', 'TripRoleLinkUnitOfWorkTests',
-    'TripSoftDeleteTests', 'TripStatisticsTests', 'TripStatsTests', 'TripTrackingPicturesTests',
-    'TripTrackingPublicationTests', 'TripTrackingStationNamesTests', 'TripTrackingTests',
-    'WorkAreaTests', 'WorkingSridBehaviourTests',
+    'TripPurgeTests', 'TripReportDocumentTests', 'TripReportTrackingTests',
+    'TripRoleLinkUnitOfWorkTests', 'TripSoftDeleteTests', 'TripStatisticsTests',
+    'TripStatsTests', 'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
+    'TripTrackingStationNamesTests', 'TripTrackingTests', 'WorkAreaTests',
+    'WorkingSridBehaviourTests',
   ],
 };
 
