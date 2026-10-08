@@ -31,7 +31,7 @@ export const specs = {
   catalogue: ['speologie-catalogue.spec.ts'],
   cavers: ['expeditions.spec.ts', 'settings.spec.ts'],
   caves: [
-    'cave-attachments.spec.ts', 'cave-grant-link.spec.ts', 'cave-levels.spec.ts', 'cave-morphometry.spec.ts',
+    'map-editing.spec.ts', 'cave-attachments.spec.ts', 'cave-grant-link.spec.ts', 'cave-levels.spec.ts', 'cave-morphometry.spec.ts',
     'cave-statistics.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
     'overburden-profile.spec.ts', 'survey-sources.spec.ts', 'qr-landing.spec.ts',
   ],
@@ -48,17 +48,20 @@ export const specs = {
   featureShares: [],
   files: ['uploads.spec.ts', 'documents.spec.ts', 'gallery.spec.ts', 'cave-attachments.spec.ts'],
   filters: ['trip-list.spec.ts', 'trip-map.spec.ts', 'registry-statistics.spec.ts'],
-  geoFeatures: ['doline-morphometry.spec.ts', 'vector-import.spec.ts', 'photo-import.spec.ts'],
+  geoFeatures: [
+    'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
+    'photo-import.spec.ts',
+  ],
   geofiles: ['vector-import.spec.ts'],
   georeferencedMaps: [
     'rastermap.spec.ts', 'rastermap-authoring.spec.ts', 'rastermap-public.spec.ts',
     'rastermap-tracking.spec.ts', 'rastermap-mobile.spec.ts',
   ],
-  history: ['panel.spec.ts'],
+  history: ['panel.spec.ts', 'map-editing.spec.ts'],
   imports: ['vector-import.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts'],
   jobs: ['survey-extraction.spec.ts', 'documents.spec.ts'],
   map: [
-    'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
+    'map-editing.spec.ts', 'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
     'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
   ],
   mapViews: [],
