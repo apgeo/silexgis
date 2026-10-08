@@ -29,7 +29,7 @@ export const specs = {
   cabinets: ['documents.spec.ts'],
   calendar: ['calendar.spec.ts', 'calendar-feed.spec.ts'],
   catalogue: ['speologie-catalogue.spec.ts'],
-  cavers: ['expeditions.spec.ts', 'settings.spec.ts'],
+  cavers: ['expeditions.spec.ts', 'settings.spec.ts', 'trip-removal-and-roster-times.spec.ts'],
   caves: [
     'map-editing.spec.ts', 'cave-attachments.spec.ts', 'cave-grant-link.spec.ts', 'cave-levels.spec.ts', 'cave-morphometry.spec.ts',
     'cave-statistics.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
@@ -111,7 +111,7 @@ export const specs = {
     'rastermap-tracking.spec.ts', 'tracking-movie.spec.ts', 'tracking-withheld.spec.ts',
     'checklists.spec.ts', 'tracking-therion.spec.ts', 'expedition-watch.spec.ts',
     'expedition-watch-mobile.spec.ts', 'trip-tracking-held-reports.spec.ts',
-    'trip-tracking-held-reports-mobile.spec.ts',
+    'trip-tracking-held-reports-mobile.spec.ts', 'trip-removal-and-roster-times.spec.ts',
   ],
   uploads: ['uploads.spec.ts'],
   users: ['settings.spec.ts', 'permission-groups.spec.ts'],
