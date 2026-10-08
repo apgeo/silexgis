@@ -279,11 +279,73 @@ public sealed class TripRosterTimesFromTrackingTests : IAsyncLifetime, IDisposab
     }
 
     /// <summary>
+    /// Two people have the trip's form open and each changes only a participant's times. The
+    /// first save moves the trip's version, so the second — which carries the roster as it was
+    /// opened, and would put the first one's times back to nothing — is refused the way any stale
+    /// save of that form is, and goes through once the trip has been read again. A save that
+    /// changes no roster row moves nothing, as before.
+    /// </summary>
+    [Fact]
+    public async Task Two_forms_open_on_one_trip_cannot_save_one_roster_over_the_other()
+    {
+        var (trip, cavers) = await CreateTripAsync("Two forms", guests: 2);
+        var (first, second) = (cavers[0], cavers[1]);
+        // The form's own save, once, so that the saves below differ from it in the roster alone.
+        (await PutRosterAsync(trip, cavers.Select(id => Row(id)))).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Both forms are opened here.
+        var opened = await TripVersionAsync(trip);
+
+        // The first form types one person's times and saves: same title, same date, same people.
+        var saved = await PutRosterAsync(trip, cavers.Select(id => id == first
+            ? Row(id, entry: "08:15:00", exit: "16:30:00")
+            : Row(id)), opened);
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+        var afterFirst = await TripVersionAsync(trip);
+        afterFirst.ShouldNotBe(opened, "a save that changed a roster row must move the trip's version");
+        saved.Headers.ETag!.ToString().ShouldBe(afterFirst, "the save hands over the version it produced");
+
+        // The second form types the other person's times, over the roster it was opened with.
+        var stale = await PutRosterAsync(trip, cavers.Select(id => id == second
+            ? Row(id, entry: "09:00:00", exit: "17:00:00")
+            : Row(id)), opened);
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, await stale.Content.ReadAsStringAsync());
+        var rows = await RosterRowsAsync(trip);
+        rows.Single(r => r.Caver == first).ShouldBe(new RosterRow(first, new TimeOnly(8, 15), new TimeOnly(16, 30)));
+        rows.Single(r => r.Caver == second).ShouldBe(new RosterRow(second, null, null));
+
+        // Read again, it carries both people's times and saves: the refusal was about the
+        // version, not about the request.
+        IEnumerable<object> both =
+        [
+            Row(first, entry: "08:15:00", exit: "16:30:00"),
+            Row(second, entry: "09:00:00", exit: "17:00:00"),
+        ];
+        (await PutRosterAsync(trip, both, afterFirst)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var afterSecond = await TripVersionAsync(trip);
+        afterSecond.ShouldNotBe(afterFirst);
+
+        // The same roster saved again changes no row: the version stays, and nothing more lands
+        // on the trip's history — the version follows what was written, not that a save was made.
+        var historyBefore = await HistoryAsync(trip);
+        (await PutRosterAsync(trip, both, afterSecond)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await TripVersionAsync(trip)).ShouldBe(afterSecond);
+        (await HistoryAsync(trip)).RosterRows.ShouldBe(historyBefore.RosterRows);
+
+        // Taking somebody off is a change of the roster like any other.
+        (await PutRosterAsync(trip, [Row(first, entry: "08:15:00", exit: "16:30:00")], afterSecond))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await TripVersionAsync(trip)).ShouldNotBe(afterSecond);
+        (await RosterRowsAsync(trip)).Select(r => r.Caver).ShouldBe([first]);
+    }
+
+    /// <summary>
     /// A time typed on the trip's form after the review, and saved with nothing else changed, is
-    /// not replaced by a write that was never shown it. The trip's version is no help there — it
-    /// is the trip's own row's, and that save writes roster rows only — so the write is refused
-    /// on what it says the roster held. Read again, the typed time is marked as an overwrite, and
-    /// only a write that says so replaces it.
+    /// not replaced by a write that was never shown it. The form's save moved the trip's version,
+    /// so the write as reviewed is refused as stale before it is looked at. And a writer who has
+    /// the new version but still says the roster held nothing — a version fetched without reading
+    /// the proposal again — is refused on what it says the roster held. Read again, the typed time
+    /// is marked as an overwrite, and only a write that says so replaces it.
     /// </summary>
     [Fact]
     public async Task A_time_typed_after_the_review_is_not_replaced_by_a_write_that_never_saw_it()
@@ -300,15 +362,24 @@ public sealed class TripRosterTimesFromTrackingTests : IAsyncLifetime, IDisposab
         Person(times, typedMeanwhile).GetProperty("overwrites").GetBoolean().ShouldBeFalse();
 
         // Somebody else types one person's times on the trip's form and saves: same title, same
-        // date, same people. The trip's version stays where the review read it.
+        // date, same people. This used to leave the trip's version where the review read it, and
+        // the assertion here said so; a save that changes a roster row now moves it, because two
+        // such saves from two open forms otherwise overwrite each other with nobody told.
         (await PutRosterAsync(trip, cavers.Select(id => id == typedMeanwhile
             ? Row(id, entry: "08:15:00", exit: "16:30:00")
             : Row(id)))).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await TripVersionAsync(trip)).ShouldBe(version,
-            "the case is about a save the trip's version does not see; if it moved, this test is measuring the precondition instead");
+        var moved = await TripVersionAsync(trip);
+        moved.ShouldNotBe(version, "a save of the form that changed a participant's times moves the trip's version");
 
-        // The write as reviewed: both people, neither marked as replacing anything.
-        var refused = await TakeAsync(owner, trip, version, Bucharest,
+        // The write as reviewed, under the version it was reviewed at: stale, and nothing written.
+        var stale = await TakeAsync(owner, trip, version, Bucharest,
+            [(typedMeanwhile, "09:00:00", "17:00:00"), (untouched, "09:00:00", "17:00:00")]);
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, await stale.Content.ReadAsStringAsync());
+
+        // The same write under the version the trip has now — as a writer would send that picked
+        // the version up without reading the proposal again. The version no longer refuses it;
+        // what it says the roster held does.
+        var refused = await TakeAsync(owner, trip, moved, Bucharest,
             [(typedMeanwhile, "09:00:00", "17:00:00"), (untouched, "09:00:00", "17:00:00")]);
         refused.StatusCode.ShouldBe(HttpStatusCode.Conflict, await refused.Content.ReadAsStringAsync());
         (await refused.Content.ReadAsStringAsync()).ShouldContain("tracking.roster_times_changed");
@@ -320,17 +391,19 @@ public sealed class TripRosterTimesFromTrackingTests : IAsyncLifetime, IDisposab
 
         // Saying what the roster holds now, while still claiming nothing typed is replaced, is
         // no better.
-        var unmarked = await TakeAsync(owner, trip, version, Bucharest,
+        var unmarked = await TakeAsync(owner, trip, moved, Bucharest,
             [new Tick(typedMeanwhile, "09:00:00", "17:00:00", "08:15:00", "16:30:00")]);
         unmarked.StatusCode.ShouldBe(HttpStatusCode.Conflict, await unmarked.Content.ReadAsStringAsync());
 
-        // Read again, the typed time is pointed out, and the write that repeats that goes through
-        // — so the refusals above were about the roster, not about the people or the trip.
-        var (again, _) = await ReviewAsync(trip, Bucharest);
+        // Read again, the typed time is pointed out under the version the form's save produced,
+        // and the write that repeats that goes through — so the refusals above were about the
+        // version and the roster, not about the people or the trip.
+        var (again, current) = await ReviewAsync(trip, Bucharest);
+        current.ShouldBe(moved);
         var shown = Person(again, typedMeanwhile);
         shown.GetProperty("overwrites").GetBoolean().ShouldBeTrue();
         shown.GetProperty("currentEntry").GetString().ShouldBe("08:15:00");
-        var taken = await TakeAsync(owner, trip, version, Bucharest,
+        var taken = await TakeAsync(owner, trip, current, Bucharest,
         [
             new Tick(typedMeanwhile, "09:00:00", "17:00:00", "08:15:00", "16:30:00", Overwrites: true),
             new Tick(untouched, "09:00:00", "17:00:00"),

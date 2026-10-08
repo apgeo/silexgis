@@ -120,7 +120,13 @@ public sealed record TripWriteInput
 /// not: who the write newly named, which caves it newly named, and whether it moved anything at
 /// all.
 /// </summary>
+/// <param name="RosterChanged">
+/// Whether a roster row was added, taken away or given another time or note. The caller saves,
+/// so the caller is who has to act on it: a change of the roster alone writes roster rows and
+/// leaves the trip's own row untouched, and the trip's own row is what its version is read from.
+/// </param>
 public sealed record TripWriteOutcome(
     IReadOnlyList<Guid> NewlyNamedUserIds,
     IReadOnlyList<Guid> AddedCaveIds,
-    bool SomethingChanged);
+    bool SomethingChanged,
+    bool RosterChanged);

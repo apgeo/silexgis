@@ -939,7 +939,14 @@ public static class TripLogEndpoints
         await TripCaveAccessNotifier.CavesAddedAsync(db, access, user, trip, outcome.AddedCaveIds, ct);
         try
         {
-            await db.SaveChangesAsync(ct);
+            if (outcome.RosterChanged)
+            {
+                await SaveAndMoveTheVersionAsync(db, trip, ct);
+            }
+            else
+            {
+                await db.SaveChangesAsync(ct);
+            }
         }
         catch (DbUpdateException e) when (TripPartyNumbers.LostTheRace(e))
         {
@@ -955,6 +962,46 @@ public static class TripLogEndpoints
         // that a second save a moment later is not refused against a version only a read knew.
         await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
         return TypedResults.Ok(items[0]);
+    }
+
+    /// <summary>
+    /// Saves a write that changed the trip's roster, and stamps the trip's own row with it so
+    /// that the trip's version moves.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The version a save of this form is checked against is the version of the trip's own row.
+    /// A save that changes only who is on the trip, or their times, writes roster rows and leaves
+    /// that row alone — so two people with the form open could each change a participant's time,
+    /// each pass the precondition with the version they opened with, and the second would put the
+    /// first one's times back to what its form was opened with, with nobody told. The roster is
+    /// written whole, so every save that changes a row of it has to be visible to the next one.
+    /// </para>
+    /// <para>
+    /// Stamped past the change tracker rather than by marking the trip modified, because a
+    /// modified trip is a line on the trip's history, and "the trip was updated" beside the
+    /// roster rows' own lines would say nothing those do not. One transaction for both: roster
+    /// rows written under a version that did not move are exactly what the stamp is there to
+    /// prevent. A save that changed no roster row does not come here and moves nothing.
+    /// </para>
+    /// </remarks>
+    private static async Task SaveAndMoveTheVersionAsync(SilexGisDbContext db, TripLog trip, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.SaveChangesAsync(ct);
+
+        var stamped = DateTimeOffset.UtcNow;
+        await db.TripLogs
+            .Where(x => x.Id == trip.Id)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.UpdatedAt, stamped), ct);
+        await transaction.CommitAsync(ct);
+
+        // The answer is mapped from the trip in hand, which the statement above went round. It is
+        // given what was written and told that this is what the database holds, so that it is
+        // neither answered stale nor written a second time by a later save of this context.
+        var updatedAt = db.Entry(trip).Property(x => x.UpdatedAt);
+        updatedAt.CurrentValue = stamped;
+        updatedAt.IsModified = false;
     }
 
     /// <summary>

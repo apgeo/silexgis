@@ -138,12 +138,12 @@ public static class TrackingRosterTimesEndpoints
                     "What the log says about one of these people is no longer what was reviewed. Read the times again.");
             }
 
-            // The same for the roster's side of the review. The trip's version cannot stand in
-            // for this: it is the version of the trip's own row, and a save of the trip's form
-            // that changes nothing but a participant's times writes roster rows only and leaves
-            // it where it was. So the request repeats what the roster was shown to hold, and a
-            // time typed since — one the reviewer was never shown as about to be replaced — is a
-            // refusal rather than a quiet overwrite.
+            // The same for the roster's side of the review. The trip's version covers a save of
+            // the trip's form, which moves it whenever it changes a roster row; it does not cover
+            // a writer that holds the version of now beside a review read earlier, and it says
+            // nothing about which rows the reviewer was shown. So the request repeats what the
+            // roster was shown to hold, and a time typed since — one the reviewer was never shown
+            // as about to be replaced — is a refusal rather than a quiet overwrite.
             if (!SameMinute(person.CurrentEntry, asked.CurrentEntry)
                 || !SameMinute(person.CurrentExit, asked.CurrentExit)
                 || person.Overwrites != asked.Overwrites!.Value)

@@ -154,8 +154,15 @@ public sealed class TripLogWriteService(
         // is how a category earns being muted along with the messages that matter.
         var somethingChanged = db.ChangeTracker.HasChanges();
 
+        // Asked of the rows rather than of the request, for the same reason: a roster sent back
+        // exactly as it was assigns equal values to every kept row and the tracker reports none
+        // of them. Only rows of this trip are looked at — the context is the request's, and
+        // nothing says another trip's roster is never loaded into it.
+        var rosterChanged = db.ChangeTracker.Entries<TripLogParticipant>()
+            .Any(row => row.Entity.TripLogId == trip.Id && row.State != EntityState.Unchanged);
+
         await AnnounceAsync(trip, added, notice, ct);
-        return new TripWriteOutcome(added, addedCaves, somethingChanged);
+        return new TripWriteOutcome(added, addedCaves, somethingChanged, rosterChanged);
     }
 
     /// <summary>
