@@ -484,7 +484,9 @@ test('cave centerline: upload, computed length and map overlay toggle', async ({
 
   // The workspace offers the centerline overlay but leaves it off: it is the heaviest overlay
   // there is, so it is opt-in. Switching it on loads it and says which representation arrived.
-  await page.goto('/');
+  // The map by its own address, and waited for: a hard navigation signs in again before anything
+  // is drawn, and the root address is whatever the account's landing preference says.
+  await gotoRoute(page, '/map');
   const centerlineNode = overlayTreeNode(page, 'Cave centerlines');
   await expect(centerlineNode).toBeVisible({ timeout: 15_000 });
   await expect(centerlineNode.locator('.ant-tree-checkbox-checked')).toHaveCount(0);
@@ -818,10 +820,14 @@ test('surface feature history records edits and restores in the map panel', asyn
   // rather than swept: only these two flows draw on this pixel, and sweeping everything
   // stamped E2E takes live subjects out from under whatever else is running beside this.
   await deleteFeatureRows(page, /E2E (Hist Feat|Sinkhole) /);
-  await page.goto('/');
+  // The map by its own address, and waited for: a hard navigation signs in again before anything
+  // is drawn, which under load outlasts the five seconds an unqualified expectation allows, and
+  // the root address is whatever the account's landing preference says — which another test of
+  // this file changes for the same account.
+  await gotoRoute(page, '/map');
 
   const toolbar = page.locator('.map-edit-overlay');
-  await expect(toolbar).toBeVisible();
+  await expect(toolbar).toBeVisible({ timeout: 15_000 });
   await toolbar.getByRole('button', { name: /Feature type/ }).click();
   await page.getByRole('button', { name: 'Sinkhole / Doline' }).click();
 
