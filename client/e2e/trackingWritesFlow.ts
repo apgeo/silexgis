@@ -795,6 +795,12 @@ export async function correctImportAndReportByPlace(page: Page) {
   await saidAt.fill(late.typed);
   await saidAt.press('Enter');
   await expect(saidAt).toHaveValue(late.typed);
+  // The button is pressed once the card has come to rest. On a phone the picker's panel opens over
+  // the button and fades out after the moment is taken, and the refusal's sentence above the button
+  // folds away as the field becomes valid, moving it — a press made during either lands on the
+  // panel or beside the button, sends nothing and says nothing.
+  await expect(page.locator('.ant-picker-dropdown:visible')).toHaveCount(0);
+  await expect(page.getByText(/Say when this was said/)).toHaveCount(0);
   await page.getByTestId('trip-tracking-record').click();
   await expect(page.getByText('Recorded for 1.')).toBeVisible({ timeout: 15_000 });
   await expect(log).toContainText(LATE_NOTE, { timeout: 15_000 });
