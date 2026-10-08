@@ -14,6 +14,7 @@ using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Metadata;
+using SilexGis.Infrastructure.Surveys;
 using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Infrastructure.Persistence;
@@ -99,6 +100,12 @@ public static class DemoSeeder
             // stay as it was on every machine that had one, which is the same trap the camp
             // roster above is hoisted out of.
             await SeedAnnotatedTextAsync(db, documents, fileStore, ownerUserId, demoCaveId, ct);
+            await db.SaveChangesAsync(ct);
+
+            // Last, and on guards of its own for the same reason as the block above: a trip that
+            // was followed underground needs a survey to be followed on, a survey is a stored
+            // file, and so this half of the dataset exists only where bytes can be kept.
+            await SeedTrackedTripAsync(db, documents, fileStore, ownerUserId, demoCaveId, ct);
             await db.SaveChangesAsync(ct);
         }
     }
@@ -504,6 +511,16 @@ public static class DemoSeeder
         return await fileStore.SaveAsync(stream, extension, ct);
     }
 
+    /// <summary>
+    /// Where the big demonstration cave's main entrance is. Named because two things have to agree
+    /// on it: the entrance on the map, and the survey of the cave, whose zero is that entrance.
+    /// </summary>
+    private const double MainEntranceLongitude = 25.4472;
+
+    private const double MainEntranceLatitude = 45.5312;
+
+    private const double MainEntranceHeightM = 952;
+
     private static async Task<Guid> SeedCavesAsync(
         SilexGisDbContext db, FeatureWriteService writer, Guid ownerUserId, CancellationToken ct)
     {
@@ -576,7 +593,7 @@ public static class DemoSeeder
         }
 
         await EnsureEntranceAsync(db, writer, bigDemoId.Value, ownerUserId, naturalEntranceId,
-            "Main entrance", 25.4472, 45.5312, 952m, isMain: true, ct);
+            "Main entrance", MainEntranceLongitude, MainEntranceLatitude, (decimal)MainEntranceHeightM, isMain: true, ct);
         await EnsureEntranceAsync(db, writer, bigDemoId.Value, ownerUserId, naturalEntranceId,
             "Upper entrance", 25.4481, 45.5325, 1010m, isMain: false, ct);
 
@@ -1582,5 +1599,303 @@ public static class DemoSeeder
         };
         db.Events.Add(row);
         return row;
+    }
+
+    /// <summary>
+    /// The one trip of the demonstration data that was followed underground, named once: every
+    /// piece of the block below hangs off the trip found by this.
+    /// </summary>
+    /// <remarks>
+    /// Not under the camp's prefix, so the camp does not gather it; and not in the list of trips
+    /// further up, whose position decides which cave and which people a trip gets — this one names
+    /// its own.
+    /// </remarks>
+    public const string TrackedTripTitle = "Demo: tracked descent";
+
+    /// <summary>The day the tracked trip was done. Fixed, like every other date here, and in the past.</summary>
+    private static readonly DateOnly TrackedTripDate = new(2026, 8, 29);
+
+    /// <summary>
+    /// A trip that was followed from the surface, start to finish: a survey of the demonstration
+    /// cave, a watch that was started and closed on it, and the reports that came out in between.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Without it a fresh demonstration installation has a tracking tab on every trip and nothing
+    /// in any of them — no replay to play, no log to read, no movie to make — and those surfaces
+    /// read as unfinished rather than as empty.
+    /// </para>
+    /// <para>
+    /// <b>The survey arrives the way an uploaded one does</b>: its bytes are stored, the model row
+    /// names them, and the reading that fills in its stations is queued for the worker every
+    /// upload waits on. Nothing here writes a station. The reports can still be written first,
+    /// because a report holds a station by its name and that name is the one in the file.
+    /// </para>
+    /// <para>
+    /// <b>The watch is written closed.</b> Starting one is something a person does while a party
+    /// is underground, with the clock; a seeded trip is over, so its watch is laid down as the
+    /// record of one — when it was started, when it was closed — and never passes through being
+    /// live. It is on the unprotected public cave, so its positions are ones every account may be
+    /// told, and a reader of the demonstration sees the replay rather than a list of withheld
+    /// places.
+    /// </para>
+    /// <para>
+    /// <b>No link is published for it.</b> Publishing puts a page in front of people with no
+    /// account, and that is a person's decision about a particular trip. The demonstration data
+    /// is also what a public showcase installation runs on, where a seeded link would be a page
+    /// nobody chose to put on the internet.
+    /// </para>
+    /// <para>
+    /// Each piece is looked for before it is written — the model, the declared place, the trip,
+    /// the team, the watch, and every report by whom it is about, what kind it is and its moment —
+    /// so a second run writes nothing and a lost piece comes back by itself. One limit, stated
+    /// rather than papered over: a survey model that was lost comes back as a new model, and
+    /// nothing re-points a watch that still exists at it, because a watch is never moved to
+    /// another model on its own behalf — it then says, truthfully, that its model is gone.
+    /// </para>
+    /// </remarks>
+    private static async Task SeedTrackedTripAsync(
+        SilexGisDbContext db,
+        DocumentWriteService documents,
+        IFileStore fileStore,
+        Guid ownerUserId,
+        Guid demoCaveId,
+        CancellationToken ct)
+    {
+        // The two people who went. They are seeded with the trips above, which always run first;
+        // without them there is nobody to follow and the block has nothing honest to write.
+        var ana = await db.Cavers.Where(c => c.FullName == "Ana Demo").Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct);
+        var bogdan = await db.Cavers.Where(c => c.FullName == "Bogdan Demo").Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct);
+        if (ana is null || bogdan is null)
+        {
+            return;
+        }
+
+        var modelId = await db.SurveyModels
+            .Where(m => m.CaveFeatureId == demoCaveId && m.Name == DemoSurvey.ModelName)
+            .Select(m => (Guid?)m.Id)
+            .FirstOrDefaultAsync(ct);
+        modelId ??= await CreateDemoSurveyAsync(db, documents, fileStore, ownerUserId, demoCaveId, ct);
+
+        // What the cave says a reported depth means. A depth is the commonest thing to come out
+        // of a cave by word of mouth, and a place declared for one is what turns "at minus sixty"
+        // into a station without anybody measuring; one row is enough to show both the report
+        // placed by it and the name people use for the place.
+        if (!await db.CaveDepthPlaces.AnyAsync(
+                x => x.CaveFeatureId == demoCaveId && x.DepthM == DemoSurvey.PitFootDepthM, ct))
+        {
+            db.CaveDepthPlaces.Add(new CaveDepthPlace
+            {
+                CaveFeatureId = demoCaveId,
+                DepthM = DemoSurvey.PitFootDepthM,
+                ViewerStationName = DemoSurvey.PitFoot,
+                PlaceLabel = "Foot of the pit",
+            });
+        }
+
+        var tripId = await db.TripLogs
+            .Where(t => t.Title == TrackedTripTitle)
+            .Select(t => (Guid?)t.Id)
+            .FirstOrDefaultAsync(ct);
+        if (tripId is null)
+        {
+            tripId = await CreateTrackedTripAsync(db, ownerUserId, demoCaveId, ana.Value, bogdan.Value, ct);
+        }
+
+        const string teamTitle = "Pit team";
+        var teamId = await db.TripTeams
+            .Where(t => t.TripLogId == tripId && t.Title == teamTitle)
+            .Select(t => (Guid?)t.Id)
+            .FirstOrDefaultAsync(ct);
+        if (teamId is null)
+        {
+            var team = new TripTeam { TripLogId = tripId.Value, Title = teamTitle };
+            db.TripTeams.Add(team);
+            teamId = team.Id;
+        }
+
+        DateTimeOffset At(int hour, int minute) =>
+            new(TrackedTripDate.Year, TrackedTripDate.Month, TrackedTripDate.Day, hour, minute, 0, TimeSpan.Zero);
+
+        // Started before anybody went in and closed after the last person was out, as a watch is.
+        var watch = await db.TripTrackings.FirstOrDefaultAsync(t => t.TripLogId == tripId, ct);
+        if (watch is null)
+        {
+            watch = new TripTracking
+            {
+                TripLogId = tripId.Value,
+                State = TripTrackingState.Closed,
+                SurveyModelId = modelId,
+                // The cave the model belongs to, kept beside it as choosing a model keeps it:
+                // it is what decides who may be told a place, and it outlives the model.
+                CaveFeatureId = demoCaveId,
+                ArmedAt = At(7, 0),
+                FirstArmedAt = At(7, 0),
+                ClosedAt = At(10, 20),
+            };
+            db.TripTrackings.Add(watch);
+        }
+
+        // Reports are written against the model the watch is on, as the product writes them. A
+        // watch that outlived its model keeps pointing at the one that is gone; a report put back
+        // beside it names that same model, so the log stays one statement about one survey.
+        var reportedOn = watch.SurveyModelId ?? modelId;
+
+        // About three hours, in the order word would have come out: both in, both at the end of
+        // the gallery, both at the head of the pit, one down to its foot — reported as a depth,
+        // which the declared place turns into a station — a word from the one who stayed, and
+        // out one after the other. A station is said only by a report that places somebody; the
+        // note says nothing about where, because a note is read by everybody who reads the trip.
+        var reports = new (Guid Caver, TripPositionEventKind Kind, string? Station, decimal? DepthM, string? Note, DateTimeOffset At)[]
+        {
+            (ana.Value, TripPositionEventKind.Entered, null, null, null, At(7, 10)),
+            (bogdan.Value, TripPositionEventKind.Entered, null, null, null, At(7, 10)),
+            (ana.Value, TripPositionEventKind.AtStation, DemoSurvey.GalleryEnd, null, null, At(7, 40)),
+            (bogdan.Value, TripPositionEventKind.AtStation, DemoSurvey.GalleryEnd, null, null, At(7, 40)),
+            (ana.Value, TripPositionEventKind.AtStation, DemoSurvey.PitHead, null, null, At(8, 15)),
+            (bogdan.Value, TripPositionEventKind.AtStation, DemoSurvey.PitHead, null, null, At(8, 15)),
+            (ana.Value, TripPositionEventKind.AtDepth, DemoSurvey.PitFoot, DemoSurvey.PitFootDepthM, null, At(8, 50)),
+            (bogdan.Value, TripPositionEventKind.Note, null, null, "Rope checked and holding. Waiting until the way back up is clear.", At(9, 0)),
+            (bogdan.Value, TripPositionEventKind.Exited, null, null, null, At(10, 0)),
+            (ana.Value, TripPositionEventKind.Exited, null, null, null, At(10, 15)),
+        };
+
+        var written = await db.TripPositionEvents
+            .Where(e => e.TripLogId == tripId)
+            .Select(e => new { e.CaverId, e.Kind, e.RecordedAt })
+            .ToListAsync(ct);
+        foreach (var report in reports)
+        {
+            if (written.Any(e => e.CaverId == report.Caver && e.Kind == report.Kind && e.RecordedAt == report.At))
+            {
+                continue;
+            }
+
+            var placed = report.Station is not null;
+            db.TripPositionEvents.Add(new TripPositionEvent
+            {
+                TripLogId = tripId.Value,
+                CaverId = report.Caver,
+                TeamId = teamId,
+                Kind = report.Kind,
+                // A report that places nobody names no model and no cave, exactly as one recorded
+                // by hand does: the pair is there to say whose stations a name belongs to and who
+                // may be told it, and there is no name here to say either about.
+                SurveyModelId = placed ? reportedOn : null,
+                CaveFeatureId = placed ? demoCaveId : null,
+                ViewerStationName = report.Station,
+                DepthEnteredM = report.DepthM,
+                Note = report.Note,
+                RecordedAt = report.At,
+                RecordedByUserId = ownerUserId,
+            });
+        }
+    }
+
+    /// <summary>
+    /// The invented survey as a survey model of the demonstration cave, stored and queued exactly
+    /// as an upload stores and queues one.
+    /// </summary>
+    /// <remarks>
+    /// Saved here rather than left to the caller: whether the model becomes the one the cave is
+    /// represented by is decided against the rows already stored, and the model and the job that
+    /// reads it have to land together or not at all.
+    /// </remarks>
+    private static async Task<Guid> CreateDemoSurveyAsync(
+        SilexGisDbContext db,
+        DocumentWriteService documents,
+        IFileStore fileStore,
+        Guid ownerUserId,
+        Guid demoCaveId,
+        CancellationToken ct)
+    {
+        var bytes = DemoSurvey.Build();
+        var storagePath = await StoreAsync(fileStore, bytes, ".3d", ct);
+        var stored = documents.Create(
+            new StoredContent(
+                storagePath,
+                DemoSurvey.FileName,
+                "application/octet-stream",
+                bytes.LongLength,
+                Convert.ToHexStringLower(SHA256.HashData(bytes)),
+                FileKind.Survey),
+            DemoSurvey.ModelName,
+            ownerUserId,
+            ownerUserId).File;
+
+        var model = new SurveyModel
+        {
+            CaveFeatureId = demoCaveId,
+            Name = DemoSurvey.ModelName,
+            FileId = stored.Id,
+            Format = SurveyModelFormat.Survex3d,
+            Description = "An invented survey — no real cave was measured to make it.",
+
+            // What an uploader answers for a file in plain metres about its own zero: where that
+            // zero is. Here it is the survey's first station, the way in, so it is the cave's
+            // main entrance. Without it the reading refuses the file — it cannot say where a
+            // single station is — and the model would sit on the cave's page as one that failed.
+            Anchor = new Point(MainEntranceLongitude, MainEntranceLatitude) { SRID = 4326 },
+            AnchorHeightM = MainEntranceHeightM,
+        };
+        db.SurveyModels.Add(model);
+
+        // Its reading is queued for the worker, not done here: the stations, the walls and the
+        // measurements a survey is read into come from the one reader, on the one path, so the
+        // demonstration model is in every respect a model somebody uploaded.
+        SurveyModelReading.QueueFirst(db, model, requestedBy: null);
+        await SurveyModelCurrency.TakeIfUnclaimedAsync(db, model, ct);
+        await db.SaveChangesAsync(ct);
+        return model.Id;
+    }
+
+    /// <summary>The tracked trip itself: its row, who was on it, their numbers, and where it went.</summary>
+    private static async Task<Guid> CreateTrackedTripAsync(
+        SilexGisDbContext db, Guid ownerUserId, Guid demoCaveId, Guid ana, Guid bogdan, CancellationToken ct)
+    {
+        var tripTypeId = await db.TripTypes.Where(t => t.Code == "exploration").Select(t => (long?)t.Id).FirstOrDefaultAsync(ct)
+            ?? throw new InvalidOperationException("Trip type 'exploration' is not seeded.");
+        var roleIds = await db.TripParticipantRoles.ToDictionaryAsync(r => r.Code, r => r.Id, ct);
+
+        var trip = new TripLog
+        {
+            Title = TrackedTripTitle,
+            TripTypeId = tripTypeId,
+            TripDate = TrackedTripDate,
+            Description = "Demonstration trip log: a descent that was followed from the surface.",
+            EntryTime = new TimeOnly(7, 10),
+            ExitTime = new TimeOnly(10, 15),
+            DepthReachedM = DemoSurvey.PitFootDepthM,
+            OwnerUserId = ownerUserId,
+            // For accounts, not for visitors: the trip adds nothing to what somebody without an
+            // account can reach on an installation running the demonstration data.
+            Visibility = Visibility.Authenticated,
+            State = ActivityState.Published,
+            PublishedAt = new DateTimeOffset(2026, 8, 31, 18, 0, 0, TimeSpan.Zero),
+        };
+        db.TripLogs.Add(trip);
+
+        db.TripLogParticipants.Add(new TripLogParticipant
+        {
+            TripLogId = trip.Id,
+            CaverId = ana,
+            RoleId = roleIds[TripParticipantRoleSeeds.ProposerCode],
+        });
+        db.TripLogParticipants.Add(new TripLogParticipant
+        {
+            TripLogId = trip.Id,
+            CaverId = bogdan,
+            RoleId = roleIds[TripParticipantRoleSeeds.ParticipantCode],
+        });
+
+        // Their numbers in the party, from the writer every roster write goes through.
+        await TripPartyNumbers.AssignAsync(db, trip.Id, [ana, bogdan], ct);
+
+        if (!await TripRoleLinks.NameFeatureAsync(db, trip.Id, demoCaveId, "trip-visited", ownerUserId, ct))
+        {
+            throw new InvalidOperationException("Relation type 'trip-visited' is not seeded.");
+        }
+
+        return trip.Id;
     }
 }

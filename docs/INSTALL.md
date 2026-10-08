@@ -61,7 +61,10 @@ To load a small demo dataset (six caves with their entrances, a containing karst
 surface features, trips with the people on them, four camps with a roster and the trips they
 gathered, two leads on the camp's board, club dates including a series and one with answers, two
 saved map views, plus a two-shelf archive holding a survey report and a link joining that report
-to the cave it describes; re-running it puts back any row that was lost and leaves the rest alone):
+to the cave it describes, and one trip that was followed underground — an invented survey of the
+first demo cave, a closed tracking watch on it with ten reports from two people over about three
+hours, and one depth the cave declares a place for — so the replay, the log and the movie have
+something to show; re-running it puts back any row that was lost and leaves the rest alone):
 
 ```bash
 docker compose exec api dotnet SilexGis.Api.dll seed-demo
