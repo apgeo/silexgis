@@ -221,6 +221,27 @@ public sealed class MapBackgroundDocumentChoiceTests : IAsyncLifetime, IDisposab
             $"/api/v1/admin/map-backgrounds/{await IdOfAsync(Marked)}/in-documents", new { choice = "sometimes" }))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
+        // No answer at all is not "take the decision back": a decided source stays decided.
+        var decided = await IdOfAsync(Marked);
+        (await ChooseAsync(admin, decided, "off")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        try
+        {
+            await ProblemAsync(
+                await admin.PutAsJsonAsync($"/api/v1/admin/map-backgrounds/{decided}/in-documents", new { }),
+                HttpStatusCode.BadRequest,
+                "validation.failed");
+            await ProblemAsync(
+                await admin.PutAsJsonAsync(
+                    $"/api/v1/admin/map-backgrounds/{decided}/in-documents", new { choice = (string?)null }),
+                HttpStatusCode.BadRequest,
+                "validation.failed");
+            (await PublishedAsync())[Marked].ShouldBeFalse();
+        }
+        finally
+        {
+            (await ChooseAsync(admin, decided, "default")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
         long overlay, uncredited, unpublished;
         await using (var scope = factory.Services.CreateAsyncScope())
         {

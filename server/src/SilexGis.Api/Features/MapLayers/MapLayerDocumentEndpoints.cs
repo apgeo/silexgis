@@ -37,11 +37,16 @@ public sealed record MapBackgroundDto(
     bool CanBeCopied);
 
 /// <summary>An administrator's answer about one background.</summary>
-public sealed record MapBackgroundChoiceRequest(MapLayerDocumentChoice Choice);
+/// <remarks>
+/// The answer is declared optional and demanded by the validator. Its zero value is
+/// <c>default</c> — take the decision back — so a body that named nothing would otherwise read
+/// as an instruction to undo what an administrator decided.
+/// </remarks>
+public sealed record MapBackgroundChoiceRequest(MapLayerDocumentChoice? Choice);
 
 public sealed class MapBackgroundChoiceRequestValidator : AbstractValidator<MapBackgroundChoiceRequest>
 {
-    public MapBackgroundChoiceRequestValidator() => RuleFor(x => x.Choice).IsInEnum();
+    public MapBackgroundChoiceRequestValidator() => RuleFor(x => x.Choice).NotNull().IsInEnum();
 }
 
 /// <summary>
@@ -145,7 +150,8 @@ public static class MapLayerDocumentEndpoints
 
         // Switching off, or going back to the catalogue, is always possible; only saying yes
         // needs the credit that would be written under the picture.
-        if (request.Choice == MapLayerDocumentChoice.On && obstacle == MapLayerDocumentObstacle.NoAttribution)
+        var choice = request.Choice!.Value;
+        if (choice == MapLayerDocumentChoice.On && obstacle == MapLayerDocumentObstacle.NoAttribution)
         {
             return ApiProblems.Conflict(
                 MapLayerDocumentRules.AttributionRequiredCode,
@@ -153,7 +159,7 @@ public static class MapLayerDocumentEndpoints
         }
 
         var before = (Choice: layer.InDocumentsChoice, Effective: Effective(layer));
-        layer.InDocumentsChoice = MapLayerDocumentRules.Stored(request.Choice);
+        layer.InDocumentsChoice = MapLayerDocumentRules.Stored(choice);
         if (before.Choice != layer.InDocumentsChoice)
         {
             // Written by hand: a catalogue entry is rewritten from the file on every start, and

@@ -22634,7 +22634,7 @@ export interface components {
         /** @enum {unknown} */
         MailTransportSecurity: "auto" | "none" | "startTls" | "sslOnConnect";
         MapBackgroundChoiceRequest: {
-            choice: components["schemas"]["MapLayerDocumentChoice"];
+            choice: null | components["schemas"]["MapLayerDocumentChoice"];
         };
         MapBackgroundDto: {
             /** Format: int64 */
