@@ -71,6 +71,13 @@ public sealed record TrackingParticipantDto(
     DateTimeOffset? LastRecordedAt,
     DateTimeOffset? PositionRecordedAt,
     string? StationName,
+    /// <summary>
+    /// The far end of the stretch, where the placing report said the person was between
+    /// <see cref="StationName"/> and another station of the same survey; null for a report at one
+    /// station, and withheld on exactly the branch that withholds the first station. A reader who
+    /// draws one mark draws it at the first station. No published shape carries this.
+    /// </summary>
+    string? ToStationName,
     decimal? DepthM,
     /// <summary>
     /// The survey model the placing report was recorded against, or null where there is no
@@ -376,7 +383,13 @@ public sealed record TrackingStateDto(
 /// False where nothing is declared, where the report was measured on a survey the watch has since
 /// left, and wherever the place or the declaration is withheld from the caller — it rides the
 /// place's own branch. On the sheet import's "what is there now" it is not worked out and reads
-/// false. Signed-in log only.
+/// false. Signed-in log only. Of a stretch it speaks for the first station, the one a mark is
+/// drawn at.
+/// </param>
+/// <param name="ToStationName">
+/// The far end of a stretch: the report says the person was between <paramref name="StationName"/>
+/// and this station of the same survey. Null on a report at one station, and taken out together
+/// with the first station wherever the place is withheld. Signed-in log only.
 /// </param>
 public sealed record TrackingEventDto(
     Guid Id,
@@ -385,6 +398,7 @@ public sealed record TrackingEventDto(
     TripPositionEventKind Kind,
     Guid? SurveyModelId,
     string? StationName,
+    string? ToStationName,
     decimal? DepthEnteredM,
     string? Note,
     DateTimeOffset RecordedAt,
@@ -674,6 +688,12 @@ public interface ITrackingReportFields
 
     string? StationName { get; }
 
+    /// <summary>
+    /// The far end of a stretch, for a report that says somebody was between two stations; absent
+    /// on every other report.
+    /// </summary>
+    string? ToStationName { get; }
+
     decimal? DepthM { get; }
 
     Guid? TeamId { get; }
@@ -711,6 +731,7 @@ public sealed record TrackingEventRequest(
     IReadOnlyList<Guid>? CaverIds,
     TripPositionEventKind? Kind,
     string? StationName,
+    string? ToStationName,
     decimal? DepthM,
     Guid? TeamId,
     string? Note,
@@ -730,6 +751,7 @@ public sealed record TrackingEventRequest(
 public sealed record TrackingEventEditRequest(
     TripPositionEventKind? Kind,
     string? StationName,
+    string? ToStationName,
     decimal? DepthM,
     Guid? TeamId,
     string? Note,
@@ -755,6 +777,14 @@ internal static class TrackingReportFieldRules
         validator.RuleFor(x => x.StationName).NotEmpty().MaximumLength(TripTrackingRules.MaxStationNameLength)
             .When(x => x.Kind == TripPositionEventKind.AtStation);
         validator.RuleFor(x => x.StationName).Null()
+            .When(x => x.Kind is not null && x.Kind != TripPositionEventKind.AtStation);
+        // The far end of a stretch is said by a station report or not at all. An empty string is
+        // refused rather than read as "none": a sender that means no stretch leaves the field out,
+        // and one that sends a blank has a second station field it forgot to fill. Whether the two
+        // ends are one station is asked later, of the names the survey resolves them to.
+        validator.RuleFor(x => x.ToStationName).NotEmpty().MaximumLength(TripTrackingRules.MaxStationNameLength)
+            .When(x => x.ToStationName is not null && x.Kind == TripPositionEventKind.AtStation);
+        validator.RuleFor(x => x.ToStationName).Null()
             .When(x => x.Kind is not null && x.Kind != TripPositionEventKind.AtStation);
         validator.RuleFor(x => x.DepthM).NotNull()
             .When(x => x.Kind == TripPositionEventKind.AtDepth);

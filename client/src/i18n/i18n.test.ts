@@ -607,6 +607,7 @@ describe('i18n locales', () => {
       'Time',
       'Depth',
       'Station',
+      'ToStation',
       'Place',
       'Cavers',
       'Team',

@@ -99,7 +99,8 @@ public static class HistoryProtection
     // timeline stops dropping. The migration that renames the column renames the key in those
     // rows with it, which is what keeps one spelling here sufficient.
     private static readonly string[] TripPositionEventNoise =
-        [nameof(TripPositionEvent.ViewerStationName), nameof(TripPositionEvent.DepthEnteredM),
+        [nameof(TripPositionEvent.ViewerStationName), nameof(TripPositionEvent.ViewerToStationName),
+         nameof(TripPositionEvent.DepthEnteredM),
          nameof(TripPositionEvent.SurveyModelId), nameof(TripPositionEvent.CaveFeatureId)];
     private static readonly string[] TripTrackingNoise =
         [nameof(Entities.TripTracking.ReferenceStationName), nameof(Entities.TripTracking.DepthFilter),

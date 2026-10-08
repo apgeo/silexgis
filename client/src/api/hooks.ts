@@ -9039,6 +9039,11 @@ export interface TrackingReportRequest {
   caverIds: string[];
   kind: TripPositionEventKind;
   stationName?: string | null;
+  /**
+   * The far end of a stretch, on a station report that says somebody was between two stations of
+   * the survey; null or absent on every other report.
+   */
+  toStationName?: string | null;
   depthM?: number | null;
   teamId?: string | null;
   note?: string | null;
@@ -9058,6 +9063,7 @@ function postTrackingReport({
   caverIds,
   kind,
   stationName = null,
+  toStationName = null,
   depthM = null,
   teamId = null,
   note = null,
@@ -9067,7 +9073,7 @@ function postTrackingReport({
   return unwrap(
     api.POST('/api/v1/trip-logs/{tripLogId}/tracking/events', {
       params: { path: { tripLogId } },
-      body: { caverIds, kind, stationName, depthM, teamId, note, recordedAt, clientKey },
+      body: { caverIds, kind, stationName, toStationName, depthM, teamId, note, recordedAt, clientKey },
     }),
   );
 }
@@ -9143,6 +9149,7 @@ export function useUpdateTrackingEvent() {
       eventId,
       kind,
       stationName = null,
+      toStationName = null,
       depthM = null,
       teamId = null,
       note = null,
@@ -9152,6 +9159,8 @@ export function useUpdateTrackingEvent() {
       eventId: string;
       kind: TripPositionEventKind;
       stationName?: string | null;
+      /** The far end of a stretch; null says the report is at one station, or names none. */
+      toStationName?: string | null;
       depthM?: number | null;
       teamId?: string | null;
       note?: string | null;
@@ -9161,7 +9170,7 @@ export function useUpdateTrackingEvent() {
       unwrap(
         api.PUT('/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}', {
           params: { path: { tripLogId, eventId } },
-          body: { kind, stationName, depthM, teamId, note, recordedAt },
+          body: { kind, stationName, toStationName, depthM, teamId, note, recordedAt },
         }),
       ),
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),

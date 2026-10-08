@@ -57,6 +57,9 @@ public sealed record TrackingCsvRow
 
     public string? StationName { get; init; }
 
+    /// <summary>The far end of a stretch, as written; only ever beside a station.</summary>
+    public string? ToStationName { get; init; }
+
     public string? PlaceLabel { get; init; }
 
     public decimal? DepthM { get; init; }

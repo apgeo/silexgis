@@ -181,6 +181,92 @@ public class TrackingCsvPlannerTests
         plan.Reports[0].DepthM.ShouldBeNull();
     }
 
+    private const string StretchHeader = "Data si ora,Adancime,Statie,Pana la statia,Loc,Speologi,Echipa,Nota,Stare\r\n";
+
+    private static TrackingCsvPlan StretchPlanOf(string rows, TrackingCsvSubject? subject = null) =>
+        TrackingCsvPlanner.Plan(TrackingCsvParser.Parse(StretchHeader + rows), subject ?? Subject());
+
+    [Fact]
+    public void A_row_between_two_stations_is_planned_as_a_stretch_of_the_model()
+    {
+        var report = StretchPlanOf("12.09.2026 09:00,,2,3,,Ion Popescu,,,").Reports.ShouldHaveSingleItem();
+
+        report.Kind.ShouldBe(TripPositionEventKind.AtStation);
+        report.ViewerStationName.ShouldBe("2");
+        report.ViewerToStationName.ShouldBe("3");
+
+        // The twin: the same sheet with the cell left empty is a report at one station.
+        StretchPlanOf("12.09.2026 09:00,,2,,,Ion Popescu,,,").Reports.ShouldHaveSingleItem()
+            .ViewerToStationName.ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_stretch_is_refused_for_the_end_that_is_wrong_and_says_which()
+    {
+        var far = StretchPlanOf("12.09.2026 09:00,,2,99,,Ion Popescu,,,");
+        far.Reports.ShouldBeEmpty();
+        var unknownFar = far.Refused.ShouldHaveSingleItem();
+        unknownFar.Problem.ShouldBe(TrackingCsvProblem.ToStationNotInModel);
+        unknownFar.Detail.ShouldBe("99");
+
+        var near = StretchPlanOf("12.09.2026 09:00,,98,3,,Ion Popescu,,,");
+        near.Reports.ShouldBeEmpty();
+        var unknownNear = near.Refused.ShouldHaveSingleItem();
+        unknownNear.Problem.ShouldBe(TrackingCsvProblem.StationNotInModel);
+        unknownNear.Detail.ShouldBe("98");
+
+        StretchPlanOf("12.09.2026 09:00,,2,2,,Ion Popescu,,,")
+            .Refused.ShouldHaveSingleItem().Problem.ShouldBe(TrackingCsvProblem.StretchSameStation);
+
+        // Half a stretch is refused where it is read, whatever else the row offers as a place.
+        var half = StretchPlanOf("12.09.2026 09:00,100,,3,,Ion Popescu,,,");
+        half.Reports.ShouldBeEmpty();
+        half.Refused.ShouldContain(d => d.Problem == TrackingCsvProblem.ToStationWithoutStation);
+    }
+
+    [Fact]
+    public void A_standing_word_takes_both_ends_of_a_stretch_with_it()
+    {
+        var report = StretchPlanOf("12.09.2026 09:00,,2,3,,Ion Popescu,,,iesire").Reports.ShouldHaveSingleItem();
+
+        report.Kind.ShouldBe(TripPositionEventKind.Exited);
+        report.ViewerStationName.ShouldBeNull();
+        report.ViewerToStationName.ShouldBeNull();
+        report.Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.StateOverridesPlace);
+    }
+
+    [Fact]
+    public void A_stored_stretch_is_kept_by_a_row_saying_the_same_and_by_a_sheet_that_cannot_say_one()
+    {
+        var subject = Holding(new TrackingCsvStoredPlace(TripPositionEventKind.AtStation, "old.7", null, "old.9"));
+
+        // Both ends as the log holds them — on a survey the watch has since left, so resolving
+        // either would refuse the row.
+        var same = StretchPlanOf("12.09.2026 09:00,,old.7,old.9,,Ion Popescu,,,", subject);
+        same.Refused.ShouldBeEmpty();
+        var kept = same.Reports.ShouldHaveSingleItem();
+        kept.KeepsStoredPlace.ShouldBeTrue();
+        kept.ViewerStationName.ShouldBe("old.7");
+        kept.ViewerToStationName.ShouldBe("old.9");
+
+        // A sheet with no column for the far end names the first station and unsays nothing.
+        var silent = PlanOf("12.09.2026 09:00,,old.7,,Ion Popescu,,,", subject).Reports.ShouldHaveSingleItem();
+        silent.KeepsStoredPlace.ShouldBeTrue();
+        silent.ViewerToStationName.ShouldBe("old.9");
+
+        // The twin: a sheet that has the column and leaves the cell empty says "at this station",
+        // which is another statement and is resolved as one — here against a survey without it.
+        StretchPlanOf("12.09.2026 09:00,,old.7,,,Ion Popescu,,,", subject)
+            .Refused.ShouldHaveSingleItem().Problem.ShouldBe(TrackingCsvProblem.StationNotInModel);
+
+        // And on the survey in force, an emptied cell turns the stored stretch into one station.
+        var held = Holding(new TrackingCsvStoredPlace(TripPositionEventKind.AtStation, "2", null, "3"));
+        var cut = StretchPlanOf("12.09.2026 09:00,,2,,,Ion Popescu,,,", held).Reports.ShouldHaveSingleItem();
+        cut.KeepsStoredPlace.ShouldBeFalse();
+        cut.ViewerStationName.ShouldBe("2");
+        cut.ViewerToStationName.ShouldBeNull();
+    }
+
     [Fact]
     public void A_station_the_model_does_not_have_is_refused()
     {

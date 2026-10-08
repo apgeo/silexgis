@@ -28,7 +28,8 @@ public sealed record TrackingCsvExportRow(
     TripPositionEventKind Kind,
     string? StationName,
     decimal? DepthM,
-    string? Note);
+    string? Note,
+    string? ToStationName = null);
 
 /// <summary>
 /// A tracking log written as the sheet the importer reads: the importer's own columns, in its own
@@ -88,6 +89,25 @@ public static class TrackingCsvWriter
     public static string HeaderLine { get; } = string.Join(',', Header) + LineEnd;
 
     /// <summary>
+    /// The heading of the column that carries the far end of a stretch, written straight after the
+    /// station's own column and only into a sheet that has a stretch to say.
+    /// </summary>
+    /// <remarks>
+    /// Not one of the fixed columns, on purpose. Nearly every log holds no stretch, and a column
+    /// that is empty on every row of nearly every sheet is one more thing for somebody keeping the
+    /// sheet by hand to wonder about. The reader recognises the heading whenever it is there, and
+    /// a sheet without it says nothing about stretches — so a log written out without the column
+    /// reads back exactly as one written out with it and left empty would.
+    /// </remarks>
+    public const string ToStationHeader = "Pana la statia";
+
+    /// <summary>
+    /// Where the station's column stands among <see cref="Columns"/>: the far end's column is
+    /// written straight after it.
+    /// </summary>
+    private static readonly int StationColumn = Columns.ToList().IndexOf(TrackingCsvField.Station);
+
+    /// <summary>
     /// The reports as a sheet, in the order given, under <see cref="HeaderLine"/>.
     /// </summary>
     /// <remarks>
@@ -97,11 +117,18 @@ public static class TrackingCsvWriter
     public static string Write(IEnumerable<TrackingCsvExportRow> rows)
     {
         var words = TrackingCsvStateWords.Default;
-        var sheet = new StringBuilder(HeaderLine);
-        foreach (var row in rows)
+        var log = rows as IReadOnlyCollection<TrackingCsvExportRow> ?? [.. rows];
+        var stretches = log.Any(IsStretch);
+        var sheet = new StringBuilder(
+            stretches
+                ? string.Join(',', Header.Take(StationColumn + 1).Append(ToStationHeader).Concat(Header.Skip(StationColumn + 1)))
+                    + LineEnd
+                : HeaderLine);
+        foreach (var row in log)
         {
             string? depth = null;
             string? station = null;
+            string? toStation = null;
             string? state = null;
             switch (row.Kind)
             {
@@ -116,6 +143,7 @@ public static class TrackingCsvWriter
                     break;
                 case TripPositionEventKind.AtStation when !string.IsNullOrWhiteSpace(row.StationName):
                     station = row.StationName;
+                    toStation = IsStretch(row) ? row.ToStationName : null;
                     break;
                 case TripPositionEventKind.AtDepth when row.DepthM is { } metres:
                     depth = metres.ToString(CultureInfo.InvariantCulture);
@@ -131,7 +159,9 @@ public static class TrackingCsvWriter
             sheet.Append(Moment(row.At)).Append(',')
                 // A number, written bare: "-40" is a depth above the entrance and has to stay one.
                 .Append(depth).Append(',')
-                .Append(TextCell(station)).Append(',')
+                .Append(TextCell(station)).Append(',');
+            if (stretches) sheet.Append(TextCell(toStation)).Append(',');
+            sheet
                 // The place column stays empty: a report keeps the depth a declared name stood
                 // for, not the name, and the depth is what is written.
                 .Append(',')
@@ -144,6 +174,15 @@ public static class TrackingCsvWriter
 
         return sheet.ToString();
     }
+
+    /// <summary>
+    /// Whether a row is a stretch this sheet can write: a station report with both ends. A far end
+    /// beside no station — which is what a place kept back from the reader looks like — is not.
+    /// </summary>
+    private static bool IsStretch(TrackingCsvExportRow row) =>
+        row.Kind == TripPositionEventKind.AtStation
+        && !string.IsNullOrWhiteSpace(row.StationName)
+        && !string.IsNullOrWhiteSpace(row.ToStationName);
 
     /// <summary>An instant as the sheet writes it: UTC, to the last digit stored, marked as UTC.</summary>
     public static string Moment(DateTimeOffset at) =>

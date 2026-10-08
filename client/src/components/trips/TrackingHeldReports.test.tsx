@@ -42,6 +42,7 @@ function held(over: Partial<HeldReport> = {}, body: Partial<HeldReport['body']> 
       caverIds: ['caver-1', 'caver-2'],
       kind: 'atStation',
       stationName: 'p.g.42',
+      toStationName: null,
       depthM: null,
       teamId: null,
       note: 'waiting at the pitch head',
@@ -121,6 +122,17 @@ describe('the held reports above the report card', () => {
     expect(second.getByText('Maria Dinu')).toBeInTheDocument();
     expect(second.getByText('At a depth')).toBeInTheDocument();
     expect(second.getByText('120 m')).toBeInTheDocument();
+  });
+
+  it('says a held report between two stations as that, with both names', () => {
+    const stretch = held({}, { toStationName: 'p.g.44' });
+    show();
+
+    open();
+
+    const row = within(screen.getByTestId(`trip-tracking-outbox-${stretch.clientKey}`));
+    expect(row.getByText('Between p.g.42 and p.g.44')).toBeInTheDocument();
+    expect(row.queryByText('p.g.42')).toBeNull();
   });
 
   /**

@@ -250,6 +250,7 @@ function tracking(overrides: Partial<TrackingState> = {}): TrackingState {
         // The station report is itself the latest one here, so the two moments agree.
         positionRecordedAt: '2026-09-12T07:00:00Z',
         stationName: 'p.g.7',
+        toStationName: null,
         depthM: null,
         // Measured in the model the panel is showing, which is what makes this the ordinary case.
         positionSurveyModelId: MODEL,
@@ -744,6 +745,38 @@ describe('TrackingModelPanel', () => {
   });
 
   /**
+   * A position that is a stretch reaches the viewer with its far end, from the live watch and from
+   * a replayed moment alike — and each from its own source: the watch's folded row while live, the
+   * very report that placed the person while replaying. The two are given different far ends here
+   * so that one standing in for the other would show.
+   */
+  it('hands the viewer the far end of a stretch, live and at a replayed moment', () => {
+    const stretch = tracking();
+    stretch.participants[0] = { ...stretch.participants[0], toStationName: 'p.g.9' };
+    log = [
+      { ...atStation(ANA, '2026-09-12T06:40:00Z', 'p.g.3'), toStationName: 'p.g.4' },
+      entered(ANA, '2026-09-12T06:10:00Z'),
+    ];
+    show(stretch, [entered(ANA, '2026-09-12T06:10:00Z')]);
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+    expect(given!.trackedCavers![0].position).toEqual({
+      kind: 'station',
+      station: 'p.g.7',
+      toStation: 'p.g.9',
+    });
+
+    fireEvent.click(screen.getByTestId('trip-tracking-replay-open'));
+    fireEvent.keyDown(screen.getByRole('slider'), { key: 'End', keyCode: 35 });
+
+    expect(given!.trackedCavers![0].position).toEqual({
+      kind: 'station',
+      station: 'p.g.3',
+      toStation: 'p.g.4',
+    });
+  });
+
+  /**
    * The card over the model words a silence as the table above it does, from the page's instant.
    *
    * The table says "3 hours ago" and the card used to print a date and an hour for the reader to
@@ -1076,6 +1109,8 @@ describe('TrackingModelPanel', () => {
         caverIds: [ANA],
         kind: 'atStation',
         stationName: 'p.g.42',
+        // A press names one station: the dialog it opens reports at it, never between two.
+        toStationName: null,
         depthM: null,
         teamId: null,
         note: null,

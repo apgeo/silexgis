@@ -30,6 +30,7 @@ function report(over: Partial<HeldReport> = {}): HeldReport {
       caverIds: ['caver-1'],
       kind: 'atStation',
       stationName: 'p.g.42',
+      toStationName: null,
       depthM: null,
       teamId: null,
       note: 'waiting at the pitch head',

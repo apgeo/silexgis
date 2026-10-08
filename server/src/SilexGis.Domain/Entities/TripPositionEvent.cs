@@ -135,6 +135,28 @@ public class TripPositionEvent : ITimestamped, IAuditable, IAuditChild
     /// </summary>
     public string? ViewerStationName { get; set; }
 
+    /// <summary>
+    /// The far end of a stretch, in the survey viewer's own spelling: the report says the person
+    /// was somewhere between <see cref="ViewerStationName"/> and this station. Null on every report
+    /// that names one station or none, which is nearly all of them.
+    ///
+    /// <para>
+    /// A stretch is one statement about one survey: both ends are stations of the survey in
+    /// <see cref="SurveyModelId"/>, resolved together when the report is written, and they are two
+    /// different stations — "between A and A" is a report at A. It exists only on a station
+    /// report; the table refuses any other shape, so a writer that changes a report's kind or its
+    /// first station and forgets this column fails loudly instead of leaving half a stretch
+    /// beside a place it never belonged to.
+    /// </para>
+    /// <para>
+    /// It is place, exactly as the first station is: withheld from a reader who may not be told
+    /// the cave's positions, kept out of the trip's history, and <b>told to signed-in readers
+    /// only</b>. What a visitor without an account is given goes on carrying the first station and
+    /// nothing else, so this column must not be read by anything that builds a published shape.
+    /// </para>
+    /// </summary>
+    public string? ViewerToStationName { get; set; }
+
     /// <summary>The depth the reporter gave, metres positive down, for AtDepth events.</summary>
     public decimal? DepthEnteredM { get; set; }
 

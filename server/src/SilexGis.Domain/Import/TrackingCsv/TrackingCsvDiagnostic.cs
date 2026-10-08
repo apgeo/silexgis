@@ -116,6 +116,22 @@ public enum TrackingCsvProblem
     /// <summary>The station named is not one of the survey the watch is on.</summary>
     StationNotInModel,
 
+    /// <summary>
+    /// The station named as the far end of a stretch is not one of the survey the watch is on.
+    /// Said apart from the first station so the reviewer knows which cell to look at.
+    /// </summary>
+    ToStationNotInModel,
+
+    /// <summary>The row names the same station as both ends of a stretch.</summary>
+    StretchSameStation,
+
+    /// <summary>
+    /// The row names the far end of a stretch and no station for it to be measured from. Refused
+    /// rather than read as a report at that one station: the sheet said "between", and this
+    /// reading did not follow where from.
+    /// </summary>
+    ToStationWithoutStation,
+
     /// <summary>The model has no datum to measure a depth from.</summary>
     DepthReferenceUnknown,
 

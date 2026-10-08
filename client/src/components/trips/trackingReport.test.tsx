@@ -94,6 +94,7 @@ describe('sending a tracking report', () => {
       caverIds: ['caver-1'],
       kind: 'atStation',
       stationName: 'p.g.42',
+      toStationName: null,
       depthM: null,
       teamId: null,
       note: 'at the pitch head',
@@ -104,6 +105,31 @@ describe('sending a tracking report', () => {
     expect(heldReportsOf(ANA)).toEqual([]);
     expect(Object.keys(window.localStorage)).toEqual([]);
     expect(screen.getByText('Recorded for 1.')).toBeInTheDocument();
+  });
+
+  /**
+   * A report between two stations. The far end travels with the station report and is kept with it
+   * in storage, so a report held through a lost connection is sent later as the stretch it was; a
+   * second station left blank, or left over under a report of another kind, is sent as none.
+   */
+  it('sends the second station of a stretch, keeps it with a held report, and sends a blank one as none', async () => {
+    const send = hook().current.send;
+
+    await sent(send, 'trip-1', ['caver-1'], { ...AT_STATION, toStationName: ' p.g.44 ' });
+    expect(posted()).toMatchObject({ stationName: 'p.g.42', toStationName: 'p.g.44' });
+
+    await sent(send, 'trip-1', ['caver-1'], { ...AT_STATION, toStationName: '   ' });
+    expect(posted(1)).toMatchObject({ stationName: 'p.g.42', toStationName: null });
+
+    await sent(send, 'trip-1', ['caver-1'], { kind: 'note', note: 'cold', toStationName: 'p.g.44' });
+    expect(posted(2)).toMatchObject({ kind: 'note', stationName: null, toStationName: null });
+
+    recordEvents.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const outcome = await sent(send, 'trip-1', ['caver-1'], { ...AT_STATION, toStationName: 'p.g.44' });
+    expect(outcome).toMatchObject({ held: true });
+    expect(heldReportsOf(ANA).map((one) => one.body)).toEqual([
+      expect.objectContaining({ stationName: 'p.g.42', toStationName: 'p.g.44' }),
+    ]);
   });
 
   /**
@@ -148,6 +174,7 @@ describe('sending a tracking report', () => {
             caverIds: ['caver-1', 'caver-2'],
             kind: 'atStation',
             stationName: 'p.g.42',
+            toStationName: null,
             depthM: null,
             teamId: null,
             note: 'at the pitch head',

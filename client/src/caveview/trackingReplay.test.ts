@@ -57,6 +57,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         lastRecordedAt: '2026-09-12T10:00:00Z',
         positionRecordedAt: '2026-09-12T10:00:00Z',
         stationName: 'p.g.9',
+        toStationName: null,
         depthM: null,
         // The watch's own fold, which this module never reads — it replays the log — but which a
         // real answer always carries. Written out because the cast that used to stand here let a
@@ -370,6 +371,7 @@ describe('trackedCaversAt', () => {
           lastRecordedAt: null,
           positionRecordedAt: null,
           stationName: null,
+          toStationName: null,
           depthM: null,
           positionSurveyModelId: null,
           in: false,

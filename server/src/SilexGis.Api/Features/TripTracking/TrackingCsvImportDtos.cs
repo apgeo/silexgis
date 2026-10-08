@@ -180,6 +180,7 @@ public sealed record TrackingCsvPreviewRowDto(
     Guid? TeamId,
     TripPositionEventKind Kind,
     string? StationName,
+    string? ToStationName,
     string? PlaceLabel,
     decimal? DepthM,
     string? Note,

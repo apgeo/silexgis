@@ -26190,6 +26190,7 @@ export interface components {
             teamId: null | string;
             kind: components["schemas"]["TripPositionEventKind"];
             stationName: null | string;
+            toStationName: null | string;
             placeLabel: null | string;
             /** Format: double */
             depthM: null | number;
@@ -26220,6 +26221,7 @@ export interface components {
             /** Format: uuid */
             surveyModelId: null | string;
             stationName: null | string;
+            toStationName: null | string;
             /** Format: double */
             depthEnteredM: null | number;
             note: null | string;
@@ -26232,6 +26234,7 @@ export interface components {
         TrackingEventEditRequest: {
             kind: null | components["schemas"]["TripPositionEventKind"];
             stationName: null | string;
+            toStationName: null | string;
             /** Format: double */
             depthM: null | number;
             /** Format: uuid */
@@ -26244,6 +26247,7 @@ export interface components {
             caverIds: null | string[];
             kind: null | components["schemas"]["TripPositionEventKind"];
             stationName: null | string;
+            toStationName: null | string;
             /** Format: double */
             depthM: null | number;
             /** Format: uuid */
@@ -26265,6 +26269,7 @@ export interface components {
             /** Format: date-time */
             positionRecordedAt: null | string;
             stationName: null | string;
+            toStationName: null | string;
             /** Format: double */
             depthM: null | number;
             /** Format: uuid */

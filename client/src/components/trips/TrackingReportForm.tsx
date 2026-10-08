@@ -116,7 +116,7 @@ export default function TrackingReportForm({
     // On the log, or kept in this browser to be sent when the connection returns: either way the
     // report has left this card, and leaving its text in the fields would invite sending it twice.
     if (trackingReportLeftTheForm(await report.send(tripLogId, caverIds, values))) {
-      form.resetFields(['stationName', 'depthM', 'note', 'recordedAt']);
+      form.resetFields(['stationName', 'toStationName', 'depthM', 'note', 'recordedAt']);
       onRecorded();
     }
   };

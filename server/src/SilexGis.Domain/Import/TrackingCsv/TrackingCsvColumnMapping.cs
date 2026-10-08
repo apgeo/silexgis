@@ -67,6 +67,9 @@ public sealed record TrackingCsvColumnMapping
         TrackingCsvField.Time => TimeOnlyHeaders,
         TrackingCsvField.Depth => ["adancime", "adancimea", "cota", "depth", "elevation", "m"],
         TrackingCsvField.Station => ["statie", "statia", "punct", "punctul", "station", "point"],
+        TrackingCsvField.ToStation =>
+            ["pana la statia", "pana la", "a doua statie", "statia 2", "statie 2",
+             "to station", "second station", "station 2"],
         TrackingCsvField.Place =>
             ["loc", "locul", "locatie", "locatia", "nume loc", "denumire", "denumirea locului",
              "reper", "toponim", "place", "place name", "location", "landmark"],

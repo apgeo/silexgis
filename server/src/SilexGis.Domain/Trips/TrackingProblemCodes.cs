@@ -103,6 +103,16 @@ public static class TrackingProblemCodes
     /// </summary>
     public const string StationReadingOutdated = "tracking.station_reading_outdated";
 
+    /// <summary>
+    /// The survey has no station by the name a report gave for the far end of a stretch. Its own
+    /// code, apart from <see cref="StationUnknown"/>, so that whoever typed two stations is told
+    /// which of them to look at.
+    /// </summary>
+    public const string ToStationUnknown = "tracking.to_station_unknown";
+
+    /// <summary>A report gave the same station for both ends of a stretch.</summary>
+    public const string StretchSameStation = "tracking.stretch_same_station";
+
     /// <summary>No station matches the depth a report gave under the watch's depth filter.</summary>
     public const string NoStationAtDepth = "tracking.no_station_at_depth";
 

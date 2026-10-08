@@ -55,6 +55,13 @@ public enum TrackingCsvField
     Station,
 
     /// <summary>
+    /// The far end of a stretch: the row says the people were between the station in
+    /// <see cref="Station"/> and this one. Read only beside a station; a sheet that has no such
+    /// column says nothing about stretches, and unsays none the log already holds.
+    /// </summary>
+    ToStation,
+
+    /// <summary>
     /// A place the cave itself has declared a name for, which resolves to a station and a depth.
     /// </summary>
     /// <remarks>

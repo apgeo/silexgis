@@ -322,6 +322,27 @@ describe('movieParty', () => {
     expect(trails.get('trip-1:caver-ana')).toEqual({ stations: ['p.1', 'p.2'], color: MOVIE_MARKER_PALETTE[0] });
   });
 
+  /**
+   * A report may say somebody was between two stations. The movie has one marker per person and a
+   * trail of the stations they were placed at, so it draws the first station and nothing of the
+   * second: no marker there, and no point on the trail. Beside it, the same report at one station,
+   * which must draw exactly the same.
+   */
+  it('draws somebody reported between two stations at the first, with nothing of the second', () => {
+    const reports = (toStationName: string | null) =>
+      trip('trip-1', 'One', state([ANA]), [
+        event({ caverId: ANA, stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+        event({ caverId: ANA, stationName: 'p.2', toStationName, recordedAt: '2026-09-12T09:20:00Z' }),
+      ]);
+    const stretch = partyOf([reports('p.9')], settings({ trails: true }));
+    const oneStation = partyOf([reports(null)], settings({ trails: true }));
+
+    expect(stretch.markers.get('trip-1:caver-ana')?.station).toBe('p.2');
+    expect(stretch.trails.get('trip-1:caver-ana')?.stations).toEqual(['p.1', 'p.2']);
+    expect(JSON.stringify([...stretch.markers, ...stretch.trails])).not.toContain('p.9');
+    expect([...stretch.markers, ...stretch.trails]).toEqual([...oneStation.markers, ...oneStation.trails]);
+  });
+
   it('in together mode, lets a running trip’s newer note outrank a finished trip’s last one', () => {
     const short = trip('trip-short', 'Short', { ...state([ANA]), armedAt: '2026-09-12T08:00:00Z', closedAt: '2026-09-12T10:00:00Z' }, [
       event({ caverId: ANA, kind: 'note', surveyModelId: null, note: 'Out soon', recordedAt: '2026-09-12T09:55:00Z' }),

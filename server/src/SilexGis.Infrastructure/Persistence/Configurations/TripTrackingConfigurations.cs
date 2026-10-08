@@ -24,7 +24,15 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
 {
     public void Configure(EntityTypeBuilder<TripPositionEvent> builder)
     {
-        builder.ToTable("trip_position_events");
+        // The far end of a stretch stands only on a station report that names its first station,
+        // and is never that same station. Said by the table as well as by the routes because a
+        // report's place is rewritten from several sides — a correction, a sheet, an import — and
+        // one of them forgetting the second station would otherwise leave it standing beside a
+        // place it was never recorded with.
+        builder.ToTable("trip_position_events", table => table.HasCheckConstraint(
+            StretchCheck,
+            "viewer_to_station_name IS NULL OR (kind = 1 AND viewer_station_name IS NOT NULL "
+                + "AND viewer_to_station_name <> viewer_station_name)"));
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.Kind).HasConversion<short>();
         // Provenance, stored beside the row and deliberately outside every read-side decision:
@@ -33,6 +41,7 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         // The viewer's own spelling of the station path; text kept even when the model row later
         // disappears.
         builder.Property(x => x.ViewerStationName).HasMaxLength(400);
+        builder.Property(x => x.ViewerToStationName).HasMaxLength(400);
         builder.Property(x => x.DepthEnteredM).HasPrecision(7, 1);
         builder.Property(x => x.Note).HasMaxLength(2000);
 
@@ -92,6 +101,9 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
     /// twice — what a write that lost a race to its own duplicate is told it violated.
     /// </summary>
     public const string ClientKeyIndex = "ux_trip_position_events_client_key";
+
+    /// <summary>The database's name for the rule on where the far end of a stretch may stand.</summary>
+    public const string StretchCheck = "ck_trip_position_events_stretch";
 }
 
 public sealed class TripTrackingConfiguration : IEntityTypeConfiguration<TripTracking>

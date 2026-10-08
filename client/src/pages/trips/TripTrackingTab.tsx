@@ -727,9 +727,23 @@ export default function TripTrackingTab({
    * would teach a coordinator to read past the one that mattered. What counts as far enough is a
    * caving judgement and lives in one place, next to its reasoning.
    */
-  const place = (stationName: string | null, depthM: number | null, gap: TrackingDepthGap | null) => {
+  const place = (
+    stationName: string | null,
+    depthM: number | null,
+    gap: TrackingDepthGap | null,
+    toStationName: string | null = null,
+  ) => {
     if (depthM === null) {
-      return stationName;
+      // A report between two stations is said as that, with both names. Printing the first alone
+      // would state a place nobody reported; the server sends the far end only beside the first
+      // station, so there is never one to print where the place is withheld.
+      return stationName !== null && toStationName !== null ? (
+        <span className="tracking-position-stretch" data-testid="trip-tracking-stretch">
+          {t('trips.tracking.stretch', { from: stationName, to: toStationName })}
+        </span>
+      ) : (
+        stationName
+      );
     }
     return (
       <>
@@ -827,6 +841,7 @@ export default function TripTrackingTab({
               askedDepthM: participant.depthM,
               surveyModelId: participant.positionSurveyModelId,
             }),
+            participant.toStationName,
           )}
           {outsideDeclaredTag(
             participant.outsideDeclaredParts,
@@ -944,6 +959,7 @@ export default function TripTrackingTab({
               askedDepthM: row.depthEnteredM,
               surveyModelId: row.surveyModelId,
             }),
+            row.toStationName,
           )}
           {outsideDeclaredTag(row.outsideDeclaredParts, `trip-tracking-event-outside-declared-${row.id}`)}
           {eventOtherModelTag(row)}

@@ -43,6 +43,54 @@ public class TrackingCsvWriterTests
     }
 
     [Fact]
+    public void A_stretch_adds_its_column_beside_the_station_and_reads_back_as_the_stretch_it_was()
+    {
+        var stretch = Row(TripPositionEventKind.AtStation, station: "upper.2", at: Nine) with { ToStationName = "deep.3" };
+        var sheet = TrackingCsvWriter.Write(
+        [
+            stretch,
+            Row(TripPositionEventKind.AtStation, station: "deep.3", at: Nine.AddMinutes(10)),
+            Row(TripPositionEventKind.AtDepth, depth: 96m, at: Nine.AddMinutes(20)),
+        ]);
+
+        sheet.Split("\r\n")[0].ShouldBe("Data si ora,Adancime,Statie,Pana la statia,Loc,Speologi,Echipa,Nota,Stare");
+        TrackingCsvColumnMapping.CandidatesFor(TrackingCsvField.ToStation)
+            .ShouldContain(TripImportNames.Key(TrackingCsvWriter.ToStationHeader));
+
+        var read = TrackingCsvParser.Parse(sheet);
+        read.FileDiagnostics.ShouldBeEmpty();
+        read.UnmappedColumns.ShouldBeEmpty();
+        read.ResolvedColumns[TrackingCsvField.ToStation].ShouldBe(TrackingCsvWriter.ToStationHeader);
+        read.Rows.ShouldAllBe(r => r.Diagnostics.Count == 0);
+        read.Rows.Select(r => (r.Kind, r.StationName, r.ToStationName, r.DepthM)).ShouldBe(
+        [
+            (TripPositionEventKind.AtStation, "upper.2", "deep.3", null),
+            (TripPositionEventKind.AtStation, "deep.3", null, null),
+            (TripPositionEventKind.AtDepth, null, null, 96m),
+        ]);
+
+        // The twin: a log with no stretch is written exactly as it always was, column for column.
+        var plain = TrackingCsvWriter.Write([stretch with { ToStationName = null }]);
+        plain.ShouldStartWith(TrackingCsvWriter.HeaderLine);
+        plain.ShouldNotContain(TrackingCsvWriter.ToStationHeader);
+        TrackingCsvParser.Parse(plain).ResolvedColumns.ShouldNotContainKey(TrackingCsvField.ToStation);
+    }
+
+    [Fact]
+    public void A_far_end_beside_a_place_kept_back_writes_no_stretch()
+    {
+        // What a withheld station report looks like to the writer: its kind and no place. The far
+        // end is withheld with the first, so there is none here either — and were one handed over
+        // by mistake, it is not written beside a station that is not.
+        var sheet = TrackingCsvWriter.Write(
+            [Row(TripPositionEventKind.AtStation) with { ToStationName = "deep.3" }]);
+
+        sheet.ShouldStartWith(TrackingCsvWriter.HeaderLine);
+        sheet.ShouldNotContain("deep.3");
+        sheet.ShouldContain(TrackingCsvStateWords.Withheld);
+    }
+
+    [Fact]
     public void Each_kind_of_report_reads_back_as_the_report_it_was()
     {
         var read = Read(

@@ -341,6 +341,39 @@ afterEach(() => {
 });
 
 describe('the tracking movie dialog', () => {
+  /**
+   * The movie draws one marker per person, so somebody reported between two stations is drawn at
+   * the first. That is said — and only over trips whose logs hold such a report, so that it is not
+   * a sentence every movie carries and nobody reads.
+   */
+  it('says a caver reported between two stations is drawn at the first, only where a log holds one', async () => {
+    const report = (toStationName: string | null) =>
+      ({
+        id: 'event-1',
+        caverId: 'caver-1',
+        teamId: null,
+        kind: 'atStation',
+        surveyModelId: MODEL,
+        stationName: 'p8.1',
+        toStationName,
+        depthEnteredM: null,
+        note: null,
+        recordedAt: ARMED,
+      }) as unknown as TrackingEvent;
+    const plain = movieTrip('trip-a', 'Alpha');
+    reads.movie = ready({ ...plain, trip: { ...plain.trip, events: [report(null)] } });
+    open(['trip-a']);
+    expect(await screen.findByTestId('movie-privacy')).toBeInTheDocument();
+    expect(screen.queryByTestId('movie-stretch-note')).toBeNull();
+    cleanup();
+
+    reads.movie = ready({ ...plain, trip: { ...plain.trip, events: [report('p8.2')] } });
+    open(['trip-a']);
+    expect(await screen.findByTestId('movie-stretch-note')).toHaveTextContent(
+      'The movie draws each of them at the first of the two',
+    );
+  });
+
   it('shows the preview, every group of settings, the notice about what the file shows, and the tracked trips', async () => {
     open();
 

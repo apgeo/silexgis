@@ -31,8 +31,15 @@ import { instantOf } from '../pages/public/publicTripParty.ts';
 
 /** Where one person was last reported, as far as this reader is being told. */
 export type TrackedCaverPosition =
-  /** A station of the model on screen, which is where the marker goes. */
-  | { kind: 'station'; station: string }
+  /**
+   * A station of the model on screen, which is where the marker goes.
+   *
+   * `toStation` is the far end where the report said the person was between two stations: the
+   * marker still stands at `station`, and a surface that can draws a line on to the far one. No
+   * fold in this module sets it and no published shape carries it — it is added afterwards, for
+   * signed-in readers only, by the module that owns everything a stretch does.
+   */
+  | { kind: 'station'; station: string; toStation?: string }
   /** A depth below the entrance, which no station names — so it is said, not drawn. */
   | { kind: 'depth'; depthM: number }
   /** A position exists and this reader may not be told it. `certain` is the stronger claim. */

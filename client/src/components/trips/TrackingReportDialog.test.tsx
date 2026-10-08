@@ -126,6 +126,8 @@ describe('TrackingReportDialog', () => {
       caverIds: ['caver-1'],
       kind: 'atStation',
       stationName: 'p.g.42',
+      // The dialog reports at the station that was pressed, never between two.
+      toStationName: null,
       // A depth belongs to a depth report; the server refuses a request carrying the other one
       // rather than quietly ignoring it.
       depthM: null,

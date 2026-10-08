@@ -22,6 +22,7 @@ function participant(overrides: Partial<TrackingParticipant> = {}): TrackingPart
     // agree. Every test that needs them to disagree says both.
     positionRecordedAt: '2026-09-12T09:00:00Z',
     stationName: 'p.g.7',
+    toStationName: null,
     depthM: null,
     // Placed on the very model the panel is showing, which is the ordinary case. A test about a
     // place measured in another survey says so itself.

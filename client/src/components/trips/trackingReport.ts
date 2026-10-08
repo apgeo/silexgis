@@ -80,6 +80,8 @@ export function trackingReportLeftTheForm(outcome: TrackingReportOutcome): boole
 export interface TrackingReportValues {
   kind: TripPositionEventKind;
   stationName?: string;
+  /** The far end of a stretch, where the report says somebody is between two stations. */
+  toStationName?: string;
   depthM?: number | null;
   teamId?: string | null;
   note?: string;
@@ -94,6 +96,11 @@ export interface TrackingReportValues {
  * reported is sent as null rather than as whatever was left in a field the reader changed their
  * mind about.
  *
+ * <b>The far end of a stretch goes with a station report, and an empty one is no stretch.</b> The
+ * field is optional on the form, and a box somebody opened and left blank must read as a report at
+ * one station: the server refuses a blank second station rather than guessing that, so blank is
+ * turned into absence here, once, for every surface.
+ *
  * <b>An empty moment means the server's clock</b>, which is what a report made as it happens wants;
  * a filled one is written as an instant with its offset, because the reader's phone and the server
  * are not in the same place as often as they are.
@@ -104,11 +111,13 @@ export function trackingReportBody(
   values: TrackingReportValues,
 ) {
   const note = values.note?.trim();
+  const toStation = values.kind === 'atStation' ? values.toStationName?.trim() : undefined;
   return {
     tripLogId,
     caverIds: [...caverIds],
     kind: values.kind,
     stationName: values.kind === 'atStation' ? (values.stationName ?? '').trim() : null,
+    toStationName: toStation ? toStation : null,
     depthM: values.kind === 'atDepth' ? (values.depthM ?? null) : null,
     teamId: values.teamId ?? null,
     note: note ? note : null,
@@ -137,6 +146,28 @@ export function trackingStationRules(t: ReturnType<typeof useTranslation>['t']):
  */
 function answeredLater(error: ApiError): boolean {
   return error.status === 429 || error.status === 503;
+}
+
+/**
+ * What the second station of a stretch has to be, where one is given at all.
+ *
+ * Optional — most reports are at one station — and, where it is filled in, not the station above
+ * it. The server refuses the same station twice and says so; asked here as well so that a slip in
+ * choosing the far end is shown beside the field that holds it, before anything is sent. It reads
+ * the names as typed, so two spellings of one station pass here and are still refused there.
+ */
+export function trackingToStationRules(t: ReturnType<typeof useTranslation>['t']): Rule[] {
+  return [
+    ({ getFieldValue }) => ({
+      validator: (_rule, value: string | undefined) => {
+        const to = (value ?? '').trim();
+        const from = String(getFieldValue('stationName') ?? '').trim();
+        return to.length > 0 && to === from
+          ? Promise.reject(new Error(t('trips.tracking.reportToStationSame')))
+          : Promise.resolve();
+      },
+    }),
+  ];
 }
 
 /**
@@ -224,6 +255,7 @@ export function useTrackingReport() {
             caverIds: body.caverIds,
             kind: body.kind,
             stationName: body.stationName,
+            toStationName: body.toStationName,
             depthM: body.depthM,
             teamId: body.teamId,
             note: body.note,

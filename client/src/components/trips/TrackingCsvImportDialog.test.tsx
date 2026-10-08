@@ -68,6 +68,7 @@ const PREVIEW: Preview = {
       teamId: null,
       kind: 'atDepth',
       stationName: 'upper.2',
+      toStationName: null,
       placeLabel: null,
       depthM: 96,
       note: null,
@@ -85,6 +86,7 @@ const PREVIEW: Preview = {
       teamId: null,
       kind: 'atDepth',
       stationName: 'upper.2',
+      toStationName: null,
       placeLabel: null,
       depthM: 96,
       note: null,
@@ -96,6 +98,7 @@ const PREVIEW: Preview = {
         kind: 'atStation',
         surveyModelId: 'model-1',
         stationName: 'deep.3',
+        toStationName: null,
         depthEnteredM: null,
         note: 'la baza puitului',
         recordedAt: '2026-09-12T10:00:00Z',
@@ -449,6 +452,80 @@ describe('TrackingCsvImportDialog', () => {
 
     const rows = within(screen.getByTestId('trip-tracking-csv-rows'));
     expect(rows.getByText('Meandru → p8.98')).toBeInTheDocument();
+  });
+
+  it('prints both ends of a stretch on a row that adds one', async () => {
+    look.mockResolvedValue({
+      ...PREVIEW,
+      replaces: 0,
+      rows: [
+        {
+          ...PREVIEW.rows[0],
+          kind: 'atStation',
+          depthM: null,
+          stationName: 'upper.2',
+          toStationName: 'upper.7',
+        },
+      ],
+    });
+    open();
+    await drop('x');
+    await readIt();
+
+    const rows = within(screen.getByTestId('trip-tracking-csv-rows'));
+    expect(rows.getByText('Between upper.2 and upper.7')).toBeInTheDocument();
+  });
+
+  it('shows a stretch cut to its first station as a change', async () => {
+    // The sheet has the second station's column and the cell was emptied: the only thing the
+    // import changes is the far end, so the two lines must not read alike.
+    const stretch = {
+      ...PREVIEW.rows[1].before!,
+      stationName: 'upper.2',
+      toStationName: 'upper.7',
+      note: null,
+    };
+    const cut = {
+      ...PREVIEW.rows[1],
+      kind: 'atStation' as const,
+      depthM: null,
+      stationName: 'upper.2',
+      toStationName: null,
+      before: stretch,
+    };
+    look.mockResolvedValue({ ...PREVIEW, creates: 0, rows: [cut] });
+    open();
+    await drop('x');
+    await readIt();
+
+    const before = screen.getByTestId('trip-tracking-csv-row-before-3');
+    const after = screen.getByTestId('trip-tracking-csv-row-after-3');
+    expect(before).toHaveTextContent(/^In the log now: At a station · Between upper\.2 and upper\.7$/);
+    expect(after).toHaveTextContent(/^After the import: At a station · upper\.2$/);
+    expect(after).not.toHaveTextContent('upper.7');
+  });
+
+  it('shows a far end the sheet gives a report that had none', async () => {
+    const plain = { ...PREVIEW.rows[1].before!, stationName: 'upper.2', note: null };
+    const grown = {
+      ...PREVIEW.rows[1],
+      kind: 'atStation' as const,
+      depthM: null,
+      stationName: 'upper.2',
+      toStationName: 'upper.7',
+      before: plain,
+    };
+    look.mockResolvedValue({ ...PREVIEW, creates: 0, rows: [grown] });
+    open();
+    await drop('x');
+    await readIt();
+
+    expect(screen.getByTestId('trip-tracking-csv-row-before-3')).toHaveTextContent(
+      /^In the log now: At a station · upper\.2$/,
+    );
+    expect(screen.getByTestId('trip-tracking-csv-row-after-3')).toHaveTextContent(
+      /^After the import: At a station · Between upper\.2 and upper\.7$/,
+    );
   });
 
   it('shows what a row would replace beside what it would leave, and nothing of the kind on a new row', async () => {

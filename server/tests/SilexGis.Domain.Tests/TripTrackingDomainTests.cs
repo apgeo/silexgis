@@ -27,6 +27,44 @@ public class TripTrackingDomainTests
         TrackingDepthResolver.Station.Of(SurveyModelFormat.Lox, "cave", name, surveyName, z, isEntrance);
 
     [Fact]
+    public void A_stretch_needs_a_station_report_with_two_different_stations()
+    {
+        // No far end is the ordinary report, whatever its kind and whatever it names.
+        TripTrackingRules.StretchProblem(TripPositionEventKind.AtStation, "cave.upper.2", null)
+            .ShouldBe(TrackingStretchProblem.None);
+        TripTrackingRules.StretchProblem(TripPositionEventKind.Note, null, null)
+            .ShouldBe(TrackingStretchProblem.None);
+
+        // The stretch itself, either way round: no direction is said, so neither order is refused.
+        TripTrackingRules.StretchProblem(TripPositionEventKind.AtStation, "cave.upper.2", "cave.deep.3")
+            .ShouldBe(TrackingStretchProblem.None);
+        TripTrackingRules.StretchProblem(TripPositionEventKind.AtStation, "cave.deep.3", "cave.upper.2")
+            .ShouldBe(TrackingStretchProblem.None);
+
+        // The same station twice is a report at that station — compared exactly, because the
+        // names asked about are already the survey's own.
+        TripTrackingRules.StretchProblem(TripPositionEventKind.AtStation, "cave.upper.2", "cave.upper.2")
+            .ShouldBe(TrackingStretchProblem.SameStation);
+        TripTrackingRules.StretchProblem(TripPositionEventKind.AtStation, "cave.upper.2", "CAVE.UPPER.2")
+            .ShouldBe(TrackingStretchProblem.None);
+
+        // Half a stretch, and a far end on a report that names no station of its own.
+        TripTrackingRules.StretchProblem(TripPositionEventKind.AtStation, null, "cave.deep.3")
+            .ShouldBe(TrackingStretchProblem.FirstStationMissing);
+        TripTrackingRules.StretchProblem(TripPositionEventKind.AtStation, "", "cave.deep.3")
+            .ShouldBe(TrackingStretchProblem.FirstStationMissing);
+        foreach (var kind in new[]
+                 {
+                     TripPositionEventKind.Entered, TripPositionEventKind.AtDepth,
+                     TripPositionEventKind.Note, TripPositionEventKind.Exited,
+                 })
+        {
+            TripTrackingRules.StretchProblem(kind, "cave.upper.2", "cave.deep.3")
+                .ShouldBe(TrackingStretchProblem.NotAStationReport);
+        }
+    }
+
+    [Fact]
     public void The_depth_datum_is_the_named_station_when_one_is_configured_and_the_highest_entrance_otherwise()
     {
         TrackingDepthResolver.ReferenceZ(Shaft, "cave.upper.1").ShouldBe(340);

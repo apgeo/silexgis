@@ -86,6 +86,7 @@ public static class TrackingCsvPlanDigest
             Put(text, report.TeamId?.ToString("N"));
             Put(text, ((int)report.Kind).ToString(CultureInfo.InvariantCulture));
             Put(text, report.ViewerStationName);
+            Put(text, report.ViewerToStationName);
             Put(text, Depth(report.DepthM));
             Put(text, report.Note);
             Put(text, report.Replaces ? "1" : "0");
@@ -108,6 +109,7 @@ public static class TrackingCsvPlanDigest
             Put(text, ((int)stood.Kind).ToString(CultureInfo.InvariantCulture));
             Put(text, stood.SurveyModelId?.ToString("N"));
             Put(text, stood.StationName);
+            Put(text, stood.ToStationName);
             Put(text, Depth(stood.DepthM));
             Put(text, stood.Note);
             Put(text, stood.Corrected ? "1" : "0");
@@ -147,4 +149,5 @@ public sealed record TrackingCsvReplacedReport(
     string? StationName,
     decimal? DepthM,
     string? Note,
-    bool Corrected);
+    bool Corrected,
+    string? ToStationName = null);

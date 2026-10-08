@@ -126,10 +126,12 @@ public sealed record TrackingCsvSubject
 /// <param name="Kind">What the stored report is.</param>
 /// <param name="ViewerStationName">The station it is anchored to, as the log keeps it.</param>
 /// <param name="DepthM">The depth it was given as, for a depth report.</param>
+/// <param name="ViewerToStationName">The far end of the stretch it says, where it says one.</param>
 public sealed record TrackingCsvStoredPlace(
     TripPositionEventKind Kind,
     string? ViewerStationName,
-    decimal? DepthM);
+    decimal? DepthM,
+    string? ViewerToStationName = null);
 
 /// <summary>One report a sheet's row turned into, ready to be written.</summary>
 public sealed record TrackingCsvPlannedReport
@@ -165,6 +167,12 @@ public sealed record TrackingCsvPlannedReport
     public required TripPositionEventKind Kind { get; init; }
 
     public string? ViewerStationName { get; init; }
+
+    /// <summary>
+    /// The far end of a stretch, in the viewer's spelling: the report is to say the person was
+    /// between <see cref="ViewerStationName"/> and this station. Null for a report at one station.
+    /// </summary>
+    public string? ViewerToStationName { get; init; }
 
     /// <summary>
     /// The place as the sheet named it, where the station came from a name the cave declared.
@@ -354,6 +362,7 @@ public static class TrackingCsvPlanner
             }
 
             var placed = Place(row, subject, stored);
+            var carriesStretch = parsed.ResolvedColumns.ContainsKey(TrackingCsvField.ToStation);
 
             // A place that cannot be resolved costs the row, once, before anybody on it is looked
             // for — unless the row only repeats, for somebody on it, what the log already holds
@@ -367,13 +376,17 @@ public static class TrackingCsvPlanner
                 placeRefused = true;
                 refused.Add(new TrackingCsvDiagnostic(
                     TrackingCsvSeverity.Error, problem, row.Line,
-                    Detail: row.StationName ?? row.PlaceLabel ?? row.DepthM?.ToString()));
+                    // The cell the refusal is about: the far end's own name where it is the far
+                    // end that the survey does not have.
+                    Detail: problem == TrackingCsvProblem.ToStationNotInModel
+                        ? row.ToStationName
+                        : row.StationName ?? row.PlaceLabel ?? row.DepthM?.ToString()));
             }
 
             if (placed.Problem is { } unplaced
                 && !row.Cavers.Any(name =>
                     CaverNameLadder.Match(name, subject.Roster) is [var only]
-                    && StoodAs(row, subject, (only.Key, row.At!.Value)) is not null))
+                    && StoodAs(row, subject, (only.Key, row.At!.Value), carriesStretch) is not null))
             {
                 RefusePlace(unplaced);
                 continue;
@@ -419,7 +432,7 @@ public static class TrackingCsvPlanner
 
                 // What the log holds under this key, where the row says the same of it. Asked
                 // before the place the row resolved to is used, because it replaces that place.
-                var stood = StoodAs(row, subject, key);
+                var stood = StoodAs(row, subject, key, carriesStretch);
                 if (stood is null && placed.Problem is { } placeProblem)
                 {
                     RefusePlace(placeProblem);
@@ -450,6 +463,7 @@ public static class TrackingCsvPlanner
                     KeepsStoredTeam = teamProblem == TrackingCsvProblem.TeamAmbiguous,
                     Kind = row.Kind!.Value,
                     ViewerStationName = stood is null ? placed.ViewerStationName : stood.ViewerStationName,
+                    ViewerToStationName = stood is null ? placed.ViewerToStationName : stood.ViewerToStationName,
                     PlaceLabel = stood is null ? placed.PlaceLabel : null,
                     DepthM = stood is null ? placed.DepthM : stood.DepthM,
                     Note = row.Note,
@@ -528,8 +542,16 @@ public static class TrackingCsvPlanner
     /// a note claim no place, and are written as they always were.
     /// </para>
     /// </remarks>
+    /// <param name="carriesStretch">
+    /// Whether the sheet has a column for the far end of a stretch. A sheet that has one says of
+    /// every station row whether it is a stretch, so the two ends are compared together and an
+    /// empty cell beside a stored stretch says "at this one station". A sheet without the column
+    /// cannot say a stretch at all; its station is compared alone, and a stretch the log holds
+    /// from that station is left standing rather than cut down to a place nobody corrected it to.
+    /// </param>
     private static TrackingCsvStoredPlace? StoodAs(
-        TrackingCsvRow row, TrackingCsvSubject subject, (Guid CaverId, DateTimeOffset At) key)
+        TrackingCsvRow row, TrackingCsvSubject subject, (Guid CaverId, DateTimeOffset At) key,
+        bool carriesStretch)
     {
         if (!subject.Stored.TryGetValue(key, out var stood) || row.Kind != stood.Kind)
         {
@@ -541,7 +563,12 @@ public static class TrackingCsvPlanner
             (TripPositionEventKind.AtStation, TrackingCsvPlaceKind.Station) =>
                 stood.ViewerStationName is not null
                 && string.Equals(
-                    row.StationName, TripCsv.TripCsvValues.Tidy(stood.ViewerStationName), StringComparison.Ordinal),
+                    row.StationName, TripCsv.TripCsvValues.Tidy(stood.ViewerStationName), StringComparison.Ordinal)
+                && (!carriesStretch
+                    || string.Equals(
+                        row.ToStationName,
+                        stood.ViewerToStationName is null ? null : TripCsv.TripCsvValues.Tidy(stood.ViewerToStationName),
+                        StringComparison.Ordinal)),
             (TripPositionEventKind.AtDepth, TrackingCsvPlaceKind.Depth) =>
                 stood.DepthM is not null && row.DepthM == stood.DepthM,
             _ => false,
@@ -555,7 +582,33 @@ public static class TrackingCsvPlanner
     /// also said "out" — where the standing wins and no station is claimed — is not shown as a
     /// place that resolved to nothing.
     /// </remarks>
-    private static (string? ViewerStationName, decimal? DepthM, TrackingCsvProblem? Problem, string? PlaceLabel) Place(
+    private static (string? ViewerStationName, decimal? DepthM, TrackingCsvProblem? Problem, string? PlaceLabel,
+        string? ViewerToStationName) Place(
+        TrackingCsvRow row, TrackingCsvSubject subject, HashSet<string> stored)
+    {
+        var (station, depth, problem, label) = PlaceOfFirst(row, subject, stored);
+        if (problem is not null || row.ToStationName is null || row.Decides != TrackingCsvPlaceKind.Station)
+        {
+            return (station, depth, problem, label, null);
+        }
+
+        // The far end of a stretch, against the same survey as the first and by the same reading
+        // of names. Asked for the same station only once both are resolved: two spellings of one
+        // station are one station.
+        var far = SurveyStationNames.ViewerNameOfMatch(
+            subject.Format, subject.RootSurveyName, row.ToStationName, stored.Contains);
+        if (far is null)
+        {
+            return (null, null, TrackingCsvProblem.ToStationNotInModel, null, null);
+        }
+
+        return TripTrackingRules.StretchProblem(row.Kind!.Value, station, far) == TrackingStretchProblem.None
+            ? (station, depth, null, label, far)
+            : (null, null, TrackingCsvProblem.StretchSameStation, null, null);
+    }
+
+    /// <summary>The station, or the depth, a row puts somebody at — the first end of a stretch.</summary>
+    private static (string? ViewerStationName, decimal? DepthM, TrackingCsvProblem? Problem, string? PlaceLabel) PlaceOfFirst(
         TrackingCsvRow row, TrackingCsvSubject subject, HashSet<string> stored)
     {
         // Going in, coming out and a note claim no station, so nothing is resolved for them —

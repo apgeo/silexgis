@@ -94,6 +94,7 @@ describe('a tracking report sent with no connection', () => {
           caverIds: ['caver-1'],
           kind: 'entered',
           stationName: null,
+          toStationName: null,
           depthM: null,
           teamId: null,
           note: null,

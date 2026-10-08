@@ -189,7 +189,8 @@ public static class TrackingCsvImportEndpoints
                 shown.Kind,
                 shown.StationName,
                 shown.DepthEnteredM,
-                shown.Note);
+                shown.Note,
+                shown.ToStationName);
         }));
 
         return TypedResults.File(
@@ -227,7 +228,7 @@ public static class TrackingCsvImportEndpoints
         TrackingCsvPreviewRowDto Row(TrackingCsvPlannedReport report) =>
             new(report.Line, report.At, report.CaverId, report.CaverWritten, report.CaverMatched,
                 report.MatchedBy.ToString(), TeamAfter(report), report.Kind, report.ViewerStationName,
-                report.PlaceLabel, report.DepthM, report.Note, report.Replaces,
+                report.ViewerToStationName, report.PlaceLabel, report.DepthM, report.Note, report.Replaces,
                 report.Replaces ? before.GetValueOrDefault((report.CaverId, report.At)) : null,
                 [.. report.Diagnostics.Select(Diagnostic)]);
 
@@ -373,6 +374,10 @@ public static class TrackingCsvImportEndpoints
                     row.SurveyModelId = report.ViewerStationName is null ? null : plan.SurveyModelId;
                     row.CaveFeatureId = report.ViewerStationName is null ? null : plan.CaveFeatureId;
                     row.ViewerStationName = report.ViewerStationName;
+                    // With the first station, always: the far end of a stretch belongs to the
+                    // place the row states, and a row stating another place states no stretch
+                    // unless it names one.
+                    row.ViewerToStationName = report.ViewerToStationName;
                     row.DepthEnteredM = report.Kind == TripPositionEventKind.AtDepth ? report.DepthM : null;
                 }
 
@@ -413,6 +418,7 @@ public static class TrackingCsvImportEndpoints
                 SurveyModelId = report.ViewerStationName is null ? null : plan.SurveyModelId,
                 CaveFeatureId = report.ViewerStationName is null ? null : plan.CaveFeatureId,
                 ViewerStationName = report.ViewerStationName,
+                ViewerToStationName = report.ViewerToStationName,
                 DepthEnteredM = report.Kind == TripPositionEventKind.AtDepth ? report.DepthM : null,
                 Note = report.Note,
                 RecordedAt = report.At,
@@ -480,7 +486,7 @@ public static class TrackingCsvImportEndpoints
             b => b.Key,
             b => new TrackingCsvReplacedReport(
                 b.Value.Id, b.Value.TeamId, b.Value.Kind, b.Value.SurveyModelId, b.Value.StationName,
-                b.Value.DepthEnteredM, b.Value.Note, b.Value.Corrected));
+                b.Value.DepthEnteredM, b.Value.Note, b.Value.Corrected, b.Value.ToStationName));
 
     // ---- the trip a sheet is read against -----------------------------------------------
 
@@ -628,7 +634,7 @@ public static class TrackingCsvImportEndpoints
             .Where(e => TrackingWithholding.PositionOpen(e, openCaves))
             .ToDictionary(
                 e => (e.CaverId, At: e.RecordedAt),
-                e => new TrackingCsvStoredPlace(e.Kind, e.ViewerStationName, e.DepthEnteredM));
+                e => new TrackingCsvStoredPlace(e.Kind, e.ViewerStationName, e.DepthEnteredM, e.ViewerToStationName));
 
         var subject = new TrackingCsvSubject
         {

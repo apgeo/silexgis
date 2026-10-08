@@ -15,7 +15,7 @@ import SurveyStationInput from '../caves/SurveyStationInput.tsx';
 import List from '../List.tsx';
 import { trackingDepthGap } from './trackingDepthGap.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
-import { trackingStationRules } from './trackingReport.ts';
+import { trackingStationRules, trackingToStationRules } from './trackingReport.ts';
 
 /** How big the controls are drawn — decided by the pointer, by the surface around this. */
 type ControlSize = 'large' | 'middle';
@@ -91,6 +91,7 @@ interface Props {
 interface PlaceFormValues {
   kind: TripPositionEventKind;
   stationName?: string;
+  toStationName?: string;
   depthM?: number | null;
 }
 
@@ -222,7 +223,13 @@ export default function TrackingPlaceFields({
       return;
     }
 
-    form.setFieldsValue({ kind: 'atDepth', depthM, stationName: undefined });
+    form.setFieldsValue({
+      kind: 'atDepth',
+      depthM,
+      stationName: undefined,
+      // A stretch belongs to the station report this stops being.
+      toStationName: undefined,
+    });
     setListing(false);
   };
 
@@ -237,7 +244,13 @@ export default function TrackingPlaceFields({
    * the log would be two answers to one question.
    */
   const onChooseCandidate = (candidate: TrackingDepthCandidate) => {
-    form.setFieldsValue({ kind: 'atStation', stationName: candidate.stationName });
+    form.setFieldsValue({
+      kind: 'atStation',
+      stationName: candidate.stationName,
+      // Whatever far end an earlier station report left in the form was said about another
+      // station, and would otherwise come back beside this one as if somebody had chosen it.
+      toStationName: undefined,
+    });
     setListing(false);
   };
 
@@ -317,6 +330,24 @@ export default function TrackingPlaceFields({
           surveyModelId={surveyModelId}
           help={t('trips.tracking.reportStationHelp')}
         />
+      )}
+      {/* The far end of a stretch, under the station it starts from. Word from underground is
+          often "past the pitch, not yet at the sump", and either station alone would write down a
+          place nobody reported. Offered from the survey's names exactly as the first is, and
+          optional: left empty, this is a report at the one station above. */}
+      {kind === 'atStation' && (
+        <Form.Item
+          name="toStationName"
+          label={t('trips.tracking.reportToStation')}
+          extra={t('trips.tracking.reportToStationHelp')}
+          dependencies={['stationName']}
+          rules={trackingToStationRules(t)}
+        >
+          <SurveyStationInput
+            surveyModelId={surveyModelId}
+            data-testid={`${idPrefix}-to-station`}
+          />
+        </Form.Item>
       )}
 
       {kind === 'atDepth' && (

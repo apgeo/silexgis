@@ -531,22 +531,38 @@ export default function TrackingCsvImportDialog({
     </Flex>
   );
   /**
+   * The station of a report, or both ends where it says somebody is between two.
+   *
+   * A sheet can cut a stretch down to its first station, or give a report a far end it did not
+   * have, and that is then the whole of the change: printed by its first station alone, the
+   * report in the log and the report the import would leave read as the same line.
+   */
+  const stationsInWords = (
+    stationName: string | null | undefined,
+    toStationName: string | null | undefined,
+  ) =>
+    stationName && toStationName
+      ? t('trips.tracking.stretch', { from: stationName, to: toStationName })
+      : (stationName ?? null);
+  /**
    * Where a row puts somebody, in the sheet's words and the log's.
    *
    * A place the sheet named is shown with the station it became, because the two are in different
    * vocabularies — the club's name for the place and the survey's name for the station — and a
    * reviewer shown only the station cannot tell whether the name they wrote was understood.
    */
-  const placeOf = (row: TrackingCsvPreviewRow) =>
-    row.stationName && row.placeLabel
+  const placeOf = (row: TrackingCsvPreviewRow) => {
+    const stations = stationsInWords(row.stationName, row.toStationName);
+    return stations && row.placeLabel
       ? t('trips.tracking.csvImport.placeNamed', {
           label: row.placeLabel,
-          station: row.stationName,
+          station: stations,
         })
-      : (row.stationName ??
+      : (stations ??
         (row.depthM !== null && row.depthM !== undefined
           ? t('caves.depthPlaces.metres', { depth: row.depthM })
           : t(`trips.tracking.kinds.${row.kind}`)));
+  };
   /**
    * One report in a line: what kind it is, where, and what was noted.
    *
@@ -615,7 +631,7 @@ export default function TrackingCsvImportDialog({
           </Typography.Text>{' '}
           {reportInWords({
             kind: before.kind,
-            place: before.stationName ?? null,
+            place: stationsInWords(before.stationName, before.toStationName),
             depthM: before.depthEnteredM,
             team: teamInWords(before.teamId ?? null),
             note: before.note,

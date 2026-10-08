@@ -148,7 +148,8 @@ internal static class TrackingWithholding
 
     /// <summary>A row that claims a place, however partially — anything here is location data.</summary>
     internal static bool HasPosition(TripPositionEvent e) =>
-        e.ViewerStationName is not null || e.DepthEnteredM is not null || e.SurveyModelId is not null;
+        e.ViewerStationName is not null || e.ViewerToStationName is not null
+        || e.DepthEnteredM is not null || e.SurveyModelId is not null;
 
     /// <summary>
     /// Whether this caller may see the row's position, given the caves open to them. A position
@@ -181,8 +182,8 @@ internal static class TrackingWithholding
     /// The one place a stored report is turned into what a signed-in caller reads. The log's list
     /// and the sheet import's "what is there now" both answer through it, so a station the list
     /// withholds from somebody cannot reach them as the "before" of a row they are about to
-    /// replace. What is taken out is the place and only the place — the station, the depth and the
-    /// survey it was read on; that the report exists, what kind it is, its note and its moment are
+    /// replace. What is taken out is the place and only the place — the station, the far end of a
+    /// stretch from it, the depth and the survey it was read on; that the report exists, what kind it is, its note and its moment are
     /// the trip's, and the caller reads the trip.
     /// </para>
     /// <para>
@@ -202,6 +203,8 @@ internal static class TrackingWithholding
             e.Id, e.CaverId, e.TeamId, e.Kind,
             open ? e.SurveyModelId : null,
             open ? e.ViewerStationName : null,
+            // The far end of a stretch is place, and leaves with the rest of it.
+            open ? e.ViewerToStationName : null,
             open ? e.DepthEnteredM : null,
             e.Note, e.RecordedAt,
             TripTrackingRules.ChangedSinceWritten(e.CreatedAt, e.UpdatedAt),

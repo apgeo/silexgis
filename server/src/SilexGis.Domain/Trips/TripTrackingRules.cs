@@ -23,6 +23,22 @@ public enum TripStanding
     Out = 2,
 }
 
+/// <summary>Why the two ends a report gives for a stretch between stations cannot stand.</summary>
+public enum TrackingStretchProblem
+{
+    /// <summary>Nothing is wrong: there is no far end, or there are two different stations.</summary>
+    None = 0,
+
+    /// <summary>A far end was given on a report that is not a station report.</summary>
+    NotAStationReport = 1,
+
+    /// <summary>A far end was given with no first station beside it.</summary>
+    FirstStationMissing = 2,
+
+    /// <summary>Both ends are the same station, which is a report at that station.</summary>
+    SameStation = 3,
+}
+
 /// <summary>
 /// The party a trip's watch counts, as <see cref="TripTrackingRules.PartyOf"/> decides it.
 /// </summary>
@@ -215,6 +231,44 @@ public static class TripTrackingRules
     /// </remarks>
     public static bool DrawableOn(Guid? recordedOn, Guid? modelInUse) =>
         recordedOn is not null && modelInUse is not null && recordedOn == modelInUse;
+
+    /// <summary>
+    /// What is wrong with the two ends a report gives for a stretch, or
+    /// <see cref="TrackingStretchProblem.None"/> where they may stand — including where there is
+    /// no far end at all, which is the ordinary report.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A report may say that somebody was between two stations: word from underground is often
+    /// "past the second pitch, not yet at the sump", and writing either station alone states a
+    /// place nobody reported. A stretch is that statement and nothing more — two stations of one
+    /// survey, no position along it, no direction of travel.
+    /// </para>
+    /// <para>
+    /// <b>Both ends, and two different ones.</b> A far end with no first station is half a
+    /// statement, and the first station is the one every surface that draws a single mark draws
+    /// at. The same station twice is a report at that station, and is refused rather than quietly
+    /// reduced to one, so that a slip in choosing the second end is seen by the person who made it.
+    /// Only a station report can carry one: a depth is resolved to a station by measurement, and a
+    /// stretch from a measured guess to a named station would look more certain than it is.
+    /// </para>
+    /// <para>
+    /// The names are compared as given, which is why this is asked of names already resolved
+    /// against the survey — two spellings of one station are one station. That both ends belong to
+    /// one survey is not asked here: a report holds exactly one survey, and whoever resolves the
+    /// ends resolves both against it.
+    /// </para>
+    /// </remarks>
+    public static TrackingStretchProblem StretchProblem(
+        TripPositionEventKind kind, string? stationName, string? toStationName)
+    {
+        if (toStationName is null) return TrackingStretchProblem.None;
+        if (kind != TripPositionEventKind.AtStation) return TrackingStretchProblem.NotAStationReport;
+        if (string.IsNullOrEmpty(stationName)) return TrackingStretchProblem.FirstStationMissing;
+        return string.Equals(stationName, toStationName, StringComparison.Ordinal)
+            ? TrackingStretchProblem.SameStation
+            : TrackingStretchProblem.None;
+    }
 
     /// <summary>
     /// Whether a watch that will be in <paramref name="state"/>, anchored to

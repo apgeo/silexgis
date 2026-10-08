@@ -26,6 +26,7 @@ function participant(label: string | null): TrackingParticipant {
     lastRecordedAt: '2026-09-16T09:00:00Z',
     positionRecordedAt: null,
     stationName: null,
+    toStationName: null,
     depthM: null,
     positionSurveyModelId: null,
     in: true,

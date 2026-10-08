@@ -41,6 +41,7 @@ interface Props {
 interface EditForm {
   kind: TripPositionEventKind;
   stationName?: string;
+  toStationName?: string;
   depthM?: number | null;
   teamId?: string | null;
   note?: string;
@@ -181,6 +182,9 @@ function CorrectionForm({
   const initial: EditForm = {
     kind: report.kind,
     stationName: report.stationName ?? undefined,
+    // A report between two stations opens holding both, so that correcting its hour or its note
+    // does not quietly turn it into a report at the first station.
+    toStationName: report.toStationName ?? undefined,
     depthM: report.depthEnteredM ?? null,
     teamId: report.teamId ?? null,
     note: report.note ?? undefined,
@@ -215,6 +219,12 @@ function CorrectionForm({
         // the whole report again, and a station left over from the kind this report used to be
         // would be refused as belonging to the wrong sort of report.
         stationName: values.kind === 'atStation' ? (values.stationName ?? null) : null,
+        // An emptied second station is a report at one station, said as an absence: the server
+        // refuses a blank rather than guessing that.
+        toStationName:
+          values.kind === 'atStation' && values.toStationName?.trim()
+            ? values.toStationName.trim()
+            : null,
         depthM: values.kind === 'atDepth' ? (values.depthM ?? null) : null,
         teamId: values.teamId ?? null,
         note: values.note?.trim() ? values.note.trim() : null,

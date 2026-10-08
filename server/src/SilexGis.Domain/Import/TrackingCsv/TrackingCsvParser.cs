@@ -410,6 +410,7 @@ public static class TrackingCsvParser
         }
 
         var stationName = Text(TrackingCsvField.Station);
+        var toStationName = Text(TrackingCsvField.ToStation);
         var placeLabel = Text(TrackingCsvField.Place);
         var (depth, depthProblem) = ReadDepth(Text(TrackingCsvField.Depth));
         if (depthProblem is { } problem)
@@ -433,7 +434,9 @@ public static class TrackingCsvParser
                 record.Line, Named(TrackingCsvField.State), stateText));
         }
 
-        if (state is not null && (stationName is not null || placeLabel is not null || depth is not 0 and not null))
+        if (state is not null
+            && (stationName is not null || toStationName is not null || placeLabel is not null
+                || depth is not 0 and not null))
         {
             // Quiet in the ordinary case: a club writes depth 0 beside "intrare", and nothing was
             // lost by dropping it. Said out loud only where the row claimed a real place as well,
@@ -441,6 +444,16 @@ public static class TrackingCsvParser
             diagnostics.Add(new TrackingCsvDiagnostic(
                 TrackingCsvSeverity.Warning, TrackingCsvProblem.StateOverridesPlace,
                 record.Line, Named(TrackingCsvField.State), stateText));
+        }
+
+        if (state is null && toStationName is not null && stationName is null)
+        {
+            // Half a stretch. Not read as a report at the one station it does name, and not
+            // dropped in favour of a depth or a declared place beside it: the row said "between"
+            // and the other end is missing, which is for whoever kept the sheet to say.
+            diagnostics.Add(new TrackingCsvDiagnostic(
+                TrackingCsvSeverity.Error, TrackingCsvProblem.ToStationWithoutStation,
+                record.Line, Named(TrackingCsvField.ToStation), toStationName));
         }
 
         var note = FoldNote(Text(TrackingCsvField.Note), Text(TrackingCsvField.Details));
@@ -484,6 +497,8 @@ public static class TrackingCsvParser
             Cavers = cavers,
             Team = Text(TrackingCsvField.Team),
             StationName = stationName,
+            // A standing word wins over any place on its row, and takes both ends with it.
+            ToStationName = state is null && stationName is not null ? toStationName : null,
             PlaceLabel = placeLabel,
             DepthM = depth,
             Decides = decides,

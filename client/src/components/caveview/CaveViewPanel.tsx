@@ -39,6 +39,14 @@ import {
   type DrawnMarker,
 } from '../../caveview/liveMarkerSync.ts';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
+import {
+  noStretchFaults,
+  stretchFaults as learnStretchFaults,
+  syncStretchTrails,
+  wantedStretches,
+  type DrawnStretch,
+  type StretchFault,
+} from '../../caveview/trackedStretch.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
@@ -425,6 +433,14 @@ export default function CaveViewPanel({
    * party every time a coordinator engages the replay under this panel.
    */
   const [unplacedStations, setUnplacedStations] = useState<ReadonlySet<string>>(noStationsMissing);
+  /**
+   * Which stretches — a position reported between two stations — the loaded model could draw no
+   * line for, and why. Asked of the viewer and kept as plain strings for exactly the reasons the
+   * set above is: it is a fact about the parsed file, it only grows while one model stays loaded,
+   * and the list beside the model has to say it.
+   */
+  const [stretchFaults, setStretchFaults] =
+    useState<ReadonlyMap<string, StretchFault>>(noStretchFaults);
   /** Which row of the watch the camera was last sent to, and whose station carries the mark. */
   const [shownPlace, setShownPlace] = useState<TrackedPlace | null>(null);
   /**
@@ -464,6 +480,8 @@ export default function CaveViewPanel({
   const viewerRef = useRef<{ viewer: CaveViewer; ui: CaveViewUi } | null>(null);
   /** What is drawn for each caver right now — the thing the next answer is compared against. */
   const drawnMarkersRef = useRef(new Map<string, DrawnMarker>());
+  /** The stretch lines last handed to the viewer, by the stretch each one draws. */
+  const drawnStretchesRef = useRef(new Map<string, DrawnStretch>());
 
   const focusOf = (ref: ResourceRef) => focusForRef(ref, surveyModelId);
 
@@ -582,6 +600,10 @@ export default function CaveViewPanel({
     // A new viewer draws none of the old one's markers, so nothing is drawn until they are added
     // again — which the marker effect does as soon as this one reports the model loaded.
     drawnMarkersRef.current = new Map();
+    // The same of the lines drawn for people between two stations, and of what was learned about
+    // which of them the model taken off the screen could not route.
+    drawnStretchesRef.current = new Map();
+    setStretchFaults(noStretchFaults);
     // And nothing is known yet about what the next model can place. Left standing, the answer
     // about the survey just taken off the screen would be drawn against the one arriving — on a
     // panel that is mid-load and showing no model at all, which is where a stale claim is least
@@ -896,6 +918,34 @@ export default function CaveViewPanel({
     // in no dependency list of this effect.
     setUnplacedStations((known) => stationsNotOnModel(known, viewer.getLiveMarkers()));
   }, [trackedCavers, markerMoveMs, showMarkerTimes, status, t, i18n.language, today]);
+
+  // ---- The line of a position that is a stretch ----
+  //
+  // Somebody reported between two stations keeps their marker at the first, and a dashed line is
+  // routed along the survey to the second. It is brought into line with the party exactly as the
+  // markers are — added when somebody is reported on a stretch, taken off as soon as their position
+  // is anything else — and then the viewer is asked what became of each line, because a stretch
+  // whose far station the drawing does not hold, or which the survey's legs do not join, is drawn
+  // as nothing at all and has to be said in words instead.
+  //
+  // An effect of its own rather than a few lines in the one above: it is re-run when the drawing
+  // turns out not to hold a station, which the marker effect must never depend on, since that
+  // effect is what learns it.
+  //
+  // A party handed over by a page that is not signed in names no far end, so this draws nothing
+  // there and asks the viewer nothing.
+  useEffect(() => {
+    const viewer = viewerRef.current?.viewer;
+    if (viewer === undefined || status !== 'ready') {
+      return;
+    }
+    const wanted = wantedStretches(trackedCavers ?? [], trackedCaverPalette, unplacedStations);
+    if (wanted.size === 0 && drawnStretchesRef.current.size === 0) {
+      return;
+    }
+    drawnStretchesRef.current = syncStretchTrails(viewer, drawnStretchesRef.current, wanted);
+    setStretchFaults((known) => learnStretchFaults(known, viewer.getTrails()));
+  }, [trackedCavers, unplacedStations, status]);
 
   // ---- Handing that answer to the surfaces outside this panel ----
   //
@@ -1289,6 +1339,8 @@ export default function CaveViewPanel({
           cavers={trackedCavers}
           // Which stations the model on screen has no node for, as the viewer answered it.
           unplacedStations={unplacedStations}
+          // Which lines between two stations the model could not draw, as the viewer answered it.
+          stretchFaults={stretchFaults}
           showTimes={showMarkerTimes}
           onShowTimesChange={setShowMarkerTimes}
           showLabels={showMarkerLabels}

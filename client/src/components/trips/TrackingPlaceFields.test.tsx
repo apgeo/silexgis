@@ -31,11 +31,14 @@ type Kind = import('../../api/hooks.ts').TripPositionEventKind;
 interface Values {
   kind: Kind;
   stationName?: string;
+  toStationName?: string;
   depthM?: number | null;
 }
 
 /** What the form around the block holds, read whenever a case wants to know what would be sent. */
 let held: () => Values = () => ({ kind: 'entered' });
+/** The form's own verdict on what it holds: what a surface asks before it sends anything. */
+let checked: () => Promise<unknown> = () => Promise.resolve();
 
 /**
  * The block inside a form of the shape every surface gives it: a kind it is told, and a station
@@ -56,6 +59,7 @@ function Surface({
   const [form] = Form.useForm<Values>();
   const watched = Form.useWatch('kind', form) ?? kind;
   held = () => form.getFieldsValue(true);
+  checked = () => form.validateFields();
   return (
     <Form form={form} layout="vertical" initialValues={{ kind, depthM: seedDepth ?? undefined }}>
       <Form.Item name="kind" hidden>
@@ -210,6 +214,74 @@ describe('TrackingPlaceFields, the station', () => {
     );
     expect(screen.getByLabelText('Station')).toBe(screen.getByTestId('pressed-station'));
     expect(screen.getByText('Why it is asked')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The far end of a stretch.
+ *
+ * A report may say somebody is between two stations. What is pinned is that the second station is
+ * asked for under the first and offered from the same survey, that leaving it empty is an ordinary
+ * report at one station, that naming the first station twice is refused beside the field, and that
+ * a far end never survives the report turning into something it does not belong to.
+ */
+describe('TrackingPlaceFields, the second station of a stretch', () => {
+  it('is asked under the first, by its own label, and offers the same survey\'s stations', async () => {
+    stationSearch.mockImplementation((_model: string | undefined, q: string) => ({
+      data: q === '' ? undefined : stations('cave.deep.3', 'cave.deep.4'),
+    }));
+    show({ kind: 'atStation' });
+
+    const first = screen.getByTestId('surface-station');
+    const second = screen.getByLabelText('Second station, if they are between two');
+    expect(second).toBe(screen.getByTestId('surface-to-station'));
+    expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.change(second, { target: { value: 'cave.d' } });
+    await waitFor(() => expect(stationSearch).toHaveBeenCalledWith('model-1', 'cave.d'));
+    fireEvent.click(await optionTitled('cave.deep.4'));
+    expect(held().toStationName).toBe('cave.deep.4');
+  });
+
+  it('may be left empty, which is a report at the one station', async () => {
+    show({ kind: 'atStation' });
+    fireEvent.change(screen.getByTestId('surface-station'), { target: { value: 'cave.deep.3' } });
+
+    await expect(checked()).resolves.toMatchObject({ stationName: 'cave.deep.3' });
+    expect(held().toStationName ?? '').toBe('');
+  });
+
+  it('refuses the first station given again as the far end, and takes any other', async () => {
+    show({ kind: 'atStation' });
+    fireEvent.change(screen.getByTestId('surface-station'), { target: { value: 'cave.deep.3' } });
+    fireEvent.change(screen.getByTestId('surface-to-station'), { target: { value: ' cave.deep.3 ' } });
+
+    await expect(checked()).rejects.toBeDefined();
+    expect(
+      await screen.findByText(
+        'That is the station above. Name the other end of the stretch, or leave this empty.',
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('surface-to-station'), { target: { value: 'cave.deep.4' } });
+    await expect(checked()).resolves.toMatchObject({ toStationName: 'cave.deep.4' });
+  });
+
+  it('is not asked of a depth report, and is let go when a declared place is chosen', async () => {
+    declaredPlaces.mockReturnValue([{ depthM: 96, stationName: 'cave.upper.2', placeLabel: 'Meandru' }]);
+    show({ kind: 'atStation' });
+    fireEvent.change(screen.getByTestId('surface-station'), { target: { value: 'cave.deep.3' } });
+    fireEvent.change(screen.getByTestId('surface-to-station'), { target: { value: 'cave.deep.4' } });
+
+    const chooser = screen.getByLabelText('Place');
+    fireEvent.mouseDown(
+      chooser.closest('.ant-select')?.querySelector('.ant-select-selector') ?? chooser,
+    );
+    fireEvent.click(await optionTitled('Meandru — 96 m'));
+
+    await waitFor(() => expect(held().kind).toBe('atDepth'));
+    expect(screen.queryByTestId('surface-to-station')).toBeNull();
+    expect(held().toStationName).toBeUndefined();
   });
 });
 

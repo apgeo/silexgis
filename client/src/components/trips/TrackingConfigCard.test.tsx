@@ -338,6 +338,7 @@ describe('TrackingConfigCard', () => {
       lastRecordedAt: '2026-09-12T09:00:00Z',
       positionRecordedAt: '2026-09-12T09:00:00Z',
       stationName: 'p.g.7',
+      toStationName: null,
       depthM: null,
       positionSurveyModelId: MODEL,
       in: true,

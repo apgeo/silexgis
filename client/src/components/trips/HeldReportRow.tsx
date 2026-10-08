@@ -45,7 +45,12 @@ export default function HeldReportRow({
 
   const place =
     report.body.stationName !== null
-      ? report.body.stationName
+      ? report.body.toStationName !== null
+        ? t('trips.tracking.stretch', {
+            from: report.body.stationName,
+            to: report.body.toStationName,
+          })
+        : report.body.stationName
       : report.body.depthM !== null
         ? t('trips.metres', { value: report.body.depthM })
         : null;

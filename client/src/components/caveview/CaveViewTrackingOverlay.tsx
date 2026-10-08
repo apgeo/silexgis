@@ -12,6 +12,11 @@ import { useTranslation } from 'react-i18next';
 import { shortNameOf } from '../../caveview/modelParts.ts';
 import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import {
+  noStretchFaults,
+  stretchFaultOf,
+  type StretchFault,
+} from '../../caveview/trackedStretch.ts';
+import {
   teamStation,
   trackedCaverTeams,
   type TrackedCaver,
@@ -61,6 +66,16 @@ export interface CaveViewTrackingOverlayProps {
    * Empty while nothing is claimed, which is also what a panel with no model loaded answers.
    */
   unplacedStations?: ReadonlySet<string>;
+  /**
+   * The stretches — positions reported between two stations — whose line the model on screen could
+   * not draw, as the viewer answered it, by stretch.
+   *
+   * The marker of such a person stands at the first station exactly as it would for a report at
+   * that station alone, so without this the drawing and the words beside it disagree and nothing
+   * says which to believe. Empty while nothing is claimed, and always empty on a surface that is
+   * told no far end.
+   */
+  stretchFaults?: ReadonlyMap<string, StretchFault>;
   /**
    * Whether each marker's label carries the time of its last report beside the name.
    *
@@ -161,6 +176,7 @@ export interface CaveViewTrackingOverlayProps {
 export default function CaveViewTrackingOverlay({
   cavers,
   unplacedStations = noStationsMissing,
+  stretchFaults = noStretchFaults,
   showTimes,
   onShowTimesChange,
   showLabels,
@@ -181,6 +197,8 @@ export default function CaveViewTrackingOverlay({
   const listOpen = expanded ?? !narrow;
 
   const open = cavers.find((caver) => caver.caverId === openCaverId) ?? null;
+  /** What is known to be wrong with the line of the stretch the opened person stands on. */
+  const openStretchFault = open === null ? null : stretchFaultOf(stretchFaults, open);
   const when = (value: string | null) =>
     value === null ? '—' : new Date(value).toLocaleString(i18n.language);
   /**
@@ -262,7 +280,34 @@ export default function CaveViewTrackingOverlay({
         // one press away says it in full with what is wrong with it. What a row has room for is
         // the one thing a reader cannot get from the model itself: that this name is not one of
         // the dots on it.
-        return offModel(caver) ? notOnModelTag() : shortNameOf(position.station);
+        if (offModel(caver)) {
+          return notOnModelTag();
+        }
+        // A stretch keeps both names even in the one line a row has: dropping the second would
+        // turn "between A and B" into "at A", which is a different report.
+        if (position.toStation === undefined) {
+          return shortNameOf(position.station);
+        }
+        return (
+          <>
+            {t('caveview.tracking.positionStretchShort', {
+              from: shortNameOf(position.station),
+              to: shortNameOf(position.toStation),
+            })}
+            {/* The row has no room for the sentence, so it carries the fact that there is one:
+                no line is drawn for this stretch, and the card one press away says why. */}
+            {stretchFaultOf(stretchFaults, caver) !== null && (
+              <WarningOutlined
+                className="caveview-tracking-stretch-fault"
+                style={{ marginInlineStart: 4 }}
+                role="img"
+                aria-label={t('caveview.tracking.stretchNotDrawn')}
+                title={t('caveview.tracking.stretchNotDrawn')}
+                data-testid="caveview-position-stretch-not-drawn"
+              />
+            )}
+          </>
+        );
       case 'depth':
         return t('trips.metres', { value: position.depthM });
       case 'withheld':
@@ -300,7 +345,15 @@ export default function CaveViewTrackingOverlay({
   const fullPlace = (position: TrackedCaverPosition) => {
     switch (position.kind) {
       case 'station':
-        return position.station;
+        // Somebody reported between two stations is said to be between them, in the words the
+        // trip's log uses: the marker stands at the first, and the row must not read as a report
+        // at it.
+        return position.toStation === undefined
+          ? position.station
+          : t('caveview.tracking.positionStretch', {
+              from: position.station,
+              to: position.toStation,
+            });
       case 'depth':
         return t('trips.metres', { value: position.depthM });
       case 'withheld':
@@ -628,6 +681,27 @@ export default function CaveViewTrackingOverlay({
               )}
             </Typography.Text>
           )}
+          {/* A stretch whose line the drawing could not show is said here, in the words for why:
+              the marker stands at the first station either way, and with no line beside it the
+              model reads as a report at that one station. Not said where the first station is
+              itself missing — the sentence above already covers a person drawn nowhere. */}
+          {open.position.kind === 'station'
+            && open.position.toStation !== undefined
+            && !offModel(open)
+            && openStretchFault !== null && (
+              <Typography.Text
+                type="secondary"
+                style={{ fontSize: 11 }}
+                data-testid="caveview-caver-card-stretch-not-drawn"
+              >
+                {t(
+                  openStretchFault === 'toNotOnModel'
+                    ? 'caveview.tracking.stretchToNotOnModelDetail'
+                    : 'caveview.tracking.stretchUnroutableDetail',
+                  { from: open.position.station, to: open.position.toStation },
+                )}
+              </Typography.Text>
+            )}
         </div>
       )}
     </div>

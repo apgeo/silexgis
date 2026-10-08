@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { CAVEVIEW_HOME, type Cv2Namespace } from '../../caveview/loadCaveView.ts';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
+import { STRETCH_TRAIL_PREFIX, stretchKey } from '../../caveview/trackedStretch.ts';
 import { shortNameOf } from '../../caveview/modelParts.ts';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
 import { reveal, resetViewControlsForTests } from '../../viewlinks/viewTargets.ts';
@@ -71,6 +72,38 @@ const moveLiveMarker = vi.fn((id: string, ref: unknown, _options?: unknown) => {
 });
 const removeLiveMarker = vi.fn((id: string) => heldMarkers.delete(id));
 const getLiveMarkers = vi.fn(() => [...heldMarkers.values()]);
+/**
+ * The pairs of stations this fake survey holds and does not join — two parts of a cave surveyed
+ * apart. A trail between such a pair is kept, resolved, and described back with a gap.
+ */
+const unjoinedStations = new Set<string>();
+/**
+ * The trails the fake viewer is holding. Answered from what the panel did, like the markers: a
+ * trail naming a station the model does not hold is kept and described back unresolved.
+ */
+const heldTrails = new Map<
+  string,
+  { id: string; resolved: boolean; points: { ref: string; resolved: boolean; atLength: number | null }[]; gaps: unknown[] }
+>();
+const addTrail = vi.fn((id: string, refs: readonly string[], _options?: unknown) => {
+  const points = refs.map((ref, index) => ({
+    ref,
+    resolved: !missingStations.has(ref),
+    atLength: missingStations.has(ref) ? null : index * 10,
+  }));
+  const resolved = points.every((point) => point.resolved);
+  const trail = {
+    id,
+    resolved,
+    points,
+    gaps: resolved && unjoinedStations.has(refs.join('|')) ? [{}] : [],
+  };
+  heldTrails.set(id, trail);
+  return trail;
+});
+const updateTrail = vi.fn((id: string, _refs: unknown, _options?: unknown) => heldTrails.get(id) ?? null);
+const removeTrail = vi.fn((id: string) => heldTrails.delete(id));
+const getTrails = vi.fn(() => [...heldTrails.values()]);
 const setLiveMarkerClusterLabel = vi.fn();
 const setStationMedia = vi.fn();
 const clearStationMedia = vi.fn();
@@ -129,6 +162,10 @@ class FakeViewer {
   moveLiveMarker = moveLiveMarker;
   removeLiveMarker = removeLiveMarker;
   getLiveMarkers = getLiveMarkers;
+  addTrail = addTrail;
+  updateTrail = updateTrail;
+  removeTrail = removeTrail;
+  getTrails = getTrails;
   setLiveMarkerClusterLabel = setLiveMarkerClusterLabel;
   setStationMedia = setStationMedia;
   clearStationMedia = clearStationMedia;
@@ -255,6 +292,8 @@ beforeEach(() => {
   viewers.length = 0;
   missingStations.clear();
   heldMarkers.clear();
+  heldTrails.clear();
+  unjoinedStations.clear();
   lastViewerConfig = undefined;
   stationLabelOver = false;
   lastToolbar = undefined;
@@ -790,6 +829,102 @@ describe('CaveViewPanel', () => {
         expect(focusStation).toHaveBeenCalledWith('p.g.7', { highlight: true }),
       );
       expect(screen.queryByTestId('caveview-caver-card-not-on-model')).not.toBeInTheDocument();
+    });
+
+    /**
+     * A position that is a stretch: somebody reported between two stations.
+     *
+     * What is pinned is that the marker stays at the first station and a line is routed on to the
+     * second; that the line goes when the position is anything else; and that a line the drawing
+     * cannot show is said in words rather than left as a marker that reads as a report at one
+     * station. A party that names no far end — which is every party a page that is not signed in
+     * hands over — asks the viewer for no line at all.
+     */
+    describe('somebody reported between two stations', () => {
+      const between = (overrides: Partial<TrackedCaver> = {}) =>
+        caver({ position: { kind: 'station', station: 'p.g.7', toStation: 'p.g.9' }, ...overrides });
+      const lineId = `${STRETCH_TRAIL_PREFIX}${stretchKey('p.g.7', 'p.g.9')}`;
+
+      it('keeps the marker at the first station and routes a dashed line to the second', async () => {
+        await renderReady({ trackedCavers: [between()] });
+
+        expect(addLiveMarker).toHaveBeenCalledWith('caver-1', 'p.g.7', expect.any(Object));
+        expect(addTrail).toHaveBeenCalledExactlyOnceWith(lineId, ['p.g.7', 'p.g.9'], {
+          color: expect.any(String),
+          style: 'dashed',
+        });
+        const row = screen.getByTestId('caveview-caver-caver-1');
+        expect(row).toHaveTextContent(`${shortNameOf('p.g.7')} – ${shortNameOf('p.g.9')}`);
+        expect(within(row).queryByTestId('caveview-position-stretch-not-drawn')).toBeNull();
+
+        fireEvent.click(row);
+        expect(screen.getByTestId('caveview-caver-card')).toHaveTextContent('Between p.g.7 and p.g.9');
+        expect(screen.queryByTestId('caveview-caver-card-stretch-not-drawn')).toBeNull();
+      });
+
+      it('takes the line off when the position changes, and draws it once while nothing does', async () => {
+        const { rerender } = await renderReady({ trackedCavers: [between()] });
+
+        // A poll that changed nothing: the same stretch, a new list.
+        rerender(watching([between()]));
+        expect(addTrail).toHaveBeenCalledTimes(1);
+        expect(removeTrail).not.toHaveBeenCalled();
+
+        // Reported at one station — the far one, even. The stretch is over.
+        rerender(watching([caver({ position: { kind: 'station', station: 'p.g.9' } })]));
+        expect(removeTrail).toHaveBeenCalledExactlyOnceWith(lineId);
+        expect(heldTrails.size).toBe(0);
+      });
+
+      it('says so when the drawing holds no station of the far end\'s name', async () => {
+        missingStations.add('p.g.9');
+
+        await renderReady({ trackedCavers: [between()] });
+
+        const row = screen.getByTestId('caveview-caver-caver-1');
+        expect(await within(row).findByTestId('caveview-position-stretch-not-drawn')).toBeInTheDocument();
+        // The person themselves is on the drawing: it is the line that is not.
+        expect(within(row).queryByTestId('caveview-position-not-on-model')).toBeNull();
+        fireEvent.click(row);
+        expect(screen.getByTestId('caveview-caver-card-stretch-not-drawn')).toHaveTextContent(
+          'this drawing holds no station named p.g.9',
+        );
+      });
+
+      it('says so when the survey does not join the two stations', async () => {
+        unjoinedStations.add('p.g.7|p.g.9');
+
+        await renderReady({ trackedCavers: [between()] });
+
+        const row = screen.getByTestId('caveview-caver-caver-1');
+        expect(await within(row).findByTestId('caveview-position-stretch-not-drawn')).toBeInTheDocument();
+        fireEvent.click(row);
+        expect(screen.getByTestId('caveview-caver-card-stretch-not-drawn')).toHaveTextContent(
+          'has no legs joining the two stations',
+        );
+      });
+
+      it('draws no line from a first station the drawing does not hold, and says that once', async () => {
+        missingStations.add('p.g.7');
+
+        await renderReady({ trackedCavers: [between()] });
+
+        const row = screen.getByTestId('caveview-caver-caver-1');
+        expect(await within(row).findByTestId('caveview-position-not-on-model')).toBeInTheDocument();
+        await waitFor(() => expect(heldTrails.size).toBe(0));
+        fireEvent.click(row);
+        expect(screen.getByTestId('caveview-caver-card-not-on-model')).toBeInTheDocument();
+        expect(screen.queryByTestId('caveview-caver-card-stretch-not-drawn')).toBeNull();
+      });
+
+      it('asks the viewer for no line where the party names no far end', async () => {
+        const { rerender } = await renderReady({ trackedCavers: [caver()] });
+        rerender(watching([caver({ position: { kind: 'station', station: 'p.g.9' } })]));
+
+        expect(addTrail).not.toHaveBeenCalled();
+        expect(removeTrail).not.toHaveBeenCalled();
+        expect(getTrails).not.toHaveBeenCalled();
+      });
     });
 
     describe('narrowed to the parts a watch declared', () => {

@@ -54,6 +54,8 @@ export interface HeldReportBody {
   caverIds: string[];
   kind: TripPositionEventKind;
   stationName: string | null;
+  /** The far end of a stretch, on a report that says somebody is between two stations. */
+  toStationName: string | null;
   depthM: number | null;
   teamId: string | null;
   note: string | null;
@@ -145,6 +147,7 @@ function parseEntry(storageKey: string, raw: string | null): HeldReport | null {
     !body.caverIds.every(isString) ||
     !isString(body.kind) ||
     !isNullOr(isString)(body.stationName) ||
+    !isNullOr(isString)(body.toStationName) ||
     !isNullOr(isNumber)(body.depthM) ||
     !isNullOr(isString)(body.teamId) ||
     !isNullOr(isString)(body.note) ||
@@ -164,6 +167,7 @@ function parseEntry(storageKey: string, raw: string | null): HeldReport | null {
       caverIds: body.caverIds,
       kind: body.kind as TripPositionEventKind,
       stationName: body.stationName,
+      toStationName: body.toStationName,
       depthM: body.depthM,
       teamId: body.teamId,
       note: body.note,

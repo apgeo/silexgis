@@ -45,6 +45,11 @@ export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   // it under a spelling the drawing does not use. Not the refusal above: that one is answered by
   // choosing another station, this one by reading the survey again, and nothing typed would help.
   'tracking.station_reading_outdated': 'trips.tracking.problems.stationReadingOutdated',
+  // A report between two stations names two, and either can be the one the survey lacks. The far
+  // end has a refusal of its own so that the sentence says which of the two to look at; the first
+  // station is refused by the ordinary one above.
+  'tracking.to_station_unknown': 'trips.tracking.problems.toStationUnknown',
+  'tracking.stretch_same_station': 'trips.tracking.problems.stretchSameStation',
   'tracking.no_station_at_depth': 'trips.tracking.problems.noStationAtDepth',
   'tracking.caver_not_participant': 'trips.tracking.problems.caverNotParticipant',
   'tracking.recorded_in_future': 'trips.tracking.problems.recordedInFuture',

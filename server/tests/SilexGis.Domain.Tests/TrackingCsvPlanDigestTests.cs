@@ -66,6 +66,7 @@ public class TrackingCsvPlanDigestTests
         (nameof(TrackingCsvPlannedReport.TeamId), true, r => r with { TeamId = TeamTwo }),
         (nameof(TrackingCsvPlannedReport.Kind), true, r => r with { Kind = TripPositionEventKind.AtStation }),
         (nameof(TrackingCsvPlannedReport.ViewerStationName), true, r => r with { ViewerStationName = "3" }),
+        (nameof(TrackingCsvPlannedReport.ViewerToStationName), true, r => r with { ViewerToStationName = "3" }),
         (nameof(TrackingCsvPlannedReport.DepthM), true, r => r with { DepthM = 96.1m }),
         (nameof(TrackingCsvPlannedReport.Note), true, r => r with { Note = "apa mica" }),
         (nameof(TrackingCsvPlannedReport.Replaces), true, r => r with { Replaces = true }),
@@ -91,7 +92,7 @@ public class TrackingCsvPlanDigestTests
         // restart of the server, or on another of its instances.
         var plan = PlanOf(Report(), Report() with { Line = 3, CaverId = Maria, TeamId = null, Note = null, DepthM = null });
 
-        plan.Digest().ShouldBe("c7d79a5a5d05fb5349ddafad0243f027d39dd9f4363c2c0187c71de7cc04b835");
+        plan.Digest().ShouldBe("d49b5d5e7bb18225252250bbcdc8106fca11670d427dadb76a318725cb8e0c45");
         plan.Digest().ShouldBe(TrackingCsvPlanDigest.Of(plan));
     }
 
@@ -239,6 +240,7 @@ public class TrackingCsvPlanDigestTests
             (nameof(TrackingCsvReplacedReport.Kind), Stood() with { Kind = TripPositionEventKind.Note }),
             (nameof(TrackingCsvReplacedReport.SurveyModelId), Stood() with { SurveyModelId = SurveyTwo }),
             (nameof(TrackingCsvReplacedReport.StationName), Stood() with { StationName = "deep.3" }),
+            (nameof(TrackingCsvReplacedReport.ToStationName), Stood() with { ToStationName = "deep.3" }),
             (nameof(TrackingCsvReplacedReport.DepthM), Stood() with { DepthM = 50m }),
             (nameof(TrackingCsvReplacedReport.Note), Stood() with { Note = "alta nota" }),
             (nameof(TrackingCsvReplacedReport.Corrected), Stood() with { Corrected = true }),

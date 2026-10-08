@@ -229,6 +229,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         lastRecordedAt: '2026-09-12T07:00:00Z',
         positionRecordedAt: '2026-09-12T07:00:00Z',
         stationName: 'P12',
+        toStationName: null,
         depthM: 84,
         positionSurveyModelId: null,
         in: true,
@@ -248,6 +249,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         lastRecordedAt: '2026-09-12T06:30:00Z',
         positionRecordedAt: null,
         stationName: null,
+        toStationName: null,
         depthM: null,
         positionSurveyModelId: null,
         in: true,
@@ -363,6 +365,7 @@ describe('TripTrackingTab', () => {
             // Reported at a station, and the station kept back — the shape the server sends to a
             // reader without the right to place the cave.
             stationName: null,
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: null,
             in: true,
@@ -408,6 +411,7 @@ describe('TripTrackingTab', () => {
             lastRecordedAt: '2026-09-12T07:00:00Z',
             positionRecordedAt: null,
             stationName: null,
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: null,
             in: true,
@@ -427,6 +431,7 @@ describe('TripTrackingTab', () => {
             lastRecordedAt: null,
             positionRecordedAt: null,
             stationName: null,
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: null,
             in: false,
@@ -471,6 +476,7 @@ describe('TripTrackingTab', () => {
             lastRecordedAt: '2026-09-12T06:30:00Z',
             positionRecordedAt: null,
             stationName: null,
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: null,
             in: true,
@@ -492,6 +498,7 @@ describe('TripTrackingTab', () => {
             lastRecordedAt: '2026-09-12T07:00:00Z',
             positionRecordedAt: null,
             stationName: null,
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: null,
             in: true,
@@ -1181,6 +1188,69 @@ describe('TripTrackingTab', () => {
     });
   });
 
+  /**
+   * A report between two stations is said as that, on the party table and on the log, with both
+   * names. And the second name is place: a reader the place is kept from is sent neither, and the
+   * row then reads as withheld, exactly as a report at one station does. Both are drawn here from
+   * one log, so the withheld row is seen beside one that proves a stretch would have been printed.
+   */
+  it('says a stretch as between its two stations, in the table and on the log, and nothing of a withheld one', () => {
+    const base = state();
+    trackingQuery.mockReturnValue({
+      data: state({
+        positionsWithheld: true,
+        participants: [
+          {
+            ...base.participants[0],
+            stationName: 'cave.deep.3',
+            toStationName: 'cave.deep.7',
+            depthM: null,
+            positionSurveyModelId: 'model-1',
+          },
+        ],
+      }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    const row = (id: string, stationName: string | null, toStationName: string | null) => ({
+      id,
+      caverId: ANA,
+      teamId: null,
+      kind: 'atStation',
+      surveyModelId: stationName === null ? null : 'model-1',
+      stationName,
+      toStationName,
+      depthEnteredM: null,
+      note: null,
+      recordedAt: '2026-09-12T07:00:00Z',
+    });
+    eventsQuery.mockReturnValue({
+      data: {
+        items: [
+          row('event-told', 'cave.deep.3', 'cave.deep.7'),
+          row('event-one-station', 'cave.deep.3', null),
+          row('event-kept-back', null, null),
+        ],
+        page: 1,
+        pageSize: 20,
+        totalItems: 3,
+      },
+      isPending: false,
+    });
+    show(false);
+
+    const said = screen.getAllByTestId('trip-tracking-stretch');
+    // Once for the person on the party table, once for the one report of the log that is a stretch.
+    expect(said.map((one) => one.textContent)).toEqual([
+      'Between cave.deep.3 and cave.deep.7',
+      'Between cave.deep.3 and cave.deep.7',
+    ]);
+    const log = screen.getByTestId('trip-tracking-events');
+    expect(within(log).getAllByTestId('trip-tracking-stretch')).toHaveLength(1);
+    expect(within(log).getAllByTestId('trip-tracking-position-withheld')).toHaveLength(1);
+  });
+
   it('offers a reader who may not write the trip nothing to write with', () => {
     show(false);
 
@@ -1260,6 +1330,7 @@ describe('TripTrackingTab', () => {
               lastRecordedAt: '2026-09-12T07:00:00Z',
               positionRecordedAt: null,
               stationName: null,
+              toStationName: null,
               depthM: null,
               positionSurveyModelId: null,
               in: true,
@@ -1786,6 +1857,7 @@ describe('TripTrackingTab', () => {
             lastRecordedAt: '2026-09-12T07:00:00Z',
             positionRecordedAt: '2026-09-12T07:00:00Z',
             stationName: 'P12',
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: null,
             in: true,
@@ -1805,6 +1877,7 @@ describe('TripTrackingTab', () => {
             lastRecordedAt: '2026-09-12T09:30:00Z',
             positionRecordedAt: null,
             stationName: null,
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: null,
             in: false,
@@ -1825,6 +1898,7 @@ describe('TripTrackingTab', () => {
             lastRecordedAt: null,
             positionRecordedAt: null,
             stationName: null,
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: null,
             in: false,
@@ -1959,6 +2033,7 @@ describe('TripTrackingTab', () => {
             lastRecordedAt: '2026-09-12T09:55:00Z',
             positionRecordedAt: '2026-09-12T07:00:00Z',
             stationName: 'P12',
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: null,
             in: true,
@@ -1980,6 +2055,7 @@ describe('TripTrackingTab', () => {
             lastRecordedAt: '2026-09-12T09:40:00Z',
             positionRecordedAt: null,
             stationName: null,
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: null,
             in: true,
@@ -1999,6 +2075,7 @@ describe('TripTrackingTab', () => {
             lastRecordedAt: '2026-09-12T06:30:00Z',
             positionRecordedAt: null,
             stationName: null,
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: null,
             in: true,
@@ -2227,6 +2304,7 @@ describe('TripTrackingTab', () => {
               lastRecordedAt: '2026-09-12T06:30:00Z',
               positionRecordedAt: null,
               stationName: null,
+              toStationName: null,
               depthM: null,
               positionSurveyModelId: null,
               in: true,
@@ -2267,6 +2345,7 @@ describe('TripTrackingTab', () => {
               lastRecordedAt: '2026-09-12T06:30:00Z',
               positionRecordedAt: null,
               stationName: null,
+              toStationName: null,
               depthM: null,
               positionSurveyModelId: null,
               in: true,
@@ -2287,6 +2366,7 @@ describe('TripTrackingTab', () => {
               lastRecordedAt: '2026-09-12T06:30:00Z',
               positionRecordedAt: null,
               stationName: null,
+              toStationName: null,
               depthM: null,
               positionSurveyModelId: null,
               in: true,
@@ -2417,6 +2497,7 @@ describe('TripTrackingTab', () => {
               lastRecordedAt: '2026-09-12T06:30:00Z',
               positionRecordedAt: null,
               stationName: null,
+              toStationName: null,
               depthM: null,
               positionSurveyModelId: null,
               in: true,
@@ -2723,6 +2804,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             lastRecordedAt: '2026-09-12T07:00:00Z',
             positionRecordedAt: '2026-09-12T07:00:00Z',
             stationName: 'p.g.140',
+            toStationName: null,
             depthM: 1200,
             positionSurveyModelId: 'model-1',
             in: true,
@@ -3015,6 +3097,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             positionRecordedAt: '2026-09-12T07:00:00Z',
             // Measured before the watch was re-pointed, so this name belongs to the old survey.
             stationName: 'cave.deep.3',
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: OTHER,
             in: true,
@@ -3036,6 +3119,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             // Reported since, on the survey now in use: the twin that keeps this a rule about the
             // survey rather than a mark on every station in the table.
             stationName: 'P12',
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: MODEL,
             in: true,
@@ -3090,6 +3174,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               lastRecordedAt: '2026-09-12T07:00:00Z',
               positionRecordedAt: '2026-09-12T07:00:00Z',
               stationName: 'cave.deep.3',
+              toStationName: null,
               depthM: null,
               positionSurveyModelId: null,
               in: true,
@@ -3225,6 +3310,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             lastRecordedAt: '2026-09-12T07:00:00Z',
             positionRecordedAt: '2026-09-12T07:00:00Z',
             stationName: 'cave.deep.3',
+            toStationName: null,
             depthM: null,
             // Measured against the survey in force: everything a row can be asked says this is
             // drawable, which is exactly why the drawing has to be asked as well.
@@ -3246,6 +3332,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             lastRecordedAt: '2026-09-12T07:10:00Z',
             positionRecordedAt: '2026-09-12T07:10:00Z',
             stationName: 'P12',
+            toStationName: null,
             depthM: null,
             positionSurveyModelId: MODEL,
             in: true,
@@ -3334,6 +3421,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               lastRecordedAt: '2026-09-12T07:00:00Z',
               positionRecordedAt: '2026-09-12T07:00:00Z',
               stationName: 'cave.deep.3',
+              toStationName: null,
               depthM: null,
               positionSurveyModelId: 'model-2',
               in: true,
@@ -4040,6 +4128,7 @@ describe('TripTrackingTab, reports this browser is holding', () => {
           caverIds: [ANA],
           kind: 'note',
           stationName: null,
+          toStationName: null,
           depthM: null,
           teamId: null,
           note: 'typed with no signal',

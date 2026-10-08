@@ -48,6 +48,7 @@ function held(over: Partial<HeldReport> = {}): HeldReport {
       caverIds: ['caver-1'],
       kind: 'entered',
       stationName: null,
+      toStationName: null,
       depthM: null,
       teamId: null,
       note: null,

@@ -19,6 +19,7 @@ import type { DeclaredPartsView } from '../../caveview/declaredParts.ts';
 import type { CaveViewMediaEntry } from '../../caveview/loadCaveView.ts';
 import { partFromStation, pathOf, type PickedModelPart } from '../../caveview/modelParts.ts';
 import { trackedCaversFrom } from '../../caveview/trackedCavers.ts';
+import { withStretches, withStretchesAt } from '../../caveview/trackedStretch.ts';
 import { caveViewToolbarButtons } from '../../caveview/toolbarButtons.ts';
 import {
   placedPicturesAt,
@@ -445,14 +446,21 @@ export default function TrackingModelPanel({
     return entries;
   }, [events]);
 
+  // Each person the watch places between two stations is given the far end after the fold, by
+  // the one module that knows about stretches: this surface is signed in, and the fold itself is
+  // shared with pages that are told the first station only.
   const cavers = useMemo(
     () =>
-      trackedCaversFrom(
+      withStretches(
+        trackedCaversFrom(
+          tracking,
+          (caverId) => ({
+            name: nameOf(caverId),
+            enteredAt: enteredAt.get(caverId) ?? null,
+          }),
+          drawnModelId,
+        ),
         tracking,
-        (caverId) => ({
-          name: nameOf(caverId),
-          enteredAt: enteredAt.get(caverId) ?? null,
-        }),
         drawnModelId,
       ),
     [tracking, nameOf, enteredAt, drawnModelId],
@@ -470,7 +478,11 @@ export default function TrackingModelPanel({
     () =>
       replayAt === null || log.data === undefined
         ? null
-        : trackedCaversAt(tracking, log.data, replayAt, nameOf, drawnModelId),
+        : withStretchesAt(
+            trackedCaversAt(tracking, log.data, replayAt, nameOf, drawnModelId),
+            log.data,
+            drawnModelId,
+          ),
     [tracking, log.data, replayAt, nameOf, drawnModelId],
   );
 

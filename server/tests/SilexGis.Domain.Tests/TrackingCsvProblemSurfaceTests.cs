@@ -63,6 +63,9 @@ public class TrackingCsvProblemSurfaceTests
         nameof(TrackingCsvProblem.PlaceLabelUnknown),
         nameof(TrackingCsvProblem.PlaceLabelAmbiguous),
         nameof(TrackingCsvProblem.StationNotInModel),
+        nameof(TrackingCsvProblem.ToStationNotInModel),
+        nameof(TrackingCsvProblem.StretchSameStation),
+        nameof(TrackingCsvProblem.ToStationWithoutStation),
         nameof(TrackingCsvProblem.DepthReferenceUnknown),
         nameof(TrackingCsvProblem.NoStationAtDepth),
         nameof(TrackingCsvProblem.ModelMissing),
@@ -110,6 +113,7 @@ public class TrackingCsvProblemSurfaceTests
                 nameof(TrackingCsvField.Station),
                 nameof(TrackingCsvField.Team),
                 nameof(TrackingCsvField.Time),
+                nameof(TrackingCsvField.ToStation),
             }.OrderBy(n => n, StringComparer.Ordinal),
             customMessage:
                 "A column role was added or removed. Name it in "

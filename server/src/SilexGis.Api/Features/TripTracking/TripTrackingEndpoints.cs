@@ -397,6 +397,9 @@ public static class TripTrackingEndpoints
                 // station is kept back the time that would date it is kept back with it.
                 positionOpen ? lastPositioned?.RecordedAt : null,
                 positionOpen ? lastPositioned?.ViewerStationName : null,
+                // The far end of a stretch, on the first station's own branch: the two are one
+                // statement about where somebody is, told together or not at all.
+                positionOpen ? lastPositioned?.ViewerToStationName : null,
                 positionOpen ? lastPositioned?.DepthEnteredM : null,
                 // Which model that place was measured in, on the same branch as the place itself:
                 // the name and the survey it is a name inside are one statement, and handing over
@@ -929,7 +932,7 @@ public static class TripTrackingEndpoints
 
         var placed = await ResolvePlaceAsync(
             db, access, protection, ctx!, tracking, request.Kind!.Value,
-            request.StationName, request.DepthM, ct);
+            request.StationName, request.ToStationName, request.DepthM, ct);
         if (placed.Refusal is { } placeRefused) return placeRefused;
         var kind = request.Kind!.Value;
         // Ids that rise as the people's do, so that every send of one act writes the same person
@@ -951,6 +954,7 @@ public static class TripTrackingEndpoints
                 SurveyModelId = placed.SurveyModelId,
                 CaveFeatureId = placed.CaveFeatureId,
                 ViewerStationName = placed.StationName,
+                ViewerToStationName = placed.ToStationName,
                 DepthEnteredM = placed.DepthEnteredM,
                 Note = request.Note,
                 RecordedAt = recordedAt,
@@ -989,7 +993,8 @@ public static class TripTrackingEndpoints
         var declaredParts = await TrackingDeclaredParts.ForAsync(
             db, tracking, declarationTold: placed.StationName is not null, created, ct);
         IReadOnlyList<TrackingEventDto> dtos = [.. created.Select(e => new TrackingEventDto(
-            e.Id, e.CaverId, e.TeamId, e.Kind, e.SurveyModelId, e.ViewerStationName, e.DepthEnteredM, e.Note, e.RecordedAt,
+            e.Id, e.CaverId, e.TeamId, e.Kind, e.SurveyModelId, e.ViewerStationName, e.ViewerToStationName,
+            e.DepthEnteredM, e.Note, e.RecordedAt,
             TripTrackingRules.ChangedSinceWritten(e.CreatedAt, e.UpdatedAt),
             declaredParts.Outside(e),
             placed.Placement))];
@@ -1058,12 +1063,13 @@ public static class TripTrackingEndpoints
     private static async Task<ResolvedPlace> ResolvePlaceAsync(
         SilexGisDbContext db, IAccessService access, FeatureProtection protection, AccessContext ctx,
         Domain.Entities.TripTracking tracking, TripPositionEventKind kind,
-        string? stationName, decimal? depthM,
+        string? stationName, string? toStationName, decimal? depthM,
         CancellationToken ct)
     {
         Guid? surveyModelId = null;
         Guid? caveFeatureId = null;
         string? resolvedStation = null;
+        string? resolvedToStation = null;
         decimal? depthEntered = null;
         TrackingDepthPlacementOutcome? placement = null;
 
@@ -1096,6 +1102,33 @@ public static class TripTrackingEndpoints
                                 + "stations could be reported at. Read the survey again, then report.")
                         : ApiProblems.BadRequest(TrackingProblemCodes.StationUnknown,
                             "The station is not one of the chosen model's stations."));
+                }
+
+                if (toStationName is not null)
+                {
+                    // The far end of a stretch, against the same model as the first: a stretch is
+                    // a statement inside one survey, and the report holds exactly one. Refused
+                    // under its own code so that whoever gave two stations is told which one the
+                    // survey does not have.
+                    resolvedToStation = await ResolveStationAsync(db, usable.Value.Model, toStationName, ct);
+                    if (resolvedToStation is null)
+                    {
+                        return Refused(await HeldUnderEarlierSpellingAsync(db, usable.Value.Model, toStationName, ct)
+                            ? ApiProblems.Conflict(TrackingProblemCodes.StationReadingOutdated,
+                                "The station at the far end of the stretch has no name in the survey file, and the "
+                                    + "survey was read before such stations could be reported at. Read the survey "
+                                    + "again, then report.")
+                            : ApiProblems.BadRequest(TrackingProblemCodes.ToStationUnknown,
+                                "The station at the far end of the stretch is not one of the chosen model's stations."));
+                    }
+
+                    // Asked of the resolved names: two spellings of one station are one station.
+                    if (TripTrackingRules.StretchProblem(kind, resolvedStation, resolvedToStation)
+                        == TrackingStretchProblem.SameStation)
+                    {
+                        return Refused(ApiProblems.BadRequest(TrackingProblemCodes.StretchSameStation,
+                            "Both ends of the stretch are the same station. Report at that station instead."));
+                    }
                 }
             }
             else
@@ -1133,7 +1166,8 @@ public static class TripTrackingEndpoints
             }
         }
 
-        return new ResolvedPlace(surveyModelId, caveFeatureId, resolvedStation, depthEntered, placement, null);
+        return new ResolvedPlace(
+            surveyModelId, caveFeatureId, resolvedStation, resolvedToStation, depthEntered, placement, null);
     }
 
     /// <summary>The places a cave has declared names and stations for, ordered by depth.</summary>
@@ -1151,12 +1185,15 @@ public static class TripTrackingEndpoints
     }
 
     private static ResolvedPlace Refused(ProblemHttpResult problem) =>
-        new(null, null, null, null, null, problem);
+        new(null, null, null, null, null, null, problem);
 
     /// <summary>What a report says about where somebody is, once every gate on it has been asked.</summary>
     /// <param name="Placement">How a depth became its station; null for a report that named no depth.</param>
+    /// <param name="ToStationName">
+    /// The far end of a stretch in the viewer's spelling; null unless the report gave one.
+    /// </param>
     private sealed record ResolvedPlace(
-        Guid? SurveyModelId, Guid? CaveFeatureId, string? StationName, decimal? DepthEnteredM,
+        Guid? SurveyModelId, Guid? CaveFeatureId, string? StationName, string? ToStationName, decimal? DepthEnteredM,
         TrackingDepthPlacementOutcome? Placement, ProblemHttpResult? Refusal);
 
     /// <summary>
@@ -1228,7 +1265,7 @@ public static class TripTrackingEndpoints
 
         var placed = await ResolvePlaceAsync(
             db, access, protection, ctx!, tracking, request.Kind!.Value,
-            request.StationName, request.DepthM, ct);
+            request.StationName, request.ToStationName, request.DepthM, ct);
         if (placed.Refusal is { } placeRefused) return placeRefused;
 
         row.Kind = request.Kind!.Value;
@@ -1236,6 +1273,9 @@ public static class TripTrackingEndpoints
         row.SurveyModelId = placed.SurveyModelId;
         row.CaveFeatureId = placed.CaveFeatureId;
         row.ViewerStationName = placed.StationName;
+        // Rewritten with the first station, never left standing: a correction that names one
+        // station turns a stretch into a report at that station.
+        row.ViewerToStationName = placed.ToStationName;
         row.DepthEnteredM = placed.DepthEnteredM;
         row.Note = request.Note;
         row.RecordedAt = recordedAt;
@@ -1247,7 +1287,7 @@ public static class TripTrackingEndpoints
             db, tracking, declarationTold: placed.StationName is not null, [row], ct);
         return TypedResults.Ok(new TrackingEventDto(
             row.Id, row.CaverId, row.TeamId, row.Kind, row.SurveyModelId, row.ViewerStationName,
-            row.DepthEnteredM, row.Note, row.RecordedAt,
+            row.ViewerToStationName, row.DepthEnteredM, row.Note, row.RecordedAt,
             // Read off the row as it was saved: a correction that changed nothing leaves the stamps
             // where they were, and the answer then says what the next read of the log will say.
             TripTrackingRules.ChangedSinceWritten(row.CreatedAt, row.UpdatedAt),

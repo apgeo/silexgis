@@ -15,6 +15,7 @@ import { saveBlob } from '../../../api/download.ts';
 import { useCave, useSurveyModel, useSurveyModelTrackedTrips, type TrackedTrip } from '../../../api/hooks.ts';
 import type { CaveViewer, CaveViewLabelText, CaveViewLiveMarker } from '../../../caveview/loadCaveView.ts';
 import { syncLiveMarkers, type DrawnMarker } from '../../../caveview/liveMarkerSync.ts';
+import { logsNameAStretch } from '../../../caveview/trackedStretch.ts';
 import {
   MOVIE_EXTENSION,
   probeMovieFormats,
@@ -1277,6 +1278,14 @@ function MovieDialogBody({
           />
         )}
         {run !== null && <ExportProgress run={run} />}
+        {/* A report may say somebody was between two stations. The movie has one marker per person
+            and a trail of the stations they were placed at, so it draws them at the first station;
+            said here, and only for trips whose logs hold such a report. */}
+        {logsNameAStretch(movie.trips.map((trip) => trip.events)) && (
+          <Typography.Text type="secondary" data-testid="movie-stretch-note">
+            {t('caveview.movie.stretchNote')}
+          </Typography.Text>
+        )}
         <Alert type="info" showIcon title={t('caveview.movie.privacy')} data-testid="movie-privacy" />
         <Flex justify="flex-end" align="center" gap="small" wrap>
           {movie.trips.length > 0 && (

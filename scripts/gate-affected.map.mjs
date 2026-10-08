@@ -26,6 +26,7 @@ export const groups = {
     'TripSectionSchemaTests', 'TripSilentWriteTests', 'TripStatisticsTests',
     'TripTypeVocabularyTests', 'TripTrackingTests', 'TripTrackingPublicationTests',
     'TripPastTrackTests', 'TripTrackingPicturesTests', 'TripTrackingStationNamesTests',
+    'TripTrackingStretchTests',
     'TripLiveSiblingTests', 'TripHandoverTests', 'PublishedNamesNowhereTests',
     'SurveyModelTrackedTripsTests', 'SurveyModelTrackedTripCountsTests',
     'SurveyModelTrackedTripReplayTests', 'TrackingCsvImportTests',
@@ -463,8 +464,8 @@ export const crossCutting = {
     'TripPurgeTests', 'TripReportDocumentTests', 'TripReportTrackingTests',
     'TripRoleLinkUnitOfWorkTests', 'TripSoftDeleteTests', 'TripStatisticsTests',
     'TripStatsTests', 'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
-    'TripTrackingStationNamesTests', 'TripTrackingTests', 'WorkAreaTests',
-    'WorkingSridBehaviourTests',
+    'TripTrackingStationNamesTests', 'TripTrackingStretchTests', 'TripTrackingTests',
+    'WorkAreaTests', 'WorkingSridBehaviourTests',
   ],
 };
 

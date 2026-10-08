@@ -28,6 +28,7 @@ function report(over: Partial<HeldReport> = {}): HeldReport {
       caverIds: ['caver-1'],
       kind: 'atStation',
       stationName: 'p.g.42',
+      toStationName: null,
       depthM: null,
       teamId: null,
       note: 'waiting at the pitch head',
@@ -68,6 +69,29 @@ describe('the outbox of tracking reports', () => {
     const after = await openTab();
 
     expect(after.heldReportsOf(ANA)).toEqual([{ ...kept, sending: false }]);
+  });
+
+  /**
+   * A report between two stations keeps its far end through storage. A far end that is not a name
+   * makes an item something this version did not write, and it is left where it is.
+   */
+  it('keeps the second station of a stretch, and reads no item whose second station is not a name', async () => {
+    const before = await openTab();
+    const stretch = report({ body: { ...report().body, toStationName: 'p.g.44' } });
+    before.holdReport(stretch);
+    window.localStorage.setItem(
+      'silexgis.trackingOutbox.odd',
+      JSON.stringify({
+        ...report({ clientKey: 'odd' }),
+        body: { ...report({ clientKey: 'odd' }).body, toStationName: 7 },
+        v: 1,
+      }),
+    );
+
+    const after = await openTab();
+
+    const read = new Map(after.heldReportsOf(ANA).map((one) => [one.clientKey, one.body.toStationName]));
+    expect(read).toEqual(new Map([[stretch.clientKey, 'p.g.44']]));
   });
 
   it('lists oldest composition first, and one trip at a time when asked', async () => {

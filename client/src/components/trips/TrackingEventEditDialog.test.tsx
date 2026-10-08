@@ -41,6 +41,7 @@ const REPORT: TrackingEvent = {
   kind: 'atStation',
   surveyModelId: 'model-1',
   stationName: 'cave.upper.2',
+  toStationName: null,
   depthEnteredM: null,
   note: 'first call',
   recordedAt: '2026-09-12T10:00:00Z',
@@ -144,6 +145,61 @@ describe('TrackingEventEditDialog', () => {
     expect(sent.kind).toBe('exited');
     expect(sent.stationName).toBeNull();
     expect(sent.depthM).toBeNull();
+  });
+
+  /**
+   * A report between two stations is corrected as one. It opens holding both ends, so that
+   * correcting something else about it sends the stretch back unchanged; emptying the second
+   * station turns it into a report at the first, said to the server as an absence; and a stretch
+   * corrected into a kind that names no station carries neither end.
+   */
+  it('opens a stretch on both its stations and sends back what the fields then hold', async () => {
+    const stretch = { ...REPORT, toStationName: 'cave.upper.5' };
+    const save = () => fireEvent.click(screen.getByRole('button', { name: /save the correction/i }));
+    render(
+      <App>
+        <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={stretch} teams={[]} onClose={() => {}} />
+      </App>,
+    );
+
+    expect(screen.getByTestId('trip-tracking-edit-station')).toHaveValue('cave.upper.2');
+    expect(screen.getByTestId('trip-tracking-edit-to-station')).toHaveValue('cave.upper.5');
+
+    save();
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect(update.mock.calls[0][0]).toMatchObject({
+      stationName: 'cave.upper.2',
+      toStationName: 'cave.upper.5',
+    });
+
+    fireEvent.change(screen.getByTestId('trip-tracking-edit-to-station'), { target: { value: '  ' } });
+    save();
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+    expect(update.mock.calls[1][0]).toMatchObject({ stationName: 'cave.upper.2', toStationName: null });
+  });
+
+  it('carries neither end of a stretch on a correction into a kind that names no station', async () => {
+    render(
+      <App>
+        <TrackingEventEditDialog
+          {...WATCH}
+          tripLogId="trip-1"
+          report={{ ...REPORT, toStationName: 'cave.upper.5' }}
+          teams={[]}
+          onClose={() => {}}
+        />
+      </App>,
+    );
+
+    const kindField = screen.getByTestId('trip-tracking-edit-kind');
+    fireEvent.mouseDown(kindField.querySelector('.ant-select-selector') ?? kindField);
+    await act(async () => {
+      fireEvent.click(document.querySelector('.ant-select-item-option[title="Came out"]')!);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save the correction/i }));
+
+    await waitFor(() => expect(update).toHaveBeenCalled());
+    expect(update.mock.calls[0][0]).toMatchObject({ kind: 'exited', stationName: null, toStationName: null });
   });
 
   it('saves nothing and rejects nothing when a required field is left empty', async () => {
