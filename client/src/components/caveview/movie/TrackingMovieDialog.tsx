@@ -2,6 +2,7 @@
 import {
   CameraOutlined,
   CaretRightOutlined,
+  CloseOutlined,
   DownOutlined,
   PauseOutlined,
   RightOutlined,
@@ -50,6 +51,7 @@ import {
   recordMovie,
   recordMovieToSink,
   recordMovieStill,
+  MovieFrameUncomposedError,
   MovieStillUnwrittenError,
   type MovieProgress,
   type MovieRecording,
@@ -577,6 +579,20 @@ function MovieDialogBody({
   const [position, setPosition] = useState(0);
   const index = frames === null ? 0 : Math.min(position, frames.count - 1);
   const [failure, setFailure] = useState<Failure | null>(null);
+  /**
+   * What is said under the heading of a failure. The failures that were foreseen are said in
+   * the reader's own language — a browser that composed the picture and gave no file of it by
+   * the heading alone, one that gave no canvas to compose on by a sentence of its own — and
+   * only what nobody foresaw is quoted as it came, because its words are all there is to go on.
+   */
+  const failureDetail = (error: unknown): string | null =>
+    error instanceof MovieStillUnwrittenError
+      ? null
+      : error instanceof MovieFrameUncomposedError
+        ? t('caveview.movie.frameUncomposed')
+        : error instanceof Error
+          ? error.message
+          : String(error);
 
   const partyRef = useRef<MovieParty | null>(null);
   const drawnRef = useRef(new Map<string, DrawnMarker>());
@@ -918,7 +934,7 @@ function MovieDialogBody({
       }
     } catch (error) {
       if (!isMovieAbort(error)) {
-        setFailure({ what: 'movie', detail: error instanceof Error ? error.message : String(error) });
+        setFailure({ what: 'movie', detail: failureDetail(error) });
       }
     } finally {
       if (disk !== null && !sinkHandedOver) {
@@ -975,13 +991,7 @@ function MovieDialogBody({
       saveBlob(picture, name);
       message.success(t('caveview.movie.saved', { name }));
     } catch (error) {
-      // A browser that composed the picture and gave no file of it is said in the reader's own
-      // language by the heading alone; only what nobody foresaw is quoted as it came.
-      setFailure({
-        what: 'still',
-        detail:
-          error instanceof MovieStillUnwrittenError ? null : error instanceof Error ? error.message : String(error),
-      });
+      setFailure({ what: 'still', detail: failureDetail(error) });
     } finally {
       setStillBusy(false);
     }
@@ -1254,7 +1264,13 @@ function MovieDialogBody({
           <Alert
             type="error"
             showIcon
-            closable={{ onClose: () => setFailure(null) }}
+            // The icon is named although it is the library's own default: its alert draws a
+            // close button for an options object only when that object carries one.
+            closable={{
+              closeIcon: <CloseOutlined />,
+              onClose: () => setFailure(null),
+              'aria-label': t('common.close'),
+            }}
             title={t(failure.what === 'still' ? 'caveview.movie.stillFailed' : 'caveview.movie.exportFailed')}
             description={failure.detail ?? undefined}
             data-testid={failure.what === 'still' ? 'movie-still-failed' : 'movie-export-failed'}

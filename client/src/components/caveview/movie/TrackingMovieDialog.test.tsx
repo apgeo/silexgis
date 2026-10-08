@@ -10,6 +10,7 @@ import type { MovieSink } from '../../../caveview/movie/encode/movieSink.ts';
 import type { MovieFileChoice } from '../../../caveview/movie/movieFileSink.ts';
 import type { MovieTripData } from '../../../caveview/movie/movieParty.ts';
 import {
+  MovieFrameUncomposedError,
   MovieStillUnwrittenError,
   type MovieRecording,
   type MovieStillRecording,
@@ -690,6 +691,67 @@ describe('the tracking movie dialog', () => {
 
     expect(await screen.findByTestId('movie-export-failed')).toHaveTextContent('GIF encoder, frame: out of memory');
     expect(saveBlob).not.toHaveBeenCalled();
+  });
+
+  it('lets the notice of a failed export be closed', async () => {
+    // The notice was given a way to be dismissed and drew no button for it: the library's
+    // alert shows one for an options object only when that object names the icon. Somebody
+    // whose export had failed kept the red notice over the dialog until they closed the lot.
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovie.mockRejectedValue(new Error('GIF encoder, frame: out of memory'));
+    open(['trip-a']);
+
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+
+    const notice = await screen.findByTestId('movie-export-failed');
+    fireEvent.click(within(notice).getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => expect(screen.queryByTestId('movie-export-failed')).not.toBeInTheDocument());
+    // The dialog itself is still there, with the export on offer again.
+    expect(screen.getByTestId('movie-export')).not.toBeDisabled();
+  });
+
+  it('says a frame the browser gave no canvas for in the reader’s language, with no English under it', async () => {
+    // One failure of the recorder is foreseen — the browser hands out no canvas to compose
+    // on, which is what a machine short of graphics memory does — and its sentence was
+    // written for a log, in English. Quoted under the heading it put an English sentence
+    // into a Romanian dialog.
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovie.mockRejectedValue(new MovieFrameUncomposedError());
+    await i18n.changeLanguage('ro');
+    try {
+      open(['trip-a']);
+      const exportButton = await screen.findByTestId('movie-export');
+      await waitFor(() => expect(exportButton).not.toBeDisabled());
+      fireEvent.click(exportButton);
+
+      const notice = await screen.findByTestId('movie-export-failed');
+      expect(notice).toHaveTextContent('Filmul nu a putut fi făcut.');
+      expect(notice).toHaveTextContent('Browserul nu a dat o suprafață de desen');
+      expect(notice).not.toHaveTextContent('canvas');
+      expect(notice).not.toHaveTextContent('composed');
+      // And its close button is named in the same language.
+      expect(within(notice).getByRole('button', { name: 'Închide' })).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('says the same of a picture the browser gave no canvas for', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovieStill.mockRejectedValue(new MovieFrameUncomposedError());
+    open(['trip-a']);
+
+    const still = await screen.findByTestId('movie-still');
+    await waitFor(() => expect(still).not.toBeDisabled());
+    fireEvent.click(still);
+
+    const notice = await screen.findByTestId('movie-still-failed');
+    expect(notice).toHaveTextContent('The picture could not be made.');
+    expect(notice).toHaveTextContent('The browser gave no drawing surface to compose it on.');
+    expect(notice).not.toHaveTextContent('2D canvas');
   });
 
   it('closing the dialog in the middle of an export calls the export off', async () => {

@@ -309,9 +309,21 @@ function compositeCanvas(
   const canvas = createCanvas(width, height);
   const context = canvas.getContext('2d', { willReadFrequently });
   if (context === null) {
-    throw new Error('A movie frame could not be composed: the browser gave no 2D canvas.');
+    throw new MovieFrameUncomposedError();
   }
   return { canvas, context };
+}
+
+/**
+ * The browser handed out no 2D canvas to compose a frame on — of a movie or of a single picture.
+ * A kind of its own so that whoever shows the failure can say it in the reader's language: this
+ * message is for a log.
+ */
+export class MovieFrameUncomposedError extends Error {
+  constructor() {
+    super('A movie frame could not be composed: the browser gave no 2D canvas.');
+    this.name = 'MovieFrameUncomposedError';
+  }
 }
 
 /**
