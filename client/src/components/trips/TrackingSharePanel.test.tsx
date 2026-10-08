@@ -98,9 +98,25 @@ describe('publishing a tracked trip', () => {
   it('says a link ends on its own, and says so before there is one', () => {
     view();
 
-    expect(screen.getByTestId('trip-tracking-publish-ends')).toHaveTextContent(
-      /stops working when the watch is closed/,
+    // True of the grace period: a closed watch does not end the link at once. The page goes on
+    // answering, saying the trip is over, until the grace after closing has run out — which is
+    // what the confirmation of closing a watch says too. "Stops working when the watch is
+    // closed" told the person about to paste the address something the page does not do.
+    const ends = screen.getByTestId('trip-tracking-publish-ends');
+    expect(ends).toHaveTextContent(
+      /Once the watch is closed the page says the trip is over, and the link stops opening that page when the grace period after closing has run out/,
     );
+    expect(ends).not.toHaveTextContent(/when the watch is closed/);
+    expect(ends).toHaveTextContent(/in any case it stops on the date below/);
+    // And true of what comes after: the address is not dead then. Past trips are on unless an
+    // installation switches them off, and a link that has run out still opens its trip among
+    // them, party and all, until somebody takes it back. The sentence used to promise the
+    // opposite — that an address left in an article "does not go on showing the party for
+    // ever" — to the one person deciding whether to paste it into an article.
+    expect(ends).toHaveTextContent(
+      /unless past trips are switched off for this installation, the same address goes on opening this trip among its cave’s past trips — the party with it — until the link is taken back/,
+    );
+    expect(ends).not.toHaveTextContent(/stops working|for ever/);
   });
 
   /**
@@ -131,8 +147,13 @@ describe('publishing a tracked trip', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('trip-tracking-publish-minted-expires')).toHaveTextContent(
-        /stops working on/,
+        /stops following the party on/,
       ),
+    );
+    // Following is what ends on that date. The address itself goes on opening the trip among
+    // the past trips, and "stops working" beside the address said it would not.
+    expect(screen.getByTestId('trip-tracking-publish-minted-expires')).toHaveTextContent(
+      /it then still opens this trip among its cave’s past trips until you take it back/,
     );
     // The positive twin of the date being there at all: it is the server's answer rather than a
     // constant, so it has to be the date this mint came back with.
@@ -479,9 +500,14 @@ describe('publishing a tracked trip', () => {
     expect(screen.getByTestId(`trip-tracking-publish-status-${SHARE}`)).not.toHaveTextContent(
       'Live',
     );
-    expect(screen.getByTestId(`trip-tracking-publish-expires-${SHARE}`)).toHaveTextContent(
-      /opens nothing at the moment/,
+    const dormant = screen.getByTestId(`trip-tracking-publish-expires-${SHARE}`);
+    expect(dormant).toHaveTextContent(/opens nothing at the moment/);
+    // And why, without denying the grace period: the page answers past the closing of the
+    // watch for a while, so "only while the watch is running" was not the rule.
+    expect(dormant).toHaveTextContent(
+      /while the watch is running and until the grace period after its closing has run out/,
     );
+    expect(dormant).not.toHaveTextContent(/only while the watch is running/);
     // Still listed, and still revocable. A closed watch can be armed again and a protection can be
     // lifted, so this is the link somebody may well want to take back before it answers again —
     // and a row that had been hidden could not be taken back at all.

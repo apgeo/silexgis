@@ -1942,15 +1942,15 @@
         "none": "This trip is not published. Nobody can follow it without an account.",
         "statusActive": "Live",
         "statusDormant": "Not open",
-        "dormantUntil": "This link opens nothing at the moment. The page answers only while the watch is running and while the trip’s cave may be published — if that changes back, this link works again until {{when}}.",
+        "dormantUntil": "This link opens nothing at the moment. The page answers while the watch is running and until the grace period after its closing has run out, and only while the trip’s cave may be published — if that changes back, this link works again until {{when}}.",
         "createdAt": "Created {{when}}",
         "revoke": "Take it back",
         "revokeConfirm": "Take this follow link back? Anybody holding it stops being able to open the page.",
         "revoked": "The follow link has been taken back.",
         "listUnavailable": "This trip's follow links could not be read.",
         "expiresAt": "Works until {{when}}",
-        "ends": "A follow link ends on its own. It stops working when the watch is closed, and in any case on the date below — so an address left in an old article does not go on showing the party for ever. Taking it back ends it at once.",
-        "mintedExpires": "This address stops working on {{when}}, or sooner when you close the watch.",
+        "ends": "A follow link stops following on its own. Once the watch is closed the page says the trip is over, and the link stops opening that page when the grace period after closing has run out; in any case it stops on the date below. That ends the following, not the publication: unless past trips are switched off for this installation, the same address goes on opening this trip among its cave’s past trips — the party with it — until the link is taken back. Taking it back ends both at once.",
+        "mintedExpires": "This address stops following the party on {{when}}, or sooner: once you have closed the watch and the grace period after closing has run out. Unless past trips are switched off here, it then still opens this trip among its cave’s past trips until you take it back.",
         "tellsParty": "Everybody on this trip who has an account is told that it has been published.",
         "languageLabel": "Language the page opens in",
         "languageDefault": "None named",
@@ -1967,7 +1967,7 @@
       "published": {
         "title": "This trip is published",
         "since": "Since {{when}}, anybody holding the link can open a page about this trip without an account. It shows who was on the trip, what the page calls each of them, and where each was last reported.",
-        "until": "The link stops working on {{when}}, or sooner when the watch is closed.",
+        "until": "The link stops following the party on {{when}}, or sooner: once the watch is closed and the grace period after closing has run out. Unless past trips are switched off here, it then still opens this trip among its cave’s past trips until it is taken back.",
         "whereToLook": "The list below shows what the page calls each person on this trip, including you. A caption set on somebody is what the page prints for them instead."
       },
       "publicName": {
@@ -2388,6 +2388,12 @@
       "ExpeditionRosterEntry": "Roster entry",
       "TripInvitation": "Invitation",
       "Event": "Event"
+    },
+    "rosterTimes": {
+      "written": "Entry and exit times on the roster were taken from the tracking log.",
+      "people": "People: {{n}}",
+      "rows": "Roster rows: {{n}}",
+      "zone": "Read on the clocks of {{zone}}."
     },
     "field": {
       "name": "Name",
@@ -3273,6 +3279,7 @@
         "keep": "Keep going"
       },
       "exportFailed": "The movie could not be made.",
+      "frameUncomposed": "The browser gave no drawing surface to compose it on. That usually means it is short of graphics memory: closing other tabs, or loading the page again, may help.",
       "videoTooLong": "This video renders every one of its frames, in software on a computer without a graphics card, and may take a long time to export. A shorter length, a lower frame rate or a smaller size is quicker.",
       "layersMissing": "Greyed layers: this model has none of them.",
       "shadingTerrainHelp": "The depth shadings need the model to stand on real terrain, which this one does not.",
@@ -6377,6 +6384,27 @@
     "namesShown": "The published pages of this installation show the party's real names.",
     "namesHidden": "The published pages of this installation show places in the party, not people's names.",
     "archiveOff": "Past trips are switched off here, so no link is in the archive: once a trip's own page has closed, its link opens nothing.",
+    "settings": {
+      "title": "What these statuses rest on in this installation",
+      "lifetime": "A link runs out by itself after its trip's last day, whatever its tracking does (the date under “Runs out”) — {{span}}",
+      "grace": "“Just closed” lasts this long after tracking is closed, and never past the date the link runs out — {{span}}",
+      "graceNone": "“Just closed” is not used here: a link stops opening its page the moment its tracking is closed.",
+      "retention": "“In the archive” lasts this long after a trip's last day — {{span}}",
+      "retentionUnlimited": "“In the archive” has no time limit here.",
+      "siblings": "An old link goes on listing the parties tracked in its cave now for this long after its own trip's last day — {{span}}",
+      "siblingsUnlimited": "An old link goes on listing the parties tracked in its cave now, with no time limit.",
+      "siblingsNone": "An old link stops listing the parties tracked in its cave now as soon as its own trip is over and its own page has ended.",
+      "siblingsWhileArchived": "An old link goes on listing the parties tracked in its cave now for as long as its own trip stays in the archive (the line above).",
+      "siblingsWithinArchive": "An old link goes on listing the parties tracked in its cave now for this long after its own trip's last day, and never after its trip has left the archive — {{span}}",
+      "siblingsArchiveOff": "An old link lists nobody here: with past trips switched off, a link whose own page has ended opens nothing.",
+      "readLimit": "Requests one address may make to the published pages in a minute, before it is told to wait: {{limit}}",
+      "span": {
+        "days": "days: {{amount}}",
+        "hours": "hours: {{amount}}",
+        "minutes": "minutes: {{amount}}",
+        "seconds": "seconds: {{amount}}"
+      }
+    },
     "anyStatus": "Any status",
     "empty": "Nothing has been published on this installation.",
     "emptyFiltered": "No link has this status.",
