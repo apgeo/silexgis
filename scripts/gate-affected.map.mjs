@@ -35,6 +35,7 @@ export const groups = {
     'PublicTripCachingTests', 'PublicTripValidatorTests', 'PublicTripPlannedReturnTests',
     'PublicTripDepthPlacesTests', 'PublicTripMomentPicturesTests',
     'OptionsDocumentationTests', 'PerMinuteLimitTests', 'ProxyHopsCheckTests', 'StartupSettingsTests',
+    'PublishedReadRefusalDocumentationTests',
     'TripOrganizingGroupGuardTests', 'TripsOfTheCallerTests',
     'EnumBindingTests', 'TripPurgeTests', 'TripTrackImportTests', 'TripWriteShapeTests',
     'TripReportMapTests', 'TripRosterTimesFromTrackingTests',
