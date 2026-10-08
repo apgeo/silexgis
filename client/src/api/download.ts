@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { userManager } from '../auth/auth.tsx';
+import i18n from '../i18n';
 import type {
   RegistryCorrelationParams,
   RegistryDistributionParams,
@@ -62,6 +63,15 @@ async function download(url: string, body?: unknown): Promise<void> {
   const headers: Record<string, string> = {};
   if (user?.access_token) {
     headers.Authorization = `Bearer ${user.access_token}`;
+  }
+  // A file can carry words the server writes — a write-up's tracking journal is worded there —
+  // and they are picked by this header, as every other answer's are. A download does not go
+  // through the client those answers come from, so it says the language itself: left unsaid, the
+  // browser would send the language it was installed in, and somebody reading the application in
+  // one language would save a file worded in another.
+  const language = i18n.resolvedLanguage ?? i18n.language;
+  if (language) {
+    headers['Accept-Language'] = language;
   }
   const form = body instanceof FormData ? body : undefined;
   if (body !== undefined && !form) {

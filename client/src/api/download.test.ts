@@ -2,8 +2,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../auth/auth.tsx', () => ({ userManager: { getUser: () => Promise.resolve(null) } }));
+const { default: i18n } = await import('../i18n');
 const {
   DownloadError,
+  downloadFile,
   downloadFileForm,
   expeditionReportUrl,
   reportPdfRefusal,
@@ -94,6 +96,46 @@ describe('downloadFileForm', () => {
       status: 400,
       code: 'trip_report.map_too_large',
     });
+  });
+});
+
+describe('the language a download asks in', () => {
+  /**
+   * A downloaded file can carry words the server writes, picked by this header. A plain fetch
+   * sends the language the browser was installed in, which is not the one the reader chose here:
+   * the file and the page it was taken from would then be worded in two languages.
+   */
+  it('is the one the reader chose in the application, on a plain download and on one that sends a form', async () => {
+    const fetched = vi.fn(
+      async (_url: string, _init: RequestInit) =>
+        new Response(new Blob(['a document']), {
+          status: 200,
+          headers: { 'content-disposition': 'attachment; filename="trip-report.docx"' },
+        }),
+    );
+    vi.stubGlobal('fetch', fetched);
+    URL.createObjectURL = vi.fn(() => 'blob:document');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const before = i18n.resolvedLanguage ?? i18n.language;
+
+    try {
+      await i18n.changeLanguage('ro');
+      await downloadFile('/api/v1/trip-logs/t/report?');
+      await i18n.changeLanguage('en');
+      await downloadFileForm('/api/v1/trip-logs/t/report/download?', new FormData());
+    } finally {
+      await i18n.changeLanguage(before);
+    }
+
+    const asked = fetched.mock.calls.map(([, init]) => [
+      init.method,
+      (init.headers as Record<string, string>)['Accept-Language'],
+    ]);
+    expect(asked).toEqual([
+      ['GET', 'ro'],
+      ['POST', 'en'],
+    ]);
   });
 });
 
