@@ -7,11 +7,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 using Shouldly;
+using SilexGis.Api.Common;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Trips;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -29,6 +33,8 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     private readonly string filesRoot;
     private readonly string connectionString;
     private string ownerEmail = null!;
+    private Guid ownerId;
+    private Guid readerId;
 
     private HttpClient owner = null!;
     private HttpClient reader = null!;
@@ -61,8 +67,8 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerEmail = $"trk-own-{suffix}@t.local";
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"trk-own-{suffix}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"trk-read-{suffix}@t.local");
+        ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"trk-own-{suffix}@t.local");
+        readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"trk-read-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -289,6 +295,213 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         // And the resolver — a position computation — is closed to them outright.
         var resolve = await reader.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/resolve-depth", new { depthM = 50 });
         resolve.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>
+    /// The journal the rest of the application asks tracking for says, to each reader, what the
+    /// tracking screen's own two reads say to that reader — and to nobody a place those reads keep.
+    /// </summary>
+    /// <remarks>
+    /// Two trips side by side, one in a cave whose position is protected and one in a cave that is
+    /// not, read three ways: by the account that may place both caves, by a member who may read the
+    /// trips and place neither protected cave, and under the reading that stands for every account
+    /// at once — the one a document kept on a trip is worded for. The unprotected trip is the
+    /// positive half of every refusal here: the same reader, the same reports, and the station told.
+    /// </remarks>
+    [Fact]
+    public async Task The_journal_handed_to_the_rest_of_the_application_is_what_the_tracking_reads_answer_the_same_reader()
+    {
+        var guarded = await JournalledTripAsync(locationProtected: true);
+        var open = await JournalledTripAsync(locationProtected: false);
+
+        // The account that may place the cave: everything, on both, and nothing marked.
+        foreach (var trip in new[] { guarded, open })
+        {
+            var mine = (await JournalAsync(trip, reading: ownerId, namedFor: ownerId)).ShouldNotBeNull();
+            await ShouldBeWhatTheScreenAnswersAsync(mine, owner, trip);
+            mine.AnyWithheld.ShouldBeFalse();
+            mine.Entries.ShouldAllBe(entry => !entry.Withheld);
+            mine.Entries.Count.ShouldBe(6, "two entries, a station, a depth, a note and an exit");
+            mine.Entries.Select(entry => entry.Station).OfType<string>()
+                .ShouldBe(new[] { "cave.upper.2", "cave.deep.3" });
+            mine.Entries.Single(entry => entry.Kind == TripPositionEventKind.AtDepth).DepthM.ShouldBe(118);
+            // The report taken off the log is in neither: it named a station nothing else names.
+            JsonSerializer.Serialize(mine).ShouldNotContain("cave.parallel.2");
+            mine.People.ShouldAllBe(person => person.Name != null && person.Name.StartsWith("Guest "));
+            mine.People.ShouldAllBe(person => !person.PlaceWithheld);
+            mine.State.ShouldBe(TripTrackingState.Closed);
+            mine.StartedAt.ShouldNotBeNull();
+            mine.ClosedAt.ShouldNotBeNull();
+        }
+
+        // The member who may read the trip and not place the protected cave.
+        var theirsGuarded = (await JournalAsync(guarded, reading: readerId, namedFor: readerId)).ShouldNotBeNull();
+        await ShouldBeWhatTheScreenAnswersAsync(theirsGuarded, reader, guarded);
+        ShouldStateNoPlace(theirsGuarded);
+        var theirsOpen = (await JournalAsync(open, reading: readerId, namedFor: readerId)).ShouldNotBeNull();
+        await ShouldBeWhatTheScreenAnswersAsync(theirsOpen, reader, open);
+        theirsOpen.AnyWithheld.ShouldBeFalse();
+        theirsOpen.Entries.Select(entry => entry.Station).OfType<string>().ShouldBe(new[] { "cave.upper.2", "cave.deep.3" });
+
+        // Every account at once — and named for the account that may place the cave, which is how
+        // a document kept on a trip is made: whoever asked for it lends it names and no rights.
+        var anyGuarded = (await JournalAsync(guarded, reading: null, namedFor: ownerId)).ShouldNotBeNull();
+        ShouldStateNoPlace(anyGuarded);
+        anyGuarded.People.ShouldAllBe(person => person.Name != null);
+        var anyOpen = (await JournalAsync(open, reading: null, namedFor: ownerId)).ShouldNotBeNull();
+        anyOpen.AnyWithheld.ShouldBeFalse();
+        anyOpen.Entries.Select(entry => entry.Station).OfType<string>().ShouldBe(new[] { "cave.upper.2", "cave.deep.3" });
+        anyOpen.People.Select(person => person.Station).ShouldBe(theirsOpen.People.Select(person => person.Station));
+
+        // With no account to name people for, nobody is named — and nothing else moves.
+        var unnamed = (await JournalAsync(open, reading: ownerId, namedFor: null)).ShouldNotBeNull();
+        unnamed.People.ShouldAllBe(person => person.Name == null);
+        unnamed.Entries.ShouldAllBe(entry => entry.Name == null);
+        unnamed.Entries.Select(entry => entry.Station).OfType<string>().ShouldBe(new[] { "cave.upper.2", "cave.deep.3" });
+    }
+
+    /// <summary>
+    /// A trip nobody followed has no journal, and neither has a deleted one — whose watch and
+    /// reports are all still stored.
+    /// </summary>
+    [Fact]
+    public async Task A_trip_never_followed_has_no_journal_and_a_deleted_trip_answers_nothing()
+    {
+        var (plain, _) = await CreateTripAsync("Never followed", guests: 1);
+        (await JournalAsync(plain, reading: ownerId, namedFor: ownerId)).ShouldBeNull();
+
+        var followed = await JournalledTripAsync(locationProtected: false);
+        (await JournalAsync(followed, reading: ownerId, namedFor: ownerId)).ShouldNotBeNull();
+
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{followed}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await JournalAsync(followed, reading: ownerId, namedFor: ownerId)).ShouldBeNull();
+        (await JournalAsync(followed, reading: null, namedFor: ownerId)).ShouldBeNull();
+        // Nothing was destroyed to get that answer: the rows are there, behind the trip.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TripPositionEvents.IgnoreQueryFilters().CountAsync(e => e.TripLogId == followed))
+            .ShouldBeGreaterThan(0);
+        (await db.TripTrackings.IgnoreQueryFilters().CountAsync(t => t.TripLogId == followed)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A finished watch with a little of everything on its log: both people in, one placed at a
+    /// station and one at a depth, a note, an exit — and one report taken off again, at a station
+    /// no other report names.
+    /// </summary>
+    private async Task<Guid> JournalledTripAsync(bool locationProtected)
+    {
+        var (trip, cavers) = await CreateTripAsync("Journalled", guests: 2);
+        var cave = await CreateCaveAsync(locationProtected);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await ReportAsync(trip, new { caverIds = cavers, kind = "entered" }, At(9, 0));
+        await ReportAsync(
+            trip, new { caverIds = new[] { cavers[0] }, kind = "atStation", stationName = "cave.upper.2" }, At(10, 0));
+        var mistaken = await PostEventAsync(owner, trip, new
+        {
+            caverIds = new[] { cavers[0] }, kind = "atStation", stationName = "cave.parallel.2", recordedAt = At(10, 30),
+        });
+        mistaken.StatusCode.ShouldBe(HttpStatusCode.OK, await mistaken.Content.ReadAsStringAsync());
+        await ReportAsync(trip, new { caverIds = new[] { cavers[1] }, kind = "atDepth", depthM = 118 }, At(11, 0));
+        await ReportAsync(
+            trip, new { caverIds = new[] { cavers[0] }, kind = "note", note = "Rigging the second pitch" }, At(11, 30));
+        await ReportAsync(trip, new { caverIds = new[] { cavers[0] }, kind = "exited" }, At(12, 0));
+
+        (await owner.DeleteAsync(EventOf(trip, (await BodyAsync(mistaken))[0].GetProperty("id").GetGuid())))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await PutConfigAsync(owner, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        return trip;
+    }
+
+    /// <summary>
+    /// The journal as the application's own seam answers it: for one account's rights, or — with
+    /// no account given — for the rights every account holds, and named for whoever is given.
+    /// </summary>
+    private async Task<TripTrackingJournal?> JournalAsync(Guid trip, Guid? reading, Guid? namedFor)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var rights = reading is { } account
+            ? await AccessContextResolver.ResolveAsync(db, account)
+            : await AccessContextResolver.ResolveForAnyAccountAsync(db);
+        return await scope.ServiceProvider.GetRequiredService<ITripTrackingJournal>().ReadAsync(
+            trip, rights, namedFor is { } named ? new UserContext(named, []) : null, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Field by field against the state read and the log read this client is answered over HTTP:
+    /// the watch, each person in the screen's order, each report in time order.
+    /// </summary>
+    private static async Task ShouldBeWhatTheScreenAnswersAsync(TripTrackingJournal journal, HttpClient client, Guid trip)
+    {
+        static string Wire<T>(T value) where T : struct, Enum => JsonNamingPolicy.CamelCase.ConvertName(value.ToString());
+        static string? TextOf(JsonElement element, string property) =>
+            element.GetProperty(property).ValueKind == JsonValueKind.Null ? null : element.GetProperty(property).GetString();
+        static decimal? NumberOf(JsonElement element, string property) =>
+            element.GetProperty(property).ValueKind == JsonValueKind.Null ? null : element.GetProperty(property).GetDecimal();
+
+        var state = await StateAsync(client, trip);
+        Wire(journal.State).ShouldBe(state.GetProperty("state").GetString());
+        journal.StartedAt.ShouldBe(TimeOf(state, "firstArmedAt"));
+        journal.ClosedAt.ShouldBe(TimeOf(state, "closedAt"));
+
+        var folded = state.GetProperty("participants").EnumerateArray().ToList();
+        journal.People.Select(person => person.CaverId).ShouldBe(folded.Select(p => p.GetProperty("caverId").GetGuid()));
+        foreach (var (person, theirs) in journal.People.Zip(folded))
+        {
+            person.Station.ShouldBe(TextOf(theirs, "stationName"));
+            person.DepthM.ShouldBe(NumberOf(theirs, "depthM"));
+            person.PlaceAt.ShouldBe(TimeOf(theirs, "positionRecordedAt"));
+            person.LastHeardAt.ShouldBe(TimeOf(theirs, "lastRecordedAt"));
+            (person.Standing == TripStanding.Underground).ShouldBe(theirs.GetProperty("in").GetBoolean());
+            (person.Standing == TripStanding.Out).ShouldBe(theirs.GetProperty("out").GetBoolean());
+            person.OnRoster.ShouldBe(theirs.GetProperty("onRoster").GetBoolean());
+            ((decimal?)person.Number).ShouldBe(NumberOf(theirs, "ordinal"));
+        }
+
+        // The screen lists the newest report first; the journal is read from the beginning.
+        var log = await LogAsync(client, trip);
+        log.Reverse();
+        journal.Entries.Count.ShouldBe(log.Count);
+        foreach (var (entry, told) in journal.Entries.Zip(log))
+        {
+            entry.At.ShouldBe(told.GetProperty("recordedAt").GetDateTimeOffset());
+            entry.CaverId.ShouldBe(told.GetProperty("caverId").GetGuid());
+            Wire(entry.Kind).ShouldBe(told.GetProperty("kind").GetString());
+            entry.Station.ShouldBe(TextOf(told, "stationName"));
+            entry.DepthM.ShouldBe(NumberOf(told, "depthEnteredM"));
+            entry.Note.ShouldBe(TextOf(told, "note"));
+        }
+    }
+
+    /// <summary>
+    /// A journal of the protected trip as somebody who may not place its cave is told it: every
+    /// report and every person is there, with its hour, and no station or depth anywhere in it.
+    /// </summary>
+    private static void ShouldStateNoPlace(TripTrackingJournal journal)
+    {
+        journal.AnyWithheld.ShouldBeTrue();
+        journal.Entries.Count.ShouldBe(6);
+        foreach (var entry in journal.Entries)
+        {
+            var saysWhere = entry.Kind is TripPositionEventKind.AtStation or TripPositionEventKind.AtDepth;
+            entry.Withheld.ShouldBe(saysWhere);
+            entry.Station.ShouldBeNull();
+            entry.DepthM.ShouldBeNull();
+        }
+
+        // What is not a place stays: the note, and who is in and who is out.
+        journal.Entries.Single(entry => entry.Kind == TripPositionEventKind.Note).Note.ShouldBe("Rigging the second pitch");
+        journal.People.Count.ShouldBe(2);
+        journal.People.ShouldAllBe(person => person.PlaceWithheld && person.Station == null && person.DepthM == null && person.PlaceAt == null);
+        journal.People.ShouldAllBe(person => person.LastHeardAt != null);
+        journal.People.Select(person => person.Standing).ShouldBe(
+            new[] { TripStanding.Out, TripStanding.Underground }, ignoreOrder: true);
+        // And on the bytes, whichever member a later change might put a station in.
+        JsonSerializer.Serialize(journal).ShouldNotContain("cave.");
     }
 
     /// <summary>

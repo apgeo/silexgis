@@ -240,6 +240,11 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // to know. Registered concretely: it is called from one place and substituted by nothing, so an
     // interface would be ceremony rather than a seam.
     builder.Services.AddScoped<SilexGis.Api.Features.TripTracking.TripPublicationAnnouncer>();
+    // A trip's tracking journal for whatever is printed about the trip outside the tracking
+    // screen. An interface because the asker is another feature area, which may not reach into
+    // this one: it asks, and tracking answers with its own reads, so one rule decides what of a
+    // place a reader is told wherever it is told.
+    builder.Services.AddScoped<ITripTrackingJournal, SilexGis.Api.Features.TripTracking.TripTrackingJournalReads>();
     // Why a published page was refused and how much the published surface is read, for the
     // operator: a log event and counters, and nothing in any response. One for the application's
     // lifetime because it owns the counters.
