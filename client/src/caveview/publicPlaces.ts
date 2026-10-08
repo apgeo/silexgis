@@ -26,9 +26,10 @@ export interface PublishedPlace {
  * is the ordinary answer, and the only one on an installation that does not publish these names.
  *
  * <b>Null means "say the station as the survey names it", exactly as before these names existed.</b>
- * The list is empty on every installation that has not chosen to publish it and for every cave
- * that has declared nothing, and a missing list — an answer from a server older than the member —
- * is read the same way; so a caller that falls back to the station on null behaves, for all of
+ * The list is null on every installation that has not chosen to publish it and for every cave
+ * that has named nothing on the survey being drawn — the server sends a list only when it has
+ * entries — and a missing list, an answer from a server older than the member, and an empty one
+ * are read the same way; so a caller that falls back to the station on null behaves, for all of
  * those, precisely as it always did.
  *
  * <b>Matched on the station as written, and on nothing else.</b> The server sends each name with

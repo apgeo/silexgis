@@ -126,7 +126,7 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
 
     /// <summary>
     /// <b>The load-bearing one.</b> The cave has declared five named depths and one unnamed. As
-    /// installed, no route carries any of the names and both surveys come with an empty list;
+    /// installed, no route carries any of the names and neither survey comes with a list at all;
     /// with the setting on, each survey comes with exactly the named declarations whose station
     /// it holds, in order of depth — the followed trip's survey and the finished trip's older one
     /// answering differently about the place only the older one has — and the two reads that hand
@@ -154,10 +154,11 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
             foreach (var label in EveryLabel) off[route].Body.ShouldNotContain(label, Case.Insensitive, route);
         }
 
-        // Present and empty where a survey is handed over, so a page reads "no names" and not "an
-        // older server"; and not a member of the two lists, which hand none over.
-        PlacesOf(off[cave.Follow]).ShouldBeEmpty();
-        PlacesOf(off[cave.PastTrip]).ShouldBeEmpty();
+        // Null where a survey is handed over — never a list with nothing in it, which a page
+        // keeping names of its own could read as "this cave has none"; and not a member of the
+        // two lists, which hand no survey over.
+        ShouldSendNoListOfPlaces(off[cave.Follow]);
+        ShouldSendNoListOfPlaces(off[cave.PastTrip]);
         NamesIn(off[cave.Live]).ShouldNotContain("places");
         NamesIn(off[cave.Past]).ShouldNotContain("places");
 
@@ -227,6 +228,74 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
     }
 
     /// <summary>
+    /// <b>Nothing to say is said as null, never as a list with no entries</b> — read off the bytes
+    /// of the answer, because a page outside this application may take any list here as replacing
+    /// the names it keeps itself. Three states say nothing: an installation that does not publish
+    /// the names (whatever the cave has declared), one that does for a cave that has named no
+    /// depth, and one that does for a cave whose only names are for stations the survey being
+    /// handed over does not hold. In each the two reads that hand a survey over carry
+    /// <c>"places":null</c> and no array under that name; one name on a station of the survey and
+    /// the same read carries a list of one.
+    /// </summary>
+    [Fact]
+    public async Task With_nothing_to_tell_the_named_depths_are_null_in_the_answer_and_never_an_empty_list()
+    {
+        var cave = await PublishedCaveAsync();
+        string[] handOverASurvey = [cave.Follow, cave.PastTrip];
+
+        // ---- publishing, and the cave has declared nothing ----------------------------------
+        var nothingDeclared = new Dictionary<string, Answer>();
+        foreach (var route in handOverASurvey)
+        {
+            nothingDeclared[route] = await ReadAsync(visitorOfPublishing, route);
+            ShouldSendNoListOfPlaces(nothingDeclared[route]);
+            // An installation that turned the setting on and has nothing to say answers what one
+            // that never heard of it answers, member for member — and under the same validator,
+            // so a reader's copy from before the setting was turned on is still confirmed.
+            var installed = await ReadAsync(visitor, route);
+            ShouldSendNoListOfPlaces(installed);
+            Comparable(Json(nothingDeclared[route]), without: "").ShouldBe(Comparable(Json(installed), without: ""), route);
+            nothingDeclared[route].Tag.ShouldBe(installed.Tag, route);
+        }
+
+        // ---- publishing, a depth declared and nobody gave it a name --------------------------
+        await DeclareAsync(cave.Cave, 80m, "cave.mid.1", null);
+        foreach (var route in handOverASurvey) ShouldSendNoListOfPlaces(await ReadAsync(visitorOfPublishing, route));
+
+        // ---- publishing, named — on a station neither survey of the cave holds ---------------
+        await DeclareAsync(cave.Cave, 130m, "cave.gone.9", OnNoSurvey);
+        foreach (var route in handOverASurvey)
+        {
+            var answer = await ReadAsync(visitorOfPublishing, route);
+            ShouldSendNoListOfPlaces(answer);
+            answer.Body.ShouldNotContain(OnNoSurvey, Case.Insensitive, route);
+            answer.Tag.ShouldBe(nothingDeclared[route].Tag, route);
+        }
+
+        // ---- publishing, named — on a station only the finished trip's survey holds ----------
+        await DeclareAsync(cave.Cave, 95m, "cave.old.7", OnTheOlderSurveyOnly);
+        ShouldSendNoListOfPlaces(await ReadAsync(visitorOfPublishing, cave.Follow));
+        PlacesOf(await ReadAsync(visitorOfPublishing, cave.PastTrip))
+            .ShouldBe([("cave.old.7", 95m, OnTheOlderSurveyOnly)]);
+
+        // ---- and one name on a station both hold: a list, where there is something in it -----
+        await DeclareAsync(cave.Cave, 50m, "cave.upper.2", Hall);
+        foreach (var route in handOverASurvey)
+        {
+            var told = await ReadAsync(visitorOfPublishing, route);
+            PlacesOf(told).ShouldContain(("cave.upper.2", 50m, Hall), route);
+            told.Body.ShouldContain("\"places\":[{", Case.Sensitive, route);
+            told.Tag.ShouldNotBe(nothingDeclared[route].Tag, route);
+
+            // The installation beside it, the same cave with all of that declared: still null.
+            var installed = await ReadAsync(visitor, route);
+            ShouldSendNoListOfPlaces(installed);
+            foreach (var label in EveryLabel) installed.Body.ShouldNotContain(label, Case.Insensitive, route);
+            installed.Tag.ShouldNotBe(told.Tag, route);
+        }
+    }
+
+    /// <summary>
     /// What the list costs the database, counted: nothing where it is not published, one read
     /// where the cave has named nothing, two where it has — and still two, and no more than the
     /// stated bound of names, when a cave has named more places than the bound.
@@ -282,8 +351,8 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         capped[0].ShouldBe(("cave.upper.2", 50m, Hall));
         // The deepest five are the ones left out.
         capped[^1].DepthM.ShouldBe(200m + beyond - 2 - 5);
-        // And on the installation beside it the same cave still comes with none.
-        PlacesOf(await ReadAsync(visitor, cave.Follow)).ShouldBeEmpty();
+        // And on the installation beside it the same cave still comes with no list.
+        ShouldSendNoListOfPlaces(await ReadAsync(visitor, cave.Follow));
 
         // The replay hands the same survey over and pays the same two reads for the same list.
         (await ReadAsync(visitor, cave.PastTrip)).Status.ShouldBe(HttpStatusCode.OK);
@@ -354,12 +423,38 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
 
     private static JsonElement Json(Answer answer) => JsonDocument.Parse(answer.Body).RootElement;
 
-    /// <summary>The named depths that came with the survey of an answer that hands one over.</summary>
+    /// <summary>
+    /// The answer hands a survey over and says nothing about named depths, <b>judged on its bytes
+    /// as well as on what they parse to</b>: the member is there as null, the way this answer
+    /// writes every member it has nothing for, and no array stands under that name anywhere.
+    /// </summary>
+    private static void ShouldSendNoListOfPlaces(Answer answer)
+    {
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.Body);
+        var model = Json(answer).GetProperty("model");
+        model.ValueKind.ShouldBe(JsonValueKind.Object);
+        model.TryGetProperty("places", out var places).ShouldBeTrue();
+        places.ValueKind.ShouldBe(JsonValueKind.Null);
+        // Its neighbours that have nothing to say are written the same way, so "null and present"
+        // is this answer's own habit and not a special case of this member.
+        model.GetProperty("meshUrl").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The bytes: the response is written compact, so these are exact spellings.
+        answer.Body.ShouldContain("\"places\":null", Case.Sensitive);
+        answer.Body.ShouldNotContain("\"places\":[", Case.Sensitive);
+        NamesIn(answer).Count(name => name == "places").ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The named depths that came with the survey of an answer that hands one over: a list, and
+    /// one with something in it — an answer with nothing to tell sends no list at all.
+    /// </summary>
     private static List<(string Station, decimal DepthM, string Label)> PlacesOf(Answer answer)
     {
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.Body);
         var places = Json(answer).GetProperty("model").GetProperty("places");
         places.ValueKind.ShouldBe(JsonValueKind.Array);
+        places.GetArrayLength().ShouldBeGreaterThan(0);
         return [.. places.EnumerateArray().Select(place =>
         {
             // Exactly these three members: no id of the declaration, nothing about who wrote it.

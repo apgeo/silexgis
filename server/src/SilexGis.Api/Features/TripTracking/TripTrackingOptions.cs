@@ -77,8 +77,9 @@ public sealed class TripTrackingOptions
     /// <para>
     /// Off, because the names are words a club typed for its own members — what it calls a pitch,
     /// where it camps — and nothing published has carried them before; whether people without an
-    /// account are to read them is the club's to decide. Turned off, the member is there and
-    /// empty whatever the cave has declared, no declaration is read on a published route at all,
+    /// account are to read them is the club's to decide. Turned off, the member is null whatever
+    /// the cave has declared — never a list with no entries, which a reader keeping names of its
+    /// own could take as "there are none" — no declaration is read on a published route at all,
     /// and the answer is otherwise exactly what it was.
     /// </para>
     /// <para>

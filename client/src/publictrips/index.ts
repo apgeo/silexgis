@@ -68,7 +68,8 @@ export type { PublicReportedPlace } from '../caveview/publicTrackedCavers.ts';
 // What the cave calls the station somebody was reported at, read off the names a published survey
 // may come with (`model.places`). Asked here so that an article and this application put the same
 // name beside the same station — and so that both fall back to the station, in the same cases,
-// where the list is empty, which it is on every installation that does not publish these names.
+// where there is no list: it is null on every installation that does not publish these names and
+// for a cave that has named nothing, and is sent only when it has entries.
 // A place's `depthM` is a magnitude, where a person's own reported depth carries its sign (note 2
 // above); this compares neither.
 export { placeLabelFor } from '../caveview/publicPlaces.ts';

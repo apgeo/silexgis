@@ -894,7 +894,7 @@ export default function PublicTripPage() {
       // <b>Read off the survey being drawn, live or replayed</b>: the names travel with the model
       // the server hands over, having been checked against that model's own stations, so a replay
       // of an old trip on an older survey is named by what that survey holds. On an installation
-      // that publishes none — which is how one is installed — the list is empty, this is null, and
+      // that publishes none — which is how one is installed — there is no list, this is null, and
       // the row below is the station alone, exactly as it was before the names existed.
       //
       // <b>The station stays, under the name.</b> It is what the drawing labels and what a link

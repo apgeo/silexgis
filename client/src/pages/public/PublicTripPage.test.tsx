@@ -1114,9 +1114,14 @@ describe('the drawing on a followed page', () => {
     expect(document.body).not.toHaveTextContent('Balconul');
   });
 
-  it('shows the station alone, as it always did, where the survey came with no names', () => {
-    // What every installation sends until it chooses otherwise: the list is there and empty.
-    ready({ model: { ...model, places: [] } });
+  it.each([
+    // What every installation sends until it chooses otherwise, and what one that publishes the
+    // names sends for a cave that has named nothing: no list at all.
+    ['no list', null],
+    // What a server from before that rule sent for the same two cases.
+    ['an empty list', []],
+  ])('shows the station alone, as it always did, where the survey came with %s', (_, places) => {
+    ready({ model: { ...model, places } });
     render(<PublicTripPage />);
 
     const card = screen.getByTestId('public-trip-caver-1');

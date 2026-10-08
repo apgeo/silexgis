@@ -262,9 +262,11 @@ describe('the fold, compiled for a page that has no build step', () => {
 
     for (const station of ['cave.upper.2', 'cave.deep.3', 'cave.mid.1', '', null]) {
       expect(labelThere(station, places), String(station)).toBe(placeLabelFor(station, places));
-      // What every installation that publishes no names sends, and what an older answer lacks.
-      expect(labelThere(station, []), String(station)).toBeNull();
+      // What every installation that publishes no names sends, what an older answer lacks, and
+      // a list with nothing in it, which no server sends any more and an older one did.
+      expect(labelThere(station, null), String(station)).toBeNull();
       expect(labelThere(station, undefined), String(station)).toBeNull();
+      expect(labelThere(station, []), String(station)).toBeNull();
     }
     // Pinned to the words as well: two compilations that both answered null would agree.
     expect(labelThere('cave.deep.3', places)).toBe('Sifonul');

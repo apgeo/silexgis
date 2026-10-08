@@ -893,7 +893,7 @@ public static class TripTrackingPublicationEndpoints
     /// </remarks>
     /// <param name="publishDepthPlaces">
     /// Whether this installation tells visitors the names its caves give their depths. False sends
-    /// the member empty and reads no declaration.
+    /// the member null and reads no declaration.
     /// </param>
     internal static async Task<PublicTripSurveyModelDto?> ModelAsync(
         SilexGisDbContext db, FeatureProtection protection, ICrsRegistry crs,
@@ -926,7 +926,10 @@ public static class TripTrackingPublicationEndpoints
             // the cave the publication was decided about. A trip whose survey answers to another
             // cave never reaches this line, so no cave's names travel with a drawing that is not
             // its own.
-            publishDepthPlaces ? await DepthPlacesAsync(db, model, configCave, ct) : []);
+            // Null, never an empty list, when the installation says nothing or there is nothing
+            // to say: a reader that takes a list here as replacing names of its own must not be
+            // handed one that replaces them with none.
+            publishDepthPlaces ? await DepthPlacesAsync(db, model, configCave, ct) : null);
     }
 
     /// <summary>
@@ -954,8 +957,12 @@ public static class TripTrackingPublicationEndpoints
     /// station row is read with the number its file gave it, because that is what says whether the
     /// viewer can draw it at all.
     /// </para>
+    /// <para>
+    /// <b>Null when nothing is left to tell</b> — the cave has named no depth, or none of the
+    /// names it has is a station of this survey. The answer never carries a list with no entries.
+    /// </para>
     /// </remarks>
-    private static async Task<IReadOnlyList<PublicTripPlaceDto>> DepthPlacesAsync(
+    private static async Task<IReadOnlyList<PublicTripPlaceDto>?> DepthPlacesAsync(
         SilexGisDbContext db, SurveyModel model, Guid configCave, CancellationToken ct)
     {
         var rows = await db.CaveDepthPlaces.AsNoTracking()
@@ -966,7 +973,7 @@ public static class TripTrackingPublicationEndpoints
             .ToListAsync(ct);
         if (rows.Count == 0)
         {
-            return [];
+            return null;
         }
 
         var declared = rows
@@ -992,9 +999,10 @@ public static class TripTrackingPublicationEndpoints
                 s.FileStationId))
             .ToList();
 
-        return [.. TrackingDepthPlacements
+        List<PublicTripPlaceDto> places = [.. TrackingDepthPlacements
             .PublishedPlaces(declared, stations, TrackingDepthPlacements.MaxPublishedPlaces)
             .Select(p => new PublicTripPlaceDto(p.ViewerStationName, p.DepthM, p.PlaceLabel!.Trim()))];
+        return places.Count == 0 ? null : places;
     }
 
     // ---- the pictures a follower is shown ----------------------------------------------------

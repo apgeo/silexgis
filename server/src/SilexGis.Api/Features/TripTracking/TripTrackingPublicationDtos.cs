@@ -181,12 +181,21 @@ public sealed record PublicTripSurveyModelDto(
     /// What the cave calls some of its depths, for the stations of this survey: shallowest first.
     /// </summary>
     /// <remarks>
-    /// <b>Always present, and empty far more often than not</b> — on every installation that does
-    /// not publish these names, which is how one is installed, and for every cave that has
-    /// declared none. An empty list is "nothing to add": a page shows each reported station under
-    /// the name the survey gives it, exactly as it did before this member existed.
+    /// <para>
+    /// <b>Null far more often than not, and never an empty list</b> — null on every installation
+    /// that does not publish these names, which is how one is installed, and null for every cave
+    /// with no named depth among this survey's stations. Null is "nothing to add": a page shows
+    /// each reported station under the name the survey gives it, exactly as it did before this
+    /// member existed.
+    /// </para>
+    /// <para>
+    /// Why "nothing" is null and not a list with no entries: a page outside this application may
+    /// keep a list of names of its own and read a list here as replacing it. A list with nothing
+    /// in it would then replace that page's names with none, on an installation that never
+    /// decided to say anything about them. So a list is sent only when it has something in it.
+    /// </para>
     /// </remarks>
-    IReadOnlyList<PublicTripPlaceDto> Places);
+    IReadOnlyList<PublicTripPlaceDto>? Places);
 
 /// <summary>
 /// One place a cave has named: a station of the survey being handed over, the depth the cave

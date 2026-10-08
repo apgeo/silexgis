@@ -24380,7 +24380,7 @@ export interface components {
             proj4: null | string;
             pictures: components["schemas"]["PublicTripStationPictureDto"][];
             rasterMaps: components["schemas"]["PublicTripRasterMapDto"][];
-            places: components["schemas"]["PublicTripPlaceDto"][];
+            places: null | components["schemas"]["PublicTripPlaceDto"][];
         };
         PublicTripTeamDto: {
             /** Format: uuid */
