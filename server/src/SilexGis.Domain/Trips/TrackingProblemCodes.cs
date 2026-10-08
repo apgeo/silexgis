@@ -75,6 +75,12 @@ public static class TrackingProblemCodes
     /// <summary>A report was to be destroyed for good while it is still on the log.</summary>
     public const string EventNotRemoved = "tracking.event_not_removed";
 
+    /// <summary>
+    /// Every report about one person was to be removed from a trip for good, and the trip holds
+    /// none about them — neither on its log nor among those taken off it.
+    /// </summary>
+    public const string NoReportsOfPerson = "tracking.no_reports_of_person";
+
     /// <summary>The survey has no station by the name a report gave.</summary>
     public const string StationUnknown = "tracking.station_unknown";
 

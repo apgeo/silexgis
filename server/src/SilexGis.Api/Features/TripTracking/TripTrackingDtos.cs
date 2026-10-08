@@ -403,6 +403,15 @@ public sealed record TrackingEventDto(
 /// </remarks>
 public sealed record TrackingRemovedEventDto(TrackingEventDto Report, DateTimeOffset RemovedAt);
 
+/// <summary>
+/// What removing every report about one person from a trip destroyed.
+/// </summary>
+/// <param name="Removed">
+/// How many reports are gone for good: those that were on the log and those that had been taken
+/// off it and kept, together. Never zero — a trip holding none about the person is a refusal.
+/// </param>
+public sealed record TrackingReportsRemovedDto(int Removed);
+
 
 /// <summary>
 /// One place the watch's cave has declared: what it is called, which station it is, how deep.

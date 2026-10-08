@@ -52,6 +52,8 @@ public static class TripTrackingEndpoints
         tracking.MapPut("/participants/{caverId:guid}", SetParticipantLabelAsync)
             .WithValidation<TrackingParticipantLabelRequest>()
             .WithSummary("Name one participant as a follower of the published page sees them; an empty label returns them to the non-identifying default.");
+        tracking.MapDelete("/participants/{caverId:guid}/events", RemoveReportsOfAsync)
+            .WithSummary("Destroy, for good, every report of this trip about one person — those on the log and those already taken off it and kept. For when that person asks to be removed.");
         tracking.MapPost("/events", CreateEventsAsync).WithValidation<TrackingEventRequest>()
             .WithSummary("Record one report for one or many cavers at once — never a roster edit.");
         tracking.MapGet("/events", ListEventsAsync)
@@ -559,9 +561,14 @@ public static class TripTrackingEndpoints
     /// thing somebody withdrew. Those who may write the log are the ones who can put it back or
     /// destroy it, so they are the ones it is listed for. No state rule applies: a watch that was
     /// never started has nothing removed to list, and listing nothing is the true answer.
+    /// <para>
+    /// Narrowed to one person where one is named, as the log itself can be: whoever is about to
+    /// remove everything about somebody is told how many kept reports go with it, and the total
+    /// of the narrowed list is that number.
+    /// </para>
     /// </remarks>
     private static async Task<Results<Ok<PagedResult<TrackingRemovedEventDto>>, ProblemHttpResult>> ListRemovedEventsAsync(
-        Guid tripLogId, int? page, int? pageSize, SilexGisDbContext db, IAccessService access,
+        Guid tripLogId, Guid? caverId, int? page, int? pageSize, SilexGisDbContext db, IAccessService access,
         FeatureProtection protection, IAccessContextAccessor accessAccessor, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -572,7 +579,9 @@ public static class TripTrackingEndpoints
         if (refusal is not null) return refusal;
 
         var (p, ps) = Paging.Normalize(page, pageSize);
-        var result = await RemovedReports(db, tripLogId).AsNoTracking()
+        var removed = RemovedReports(db, tripLogId).AsNoTracking();
+        if (caverId is not null) removed = removed.Where(e => e.CaverId == caverId);
+        var result = await removed
             .OrderByDescending(e => e.RemovedAt).ThenByDescending(e => e.Id)
             .ToPagedAsync(p, ps, e => e, ct);
 
@@ -1314,6 +1323,75 @@ public static class TripTrackingEndpoints
         row.RemovedByUserId = user!.UserId;
         await SaveKeepingChangedMomentAsync(db, row, RemovedReports(db, tripLogId), ct);
         return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// Removes, for good, every report of one trip about one person — under the same gate as
+    /// destroying a single report.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the act for a person who asks that what a trip's log says about them be removed,
+    /// and that request is not met by hiding. Taking a report off the log keeps it, so that a
+    /// mis-tap can be undone; a kept copy that can be put back is exactly what somebody asking to
+    /// be removed is asking not to exist. So both go in the one act: the reports on the log, and
+    /// the ones already taken off it and kept. Nothing is left to put back.
+    /// </para>
+    /// <para>
+    /// <b>The person is named by a segment of the path, never by an optional parameter.</b> A
+    /// delete over a collection whose filter may be left out is one typing mistake away from
+    /// "everybody's"; a route that cannot be spelt without the person cannot be asked that.
+    /// </para>
+    /// <para>
+    /// The person need not be on the trip's roster: reports outlive a roster edit, and somebody
+    /// taken off the trip is the very case in which their reports are all that still names them.
+    /// The roster is not touched either way, and neither is the name the published page gives
+    /// them — that row goes with the person, not with their reports.
+    /// </para>
+    /// <para>
+    /// Rows are loaded and removed one by one through the model, never in a set-based delete, so
+    /// that each lands on the trip's history like any other destroyed report. As with destroying
+    /// one, an act of reporting none of whose reports is left is forgotten, and a late repeat of
+    /// it would be written as a first send.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<TrackingReportsRemovedDto>, ProblemHttpResult>> RemoveReportsOfAsync(
+        Guid tripLogId, Guid caverId, SilexGisDbContext db, IAccessService access,
+        IAccessContextAccessor accessAccessor, IUserContextAccessor userAccessor, CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var user = await userAccessor.GetAsync(ct);
+        var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
+        var refusal = ctx is null || user is null
+            ? ApiProblems.NotFound("trip_log.not_found")
+            : await WriteGuardAsync(access, ctx, trip, ct);
+        if (refusal is not null) return refusal;
+
+        var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
+        if (tracking is null || !TripTrackingRules.MayWriteLog(tracking.State))
+        {
+            return ApiProblems.Conflict(TrackingProblemCodes.NotWritable, LogNotWritable);
+        }
+
+        // Two reads rather than one past the filter: the log as everybody reads it, and the set
+        // that already answers for the reports taken off it — which says again that the trip is
+        // not deleted.
+        var onTheLog = await db.TripPositionEvents
+            .Where(e => e.TripLogId == tripLogId && e.CaverId == caverId).ToListAsync(ct);
+        var kept = await RemovedReports(db, tripLogId).Where(e => e.CaverId == caverId).ToListAsync(ct);
+        var removed = onTheLog.Count + kept.Count;
+        if (removed == 0)
+        {
+            // Said as a refusal, not as "0 removed": whoever pressed this was told there were
+            // reports, and a quiet success would let them tell the person it was done when
+            // somebody else had already done it — or when the wrong trip was open.
+            return ApiProblems.NotFound(TrackingProblemCodes.NoReportsOfPerson);
+        }
+
+        db.TripPositionEvents.RemoveRange(onTheLog);
+        db.TripPositionEvents.RemoveRange(kept);
+        await db.SaveChangesAsync(ct);
+        return TypedResults.Ok(new TrackingReportsRemovedDto(removed));
     }
 
     /// <summary>

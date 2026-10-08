@@ -14017,6 +14017,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{tripLogId}/tracking/participants/{caverId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Destroy, for good, every report of this trip about one person — those on the log and those already taken off it and kept. For when that person asks to be removed. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    caverId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingReportsRemovedDto"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-logs/{tripLogId}/tracking/events": {
         parameters: {
             query?: never;
@@ -14164,6 +14203,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    caverId?: string;
                     page?: number;
                     pageSize?: number;
                 };
@@ -18783,7 +18823,7 @@ export interface paths {
             };
         };
         post?: never;
-        /** Removes a person, refused while trips or a camp's roster still name them. */
+        /** Removes a person, refused while trips or a camp's roster still name them; the refusal over trips lists those the caller may read ('trips') and says whether anything else holds the person ('heldElsewhere'). */
         delete: {
             parameters: {
                 query?: never;
@@ -26208,6 +26248,10 @@ export interface components {
             report: components["schemas"]["TrackingEventDto"];
             /** Format: date-time */
             removedAt: string;
+        };
+        TrackingReportsRemovedDto: {
+            /** Format: int32 */
+            removed: number;
         };
         TrackingResolveDepthRequest: {
             /** Format: double */

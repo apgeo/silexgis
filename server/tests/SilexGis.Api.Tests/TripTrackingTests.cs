@@ -2236,6 +2236,345 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         (await BodyAsync(restored)).GetProperty("caverId").GetGuid().ShouldBe(stays);
     }
 
+    // ---- when somebody asks to be removed -----------------------------------------------------
+
+    private static string ReportsOf(Guid trip, Guid caver) =>
+        $"/api/v1/trip-logs/{trip}/tracking/participants/{caver}/events";
+
+    /// <summary>
+    /// How many reports of a trip are about each person as the table holds them — on the log and
+    /// taken off it alike, which is what "gone" has to be measured against.
+    /// </summary>
+    private async Task<Dictionary<Guid, int>> ReportsHeldAsync(Guid trip)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.TripPositionEvents.IgnoreQueryFilters().Where(e => e.TripLogId == trip)
+            .GroupBy(e => e.CaverId).ToDictionaryAsync(g => g.Key, g => g.Count());
+    }
+
+    /// <summary>A full administrator: the refusal over a person is about history, not rights.</summary>
+    private async Task<HttpClient> AdministratorAsync()
+    {
+        var email = $"trk-adm-{Guid.NewGuid():N}"[..20] + "@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, email);
+        return await AuthHelper.BearerClientAsync(factory, email);
+    }
+
+    /// <summary>The trips a refused delete of a person names, and whether anything else holds them.</summary>
+    private static async Task<(List<JsonElement> Trips, bool HeldElsewhere)> HeldByAsync(HttpClient client, Guid caver)
+    {
+        var refused = await client.DeleteAsync($"/api/v1/cavers/{caver}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        var problem = await BodyAsync(refused);
+        problem.GetProperty("code").GetString().ShouldBe("caver.referenced_by_trips");
+        return ([.. problem.GetProperty("trips").EnumerateArray()], problem.GetProperty("heldElsewhere").GetBoolean());
+    }
+
+    /// <summary>
+    /// The act destroys that person's reports of that trip — the ones on the log and the ones
+    /// taken off it and kept — and nobody else's of either kind; each is on the trip's history;
+    /// and with nothing left it is a refusal, not a quiet nought.
+    /// </summary>
+    [Fact]
+    public async Task Removing_a_persons_reports_destroys_theirs_kept_ones_included_and_nobody_elses()
+    {
+        var (trip, cavers) = await CreateTripAsync("Asked to be removed", guests: 3);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (asks, other, third) = (cavers[0], cavers[1], cavers[2]);
+
+        await ReportAsync(trip, new { caverIds = cavers, kind = "entered" }, At(9, 0));
+        await ReportAsync(trip, new { caverIds = new[] { asks }, kind = "atStation", stationName = "cave.upper.1" }, At(10, 0));
+        await ReportAsync(trip, new { caverIds = new[] { other }, kind = "atStation", stationName = "cave.upper.2" }, At(10, 5));
+        var asksNote = await PostEventAsync(owner, trip, new
+        {
+            caverIds = new[] { asks }, kind = "note", note = "theirs, taken off", recordedAt = At(11, 0),
+        });
+        var othersNote = await PostEventAsync(owner, trip, new
+        {
+            caverIds = new[] { other }, kind = "note", note = "somebody else's, taken off", recordedAt = At(11, 5),
+        });
+        var asksKept = (await BodyAsync(asksNote))[0].GetProperty("id").GetGuid();
+        var othersKept = (await BodyAsync(othersNote))[0].GetProperty("id").GetGuid();
+        (await owner.DeleteAsync(EventOf(trip, asksKept))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await owner.DeleteAsync(EventOf(trip, othersKept))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // What there is to lose, stated before anything is removed: three about the person (one
+        // of them kept), three about the second (one kept), one about the third.
+        var before = await ReportsHeldAsync(trip);
+        before[asks].ShouldBe(3);
+        before[other].ShouldBe(3);
+        before[third].ShouldBe(1);
+
+        // The same numbers as whoever is about to press is told them: the log narrowed to the
+        // person, and the kept reports narrowed to the person, add up to what will go.
+        async Task<int> ToldAsync(string list, Guid caver)
+        {
+            var response = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/{list}?caverId={caver}&pageSize=1");
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+            var page = await BodyAsync(response);
+            page.GetProperty("items").EnumerateArray()
+                .ShouldAllBe(item => (list == "events" ? item : item.GetProperty("report")).GetProperty("caverId").GetGuid() == caver);
+            return page.GetProperty("totalItems").GetInt32();
+        }
+
+        (await ToldAsync("events", asks)).ShouldBe(2);
+        (await ToldAsync("events/removed", asks)).ShouldBe(1);
+        (await ToldAsync("events/removed", third)).ShouldBe(0);
+        // Unnarrowed, the kept list is everybody's — so the narrowing above is what gave one.
+        (await RemovedAsync(owner, trip)).Count.ShouldBe(2);
+
+        var removed = await owner.DeleteAsync(ReportsOf(trip, asks));
+        removed.StatusCode.ShouldBe(HttpStatusCode.OK, await removed.Content.ReadAsStringAsync());
+        (await BodyAsync(removed)).GetProperty("removed").GetInt32().ShouldBe(3);
+
+        var after = await ReportsHeldAsync(trip);
+        after.ContainsKey(asks).ShouldBeFalse("nothing about the person is left, kept copies included");
+        after[other].ShouldBe(3);
+        after[third].ShouldBe(1);
+
+        // And as the application reads it: the log no longer speaks of them, the other two are
+        // where they were, and the only report left to put back is somebody else's.
+        var log = await LogAsync(owner, trip);
+        log.Count.ShouldBe(3);
+        log.ShouldAllBe(e => e.GetProperty("caverId").GetGuid() != asks);
+        (await RemovedAsync(owner, trip)).ShouldHaveSingleItem()
+            .GetProperty("report").GetProperty("id").GetGuid().ShouldBe(othersKept);
+        (await owner.PostAsync(RestoreOf(trip, asksKept), null)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        // They are still on the trip's roster: the act removes reports, not the person's name.
+        (await RosterAsync(trip)).ShouldContain(asks);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.AuditEntries.CountAsync(a => a.RootEntityId == trip.ToString()
+                && a.EntityType == nameof(TripPositionEvent) && a.Action == AuditActions.Deleted)).ShouldBe(3);
+
+            // What the confirmation tells whoever presses this, held to the fact: the reports are
+            // gone, and the trip's history still says what each one said.
+            var kept = await db.AuditEntries
+                .Where(a => a.EntityId == asksKept.ToString() && a.Action == AuditActions.Deleted)
+                .Select(a => a.Changes).SingleAsync();
+            kept.ShouldNotBeNull().ShouldContain("theirs, taken off");
+        }
+
+        // Asked again, and asked about somebody the trip has never had a report of.
+        var again = await owner.DeleteAsync(ReportsOf(trip, asks));
+        again.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await again.Content.ReadAsStringAsync()).ShouldContain("tracking.no_reports_of_person");
+        var nobody = await owner.DeleteAsync(ReportsOf(trip, Guid.NewGuid()));
+        nobody.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await nobody.Content.ReadAsStringAsync()).ShouldContain("tracking.no_reports_of_person");
+        (await ReportsHeldAsync(trip)).Values.Sum().ShouldBe(4);
+    }
+
+    /// <summary>
+    /// The act is refused wherever destroying one report is: to nobody signed in, to a reader of
+    /// the trip, as "no such trip" to somebody who may not read it, and on a watch whose log takes
+    /// no writes — and in each case nothing is removed. The same request from the trip's writer on
+    /// a writable log goes through, which is what shows the refusals were about the caller and the
+    /// state, not about the request.
+    /// </summary>
+    [Fact]
+    public async Task Removing_a_persons_reports_is_refused_wherever_destroying_one_is()
+    {
+        var (trip, cavers) = await CreateTripAsync("Not theirs to remove", guests: 2, visibility: "authenticated");
+        var (hidden, hiddenCavers) = await CreateTripAsync("Not theirs to see", guests: 1, visibility: "private");
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ArmAsync(owner, hidden, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ReportAsync(trip, new { caverIds = cavers, kind = "entered" }, At(9, 0));
+        await ReportAsync(hidden, new { caverIds = hiddenCavers, kind = "entered" }, At(9, 0));
+
+        (await anonymous.DeleteAsync(ReportsOf(trip, cavers[0]))).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // The reader does read this trip — what they are refused is the write.
+        (await reader.GetAsync($"/api/v1/trip-logs/{trip}/tracking")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await reader.DeleteAsync(ReportsOf(trip, cavers[0]))).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // And does not read the private one, which answers as a trip that is not there.
+        (await reader.GetAsync($"/api/v1/trip-logs/{hidden}/tracking")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var masked = await reader.DeleteAsync(ReportsOf(hidden, hiddenCavers[0]));
+        masked.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await masked.Content.ReadAsStringAsync()).ShouldContain("trip_log.not_found");
+
+        // A watch that is off takes no writes, from its writer either.
+        await SetStateAsync(trip, TripTrackingState.Off);
+        var off = await owner.DeleteAsync(ReportsOf(trip, cavers[0]));
+        off.StatusCode.ShouldBe(HttpStatusCode.Conflict, await off.Content.ReadAsStringAsync());
+        (await off.Content.ReadAsStringAsync()).ShouldContain("tracking.not_writable");
+
+        // A trip that was never followed has no log to remove from.
+        var (never, neverCavers) = await CreateTripAsync("Never followed", guests: 1);
+        var unwatched = await owner.DeleteAsync(ReportsOf(never, neverCavers[0]));
+        unwatched.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await unwatched.Content.ReadAsStringAsync()).ShouldContain("tracking.not_writable");
+
+        var untouched = await ReportsHeldAsync(trip);
+        untouched[cavers[0]].ShouldBe(1);
+        untouched[cavers[1]].ShouldBe(1);
+        (await ReportsHeldAsync(hidden))[hiddenCavers[0]].ShouldBe(1);
+
+        await SetStateAsync(trip, TripTrackingState.Closed);
+        var allowed = await owner.DeleteAsync(ReportsOf(trip, cavers[0]));
+        allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
+        (await BodyAsync(allowed)).GetProperty("removed").GetInt32().ShouldBe(1);
+        (await ReportsHeldAsync(trip))[cavers[1]].ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The way out for somebody who is not a duplicate: the refusal to delete them names each trip
+    /// and what holds them there; a person held only by reports can be deleted once the act has
+    /// been done on each trip named; a person still on a roster is still refused, and the list
+    /// says so.
+    /// </summary>
+    [Fact]
+    public async Task A_person_held_only_by_reports_can_be_deleted_after_the_act_and_one_on_a_roster_cannot()
+    {
+        var (first, cavers) = await CreateTripAsync("Held, first trip", guests: 3);
+        var (leaves, stays, bystander) = (cavers[0], cavers[1], cavers[2]);
+        var second = await CreateTripOfAsync("Held, second trip", [leaves, bystander]);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, first, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ArmAsync(owner, second, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ReportAsync(first, new { caverIds = cavers, kind = "entered" }, At(9, 0));
+        await ReportAsync(first, new { caverIds = new[] { leaves }, kind = "exited" }, At(15, 0));
+        await ReportAsync(second, new { caverIds = new[] { leaves, bystander }, kind = "entered" }, At(9, 30));
+        var kept = await PostEventAsync(owner, second, new
+        {
+            caverIds = new[] { leaves }, kind = "note", note = "kept", recordedAt = At(10, 0),
+        });
+        (await owner.DeleteAsync(EventOf(second, (await BodyAsync(kept))[0].GetProperty("id").GetGuid())))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Both watches are closed and the person is taken off both trips: their reports are now
+        // all that names them.
+        await SetStateAsync(first, TripTrackingState.Closed);
+        await SetStateAsync(second, TripTrackingState.Closed);
+        (await PutRosterAsync(first, [stays, bystander])).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PutRosterAsync(second, [bystander])).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var administrator = await AdministratorAsync();
+        var (trips, elsewhere) = await HeldByAsync(administrator, leaves);
+        elsewhere.ShouldBeFalse();
+        trips.Count.ShouldBe(2);
+        var onFirst = trips.Single(t => t.GetProperty("id").GetGuid() == first);
+        onFirst.GetProperty("onRoster").GetBoolean().ShouldBeFalse();
+        onFirst.GetProperty("reports").GetInt32().ShouldBe(2);
+        onFirst.GetProperty("reportsRemovable").GetBoolean().ShouldBeTrue();
+        onFirst.GetProperty("tripDate").GetString().ShouldBe("2026-09-12");
+        onFirst.GetProperty("title").GetString()!.ShouldStartWith("Roster ");
+        // The one taken off the log and kept is counted for somebody who may write that log.
+        trips.Single(t => t.GetProperty("id").GetGuid() == second).GetProperty("reports").GetInt32().ShouldBe(2);
+
+        // One trip dealt with is not enough, and the list then names the one that is left.
+        (await administrator.DeleteAsync(ReportsOf(first, leaves))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (left, _) = await HeldByAsync(administrator, leaves);
+        left.ShouldHaveSingleItem().GetProperty("id").GetGuid().ShouldBe(second);
+        (await administrator.DeleteAsync(ReportsOf(second, leaves))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await administrator.DeleteAsync($"/api/v1/cavers/{leaves}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Nobody else lost anything on the way.
+        var firstHeld = await ReportsHeldAsync(first);
+        firstHeld[stays].ShouldBe(1);
+        firstHeld[bystander].ShouldBe(1);
+        (await ReportsHeldAsync(second))[bystander].ShouldBe(1);
+
+        // Somebody still on a roster: the list says so, removing their reports changes the count
+        // and not the refusal, and there is then nothing here to remove.
+        var (held, _) = await HeldByAsync(administrator, stays);
+        var named = held.ShouldHaveSingleItem();
+        named.GetProperty("onRoster").GetBoolean().ShouldBeTrue();
+        named.GetProperty("reports").GetInt32().ShouldBe(1);
+        named.GetProperty("reportsRemovable").GetBoolean().ShouldBeTrue();
+        (await administrator.DeleteAsync(ReportsOf(first, stays))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (still, _) = await HeldByAsync(administrator, stays);
+        var roster = still.ShouldHaveSingleItem();
+        roster.GetProperty("onRoster").GetBoolean().ShouldBeTrue();
+        roster.GetProperty("reports").GetInt32().ShouldBe(0);
+        roster.GetProperty("reportsRemovable").GetBoolean().ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A report taken off a log is listed only for those who may write that log, and the refusal
+    /// over a person follows the same rule: a caller who keeps the roster and only reads the trip
+    /// is told that something holds the person, never that this trip has removed reports about
+    /// them. The trip's writer, asked the same question, is told.
+    /// </summary>
+    [Fact]
+    public async Task A_kept_report_is_named_in_the_refusal_only_to_somebody_who_may_write_that_log()
+    {
+        var (trip, cavers) = await CreateTripAsync("Kept and unseen", guests: 2, visibility: "authenticated");
+        var (leaves, stays) = (cavers[0], cavers[1]);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var placed = await PostEventAsync(owner, trip, new { caverIds = new[] { leaves }, kind = "entered" });
+        (await owner.DeleteAsync(EventOf(trip, (await BodyAsync(placed))[0].GetProperty("id").GetGuid())))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await PutRosterAsync(trip, [stays])).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Somebody who may delete people and write no trip: an account with no role of its own
+        // and one rule over the roster.
+        var administrator = await AdministratorAsync();
+        var keeperEmail = $"trk-ros-{Guid.NewGuid():N}"[..20] + "@t.local";
+        var keeperId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, keeperEmail);
+        var rules = await administrator.PostAsJsonAsync("/api/v1/permission-groups/", new
+        {
+            name = $"Roster only {Guid.NewGuid():N}"[..30], description = (string?)null,
+        });
+        rules.StatusCode.ShouldBe(HttpStatusCode.Created, await rules.Content.ReadAsStringAsync());
+        var rulesId = (await BodyAsync(rules)).GetProperty("id").GetGuid();
+        (await administrator.PostAsJsonAsync($"/api/v1/permission-groups/{rulesId}/members", new
+        {
+            memberKind = "user", memberId = keeperId,
+        })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await administrator.PutAsJsonAsync($"/api/v1/permission-groups/{rulesId}/entries", new
+        {
+            entries = new[] { new { effect = "allow", domain = "cavers", actions = "read, delete", scopeKind = "all" } },
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var keeper = await AuthHelper.BearerClientAsync(factory, keeperEmail);
+
+        // They do read the trip, and are named it for the person who is on its roster — so the
+        // empty list below is not a caller who is told nothing.
+        (await keeper.GetAsync($"/api/v1/trip-logs/{trip}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (control, controlElsewhere) = await HeldByAsync(keeper, stays);
+        control.ShouldHaveSingleItem().GetProperty("id").GetGuid().ShouldBe(trip);
+        control[0].GetProperty("reportsRemovable").GetBoolean().ShouldBeFalse();
+        controlElsewhere.ShouldBeFalse();
+
+        var (theirs, elsewhere) = await HeldByAsync(keeper, leaves);
+        theirs.ShouldBeEmpty();
+        elsewhere.ShouldBeTrue();
+
+        var (writers, writersElsewhere) = await HeldByAsync(administrator, leaves);
+        var told = writers.ShouldHaveSingleItem();
+        told.GetProperty("id").GetGuid().ShouldBe(trip);
+        told.GetProperty("onRoster").GetBoolean().ShouldBeFalse();
+        told.GetProperty("reports").GetInt32().ShouldBe(1);
+        told.GetProperty("reportsRemovable").GetBoolean().ShouldBeTrue();
+        writersElsewhere.ShouldBeFalse();
+    }
+
+    /// <summary>A trip naming people who already exist, as its form would send them.</summary>
+    private async Task<Guid> CreateTripOfAsync(string title, IEnumerable<Guid> people)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"{title} {Guid.NewGuid():N}",
+            tripDate = "2026-09-12",
+            participants = people.Select(id => new { caverId = id }).ToArray(),
+            visibility = "authenticated",
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
     // ---- a report that cannot be written twice ------------------------------------------------
 
     /// <summary>
