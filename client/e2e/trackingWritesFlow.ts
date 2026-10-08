@@ -341,6 +341,127 @@ export async function correctImportAndReportByPlace(page: Page) {
     )
     .toBe(DECLARED_STATION);
 
+  // ---- Somebody between two stations, and a note about the cave ----
+  // Two things said on the card and read back off the log and the party table: Maria somewhere
+  // between two stations, and a hazard at a third station that is about nobody. Both reports are
+  // destroyed again at the end of this block, because everything below counts this log's rows and
+  // its removed reports and is about other things.
+  const stretchFrom = 'p8.p8.97';
+  const stretchWords = `Between ${stretchFrom} and ${DECLARED_STATION}`;
+  const hazardWords = `E2E loose rock above the pitch ${stamp}`;
+  // A station neither person is reported at, so that "nobody moved there" can be seen.
+  const hazardStation = (
+    (await apiJson(
+      page,
+      token,
+      'GET',
+      `/api/v1/survey-models/${modelId}/stations?q=p8.p8.9&pageSize=50`,
+    )) as { items: { viewerName: string }[] }
+  ).items
+    .map((station) => station.viewerName)
+    // Not part of either of the other two names, nor they of it: the station is looked for as text
+    // on the party table below, and `p8.p8.9` would be found inside `p8.p8.97`.
+    .find((name) => ![stretchFrom, DECLARED_STATION].some((other) => other.includes(name) || name.includes(other)))!;
+  expect(hazardStation).toBeTruthy();
+  // The far end and the subject of a report are members the rest of this walk never reads.
+  const wholeLog = async () =>
+    (await logOf()) as unknown as (Omit<Report, 'caverId'> & {
+      caverId: string | null;
+      toStationName: string | null;
+    })[];
+  /**
+   * Types a station's name and takes it from the survey's own names, as a coordinator would. Typed
+   * in capitals, the way a relayed message arrives: a name already spelled exactly as the survey
+   * spells it, and the only one that begins so, is offered no list — there is nothing to choose.
+   */
+  const nameStation = async (testId: string, station: string) => {
+    await page.getByTestId(testId).fill(station.toUpperCase());
+    await page
+      .locator(`.ant-select-dropdown:visible .ant-select-item-option[title="${station}"]`)
+      .click();
+    await expect(page.getByTestId(testId)).toHaveValue(station);
+  };
+  const mariaOnWatch = party.getByRole('row', { name: new RegExp(MARIA) });
+  const ionPlaced = party.getByRole('row', { name: new RegExp(ION) });
+
+  await mariaOnWatch.getByRole('checkbox').check();
+  await page.getByTestId('trip-tracking-kind').click();
+  await page.locator('.ant-select-item-option[title="At a station"]').click();
+  await nameStation('trip-tracking-station', stretchFrom);
+  await nameStation('trip-tracking-to-station', DECLARED_STATION);
+  await page.getByTestId('trip-tracking-record').click();
+  await expect
+    .poll(
+      async () => {
+        const row = (await wholeLog()).find(
+          (entry) => entry.caverId === maria && entry.kind === 'atStation',
+        );
+        return [row?.stationName, row?.toStationName];
+      },
+      { timeout: 15_000 },
+    )
+    .toEqual([stretchFrom, DECLARED_STATION]);
+  // Said as a stretch on the log, once, and against Maria on the party table.
+  await expect(log.getByTestId('trip-tracking-stretch')).toHaveText(stretchWords, {
+    timeout: 15_000,
+  });
+  await expect(mariaOnWatch.getByTestId('trip-tracking-stretch')).toHaveText(stretchWords, {
+    timeout: 15_000,
+  });
+
+  // The note about the cave. Nobody is ticked — the report above let the ticks go — and for this
+  // kind the card asks for nobody: no warning, and the button is live.
+  await page.getByTestId('trip-tracking-kind').click();
+  await page.locator('.ant-select-item-option[title="About the cave"]').click();
+  await expect(page.getByTestId('trip-tracking-cave-note-hint')).toBeVisible();
+  await expect(page.getByTestId('trip-tracking-nobody')).toHaveCount(0);
+  await nameStation('trip-tracking-station', hazardStation);
+  await page.getByTestId('trip-tracking-note').fill(hazardWords);
+  await page.getByTestId('trip-tracking-record').click();
+  await expect(page.getByText('Note about the cave recorded.')).toBeVisible({ timeout: 15_000 });
+  const hazard = (await wholeLog()).find((entry) => entry.kind === 'caveNote')!;
+  // About nobody, at the station that was named.
+  expect([hazard.caverId, hazard.stationName, hazard.note]).toEqual([
+    null,
+    hazardStation,
+    hazardWords,
+  ]);
+  await expect(log).toContainText(hazardWords, { timeout: 15_000 });
+  await expect(log).toContainText('The cave');
+  await expect(log).toContainText(hazardStation);
+  // And nobody moved: both people are underground as before, each where their own report put
+  // them, and the hazard's station is on the log and nowhere on the party table.
+  await expect(page.getByTestId('trip-tracking-standing-underground')).toHaveCount(2);
+  await expect(mariaOnWatch.getByTestId('trip-tracking-stretch')).toHaveText(stretchWords);
+  await expect(ionPlaced).toContainText(DECLARED_STATION);
+  await expect(party).not.toContainText(hazardStation);
+  const folded = (await apiJson(page, token, 'GET', `/api/v1/trip-logs/${trip.id}/tracking`)) as {
+    participants: { caverId: string; stationName: string | null }[];
+  };
+  expect(
+    folded.participants.map((person) => [person.caverId, person.stationName]).sort(),
+  ).toEqual(
+    [
+      [ion, DECLARED_STATION],
+      [maria, stretchFrom],
+    ].sort(),
+  );
+
+  // Both taken off the log and destroyed, and the page read again, so the steps below meet the
+  // log and the list of removed reports exactly as they were before this block.
+  const stretchReport = (await wholeLog()).find(
+    (entry) => entry.caverId === maria && entry.kind === 'atStation',
+  )!;
+  for (const reportId of [stretchReport.id, hazard.id]) {
+    const address = `/api/v1/trip-logs/${trip.id}/tracking/events/${reportId}`;
+    await apiJson(page, token, 'DELETE', address);
+    await apiJson(page, token, 'DELETE', `${address}?permanent=true`);
+  }
+  expect((await wholeLog()).some((entry) => entry.kind === 'caveNote')).toBe(false);
+  await page.reload();
+  await expect(log).toContainText('E2E Maria went in, corrected', { timeout: 30_000 });
+  await expect(log).not.toContainText(hazardWords);
+
   // ---- Taking a report off the log, and putting it back ----
   // The report just made, because it is the one with the most to lose: a station, the depth that
   // was asked for, and the survey both were read on. Held whole, as the log answers it, so that
