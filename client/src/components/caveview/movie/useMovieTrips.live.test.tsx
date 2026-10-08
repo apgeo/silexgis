@@ -21,6 +21,8 @@ interface Report {
   id: string;
   recordedAt: string;
   surveyModelId: string;
+  /** Null on a note about the cave, which is about nobody; left out here on a report about somebody. */
+  caverId?: string | null;
 }
 const server = vi.hoisted(() => ({
   /** The trip's log as the server holds it, newest first. */
@@ -171,6 +173,27 @@ describe('a movie of a trip still under way', () => {
     expect(fresh.map((trip) => trip.events.map((event) => event.id))).toEqual([['r4', 'r3', 'r2', 'r1']]);
     // What the export read is what the dialog shows from then on.
     await waitFor(() => expect(result.current.newReports.get(TRIP)).toBe(2));
+  });
+
+  it('leaves a note about the cave out of the movie, when the log is first read and when an export reads it again', async () => {
+    // About nobody, and for whoever may read the trip: the log's read carries it, a movie does not.
+    const caveNote = (id: string, recordedAt: string): Report => ({ ...report(id, recordedAt), caverId: null });
+    server.log = [caveNote('n1', '2026-09-12T09:10:00Z'), ...server.log];
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useMovieTrips(MODEL, [TRIP], Date.now()), { wrapper });
+    await waitFor(() => expect(result.current.trips).toHaveLength(1));
+    expect(result.current.trips[0].events.map((event) => event.id)).toEqual(['r2', 'r1']);
+
+    server.log = [caveNote('n2', '2026-09-12T10:10:00Z'), report('r3', '2026-09-12T10:00:00Z'), ...server.log];
+    let fresh: Awaited<ReturnType<typeof result.current.rereadLive>> = [];
+    await act(async () => {
+      fresh = await result.current.rereadLive();
+    });
+
+    expect(fresh.map((trip) => trip.events.map((event) => event.id))).toEqual([['r3', 'r2', 'r1']]);
+    // One report arrived since the dialog opened. The second note is word about the cave, not about
+    // anybody in the party, and is not counted among them.
+    await waitFor(() => expect(result.current.newReports.get(TRIP)).toBe(1));
   });
 
   it('refuses the export’s read when the log cannot be read, and keeps the movie it had', async () => {
