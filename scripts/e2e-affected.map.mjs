@@ -23,7 +23,7 @@ export const always = ['smoke.spec.ts'];
 /** Area name → the specs that answer for it. An empty list means "nothing narrower than everything". */
 export const specs = {
   about: [],
-  access: ['permission-groups.spec.ts', 'cave-grant-link.spec.ts'],
+  access: ['permission-groups.spec.ts', 'cave-grant-link.spec.ts', 'expedition-sharing.spec.ts'],
   admin: ['settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts'],
   audit: ['panel.spec.ts'],
   cabinets: ['documents.spec.ts'],
@@ -34,6 +34,7 @@ export const specs = {
     'map-editing.spec.ts', 'cave-attachments.spec.ts', 'cave-grant-link.spec.ts', 'cave-levels.spec.ts', 'cave-morphometry.spec.ts',
     'cave-statistics.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
     'overburden-profile.spec.ts', 'survey-sources.spec.ts', 'qr-landing.spec.ts',
+    'feature-restore.spec.ts',
   ],
   cavingGroups: ['announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts'],
   checklists: ['checklists.spec.ts'],
@@ -42,7 +43,7 @@ export const specs = {
   diagnostics: ['consoleGuard.spec.ts', 'errorReporting.spec.ts'],
   documents: ['documents.spec.ts', 'annotated-text.spec.ts', 'reslinks.spec.ts'],
   events: ['events.spec.ts', 'calendar.spec.ts'],
-  expeditions: ['expeditions.spec.ts', 'calendar.spec.ts'],
+  expeditions: ['expeditions.spec.ts', 'expedition-sharing.spec.ts', 'calendar.spec.ts'],
   exports: ['karstlink-export.spec.ts', 'registry-statistics.spec.ts', 'trip-list.spec.ts'],
   featureSets: ['doline-morphometry.spec.ts', 'vector-import.spec.ts'],
   featureShares: [],
@@ -50,7 +51,7 @@ export const specs = {
   filters: ['trip-list.spec.ts', 'trip-map.spec.ts', 'registry-statistics.spec.ts'],
   geoFeatures: [
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
-    'photo-import.spec.ts',
+    'photo-import.spec.ts', 'feature-restore.spec.ts',
   ],
   geofiles: ['vector-import.spec.ts'],
   georeferencedMaps: [

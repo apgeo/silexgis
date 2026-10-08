@@ -5572,6 +5572,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/map-backgrounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The map backgrounds this installation publishes, each with whether a document may copy it, what the catalogue says and what an administrator decided. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MapBackgroundDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/map-backgrounds/{id}/in-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Decides whether documents may copy one background: on, off, or default to follow the catalogue again. Kept across restarts. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MapBackgroundChoiceRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MapBackgroundDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves": {
         parameters: {
             query?: never;
@@ -6666,7 +6744,7 @@ export interface paths {
             };
         };
         post?: never;
-        /** Soft-deletes a feature and its containment subtree (Delete permission). */
+        /** Soft-deletes a feature and its containment subtree (Delete permission). Nothing is removed: the deletion can be undone from the list of deleted features. */
         delete: {
             parameters: {
                 query?: never;
@@ -6687,6 +6765,83 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The deletions of caves, entrances and surface features the caller may undo, most recent first: one row per deletion, with what went with it. Carries no position. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfDeletedFeatureDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Puts a deleted cave, entrance or surface feature back with everything that was deleted along with it (the right to read it and to delete it), and answers the feature with its version. Refused while something containing it is deleted. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureEnvelopeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -9301,7 +9456,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Upload limits this installation applies, and how much room the caller has left. */
+        /** Upload limits this installation applies, how much room the caller has left, and whether it runs the service that lays office documents out as PDF. */
         get: {
             parameters: {
                 query?: never;
@@ -13133,11 +13288,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The trip written up as a document, built from this caller's own reading of the trip — the same one the page shows. */
+        /** The trip written up as a document, built from this caller's own reading of the trip — the same one the page shows. 'format=pdf' asks for it as a PDF, which an installation without the document converter refuses. */
         get: {
             parameters: {
                 query?: {
                     templateId?: string;
+                    format?: string;
                 };
                 header?: never;
                 path: {
@@ -13162,6 +13318,7 @@ export interface paths {
             parameters: {
                 query?: {
                     templateId?: string;
+                    format?: string;
                 };
                 header?: never;
                 path: {
@@ -13199,12 +13356,13 @@ export interface paths {
         put?: never;
         /**
          * The trip written up as a document, with a picture of a map the caller drew placed where the write-up says where the trip went.
-         * @description Multipart, with one optional part named 'map': a PNG or JPEG the caller's own browser drew out of what the trip's page was already given. The picture is checked, redrawn here and placed in this one answer; it is stored nowhere. Without the part the answer is the plain download's. The layout is chosen by the same query parameter the plain download takes.
+         * @description Multipart, with one optional part named 'map': a PNG or JPEG the caller's own browser drew out of what the trip's page was already given. The picture is checked, redrawn here and placed in this one answer; it is stored nowhere. Without the part the answer is the plain download's. The layout and the format are chosen by the same query parameters the plain download takes; asked for as a PDF, the picture goes in before the document is converted.
          */
         post: {
             parameters: {
                 query?: {
                     templateId?: string;
+                    format?: string;
                 };
                 header?: never;
                 path: {
@@ -15457,11 +15615,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The camp written up as one document, in the layout named or the club's chosen one. Built from what this caller may read: a trip they may not open contributes nothing to it. */
+        /** The camp written up as one document, in the layout named or the club's chosen one. Built from what this caller may read: a trip they may not open contributes nothing to it. 'format=pdf' asks for it as a PDF, which an installation without the document converter refuses. */
         get: {
             parameters: {
                 query?: {
                     templateId?: string;
+                    format?: string;
                 };
                 header?: never;
                 path: {
@@ -15486,6 +15645,7 @@ export interface paths {
             parameters: {
                 query?: {
                     templateId?: string;
+                    format?: string;
                 };
                 header?: never;
                 path: {
@@ -15752,7 +15912,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trip-report-templates": {
+    "/api/v1/report-templates": {
         parameters: {
             query?: never;
             header?: never;
@@ -15777,7 +15937,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TripReportTemplateDto"][];
+                        "application/json": components["schemas"]["ReportTemplateDto"][];
                     };
                 };
             };
@@ -15793,7 +15953,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["TripReportTemplateRequest"];
+                    "application/json": components["schemas"]["ReportTemplateRequest"];
                 };
             };
             responses: {
@@ -15803,7 +15963,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TripReportTemplateDto"];
+                        "application/json": components["schemas"]["ReportTemplateDto"];
                     };
                 };
             };
@@ -15814,7 +15974,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trip-report-templates/default": {
+    "/api/v1/report-templates/default": {
         parameters: {
             query?: never;
             header?: never;
@@ -15850,7 +16010,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trip-report-templates/{id}": {
+    "/api/v1/report-templates/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -15870,7 +16030,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["TripReportTemplateRequest"];
+                    "application/json": components["schemas"]["ReportTemplateRequest"];
                 };
             };
             responses: {
@@ -15880,7 +16040,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TripReportTemplateDto"];
+                        "application/json": components["schemas"]["ReportTemplateDto"];
                     };
                 };
             };
@@ -17197,7 +17357,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Shares this camp: one rule onto every trip it gathers, bounded at each trip by what the caller holds there. Adds and restates; never removes. */
+        /** Shares this camp: one rule onto every trip it gathers that the caller may administer, bounded at each trip by what the caller holds there, and says which trips it skipped. Adds and restates; never removes. */
         post: {
             parameters: {
                 query?: never;
@@ -17219,7 +17379,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["ExpeditionSharingDto"];
+                        "application/json": components["schemas"]["ExpeditionSharingOutcomeDto"];
                     };
                 };
             };
@@ -17259,7 +17419,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Carries this camp's sharing onto the trips that joined since it was applied. A trip joining is not covered by itself — this is the act that covers it. */
+        /** Carries this camp's sharing onto the trips it does not reach yet — ones that joined since it was applied, and ones skipped then that the caller may now administer. A trip joining is not covered by itself: this is the act that covers it. */
         post: {
             parameters: {
                 query?: never;
@@ -17277,7 +17437,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["ExpeditionSharingDto"];
+                        "application/json": components["schemas"]["ExpeditionSharingOutcomeDto"];
                     };
                 };
             };
@@ -19912,6 +20072,8 @@ export interface components {
                 [key: string]: components["schemas"]["CreatableCavingGroupDto"][];
             };
         };
+        /** @enum {unknown} */
+        CascadeSkipReason: "notAdministered" | "beyondHolding";
         CaveCrossSectionDto: {
             /** Format: uuid */
             caveId: string;
@@ -20705,6 +20867,20 @@ export interface components {
             /** Format: date-time */
             expiresAt: null | string;
         };
+        DeletedFeatureDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FeatureKind"];
+            featureTypeCode: null | string;
+            name: null | string;
+            /** Format: date-time */
+            deletedAt: string;
+            /** Format: int32 */
+            entranceCount: number;
+            /** Format: int32 */
+            otherCount: number;
+            parents: components["schemas"]["FeatureBreadcrumbDto"][];
+        };
         DeletedPhotoDto: {
             /** Format: uuid */
             documentId: string;
@@ -21318,6 +21494,20 @@ export interface components {
             memberTrips: number;
             rules: components["schemas"]["ExpeditionSharedRuleDto"][];
         };
+        ExpeditionSharingOutcomeDto: {
+            sharing: components["schemas"]["ExpeditionSharingDto"];
+            /** Format: int32 */
+            sharedTrips: number;
+            skippedTrips: components["schemas"]["ExpeditionSkippedTripDto"][];
+            /** Format: int32 */
+            skippedTripsNotNamed: number;
+        };
+        ExpeditionSkippedTripDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            reason: components["schemas"]["CascadeSkipReason"];
+        };
         ExpeditionTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];
         };
@@ -21681,6 +21871,7 @@ export interface components {
             /** Format: int64 */
             resumableThresholdBytes: number;
             archiveExtensions: string[];
+            conversionAvailable: boolean;
         };
         FileDto: {
             /** Format: uuid */
@@ -22442,6 +22633,20 @@ export interface components {
         };
         /** @enum {unknown} */
         MailTransportSecurity: "auto" | "none" | "startTls" | "sslOnConnect";
+        MapBackgroundChoiceRequest: {
+            choice: null | components["schemas"]["MapLayerDocumentChoice"];
+        };
+        MapBackgroundDto: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            groupName: null | string;
+            attribution: null | string;
+            inDocuments: boolean;
+            catalogueDefault: boolean;
+            choice: components["schemas"]["MapLayerDocumentChoice"];
+            canBeCopied: boolean;
+        };
         MapConfigDto: {
             /** Format: int32 */
             centerlineDetailZoom: number;
@@ -22471,6 +22676,8 @@ export interface components {
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";
+        /** @enum {unknown} */
+        MapLayerDocumentChoice: "default" | "on" | "off";
         MapLayerDto: {
             /** Format: int64 */
             id: number;
@@ -22859,6 +23066,15 @@ export interface components {
         };
         PagedResultOfCaveListItemDto: {
             items: components["schemas"]["CaveListItemDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfDeletedFeatureDto: {
+            items: components["schemas"]["DeletedFeatureDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -24022,8 +24238,30 @@ export interface components {
             /** Format: int32 */
             caveCount: number;
         };
+        ReportTemplateDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["ReportTemplateKind"];
+            body: string;
+            isDefault: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: int64 */
+            tripTypeId?: null | number;
+        };
         /** @enum {unknown} */
         ReportTemplateKind: "trip" | "expedition";
+        ReportTemplateRequest: {
+            name: string;
+            body: string;
+            isDefault: boolean;
+            kind: null | components["schemas"]["ReportTemplateKind"];
+            /** Format: int64 */
+            tripTypeId?: null | number;
+        };
         ResetPasswordRequest: {
             email: string;
             token: string;
@@ -26196,28 +26434,6 @@ export interface components {
             /** Format: uuid */
             fileId: string;
             fileName: string;
-        };
-        TripReportTemplateDto: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            kind: components["schemas"]["ReportTemplateKind"];
-            body: string;
-            isDefault: boolean;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-            /** Format: int64 */
-            tripTypeId?: null | number;
-        };
-        TripReportTemplateRequest: {
-            name: string;
-            body: string;
-            isDefault: boolean;
-            kind: null | components["schemas"]["ReportTemplateKind"];
-            /** Format: int64 */
-            tripTypeId?: null | number;
         };
         TripStatisticsDto: {
             /** Format: int32 */

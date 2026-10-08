@@ -103,6 +103,49 @@ describe('the imports this account made', () => {
   });
 
   /**
+   * The caves and features an undo deletes can be put back as well, whatever the source: a
+   * spreadsheet of trips creates the caves its trips name, and those are deleted with them.
+   */
+  it.each(['vectorFile', 'tripCsv'] as const)(
+    'says the caves and features an undo deletes can be restored (%s)',
+    async (source) => {
+      show([batch({ source, geofileName: source === 'vectorFile' ? 'entrances.gpx' : null })]);
+
+      expect(await undoConfirmation()).toContain(
+        'Each cave and feature it created can be restored from Deleted caves and features.',
+      );
+    },
+  );
+
+  /**
+   * A deleted cave answers as not found at its own address, exactly as a deleted trip does, so
+   * its line names it and points at where it can be put back rather than at itself.
+   */
+  it('sends the reader of an undone batch to where its caves and features can be put back', () => {
+    detailSpy.mockReturnValue({
+      isLoading: false,
+      data: {
+        items: [
+          { id: 1, featureId: 'dddddddd-0000-0000-0000-000000000001', featureName: 'Pestera Mare', featureDeleted: true, action: 'create' },
+          { id: 2, featureId: 'dddddddd-0000-0000-0000-000000000002', featureName: 'Pestera Mica', featureDeleted: false, action: 'create' },
+        ],
+      },
+    });
+    show([batch({ source: 'vectorFile', geofileName: 'caves.gpx', revertedAt: '2026-10-02T10:00:00Z', canRevert: false })]);
+
+    fireEvent.click(screen.getByText('caves.gpx'));
+    const drawer = screen.getByTestId('import-batch-detail');
+
+    const restore = within(drawer).getByTestId('import-batch-feature-restore');
+    expect(restore.getAttribute('href')).toBe('/features/deleted');
+    expect(within(drawer).getByText('Pestera Mare')).toBeTruthy();
+    expect(within(drawer).queryByRole('link', { name: 'Pestera Mare' })).toBeNull();
+
+    expect(within(drawer).getByRole('link', { name: 'Pestera Mica' }).getAttribute('href'))
+      .toBe('/features/dddddddd-0000-0000-0000-000000000002');
+  });
+
+  /**
    * A deleted trip answers as not found at its own address. A line that went on linking there
    * would send the reader to a page saying no such trip, one click after a page that named it.
    */

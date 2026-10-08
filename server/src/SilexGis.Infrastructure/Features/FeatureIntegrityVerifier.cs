@@ -62,6 +62,22 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
             }
         }
 
+        // Nothing live sits under something deleted. A delete stamps a whole containment
+        // subtree and a restore is refused while a container is deleted, so no write path
+        // leaves such a row; reads lean on that — a row inherits its audience from the rows
+        // containing it, and the read filter leaves a deleted container out of that chain. The
+        // one way to it is a restore and a delete of its container landing in the same instant,
+        // which nothing locks against, so this is where it would be found.
+        var deletedIds = features.Where(f => f.DeletedAt is not null).Select(f => f.Id).ToHashSet();
+        foreach (var feature in features.Where(f => f.DeletedAt is null))
+        {
+            if (FeatureDeletionRules.DeletedContainers(feature.Id, feature.AncestorIds, deletedIds.Contains).Count > 0)
+            {
+                problems.Add(new IntegrityProblem("live_under_deleted", feature.Id,
+                    "a feature that is not deleted sits inside one that is"));
+            }
+        }
+
         // A cave is two rows and only one direction of the pair is guarded: the caves row
         // carries a composite foreign key on (id, kind) into the feature row, so a caves row
         // without its feature is impossible, while a feature of kind Cave that lost — or was

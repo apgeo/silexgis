@@ -148,10 +148,15 @@ pentru un interval de zile**:
 | **Cine** | Începeți să scrieți și alegeți pe cineva din lista de speologi — sau scrieți numele cuiva care nu este în ea |
 | **Rol** | *Membru*, dacă nu spuneți altfel |
 | **Zilele** | Prima și ultima zi în care a fost acolo; pentru o singură zi, alegeți-o de două ori. Pornește de la întreaga tabără |
+| **Încă acolo** | Bifați pentru cineva care nu a plecat încă: șederea are atunci o primă zi și nicio ultimă zi, iar lista o arată ca *„din 14.07.2026, încă acolo”*. Debifați și dați ultima zi după ce a plecat |
 | **Notă** | *A sosit mai târziu, a plecat mai devreme, s-a întors…* |
 
 Cine a gătit și a și cartat are **două șederi**, la fel și cine a plecat și s-a întors. Nimic
 nu împiedică șederile să se suprapună.
+
+O ședere fără ultima zi înseamnă întotdeauna **încă acolo** — nu este niciodată felul în care
+se consemnează o singură zi. Lista și raportul taberei o spun amândouă în cuvinte, arată o
+singură dată pentru o singură zi și ambele date pentru o ședere mai lungă.
 
 **Numirea cuiva nou.** Un nume pe care îl scrieți în loc să îl alegeți *„se salvează ca nume:
 înseamnă persoana pe care lista de speologi o are deja exact sub acest nume, iar dacă nu este
@@ -202,15 +207,29 @@ acestei tabere sau turelor din ea pe care le puteți citi."*
 ## Raportul
 
 **Raport**, în antetul taberei, deschide tabăra aranjată pentru citit: *Despre tabără*, *Turele*,
-*Cine a participat* și fotografiile, construite din ceea ce puteți vedea **dumneavoastră** —
-pagina o spune: *„Acest raport arată ceea ce puteți vedea dumneavoastră. Altcineva care citește
-aceeași tabără poate vedea mai mult sau mai puțin: turele din ea, persoanele, fotografiile."*
+*Ce a scris fiecare tură*, *Cine a participat* și fotografiile, construite din ceea ce puteți
+vedea **dumneavoastră** — pagina o spune: *„Acest raport arată ceea ce puteți vedea
+dumneavoastră. Altcineva care citește aceeași tabără poate vedea mai mult sau mai puțin: turele
+din ea, persoanele, fotografiile."*
+
+**Ce a scris fiecare tură** este textul propriu al fiecărei ture, sub data și titlul ei:
+relatarea, rezultatele și răspunsurile din formularul ei. Vi se arată, pentru fiecare tură, exact
+ce v-ar arăta raportul propriu al acelei ture — așa că relatarea a ceea ce a mers prost într-o
+tură apare doar dacă puteți edita acea tură, iar o tură pe care nu o puteți citi nu apare deloc.
+O tură care nu a scris nimic nu are titlu. În documentul Word aceeași parte este tipărită de
+rândul `accounts` din model; un club care nu o dorește scoate acel rând din modelul său de tabără.
 
 - **Descarcă documentul** îl salvează ca document Word, în modelul standard sau într-unul pe
   care clubul îl ține la **Configurare → Modele de raport**.
+- **Descarcă PDF** dă același document ca PDF. Apare doar acolo unde instalarea rulează
+  convertorul de documente; unde lipsește, **Tipărește** și *Salvează ca PDF* din browser este
+  calea. Nimic din PDF nu se păstrează pe server, iar copia salvată la tabără este întotdeauna
+  documentul Word.
 - **Salvează la tabără** depune documentul pe fila *Fișiere* a taberei. Copia salvată acolo poate
   fi deschisă de toți cei care pot citi tabăra, așa că este construită din ce poate vedea orice
-  cont din turele ei; copia dumneavoastră completă este descărcarea.
+  cont din turele ei — inclusiv ce a scris fiecare tură: textul unei ture este în copia salvată
+  doar așa cum îl poate citi orice cont, niciodată așa cum îl citiți dumneavoastră. Copia
+  dumneavoastră completă este descărcarea.
 - **Tipărește** folosește browserul, fără cadrul aplicației pe hârtie.
 
 ## Permisiuni și partajare
@@ -223,11 +242,29 @@ Două butoane în antet, ambele pentru cineva care poate gestiona permisiunile t
 
 **Partajează** ajunge mai departe: *„Partajarea unei tabere scrie câte o regulă pe fiecare tură
 adunată în ea, marcată ca fiind a taberei, astfel încât cel cu care este partajată poate citi ce
-a adunat tabăra."* Necesită dreptul de a gestiona permisiunile pe fiecare dintre aceste ture —
-dacă vreo tură refuză, nu se partajează nimic și vi se spune câte au refuzat, niciodată care.
-Dialogul arată câte dintre turele taberei acoperă fiecare partajare și spune când s-au alăturat
-ture de la ultima aplicare: aplicați-o din nou pentru a le acoperi sau retrageți-o pentru a o
-lua înapoi de pe toate turele deodată.
+a adunat tabăra."* Fiecare tură răspunde pentru ea însăși: tabăra este partajată pe fiecare
+tură ale cărei permisiuni le puteți gestiona, iar celelalte sunt **sărite și enumerate**, așa
+că o tabără care adună turele altui club este partajată imediat pentru ale dumneavoastră.
+
+După ce aplicați o partajare, dialogul spune ce a făcut — *„Ture partajate: 2. Ture sărite: 3.”* —
+și enumeră turele sărite:
+
+- o tură pe care o puteți citi este **numită**, cu ceea ce stă în cale: *„proprietarul ei
+  trebuie să vă lase să îi gestionați permisiunile”* sau *„ați cerut să dați mai mult decât
+  aveți dumneavoastră pe această tură”* (nu puteți da nimănui pe o tură mai mult decât aveți
+  acolo);
+- o tură pe care **nu** o puteți citi nu este numită — o tabără poate aduna o tură pe care
+  organizatorul ei nu o poate deschide — și este doar numărată: *„Ture sărite pe care nu le
+  puteți citi și care, de aceea, nu sunt numite aici: 1.”*
+
+Pe o tură sărită nu se scrie nimic. După ce proprietarul ei v-a lăsat să îi gestionați
+permisiunile, **Aplică din nou** o preia. Dacă nicio tură nu a putut fi partajată, nu se
+partajează nimic și vi se spune acest lucru.
+
+Dialogul arată și câte dintre turele taberei acoperă fiecare partajare. Mai puține decât toate
+înseamnă că unele ture s-au alăturat după ultima aplicare sau au fost sărite: aplicați din nou
+pentru a le acoperi pe cele pe care le puteți sau retrageți partajarea pentru a lua înapoi de
+pe toate turele ce a scris tabăra — și numai atât.
 
 ---
 

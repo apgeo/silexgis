@@ -43,7 +43,18 @@ public static class FeatureEndpoints
         features.MapPut("/{id:guid}", UpdateAsync).WithValidation<FeatureUpdateRequest>()
             .WithSummary("Full update of a generic feature (Write permission, If-Match required).");
         features.MapDelete("/{id:guid}", DeleteAsync)
-            .WithSummary("Soft-deletes a feature and its containment subtree (Delete permission).");
+            .WithSummary(
+                "Soft-deletes a feature and its containment subtree (Delete permission). Nothing is "
+                + "removed: the deletion can be undone from the list of deleted features.");
+        features.MapGet("/deleted", FeatureDeletionEndpoints.ListAsync)
+            .WithSummary(
+                "The deletions of caves, entrances and surface features the caller may undo, most "
+                + "recent first: one row per deletion, with what went with it. Carries no position.");
+        features.MapPost("/{id:guid}/restore", FeatureDeletionEndpoints.RestoreAsync)
+            .WithSummary(
+                "Puts a deleted cave, entrance or surface feature back with everything that was "
+                + "deleted along with it (the right to read it and to delete it), and answers the "
+                + "feature with its version. Refused while something containing it is deleted.");
 
         return api;
     }
@@ -196,21 +207,33 @@ public static class FeatureEndpoints
             return ApiProblems.NotFound("feature.not_found");
         }
 
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.Features, feature.Id, ct);
+        return TypedResults.Ok(
+            await EnvelopeAsync(db, ctx!, feature, exact, accessOptions.Value.LocationGridMeters, ct));
+    }
+
+    /// <summary>
+    /// A feature as its own address answers it: the common view and the attributes of its kind,
+    /// with its position as this caller may have it. One home, because a second route now answers
+    /// a feature this way and the two must not come to differ in what they withhold.
+    /// </summary>
+    /// <param name="feature">The feature, loaded with its subtype rows.</param>
+    /// <param name="exact">Whether the caller may place it exactly — decided by the caller of this.</param>
+    internal static async Task<FeatureEnvelopeDto> EnvelopeAsync(
+        SilexGisDbContext db, AccessContext ctx, Feature feature, bool exact, double gridMeters, CancellationToken ct)
+    {
         var featureType = feature.FeatureTypeId is null
             ? null
             : await db.FeatureTypes.AsNoTracking().FirstOrDefaultAsync(t => t.Id == feature.FeatureTypeId, ct);
-        var parents = await PrimaryChainAsync(db, ctx!, feature, ct);
-
-        await Concurrency.EmitETagAsync(http, db, VersionedTable.Features, feature.Id, ct);
+        var parents = await PrimaryChainAsync(db, ctx, feature, ct);
         var dto = feature.ToDto(
-            featureType?.Code, FeatureMapping.DisplayPolicy(feature, featureType), exact,
-            accessOptions.Value.LocationGridMeters, parents);
-        return TypedResults.Ok(new FeatureEnvelopeDto(
+            featureType?.Code, FeatureMapping.DisplayPolicy(feature, featureType), exact, gridMeters, parents);
+        return new FeatureEnvelopeDto(
             feature.Kind,
             dto,
             feature.Cave?.ToCaveDto(exact),
             feature.Entrance?.ToEntranceDto(exact),
-            feature.Centerline?.ToCenterlineDto()));
+            feature.Centerline?.ToCenterlineDto());
     }
 
     private static async Task<Results<Created<FeatureDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(

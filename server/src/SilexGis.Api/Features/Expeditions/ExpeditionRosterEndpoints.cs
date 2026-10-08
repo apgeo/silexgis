@@ -350,11 +350,9 @@ public static class ExpeditionRosterEndpoints
         entry.RoleId = request.RoleId;
         entry.FromDate = request.FromDate;
 
-        // A stay ending the day it starts stores no end, the way the camp's own dates do, so one
-        // day never reads as a range of itself. The database refuses an end that is not strictly
-        // after the first day, so this normalisation is what lets the ordinary "same day twice"
-        // request through.
-        entry.ToDate = DayRange.EndForStorage(request.FromDate, request.ToDate);
+        // Stored as sent, and not folded the way the camp's own dates are: no last day means the
+        // person is still there, so somebody there for one day keeps that day as their last.
+        entry.ToDate = DayRange.OpenEndForStorage(request.FromDate, request.ToDate);
         entry.Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
     }
 

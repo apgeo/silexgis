@@ -13,8 +13,10 @@ namespace SilexGis.Api.Features.Permissions;
 
 /// <summary>One rule a camp's sharing holds, and how much of the camp currently carries it.</summary>
 /// <param name="Trips">
-/// Member trips carrying this rule right now. Fewer than the camp has means trips joined after
-/// the sharing was last applied — re-applying covers them.
+/// Member trips carrying this rule right now. Fewer than the camp has means trips the sharing
+/// has not reached: ones that joined after it was last applied, and ones that refused it
+/// because whoever applied it could not administer them. Applying again covers the first kind,
+/// and the second once their owners have delegated.
 /// </param>
 public sealed record ExpeditionSharedRuleDto(
     AccessSubjectKind SubjectKind,
@@ -26,6 +28,35 @@ public sealed record ExpeditionSharedRuleDto(
 
 /// <summary>What a camp's sharing comes to: its rules, and how many trips it has to reach.</summary>
 public sealed record ExpeditionSharingDto(int MemberTrips, IReadOnlyList<ExpeditionSharedRuleDto> Rules);
+
+/// <summary>A member trip the sharing did not reach, named because this caller may read it.</summary>
+/// <param name="Reason">
+/// What stands in the way, which is a fact about the caller's own rights on a trip they can
+/// already open: they may not administer its rules, or they asked to pass on more than they
+/// hold on it.
+/// </param>
+public sealed record ExpeditionSkippedTripDto(Guid Id, string Title, CascadeSkipReason Reason);
+
+/// <summary>
+/// What applying a camp's sharing did: the sharing as it now stands, how many of the camp's
+/// trips took it, and the ones that did not.
+/// </summary>
+/// <param name="Sharing">The camp's sharing after the act, exactly as the read answers it.</param>
+/// <param name="SharedTrips">Member trips that carry the applied rules after this act.</param>
+/// <param name="SkippedTrips">
+/// The trips that refused it and that this caller may read, in the order the camp lists its
+/// trips. Empty when every trip took it.
+/// </param>
+/// <param name="SkippedTripsNotNamed">
+/// How many further trips refused it. They are trips this caller may not read, so they are a
+/// number here and nothing else — a camp may gather a trip its organiser cannot open, and
+/// naming it in the answer to an unrelated act would be how they learned it exists.
+/// </param>
+public sealed record ExpeditionSharingOutcomeDto(
+    ExpeditionSharingDto Sharing,
+    int SharedTrips,
+    IReadOnlyList<ExpeditionSkippedTripDto> SkippedTrips,
+    int SkippedTripsNotNamed);
 
 /// <summary>
 /// Sharing a camp, which reaches the trips the camp gathered: one rule written onto each of
@@ -42,7 +73,8 @@ public sealed record ExpeditionSharingDto(int MemberTrips, IReadOnlyList<Expedit
 /// <para>
 /// Every one of them takes the right to administer the camp's rules — the same right the camp's
 /// own permissions tab takes — and each rule is then bounded again at the trip it lands on. The
-/// camp is where a person asks; each trip is what answers.
+/// camp is where a person asks; each trip is what answers, and answers for itself: a trip that
+/// refuses is skipped and said to have been, and the rest are shared.
 /// </para>
 /// </remarks>
 public static class ExpeditionSharingEndpoints
@@ -60,12 +92,14 @@ public static class ExpeditionSharingEndpoints
             .WithSummary("What this camp's sharing grants, and how many of its trips carry it.");
         sharing.MapPost("/", ApplyAsync).WithValidation<ExpeditionShareRequest>()
             .WithSummary(
-                "Shares this camp: one rule onto every trip it gathers, bounded at each trip by "
-                + "what the caller holds there. Adds and restates; never removes.");
+                "Shares this camp: one rule onto every trip it gathers that the caller may "
+                + "administer, bounded at each trip by what the caller holds there, and says "
+                + "which trips it skipped. Adds and restates; never removes.");
         sharing.MapPost("/re-apply", ReapplyAsync)
             .WithSummary(
-                "Carries this camp's sharing onto the trips that joined since it was applied. "
-                + "A trip joining is not covered by itself — this is the act that covers it.");
+                "Carries this camp's sharing onto the trips it does not reach yet — ones that "
+                + "joined since it was applied, and ones skipped then that the caller may now "
+                + "administer. A trip joining is not covered by itself: this is the act that covers it.");
         sharing.MapDelete("/", WithdrawAsync)
             .WithSummary(
                 "Withdraws every rule this camp's sharing wrote, and only those: a rule of the "
@@ -98,7 +132,7 @@ public static class ExpeditionSharingEndpoints
         return TypedResults.Ok(await SharingAsync(db, user, expedition!.Id, ct));
     }
 
-    private static async Task<Results<Ok<ExpeditionSharingDto>, UnauthorizedHttpResult, ProblemHttpResult>> ApplyAsync(
+    private static async Task<Results<Ok<ExpeditionSharingOutcomeDto>, UnauthorizedHttpResult, ProblemHttpResult>> ApplyAsync(
         Guid id,
         ExpeditionShareRequest request,
         SilexGisDbContext db,
@@ -129,7 +163,7 @@ public static class ExpeditionSharingEndpoints
 
         Record(db, currentUser, expedition!.Id, "applied", outcome);
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await SharingAsync(db, user, expedition.Id, ct));
+        return TypedResults.Ok(Answer(outcome, await SharingAsync(db, user, expedition.Id, ct)));
     }
 
     /// <summary>
@@ -140,9 +174,11 @@ public static class ExpeditionSharingEndpoints
     /// the camp's sharing on its own: a grant nobody performed is a grant nobody can be asked
     /// about, and the trip's owner would find their trip shared by a membership change. So the
     /// rules stay where they were written and somebody says, in as many words, "and the ones
-    /// that joined since" — which is a line in the trail with a person's name on it.
+    /// that joined since" — which is a line in the trail with a person's name on it. It is
+    /// also how a trip skipped when the sharing was applied is picked up once its owner has
+    /// let the organiser administer it: the same act, judged at each trip again as it now stands.
     /// </remarks>
-    private static async Task<Results<Ok<ExpeditionSharingDto>, UnauthorizedHttpResult, ProblemHttpResult>> ReapplyAsync(
+    private static async Task<Results<Ok<ExpeditionSharingOutcomeDto>, UnauthorizedHttpResult, ProblemHttpResult>> ReapplyAsync(
         Guid id,
         SilexGisDbContext db,
         IAccessService access,
@@ -178,7 +214,7 @@ public static class ExpeditionSharingEndpoints
 
         Record(db, currentUser, expedition!.Id, "re-applied", outcome);
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await SharingAsync(db, user, expedition.Id, ct));
+        return TypedResults.Ok(Answer(outcome, await SharingAsync(db, user, expedition.Id, ct)));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> WithdrawAsync(
@@ -214,10 +250,22 @@ public static class ExpeditionSharingEndpoints
         db.AccessEntries.RemoveRange(written);
 
         Record(db, currentUser, expedition!.Id, "withdrawn",
-            new ExpeditionCascadeOutcome(null, 0, 0, 0, 0), withdrawn: written.Count);
+            new ExpeditionCascadeOutcome(null, 0, 0, 0, 0, 0, [], 0), withdrawn: written.Count);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }
+
+    /// <summary>
+    /// What the act did, as it is told to whoever performed it. The skipped trips arrive here
+    /// already decided — the writer hands on only the ones this caller may read, and a count of
+    /// the rest — so nothing in this mapping could name a trip the caller cannot open.
+    /// </summary>
+    private static ExpeditionSharingOutcomeDto Answer(
+        ExpeditionCascadeOutcome outcome, ExpeditionSharingDto sharing) => new(
+            sharing,
+            outcome.Shared,
+            [.. outcome.Skipped.Select(x => new ExpeditionSkippedTripDto(x.TripId, x.Title, x.Reason))],
+            outcome.SkippedNotNamed);
 
     /// <summary>
     /// The camp, and the right to administer its rules. A camp the caller cannot read answers
@@ -333,6 +381,9 @@ public static class ExpeditionSharingEndpoints
                 {
                     ["Sharing"] = new() { ["old"] = null, ["new"] = act },
                     ["Trips"] = new() { ["old"] = null, ["new"] = outcome.Trips },
+                    // How many, and never which: the camp's trail is read by everybody who may
+                    // read the camp, which is a wider audience than any one of its trips has.
+                    ["TripsSkipped"] = new() { ["old"] = null, ["new"] = outcome.SkippedTrips },
                     ["RulesWritten"] = new() { ["old"] = null, ["new"] = outcome.Written },
                     ["RulesRestated"] = new() { ["old"] = null, ["new"] = outcome.Updated },
                     ["RulesWithdrawn"] = new() { ["old"] = null, ["new"] = withdrawn },

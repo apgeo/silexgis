@@ -178,11 +178,51 @@ ar preda exact poziția pe care fișierul o ascunde.
 
 ---
 
-## Ștergerea
+## Ștergerea și restaurarea
 
 **Ștergeți această peșteră?** — și, la elemente în general, *elementele conținute se șterg odată
-cu ea*. Totul este consemnat în
+cu ea*: o peșteră își ia intrările și poligonațiile. Confirmarea spune ce urmează să se întâmple:
+**nu se elimină nimic, iar peștera poate fi restaurată din Peșteri și elemente șterse.** Ștergerea
+unei singure intrări din fișa peșterii spune același lucru. Totul este consemnat în
 [istoricul de modificări](history-and-audit.md).
+
+O peșteră ștearsă **dispare de peste tot deodată** — din listă, de pe hartă, din căutare, din
+turele care o numeau — iar adresa ei răspunde ca și cum nu ar fi existat niciodată, inclusiv
+pentru proprietar.
+
+### Peșteri și elemente șterse
+
+**Peșteri → Peșteri și elemente șterse** (același buton se află și pe lista **Elemente**) arată
+ștergerile **pe care le puteți anula**, cele mai recente primele.
+
+| Coloană | Ce arată |
+|---|---|
+| **Denumire** | Ce a fost șters și, dedesubt, unde se afla — o intrare se deosebește prin peștera ei |
+| **Fel** | Peșteră, Intrare sau tipul elementului |
+| **Șters** | Când |
+| **Șterse odată cu el** | Ce a plecat împreună — *1 intrare*, *2 intrări, 3 alte obiecte* |
+
+- **Un rând este o ștergere, nu un obiect.** O peșteră ștearsă cu două intrări este un singur rând
+  care spune *2 intrări*; restaurarea le aduce înapoi pe toate trei. O intrare pe care ați
+  șters-o *înainte* de a șterge peștera este o ștergere separată: apare în listă după ce peștera
+  revine și rămâne ștearsă până o restaurați și pe ea.
+- **Cine poate șterge ceva îl poate și restaura.** Lista se calculează rând cu rând după această
+  regulă, deci cine nu poate șterge nimic vede o listă goală. O intrare poate fi restaurată și de
+  cine poate edita peștera, pentru că tot el o poate șterge din fișa peșterii.
+- **Lista nu spune niciodată unde se află ceva.** Nu conține nicio coordonată, iar o peșteră
+  restaurată se deschide arătând exact poziția pe care o puteați vedea înainte — aproximativă
+  dacă era aproximativă pentru dumneavoastră. Nu vi se arată și nu vi se numără nimic din ce nu
+  puteați citi înainte de ștergere.
+- **Restaurează** întreabă mai întâi, aduce înapoi peștera sau elementul cu tot ce a fost șters
+  odată cu el și îl deschide. **O tură care numea peștera o numește din nou.**
+- Ceva aflat **într-o peșteră sau zonă ștearsă nu poate fi restaurat separat** — pagina spune ce
+  trebuie restaurat mai întâi.
+- O peșteră restaurată al cărei **nume a fost refolosit între timp** stă pur și simplu alături de
+  cea cu același nume: denumirile nu sunt unice.
+- O **poligonație** nu se restaurează separat. Revine odată cu peștera ei, dacă au fost șterse
+  împreună.
+- Peșterile și elementele șterse sunt **păstrate până le restaurează cineva**; nimic nu le elimină
+  după un număr de zile.
 
 ---
 

@@ -27,6 +27,7 @@ public class ExpeditionReportTemplateFormatTests
         read.Parts.ShouldContain(p => p.Directive == ReportTemplateDirective.Days);
         read.Parts.ShouldContain(p => p.Directive == ReportTemplateDirective.Trips);
         read.Parts.ShouldContain(p => p.Directive == ReportTemplateDirective.Teams);
+        read.Parts.ShouldContain(p => p.Directive == ReportTemplateDirective.Accounts);
         read.Parts.ShouldContain(p => p.Directive == ReportTemplateDirective.Roster);
         read.Parts.ShouldContain(p => p.Directive == ReportTemplateDirective.Photographs);
     }
@@ -58,6 +59,28 @@ public class ExpeditionReportTemplateFormatTests
         var formOnATrip = ReportTemplateFormat.Parse(
             "title: {title}\nsection: safety", ReportTemplateKind.Trip);
         formOnATrip.Ok.ShouldBeTrue(string.Join(" ", formOnATrip.Errors));
+    }
+
+    /// <summary>
+    /// What each gathered trip wrote about itself is asked for by a word of the camp's own, which
+    /// stands alone like its other lists and means nothing on a trip — a trip prints its own words
+    /// through its own names.
+    /// </summary>
+    [Fact]
+    public void The_trips_own_words_are_a_camp_word_that_stands_alone()
+    {
+        var onACamp = ReportTemplateFormat.Parse("title: {title}\naccounts", ReportTemplateKind.Expedition);
+        onACamp.Ok.ShouldBeTrue(string.Join(" ", onACamp.Errors));
+        onACamp.Parts.ShouldContain(p => p.Directive == ReportTemplateDirective.Accounts && p.Line == 2);
+
+        var withWordsAfter = ReportTemplateFormat.Parse(
+            "title: {title}\naccounts: all of them", ReportTemplateKind.Expedition);
+        withWordsAfter.Ok.ShouldBeFalse();
+        withWordsAfter.Errors.ShouldContain(e => e.Contains("Line 2", StringComparison.Ordinal));
+
+        var onATrip = ReportTemplateFormat.Parse("title: {title}\naccounts", ReportTemplateKind.Trip);
+        onATrip.Ok.ShouldBeFalse();
+        onATrip.Errors.ShouldContain(e => e.Contains("Line 2", StringComparison.Ordinal));
     }
 
     /// <summary>

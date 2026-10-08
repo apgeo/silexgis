@@ -72,6 +72,35 @@ that particular cave is disclosed.
 
 Turning it on **never reveals a position**: following the link still gives the protected view.
 
+## Maps in documents
+
+The **Maps in documents** tab decides **which map backgrounds a document may copy**. A trip's
+[downloaded write-up](../features/trips.md) carries a map of the trip drawn over one background:
+the default background if it is switched on here, otherwise the first one that is.
+
+Every background this installation publishes is listed with **one switch**.
+
+| Column | What it shows |
+|---|---|
+| **Background** | The source, the group the catalogue files it under, and the credit written under the picture |
+| **In documents** | The switch |
+| **As shipped** | What the installation shipped with — and *Decided here* where an administrator chose otherwise, with **Use the shipped answer** to take the decision back |
+
+- **Switching a background on is a statement about its terms.** Showing a map on screen and
+  putting it into a file that is then mailed and printed are different uses, and each provider
+  decides the second separately. Switch a source on only after reading its terms; the group it is
+  filed under is shown for that reason.
+- A decision takes effect **at once** and is **kept across restarts and upgrades**. The shipped
+  answer goes on applying to every background nobody has decided about.
+- A source with **no credit** cannot be switched on: there would be nothing to write under the
+  picture.
+- With **nothing switched on**, a write-up still gets its map — drawn on a plain ground, which
+  the picture says under itself. The page warns when that is the case.
+- Each decision is recorded in the [audit trail](../features/history-and-audit.md).
+
+Which backgrounds exist at all, and their addresses, stay in the installation's catalogue file —
+see the install guide.
+
 ---
 
 ## Message texts

@@ -400,7 +400,7 @@ public sealed class TripReportMapTests : IAsyncLifetime, IDisposable, IClassFixt
         using var noSuchLayout = await owner.PostAsync(
             $"{DownloadUrl(open)}?templateId={Guid.NewGuid()}", Form(notAPicture));
         noSuchLayout.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await CodeOfAsync(noSuchLayout)).ShouldBe("trip_report_template.not_found");
+        (await CodeOfAsync(noSuchLayout)).ShouldBe("report_template.not_found");
 
         // …and the owner, with a real picture, gets the document of the trip the reader may not
         // read: the refusals above were about who was asking.
@@ -488,7 +488,7 @@ public sealed class TripReportMapTests : IAsyncLifetime, IDisposable, IClassFixt
         finally
         {
             // A stored layout belongs to the whole installation, so it does not outlive the case.
-            (await admin.DeleteAsync($"/api/v1/trip-report-templates/{layoutId}")).EnsureSuccessStatusCode();
+            (await admin.DeleteAsync($"/api/v1/report-templates/{layoutId}")).EnsureSuccessStatusCode();
         }
     }
 
@@ -629,7 +629,7 @@ public sealed class TripReportMapTests : IAsyncLifetime, IDisposable, IClassFixt
 
     private async Task<Guid> StoreLayoutAsync(string body)
     {
-        var response = await admin.PostAsJsonAsync("/api/v1/trip-report-templates/", new
+        var response = await admin.PostAsJsonAsync("/api/v1/report-templates/", new
         {
             name = $"Placeless {suffix}",
             body,

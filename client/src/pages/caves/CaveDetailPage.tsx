@@ -268,8 +268,12 @@ export default function CaveDetailPage() {
             </Button>
           )}
           {canDelete && (
-            <Popconfirm title={t('caves.deleteConfirm')} onConfirm={() => void onDeleteCave()}>
-              <Button danger icon={<DeleteOutlined />}>
+            <Popconfirm
+              title={t('caves.deleteConfirm')}
+              description={t('caves.deleteRestorable')}
+              onConfirm={() => void onDeleteCave()}
+            >
+              <Button danger icon={<DeleteOutlined />} data-testid="cave-delete">
                 {t('caves.delete')}
               </Button>
             </Popconfirm>
@@ -419,6 +423,7 @@ export default function CaveDetailPage() {
                         />
                         <Popconfirm
                           title={t('entrances.deleteConfirm')}
+                          description={t('entrances.deleteRestorable')}
                           onConfirm={() => void deleteEntrance.mutateAsync(e.id)}
                         >
                           <Button size="small" type="text" danger icon={<DeleteOutlined />} />

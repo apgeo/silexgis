@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
-using System.Text.Json;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Api.Features.TripLogs;
 
@@ -54,14 +54,6 @@ internal sealed record TripReportContent(
     // Appended, and defaulted to nothing, so the copy filed against the trip — which is built
     // without ever naming this member — cannot come to carry one by an argument slipping along.
     TripReportMap? Map = null);
-
-/// <summary>Which of a trip's three sections a set of field titles belongs to.</summary>
-internal enum TripSectionKey
-{
-    FieldData = 0,
-    Logistics = 1,
-    Safety = 2,
-}
 
 /// <summary>
 /// One trip, arranged as the document a club circulates, under the layout the club asked for.
@@ -157,7 +149,8 @@ internal static class TripReportDocument
                     break;
 
                 case ReportTemplateDirective.Section:
-                    AppendSection(blocks, content, KeyOf(part.Text));
+                    blocks.AddRange(TripNarrativeComposition.Section(
+                        NarrativeOf(trip), content.SectionTitles, TripNarrativeComposition.KeyOf(part.Text)));
                     break;
 
                 case ReportTemplateDirective.Photographs:
@@ -262,46 +255,15 @@ internal static class TripReportDocument
     }
 
     /// <summary>
-    /// One of the three per-purpose parts, written out under the names its purpose gave its
-    /// questions.
+    /// The trip's own words as this reading was given them, in the shape the shared composition
+    /// of a trip's form answers reads.
     /// </summary>
     /// <remarks>
-    /// The account of what went wrong arrives as nothing at all for a reader who may not change
-    /// the trip — not as an empty bag — so nothing at all is what this writes.
+    /// Taken off the trip's answer and decided nowhere here: whether the account of what went
+    /// wrong is among them was settled when that answer was produced.
     /// </remarks>
-    private static void AppendSection(
-        List<DocumentBlock> blocks, TripReportContent content, TripSectionKey key)
-    {
-        if (BagOf(content.Trip, key) is not { ValueKind: JsonValueKind.Object } written)
-        {
-            return;
-        }
-
-        var titles = content.SectionTitles.GetValueOrDefault(key);
-        foreach (var property in written.EnumerateObject())
-        {
-            if (Value(property.Value) is not { } text)
-            {
-                continue;
-            }
-
-            blocks.Add(DocumentBlock.Field(titles?.GetValueOrDefault(property.Name) ?? property.Name, text));
-        }
-    }
-
-    private static JsonElement? BagOf(TripLogDto trip, TripSectionKey key) => key switch
-    {
-        TripSectionKey.FieldData => trip.FieldData,
-        TripSectionKey.Logistics => trip.Logistics,
-        _ => trip.Safety,
-    };
-
-    private static TripSectionKey KeyOf(string section) => section switch
-    {
-        "logistics" => TripSectionKey.Logistics,
-        "safety" => TripSectionKey.Safety,
-        _ => TripSectionKey.FieldData,
-    };
+    private static TripNarrative NarrativeOf(TripLogDto trip) => new(
+        trip.Description, trip.Results, trip.FieldData, trip.Logistics, trip.Safety, trip.SafetySchemaVersion);
 
     /// <summary>
     /// What a line of the layout says once the trip has filled it in, or null when it says
@@ -342,37 +304,8 @@ internal static class TripReportDocument
             case "people": return People(trip);
             case "sketch": return Sketch(trip);
             case "meeting": return Meeting(trip);
-            default: return Answer(content, name);
+            default: return TripNarrativeComposition.Answer(NarrativeOf(trip), name);
         }
-    }
-
-    /// <summary>
-    /// One answer out of one part of the trip's form, by the name the form gave it.
-    /// </summary>
-    /// <remarks>
-    /// Read out of the answer this caller was given and nowhere else, which is what makes a
-    /// layout safe to let a club write: a part this reader is not given arrives as nothing, so
-    /// naming one of its answers in a layout produces a document without that line rather than a
-    /// way of asking for it.
-    /// </remarks>
-    private static string? Answer(TripReportContent content, string name)
-    {
-        var dot = name.IndexOf('.', StringComparison.Ordinal);
-        if (dot <= 0 || dot >= name.Length - 1)
-        {
-            return null;
-        }
-
-        var section = name[..dot];
-        if (!ReportTemplateFormat.Sections.Contains(section, StringComparer.Ordinal))
-        {
-            return null;
-        }
-
-        return BagOf(content.Trip, KeyOf(section)) is { ValueKind: JsonValueKind.Object } bag
-            && bag.TryGetProperty(name[(dot + 1)..], out var answer)
-            ? Value(answer)
-            : null;
     }
 
     private static string? Caves(TripReportContent content)
@@ -467,19 +400,6 @@ internal static class TripReportDocument
             + $"{Math.Abs(centre.X):F5}° {(centre.X >= 0 ? "E" : "W")}. Everyone who may read this "
             + $"trip sees this position exactly as placed, whatever protection the caves it names carry.");
     }
-
-    /// <summary>How one answer in a section reads, or null when it says nothing.</summary>
-    private static string? Value(JsonElement value) => value.ValueKind switch
-    {
-        JsonValueKind.String => string.IsNullOrWhiteSpace(value.GetString()) ? null : value.GetString(),
-        JsonValueKind.Number => value.GetRawText(),
-        JsonValueKind.True => "Yes",
-        JsonValueKind.False => "No",
-        JsonValueKind.Array => value.GetArrayLength() == 0
-            ? null
-            : string.Join(", ", value.EnumerateArray().Select(Value).Where(x => x is not null)),
-        _ => null,
-    };
 
     private static string Dates(TripLogDto trip) =>
         trip.TripDateEnd is { } end && end != trip.TripDate

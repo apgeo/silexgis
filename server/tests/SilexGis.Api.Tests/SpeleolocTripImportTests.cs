@@ -671,6 +671,42 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
     }
 
     /// <summary>
+    /// A recording that began and ended on one day becomes a trip of one day, stored the one way
+    /// one day is stored: with no end. And a recording whose device says it ended before it began
+    /// becomes the day it began, rather than being refused for a clock nobody can correct inside
+    /// an archive.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_recording_of_one_day_becomes_a_trip_with_no_end(bool endsBeforeItBegins)
+    {
+        var cave = await CreateCaveAsync(editor, locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        await SeedPlacesAsync(cave);
+        var fileId = endsBeforeItBegins
+            ? await UploadAsync("backwards.zip", BuildArchive(recordingEndedAt: ScanOne.AddDays(-2)))
+            : await UploadArchiveAsync();
+        var (_, people) = await CreateTripAsync(editor, "One day", guests: 1);
+
+        var options = Options(model, caver: people[0], createTrip: true);
+        var points = ProposedPointsOf(await PreviewAsync(editor, fileId, options));
+        var committed = await editor.PostAsJsonAsync($"/api/v1/speleoloc-imports/{fileId}/commit", new
+        {
+            options,
+            pointIds = points,
+        });
+        committed.StatusCode.ShouldBe(HttpStatusCode.OK, await committed.Content.ReadAsStringAsync());
+        var trip = (await BodyAsync(committed)).GetProperty("tripLogId").GetGuid();
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var stored = await db.TripLogs.AsNoTracking().SingleAsync(t => t.Id == trip);
+        stored.TripDate.ShouldBe(DateOnly.FromDateTime(ScanOne.UtcDateTime));
+        stored.TripDateEnd.ShouldBeNull();
+    }
+
+    /// <summary>
     /// A person the trip does not have is named by the dry run, not discovered by the confirmation.
     ///
     /// <para>
@@ -956,7 +992,11 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
     /// an older device schema looks like: all five tables present under the names the import
     /// checks, and one of them missing a column the import reads.
     /// </param>
-    private byte[] BuildArchive(Guid? crowdedRecording = null, int crowdedScans = 0, bool withLogColumn = true)
+    private byte[] BuildArchive(
+        Guid? crowdedRecording = null,
+        int crowdedScans = 0,
+        bool withLogColumn = true,
+        DateTimeOffset? recordingEndedAt = null)
     {
         var directory = Path.Combine(TestScratch.Root, $"silexgis-speleoloc-fixture-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -1017,7 +1057,7 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
                 Place(connection, placeNobodyHolds, caveId, "Marcaj 3", FractionalDepth);
                 Place(connection, placeDeep, caveId, "Marcaj 4", -120.0);
 
-                Recording(connection, recordingId, caveId, "Tura inventata", withLogColumn);
+                Recording(connection, recordingId, caveId, "Tura inventata", withLogColumn, recordingEndedAt);
 
                 Scan(connection, recordingId, placeAtFifty, ScanOne, "la baza puțului");
                 Scan(connection, recordingId, placeWithNoDepth, ScanTwo, null);
@@ -1092,7 +1132,13 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
             ("@d", depth is null ? DBNull.Value : depth.Value),
             ("@b", Bytes(deviceUserId)));
 
-    private void Recording(SqliteConnection connection, Guid id, Guid caveId, string title, bool withLog) =>
+    private void Recording(
+        SqliteConnection connection,
+        Guid id,
+        Guid caveId,
+        string title,
+        bool withLog,
+        DateTimeOffset? endedAt = null) =>
         Insert(connection,
             "insert into cave_trips (uuid, cave_uuid, title, trip_started_at, trip_ended_at, "
             + (withLog ? "log, " : string.Empty)
@@ -1105,7 +1151,7 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
                     ("@c", Bytes(caveId)),
                     ("@t", (object)title),
                     ("@s", ScanOne.AddMinutes(-5).ToUnixTimeMilliseconds()),
-                    ("@e", ScanFour.AddMinutes(20).ToUnixTimeMilliseconds()),
+                    ("@e", (endedAt ?? ScanFour.AddMinutes(20)).ToUnixTimeMilliseconds()),
                     ("@l", "jurnal inventat"),
                     ("@d", Bytes(deviceUserId)),
                 ]
@@ -1114,7 +1160,7 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
                     ("@c", Bytes(caveId)),
                     ("@t", (object)title),
                     ("@s", ScanOne.AddMinutes(-5).ToUnixTimeMilliseconds()),
-                    ("@e", ScanFour.AddMinutes(20).ToUnixTimeMilliseconds()),
+                    ("@e", (endedAt ?? ScanFour.AddMinutes(20)).ToUnixTimeMilliseconds()),
                     ("@d", Bytes(deviceUserId)),
                 ]);
 

@@ -24,6 +24,7 @@ const CaveListPage = lazy(() => import('./pages/caves/CaveListPage.tsx'));
 const CaveFormPage = lazy(() => import('./pages/caves/CaveFormPage.tsx'));
 const CaveDetailPage = lazy(() => import('./pages/caves/CaveDetailPage.tsx'));
 const FeatureListPage = lazy(() => import('./pages/features/FeatureListPage.tsx'));
+const DeletedFeaturesPage = lazy(() => import('./pages/features/DeletedFeaturesPage.tsx'));
 const FeatureDetailPage = lazy(() => import('./pages/features/FeatureDetailPage.tsx'));
 const SharedFeaturePage = lazy(() => import('./pages/SharedFeaturePage.tsx'));
 const GeodataPage = lazy(() => import('./pages/geodata/GeodataPage.tsx'));
@@ -65,7 +66,7 @@ const DocumentTypesPage = lazy(() => import('./pages/admin/DocumentTypesPage.tsx
 const TripTypesPage = lazy(() => import('./pages/admin/TripTypesPage.tsx'));
 const TripParticipantRolesPage = lazy(() => import('./pages/admin/TripParticipantRolesPage.tsx'));
 const ExpeditionRosterRolesPage = lazy(() => import('./pages/admin/ExpeditionRosterRolesPage.tsx'));
-const TripReportTemplatesPage = lazy(() => import('./pages/admin/TripReportTemplatesPage.tsx'));
+const ReportTemplatesPage = lazy(() => import('./pages/admin/ReportTemplatesPage.tsx'));
 const RelationTypesPage = lazy(() => import('./pages/admin/RelationTypesPage.tsx'));
 const TerrainPage = lazy(() => import('./pages/admin/TerrainPage.tsx'));
 const CabinetsPage = lazy(() => import('./pages/documents/CabinetsPage.tsx'));
@@ -161,6 +162,7 @@ export const routes: RouteObject[] = [
           { path: '/caves/:id', element: <Loadable><CaveDetailPage /></Loadable> },
           { path: '/caves/:id/edit', element: <Loadable><CaveFormPage /></Loadable> },
           { path: '/features', element: <Loadable><FeatureListPage /></Loadable> },
+          { path: '/features/deleted', element: <Loadable><DeletedFeaturesPage /></Loadable> },
           { path: '/features/:id', element: <Loadable><FeatureDetailPage /></Loadable> },
           { path: '/geodata', element: <Loadable><GeodataPage /></Loadable> },
           { path: '/geodata/:geofileId/import', element: <Loadable><ImportWorkspacePage /></Loadable> },
@@ -199,7 +201,7 @@ export const routes: RouteObject[] = [
           { path: '/admin/trip-types', element: <Loadable><TripTypesPage /></Loadable> },
           { path: '/admin/participant-roles', element: <Loadable><TripParticipantRolesPage /></Loadable> },
           { path: '/admin/camp-roster-roles', element: <Loadable><ExpeditionRosterRolesPage /></Loadable> },
-          { path: '/admin/report-templates', element: <Loadable><TripReportTemplatesPage /></Loadable> },
+          { path: '/admin/report-templates', element: <Loadable><ReportTemplatesPage /></Loadable> },
           { path: '/admin/relation-types', element: <Loadable><RelationTypesPage /></Loadable> },
           { path: '/admin/terrain', element: <Loadable><TerrainPage /></Loadable> },
           { path: '/cabinets', element: <Loadable><CabinetsPage /></Loadable> },

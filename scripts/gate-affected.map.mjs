@@ -21,7 +21,7 @@ export const groups = {
     'TripCaveReachTests', 'TripChecklistTickTests', 'TripInvitationTests',
     'TripInvitationSubjectTests', 'TripMeetingPointTests', 'TripParticipantRoleVocabularyTests',
     'TripPlanNotificationTests', 'TripPromotionTests', 'TripReportDocumentTests',
-    'TripListGroupingTests', 'TripReportTemplateTests', 'TripRoleLinkUnitOfWorkTests',
+    'TripListGroupingTests', 'ReportTemplateTests', 'TripRoleLinkUnitOfWorkTests',
     'TripSectionSchemaTests', 'TripSilentWriteTests', 'TripStatisticsTests',
     'TripTypeVocabularyTests', 'TripTrackingTests', 'TripTrackingPublicationTests',
     'TripPastTrackTests', 'TripTrackingPicturesTests', 'TripTrackingStationNamesTests',
@@ -38,6 +38,12 @@ export const groups = {
     // what leaves and returns with it, who may put it back, and what the rest of the
     // application does about the rows it still holds.
     'TripSoftDeleteTests', 'TripRestoreTests', 'TripSoftDeleteHousekeepingTests',
+    // One day is stored one way: folded to no end on a trip, kept as its day on a camp's
+    // roster — and the calendar, the feed and the write-ups read both.
+    'OneDaySpanTests',
+    // A write-up asked for as a PDF: the generated document passed through the optional
+    // conversion service, and each way of not getting one.
+    'WriteUpPdfTests',
   ],
   events: [
     'EventAccessDomainTests', 'EventAuthoringTests', 'EventInvitationTests',
@@ -52,6 +58,8 @@ export const groups = {
     'ExpeditionRosterEntityTests',
     'ExpeditionRosterRoleVocabularyTests', 'ExpeditionRosterTests',
     'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
+    'OneDaySpanTests',
+    'WriteUpPdfTests',
   ],
   documents: [
     'ContentMetadataTests', 'DemoPdfTests', 'DocumentAccessApiTests',
@@ -67,6 +75,8 @@ export const groups = {
     // A picture a caller hands a write-up is read and redrawn beside the document writer; the
     // first is that reader on its own, the second the route that passes it a real upload.
     'SuppliedPictureTests', 'TripReportMapTests',
+    // The write-up's own caller of the conversion service sits beside the document writer.
+    'WriteUpPdfTests',
   ],
   photos: [
     'AlbumAndPublicGalleryTests', 'ExpeditionPhotographTests', 'PhotoBytesProtectionTests',
@@ -101,6 +111,9 @@ export const groups = {
     'CenterlineTests', 'EntrancePlacementGuardTests', 'HypsometryTests', 'PerformanceTests',
     'PersistenceTests', 'ProtectionDepthTests', 'StructureComparisonTests', 'SurveyMeshTests',
     'SurveyModelTests',
+    // A deleted cave, entrance or surface feature can be put back: what one deletion took,
+    // who may undo it, and what the answer says about where a protected cave is.
+    'FeatureRestoreTests',
   ],
   cavers: ['CaverRosterTests', 'ProfileVisibilityTests'],
   cavingGroups: [
@@ -111,6 +124,8 @@ export const groups = {
     'ClosestApproachTests', 'FeatureFilterCompilerTests', 'FeatureHierarchyTests',
     'FeatureIntegrityTests', 'FeatureLinkTests', 'FeatureTests', 'GeoJsonGeometryTests',
     'PolygonMorphometryTests', 'StructureComparisonTests',
+    // The restore routes and the rule they keep live in the feature slice itself.
+    'FeatureRestoreTests',
   ],
   featureSets: ['FeatureIntegrityTests', 'FeatureTests'],
   featureShares: ['FeatureShareTests'],
@@ -166,6 +181,9 @@ export const groups = {
   taxonomies: [
     'ExpeditionRosterRoleVocabularyTests', 'TaxonomyWideningTests', 'TermRuleSetTests',
     'TripParticipantRoleVocabularyTests', 'TripTypeVocabularyTests',
+    // A report layout is kept as a vocabulary: read by everyone, written by whoever may edit
+    // the installation's vocabularies.
+    'ReportTemplateTests',
   ],
   cabinets: ['CabinetApiTests', 'CabinetTreeTests'],
   crs: ['CrsTests', 'SpatialOptionsTests', 'WorkingSridBehaviourTests'],
@@ -176,7 +194,12 @@ export const groups = {
   // the application answers, but whether each test was given the application its mode promises.
   about: ['ApiSmokeTests', 'TestModeTests'],
   audit: ['AccessHistoryTests', 'HistoryTests'],
-  admin: ['AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests', 'SeededGroupUpgradeTests'],
+  admin: [
+    'AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests', 'SeededGroupUpgradeTests',
+    // Which map backgrounds a document may copy is an administrator's setting, kept across
+    // restarts beside the shipped catalogue's answer.
+    'MapBackgroundDocumentChoiceTests',
+  ],
   settings: ['AccountSettingsTests', 'OptionsDocumentationTests', 'TerrainOptionsTests', 'UiDefaultsTests'],
   messaging: [
     'AdminMessagingTests', 'CavingGroupAnnouncementPaidCapTests', 'NotificationDeliveryTests',
@@ -376,22 +399,23 @@ export const crossCutting = {
     'EventPolymorphicTests', 'EventReminderSweepTests', 'EventSeriesBulkTests',
     'ExpeditionMembershipTests', 'ExpeditionReportTests', 'ExpeditionRosterRoleVocabularyTests',
     'ExpeditionRosterTests', 'ExpeditionSharingCascadeTests', 'ExpeditionTests',
-    'ExpeditionTimelineTests', 'FeatureHierarchyTests', 'FeatureLinkTests', 'FeatureShareTests',
-    'FeatureTests', 'FileAttachmentTests', 'GeofileTests', 'HypsometryTests',
-    'ImmichPhotoLibraryTests', 'MapViewTests', 'NotificationHealthTests', 'PhotoImportTests',
-    'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
+    'ExpeditionTimelineTests', 'FeatureHierarchyTests', 'FeatureLinkTests',
+    'FeatureRestoreTests', 'FeatureShareTests', 'FeatureTests', 'FileAttachmentTests',
+    'GeofileTests', 'HypsometryTests', 'ImmichPhotoLibraryTests',
+    'MapBackgroundDocumentChoiceTests', 'MapViewTests', 'NotificationHealthTests',
+    'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
     'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',
-    'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests', 'ResLinkApiTests',
-    'SeededGroupUpgradeTests', 'SpeleolocTripImportTests', 'SpeologieCatalogueTests',
-    'StagedImportTests', 'SurveyCompilationTests', 'SurveyModelTests', 'SurveySourceTests',
-    'SyncSetTests', 'TermRuleSetTests', 'TerrainActivationTests', 'TerrainBuildApiTests',
-    'TerrainBuildPipelineTests', 'TerrainDerivativeApiTests', 'TerrainProbeTests',
-    'TerrainSourceTests', 'TextExtractionPipelineTests', 'TrackingCsvImportTests',
-    'TripAndTagTests', 'TripAttendanceLimitTests', 'TripCalloutStandDownTests',
-    'TripChecklistTickTests', 'TripImportCommitTests', 'TripImportSessionTests',
-    'TripInvitationTests', 'TripOrganizingGroupGuardTests',
-    'TripParticipantRoleVocabularyTests', 'TripPromotionTests', 'TripReportDocumentTests',
-    'TripReportMapTests', 'TripReportTemplateTests', 'TripRestoreTests', 'TripStatisticsTests',
+    'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests', 'ReportTemplateTests',
+    'ResLinkApiTests', 'SeededGroupUpgradeTests', 'SpeleolocTripImportTests',
+    'SpeologieCatalogueTests', 'StagedImportTests', 'SurveyCompilationTests',
+    'SurveyModelTests', 'SurveySourceTests', 'SyncSetTests', 'TermRuleSetTests',
+    'TerrainActivationTests', 'TerrainBuildApiTests', 'TerrainBuildPipelineTests',
+    'TerrainDerivativeApiTests', 'TerrainProbeTests', 'TerrainSourceTests',
+    'TextExtractionPipelineTests', 'TrackingCsvImportTests', 'TripAndTagTests',
+    'TripAttendanceLimitTests', 'TripCalloutStandDownTests', 'TripChecklistTickTests',
+    'TripImportCommitTests', 'TripImportSessionTests', 'TripInvitationTests',
+    'TripOrganizingGroupGuardTests', 'TripParticipantRoleVocabularyTests', 'TripPromotionTests',
+    'TripReportDocumentTests', 'TripReportMapTests', 'TripRestoreTests', 'TripStatisticsTests',
     'TripTrackImportTests', 'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
     'TripTrackingTests', 'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
     'UserAdministrationTests',
@@ -407,10 +431,10 @@ export const crossCutting = {
     'EntrancePlacementGuardTests', 'EnumBindingTests', 'ExpeditionDeleteCleanupTests',
     'ExpeditionLeadsTests', 'ExpeditionMapTests', 'ExpeditionReportTests',
     'FeatureFilterCompilerTests', 'FeatureHierarchyTests', 'FeatureLinkTests',
-    'FeatureShareTests', 'FeatureTests', 'FileAccessBatchParityTests', 'FileAttachmentTests',
-    'FilterParityTests', 'FilterWorldConformanceTests', 'GeofileTests', 'GeoreferencedMapTests',
-    'HistoryTests', 'HypsometryTests', 'KarstLinkExportTests', 'MapDensityTests',
-    'MapPointPatternTests', 'PhotoBytesProtectionTests', 'PhotoImportTests',
+    'FeatureRestoreTests', 'FeatureShareTests', 'FeatureTests', 'FileAccessBatchParityTests',
+    'FileAttachmentTests', 'FilterParityTests', 'FilterWorldConformanceTests', 'GeofileTests',
+    'GeoreferencedMapTests', 'HistoryTests', 'HypsometryTests', 'KarstLinkExportTests',
+    'MapDensityTests', 'MapPointPatternTests', 'PhotoBytesProtectionTests', 'PhotoImportTests',
     'PolygonMorphometryTests', 'ProtectionDepthTests', 'PublicTripDiagnosticsTests',
     'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests', 'PublishedNamesNowhereTests',
     'PublishedSurveyBoundsTests', 'RegistryStatisticsTests', 'ResLinkApiTests',

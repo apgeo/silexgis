@@ -79,6 +79,19 @@ public class MapLayer : ITimestamped
     /// </remarks>
     public bool InDocuments { get; set; }
 
+    /// <summary>
+    /// What an administrator of this installation decided about copying this source into
+    /// documents, or null while nobody has decided and the catalogue's answer above stands.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside the catalogue's answer rather than written over it. The catalogue is applied
+    /// again on every start and wins for every column it declares; this is the one thing about
+    /// a source it does not declare and so never touches. Keeping the two apart is also what
+    /// lets a decision be taken back — to whatever the catalogue says now — and lets a
+    /// correction to the shipped catalogue go on reaching the sources nobody here decided about.
+    /// </remarks>
+    public bool? InDocumentsChoice { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

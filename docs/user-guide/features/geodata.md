@@ -64,10 +64,12 @@ objects that import created — *"Delete all n objects this import created?"* �
 ones it hung on records that already existed. An undone import is marked as such rather than
 vanishing.
 
-For an import that created **trips**, the confirmation adds that each of them can be restored,
-and for how long: an undo deletes a trip the way you would by hand, so it is on
-[Deleted trips](trips.md#deleting-and-restoring-a-trip) afterwards. The detail of an undone
-import marks each such trip *Deleted* and links to where it is put back.
+The confirmation says that **each cave and feature the import created can be restored**: an
+undo deletes them the way you would by hand, one deletion each, so they are on
+[Deleted caves and features](caves-and-entrances.md#deleted-caves-and-features) afterwards.
+For an import that created **trips**, it adds that each of those can be restored too, and for
+how long — they are on [Deleted trips](trips.md#deleting-and-restoring-a-trip). The detail of an
+undone import marks each such object *Deleted* and links to where it is put back.
 
 If the source file has since been deleted, the row says so; if the import created nothing, it
 says that too.

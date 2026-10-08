@@ -142,10 +142,15 @@ stay* and *Remove stay*. A stay is **one person in one role, for one stretch of 
 | **Who** | Start typing and pick somebody from the list of cavers — or type the name of somebody who is not on it |
 | **Role** | *Member* unless you say otherwise |
 | **Days** | The first and the last day they were there; for a single day, pick it twice. Starts out as the whole camp |
+| **Still there** | Tick it for somebody who has not left yet: the stay then has a first day and no last one, and the roster shows it as *"from 14/07/2026, still there"*. Untick it and give the last day once they have gone |
 | **Note** | *Arrived late, left early, came back…* |
 
 Somebody who cooked and also surveyed is **two stays**, and so is somebody who left and came
 back. Nothing stops stays overlapping.
+
+A stay with no last day always means **still there** — it is never how one day is recorded.
+The roster and the camp's write-up both say it in words, print one date for a single day, and
+print both dates for a longer stay.
 
 **Naming somebody new.** A name you type instead of picking is *"saved as a name: it means
 whoever the list of cavers already holds under exactly this name, and adds them if nobody
@@ -196,15 +201,27 @@ photographs are filed against this camp or the trips in it that you may read."*
 ## The write-up
 
 **Write-up**, in the camp's header, opens the camp arranged to be read: *About the camp*, *The
-trips*, *Who was there* and the pictures, built from what **you** may see — the page says so:
-*"This write-up shows what you may see. Somebody else reading the same camp may see more, or
-less: the trips in it, the people, the pictures."*
+trips*, *What each trip wrote*, *Who was there* and the pictures, built from what **you** may
+see — the page says so: *"This write-up shows what you may see. Somebody else reading the same
+camp may see more, or less: the trips in it, the people, the pictures."*
+
+**What each trip wrote** is each trip's own text under the trip's date and title: its account,
+its results and the answers on its form. You are shown, for each trip, exactly what that trip's
+own write-up would show you — so the account of what went wrong on a trip appears only if you
+may edit that trip, and a trip you may not read is not there at all. A trip that wrote nothing
+has no heading. In the Word document the same part is printed by the layout line `accounts`; a
+club that does not want it takes that line out of its camp layout.
 
 - **Download document** saves it as a Word document, in the standard layout or in one your club
   keeps under **Configuration → Report layouts**.
+- **Download PDF** gives the same document as a PDF. It is there only where your installation
+  runs its document converter; where it is not, **Print** and *Save as PDF* in the browser is
+  the way. Nothing is kept of the PDF on the server, and the copy saved to the camp is always
+  the Word document.
 - **Save to the camp** files the document on the camp's *Files* tab. The copy saved there can
   be opened by everybody who may read the camp, so it is built from what any account may see of
-  its trips; your own fuller copy is the download.
+  its trips — including what each trip wrote: a trip's text is in the saved copy only as any
+  account may read it, never as you do. Your own fuller copy is the download.
 - **Print** uses the browser, with the application's chrome left off the paper.
 
 ## Permissions and sharing
@@ -215,11 +232,28 @@ Two buttons in the header, both for somebody who may manage the camp's permissio
 person by person or group by group. See [Permissions](../admin/permissions.md).
 
 **Share** reaches further: *"Sharing a camp writes one rule onto each trip it gathers, marked
-as the camp's, so whoever it is shared with can read what the camp gathered."* It takes the
-right to manage permissions on every one of those trips — if any trip refuses, nothing is
-shared and you are told how many refused, never which. The dialog shows how many of the camp's
-trips each sharing covers, and says when trips have joined since it was last applied: apply it
-again to cover them, or withdraw it to take it back from every trip at once.
+as the camp's, so whoever it is shared with can read what the camp gathered."* Each trip
+answers for itself: the camp is shared on every trip whose permissions you may manage, and
+the others are **skipped and listed**, so a camp that gathers another club's trips is shared
+for your own at once.
+
+After you apply a sharing the dialog says what it did — *"Trips shared: 2. Trips skipped: 3."* —
+and lists the skipped trips:
+
+- a trip you may read is **named**, with what stands in the way: *"its owner must let you
+  manage its permissions"*, or *"you asked to pass on more than you hold on this trip
+  yourself"* (you can never give somebody more on a trip than you have there);
+- a trip you may **not** read is not named — a camp can gather a trip its organiser cannot
+  open — and is only counted: *"Skipped trips that you may not read, and that are therefore
+  not named here: 1."*
+
+Nothing is written onto a skipped trip. Once its owner has let you manage its permissions,
+**Apply again** picks it up. If no trip at all could be shared, nothing is shared and you are
+told so.
+
+The dialog also shows how many of the camp's trips each sharing covers. Fewer than all means
+trips joined after it was last applied, or were skipped: apply it again to cover the ones you
+may, or withdraw it to take back from every trip what the camp wrote — and only that.
 
 ---
 

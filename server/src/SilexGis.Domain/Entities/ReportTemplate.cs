@@ -4,7 +4,7 @@ using SilexGis.Domain.Trips;
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
-/// A club's own layout for the document a trip is written up as.
+/// A club's own layout for the document a trip or a camp is written up as.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -19,7 +19,7 @@ namespace SilexGis.Domain.Entities;
 /// bulletin is due.
 /// </para>
 /// </remarks>
-public class TripReportTemplate : ITimestamped, IAuditable
+public class ReportTemplate : ITimestamped, IAuditable
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
 

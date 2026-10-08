@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
+using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Trips;
@@ -46,6 +47,9 @@ public sealed class TripLogWriteService(
     /// it was recorded under, and this path never overwrites that.
     /// </summary>
     private const string CaveListRole = "trip-visited";
+
+    /// <summary>The refusal of a trip whose last day comes before its first.</summary>
+    public const string EndBeforeStartCode = "trip_log.end_before_start";
 
     /// <summary>
     /// Creates a trip, whichever door it came through. The two doors differ in one thing and it
@@ -336,7 +340,12 @@ public sealed class TripLogWriteService(
         trip.Title = input.Title;
         trip.TripTypeId = input.TripTypeId;
         trip.TripDate = input.TripDate;
-        trip.TripDateEnd = input.TripDateEnd;
+
+        // A trip ending the day it starts stores no end, the way a camp's dates do: a stored end
+        // is the "and it ran on to" fact, so one day never reads as a range of itself. Here
+        // rather than at each door, so a trip that arrives out of an import is stored exactly as
+        // one somebody typed.
+        trip.TripDateEnd = DayRange.EndForStorage(input.TripDate, input.TripDateEnd);
         trip.EntryTime = input.EntryTime;
         trip.ExitTime = input.ExitTime;
         trip.Description = input.Description;
@@ -624,6 +633,17 @@ public sealed class TripLogWriteService(
         if (input.GeometryMalformed)
         {
             throw new TripWriteException("trip_log.geometry_invalid", "Geometry is malformed or invalid.");
+        }
+
+        // A last day before the first is a mistyped date. The request's own shape refuses it
+        // first for a trip somebody typed; this is for the doors that have no such shape — a row
+        // out of a sheet — which would otherwise reach the table's constraint and fail as a fault
+        // instead of as a reason. Never repaired into one day: that would hide the mistake in a
+        // record somebody will later quote.
+        if (DayRange.EndsBeforeItStarts(input.TripDate, input.TripDateEnd))
+        {
+            throw new TripWriteException(
+                EndBeforeStartCode, "The trip's last day must not precede its first day.");
         }
 
         // The purpose vocabulary is a row set an installation extends, so an unknown identity is

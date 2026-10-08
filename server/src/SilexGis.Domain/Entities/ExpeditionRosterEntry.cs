@@ -40,12 +40,19 @@ public class ExpeditionRosterEntry : ITimestamped, IAuditable, IAuditChild
     public DateOnly FromDate { get; set; }
 
     /// <summary>
-    /// The day they were there until, present only when the stay actually ran on past its first
-    /// day — the same rule the camp's own dates follow, so one day never reads as a range of
-    /// itself. An absent end therefore says only that nothing ran on past the first day: for a
-    /// stay recorded while the camp is still going it reads as still being there, and for one
-    /// recorded against a camp that is over it reads as the single day it was.
+    /// The last day they were there, or nothing while they are still there. Somebody there for a
+    /// single day has a last day equal to their first.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not the rule the camp's own dates and a trip's follow, where an end equal to
+    /// the start is stored as nothing. A camp and a trip are written down as finished things, so
+    /// nothing there needs to say "not over yet"; a roster is kept while the camp is running, and
+    /// "arrived on the 14th and has not left" is the ordinary state of most of its rows for most
+    /// of a fortnight. One empty value cannot say that and "was there for the 14th only" at once,
+    /// and a reader who cannot tell them apart can neither count who is at the camp today nor
+    /// say how long anybody stayed. <see cref="DayRange.OpenEndForStorage"/> is the write rule and
+    /// the database holds the matching constraint.
+    /// </remarks>
     public DateOnly? ToDate { get; set; }
 
     /// <summary>Why the row reads as it does — arrived late, left early, came back.</summary>

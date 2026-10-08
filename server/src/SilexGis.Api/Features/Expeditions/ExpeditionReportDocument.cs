@@ -2,6 +2,7 @@
 using System.Globalization;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Api.Features.Expeditions;
 
@@ -23,6 +24,11 @@ internal sealed record ExpeditionReportPlate(byte[] Image, string? Caption);
 /// carry a trip the page would not show. No coordinate of any kind is on this record: a camp's
 /// write-up names caves and never places them.
 /// </remarks>
+/// <param name="Narrative">
+/// What the trip wrote about itself, as this reading is told it by the one place that decides
+/// that for the trip's own page and its own write-up. Never worked out here.
+/// </param>
+/// <param name="SectionTitles">What the trip's purpose calls the questions on its form.</param>
 internal sealed record ExpeditionReportTrip(
     Guid Id,
     string Title,
@@ -35,7 +41,9 @@ internal sealed record ExpeditionReportTrip(
     int? SurveyStations,
     decimal? RopeMetres,
     int People,
-    IReadOnlyList<string> CaveNames);
+    IReadOnlyList<string> CaveNames,
+    TripNarrative Narrative,
+    IReadOnlyDictionary<TripSectionKey, IReadOnlyDictionary<string, string>> SectionTitles);
 
 /// <summary>One recorded stay at the camp, as the roster reading gave it.</summary>
 internal sealed record ExpeditionReportStay(
@@ -171,6 +179,10 @@ internal static class ExpeditionReportDocument
                     AppendTeams(blocks, content);
                     break;
 
+                case ReportTemplateDirective.Accounts:
+                    AppendAccounts(blocks, content);
+                    break;
+
                 case ReportTemplateDirective.Roster:
                     AppendRoster(blocks, content);
                     break;
@@ -214,6 +226,89 @@ internal static class ExpeditionReportDocument
             blocks.Add(DocumentBlock.Bullet(string.Join(" · ", line)));
         }
     }
+
+    /// <summary>The three parts of a trip's form, in the order and under the words a trip's own write-up uses.</summary>
+    private static readonly (TripSectionKey Key, string Label)[] FormParts =
+    [
+        (TripSectionKey.FieldData, "Observations"),
+        (TripSectionKey.Logistics, "Logistics"),
+        (TripSectionKey.Safety, "Safety"),
+    ];
+
+    /// <summary>
+    /// What each trip this reading may see wrote about itself, trip by trip.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The words are not chosen here. Each trip arrives with what this reading is told of it by
+    /// the same decision its own page and its own write-up are built from, so this document
+    /// carries for a trip exactly what that trip's write-up would carry for the same reader —
+    /// the account of what went wrong among them only where that reader may change the trip, and
+    /// never in a copy filed for everybody. A part that was withheld arrives as nothing and is
+    /// written as nothing: no label, no empty line, nothing saying it was left out.
+    /// </para>
+    /// <para>
+    /// A trip that wrote nothing gets no heading here. It is already listed among the trips; a
+    /// bare title under this part would read as an account somebody deleted.
+    /// </para>
+    /// </remarks>
+    private static void AppendAccounts(List<DocumentBlock> blocks, ExpeditionReportContent content)
+    {
+        var written = new List<DocumentBlock>();
+        foreach (var trip in content.Trips.OrderBy(t => t.Date).ThenBy(t => t.Title, StringComparer.Ordinal))
+        {
+            var account = Account(trip);
+            if (account.Count == 0)
+            {
+                continue;
+            }
+
+            written.Add(DocumentBlock.Subheading($"{Dates(trip.Date, trip.DateEnd)} · {trip.Title}"));
+            written.AddRange(account);
+        }
+
+        if (written.Count == 0)
+        {
+            return;
+        }
+
+        blocks.Add(DocumentBlock.Note(
+            "What each trip wrote about itself, for the trips gathered into this camp that the "
+            + "person who produced this document may read; somebody else may be able to see more."));
+        blocks.AddRange(written);
+    }
+
+    private static List<DocumentBlock> Account(ExpeditionReportTrip trip)
+    {
+        var account = new List<DocumentBlock>();
+        if (Said(trip.Narrative.Description) is { } description)
+        {
+            account.Add(DocumentBlock.Paragraph(description));
+        }
+
+        if (Said(trip.Narrative.Results) is { } results)
+        {
+            account.Add(DocumentBlock.Field("Results", results));
+        }
+
+        foreach (var (key, label) in FormParts)
+        {
+            var answers = TripNarrativeComposition.Section(trip.Narrative, trip.SectionTitles, key).ToList();
+            if (answers.Count == 0)
+            {
+                continue;
+            }
+
+            account.Add(DocumentBlock.Note(label));
+            account.AddRange(answers);
+        }
+
+        return account;
+    }
+
+    /// <summary>Words somebody wrote, or null when there are none — the test a layout's own lines pass.</summary>
+    private static string? Said(string? text) =>
+        text is not null && ReportComposition.HasWords(text) ? text.Trim() : null;
 
     /// <summary>
     /// The camp day by day: which of the trips this reading may see ran on each day.
@@ -283,7 +378,7 @@ internal static class ExpeditionReportDocument
             {
                 stay.CaverName,
                 stay.RoleName,
-                Dates(stay.FromDate, stay.ToDate),
+                StayDates(stay.FromDate, stay.ToDate),
                 stay.Note,
             }.Where(x => !string.IsNullOrWhiteSpace(x));
             blocks.Add(DocumentBlock.Bullet(string.Join(" · ", line)));
@@ -440,6 +535,16 @@ internal static class ExpeditionReportDocument
         end is { } last && last != start
             ? $"{start:yyyy-MM-dd} – {last:yyyy-MM-dd}"
             : start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The days of one stay. Not <see cref="Dates"/>: for a camp or a trip no last day is one
+    /// day, and for a stay it is somebody who has not left — a document that printed such a row
+    /// as a single date would file, under the club's name, that they went home the day they came.
+    /// </summary>
+    private static string StayDates(DateOnly from, DateOnly? to) =>
+        to is null
+            ? $"from {from:yyyy-MM-dd}, still there"
+            : Dates(from, to);
 
     private static string? Hours(TimeOnly? entry, TimeOnly? exit) =>
         entry is null && exit is null

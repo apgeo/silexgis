@@ -150,7 +150,8 @@ public static class MapLayerCatalog
             // is still a perfectly good thing to look at, and only the claim that it may be put
             // into a file cannot be honoured. Said out loud, because the alternative reading of a
             // picture that comes out with no background is that the application is broken.
-            if (inDocuments && attribution is null)
+            var obstacle = inDocuments ? MapLayerDocumentRules.ObstacleTo(isBase, attribution) : null;
+            if (obstacle == MapLayerDocumentObstacle.NoAttribution)
             {
                 // Terms that allow a copy allow it with the credit beside the picture, and a
                 // credit nobody wrote down cannot be put there.
@@ -159,7 +160,7 @@ public static class MapLayerCatalog
                 inDocuments = false;
             }
 
-            if (inDocuments && !isBase)
+            if (obstacle == MapLayerDocumentObstacle.NotABackground)
             {
                 // A document's picture is drawn over one background. An overlay is not one.
                 problems.Add(new MapLayerCatalogProblem(

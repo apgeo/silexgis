@@ -90,7 +90,10 @@ test('cave add on map: place a new cave with its entrance by clicking the canvas
 
   // Clean up from the registry (entrances cascade).
   await openCaveFromRegistry(page, caveName);
-  await page.locator('button', { hasText: 'Delete' }).click();
+  // By its own id: the list this was opened from has a door named "Deleted caves and
+  // features", which a button found by the word "Delete" also matches until the cave's page
+  // has replaced it.
+  await page.getByTestId('cave-delete').click();
   await page.getByRole('button', { name: 'OK', exact: true }).click();
   await page.waitForURL(/\/caves$/);
   // Counted rather than "not visible": the detail page stays mounted for a tick after the
@@ -270,7 +273,10 @@ test('dialog placement flip: cave-add continues as a side panel with values inta
   await page.locator('.ant-modal').getByRole('button', { name: 'Cancel' }).click();
 
   await openCaveFromRegistry(page, caveName);
-  await page.locator('button', { hasText: 'Delete' }).click();
+  // By its own id: the list this was opened from has a door named "Deleted caves and
+  // features", which a button found by the word "Delete" also matches until the cave's page
+  // has replaced it.
+  await page.getByTestId('cave-delete').click();
   await page.getByRole('button', { name: 'OK', exact: true }).click();
   await page.waitForURL(/\/caves$/);
   // Counted rather than "not visible": the detail page stays mounted for a tick after the

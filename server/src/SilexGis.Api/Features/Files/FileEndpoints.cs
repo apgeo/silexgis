@@ -109,7 +109,9 @@ public static class FileEndpoints
             .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maxRequestBodyBytes))
             .WithSummary("Uploads a file (multipart), optionally filing it into a cabinet, attaching it to an object, and counting it into an upload batch.");
         files.MapGet("/config", ConfigAsync)
-            .WithSummary("Upload limits this installation applies, and how much room the caller has left.");
+            .WithSummary(
+                "Upload limits this installation applies, how much room the caller has left, and "
+                + "whether it runs the service that lays office documents out as PDF.");
         files.MapGet("/duplicate-check", DuplicateCheckAsync)
             .WithSummary("Whether a document the caller may read already holds content with this hash.");
 
@@ -172,6 +174,7 @@ public static class FileEndpoints
     private static async Task<Results<Ok<FileConfigDto>, UnauthorizedHttpResult>> ConfigAsync(
         UploadAllowanceService allowances,
         IAccessContextAccessor accessAccessor,
+        IDocumentConverter converter,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -190,7 +193,8 @@ public static class FileEndpoints
             allowance.RefusedExtensions,
             UploadSessionRules.SuggestedChunkBytes,
             ResumableThresholdBytes,
-            ArchiveExpansionRules.Extensions));
+            ArchiveExpansionRules.Extensions,
+            converter.IsConfigured));
     }
 
     /// <summary>

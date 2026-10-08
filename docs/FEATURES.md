@@ -218,6 +218,14 @@ feature and walkthroughs of whole jobs.
   in a camp. Whoever may delete a trip may restore it, and the confirmation says for how long — 30
   days unless the installation chose otherwise — after which the trip is removed for good.
   Undoing an import of trips deletes them the same way, so each can be restored on its own.
+- **A deleted cave, entrance or surface feature can be put back** — deleting one removes nothing
+  either. A cave goes with its entrances, an area with what it contains, and the list of
+  **deleted caves and features** shows each such deletion as one row that says what went with
+  it; restoring it brings all of it back, and a trip that named the cave names it again. Whoever
+  may delete something may restore it. The list holds no positions at all, and a restored cave
+  opens showing only the position its reader could see before. Something deleted before the cave
+  or area containing it was is restored after that is back; undoing an import deletes its caves
+  and features the same way, so each can be restored on its own.
 - **What it all adds up to** — a person, a cave and a club each get their totals: trips, hours
   underground, metres surveyed, first visits, how many people, how many trips had an incident. Every
   one of them is counted **over the trips you may read**, and the screen says so, because two people
@@ -506,14 +514,26 @@ feature and walkthroughs of whole jobs.
   copy you download carries **a map of the trip** — its sketch, where its party met, and the caves
   it names that you may place — drawn by your own browser out of what the page had already been
   given, over one of the installation's map backgrounds that may be copied into a document, with
-  a line under it saying whose view it is and when. The sketch is still written out in words
+  a line under it saying whose view it is and when. Which backgrounds those are is an
+  administrator's setting, one switch each, starting from what the installation shipped with and
+  kept across restarts. The sketch is still written out in words
   beside it. The copy filed against the trip never carries that map: it shows what one reader may
   see, and a filed copy is opened by everybody who may read the trip. There is no public address
-  for a report: it is downloaded by somebody signed in who may read the trip.
+  for a report: it is downloaded by somebody signed in who may read the trip. Where the
+  installation runs its optional document converter, the same write-up — a trip's or a camp's,
+  map included — can be downloaded **as a PDF**: the Word document is passed through the
+  converter inside the request and nothing is stored. Without the converter the button is not
+  offered, and the page's print view is the way to a PDF.
   A club can write **its own layout** for the document: download the standard one, which is a short
   text file that explains itself in its own comments, edit it, upload it, and choose it. A layout can
   only ask for things the reader was already given, and a line whose contents turn out to be empty
   simply disappears — so the same layout produces an honest document for a member and for an editor.
+  **A camp writes itself up too**, as one document over the trips it gathered — day by day, team by
+  team, in a layout of its own kind — and it carries **what each trip wrote about itself**: the
+  trip's account, its results and the answers on its form, under the trip's date and title. Each
+  trip's text is exactly what that trip's own write-up would show the same reader, decided in one
+  place for both documents, so a camp's write-up can never print what a trip's withholds; the copy
+  filed against the camp carries each trip only as any account may read it.
 - **Tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.

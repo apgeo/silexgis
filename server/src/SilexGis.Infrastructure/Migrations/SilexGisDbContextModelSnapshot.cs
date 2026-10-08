@@ -2635,7 +2635,7 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.ToTable("expedition_roster", null, t =>
                         {
-                            t.HasCheckConstraint("ck_expedition_roster_dates", "to_date IS NULL OR to_date > from_date");
+                            t.HasCheckConstraint("ck_expedition_roster_dates", "to_date IS NULL OR to_date >= from_date");
                         });
                 });
 
@@ -3958,6 +3958,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("in_documents");
 
+                    b.Property<bool?>("InDocumentsChoice")
+                        .HasColumnType("boolean")
+                        .HasColumnName("in_documents_choice");
+
                     b.Property<bool>("IsBase")
                         .HasColumnType("boolean")
                         .HasColumnName("is_base");
@@ -4542,6 +4546,61 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_processing_jobs_status_id");
 
                     b.ToTable("processing_jobs", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ReportTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)")
+                        .HasColumnName("body");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<short>("Kind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.Property<long?>("TripTypeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("trip_type_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_report_templates");
+
+                    b.HasIndex("TripTypeId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_report_templates_trip_type")
+                        .HasFilter("trip_type_id IS NOT NULL");
+
+                    b.HasIndex("Kind", "IsDefault")
+                        .IsUnique()
+                        .HasDatabaseName("ux_report_templates_default")
+                        .HasFilter("is_default");
+
+                    b.ToTable("report_templates", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.ResLink", b =>
@@ -6748,7 +6807,10 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("CalloutState", "CalloutAlarmAt")
                         .HasDatabaseName("ix_trip_logs_callout_state_callout_alarm_at");
 
-                    b.ToTable("trip_logs", (string)null);
+                    b.ToTable("trip_logs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_trip_logs_dates", "trip_date_end IS NULL OR trip_date_end > trip_date");
+                        });
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripLogParticipant", b =>
@@ -6944,61 +7006,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_trip_position_events_trip_log_id_caver_id_recorded_at");
 
                     b.ToTable("trip_position_events", (string)null);
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripReportTemplate", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasMaxLength(20000)
-                        .HasColumnType("character varying(20000)")
-                        .HasColumnName("body");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_default");
-
-                    b.Property<short>("Kind")
-                        .HasColumnType("smallint")
-                        .HasColumnName("kind");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)")
-                        .HasColumnName("name");
-
-                    b.Property<long?>("TripTypeId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("trip_type_id");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_trip_report_templates");
-
-                    b.HasIndex("TripTypeId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_trip_report_templates_trip_type")
-                        .HasFilter("trip_type_id IS NOT NULL");
-
-                    b.HasIndex("Kind", "IsDefault")
-                        .IsUnique()
-                        .HasDatabaseName("ux_trip_report_templates_default")
-                        .HasFilter("is_default");
-
-                    b.ToTable("trip_report_templates", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripTeam", b =>
@@ -8875,6 +8882,15 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_photo_import_sessions_users_user_id");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.ReportTemplate", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.TripType", null)
+                        .WithMany()
+                        .HasForeignKey("TripTypeId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_report_templates_trip_types_trip_type_id");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.ResLink", b =>
                 {
                     b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
@@ -9367,15 +9383,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_trip_position_events_trip_logs_trip_log_id");
 
                     b.Navigation("TripLog");
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripReportTemplate", b =>
-                {
-                    b.HasOne("SilexGis.Domain.Entities.TripType", null)
-                        .WithMany()
-                        .HasForeignKey("TripTypeId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_trip_report_templates_trip_types_trip_type_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripTeam", b =>

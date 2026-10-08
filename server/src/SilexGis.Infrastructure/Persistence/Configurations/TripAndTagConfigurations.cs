@@ -11,7 +11,13 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
 {
     public void Configure(EntityTypeBuilder<TripLog> builder)
     {
-        builder.ToTable("trip_logs");
+        // A stored end means "and it ran on to", so it is either absent or strictly after the
+        // first day — the rule a camp's dates carry, in the same words. Held in the database and
+        // not only on the write path, because every reader that asks whether a trip ran over
+        // several days is written against it: a row whose end equalled its start would read as a
+        // range of itself on some surfaces and as one day on the ones that happened to compare.
+        builder.ToTable("trip_logs", t => t.HasCheckConstraint(
+            "ck_trip_logs_dates", "trip_date_end IS NULL OR trip_date_end > trip_date"));
         builder.Property(x => x.Id).ValueGeneratedNever();
 
         // A deleted trip is gone from every query that does not deliberately ask for it.

@@ -129,3 +129,42 @@ export function tripSectionValueText(field: SchemaField, value: unknown, t: TFun
 export function isCaverReferenceField(field: SchemaField): boolean {
   return field.kind === 'string' && field.key.endsWith('_caver_id');
 }
+
+/** The three per-purpose sections of a trip's form, in the order a write-up prints them. */
+export const TRIP_SECTIONS = ['fieldData', 'logistics', 'safety'] as const;
+export type TripSectionKey = (typeof TRIP_SECTIONS)[number];
+
+/** One answer as a write-up prints it: the question it answers, and what was said. */
+export interface WrittenSectionRow {
+  field: SchemaField;
+  text: string;
+}
+
+/**
+ * The answers a section actually holds, in the order its purpose declares them.
+ *
+ * One home, because a trip's answers are written out on more than one page — the trip's own
+ * write-up, and the write-up of a camp the trip was gathered into — and the two must say the
+ * same thing about the same answer. A field naming a person from the roster is shown as that
+ * person's name; a field nobody answered is left out rather than printed as a dash.
+ */
+export function writtenSectionRows(
+  bag: unknown,
+  fields: readonly SchemaField[],
+  cavers: readonly { id: string; name: string }[] | undefined,
+  t: TFunction,
+): WrittenSectionRow[] {
+  const answers: Record<string, unknown> =
+    typeof bag === 'object' && bag !== null && !Array.isArray(bag)
+      ? (bag as Record<string, unknown>)
+      : {};
+  return fields
+    .map((field) => ({
+      field,
+      text: isCaverReferenceField(field)
+        ? (cavers?.find((caver) => caver.id === answers[field.key])?.name ??
+          (answers[field.key] == null ? '—' : String(answers[field.key])))
+        : tripSectionValueText(field, answers[field.key], t),
+    }))
+    .filter((row) => row.text !== '—');
+}

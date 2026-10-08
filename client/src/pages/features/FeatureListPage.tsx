@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { downloadFile } from '../../api/download.ts';
 import {
   useCan,
+  useCreateDoor,
   useDeleteFeature,
   useFeatureTypes,
   useFeatures,
@@ -43,6 +44,14 @@ export default function FeatureListPage() {
   const canEdit = useCan('features', 'write');
   const canReadFeatureSets = useCan('featureSets', 'read');
   const canCreateFeatures = useCan('features', 'create');
+  // Whoever could have deleted a feature is shown where one is put back from: by the right to
+  // delete, or by being able to create one — an owner deletes what they own without any
+  // capability that spells "delete", and somebody who records features only for their caving
+  // group owns those like anybody else, which is why this asks the create door. The page behind
+  // the door is decided row by row on the server.
+  const canDeleteFeatures = useCan('features', 'delete');
+  const { canCreate: mayOwn } = useCreateDoor('features');
+  const canRestore = mayOwn || canDeleteFeatures;
   const typeName = (code: string | null) =>
     code === null ? '' : featureTypes?.find((x) => x.code === code)?.name ?? code;
 
@@ -101,6 +110,15 @@ export default function FeatureListPage() {
               ...(canCreateFeatures ? [{ key: 'admin/term-rules', label: t('nav.termRules') }] : []),
             ]}
           />
+          {canRestore && (
+            <Button
+              icon={<DeleteOutlined />}
+              data-testid="feature-list-deleted"
+              onClick={() => navigate('/features/deleted')}
+            >
+              {t('features.deleted.link')}
+            </Button>
+          )}
           <Dropdown
             menu={{
               items: exportFormats.map((format) => ({
@@ -235,6 +253,7 @@ export default function FeatureListPage() {
                 {canEdit && (
                   <Popconfirm
                     title={t('features.deleteConfirm')}
+                    description={t('features.deleteRestorable')}
                     onConfirm={() => void onDelete(record.id)}
                     okButtonProps={{ danger: true }}
                   >

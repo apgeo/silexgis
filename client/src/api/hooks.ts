@@ -155,6 +155,7 @@ export const queryKeys = {
     ['filters', 'resolve', world, [...ids].sort()] as const,
   dashboardSummary: ['dashboard', 'summary'] as const,
   mapLayers: ['map-layers'] as const,
+  mapBackgrounds: ['map-backgrounds'] as const,
   mapConfig: ['map-config'] as const,
   taxonomy: (kind: string) => ['taxonomy', kind] as const,
   caves: (params: CaveListParams) => ['caves', 'list', params] as const,
@@ -172,6 +173,7 @@ export const queryKeys = {
   nominatim: (q: string) => ['nominatim', q] as const,
   features: (params: FeatureListParams) => ['features', 'list', params] as const,
   feature: (id: string) => ['features', 'detail', id] as const,
+  deletedFeatures: (page: number) => ['features', 'deleted', page] as const,
   featureParents: (id: string) => ['features', id, 'parents'] as const,
   featureChildren: (id: string, params: FeatureChildrenParams) => ['features', id, 'children', params] as const,
   featureLinks: (id: string) => ['features', id, 'links'] as const,
@@ -324,7 +326,7 @@ export const queryKeys = {
   publicLiveTrips: (token: string) => ['public-trips', token, 'live'] as const,
   checklists: ['checklists'] as const,
   checklist: (id: string) => ['checklists', 'detail', id] as const,
-  tripReportTemplates: ['trip-report-templates'] as const,
+  reportTemplates: ['report-templates'] as const,
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
   cavingGroups: ['cavingGroups'] as const,
@@ -1115,6 +1117,47 @@ export function useMapLayers() {
     queryKey: queryKeys.mapLayers,
     queryFn: () => unwrap(api.GET('/api/v1/map-layers')),
     staleTime: 5 * 60_000,
+  });
+}
+
+export type MapBackground = components['schemas']['MapBackgroundDto'];
+export type MapBackgroundChoice = components['schemas']['MapLayerDocumentChoice'];
+
+/**
+ * The map backgrounds this installation publishes, each with whether a document may copy it,
+ * what the shipped catalogue says and what an administrator decided. An administrator's reading:
+ * the server refuses it to anybody who may not read the installation's settings.
+ */
+export function useMapBackgrounds(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.mapBackgrounds,
+    queryFn: () => unwrap(api.GET('/api/v1/admin/map-backgrounds')),
+    enabled,
+  });
+}
+
+/**
+ * Decides whether documents may copy one background: on, off, or back to what the catalogue
+ * says. The answer is the row as it now stands, so the list takes it in place; and the published
+ * catalogue is read again, because that is what a write-up's page chooses its background from —
+ * a page already open must stop copying a source the moment an administrator says so.
+ */
+export function useChooseMapBackground() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, choice }: { id: number; choice: MapBackgroundChoice }) =>
+      unwrap(
+        api.PUT('/api/v1/admin/map-backgrounds/{id}/in-documents', {
+          params: { path: { id } },
+          body: { choice },
+        }),
+      ),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MapBackground[]>(queryKeys.mapBackgrounds, (rows) =>
+        rows?.map((row) => (row.id === updated.id ? updated : row)),
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mapLayers });
+    },
   });
 }
 
@@ -2687,6 +2730,59 @@ export function useDeleteFeature() {
   });
 }
 
+export type DeletedFeature = components['schemas']['DeletedFeatureDto'];
+
+/**
+ * The deletions of caves, entrances and surface features this caller may undo, most recent
+ * first: one row for each deletion, with a count of what went with it. Which those are is decided
+ * on the server row by row — the right that deletes is the right that restores — so an account
+ * that may delete nothing is answered with an empty list rather than refused.
+ */
+export function useDeletedFeatures(page = 1, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.deletedFeatures(page),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/features/deleted', { params: { query: { page, pageSize: 50 } } })),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/**
+ * Puts a deleted cave, entrance or surface feature back, with everything deleted along with it.
+ *
+ * The answer is the feature as its own address now answers it, so it is taken as that reading.
+ * Everything else that can show a feature is read again: the lists it returns to and the deleted
+ * list it has just left, a cave's entrances, the trips that name it — a trip stops naming a
+ * deleted cave and names it again once it is back — and an import's own page, which says which
+ * of the objects it created are deleted.
+ *
+ * A refusal is news about the list the button was on — somebody else put it back, or what
+ * contains it was deleted meanwhile — so the deleted list is read again then as well, rather
+ * than left offering a row that can only be refused a second time.
+ */
+export function useRestoreFeature() {
+  const queryClient = useQueryClient();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/api/v1/features/{id}/restore', { params: { path: { id } } })),
+    onSuccess: (envelope, id) => {
+      queryClient.setQueryData(queryKeys.feature(id), envelope);
+      void queryClient.invalidateQueries({
+        queryKey: ['features'],
+        // The feature itself was just taken from the answer.
+        predicate: ({ queryKey }) => !(queryKey[1] === 'detail' && queryKey[2] === id),
+      });
+      for (const scope of ['caves', 'entrances', 'trip-logs', 'import-batches']) {
+        void queryClient.invalidateQueries({ queryKey: [scope] });
+      }
+      invalidateHistory();
+    },
+    onError: () => void queryClient.invalidateQueries({ queryKey: ['features', 'deleted'] }),
+  });
+}
+
 export type FeatureParent = components['schemas']['FeatureParentDto'];
 export type ParentEdgeWrite = components['schemas']['ParentEdgeRequest'];
 export type FeatureChild = components['schemas']['FeatureChildDto'];
@@ -4159,13 +4255,13 @@ export function useRestoreTripLog() {
   });
 }
 
-export type TripReportTemplate = components['schemas']['TripReportTemplateDto'];
+export type ReportTemplate = components['schemas']['ReportTemplateDto'];
 
 /** The layouts a write-up may be built in. Every account may read them: choosing one is not editing one. */
-export function useTripReportTemplates(enabled = true) {
+export function useReportTemplates(enabled = true) {
   return useQuery({
-    queryKey: queryKeys.tripReportTemplates,
-    queryFn: () => unwrap(api.GET('/api/v1/trip-report-templates')),
+    queryKey: queryKeys.reportTemplates,
+    queryFn: () => unwrap(api.GET('/api/v1/report-templates')),
     enabled,
   });
 }
@@ -4176,18 +4272,18 @@ export function useTripReportTemplates(enabled = true) {
  */
 export function useReportTemplatesOfKind(kind: 'trip' | 'expedition', enabled = true) {
   return useQuery({
-    queryKey: [...queryKeys.tripReportTemplates, kind] as const,
+    queryKey: [...queryKeys.reportTemplates, kind] as const,
     queryFn: () =>
-      unwrap(api.GET('/api/v1/trip-report-templates', { params: { query: { kind } } })),
+      unwrap(api.GET('/api/v1/report-templates', { params: { query: { kind } } })),
     enabled,
   });
 }
 
-export type TripReportTemplateWrite = components['schemas']['TripReportTemplateRequest'];
+export type ReportTemplateWrite = components['schemas']['ReportTemplateRequest'];
 
-function useInvalidateTripReportTemplates() {
+function useInvalidateReportTemplates() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: queryKeys.tripReportTemplates });
+  return () => void queryClient.invalidateQueries({ queryKey: queryKeys.reportTemplates });
 }
 
 /**
@@ -4195,29 +4291,29 @@ function useInvalidateTripReportTemplates() {
  * line is at fault — the message is passed through rather than replaced, because the person
  * editing the layout is the only one who can act on it.
  */
-export function useCreateTripReportTemplate() {
-  const invalidate = useInvalidateTripReportTemplates();
+export function useCreateReportTemplate() {
+  const invalidate = useInvalidateReportTemplates();
   return useMutation({
-    mutationFn: (body: TripReportTemplateWrite) =>
-      unwrap(api.POST('/api/v1/trip-report-templates', { body })),
+    mutationFn: (body: ReportTemplateWrite) =>
+      unwrap(api.POST('/api/v1/report-templates', { body })),
     onSuccess: invalidate,
   });
 }
 
-export function useUpdateTripReportTemplate() {
-  const invalidate = useInvalidateTripReportTemplates();
+export function useUpdateReportTemplate() {
+  const invalidate = useInvalidateReportTemplates();
   return useMutation({
-    mutationFn: ({ id, ...body }: TripReportTemplateWrite & { id: string }) =>
-      unwrap(api.PUT('/api/v1/trip-report-templates/{id}', { params: { path: { id } }, body })),
+    mutationFn: ({ id, ...body }: ReportTemplateWrite & { id: string }) =>
+      unwrap(api.PUT('/api/v1/report-templates/{id}', { params: { path: { id } }, body })),
     onSuccess: invalidate,
   });
 }
 
-export function useDeleteTripReportTemplate() {
-  const invalidate = useInvalidateTripReportTemplates();
+export function useDeleteReportTemplate() {
+  const invalidate = useInvalidateReportTemplates();
   return useMutation({
     mutationFn: (id: string) =>
-      unwrapVoid(api.DELETE('/api/v1/trip-report-templates/{id}', { params: { path: { id } } })),
+      unwrapVoid(api.DELETE('/api/v1/report-templates/{id}', { params: { path: { id } } })),
     onSuccess: invalidate,
   });
 }
@@ -7694,6 +7790,12 @@ export function useMoveExpedition() {
 export type ExpeditionSharing = components['schemas']['ExpeditionSharingDto'];
 export type ExpeditionSharedRule = components['schemas']['ExpeditionSharedRuleDto'];
 export type ExpeditionShareEntry = components['schemas']['ExpeditionShareEntryWrite'];
+/**
+ * What applying a camp's sharing did: the sharing as it now stands, how many trips took it, the
+ * skipped trips the caller may read, and a bare count of the skipped ones they may not.
+ */
+export type ExpeditionSharingOutcome = components['schemas']['ExpeditionSharingOutcomeDto'];
+export type ExpeditionSkippedTrip = components['schemas']['ExpeditionSkippedTripDto'];
 
 /**
  * What a camp's sharing grants, and how many of its trips carry it.
@@ -7725,7 +7827,10 @@ function useInvalidateExpeditionSharing(expeditionId: string) {
   };
 }
 
-/** Shares the camp: adds and restates one rule per member trip, and never removes. */
+/**
+ * Shares the camp: adds and restates one rule per member trip the caller may administer, and
+ * never removes. The answer says which trips it skipped; a sharing that reached none is refused.
+ */
 export function useApplyExpeditionSharing(expeditionId: string) {
   const invalidate = useInvalidateExpeditionSharing(expeditionId);
   return useMutation({
@@ -7741,8 +7846,9 @@ export function useApplyExpeditionSharing(expeditionId: string) {
 }
 
 /**
- * Carries the camp's sharing onto the trips that joined since it was applied. A trip joining is
- * not covered by itself: coverage is an act somebody performs and the trail records.
+ * Carries the camp's sharing onto the trips it does not reach yet: ones that joined since it
+ * was applied, and ones skipped then whose owners have since delegated. A trip joining is not
+ * covered by itself: coverage is an act somebody performs and the trail records.
  */
 export function useReapplyExpeditionSharing(expeditionId: string) {
   const invalidate = useInvalidateExpeditionSharing(expeditionId);

@@ -33,11 +33,18 @@ vi.mock('../../api/download.ts', () => ({
   TRIP_REPORT_MAP_PART: 'map',
   downloadFile: (...args: unknown[]) => downloadFile(...args),
   downloadFileForm: (...args: unknown[]) => downloadFileForm(...args),
-  tripReportUrl: (id: string, templateId?: string) =>
-    `/api/v1/trip-logs/${id}/report?${templateId ? `templateId=${templateId}` : ''}`,
-  tripReportDownloadUrl: (id: string, templateId?: string) =>
-    `/api/v1/trip-logs/${id}/report/download?${templateId ? `templateId=${templateId}` : ''}`,
+  tripReportUrl: (id: string, templateId?: string, format?: string) =>
+    `/api/v1/trip-logs/${id}/report?${query(templateId, format)}`,
+  tripReportDownloadUrl: (id: string, templateId?: string, format?: string) =>
+    `/api/v1/trip-logs/${id}/report/download?${query(templateId, format)}`,
 }));
+
+/** The query the real builders write: a layout when one was chosen, a format only when it is a PDF. */
+function query(templateId?: string, format?: string): string {
+  return [templateId ? `templateId=${templateId}` : '', format === 'pdf' ? 'format=pdf' : '']
+    .filter(Boolean)
+    .join('&');
+}
 
 vi.mock('../../api/hooks.ts', () => ({
   useTripReportMapSources: () => ({ caves, catalog }),
@@ -82,11 +89,11 @@ beforeEach(() => {
   makePicture.mockReset().mockResolvedValue({ blob: picture, background: { drawn: true, attribution: '© Open Mappers' } });
 });
 
-async function download(subject: TripLogInfo, templateId?: string) {
+async function download(subject: TripLogInfo, templateId?: string, format?: 'docx' | 'pdf') {
   const { result } = renderHook(() => useTripReportDownload());
   let outcome: string | undefined;
   await act(async () => {
-    outcome = await result.current.download(subject, templateId);
+    outcome = await result.current.download(subject, templateId, format);
   });
   return { outcome, result };
 }
@@ -197,6 +204,51 @@ describe('downloading a trip’s write-up', () => {
     expect(failure).toBeInstanceOf(DownloadError);
     expect(downloadFile).not.toHaveBeenCalled();
     expect(result.current.downloading).toBe(false);
+  });
+
+  /**
+   * A write-up asked for as a PDF is the same request with one more word on it: the map is drawn
+   * and sent exactly as for the document, and goes in before the document is laid out.
+   */
+  it('asks for a PDF with the map in it, by the same route and with the same picture', async () => {
+    const { outcome } = await download(trip(), 'layout-7', 'pdf');
+
+    expect(downloadFileForm).toHaveBeenCalledTimes(1);
+    const [url, form] = downloadFileForm.mock.calls[0] as [string, FormData];
+    expect(url).toBe('/api/v1/trip-logs/trip-1/report/download?templateId=layout-7&format=pdf');
+    expect(form.get('map')).toBeInstanceOf(Blob);
+    expect(downloadFile).not.toHaveBeenCalled();
+    expect(outcome).toBe('with-map');
+  });
+
+  it('keeps asking for a PDF when the picture is refused and the document is fetched without it', async () => {
+    downloadFileForm.mockRejectedValue(new DownloadError(400, { code: 'trip_report.map_too_large' }));
+
+    const { outcome } = await download(trip(), undefined, 'pdf');
+
+    expect(downloadFile).toHaveBeenCalledWith('/api/v1/trip-logs/trip-1/report?format=pdf');
+    expect(outcome).toBe('map-refused');
+  });
+
+  /**
+   * A refusal that is about the PDF is not about the picture. Fetching the plain document in its
+   * place would be refused the same way, and the page would report a missing map for what is a
+   * missing converter — so it is thrown, with its code, for the page to word.
+   */
+  it('hands a refusal of the PDF back as that, and does not ask again without the picture', async () => {
+    downloadFileForm.mockRejectedValue(new DownloadError(503, { code: 'report.pdf_no_answer' }));
+    const { result } = renderHook(() => useTripReportDownload());
+
+    let failure: unknown;
+    await act(async () => {
+      failure = await result.current.download(trip(), undefined, 'pdf').catch((error: unknown) => error);
+    });
+
+    expect(failure).toBeInstanceOf(DownloadError);
+    expect((failure as { code?: string }).code).toBe('report.pdf_no_answer');
+    expect(downloadFile).not.toHaveBeenCalled();
+    expect(result.current.downloading).toBe(false);
+    expect(result.current.downloadingFormat).toBeNull();
   });
 
   it('is busy for as long as the download takes, and no longer', async () => {

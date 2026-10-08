@@ -9,6 +9,7 @@ import {
   downloadFileForm,
   tripReportDownloadUrl,
   tripReportUrl,
+  type ReportFormat,
 } from '../../api/download.ts';
 import { useTripReportMapSources, type TripLogInfo } from '../../api/hooks.ts';
 import { documentBasemap, tripReportMapContent } from './tripReportMap.ts';
@@ -89,17 +90,24 @@ function refusedOverThePicture(error: unknown): boolean {
  * Whatever happens to the map, the document is downloaded. A map that cannot be drawn, a
  * background that will not load and a picture the server will not take each end in a file, and
  * the outcome says which, so the page can tell its reader what the file does not hold.
+ *
+ * The format rides along untouched: a write-up asked for as a PDF is the same document with the
+ * same map, laid out by the installation's converter after the picture has gone in. A refusal
+ * that is about the PDF is not about the picture, so it is not answered by fetching the plain
+ * document — it is thrown, for the page to say which of the two it was.
  */
 export function useTripReportDownload() {
   const { t } = useTranslation();
   const sources = useTripReportMapSources();
-  const [downloading, setDownloading] = useState(false);
+  // Which format is on its way, so the page can spin the button that was pressed and not its twin.
+  const [downloading, setDownloading] = useState<ReportFormat | null>(null);
 
   const download = async (
     trip: TripLogInfo,
     templateId?: string,
+    format?: ReportFormat,
   ): Promise<ReportDownloadOutcome> => {
-    setDownloading(true);
+    setDownloading(format ?? 'docx');
     try {
       let picture: TripReportMapPicture | null = null;
       let notMade = false;
@@ -121,23 +129,23 @@ export function useTripReportDownload() {
         const form = new FormData();
         form.append(TRIP_REPORT_MAP_PART, picture.blob, 'map.png');
         try {
-          await downloadFileForm(tripReportDownloadUrl(trip.id, templateId), form);
+          await downloadFileForm(tripReportDownloadUrl(trip.id, templateId, format), form);
           return picture.background.drawn ? 'with-map' : 'with-map-no-background';
         } catch (error) {
           if (!refusedOverThePicture(error)) {
             throw error;
           }
-          await downloadFile(tripReportUrl(trip.id, templateId));
+          await downloadFile(tripReportUrl(trip.id, templateId, format));
           return 'map-refused';
         }
       }
 
-      await downloadFile(tripReportUrl(trip.id, templateId));
+      await downloadFile(tripReportUrl(trip.id, templateId, format));
       return notMade ? 'map-not-made' : 'plain';
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
   };
 
-  return { download, downloading };
+  return { download, downloading: downloading !== null, downloadingFormat: downloading };
 }

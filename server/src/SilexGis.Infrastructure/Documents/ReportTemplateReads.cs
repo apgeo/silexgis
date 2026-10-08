@@ -18,7 +18,7 @@ namespace SilexGis.Infrastructure.Documents;
 public static class ReportTemplateReads
 {
     /// <summary>A layout was named and there is no such layout of that kind.</summary>
-    public const string NotFoundCode = "trip_report_template.not_found";
+    public const string NotFoundCode = "report_template.not_found";
 
     /// <summary>
     /// The layout a write-up should be built in: the one asked for, the one the trip's purpose
@@ -40,11 +40,11 @@ public static class ReportTemplateReads
         // the document under some other layout is the one outcome nobody would be told about.
         if (templateId is { } id)
         {
-            return await db.TripReportTemplates.AsNoTracking()
+            return await db.ReportTemplates.AsNoTracking()
                 .Where(x => x.Id == id && x.Kind == kind).Select(x => x.Body).FirstOrDefaultAsync(ct);
         }
 
-        var stored = await db.TripReportTemplates.AsNoTracking()
+        var stored = await db.ReportTemplates.AsNoTracking()
             .Where(x => x.Kind == kind && (x.IsDefault || (tripTypeId != null && x.TripTypeId == tripTypeId)))
             .Select(x => new { x.Id, x.TripTypeId, x.IsDefault, x.Body })
             .ToListAsync(ct);

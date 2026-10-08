@@ -19,10 +19,11 @@ namespace SilexGis.Api.Features.MapLayers;
 /// map that goes blank on zoom-in reads as the application breaking.
 /// </param>
 /// <param name="InDocuments">
-/// Whether this installation's catalogue says the source's tiles may be copied into a document
-/// the application produces. A client drawing a picture for such a document takes its background
-/// only from a source that says yes; this is the catalogue's answer, published, and never a
-/// guess made from the address.
+/// Whether this installation says the source's tiles may be copied into a document the
+/// application produces: an administrator's decision where one was made, the catalogue's answer
+/// otherwise. A client drawing a picture for such a document takes its background only from a
+/// source that says yes; this is that answer, published, and never a guess made from the
+/// address.
 /// </param>
 public sealed record MapLayerDto(
     long Id, string Name, MapLayerKind LayerKind, string UrlTemplate, string? Options,
@@ -66,7 +67,10 @@ public static class MapLayerEndpoints
             .Select(l => new MapLayerDto(
                 l.Id, l.Name, l.LayerKind, l.UrlTemplate, l.Options,
                 l.Attribution, l.GroupName, l.MinZoom, l.MaxZoom,
-                l.IsBase, l.IsDefault, l.SortOrder, l.InDocuments))
+                l.IsBase, l.IsDefault, l.SortOrder,
+                // The administrator's answer where there is one, the catalogue's otherwise —
+                // spelt out here because it is evaluated in the database.
+                l.InDocumentsChoice ?? l.InDocuments))
             .ToListAsync(ct));
     }
 }

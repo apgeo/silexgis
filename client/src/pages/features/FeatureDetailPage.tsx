@@ -236,6 +236,7 @@ export default function FeatureDetailPage() {
               {canDelete && (
                 <Popconfirm
                   title={t('features.deleteConfirm')}
+                  description={t('features.deleteRestorable')}
                   onConfirm={() => void onDelete()}
                   okButtonProps={{ danger: true }}
                 >

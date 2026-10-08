@@ -53,7 +53,10 @@ A feature can have **parents** — the things that contain it — and **containe
 - One of several parents can be marked **primary**, which is the one breadcrumbs follow.
 - **Containment inherits location protection downwards.** Protect the area and everything
   inside it is protected with it.
-- **Deleting a feature deletes what it contains.** The confirmation says so.
+- **Deleting a feature deletes what it contains.** The confirmation says so — and that nothing
+  is removed: the whole deletion can be undone from
+  [Deleted caves and features](caves-and-entrances.md#deleted-caves-and-features), reached from
+  the button above this list.
 
 Edit parents from the feature's page: *Edit parents → Add parent…*, searching features by
 name.
