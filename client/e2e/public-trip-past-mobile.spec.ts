@@ -2,6 +2,19 @@
 import { join } from 'node:path';
 import { expect, type Locator, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
+import {
+  AT_FIRST_MOMENT,
+  BEFORE_ANY,
+  CAPTION,
+  EXTRAS_TITLE,
+  FIRST_MOMENT,
+  NAMED_STATION,
+  PLACE_NAME,
+  PLAIN_STATION,
+  SECOND_MOMENT,
+  extrasPage,
+  servePublishedExtras,
+} from './publishedReplayExtras.ts';
 
 /**
  * A cave's past trips under a finger.
@@ -451,6 +464,11 @@ test.describe('a cave’s past trips on a phone', () => {
     // The statement that this is the past, and the way back, where the reader is looking.
     await expect(page.getByTestId('public-past-banner')).toBeInViewport({ timeout: 20_000 });
     await expect(page.getByTestId('public-past-banner-what')).toContainText(PAST_TITLE);
+
+    // This cave's installation publishes no photographs and no names of places, as one is
+    // installed: the strip has no row of pictures, and nobody stands under a name.
+    await expect(page.getByTestId('public-past-pictures')).toHaveCount(0);
+    await expect(page.getByTestId('public-trip-place-1')).toHaveCount(0);
 
     // Sized for the finger that is driving them, not for the mouse the desktop run has.
     await fingerSized(page.getByTestId('public-past-back'), 'the way back');
@@ -1114,5 +1132,138 @@ test.describe('a cave’s past trips on a phone', () => {
     await expect(page.getByTestId('public-trip-ended')).toHaveCount(0);
     expect(served.reads.filter((read) => read === served.liveList).length).toBe(1);
     expect(await noSidewaysScroll(page)).toBeLessThanOrEqual(1);
+  });
+});
+
+/**
+ * What an installation may choose to publish beside a replay: the photographs hung on its moments,
+ * and the names the cave gives its places. Neither is published as installed, which is what the
+ * tests above are served; these are served the other answer.
+ */
+test.describe('a replay that came with photographs and named places, on a phone', () => {
+  /** The picture a press opened, drawn over the page. */
+  const opened = (page: Page) => page.locator('.ant-image-preview-img');
+
+  test('photographs stand under the rail at their moment and not before, in a row that scrolls inside the page, and open larger under a tap', async ({
+    page,
+  }) => {
+    const served = await servePublishedExtras(page);
+    await page.setViewportSize(NARROWEST);
+
+    // The party being followed now: somebody at a station the cave has named stands under the
+    // name, with the station kept beneath it.
+    await page.goto(extrasPage());
+    await expect(page.getByTestId('public-trip-place-1')).toHaveText(PLACE_NAME, { timeout: 30_000 });
+    await expect(page.getByTestId('public-trip-place-station-1')).toHaveText(NAMED_STATION);
+    expect(await noSidewaysScroll(page)).toBeLessThanOrEqual(1);
+
+    // A moment of the finished trip before anybody photographed anything: no row, no heading, and
+    // no picture fetched for later.
+    await page.goto(extrasPage(BEFORE_ANY));
+    await expect(page.getByTestId('public-past-banner-what')).toContainText(EXTRAS_TITLE, {
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId('public-past-scrub')).toBeVisible();
+    await expect(page.getByTestId('public-past-pictures')).toHaveCount(0);
+    expect(served.renderings).toEqual([]);
+
+    // The first moment that has any.
+    await page.goto(extrasPage(FIRST_MOMENT));
+    const strip = page.getByTestId('public-past-pictures');
+    await expect(strip).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('public-past-pictures-when')).toContainText('Photographs from');
+    const pictures = strip.getByTestId('public-past-picture');
+    await expect(pictures).toHaveCount(AT_FIRST_MOMENT);
+
+    // Of the party, of somebody the club named, of somebody it did not — who is called what the
+    // party list calls that place — and the gallery's caption where there is one.
+    await expect(pictures.nth(0).getByRole('img')).toHaveAccessibleName('Photograph of this moment');
+    await expect(pictures.nth(0).getByTestId('public-past-picture-who')).toHaveCount(0);
+    await expect(pictures.nth(1).getByRole('img')).toHaveAccessibleName('Photograph of Mircea');
+    await expect(pictures.nth(1).getByTestId('public-past-picture-who')).toHaveText('Mircea');
+    await expect(pictures.nth(1).getByTestId('public-past-picture-caption')).toHaveText(CAPTION);
+    await expect(pictures.nth(2).getByTestId('public-past-picture-who')).toHaveText('Caver 2');
+
+    // Drawn, at the size a thumbnail is given, from the small rendering and not the large one.
+    await strip.scrollIntoViewIfNeeded();
+    const first = pictures.nth(0).getByRole('img');
+    await expect
+      .poll(() => first.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+    const box = (await first.boundingBox())!;
+    expect(Math.round(box.width)).toBe(112);
+    expect(Math.round(box.height)).toBe(84);
+    expect(served.renderings.length).toBeGreaterThan(0);
+    expect(served.renderings.map((url) => url.searchParams.get('size'))).not.toContain('1200');
+    expect(served.renderings.every((url) => url.searchParams.get('token') !== null)).toBe(true);
+
+    // Four pictures are wider than this screen: the row scrolls inside itself, and the page does
+    // not grow sideways for it.
+    const row = strip.locator('.public-past-pictures-row');
+    const overflow = await row.evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(overflow, 'the row holds more than it shows').toBeGreaterThan(0);
+    expect(await noSidewaysScroll(page)).toBeLessThanOrEqual(1);
+    const last = pictures.nth(AT_FIRST_MOMENT - 1);
+    await last.scrollIntoViewIfNeeded();
+    await expect(last).toBeInViewport();
+    expect(await row.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollX)).toBe(0);
+
+    // A tap opens the picture larger, from the large rendering, and it can be put away again.
+    await last.getByRole('img').tap();
+    await expect(opened(page)).toBeVisible();
+    await expect(opened(page)).toHaveAttribute('src', /size=1200/);
+    await expect(opened(page)).toBeInViewport();
+    await page.keyboard.press('Escape');
+    await expect(opened(page)).toHaveCount(0);
+
+    // The person at the named station, in the party list of the replay: the same name over the
+    // same station as on the page of a party being followed.
+    await expect(page.getByTestId('public-trip-place-1')).toHaveText(PLACE_NAME);
+    await expect(page.getByTestId('public-trip-place-station-1')).toHaveText(NAMED_STATION);
+
+    // The next photographed moment replaces the row: one picture, of the person nobody named —
+    // who is at a station the cave gave no name, and so stands under the station alone.
+    await page.goto(extrasPage(SECOND_MOMENT));
+    await expect(pictures).toHaveCount(1, { timeout: 30_000 });
+    await expect(pictures.getByTestId('public-past-picture-who')).toHaveText('Caver 2');
+    await expect(page.getByTestId('public-trip-caver-2')).toContainText(PLAIN_STATION);
+    await expect(page.getByTestId('public-trip-place-2')).toHaveCount(0);
+  });
+
+  test('inside the smallest frame a club may paste, the photographs are in the sheet with the rail, and one opens inside the frame', async ({
+    page,
+  }) => {
+    await servePublishedExtras(page);
+    await page.setViewportSize(SMALLEST_FRAME);
+    await page.goto(extrasPage(FIRST_MOMENT, true));
+    await expect(page.getByTestId('public-past-banner')).toBeVisible({ timeout: 30_000 });
+
+    // The one line the frame keeps has no room for a row of pictures and is given none.
+    await expect(page.getByTestId('public-past-pictures')).toHaveCount(0);
+
+    // They are with the rest of the controls, under the rail they belong to.
+    await page.getByTestId('public-past-controls-open').tap();
+    const sheet = page.getByTestId('public-past-sheet');
+    await expect(sheet.getByTestId('public-past-scrub')).toBeVisible({ timeout: 20_000 });
+    const strip = sheet.getByTestId('public-past-pictures');
+    await expect(strip).toBeVisible();
+    const pictures = strip.getByTestId('public-past-picture');
+    await expect(pictures).toHaveCount(AT_FIRST_MOMENT);
+    await expect(pictures.nth(1).getByTestId('public-past-picture-who')).toHaveText('Mircea');
+
+    // Reached without scrolling the frame sideways, and a finger can get to one.
+    const second = pictures.nth(1).getByRole('img');
+    await second.scrollIntoViewIfNeeded();
+    await expect(second).toBeInViewport();
+    expect(await noSidewaysScroll(page)).toBeLessThanOrEqual(1);
+
+    // Opened larger inside the frame — there is nowhere else for it to open — and put away.
+    await second.tap();
+    await expect(opened(page)).toBeVisible();
+    await expect(opened(page)).toBeInViewport();
+    await page.keyboard.press('Escape');
+    await expect(opened(page)).toHaveCount(0);
+    await expect(strip).toBeVisible();
   });
 });

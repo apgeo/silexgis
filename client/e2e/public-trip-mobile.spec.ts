@@ -162,12 +162,56 @@ test.describe('following a published trip on a phone', () => {
     await expect(page.getByTestId('public-trip-count-out')).toHaveText('1');
     await expect(page.getByTestId('public-trip-count-unheard')).toHaveText('1');
 
+    // An installation that publishes no planned hour — as one is installed — prints no line for one.
+    await expect(page.getByTestId('public-trip-expected')).toHaveCount(0);
+
     // Nothing is reachable only by dragging the page sideways — the failure this layout was
     // written against, and one no assertion about a component's markup can see.
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
+  });
+
+  test('says the hour the party planned to be out by where an installation publishes it, as a plan and only while somebody is underground', async ({
+    page,
+  }) => {
+    const hours = (count: number) => new Date(Date.now() + count * 3_600_000).toISOString();
+    const plan = page.getByTestId('public-trip-expected');
+    await page.setViewportSize(NARROWEST);
+    let served: Record<string, unknown> = envelope({ expectedReturnAt: hours(2) });
+    await page.route('**/api/v1/public/trips/**', (route) => route.fulfill({ json: served }));
+
+    // Ahead: a line under the line that says since when the party is followed, inside the width.
+    await page.goto(`/shared/trips/${TOKEN}`);
+    await expect(plan).toBeVisible({ timeout: 20_000 });
+    await expect(plan).toContainText('Planned out by');
+    const since = (await page.getByTestId('public-trip-since').boundingBox())!;
+    const line = (await plan.boundingBox())!;
+    expect(line.y).toBeGreaterThanOrEqual(since.y);
+    expect(line.x + line.width).toBeLessThanOrEqual(NARROWEST.width);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBeLessThanOrEqual(1);
+
+    // Passed: the same plan in the past tense, and no word about anybody being late.
+    served = envelope({ expectedReturnAt: hours(-1) });
+    await page.goto(`/shared/trips/${TOKEN}`);
+    await expect(plan).toContainText('The plan was to be out by', { timeout: 20_000 });
+    await expect(page.getByTestId('public-trip')).not.toContainText(/overdue|late/i);
+
+    // Over: a trip that is closed says nothing of what was planned for it.
+    served = envelope({
+      state: 'closed',
+      closedAt: minutesAgo(20),
+      armedAt: minutesAgo(300),
+      expectedReturnAt: hours(-1),
+    });
+    await page.goto(`/shared/trips/${TOKEN}`);
+    await expect(page.getByTestId('public-trip-closed')).toBeVisible({ timeout: 20_000 });
+    await expect(plan).toHaveCount(0);
   });
 
   test('offers a reader with no account nothing they cannot reach', async ({ page }) => {

@@ -6,6 +6,17 @@ import { surveyRead, tryAsPerson } from './arrange.ts';
 import { ownContext, test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
+import {
+  AT_FIRST_MOMENT,
+  BEFORE_ANY,
+  CAPTION,
+  EXTRAS_TITLE,
+  FIRST_MOMENT,
+  NAMED_STATION,
+  PLACE_NAME,
+  extrasPage,
+  servePublishedExtras,
+} from './publishedReplayExtras.ts';
 import { settledScreenshot } from './settled.ts';
 
 /**
@@ -981,4 +992,74 @@ test('a visitor watches another party of the cave on the survey of the link they
       await tryAsPerson(page, 'DELETE', `/api/v1/caves/${caveId}`);
     }
   }
+});
+
+/**
+ * What an installation may choose to publish beside a trip, under a mouse: the hour the party
+ * planned to be out by, the names the cave gives its places, the photographs on a replay's
+ * moments.
+ *
+ * <b>Served by the test, unlike everything above.</b> The installation the suite stands up
+ * publishes none of the three — they are off as installed — so the tests above are the proof that
+ * the page prints nothing for them, against a real server. This one is the other side, which no
+ * real answer here can show: the three drawn in a browser at a desk's width.
+ */
+test('where an installation publishes them, a visitor is told the planned hour, reads a place by its name, and sees a replay’s photographs at their moment', async ({
+  page,
+}) => {
+  const inTwoHours = new Date(Date.now() + 2 * 3_600_000).toISOString();
+  const served = await servePublishedExtras(page, { expectedReturnAt: inTwoHours });
+
+  // The party being followed: the plan, said as a plan, and a name over a station.
+  await page.goto(extrasPage());
+  const plan = page.getByTestId('public-trip-expected');
+  await expect(plan).toBeVisible({ timeout: 30_000 });
+  await expect(plan).toContainText('Planned out by');
+  await expect(page.getByTestId('public-trip-place-1')).toHaveText(PLACE_NAME);
+  await expect(page.getByTestId('public-trip-place-station-1')).toHaveText(NAMED_STATION);
+
+  // A replay tells nobody's plan, and before the first photographed moment shows no photograph.
+  await page.goto(extrasPage(BEFORE_ANY));
+  await expect(page.getByTestId('public-past-banner-what')).toContainText(EXTRAS_TITLE, {
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId('public-past-scrub')).toBeVisible();
+  await expect(plan).toHaveCount(0);
+  await expect(page.getByTestId('public-past-pictures')).toHaveCount(0);
+  expect(served.renderings).toEqual([]);
+
+  // At the moment: the row under the rail, each picture drawn and said to be of whom it is of.
+  await page.goto(extrasPage(FIRST_MOMENT));
+  const strip = page.getByTestId('public-past-pictures');
+  await expect(strip).toBeVisible({ timeout: 30_000 });
+  const pictures = strip.getByTestId('public-past-picture');
+  await expect(pictures).toHaveCount(AT_FIRST_MOMENT);
+  await expect(pictures.nth(1).getByTestId('public-past-picture-who')).toHaveText('Mircea');
+  await expect(pictures.nth(1).getByTestId('public-past-picture-caption')).toHaveText(CAPTION);
+  await expect(pictures.nth(2).getByTestId('public-past-picture-who')).toHaveText('Caver 2');
+  const drawn = pictures.nth(1).getByRole('img');
+  await expect(drawn).toHaveAccessibleName('Photograph of Mircea');
+  await expect
+    .poll(() => drawn.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+    .toBe(true);
+  const box = (await drawn.boundingBox())!;
+  expect(Math.round(box.width)).toBe(112);
+  expect(Math.round(box.height)).toBe(84);
+  // Under the rail it belongs to, and inside the page's width.
+  const rail = (await page.getByTestId('public-past-scrub').boundingBox())!;
+  expect(box.y).toBeGreaterThan(rail.y);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    ),
+  ).toBeLessThanOrEqual(1);
+
+  // A press opens it larger, from the large rendering; Escape puts it away.
+  await drawn.click();
+  const opened = page.locator('.ant-image-preview-img');
+  await expect(opened).toBeVisible();
+  await expect(opened).toHaveAttribute('src', /size=1200/);
+  await page.keyboard.press('Escape');
+  await expect(opened).toHaveCount(0);
+  await expect(page.getByTestId('public-trip-place-1')).toHaveText(PLACE_NAME);
 });
