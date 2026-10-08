@@ -309,6 +309,10 @@ export const queryKeys = {
   // for the same reason as the kept list: every write to the log changes it.
   tripTrackingReportsHeldOf: (id: string, caverId: string) =>
     ['trip-logs', 'tracking-events', id, 'held-of', caverId] as const,
+  // What the log says about each person's entry and exit, beside the roster. Under the log's
+  // prefix because it is read off the log: a report recorded, corrected or taken off changes it.
+  tripTrackingRosterTimes: (id: string, timeZone: string) =>
+    ['trip-logs', 'tracking-events', id, 'roster-times', timeZone] as const,
   tripTrackingShares: (id: string) => ['trip-logs', 'tracking-shares', id] as const,
   // Every published link of the installation, for its administrators. Under the trips' prefix on
   // purpose: a status is read off a trip's watch and its links, so anything that writes a trip or
@@ -8472,6 +8476,10 @@ export type TrackingCsvPreview = components['schemas']['TrackingCsvPreviewDto'];
 export type TrackingCsvPreviewRow = components['schemas']['TrackingCsvPreviewRowDto'];
 export type TrackingCsvDiagnostic = components['schemas']['TrackingCsvDiagnosticDto'];
 export type CaveDepthPlace = components['schemas']['CaveDepthPlaceDto'];
+export type TrackingRosterTimes = components['schemas']['TrackingRosterTimesDto'];
+export type TrackingRosterTimesPerson = components['schemas']['TrackingRosterTimesPersonDto'];
+export type TrackingRosterTimesProblem = NonNullable<TrackingRosterTimesPerson['problem']>;
+export type TrackingRosterTimesTake = components['schemas']['TrackingRosterTimesTakeDto'];
 export type TrackingEvent = components['schemas']['TrackingEventDto'];
 export type TrackingRemovedEvent = components['schemas']['TrackingRemovedEventDto'];
 export type TrackedTrip = components['schemas']['TrackedTripDto'];
@@ -9402,6 +9410,79 @@ export function useRemoveTrackingReportsOf() {
         }),
       ),
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * What the trip's log says about when each person went in and came out, on the clocks of the zone
+ * named, beside what the roster holds now. A proposal to review; reading it writes nothing.
+ *
+ * The answer carries the trip's version, which the write that follows is checked against — so a
+ * trip somebody else saved between the review and the press is a refusal. That version does not
+ * move for a time typed on the roster and saved with nothing else, which is why the write also
+ * repeats what the roster was shown to hold for each person.
+ */
+export function useTrackingRosterTimes(
+  tripLogId: string | undefined,
+  timeZone: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.tripTrackingRosterTimes(tripLogId ?? '', timeZone),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-logs/{tripLogId}/tracking/roster-times', {
+          params: { path: { tripLogId: tripLogId! }, query: { timeZone } },
+        }),
+      ),
+    enabled: !!tripLogId && enabled,
+    // Never a held answer: the dialog that asks is opened to act on what the log and the roster
+    // say now, and the version beside the answer has to be the current one.
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+/**
+ * Writes the reviewed times of the people named to the trip's roster — every roster row of each.
+ *
+ * Each person is sent with what they were reviewed with — the pair the log gave, and what the
+ * roster was shown to hold — and the server refuses the whole write when either is no longer so
+ * for one of them.
+ */
+export function useTakeTrackingRosterTimes() {
+  const queryClient = useQueryClient();
+  const invalidateTracking = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      timeZone,
+      people,
+    }: {
+      tripLogId: string;
+      timeZone: string;
+      people: TrackingRosterTimesTake[];
+    }) => {
+      // The version the review itself was read under, and nothing older or newer standing in for
+      // it: the review is what showed the roster's present times.
+      const etag = lastReadETag(`/api/v1/trip-logs/${tripLogId}/tracking/roster-times`);
+      return unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/tracking/roster-times', {
+          params: { path: { tripLogId } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+          body: { timeZone, people },
+        }),
+      );
+    },
+    onSuccess: (_data, variables) => {
+      // The trip itself: its roster is what changed, and its version moved with it, so a trip
+      // page or form still holding the old one has to read again before it can save.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tripLog(variables.tripLogId) });
+      // Hours underground are read off the roster wherever they are totalled.
+      void queryClient.invalidateQueries({ queryKey: ['stats'] });
+      // And the watch, whose read is what carries the trip's version for the next change to it.
+      invalidateTracking(variables.tripLogId);
+    },
   });
 }
 

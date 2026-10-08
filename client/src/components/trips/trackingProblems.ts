@@ -52,6 +52,8 @@ export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'tracking.event_not_found': 'trips.tracking.problems.eventNotFound',
   'tracking.event_not_removed': 'trips.tracking.problems.eventNotRemoved',
   'tracking.no_reports_of_person': 'trips.tracking.problems.noReportsOfPerson',
+  'tracking.roster_times_zone_unknown': 'trips.tracking.problems.rosterTimesZoneUnknown',
+  'tracking.roster_times_changed': 'trips.tracking.problems.rosterTimesChanged',
   'tracking.concurrent_write': 'trips.tracking.problems.concurrentWrite',
   // Publishing. The two refusals are deliberately different things — one is about this caller's
   // rights over the cave, the other about the cave itself — and are worded as two, because the

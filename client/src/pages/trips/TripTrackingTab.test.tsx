@@ -136,6 +136,17 @@ vi.mock('../../components/trips/TrackingPicturesDialog.tsx', () => ({
   },
 }));
 
+// Taking roster times from the log: the dialog reads and writes through hooks of its own and is
+// tested where it lives. Here it is a stand-in that says whose names it was handed.
+vi.mock('../../components/trips/TrackingRosterTimesDialog.tsx', () => ({
+  default: (props: { tripLogId: string; nameOf: (caverId: string) => string; onClose: () => void }) => (
+    <div data-testid="roster-times-dialog" data-trip={props.tripLogId}>
+      {props.nameOf(ANA)}
+      <button type="button" data-testid="roster-times-dialog-close" onClick={props.onClose} />
+    </div>
+  ),
+}));
+
 /**
  * The survey panel, kept as a stand-in for one reason: it holds the only thing on this page that
  * can answer whether the drawing contains the station a report names.
@@ -1123,6 +1134,49 @@ describe('TripTrackingTab', () => {
 
       expect(screen.getByText('Remove every report about Ana Popescu from this trip, for good?')).toBeTruthy();
       expect(screen.getByTestId('remove-reports-of-confirm')).toBeEnabled();
+    });
+  });
+
+  describe('entry and exit times for the roster, from the log', () => {
+    /** The party with one of them reported out, which is what gives the log an exit to offer. */
+    const withSomebodyOut = () =>
+      state({
+        state: 'closed',
+        closedAt: '2026-09-12T15:00:00Z',
+        participants: state().participants.map((person) =>
+          person.caverId === ANA ? { ...person, lastKind: 'exited', in: false, out: true } : person,
+        ),
+      });
+
+    it('is offered once somebody has come out, and opens on this trip with the tab\'s own names', () => {
+      // Nobody is out yet: the log has no exit for anybody, and no button says otherwise.
+      const early = show();
+      expect(screen.getByTestId('trip-tracking-csv-open')).toBeTruthy();
+      expect(screen.queryByTestId('trip-tracking-roster-times-open')).toBeNull();
+      early.unmount();
+
+      trackingQuery.mockReturnValue({ data: withSomebodyOut(), isPending: false, error: null });
+      show();
+      expect(screen.queryByTestId('roster-times-dialog')).toBeNull();
+      fireEvent.click(screen.getByTestId('trip-tracking-roster-times-open'));
+
+      const dialog = screen.getByTestId('roster-times-dialog');
+      expect(dialog.getAttribute('data-trip')).toBe('trip-1');
+      expect(dialog).toHaveTextContent('Ana Popescu');
+
+      fireEvent.click(screen.getByTestId('roster-times-dialog-close'));
+      expect(screen.queryByTestId('roster-times-dialog')).toBeNull();
+    });
+
+    it('is not offered to somebody who may not write the trip', () => {
+      trackingQuery.mockReturnValue({ data: withSomebodyOut(), isPending: false, error: null });
+      const writer = show();
+      expect(screen.getByTestId('trip-tracking-roster-times-open')).toBeTruthy();
+      writer.unmount();
+
+      show(false);
+      expect(screen.getByTestId('trip-tracking-csv-export')).toBeTruthy();
+      expect(screen.queryByTestId('trip-tracking-roster-times-open')).toBeNull();
     });
   });
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
 import {
+  ClockCircleOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
@@ -52,6 +53,7 @@ import TrackingPublicNameDialog from '../../components/trips/TrackingPublicNameD
 import { RemoveReportsOfDialog } from '../../components/trips/RemoveReportsOfDialog.tsx';
 import TrackingHeldReports from '../../components/trips/TrackingHeldReports.tsx';
 import TrackingRemovedReports from '../../components/trips/TrackingRemovedReports.tsx';
+import TrackingRosterTimesDialog from '../../components/trips/TrackingRosterTimesDialog.tsx';
 import TrackingReportForm from '../../components/trips/TrackingReportForm.tsx';
 import TrackingSharePanel from '../../components/trips/TrackingSharePanel.tsx';
 import {
@@ -208,6 +210,8 @@ export default function TripTrackingTab({
   const [correcting, setCorrecting] = useState<TrackingEvent | null>(null);
   /** Whether the sheet-reading dialog is open. */
   const [importing, setImporting] = useState(false);
+  /** Whether the times the log holds are being reviewed for the trip's roster. */
+  const [takingRosterTimes, setTakingRosterTimes] = useState(false);
   const [savingLog, setSavingLog] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   /** Whether the stacked party is ordered by silence rather than as the trip names it. */
@@ -1794,6 +1798,22 @@ export default function TripTrackingTab({
                 {t('trips.tracking.csvImport.open')}
               </Button>
             )}
+            {/* Once somebody has come out, and not before: until then the log has no exit to
+                offer anybody, and a button that opens a table of "no report says they came out"
+                teaches people not to press it. For whoever may write the trip, on a closed watch
+                as much as a running one — it writes the roster, not the log. */}
+            {canEdit && data.participants.some((participant) => participant.out) && (
+              <Tooltip title={t('trips.tracking.rosterTimes.openHint')}>
+                <Button
+                  size={controlSize}
+                  icon={<ClockCircleOutlined />}
+                  onClick={() => setTakingRosterTimes(true)}
+                  data-testid="trip-tracking-roster-times-open"
+                >
+                  {t('trips.tracking.rosterTimes.open')}
+                </Button>
+              </Tooltip>
+            )}
           </Space>
         </Flex>
         {/* How a row is put right — and, on a log whose rows cannot be, why not and what does
@@ -2051,6 +2071,16 @@ export default function TripTrackingTab({
           armedAt={data?.armedAt ?? null}
           teams={data?.teams ?? []}
           onClose={() => setCorrecting(null)}
+        />
+      )}
+
+      {/* Mounted only while it is open, so every opening reads the log and the roster afresh and
+          starts from the ticks that answer gives. */}
+      {canEdit && takingRosterTimes && (
+        <TrackingRosterTimesDialog
+          tripLogId={trip.id}
+          nameOf={named}
+          onClose={() => setTakingRosterTimes(false)}
         />
       )}
 
