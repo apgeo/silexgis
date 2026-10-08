@@ -37,13 +37,13 @@ Apoi **Pornește urmărirea**. Tura arată acum *În urmărire* și se pot înre
   peșterii**, pentru că un nume de stație este o poziție. Încheierea, repornirea și modificarea
   filtrului nu îl cer.
 - **O urmărire pornită se poate muta pe altă ridicare a aceleiași peșteri** — de exemplu o
-  ridicare corectată care sosește în timpul turei — și niciodată pe a altei peșteri: *„Închide
+  ridicare corectată care sosește în timpul turei — și niciodată pe a altei peșteri: *„Încheie
   mai întâi urmărirea"*. Schimbarea ridicării șterge reperul de adâncime și filtrul, pentru că
   numele de stații nu înseamnă nimic, sau înseamnă altceva, în altă ridicare; pagina avertizează
   înainte de salvare.
 - **Încheie urmărirea** când au ieșit toți. Confirmarea spune ce urmează: grupul nu mai este
   urmărit; o pagină publicată spune că tura s-a încheiat și nu o mai arată după ce trece perioada
-  de grație de după închidere. **Jurnalul rămâne însă deschis** — rapoartele pot fi înregistrate,
+  de grație de după încheiere. **Jurnalul rămâne însă deschis** — rapoartele pot fi înregistrate,
   corectate sau șterse și după aceea, așa că nu trebuie terminat totul înainte.
   **Pornește urmărirea din nou** redeschide urmărirea. O urmărire pornită din nou arată ambele
   momente pe cardul de configurare — **Începută prima dată** și **Începută din nou** — așa că
@@ -658,7 +658,7 @@ numește din nou. Coloana
 departe de o pagină care altfel ar numi-o, fără a opri numele pentru tot clubul.
 
 **Un link se încheie singur.** Funcționează cât timp urmărirea este pornită, apoi o perioadă de
-grație după închidere (două zile, implicit) ca cei care urmăresc să poată citi că au ieșit toți,
+grație după încheiere (două zile, implicit) ca cei care urmăresc să poată citi că au ieșit toți,
 și oricum doar până la data arătată de panou (implicit, două săptămâni după ultima zi a turei).
 **Retrage-l** îl încheie imediat. Fiecare link apare ca **Activ**, **Inactiv** sau **Expirat**.
 
@@ -684,7 +684,7 @@ nu este protejată), dar **nu** și o urmărire pornită, așa că linkul unei t
 Linkul deschide o pagină **fără niciun link pe ea** și fără nimic altceva din instalare: numele
 turei, fiecare om cu locul unde a fost raportat ultima dată și când s-a auzit ultima dată de el,
 și ridicarea cu toți desenați pe ea. Se împrospătează singură în fiecare minut cât timp echipa
-este în peșteră, spune *„Această tură s-a încheiat"* după închiderea urmăririi și primește câte o
+este în peșteră, spune *„Această tură s-a încheiat"* după încheierea urmăririi și primește câte o
 filă pentru fiecare hartă scanată, acolo unde ridicarea are.
 
 Pagina spune ce arată, pentru un cititor care nu a mai urmărit niciodată o tură:
@@ -746,7 +746,7 @@ care nu deschide niciuna nu află despre nimeni altcineva, iar pagina nu cere se
 - **Urmărite acum** — fiecare echipă din aceeași peșteră urmărită în acest moment, cu tura
   linkului marcată *Tura acestui link*. Rândul fiecărei alte echipe spune câți dintre oamenii ei
   sunt *În peșteră*, *Ieșit* și *Încă neraportat*, și tabăra din care a plecat, acolo unde are
-  una. O echipă a cărei urmărire tocmai a fost închisă spune *Abia încheiată*, niciodată *În
+  una. O echipă a cărei urmărire tocmai a fost încheiată spune *Abia încheiată*, niciodată *În
   peșteră acum*.
 - **Vezi echipa**, pe rândul unei alte echipe, pune acea echipă pe pagină în locul celei a
   linkului: numele ei în titlu, oamenii ei în listă, marcajele ei pe desen — sub un banner care
@@ -767,9 +767,9 @@ care nu deschide niciuna nu află despre nimeni altcineva, iar pagina nu cere se
   - **La fel de proaspătă ca lista.** Echipa privită este citită odată cu lista, în fiecare
     minut, atât cât este privită — lista nu trebuie să rămână deschisă — iar *Pagină
     împrospătată …* spune atunci cât de veche este lista.
-  - **Se încheie spunând-o.** O echipă privită a cărei urmărire este închisă este anunțată cu
+  - **Se încheie spunând-o.** O echipă privită a cărei urmărire este încheiată este anunțată cu
     *„Tura acestei echipe s-a încheiat"*. Când iese din listă — linkul ei a fost retras, sau a
-    trecut timpul cât o urmărire închisă mai rămâne citibilă — pagina revine la tura linkului,
+    trecut timpul cât o urmărire încheiată mai rămâne citibilă — pagina revine la tura linkului,
     sub o înștiințare care numește echipa care era pe ecran. Nu schimbă niciodată pe tăcute pe
     cine priviți. Alegerea unei ture trecute încheie și ea privirea: câte o echipă pe rând.
 - **Cât de proaspătă este lista.** Cât timp o echipă din ea este în peșteră, lista este citită
@@ -1058,7 +1058,7 @@ Publicarea îi dă unei ture **două durate de viață**, care se încheie separ
 **Pagina proprie a linkului — cât timp echipa este urmărită.** Adresa răspunde cât timp sunt
 adevărate **toate** acestea:
 
-- urmărirea este pornită sau a fost închisă de mai puțin decât perioada de grație (două zile,
+- urmărirea este pornită sau a fost încheiată de mai puțin decât perioada de grație (două zile,
   implicit);
 - data arătată de panoul de publicare nu a trecut (implicit, două săptămâni după ultima zi a
   turei, sau după crearea linkului, dacă aceasta este mai târzie);
@@ -1069,14 +1069,14 @@ Când una nu mai este adevărată, adresa răspunde *„Nimic de arătat pentru 
 cu cuvânt ce răspunde o adresă care nu a existat niciodată. O pagină care era deschisă în acel
 moment păstrează pe ecran ultima echipă primită, sub *„Acest link nu mai răspunde"* și ora la
 care a fost citită ultima dată, până când cititorul o închide. Un link încheiat pentru că
-urmărirea a fost închisă funcționează din nou dacă urmărirea este pornită iar înainte de data
+urmărirea a fost încheiată funcționează din nou dacă urmărirea este pornită iar înainte de data
 linkului; un link **retras** nu mai funcționează niciodată.
 
 **Turele trecute ale peșterii — după ce s-a încheiat.** O tură încheiată este listată și poate
 fi reluată printr-un link către orice tură publicată a aceleiași peșteri. Este acolo cât timp
 sunt adevărate **toate** acestea:
 
-- urmărirea ei este închisă și pagina ei proprie nu mai răspunde (deci nu în perioada de
+- urmărirea ei este încheiată și pagina ei proprie nu mai răspunde (deci nu în perioada de
   grație);
 - cel puțin un link către ea **nu a fost retras** — un link care doar a expirat la dată
   contează în continuare;
@@ -1109,7 +1109,7 @@ acum păstrează textul care invită la o nouă încercare, iar acolo unde și t
 refuzate pagina spune ce spune despre orice link care nu mai răspunde.
 
 **Ce predă o tură trecută.** În listă: numele ei, datele ei, tabăra din care a făcut parte, câți
-au fost în ea și când i-a fost închisă urmărirea. În reluare: echipa, rapoartele cu orele lor
+au fost în ea și când i-a fost încheiată urmărirea. În reluare: echipa, rapoartele cu orele lor
 și ridicarea pe care au fost măsurate. **La publicarea unei ture nu se copiază nimic** —
 reluarea este citită de fiecare dată din jurnalul de urmărire al turei. Așadar oamenii sunt
 numiți după regula în vigoare *astăzi* (o etichetă adăugată acum ține numele acelei persoane în
@@ -1166,6 +1166,20 @@ Stările sunt calculate de server, după chiar regulile după care sunt servite 
 tabelului sunt ale întregii instalări, lista poate fi restrânsă la o singură stare, iar
 majoritatea coloanelor se pot ordona. Apăsați **Reîncarcă** înainte de a acționa pe o
 listă care a stat deschisă o vreme.
+
+**Pe ce se sprijină stările.** *Abia încheiată* și *În arhivă* sunt perioade, iar cât ține
+fiecare este o setare a instalării. Sub rândul care spune de când sunt stările, pagina tipărește
+o singură dată setările, așa cum le are serverul: după cât timp de la ultima zi a turei expiră
+singur un link; cât ține *Abia încheiată* după încheierea urmăririi (sau că nu se folosește,
+acolo unde instalarea nu lasă o asemenea perioadă); cât rămâne o tură terminată *În arhivă*,
+sau că nu există limită; cât timp mai arată un link vechi echipele urmărite acum în peștera
+lui; și câte cereri pe minut poate face o adresă către paginile publicate. Rândul despre un
+link vechi este formulat și după setările arhivei, nu numai după a lui, pentru că un asemenea
+link arată echipele de astăzi doar cât timp tura lui mai este în arhivă: unde turele trecute
+sunt oprite, spune că un link vechi nu arată nicio echipă, iar unde arhiva ține o tură un timp
+stabilit, spune că lista nu ține niciodată mai mult decât atât. Din această pagină
+nu se setează nimic — valorile se schimbă acolo unde este configurată instalarea, iar ghidul
+de instalare numește fiecare setare.
 
 **Urmăriri lăsate pornite.** Urmărirea unei ture nu este încheiată decât de un om — aplicația nu
 hotărăște niciodată singură că o echipă a ieșit. Reversul este că o urmărire uitată rămâne
@@ -1293,7 +1307,7 @@ instalare](../../../INSTALL.md#when-a-published-page-or-the-article-showing-it-s
 | Vedeți | De ce |
 |---|---|
 | *„Urmărirea nu a fost pornită niciodată pentru această tură, așa că jurnalul ei nu poate fi modificat."* | Porniți întâi urmărirea; o urmărire încheiată este în regulă |
-| *„Acea ridicare aparține altei peșteri…"* | O urmărire pornită rămâne în peștera ei — închideți-o întâi |
+| *„Acea ridicare aparține altei peșteri…"* | O urmărire pornită rămâne în peștera ei — încheiați-o întâi |
 | *„Nicio stație nu corespunde acelei adâncimi sub filtrul acestei ture…"* | Lărgiți **Unde a spus echipa că merge** sau raportați o stație |
 | *„Un raport nu poate fi despre viitor."* | Verificați ora de pe el |
 | *„Serverul nu a răspuns — raportul nu a fost încă trimis. Este păstrat în acest browser…"* | Nu este un refuz: serverul nu a putut fi contactat, iar raportul este păstrat ca să fie trimis când revine conexiunea — vedeți *Raportarea fără semnal* |

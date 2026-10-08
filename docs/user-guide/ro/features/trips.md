@@ -136,6 +136,15 @@ Fiecare persoană poate purta **orele proprii** (lăsate goale, se aplică orele
 proprie** — *întors de la capul puțului* — ca nimeni să nu inventeze o funcție pentru a înregistra
 o împrejurare.
 
+**Lista este salvată întreagă, deci doi oameni nu o pot salva unul peste altul.** Formularul
+turei trimite toți participanții, cu funcțiile, orele și notele lor, așa cum îi arată
+formularul. Dacă altcineva a salvat o modificare a listei cât ați avut formularul deschis — o
+persoană adăugată sau scoasă, o funcție, o oră, o notă, sau orele scrise din jurnalul de
+urmărire — salvarea dumneavoastră este refuzată, la fel ca atunci când s-a schimbat orice
+altceva la tură: *„Altcineva a modificat acest element de când l-ați încărcat. Reîncărcați și
+reaplicați modificările."* Nimic din ce ați completat nu a fost scris și nimic din ce a salvat
+celălalt nu s-a pierdut. O salvare care nu schimbă nimic în listă nu refuză pe nimeni.
+
 > Acel detaliu face parte din tură și **nu merge mai departe decât merge tura**. Nu puteți căuta
 > turele pe care le-a condus cineva: aceasta este o întrebare despre o persoană, asamblată din
 > înregistrări pe care cel care întreabă s-ar putea să nu aibă niciodată voie să le citească.

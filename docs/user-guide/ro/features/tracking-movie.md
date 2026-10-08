@@ -160,7 +160,7 @@ presetare, cât și după o revenire la valorile implicite.
 | | **Culoarea marcajelor** | Automat (după echipă pentru o tură, după tură pentru mai multe), după tură, după echipă sau o singură culoare |
 | | **Arată speologii care au ieșit** | Dacă cineva raportat ca ieșit rămâne în imagine |
 | | **Traseul parcurs** | O linie în urma fiecărui marcaj |
-| **Vedere** | Straturile ridicării, **Relieful de deasupra peșterii**, **Colorare**, **Cameră**, **Grosimea liniilor**, **Scara verticală** | Ce se desenează din ridicare și cum. Un strat pe care ridicarea nu îl are este gri; colorările după adâncime au nevoie de o ridicare care stă pe teren real |
+| **Vedere** | Straturile ridicării, **Relieful de deasupra peșterii**, **Colorare**, **Cameră**, **Grosimea liniilor**, **Scara verticală** | Ce se desenează din ridicare și cum. Un strat pe care ridicarea nu îl are este gri; colorările după adâncime au nevoie de o ridicare care stă pe relief real |
 | **Texte** | **Titlu**, **Ceas**, **Factor de accelerare**, **Legendă**, **Bară de progres**, **Ultima notă**, **Mărimea textelor** | Ce se scrie peste imagine |
 
 **Revino la valorile implicite** stă sub presetări și nu este una dintre ele: readuce *fiecare*
@@ -209,7 +209,28 @@ este ținută minte în acest browser, iar o presetare nu o atinge.
 dumneavoastră, iar dialogul întreabă browserul ce poate scrie la dimensiunea și ritmul alese.
 Când nu poate, formatul este dezactivat și spune de ce: *„Acest browser nu poate scrie MP4 la
 1920 × 1080, cu 30 cadre/s."* — o dimensiune mai mică sau un ritm mai scăzut pot fi acceptate —
-sau *„Acest browser nu are un codor video, așa că aici se poate face doar un GIF."*
+sau *„Acest browser nu are un codor video, așa că aici se poate face doar un GIF."* Propoziția
+aceasta este tot ce se întâmplă: nimic nu este raportat ca eroare, iar celelalte formate rămân
+cum erau.
+
+### În ce browsere se poate face un film
+
+**GIF-ul este oferit în orice browser.** Îl scrie aplicația însăși și nu cere browserului
+decât vederea 3D cu care este desenată previzualizarea. **Cele două formate video depind de
+browser**, iar dialogul nu se ia după numele browserului: îl întreabă pe cel pe care îl
+folosiți ce poate scrie codorul lui, de fiecare dată când se schimbă dimensiunea sau ritmul,
+și oferă exact atât.
+
+| Browser | Ce primiți |
+|---|---|
+| **Chrome, Edge și celelalte browsere construite pe Chromium** | GIF, WebM și MP4 — acceptate la toate dimensiunile încercate, de la 320 × 180 cu 10 cadre/s la 1920 × 1080 cu 30. Aici este testat filmul de la un capăt la altul, cu fișierele redate chiar de browser |
+| **Un browser al cărui codor video nu acceptă nimic** — varianta de Linux a motorului WebKit încercată aici este una: are un codor și a refuzat ambele formate la orice dimensiune, de la 320 × 180 la 1920 × 1080 | GIF. WebM și MP4 sunt gri, fiecare cu propoziția lui — *„Acest browser nu poate scrie WebM la 640 × 360, cu 10 cadre/s."* — iar alegerea altei dimensiuni schimbă cifrele din propoziție, nu răspunsul |
+| **Un browser fără niciun codor video** | GIF, și singura propoziție *„Acest browser nu are un codor video, așa că aici se poate face doar un GIF."* |
+| **Safari pe Mac sau pe iPhone, și Firefox** | Neîncercate de acest proiect. Li se pune aceeași întrebare ca oricărui alt browser: ce răspund că pot scrie este oferit, iar ce nu pot este gri, cu motivul lui |
+
+Așadar, dacă aveți nevoie de un video și formatul lui este gri la orice dimensiune, cauza este
+browserul și un film mai mic nu schimbă nimic: faceți video-ul într-un browser construit pe
+Chromium, sau trimiteți GIF-ul.
 
 **Mărimea este o estimare.** Sub setări dialogul spune *„Cadre: 300 · aproximativ 2,7 MB"*.
 Pentru un video cifra este ținta codorului și este de obicei apropiată. Pentru un GIF este o
@@ -337,7 +358,8 @@ Părăsirea paginii sau închiderea filei încheie și ea un export; nu se salve
 | *„Nu este nimic de reluat"* pe rândul unei ture | Urmărirea ei nu acoperă niciun interval de timp |
 | *„Jurnalul nu a putut fi citit"* | Jurnalul unei ture alese s-a întors incomplet; filmul refuză un jurnal parțial, la fel ca reluarea din tură. Debifați tura, sau închideți și încercați din nou |
 | Un format gri | Browserul dumneavoastră nu îl poate scrie la această dimensiune și la acest ritm — vedeți [Ce format](#ce-format) |
-| *„Filmul nu a putut fi făcut."* | Codorul a eșuat; linia de sub mesaj spune în ce etapă. Încercați o dimensiune mai mică sau alt format |
+| *„Filmul nu a putut fi făcut."* | Codorul a eșuat; linia de sub mesaj spune în ce etapă. Încercați o dimensiune mai mică sau alt format. Mesajul rămâne până îl închideți din **X**-ul lui sau porniți alt export |
+| *„Browserul nu a dat o suprafață de desen pe care să fie alcătuit cadrul…"* sub acel titlu, sau sub *„Imaginea nu a putut fi făcută."* | Browserul a refuzat suprafața pe care este alcătuit un cadru, de obicei pentru că a rămas fără memorie grafică. Închideți alte file sau reîncărcați pagina, cum spune propoziția |
 
 ---
 

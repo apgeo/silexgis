@@ -1121,6 +1121,20 @@ by — the list cannot say *Followed now* about an address that answers nothing.
 above the table are of the whole installation, the list can be narrowed to one status, and
 most columns sort. Press **Refresh** before acting on a list that has been open for a while.
 
+**What the statuses rest on.** *Just closed* and *In the archive* are periods, and how long
+each lasts is a setting of the installation. Under the line that says when the statuses were
+decided, the page prints the settings as the server holds them, once: how long after its
+trip's last day a link runs out by itself; how long *Just closed* lasts after tracking is
+closed (or that it is not used, where the installation allows no such period); how long a
+finished trip stays *In the archive*, or that there is no limit; how long an old link goes on
+listing the parties tracked in its cave now; and how many requests one address may make to
+the published pages in a minute. The line about an old link is worded from the archive's
+settings as well as its own, because such a link lists today's parties only while its own trip
+is still in the archive: where past trips are switched off it says that an old link lists
+nobody, and where the archive keeps a trip for a set time it says that the list never outlasts
+that. Nothing is set from this page — the figures are changed
+where the installation is configured, and the installation guide names each setting.
+
 **Tracking left running.** Nothing closes a trip's tracking but a person — the application
 never decides by itself that a party is out. The other side of that is that tracking somebody
 forgot runs for ever: the party stays on its published page as still underground, and once the

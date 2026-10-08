@@ -203,7 +203,26 @@ this browser, and a preset does not touch it.
 and the dialog asks the browser what it can write at the chosen size and rate. When it cannot,
 the format is disabled and says why: *"This browser cannot write MP4 at 1920 × 1080, 30 frames a
 second"* — a smaller size or a lower rate may be accepted — or *"This browser has no video
-encoder, so only a GIF can be made here."*
+encoder, so only a GIF can be made here."* That sentence is all that happens: nothing is
+reported as an error, and the other formats stay as they were.
+
+### Which browsers can make a film
+
+**Every browser is offered the GIF.** It is written by the application itself and asks nothing
+of the browser but the 3D view the preview is drawn with. **The two video formats depend on
+the browser**, and the dialog does not go by the browser's name: it asks the one you are using
+what its encoder will write, each time the size or the rate changes, and offers exactly that.
+
+| Browser | What you get |
+|---|---|
+| **Chrome, Edge and the other browsers built on Chromium** | GIF, WebM and MP4 — accepted at every size tried, from 320 × 180 at 10 frames a second to 1920 × 1080 at 30. This is where the movie is tested from end to end, the files played back by the browser itself |
+| **A browser whose video encoder accepts nothing** — the Linux build of the WebKit engine tried here is one: it has an encoder and it refused both formats at every size, from 320 × 180 to 1920 × 1080 | GIF. WebM and MP4 are greyed out, each with its sentence — *"This browser cannot write WebM at 640 × 360, 10 frames a second"* — and choosing another size changes the figures in the sentence, not the answer |
+| **A browser with no video encoder at all** | GIF, and the one sentence *"This browser has no video encoder, so only a GIF can be made here."* |
+| **Safari on a Mac or an iPhone, and Firefox** | Not tried by this project. They are asked the same question as every other browser: what they answer they can write is offered, and what they cannot is greyed out with its reason |
+
+So if a video is what you need and its format is grey at every size, the browser is the reason
+and a smaller movie will not change it: make the video in a browser built on Chromium, or send
+the GIF.
 
 **The size is an estimate.** Under the settings the dialog says *"300 frames · about 2.7 MB"*.
 For a video the figure is the encoder's target and is usually close. For a GIF it is a guess
@@ -328,7 +347,8 @@ Leaving the page, or closing the tab, also ends an export; nothing is saved.
 | *"There is nothing to replay"* on a trip's row | Its tracking covers no stretch of time |
 | *"The log could not be read"* | A chosen trip's log came back incomplete; the movie refuses a partial log, as the trip's own replay does. Untick the trip, or close and try again |
 | A format greyed out | Your browser cannot write it at this size and rate — see [Which format](#which-format) |
-| *"The movie could not be made."* | The encoder failed; the line under it says at which stage. Try a smaller size, or another format |
+| *"The movie could not be made."* | The encoder failed; the line under it says at which stage. Try a smaller size, or another format. The notice stays until you close it with its **X**, or start another export |
+| *"The browser gave no drawing surface to compose it on…"* under that heading, or under *"The picture could not be made."* | The browser refused the canvas a frame is put together on, usually because it is short of graphics memory. Close other tabs or load the page again, as the sentence says |
 
 ---
 

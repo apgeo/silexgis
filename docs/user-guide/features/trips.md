@@ -136,6 +136,14 @@ Each person can carry **their own entry and exit times** (left blank, the trip's
 and **a note of their own** — *turned back at the pitch head* — so nobody has to invent a job
 to record a circumstance.
 
+**The list is saved whole, so two people cannot save it over each other.** The trip's form
+sends everybody on the trip with their jobs, times and notes, as the form shows them. If
+somebody else saved a change to that list while you had the form open — a person added or
+taken off, a job, a time, a note, or the times written from the tracking log — your save is
+refused, as it is when they changed anything else on the trip: *"Someone else changed this
+since you loaded it. Reload and reapply your changes."* Nothing of yours has been written and
+nothing of theirs was lost. A save that changes nothing on the list refuses nobody.
+
 > That detail is part of the trip and **goes no further than the trip does**. You cannot
 > search for the trips somebody led: that is a question about a person, assembled out of
 > records the asker may never be allowed to read.
