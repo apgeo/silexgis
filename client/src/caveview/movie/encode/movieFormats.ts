@@ -3,6 +3,8 @@
 // The shapes every movie encoder shares. They live apart from the facade so that each encoder can
 // implement them without importing the facade that opens it.
 
+import type { MovieSink } from './movieSink.ts';
+
 export type MovieFormat = 'gif' | 'webm' | 'mp4';
 export type MovieQuality = 'low' | 'medium' | 'high';
 
@@ -39,6 +41,14 @@ export interface MovieEncoderOptions {
   quality: MovieQuality;
   /** '#rrggbb' colours a GIF must reproduce exactly (marker, plate and caption colours). */
   reservedColors?: readonly string[];
+  /**
+   * Where a video's file is written as it is encoded, instead of being held in memory until it is
+   * finished. An encoder given one needs `frameCount` too, and is ended with `finishInSink`; it
+   * only writes to the sink, and never closes or aborts it. A GIF encoder takes no sink.
+   */
+  sink?: MovieSink;
+  /** How many frames the movie will have, which a sink's writer sizes the file's front from. */
+  frameCount?: number;
 }
 
 export interface MovieEncoder {
@@ -52,6 +62,13 @@ export interface MovieEncoder {
    *  1/fps. A frame identical to the previous one may be merged into it (longer delay/duration). */
   addFrame(source: HTMLCanvasElement | OffscreenCanvas, index: number): Promise<void>;
   finish(): Promise<Blob>;
+  /**
+   * On an encoder opened with a sink, in place of `finish`: writes what is left of the file to the
+   * sink and resolves once every byte of it is there. Rejects with a `MovieSinkMismatch` when the
+   * file could not be given the bytes it would have had in memory. Absent on an encoder that
+   * cannot write as it goes.
+   */
+  finishInSink?(): Promise<void>;
   /** Releases workers / encoders. Idempotent; safe mid-run (that is how cancel works). */
   close(): void;
 }

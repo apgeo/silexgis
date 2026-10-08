@@ -34,9 +34,27 @@ export function mp4MediaTimescale(fps: number): number {
   return Math.round(fps * TICKS_PER_FRAME);
 }
 
+/** What the file's front needs to know of a frame: everything but its bytes. */
+export interface Mp4Sample {
+  size: number;
+  timestamp: number;
+  duration: number;
+  key: boolean;
+}
+
 /** The whole MP4 file, as parts to be joined in order. */
 export function muxMp4(track: Mp4Track, frames: readonly EncodedVideoFrame[]): Uint8Array[] {
   checkFrameOrder(frames);
+  const samples = frames.map((f) => ({ size: f.data.byteLength, timestamp: f.timestamp, duration: f.duration, key: f.key }));
+  return [...mp4Head(track, samples), ...frames.map((f) => f.data)];
+}
+
+/**
+ * Everything in the file before its first frame: the file type, the index and the header of the
+ * box the frames are in. It is a function of the frames' sizes and times alone — not of their
+ * bytes — which is what lets a file written as it is encoded have this part written last.
+ */
+export function mp4Head(track: Mp4Track, frames: readonly Mp4Sample[]): Uint8Array[] {
   if (track.avcC.byteLength < 7) throw new Error('the H.264 decoder configuration is missing or too short');
   const timescale = mp4MediaTimescale(track.fps);
   const ticks = (us: number) => Math.round((us * timescale) / 1e6);
@@ -49,7 +67,7 @@ export function muxMp4(track: Mp4Track, frames: readonly EncodedVideoFrame[]): U
   const mediaDuration = durations.reduce((a, b) => a + b, 0);
   const movieDuration = Math.round((mediaDuration * MOVIE_TIMESCALE) / timescale);
 
-  const dataSize = frames.reduce((n, f) => n + f.data.byteLength, 0);
+  const dataSize = frames.reduce((n, f) => n + f.size, 0);
   const ftyp = box('ftyp', [fourCC('isom'), u32(0x200), fourCC('isom'), fourCC('iso2'), fourCC('avc1'), fourCC('mp41')]);
   const mdatHeader = mdatHeaderFor(dataSize);
 
@@ -68,16 +86,16 @@ export function muxMp4(track: Mp4Track, frames: readonly EncodedVideoFrame[]): U
   let at = ftyp.byteLength + moovSize + mdatHeader.byteLength;
   for (const f of frames) {
     offsets.push(at);
-    at += f.data.byteLength;
+    at += f.size;
   }
   const index = build(offsets, wide);
   if (byteLength(index) !== moovSize) throw new Error('the index changed size once its offsets were written');
-  return [ftyp, ...index, mdatHeader, ...frames.map((f) => f.data)];
+  return [ftyp, ...index, mdatHeader];
 }
 
 function moov(
   track: Mp4Track,
-  frames: readonly EncodedVideoFrame[],
+  frames: readonly Mp4Sample[],
   durations: readonly number[],
   timescale: number,
   mediaDuration: number,
@@ -90,7 +108,7 @@ function moov(
     box('stts', [fullHeader(0, 0), ...timeToSample(durations)]),
     box('stss', [fullHeader(0, 0), u32(frames.filter((f) => f.key).length), ...syncSamples(frames)]),
     box('stsc', [fullHeader(0, 0), u32(1), u32(1), u32(1), u32(1)]),
-    box('stsz', [fullHeader(0, 0), u32(0), u32(frames.length), ...frames.map((f) => u32(f.data.byteLength))]),
+    box('stsz', [fullHeader(0, 0), u32(0), u32(frames.length), ...frames.map((f) => u32(f.size))]),
     wide
       ? box('co64', [fullHeader(0, 0), u32(offsets.length), ...offsets.map(u64)])
       : box('stco', [fullHeader(0, 0), u32(offsets.length), ...offsets.map(u32)]),
@@ -173,7 +191,7 @@ function timeToSample(durations: readonly number[]): Uint8Array[] {
   return [u32(runs.length), ...runs.flatMap(([count, delta]) => [u32(count), u32(delta)])];
 }
 
-function syncSamples(frames: readonly EncodedVideoFrame[]): Uint8Array[] {
+function syncSamples(frames: readonly Mp4Sample[]): Uint8Array[] {
   const out: Uint8Array[] = [];
   frames.forEach((f, i) => {
     if (f.key) out.push(u32(i + 1)); // sample numbers count from one
@@ -233,13 +251,13 @@ function cString(s: string): Uint8Array {
   return concat([new TextEncoder().encode(s), new Uint8Array(1)]);
 }
 
-function byteLength(parts: readonly Uint8Array[]): number {
+export function byteLength(parts: readonly Uint8Array[]): number {
   let n = 0;
   for (const p of parts) n += p.byteLength;
   return n;
 }
 
-function concat(parts: readonly Uint8Array[]): Uint8Array {
+export function concat(parts: readonly Uint8Array[]): Uint8Array {
   const out = new Uint8Array(byteLength(parts));
   let o = 0;
   for (const p of parts) {

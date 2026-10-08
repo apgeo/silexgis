@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import type { CaveViewer, CaveViewLabelText, CaveViewLiveMarker, CaveViewRef } from '../loadCaveView.ts';
 import { syncLiveMarkers, type DrawnMarker } from '../liveMarkerSync.ts';
 import { openMovieEncoder, type MovieEncoder } from './encode/movieEncoder.ts';
+import { isMovieSinkMismatch, type MovieSink } from './encode/movieSink.ts';
 import { drawMovieCaptions, movieCaptionColors, movieCaptionsAt } from './movieCaptions.ts';
 import { movieParty, type MovieParty, type MovieTripData } from './movieParty.ts';
 import { movieSize, type MovieSettings } from './movieSettings.ts';
@@ -320,6 +321,60 @@ function compositeCanvas(
  * with an `AbortError` when `signal` is aborted — in every case after the viewer has been put back.
  */
 export async function recordMovie(recording: MovieRecording): Promise<Blob> {
+  const file = await record(recording, null);
+  if (file === null) {
+    throw new Error('The movie was recorded without a file to answer.');
+  }
+  return file;
+}
+
+/**
+ * Records the movie into `sink` as it is encoded, where `recordMovie` would hold it in memory.
+ *
+ * Answers null once the whole file is in the sink and the sink is closed. The sink is this
+ * function's from the call on: on every other way out — a cancel, a failure, a viewer that could
+ * not be put back — it has been aborted, so nothing half-written is left behind, before the promise
+ * settles.
+ *
+ * Answers the file itself where it could not be written as it was encoded with the bytes it has in
+ * memory (see `MovieSinkMismatch`), or where the encoder takes no sink: the sink is aborted and the
+ * movie is made in memory, a second time through in the first case. The caller then saves it as it
+ * saves any other.
+ */
+export async function recordMovieToSink(recording: MovieRecording, sink: MovieSink): Promise<Blob | null> {
+  let file: Blob | null;
+  try {
+    file = await record(recording, sink);
+    if (file === null) {
+      // The last moment a cancel can still take the file back.
+      if (recording.signal?.aborted) {
+        throw aborted();
+      }
+      await sink.close();
+      return null;
+    }
+  } catch (error) {
+    await discard(sink);
+    if (!isMovieSinkMismatch(error) || recording.signal?.aborted) {
+      throw error;
+    }
+    return record(recording, null);
+  }
+  await discard(sink);
+  return file;
+}
+
+/** Aborts a sink whose export is over. A sink that cannot even be aborted has nothing more to say:
+ *  the export's own outcome is the one the reader is owed. */
+async function discard(sink: MovieSink): Promise<void> {
+  try {
+    await sink.abort();
+  } catch {
+    // Nothing to add to what the export itself reports.
+  }
+}
+
+async function record(recording: MovieRecording, sink: MovieSink | null): Promise<Blob | null> {
   const {
     settings,
     signal,
@@ -345,6 +400,7 @@ export async function recordMovie(recording: MovieRecording): Promise<Blob> {
     fps: frames.fps,
     quality: settings.quality,
     reservedColors: movieCaptionColors(),
+    ...(sink ? { sink, frameCount: frames.count } : {}),
   });
 
   const stage = movieStage(recording, frames, { width, height });
@@ -360,7 +416,7 @@ export async function recordMovie(recording: MovieRecording): Promise<Blob> {
     return failures;
   };
 
-  let file: Blob;
+  let file: Blob | null;
   try {
     // A cancel that arrived while the encoder was opening still closes it.
     checkAborted();
@@ -399,7 +455,12 @@ export async function recordMovie(recording: MovieRecording): Promise<Blob> {
     }
 
     onProgress?.({ stage: 'finishing', done, total, step: frames.count, steps: frames.count });
-    file = await encoder.finish();
+    if (sink && encoder.finishInSink) {
+      await encoder.finishInSink();
+      file = null;
+    } else {
+      file = await encoder.finish();
+    }
     checkAborted();
   } catch (error) {
     // A step of putting back that fails is not reported here: the recording's own failure is the

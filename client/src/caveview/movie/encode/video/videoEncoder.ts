@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { avcDecoderConfig } from '../mp4/avcConfig.ts';
 import { muxMp4 } from '../mp4/mp4Muxer.ts';
+import { Mp4SinkWriter } from '../mp4/mp4SinkWriter.ts';
+import { isMovieSinkMismatch, type MovieFramePlan, type MovieSink } from '../movieSink.ts';
 import {
   MOVIE_MIME,
   movieEncoderError,
@@ -9,6 +11,7 @@ import {
   type MovieQuality,
 } from '../movieFormats.ts';
 import { muxWebm } from '../webm/webmMuxer.ts';
+import { WebmSinkWriter } from '../webm/webmSinkWriter.ts';
 import type { EncodedVideoFrame } from './encodedFrame.ts';
 
 /**
@@ -18,6 +21,11 @@ import type { EncodedVideoFrame } from './encodedFrame.ts';
  * Every frame is stamped with the time its index says — index / fps — never with the moment it was
  * rendered, so a slow render makes a slow export and never an uneven movie. The browser encodes
  * off this thread; the frames it hands back are kept (compressed) until `finish` writes the file.
+ *
+ * Opened with a sink, the encoder instead hands each frame on to a writer that puts it in the sink
+ * as it arrives, and keeps none: a long movie then takes the memory of its newest stretch, not of
+ * its whole length. `addFrame` waits for those writes as it waits for the browser's encoder, so a
+ * slow disk slows the export down and nothing piles up.
  *
  * Which codec is used is asked, not assumed: an encoder that exists may still support nothing
  * (WebKit's test build does exactly that), and H.264 support differs between builds.
@@ -142,6 +150,9 @@ export async function openVideoEncoder(format: VideoMovieFormat, options: MovieE
   if (!codec) {
     throw movieEncoderError(format, 'open', `this browser cannot encode it at ${width}×${height}, ${fps} frames a second`);
   }
+  if (options.sink && !(Number.isInteger(options.frameCount) && (options.frameCount ?? 0) > 0)) {
+    throw movieEncoderError(format, 'open', 'a file written as it is encoded needs the number of frames beforehand');
+  }
   try {
     return new VideoMovieEncoder(format, codec, options);
   } catch (e) {
@@ -160,6 +171,13 @@ export class VideoMovieEncoder implements MovieEncoder {
   private readonly fps: number;
   private readonly keyInterval: number;
   private frames: EncodedVideoFrame[] = [];
+  /** Frames the browser has handed back, whether they were kept or written to the sink. */
+  private taken = 0;
+  private readonly sink: MovieSink | null;
+  private readonly plan: MovieFramePlan;
+  private writer: WebmSinkWriter | Mp4SinkWriter | null = null;
+  /** The writes to the sink, one after another; it never rejects — a failed write fails the encoder. */
+  private writes: Promise<void> = Promise.resolve();
   private description: Uint8Array | null = null;
   private nextIndex = 0;
   private failure: Error | null = null;
@@ -173,6 +191,12 @@ export class VideoMovieEncoder implements MovieEncoder {
     this.height = options.height;
     this.fps = options.fps;
     this.keyInterval = Math.max(1, Math.round(VIDEO_KEYFRAME_SECONDS * options.fps));
+    this.sink = options.sink ?? null;
+    this.plan = {
+      count: options.frameCount ?? 0,
+      timestamp: (index) => this.timeOf(index),
+      key: (index) => this.keyAsked(index),
+    };
     this.encoder = new VideoEncoder({
       output: (chunk, metadata) => this.take(chunk, metadata),
       error: (e) => this.fail('encode', e),
@@ -182,7 +206,7 @@ export class VideoMovieEncoder implements MovieEncoder {
 
   /** Frames the browser has handed back so far. */
   get encodedFrames(): number {
-    return this.frames.length;
+    return this.taken;
   }
 
   async prime(): Promise<void> {
@@ -197,7 +221,7 @@ export class VideoMovieEncoder implements MovieEncoder {
       if (index !== this.nextIndex) throw new Error(`frame ${index} was given where frame ${this.nextIndex} was expected`);
       const timestamp = this.timeOf(index);
       frame = new VideoFrame(source, { timestamp, duration: this.timeOf(index + 1) - timestamp });
-      this.encoder.encode(frame, { keyFrame: index % this.keyInterval === 0 });
+      this.encoder.encode(frame, { keyFrame: this.keyAsked(index) });
       this.nextIndex++;
     } catch (e) {
       return Promise.reject(movieEncoderError(this.format, 'addFrame', e));
@@ -210,6 +234,42 @@ export class VideoMovieEncoder implements MovieEncoder {
   }
 
   async finish(): Promise<Blob> {
+    if (this.sink) throw movieEncoderError(this.format, 'finish', 'the encoder writes to a sink, which is finished there');
+    await this.flushed();
+    let parts: Uint8Array[];
+    try {
+      this.checkAllCameBack();
+      parts = this.mux();
+    } catch (e) {
+      const error = movieEncoderError(this.format, 'write', e);
+      this.close();
+      throw error;
+    }
+    const blob = new Blob(parts as BlobPart[], { type: MOVIE_MIME[this.format] });
+    this.close();
+    return blob;
+  }
+
+  async finishInSink(): Promise<void> {
+    if (!this.sink) throw movieEncoderError(this.format, 'finish', 'the encoder was opened without a sink');
+    await this.flushed();
+    await this.writes;
+    if (this.closed) throw movieEncoderError(this.format, 'finish', 'the encoder was closed');
+    if (this.failure) throw this.failure;
+    try {
+      this.checkAllCameBack();
+      if (!this.writer) throw new Error('no frame reached the file');
+      await this.writer.finish();
+    } catch (e) {
+      const error = isMovieSinkMismatch(e) ? (e as Error) : movieEncoderError(this.format, 'write', e);
+      this.close();
+      throw error;
+    }
+    this.close();
+  }
+
+  // Waits for the browser's encoder to hand back everything it was given.
+  private async flushed(): Promise<void> {
     if (this.closed) throw movieEncoderError(this.format, 'finish', 'the encoder is closed');
     if (this.failure) throw this.failure;
     if (this.nextIndex === 0) throw movieEncoderError(this.format, 'finish', 'no frames were added');
@@ -221,20 +281,12 @@ export class VideoMovieEncoder implements MovieEncoder {
     }
     if (this.closed) throw movieEncoderError(this.format, 'finish', 'the encoder was closed');
     if (this.failure) throw this.failure;
-    let parts: Uint8Array[];
-    try {
-      if (this.frames.length !== this.nextIndex) {
-        throw new Error(`${this.nextIndex} frames were added but ${this.frames.length} came back from the encoder`);
-      }
-      parts = this.mux();
-    } catch (e) {
-      const error = movieEncoderError(this.format, 'write', e);
-      this.close();
-      throw error;
+  }
+
+  private checkAllCameBack(): void {
+    if (this.taken !== this.nextIndex) {
+      throw new Error(`${this.nextIndex} frames were added but ${this.taken} came back from the encoder`);
     }
-    const blob = new Blob(parts as BlobPart[], { type: MOVIE_MIME[this.format] });
-    this.close();
-    return blob;
   }
 
   close(): void {
@@ -257,6 +309,28 @@ export class VideoMovieEncoder implements MovieEncoder {
     return Math.round((index * 1e6) / this.fps);
   }
 
+  private keyAsked(index: number): boolean {
+    return index % this.keyInterval === 0;
+  }
+
+  // Hands one frame to the sink's writer, which is opened by the first: an MP4's writer needs the
+  // decoder configuration the browser reports with its first frame.
+  private async writeFrame(frame: EncodedVideoFrame): Promise<void> {
+    if (this.closed || this.failure || !this.sink) return;
+    this.writer ??= this.openWriter(this.sink, frame);
+    await this.writer.add(frame);
+  }
+
+  private openWriter(sink: MovieSink, first: EncodedVideoFrame): WebmSinkWriter | Mp4SinkWriter {
+    if (this.format === 'webm') {
+      const codecId = this.codec.startsWith('vp09') ? 'V_VP9' : 'V_VP8';
+      return new WebmSinkWriter({ codecId, width: this.width, height: this.height, fps: this.fps }, this.plan, sink);
+    }
+    const avcC = avcDecoderConfig(this.description, first.data);
+    if (!avcC) throw new Error('the H.264 encoder reported no decoder configuration');
+    return new Mp4SinkWriter({ width: this.width, height: this.height, fps: this.fps, avcC }, this.plan, sink);
+  }
+
   private mux(): Uint8Array[] {
     if (this.format === 'webm') {
       const codecId = this.codec.startsWith('vp09') ? 'V_VP9' : 'V_VP8';
@@ -273,9 +347,15 @@ export class VideoMovieEncoder implements MovieEncoder {
       const data = new Uint8Array(chunk.byteLength);
       chunk.copyTo(data);
       const own = Math.round(1e6 / this.fps);
-      this.frames.push({ data, timestamp: chunk.timestamp, duration: chunk.duration ?? own, key: chunk.type === 'key' });
+      const frame = { data, timestamp: chunk.timestamp, duration: chunk.duration ?? own, key: chunk.type === 'key' };
       const description = metadata?.decoderConfig?.description;
       if (description) this.description = copyBytes(description);
+      this.taken++;
+      if (!this.sink) {
+        this.frames.push(frame);
+        return;
+      }
+      this.writes = this.writes.then(() => this.writeFrame(frame)).catch((e: unknown) => this.fail('write', e));
     } catch (e) {
       this.fail('encode', e);
     }
@@ -283,7 +363,9 @@ export class VideoMovieEncoder implements MovieEncoder {
 
   private fail(stage: string, e: unknown): void {
     if (this.closed) return;
-    this.failure ??= movieEncoderError(this.format, stage, e);
+    // A file that could not be laid out as planned keeps its own error: whoever asked for the
+    // movie tells it from a failure by that, and makes the movie again in memory.
+    this.failure ??= isMovieSinkMismatch(e) ? (e as Error) : movieEncoderError(this.format, stage, e);
     if (this.encoder.state !== 'closed') {
       try {
         this.encoder.close();
@@ -305,6 +387,7 @@ export class VideoMovieEncoder implements MovieEncoder {
     while (!this.closed && !this.failure && this.encoder.encodeQueueSize > MAX_ENCODE_QUEUE) {
       await this.dequeued();
     }
+    if (this.sink) await this.writes;
     if (this.failure && !this.closed) throw this.failure;
   }
 

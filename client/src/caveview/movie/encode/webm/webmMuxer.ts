@@ -2,9 +2,12 @@
 import { checkFrameOrder, type EncodedVideoFrame } from '../video/encodedFrame.ts';
 import {
   byteLength,
+  concat,
   EBML_ID as ID,
   ebmlElement,
   ebmlFloat,
+  ebmlId,
+  ebmlSize,
   ebmlString,
   ebmlUint,
   ebmlUintElement,
@@ -53,10 +56,18 @@ const TRACK_NUMBER = 1;
 
 export const WEBM_APP_NAME = 'SilexGIS';
 
-interface Cluster {
+export interface WebmCluster {
   time: number;
   startsWithKey: boolean;
   blocks: EbmlParts;
+}
+
+/** What the file's front needs to know of a cluster: when it starts, whether a player can start
+ *  decoding at it, and how many bytes its whole element takes. */
+export interface WebmClusterShape {
+  time: number;
+  startsWithKey: boolean;
+  size: number;
 }
 
 /** The whole WebM file, as parts to be joined in order. */
@@ -65,7 +76,22 @@ export function muxWebm(track: WebmTrack, frames: readonly EncodedVideoFrame[]):
   const clusters = clustersOf(frames);
   const last = frames[frames.length - 1];
   const durationMs = (last.timestamp + last.duration) / 1000;
+  const clusterParts = clusters.map(webmClusterElement);
+  const shapes = clusters.map((c, i) => ({ time: c.time, startsWithKey: c.startsWithKey, size: byteLength(clusterParts[i]) }));
+  return [...webmHead(track, durationMs, shapes), ...clusterParts.flat()];
+}
 
+/** A cluster as it is written: its start time, then its frames. */
+export function webmClusterElement(cluster: WebmCluster): EbmlParts {
+  return ebmlElement(ID.Cluster, [...ebmlUintElement(ID.Timecode, cluster.time), ...cluster.blocks]);
+}
+
+/**
+ * Everything in the file before its first cluster: the EBML header, the Segment's own id and size,
+ * the SeekHead, Info, Tracks and Cues. It is a function of the clusters' shapes alone — not of
+ * their frames — which is what lets a file written as it is encoded have this part written last.
+ */
+export function webmHead(track: WebmTrack, durationMs: number, clusters: readonly WebmClusterShape[]): EbmlParts {
   const info = ebmlElement(ID.Info, [
     ...ebmlUintElement(ID.TimecodeScale, TIMECODE_SCALE_NS),
     ...ebmlElement(ID.Duration, ebmlFloat(durationMs)),
@@ -74,10 +100,6 @@ export function muxWebm(track: WebmTrack, frames: readonly EncodedVideoFrame[]):
   ]);
   const tracks = ebmlElement(ID.Tracks, ebmlElement(ID.TrackEntry, trackEntry(track)));
 
-  const clusterParts = clusters.map((c) =>
-    ebmlElement(ID.Cluster, [...ebmlUintElement(ID.Timecode, c.time), ...c.blocks]),
-  );
-
   const seekHeadSize = byteLength(seekHead(0, 0, 0));
   const infoAt = seekHeadSize;
   const tracksAt = infoAt + byteLength(info);
@@ -85,19 +107,15 @@ export function muxWebm(track: WebmTrack, frames: readonly EncodedVideoFrame[]):
   const cuesSize = byteLength(cues(clusters, clusters.map(() => 0)));
   const clusterAt: number[] = [];
   let at = cuesAt + cuesSize;
-  for (const parts of clusterParts) {
+  for (const cluster of clusters) {
     clusterAt.push(at);
-    at += byteLength(parts);
+    at += cluster.size;
   }
 
-  const segmentBody: EbmlParts = [
-    ...seekHead(infoAt, tracksAt, cuesAt),
-    ...info,
-    ...tracks,
-    ...cues(clusters, clusterAt),
-    ...clusterParts.flat(),
-  ];
-  return [...ebmlHeader(), ...ebmlElement(ID.Segment, segmentBody)];
+  // The Segment holds everything from here to the end of the file, clusters included; `at` is by
+  // now the size of all of it.
+  const front: EbmlParts = [...seekHead(infoAt, tracksAt, cuesAt), ...info, ...tracks, ...cues(clusters, clusterAt)];
+  return [...ebmlHeader(), concat([ebmlId(ID.Segment), ebmlSize(at)]), ...front];
 }
 
 function ebmlHeader(): EbmlParts {
@@ -138,7 +156,7 @@ function seekHead(infoAt: number, tracksAt: number, cuesAt: number): EbmlParts {
 }
 
 // One cue per cluster that opens with a keyframe — the places a player can start decoding from.
-function cues(clusters: readonly Cluster[], clusterAt: readonly number[]): EbmlParts {
+function cues(clusters: readonly WebmClusterShape[], clusterAt: readonly number[]): EbmlParts {
   const points: EbmlParts = [];
   clusters.forEach((c, i) => {
     if (!c.startsWithKey) return;
@@ -155,21 +173,31 @@ function cues(clusters: readonly Cluster[], clusterAt: readonly number[]): EbmlP
   return ebmlElement(ID.Cues, points);
 }
 
-function clustersOf(frames: readonly EncodedVideoFrame[]): Cluster[] {
-  const clusters: Cluster[] = [];
-  let current: Cluster | null = null;
+/** A frame's time in the file's own unit, whole milliseconds. */
+export function webmTimeOf(timestampUs: number): number {
+  return Math.round(timestampUs / 1000);
+}
+
+/** Whether a frame shown at `time` opens a new cluster rather than joining the one that is open. */
+export function webmStartsCluster(current: { time: number } | null, key: boolean, time: number): boolean {
+  return !current || key || time - current.time > WEBM_MAX_CLUSTER_MS;
+}
+
+function clustersOf(frames: readonly EncodedVideoFrame[]): WebmCluster[] {
+  const clusters: WebmCluster[] = [];
+  let current: WebmCluster | null = null;
   for (const frame of frames) {
-    const time = Math.round(frame.timestamp / 1000);
-    if (!current || frame.key || time - current.time > WEBM_MAX_CLUSTER_MS) {
+    const time = webmTimeOf(frame.timestamp);
+    if (!current || webmStartsCluster(current, frame.key, time)) {
       current = { time, startsWithKey: frame.key, blocks: [] };
       clusters.push(current);
     }
-    current.blocks.push(...simpleBlock(time - current.time, frame));
+    current.blocks.push(...webmSimpleBlock(time - current.time, frame));
   }
   return clusters;
 }
 
-function simpleBlock(relativeMs: number, frame: EncodedVideoFrame): EbmlParts {
+export function webmSimpleBlock(relativeMs: number, frame: EncodedVideoFrame): EbmlParts {
   const head = new Uint8Array(4);
   head[0] = 0x80 | TRACK_NUMBER; // the track number as a one-byte variable-length integer
   new DataView(head.buffer).setInt16(1, relativeMs);

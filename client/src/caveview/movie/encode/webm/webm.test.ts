@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
+import { MemoryMovieSink } from '../memoryMovieSink.ts';
 import type { EncodedVideoFrame } from '../video/encodedFrame.ts';
 import { concat, EBML_ID as ID, ebmlId, ebmlSize, ebmlUint } from './ebml.ts';
 import { muxWebm, WEBM_MAX_CLUSTER_MS } from './webmMuxer.ts';
+import { WebmSinkWriter } from './webmSinkWriter.ts';
 
 // ---- An EBML reader written from the format description, independent of the writer. ----
 
@@ -187,5 +189,41 @@ describe('WebM muxer', () => {
     expect(concat(muxWebm(track, input))).toEqual(concat(muxWebm(track, input)));
     expect(() => muxWebm(track, [])).toThrow(/no frames/);
     expect(() => muxWebm(track, input.slice(1))).toThrow(/first frame is not a keyframe/);
+  });
+});
+
+describe('a WebM written to a sink as its frames arrive', () => {
+  it('reads as a whole file: a Segment as long as the rest, the duration, every frame, and a cue at each cluster’s own place', async () => {
+    const track = { codecId: 'V_VP9' as const, width: 320, height: 240, fps: 25 };
+    const input = frames(600, 25, 50); // twelve clusters of two seconds
+    const sink = new MemoryMovieSink();
+    // A hold the first cluster fills, so the eleven after it are each written as they end.
+    const writer = new WebmSinkWriter(track, { count: 600, timestamp: (i) => Math.round((i * 1e6) / 25), key: (i) => i % 50 === 0 }, sink, 200);
+    for (const frame of input) await writer.add(frame);
+    await writer.finish();
+    expect(sink.writes.length).toBeGreaterThan(10);
+    expect(sink.writes.at(-1)!.position).toBe(0);
+
+    const file = sink.bytes();
+    const top = parse(file, 0, file.length);
+    expect(top.map((n) => n.id)).toEqual([ID.EBML, ID.Segment]);
+    const segment = top[1];
+    expect(segment.body + segment.size).toBe(file.length);
+    const duration = child(child(segment, ID.Info)!, ID.Duration)!.bytes;
+    expect(new DataView(duration.buffer, duration.byteOffset, 8).getFloat64(0)).toBe(24_000);
+
+    const clusters = children(segment, ID.Cluster);
+    expect(clusters).toHaveLength(12);
+    const blocks = clusters.flatMap((c) => children(c, ID.SimpleBlock));
+    expect(blocks).toHaveLength(600);
+    blocks.forEach((block, i) => expect([...block.bytes.subarray(4)]).toEqual([...input[i].data]));
+
+    const points = children(child(segment, ID.Cues)!, ID.CuePoint);
+    expect(points).toHaveLength(12);
+    points.forEach((point, i) => {
+      expect(uint(child(point, ID.CueTime)!.bytes)).toBe(i * 2000);
+      const at = uint(child(child(point, ID.CueTrackPositions)!, ID.CueClusterPosition)!.bytes);
+      expect(segment.body + at).toBe(clusters[i].start);
+    });
   });
 });

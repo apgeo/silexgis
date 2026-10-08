@@ -12,13 +12,16 @@ import type {
   CaveViewTrail,
   CaveViewTrailOptions,
 } from '../loadCaveView.ts';
+import { MemoryMovieSink } from './encode/memoryMovieSink.ts';
 import type { MovieEncoder, MovieEncoderOptions } from './encode/movieEncoder.ts';
+import { MovieSinkMismatch } from './encode/movieSink.ts';
 import { movieParty, type MovieTripData } from './movieParty.ts';
 import {
   isMovieAbort,
   movieSampleFrames,
   recordMovie,
   recordMovieStill,
+  recordMovieToSink,
   type MovieRecording,
 } from './movieRecorder.ts';
 import { DEFAULT_MOVIE_SETTINGS, type MovieSettings } from './movieSettings.ts';
@@ -672,6 +675,137 @@ describe('recordMovie', () => {
     expect(fake.viewer.endCapture).not.toHaveBeenCalled();
     expect(encoder.calls).toEqual(['close']);
     expect(scene(fake)).toEqual(before);
+  });
+});
+
+describe('recordMovieToSink', () => {
+  /** An encoder that takes a sink: it writes the file's last bytes when finished there, and can be
+   *  told to refuse the file's layout instead. */
+  function sinkEncoder(refuse = false) {
+    const fake = fakeEncoder();
+    fake.encoder.finishInSink = vi.fn(async () => {
+      fake.calls.push('finishInSink');
+      if (refuse) throw new MovieSinkMismatch('frame 3 came back as a keyframe nobody asked for');
+      await fake.opened.at(-1)!.sink!.write(0, Uint8Array.from([1, 2, 3]));
+    });
+    return fake;
+  }
+
+  it('hands the encoder the sink and the number of frames, and closes the sink once the file is whole', async () => {
+    const fake = previewViewer();
+    const before = scene(fake);
+    const encoder = sinkEncoder();
+    const sink = new MemoryMovieSink();
+    const file = await recordMovieToSink(recording(fake, encoder), sink);
+    expect(file).toBeNull();
+    expect(encoder.opened).toHaveLength(1);
+    expect(encoder.opened[0].sink).toBe(sink);
+    expect(encoder.opened[0].frameCount).toBe(encoder.calls.filter((call) => call.startsWith('frame:')).length);
+    expect(encoder.calls.slice(-2)).toEqual(['finishInSink', 'close']);
+    expect(encoder.encoder.finish).not.toHaveBeenCalled();
+    expect(sink.state).toBe('closed');
+    expect([...sink.bytes()]).toEqual([1, 2, 3]);
+    expect(scene(fake)).toEqual(before);
+  });
+
+  it('gives an in-memory recording no sink and no frame count, as before', async () => {
+    const fake = previewViewer();
+    const encoder = fakeEncoder();
+    await recordMovie(recording(fake, encoder));
+    expect(encoder.opened[0]).not.toHaveProperty('sink');
+    expect(encoder.opened[0]).not.toHaveProperty('frameCount');
+  });
+
+  it('leaves the sink aborted when cancelled, and rejects with the abort', async () => {
+    const fake = previewViewer();
+    const before = scene(fake);
+    const encoder = sinkEncoder();
+    const sink = new MemoryMovieSink();
+    const controller = new AbortController();
+    const error = await recordMovieToSink(
+      recording(fake, encoder, {
+        signal: controller.signal,
+        onProgress: ({ done }) => {
+          if (done === 5) controller.abort();
+        },
+      }),
+      sink,
+    ).catch((e: unknown) => e);
+    expect(isMovieAbort(error)).toBe(true);
+    expect(sink.state).toBe('aborted');
+    expect(encoder.calls.at(-1)).toBe('close');
+    expect(scene(fake)).toEqual(before);
+  });
+
+  it('takes the file back when the cancel comes as its last byte is written', async () => {
+    const fake = previewViewer();
+    const encoder = sinkEncoder();
+    const sink = new MemoryMovieSink();
+    const controller = new AbortController();
+    const error = await recordMovieToSink(
+      recording(fake, encoder, {
+        signal: controller.signal,
+        onProgress: ({ stage }) => {
+          if (stage === 'finishing') controller.abort();
+        },
+      }),
+      sink,
+    ).catch((e: unknown) => e);
+    expect(isMovieAbort(error)).toBe(true);
+    expect(encoder.calls).toContain('finishInSink');
+    expect(sink.state).toBe('aborted');
+    expect(sink.bytes()).toHaveLength(0);
+  });
+
+  it('leaves the sink aborted when the encoder fails, and passes the failure on as it is', async () => {
+    const fake = previewViewer();
+    const encoder = fakeEncoder(0, 3);
+    encoder.encoder.finishInSink = vi.fn(async () => {});
+    const sink = new MemoryMovieSink();
+    const error = await recordMovieToSink(recording(fake, encoder), sink).catch((e: unknown) => e);
+    expect((error as Error).message).toBe('WEBM encoder, encode: the codec gave up');
+    expect(sink.state).toBe('aborted');
+  });
+
+  it('leaves the sink aborted when no encoder could be opened at all', async () => {
+    const fake = previewViewer();
+    const sink = new MemoryMovieSink();
+    const openEncoder = vi.fn(async () => {
+      throw new Error('WEBM encoder, open: this browser cannot encode it');
+    }) as unknown as NonNullable<MovieRecording['openEncoder']>;
+    const error = await recordMovieToSink(recording(fake, fakeEncoder(), { openEncoder }), sink).catch((e: unknown) => e);
+    expect((error as Error).message).toContain('this browser cannot encode it');
+    expect(sink.state).toBe('aborted');
+    expect(fake.viewer.beginCapture).not.toHaveBeenCalled();
+  });
+
+  it('makes the movie again in memory when the file could not be laid out as planned, and answers that file', async () => {
+    const fake = previewViewer();
+    const before = scene(fake);
+    const encoder = sinkEncoder(true);
+    const sink = new MemoryMovieSink();
+    const file = await recordMovieToSink(recording(fake, encoder), sink);
+    expect(file).toBeInstanceOf(Blob);
+    expect(await file!.text()).toBe('movie');
+    expect(sink.state).toBe('aborted');
+    // Opened twice: with the sink, then without one.
+    expect(encoder.opened).toHaveLength(2);
+    expect(encoder.opened[0].sink).toBe(sink);
+    expect(encoder.opened[1]).not.toHaveProperty('sink');
+    const frames = encoder.calls.filter((call) => call.startsWith('frame:')).length;
+    expect(encoder.calls.filter((call) => call === 'frame:0')).toHaveLength(2);
+    expect(frames % 2).toBe(0);
+    expect(encoder.calls.slice(-2)).toEqual(['finish', 'close']);
+    expect(scene(fake)).toEqual(before);
+  });
+
+  it('answers the file of an encoder that takes no sink, and removes the file that was chosen for it', async () => {
+    const fake = previewViewer();
+    const encoder = fakeEncoder();
+    const sink = new MemoryMovieSink();
+    const file = await recordMovieToSink(recording(fake, encoder), sink);
+    expect(await file!.text()).toBe('movie');
+    expect(sink.state).toBe('aborted');
   });
 });
 

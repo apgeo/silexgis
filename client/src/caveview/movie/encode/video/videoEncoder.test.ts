@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryMovieSink } from '../memoryMovieSink.ts';
 import { openMovieEncoder, probeMovieFormats } from '../movieEncoder.ts';
+import { isMovieSinkMismatch, type MovieSink } from '../movieSink.ts';
 import { h264Level, videoBitrate, videoCodecCandidates, type VideoMovieEncoder } from './videoEncoder.ts';
 
 // ---- A stand-in for the browser's WebCodecs encoder: it records what it was asked, answers with
@@ -33,6 +35,8 @@ class FakeVideoFrame {
 class FakeVideoEncoder extends EventTarget {
   static supported: (codec: string) => boolean = () => true;
   static last: FakeVideoEncoder | null = null;
+  /** Frames, by index, that come back as keyframes although nobody asked for one. */
+  static unaskedKeys = new Set<number>();
   static async isConfigSupported(config: VideoEncoderConfig) {
     return { supported: FakeVideoEncoder.supported(config.codec), config };
   }
@@ -61,7 +65,8 @@ class FakeVideoEncoder extends EventTarget {
   encode(frame: FakeVideoFrame, options: { keyFrame: boolean }) {
     if (this.state !== 'configured') throw new DOMException('not configured', 'InvalidStateError');
     if (frame.closed) throw new TypeError('the frame is closed');
-    const e = { timestamp: frame.timestamp, duration: frame.duration, keyFrame: options.keyFrame };
+    const keyFrame = options.keyFrame || FakeVideoEncoder.unaskedKeys.has(this.encoded.length);
+    const e = { timestamp: frame.timestamp, duration: frame.duration, keyFrame };
     this.encoded.push(e);
     this.queue.push(e);
     if (!this.hold) queueMicrotask(() => this.release());
@@ -103,6 +108,7 @@ function installWebCodecs() {
   FakeVideoFrame.made = 0;
   FakeVideoEncoder.supported = () => true;
   FakeVideoEncoder.last = null;
+  FakeVideoEncoder.unaskedKeys = new Set();
   vi.stubGlobal('VideoEncoder', FakeVideoEncoder);
   vi.stubGlobal('VideoFrame', FakeVideoFrame);
 }
@@ -241,5 +247,98 @@ describe('video movie encoder', () => {
     const encoder = await openMovieEncoder('webm', { width: 64, height: 36, fps: 10, quality: 'low' });
     await expect(encoder.addFrame(canvas(), 3)).rejects.toThrow(/^WEBM encoder, addFrame: frame 3 was given where frame 0/);
     encoder.close();
+  });
+});
+
+describe('video movie encoder, writing to a sink', () => {
+  const OPTIONS = { width: 64, height: 36, fps: 10, quality: 'medium' as const };
+
+  async function inMemory(format: 'webm' | 'mp4', count: number): Promise<Uint8Array> {
+    const encoder = await openMovieEncoder(format, OPTIONS);
+    for (let i = 0; i < count; i++) await encoder.addFrame(canvas(), i);
+    return new Uint8Array(await (await encoder.finish()).arrayBuffer());
+  }
+
+  it.each(['webm', 'mp4'] as const)('puts in the sink the very %s it would have answered from memory', async (format) => {
+    installWebCodecs();
+    const expected = await inMemory(format, 45);
+    const sink = new MemoryMovieSink();
+    const encoder = await openMovieEncoder(format, { ...OPTIONS, sink, frameCount: 45 });
+    for (let i = 0; i < 45; i++) await encoder.addFrame(canvas(), i);
+    await encoder.finishInSink!();
+    expect([...sink.bytes()]).toEqual([...expected]);
+    // The sink is whoever opened it's to end: the encoder wrote to it and left it open.
+    expect(sink.state).toBe('open');
+    expect(FakeVideoEncoder.last!.state).toBe('closed');
+    expect(FakeVideoFrame.open).toBe(0);
+  });
+
+  it('keeps no frame once it is written, and answers no file of its own', async () => {
+    installWebCodecs();
+    const sink = new MemoryMovieSink();
+    const encoder = (await openMovieEncoder('mp4', { ...OPTIONS, sink, frameCount: 5 })) as VideoMovieEncoder;
+    for (let i = 0; i < 5; i++) await encoder.addFrame(canvas(), i);
+    expect(encoder.encodedFrames).toBe(5);
+    await expect(encoder.finish()).rejects.toThrow(/^MP4 encoder, finish: the encoder writes to a sink/);
+    await encoder.finishInSink();
+    expect(String.fromCharCode(...sink.bytes().subarray(4, 8))).toBe('ftyp');
+  });
+
+  it('needs the number of frames beforehand, and refuses to open without it', async () => {
+    installWebCodecs();
+    await expect(openMovieEncoder('webm', { ...OPTIONS, sink: new MemoryMovieSink() })).rejects.toThrow(
+      /^WEBM encoder, open: a file written as it is encoded needs the number of frames/,
+    );
+  });
+
+  it('passes on, as itself, the refusal of a file that could not be laid out as planned', async () => {
+    installWebCodecs();
+    FakeVideoEncoder.unaskedKeys = new Set([3]);
+    const encoder = await openMovieEncoder('mp4', { ...OPTIONS, sink: new MemoryMovieSink(), frameCount: 8 });
+    const outcome = await (async () => {
+      for (let i = 0; i < 8; i++) await encoder.addFrame(canvas(), i);
+      await encoder.finishInSink!();
+    })().catch((error: unknown) => error);
+    expect(isMovieSinkMismatch(outcome)).toBe(true);
+    encoder.close();
+  });
+
+  it('fails with the stage named when the sink cannot be written to, and waits for a slow one', async () => {
+    installWebCodecs();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const slow: MovieSink = {
+      write: async () => {
+        await gate;
+        throw new Error('the disk is full');
+      },
+      close: async () => {},
+      abort: async () => {},
+    };
+    // One frame is the whole movie, so its only write — the file, at the end — is the one that fails.
+    const encoder = await openMovieEncoder('mp4', { ...OPTIONS, sink: slow, frameCount: 1 });
+    await encoder.addFrame(canvas(), 0);
+    let settled = false;
+    const finishing = encoder.finishInSink!().catch((error: unknown) => {
+      settled = true;
+      return error;
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(settled).toBe(false);
+    release();
+    const error = await finishing;
+    expect((error as Error).message).toMatch(/^MP4 encoder, write: the disk is full/);
+    expect(FakeVideoEncoder.last!.state).toBe('closed');
+  });
+
+  it('closes mid-run without writing a file: the sink holds no front, and is left for its owner to abort', async () => {
+    installWebCodecs();
+    const sink = new MemoryMovieSink();
+    const encoder = await openMovieEncoder('mp4', { ...OPTIONS, sink, frameCount: 40 });
+    for (let i = 0; i < 10; i++) await encoder.addFrame(canvas(), i);
+    encoder.close();
+    await expect(encoder.finishInSink!()).rejects.toThrow(/^MP4 encoder, finish: the encoder is closed/);
+    expect(sink.writes.every((w) => w.position > 0)).toBe(true);
+    expect(sink.state).toBe('open');
   });
 });

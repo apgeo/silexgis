@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
+import { MemoryMovieSink } from '../memoryMovieSink.ts';
 import type { EncodedVideoFrame } from '../video/encodedFrame.ts';
 import { avcDecoderConfig, isWellFormedAvcC } from './avcConfig.ts';
 import { mp4MediaTimescale, muxMp4 } from './mp4Muxer.ts';
+import { Mp4SinkWriter } from './mp4SinkWriter.ts';
 
 // ---- An ISO base media box reader written from the format description, independent of the writer. ----
 
@@ -168,5 +170,41 @@ describe('H.264 decoder configuration', () => {
     expect([...rebuilt!]).toEqual([...good]);
     // With nothing in the frame to rebuild from, the reported record is all there is.
     expect(avcDecoderConfig(doubled, lengthPrefixed(idr))).toBe(doubled);
+  });
+});
+
+describe('an MP4 written to a sink as its frames arrive', () => {
+  it('reads as a whole file: the index in front of the data, every offset at its own frame, the keyframes and the length', async () => {
+    const fps = 30;
+    const input = frames(90, fps, 60);
+    const sink = new MemoryMovieSink();
+    const writer = new Mp4SinkWriter(
+      { width: 640, height: 360, fps, avcC },
+      { count: 90, timestamp: (i) => Math.round((i * 1e6) / fps), key: (i) => i % 60 === 0 },
+      sink,
+    );
+    for (const frame of input) await writer.add(frame);
+    await writer.finish();
+    // The frames were written before the index that points at them.
+    expect(sink.writes.at(-1)!.position).toBe(0);
+    expect(sink.writes[0].position).toBeGreaterThan(0);
+
+    const file = sink.bytes();
+    const top = parse(file, 0, file.length);
+    expect(top.map((b) => b.type)).toEqual(['ftyp', 'moov', 'mdat']);
+    expect(top.reduce((n, b) => n + b.size, 0)).toBe(file.length);
+    const mdat = find(top, 'mdat');
+    const stbl = find(top, 'moov/trak/mdia/minf/stbl');
+    const offsets = table(find(stbl.children, 'stco').body);
+    const stsz = find(stbl.children, 'stsz').body;
+    const sizes = Array.from({ length: u32(stsz, 8) }, (_, i) => u32(stsz, 12 + 4 * i));
+    expect(offsets).toHaveLength(90);
+    expect(offsets[0]).toBe(mdat.start + 8);
+    offsets.forEach((offset, i) => {
+      expect([...file.subarray(offset, offset + sizes[i])]).toEqual([...input[i].data]);
+    });
+    expect(offsets[89] + sizes[89]).toBe(mdat.start + mdat.size);
+    expect(table(find(stbl.children, 'stss').body)).toEqual([1, 61]);
+    expect(u32(find(top, 'moov/mvhd').body, 16)).toBe(3000);
   });
 });
