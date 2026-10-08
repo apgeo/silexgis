@@ -133,6 +133,25 @@ describe('the version an answer carries', () => {
     expect(carriedOn('PUT', '/api/v1/trip-logs/t-write')).toBe('"5"');
   });
 
+  it('does not replace the version a caller named for its own save', () => {
+    // A form filled in from the read that carried "4" sends "4". The page under it has read the
+    // record again since and "5" is on file; replaying that would present the change behind "5"
+    // as seen by a form that never showed it, and the form's older values would be written over
+    // it without a refusal.
+    answered('GET', '/api/v1/trip-logs/t-form', { status: 200, headers: { ETag: '"4"' } });
+    answered('GET', '/api/v1/trip-logs/t-form', { status: 200, headers: { ETag: '"5"' } });
+    for (const method of ['PUT', 'DELETE']) {
+      const request = new Request(`${origin}/api/v1/trip-logs/t-form`, {
+        method,
+        headers: { 'If-Match': '"4"' },
+      });
+      threadsVersions.onRequest({ request });
+      expect(request.headers.get('If-Match')).toBe('"4"');
+    }
+    // A save that names none still carries the newest.
+    expect(carriedOn('PUT', '/api/v1/trip-logs/t-form')).toBe('"5"');
+  });
+
   it('is filed under the resource a creation names, not under the collection posted to', () => {
     answered('POST', '/api/v1/trip-logs/', {
       status: 201,

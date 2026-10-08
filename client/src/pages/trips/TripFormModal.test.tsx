@@ -20,6 +20,14 @@ const holdsTheRight = { canCreate: true, unbound: true, cavingGroups: [] };
 const silex = { id: 'g-1', name: 'Silex' };
 const avenul = { id: 'g-2', name: 'Avenul' };
 
+// The version on file for the trip, as the transport would answer it at this moment.
+const versionOnFile = vi.fn<() => string | undefined>(() => undefined);
+
+vi.mock('../../api/client.ts', async (original) => ({
+  ...(await original<typeof import('../../api/client.ts')>()),
+  lastReadETag: () => versionOnFile(),
+}));
+
 vi.mock('../../api/hooks.ts', () => ({
   useCavingGroups: () => ({ data: [] }),
   useTripTypes: () => ({ data: [{ id: 1, code: 'survey', name: 'Survey / mapping', isSeeded: true }] }),
@@ -691,5 +699,58 @@ describe('TripFormModal when a save is refused', () => {
 
     expect(await screen.findByText('The operation failed. Please try again.')).toBeInTheDocument();
     expect(screen.queryByText(/has reports on this trip's tracking/)).toBeNull();
+  });
+});
+
+describe('TripFormModal and a trip that changed while the form was open', () => {
+  beforeEach(() => {
+    updateTrip.mockReset().mockResolvedValue({ id: 'trip-1' });
+    versionOnFile.mockReset().mockReturnValue(undefined);
+  });
+  afterEach(cleanup);
+
+  it('saves against the version its fields were filled from, not one read since', async () => {
+    // The form is filled once, when it opens. The page under it goes on re-reading the trip — a
+    // return to the browser tab is enough — and each read files a newer version. Were the save
+    // to carry that one, a roster somebody else saved in the meantime would be written back to
+    // what this form still shows, with the server told the change had been seen.
+    versionOnFile.mockReturnValue('"1"');
+    const view = show(trip());
+
+    versionOnFile.mockReturnValue('"2"');
+    view.rerender(
+      <App>
+        <TripFormModal open trip={trip({ title: 'Renamed by somebody else' })} onClose={() => {}} />
+      </App>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+    const sent = updateTrip.mock.calls[0][0] as { ifMatch?: string; body: TripLogWrite };
+    expect(sent.ifMatch).toBe('"1"');
+    // The fields are the ones the form opened with, which is why the version has to be too.
+    expect(sent.body.title).toBe('Digging weekend');
+  });
+
+  it('takes the version afresh each time it is opened', async () => {
+    versionOnFile.mockReturnValue('"1"');
+    const view = show(trip());
+    const closed = (
+      <App>
+        <TripFormModal open={false} trip={trip()} onClose={() => {}} />
+      </App>
+    );
+    view.rerender(closed);
+
+    versionOnFile.mockReturnValue('"2"');
+    view.rerender(
+      <App>
+        <TripFormModal open trip={trip()} onClose={() => {}} />
+      </App>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+    expect((updateTrip.mock.calls[0][0] as { ifMatch?: string }).ifMatch).toBe('"2"');
   });
 });

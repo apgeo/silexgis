@@ -257,10 +257,20 @@ function versionedResource(request: Request, response: Response): string | undef
  * version a write produced is what the next write must carry, and a client that learned versions
  * only from reads was one behind after every save, so a second save a moment later was refused as
  * a conflict nobody could see.
+ *
+ * <b>A version the caller named itself is left alone.</b> The newest version filed is the right
+ * one for a write made from what is on screen now. It is the wrong one for a form that was filled
+ * in from an earlier read: the page under an open form goes on re-reading the record, each read
+ * files a newer version, and replaying that over the form's save would present somebody else's
+ * change as already seen and write the form's older values over it. Such a caller sends the
+ * version it started from, and this must not replace it.
  */
 export const threadsVersions = {
   onRequest({ request }: { request: Request }) {
-    if (request.method === 'PUT' || request.method === 'DELETE') {
+    if (
+      (request.method === 'PUT' || request.method === 'DELETE') &&
+      !request.headers.has('If-Match')
+    ) {
       const etag = etags.get(resourcePath(request.url));
       if (etag) {
         request.headers.set('If-Match', etag);

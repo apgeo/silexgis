@@ -4282,8 +4282,18 @@ export function useUpdateTripLog() {
   const written = useTripLogWritten();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: TripLogWrite }) =>
-      unwrap(api.PUT('/api/v1/trip-logs/{id}', { params: { path: { id } }, body })),
+    // `ifMatch` is for a caller whose values were read some time before the save — the edit
+    // form: it names the version those values came from, so a change somebody else saved in
+    // between is refused instead of overwritten. Left out, the save carries the newest version
+    // read, which is right for a write made from what the page shows now.
+    mutationFn: ({ id, body, ifMatch }: { id: string; body: TripLogWrite; ifMatch?: string }) =>
+      unwrap(
+        api.PUT('/api/v1/trip-logs/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+          body,
+        }),
+      ),
     onSuccess: (trip) => {
       invalidateHistory();
       written(trip);

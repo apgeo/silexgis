@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DeleteOutlined, EllipsisOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   Alert,
@@ -17,7 +17,7 @@ import {
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
+import { ApiError, lastReadETag } from '../../api/client.ts';
 import {
   useCavingGroups,
   useCreateDoor,
@@ -304,8 +304,17 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
   // contradict the heading above it and then move to the other column on the next read.
   const attendeeRoles = (participantRoles ?? []).filter((role) => role.code !== 'proposer');
 
+  // The version of the trip the fields were filled from. The fields are filled once, when the
+  // form opens, but the page underneath goes on re-reading the trip — on a return to the browser
+  // tab, after anything that refreshes trips — and every read files a newer version for the next
+  // save to carry. A save that carried that one would tell the server this form had seen a change
+  // it never showed, and the roster and times somebody else saved meanwhile would be written back
+  // to what they were with nobody told. So the save names the version taken here.
+  const openedAtVersion = useRef<string | undefined>(undefined);
+
   useEffect(() => {
     if (open) {
+      openedAtVersion.current = trip ? lastReadETag(`/api/v1/trip-logs/${trip.id}`) : undefined;
       form.resetFields();
       if (trip) {
         form.setFieldsValue({
@@ -445,7 +454,7 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
 
     try {
       const saved = trip
-        ? await updateTrip.mutateAsync({ id: trip.id, body })
+        ? await updateTrip.mutateAsync({ id: trip.id, body, ifMatch: openedAtVersion.current })
         : planning
           ? await createPlan.mutateAsync(body)
           : await createTrip.mutateAsync(body);
