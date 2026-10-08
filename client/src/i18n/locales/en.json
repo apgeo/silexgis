@@ -3198,6 +3198,7 @@
       "progressTimes": "{{elapsed}} elapsed · about {{remaining}} left",
       "saved": "Saved {{name}}",
       "fileNamed": "The file will be saved as {{name}}",
+      "fileAsked": "A video this long is written to its file as it is made. Export asks where to save it, as {{name}} unless you choose another name.",
       "closeWhileExporting": {
         "title": "Stop making the movie?",
         "body": "The export is still running. If you close now, the frames drawn so far are thrown away and no file is saved.",

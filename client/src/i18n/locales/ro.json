@@ -3198,6 +3198,7 @@
       "progressTimes": "{{elapsed}} scurs · încă aproximativ {{remaining}}",
       "saved": "S-a salvat {{name}}",
       "fileNamed": "Fișierul se va salva ca {{name}}",
+      "fileAsked": "Un video atât de lung este scris în fișier pe măsură ce este făcut. La export se întreabă unde să fie salvat, ca {{name}} dacă nu se alege alt nume.",
       "closeWhileExporting": {
         "title": "Oprești exportul filmului?",
         "body": "Exportul încă rulează. Dacă închizi acum, cadrele desenate până acum se pierd și nu se salvează niciun fișier.",

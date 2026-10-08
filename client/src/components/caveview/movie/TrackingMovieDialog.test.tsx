@@ -4,7 +4,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TrackedTrip, TrackingEvent, TrackingState } from '../../../api/hooks.ts';
+import { MemoryMovieSink } from '../../../caveview/movie/encode/memoryMovieSink.ts';
 import type { MovieFormatSupport } from '../../../caveview/movie/encode/movieEncoder.ts';
+import type { MovieSink } from '../../../caveview/movie/encode/movieSink.ts';
+import type { MovieFileChoice } from '../../../caveview/movie/movieFileSink.ts';
 import type { MovieTripData } from '../../../caveview/movie/movieParty.ts';
 import {
   MovieStillUnwrittenError,
@@ -76,9 +79,21 @@ vi.mock('../../../caveview/movie/movieRecorder.ts', async (original) => ({
   ...(await original<typeof import('../../../caveview/movie/movieRecorder.ts')>()),
   recordMovie,
   recordMovieStill,
+  recordMovieToSink,
 }));
+const recordMovieToSink = vi.hoisted(() => vi.fn<(recording: MovieRecording, sink: MovieSink) => Promise<Blob | null>>());
 const saveBlob = vi.hoisted(() => vi.fn());
 vi.mock('../../../api/download.ts', () => ({ saveBlob }));
+// Where a long video is saved: whether this browser would be asked, and what the reader answered.
+const disk = vi.hoisted(() => ({
+  goes: false,
+  choose: vi.fn<(name: string, format: string) => Promise<MovieFileChoice>>(),
+}));
+vi.mock('../../../caveview/movie/movieFileSink.ts', async (original) => ({
+  ...(await original<typeof import('../../../caveview/movie/movieFileSink.ts')>()),
+  movieGoesToDisk: (format: string) => disk.goes && format !== 'gif',
+  chooseMovieFile: disk.choose,
+}));
 // The test canvas has no text drawing; what the captions say is the caption module's own business.
 const drawMovieCaptions = vi.hoisted(() => vi.fn());
 vi.mock('../../../caveview/movie/movieCaptions.ts', async (original) => ({
@@ -311,6 +326,9 @@ beforeEach(() => {
   reads.moviePausedAsked = [];
   recordMovie.mockReset();
   recordMovieStill.mockReset();
+  recordMovieToSink.mockReset();
+  disk.goes = false;
+  disk.choose.mockReset();
   saveBlob.mockReset();
   drawMovieCaptions.mockReset();
   useUiPrefsStore.setState({ movieSettings: undefined, movieGifCalibration: undefined });
@@ -1069,6 +1087,172 @@ describe('the tracking movie dialog', () => {
     open();
     await screen.findByTestId('movie-summary');
     expect(screen.queryByTestId('movie-file-name')).not.toBeInTheDocument();
+  });
+});
+
+describe('a video long enough to be written to its file as it is made', () => {
+  function chosenFile(name = 'my weekend.webm') {
+    const sink = new MemoryMovieSink();
+    return { sink, choice: { kind: 'file', name, sink } satisfies MovieFileChoice };
+  }
+
+  async function openLongVideo() {
+    disk.goes = true;
+    useUiPrefsStore.setState({ movieSettings: normaliseMovieSettings({ ...DEFAULT_MOVIE_SETTINGS, format: 'webm' }) });
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    return exportButton;
+  }
+
+  it('says beforehand that Export will ask where to save it, and asks nothing of a short one or of a GIF', async () => {
+    const exportButton = await openLongVideo();
+    expect(screen.getByTestId('movie-file-name')).toHaveTextContent(/Export asks where to save it, as silexgis-.*\.webm unless/);
+
+    // The same movie as a GIF is held in memory whatever its size, and is saved as every GIF is.
+    recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
+    fireEvent.click(screen.getByTestId('movie-format-gif'));
+    await waitFor(() => expect(screen.getByTestId('movie-file-name')).toHaveTextContent(/^The file will be saved as .*\.gif$/));
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    expect(disk.choose).not.toHaveBeenCalled();
+    expect(recordMovieToSink).not.toHaveBeenCalled();
+  });
+
+  it('asks on the press, records into the chosen file, and saves nothing a second time', async () => {
+    const exportButton = await openLongVideo();
+    const { sink, choice } = chosenFile();
+    disk.choose.mockResolvedValue(choice);
+    let finish!: () => void;
+    recordMovieToSink.mockImplementation(
+      () =>
+        new Promise<null>((resolve) => {
+          finish = () => resolve(null);
+        }),
+    );
+    fireEvent.click(exportButton);
+
+    await waitFor(() => expect(recordMovieToSink).toHaveBeenCalledTimes(1));
+    // Asked under the name the dialog was showing, for the format being made.
+    expect(disk.choose).toHaveBeenCalledTimes(1);
+    expect(disk.choose.mock.calls[0][0]).toMatch(/^silexgis-.*\.webm$/);
+    expect(disk.choose.mock.calls[0][1]).toBe('webm');
+    expect(recordMovieToSink.mock.calls[0][1]).toBe(sink);
+    expect(recordMovieToSink.mock.calls[0][0].settings.format).toBe('webm');
+    // While it runs the dialog names the file the reader chose, not the one it had suggested.
+    expect(screen.getByTestId('movie-file-name')).toHaveTextContent('The file will be saved as my weekend.webm');
+    await act(async () => finish());
+
+    expect(await screen.findByText('Saved my weekend.webm')).toBeInTheDocument();
+    expect(recordMovie).not.toHaveBeenCalled();
+    expect(saveBlob).not.toHaveBeenCalled();
+    // The recorder was given the sink, and ending it was the recorder's.
+    expect(sink.state).toBe('open');
+    expect(screen.queryByTestId('movie-export-failed')).not.toBeInTheDocument();
+  });
+
+  it('starts nothing when the reader closes the question: no export, no word, and Export can be pressed again', async () => {
+    const exportButton = await openLongVideo();
+    disk.choose.mockResolvedValue({ kind: 'dismissed' });
+    fireEvent.click(exportButton);
+
+    await waitFor(() => expect(disk.choose).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    expect(recordMovieToSink).not.toHaveBeenCalled();
+    expect(recordMovie).not.toHaveBeenCalled();
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('movie-progress')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('movie-cancel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('movie-export-failed')).not.toBeInTheDocument();
+    expect(exportButton).not.toBeDisabled();
+
+    // The positive case beside it: the same press, answered, does export.
+    const { choice } = chosenFile();
+    disk.choose.mockResolvedValue(choice);
+    recordMovieToSink.mockResolvedValue(null);
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(recordMovieToSink).toHaveBeenCalledTimes(1));
+  });
+
+  it('asks once, however often Export is pressed while the question is open', async () => {
+    const exportButton = await openLongVideo();
+    let answer!: (choice: MovieFileChoice) => void;
+    disk.choose.mockImplementation(() => new Promise<MovieFileChoice>((resolve) => (answer = resolve)));
+    fireEvent.click(exportButton);
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(disk.choose).toHaveBeenCalledTimes(1));
+    await act(async () => answer({ kind: 'dismissed' }));
+    expect(disk.choose).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes the movie in memory, and saves it as any other, where the browser would not ask after all', async () => {
+    const exportButton = await openLongVideo();
+    disk.choose.mockResolvedValue({ kind: 'memory' });
+    const file = new Blob(['webm'], { type: 'video/webm' });
+    recordMovie.mockResolvedValue(file);
+    fireEvent.click(exportButton);
+
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    expect(recordMovieToSink).not.toHaveBeenCalled();
+    const [saved, name] = saveBlob.mock.calls[0] as [Blob, string];
+    expect(saved).toBe(file);
+    expect(name).toMatch(/^silexgis-.*\.webm$/);
+  });
+
+  it('saves the file the recorder answers when it could not be written as it was made', async () => {
+    const exportButton = await openLongVideo();
+    const { choice } = chosenFile('chosen.webm');
+    disk.choose.mockResolvedValue(choice);
+    const file = new Blob(['webm'], { type: 'video/webm' });
+    recordMovieToSink.mockResolvedValue(file);
+    fireEvent.click(exportButton);
+
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    expect(saveBlob.mock.calls[0]).toEqual([file, 'chosen.webm']);
+  });
+
+  it('a cancel ends it without a word, and a failure says so, as for any export', async () => {
+    const exportButton = await openLongVideo();
+    const { choice } = chosenFile();
+    disk.choose.mockResolvedValue(choice);
+    recordMovieToSink.mockImplementation(
+      (recording) =>
+        new Promise<null>((_resolve, reject) => {
+          recording.signal?.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')));
+        }),
+    );
+    fireEvent.click(exportButton);
+    fireEvent.click(await screen.findByTestId('movie-cancel'));
+    await waitFor(() => expect(screen.queryByTestId('movie-cancel')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('movie-export-failed')).not.toBeInTheDocument();
+    expect(saveBlob).not.toHaveBeenCalled();
+
+    // The button was replaced by Cancel while the export ran: it is the new one that is pressed.
+    recordMovieToSink.mockRejectedValue(new Error('WEBM encoder, write: the disk is full'));
+    const again = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(again).not.toBeDisabled());
+    fireEvent.click(again);
+    expect(await screen.findByTestId('movie-export-failed')).toHaveTextContent('the disk is full');
+    expect(saveBlob).not.toHaveBeenCalled();
+  });
+
+  it('takes the chosen file away when the export ends before a frame is made', async () => {
+    disk.goes = true;
+    useUiPrefsStore.setState({ movieSettings: normaliseMovieSettings({ ...DEFAULT_MOVIE_SETTINGS, format: 'webm' }) });
+    const live = movieTrip('trip-a', 'Alpha');
+    live.trip.tracking = { ...live.trip.tracking, state: 'armed', closedAt: null } as TrackingState;
+    reads.movie = { ...ready(live), rereadLive: vi.fn(() => Promise.reject(new Error('the log could not be read'))) };
+    const { sink, choice } = chosenFile();
+    disk.choose.mockResolvedValue(choice);
+    open(['trip-a']);
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+
+    expect(await screen.findByTestId('movie-log-unavailable')).toBeInTheDocument();
+    expect(recordMovieToSink).not.toHaveBeenCalled();
+    await waitFor(() => expect(sink.state).toBe('aborted'));
   });
 });
 

@@ -43,12 +43,16 @@ import {
   type MovieTripData,
 } from '../../../caveview/movie/movieParty.ts';
 import { moviePresetOutput, withMovieOutput, type MoviePresetId } from '../../../caveview/movie/moviePresets.ts';
+import type { MovieSink } from '../../../caveview/movie/encode/movieSink.ts';
+import { chooseMovieFile, movieGoesToDisk, type MovieFileChoice } from '../../../caveview/movie/movieFileSink.ts';
 import {
   isMovieAbort,
   recordMovie,
+  recordMovieToSink,
   recordMovieStill,
   MovieStillUnwrittenError,
   type MovieProgress,
+  type MovieRecording,
 } from '../../../caveview/movie/movieRecorder.ts';
 import {
   DEFAULT_MOVIE_SETTINGS,
@@ -801,11 +805,40 @@ function MovieDialogBody({
     return () => window.clearInterval(timer);
   }, [recording]);
 
+  // Set while the reader is being asked where a long video goes, so a second press asks nothing.
+  const choosingFileRef = useRef(false);
   const exportMovie = async () => {
     const handle = handleRef.current;
-    if (handle === null || timeline === null || movie.trips.length === 0) {
+    if (handle === null || timeline === null || movie.trips.length === 0 || choosingFileRef.current) {
       return;
     }
+    // A long video is written to a file as it is made, and where that file goes has to be asked
+    // now: a browser only asks in answer to the press, and the press is spent once anything else
+    // has been waited for. Nothing has been started yet, so a reader who closes the question has
+    // cancelled nothing — there is simply no export.
+    let disk: { name: string; sink: MovieSink } | null = null;
+    if (movieGoesToDisk(settings.format, movieFileSizeEstimate(settings, frameCount, gifCalibration))) {
+      choosingFileRef.current = true;
+      let choice: MovieFileChoice;
+      try {
+        choice = await chooseMovieFile(fileName, settings.format);
+      } finally {
+        choosingFileRef.current = false;
+      }
+      if (choice.kind === 'dismissed') {
+        return;
+      }
+      if (choice.kind === 'file') {
+        if (handleRef.current !== handle) {
+          // The preview went away while the question was open: there is nothing left to record.
+          await choice.sink.abort();
+          return;
+        }
+        disk = choice;
+      }
+    }
+    // From here until the recorder takes it, a file that was chosen is this function's to remove.
+    let sinkHandedOver = false;
     stopPlaying();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -813,8 +846,9 @@ function MovieDialogBody({
     setFailure(null);
     setLiveLogFailed(false);
     // The name the dialog was showing when the export was started, so the file is called what the
-    // reader was told it would be — even when the export runs past midnight.
-    const name = fileName;
+    // reader was told it would be — even when the export runs past midnight. A file the reader
+    // chose is called what they called it.
+    const name = disk?.name ?? fileName;
     setRun({ name, startedAt, progress: null, now: startedAt });
     let trips = movie.trips;
     let recorded = timeline;
@@ -846,7 +880,7 @@ function MovieDialogBody({
             : timelineOf(spansShowing(spans, trips, surveyModelId, excluded), settings.timeline)) ?? timeline;
         setWindowEnd((before) => Math.max(before, now));
       }
-      const file = await recordMovie({
+      const asked: MovieRecording = {
         viewer: handle.viewer,
         constants: handle.cv2,
         settings,
@@ -859,10 +893,20 @@ function MovieDialogBody({
         clusterLabelAfter: clusterLabel,
         signal: controller.signal,
         onProgress: (progress) => setRun((before) => before && { ...before, progress, now: performance.now() }),
-      });
-      saveBlob(file, name);
+      };
+      let file: Blob | null;
+      if (disk === null) {
+        file = await recordMovie(asked);
+      } else {
+        sinkHandedOver = true;
+        file = await recordMovieToSink(asked, disk.sink);
+      }
+      // No file comes back from a movie that is already in the place the reader chose for it.
+      if (file !== null) {
+        saveBlob(file, name);
+      }
       message.success(t('caveview.movie.saved', { name }));
-      if (settings.format === 'gif') {
+      if (settings.format === 'gif' && file !== null) {
         // What this GIF came to corrects the size estimated for the next one. Read from the store
         // as it is now, not as it was when the export began: another window may have made one since.
         const held = normaliseMovieGifCalibration(useUiPrefsStore.getState().movieGifCalibration);
@@ -877,6 +921,10 @@ function MovieDialogBody({
         setFailure({ what: 'movie', detail: error instanceof Error ? error.message : String(error) });
       }
     } finally {
+      if (disk !== null && !sinkHandedOver) {
+        // The export ended before a frame was made: the file the question created is taken away.
+        void disk.sink.abort();
+      }
       if (abortRef.current === controller) {
         abortRef.current = null;
       }
@@ -1217,7 +1265,9 @@ function MovieDialogBody({
         <Flex justify="flex-end" align="center" gap="small" wrap>
           {movie.trips.length > 0 && (
             <Typography.Text type="secondary" className="movie-dialog-file-name" data-testid="movie-file-name">
-              {t('caveview.movie.fileNamed', { name: run?.name ?? fileName })}
+              {run === null && movieGoesToDisk(settings.format, estimate)
+                ? t('caveview.movie.fileAsked', { name: fileName })
+                : t('caveview.movie.fileNamed', { name: run?.name ?? fileName })}
             </Typography.Text>
           )}
           {recording ? (
