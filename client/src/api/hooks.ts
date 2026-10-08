@@ -305,6 +305,10 @@ export const queryKeys = {
   // both. The page is a second word-led segment, so no narrowing of the log can collide with it.
   tripTrackingRemovedEvents: (id: string, page: number) =>
     ['trip-logs', 'tracking-events', id, 'removed', page] as const,
+  // How many reports a trip holds about one person, kept ones included. Under the log's prefix
+  // for the same reason as the kept list: every write to the log changes it.
+  tripTrackingReportsHeldOf: (id: string, caverId: string) =>
+    ['trip-logs', 'tracking-events', id, 'held-of', caverId] as const,
   tripTrackingShares: (id: string) => ['trip-logs', 'tracking-shares', id] as const,
   // Every published link of the installation, for its administrators. Under the trips' prefix on
   // purpose: a status is read off a trip's watch and its links, so anything that writes a trip or
@@ -464,7 +468,14 @@ async function unwrapVoid(
   const { error, response } = await call;
   if (error !== undefined) {
     const problem = error as { code?: string; detail?: string } | undefined;
-    throw new ApiError(response.status, problem?.code, problem?.detail);
+    // The whole problem object here too: a refused delete is where a server most often has
+    // something to hand back — what still holds the thing in place.
+    throw new ApiError(
+      response.status,
+      problem?.code,
+      problem?.detail,
+      problem as Record<string, unknown> | undefined,
+    );
   }
 }
 
@@ -5125,12 +5136,10 @@ export function useUpdateCaver(id: string) {
 export function useDeleteCaver() {
   const invalidate = useInvalidateCavers();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error, response } = await api.DELETE('/api/v1/cavers/{id}', { params: { path: { id } } });
-      if (error !== undefined) {
-        throw new Error(`API error ${response.status}`);
-      }
-    },
+    // Through the shared unwrap, so that a refusal arrives with its code and its members: the
+    // refusal over trips names the trips, and a screen can only show them if they get this far.
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/cavers/{id}', { params: { path: { id } } })),
     onSuccess: (_, id) => invalidate(id),
   });
 }
@@ -9337,6 +9346,59 @@ export function useDestroyTrackingEvent() {
       unwrapVoid(
         api.DELETE('/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}', {
           params: { path: { tripLogId, eventId }, query: { permanent: true } },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * How many reports of one trip are about one person: the ones on its log and the ones taken off it
+ * and kept, which is what removing them for good destroys.
+ *
+ * Asked of the two lists themselves, each narrowed to the person and read for its total alone, so
+ * that the number said before the act is counted by the same reads the act's own guard trusts.
+ * For whoever may write the log — the kept reports are listed to nobody else.
+ */
+export function useTrackingReportsHeldOf(
+  tripLogId: string | undefined,
+  caverId: string | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.tripTrackingReportsHeldOf(tripLogId ?? '', caverId ?? ''),
+    queryFn: async () => {
+      const path = { tripLogId: tripLogId! };
+      const query = { caverId: caverId!, page: 1, pageSize: 1 };
+      const [onTheLog, kept] = await Promise.all([
+        unwrap(api.GET('/api/v1/trip-logs/{tripLogId}/tracking/events', { params: { path, query } })),
+        unwrap(
+          api.GET('/api/v1/trip-logs/{tripLogId}/tracking/events/removed', { params: { path, query } }),
+        ),
+      ]);
+      return onTheLog.totalItems + kept.totalItems;
+    },
+    enabled: !!tripLogId && !!caverId && enabled,
+    // Never a held answer: it is read to be said in a confirmation of something irreversible.
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+/**
+ * Removes, for good, every report of one trip about one person — the ones on its log and the ones
+ * already taken off it and kept. Answers how many are gone.
+ *
+ * For somebody who asks to be removed: a report that is merely off the log can be put back, which
+ * is not what they asked for. Nothing here touches the trip's roster.
+ */
+export function useRemoveTrackingReportsOf() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({ tripLogId, caverId }: { tripLogId: string; caverId: string }) =>
+      unwrap(
+        api.DELETE('/api/v1/trip-logs/{tripLogId}/tracking/participants/{caverId}/events', {
+          params: { path: { tripLogId, caverId } },
         }),
       ),
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),

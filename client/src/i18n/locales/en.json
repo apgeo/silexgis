@@ -1711,6 +1711,7 @@
       "declaredOnlyNothing": "Every survey of this drawing is in the declared parts.",
       "declaredOnlyUnmatched": "This drawing has no survey called: {{entries}}. It cannot be narrowed to the declared parts.",
       "declaredOnlyWaiting": "Available once the model has loaded.",
+      "personActions": "More for {{name}}",
       "notOnRosterDetail": "Taken off the trip's roster after reports about them were recorded. Their reports stay in the log; nothing more can be recorded for them, and a published page does not show them.",
       "quiet": {
         "tagHours": "No word for over {{amount}} h",
@@ -1826,6 +1827,16 @@
       "eventDeleted": "The report is off the log.",
       "eventDeleteUndo": "Undo",
       "eventRestored": "The report is back on the log, as it was.",
+      "removeReportsOf": {
+        "action": "Remove their reports from this trip",
+        "actionCounted": "Remove their reports from this trip: {{count}}",
+        "confirmTitle": "Remove every report about {{name}} from this trip, for good?",
+        "confirmTitleCounted": "Remove every report about {{name}} from this trip, for good? Reports: {{count}}",
+        "confirmBody": "This destroys every report this trip's tracking log holds about them — the ones on the log and the ones already taken off it and kept. It cannot be undone, and nothing is left to put back. The replay of this trip and any published page of it will change. What stays: their name on the trip's roster, until the trip is edited; and the trip's history, which records that the reports were removed and keeps what each one said.",
+        "confirmOk": "Remove for good",
+        "done": "Reports removed for good: {{count}}",
+        "failed": "The reports could not be removed."
+      },
       "removed": {
         "title": "Removed reports: {{count}}",
         "help": "Reports taken off this log. They are shown nowhere else — not in the party table, on the survey, in a replay or on a published page — and are kept for as long as the trip exists. A report put back returns exactly as it was, with its place and its moment. One deleted for good cannot be brought back.",
@@ -1858,6 +1869,7 @@
         "teamNotFound": "That team is no longer on this trip.",
         "eventNotFound": "That report is no longer on the log — somebody else may have taken it off.",
         "eventNotRemoved": "That report is on the log again — somebody put it back. Take it off first, then delete it for good.",
+        "noReportsOfPerson": "This trip holds no reports about that person any more — somebody else may have removed them.",
         "concurrentWrite": "Somebody else wrote to this tracking at the same moment. The page has been read again; try once more.",
         "tripNotFound": "This trip is no longer there, or is no longer yours to read.",
         "ifMatchRequired": "This page lost track of which version it was changing. It has been read again; try once more.",
@@ -2407,7 +2419,23 @@
     "mergeInto": "Merge into {{name}}",
     "mergeHint": "Pick the duplicate entry to fold in. Their trips and caving groups move across, and the duplicate is removed.",
     "deleteConfirm": "Remove this person from the roster?",
-    "deleteRefused": "This person is named on trips. Merge their duplicate entry instead.",
+    "deleteRefused": "This person could not be removed.",
+    "deleteRefusedCamp": "This person is on a camp's roster and cannot be removed while they are. If this is a duplicate entry, merge it instead.",
+    "heldByTrips": {
+      "title": "{{name}} cannot be removed yet",
+      "intro": "Trips still name this person, so their entry cannot be removed. Each trip below says what holds them there.",
+      "onRoster": "On the roster",
+      "onRosterHelp": "Open the trip and take them off its roster.",
+      "reports": "Tracking reports: {{count}}",
+      "notRemovable": "Their reports cannot be removed from here: that takes the right to edit this trip, and a tracking log that has been started.",
+      "elsewhere": "Something not shown here also holds this person — a trip you cannot open, a deleted trip, or more trips than this list names. Ask an administrator.",
+      "nothingLeft": "Nothing listed here holds this person any more.",
+      "deleteNow": "Remove this person",
+      "deleted": "{{name}} has been removed from the roster.",
+      "stillHeld": "Something still holds this person. The list has been read again.",
+      "merge": "Merge a duplicate instead",
+      "mergeHint": "If this is a second entry for somebody the roster already has, merge it instead: its trips and reports move to the entry that stays."
+    },
     "picker": {
       "picked": "From the list of cavers.",
       "typed": "Not chosen from the list, so it is saved as a name: it means whoever the list of cavers already holds under exactly this name, and adds them if nobody is."

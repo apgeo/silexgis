@@ -1711,6 +1711,7 @@
       "declaredOnlyNothing": "Toate ridicările acestui desen sunt în părțile declarate.",
       "declaredOnlyUnmatched": "Acest desen nu are nicio ridicare numită: {{entries}}. Nu poate fi restrâns la părțile declarate.",
       "declaredOnlyWaiting": "Disponibil după încărcarea modelului.",
+      "personActions": "Mai multe pentru {{name}}",
       "notOnRosterDetail": "A fost scos de pe lista turei după ce s-au înregistrat rapoarte despre el. Rapoartele rămân în jurnal; nu se mai poate înregistra nimic pentru el, iar o pagină publică nu îl arată.",
       "quiet": {
         "tagHours": "Nicio veste de peste {{amount}} h",
@@ -1826,6 +1827,16 @@
       "eventDeleted": "Raportul a fost scos din jurnal.",
       "eventDeleteUndo": "Anulează",
       "eventRestored": "Raportul este din nou în jurnal, așa cum era.",
+      "removeReportsOf": {
+        "action": "Șterge rapoartele ei din această tură",
+        "actionCounted": "Șterge rapoartele ei din această tură: {{count}}",
+        "confirmTitle": "Ștergi definitiv toate rapoartele despre {{name}} din această tură?",
+        "confirmTitleCounted": "Ștergi definitiv toate rapoartele despre {{name}} din această tură? Rapoarte: {{count}}",
+        "confirmBody": "Se distrug toate rapoartele pe care jurnalul de urmărire al acestei ture le are despre această persoană — cele din jurnal și cele deja scoase din el și păstrate. Acțiunea nu poate fi anulată și nu rămâne nimic de pus înapoi. Reluarea acestei ture și orice pagină publicată a ei se vor schimba. Ce rămâne: numele persoanei pe lista turei, până când tura este editată; și istoricul turei, care consemnează că rapoartele au fost șterse și păstrează ce spunea fiecare.",
+        "confirmOk": "Șterge definitiv",
+        "done": "Rapoarte șterse definitiv: {{count}}",
+        "failed": "Rapoartele nu au putut fi șterse."
+      },
       "removed": {
         "title": "Rapoarte scoase: {{count}}",
         "help": "Rapoarte scoase din acest jurnal. Nu apar nicăieri altundeva — nici în tabelul echipei, nici pe ridicare, nici într-o reluare sau pe o pagină publicată — și se păstrează cât timp există tura. Un raport pus înapoi revine exact cum era, cu locul și momentul lui. Unul șters definitiv nu mai poate fi adus înapoi.",
@@ -1858,6 +1869,7 @@
         "teamNotFound": "Acea echipă nu mai este pe această tură.",
         "eventNotFound": "Acel raport nu mai este în jurnal — s-ar putea să îl fi scos altcineva.",
         "eventNotRemoved": "Acel raport este din nou în jurnal — l-a pus cineva înapoi. Scoate-l mai întâi, apoi șterge-l definitiv.",
+        "noReportsOfPerson": "Această tură nu mai are niciun raport despre acea persoană — s-ar putea să le fi șters altcineva.",
         "concurrentWrite": "Altcineva a scris în această urmărire în același moment. Pagina a fost citită din nou; mai încearcă o dată.",
         "tripNotFound": "Această tură nu mai există sau nu mai poate fi citită de tine.",
         "ifMatchRequired": "Pagina a pierdut versiunea pe care o modifica. A fost citită din nou; mai încearcă o dată.",
@@ -2407,7 +2419,23 @@
     "mergeInto": "Unifică în {{name}}",
     "mergeHint": "Alegeți înregistrarea duplicat. Turele și grupurile sale trec la aceasta, iar duplicatul este eliminat.",
     "deleteConfirm": "Eliminați această persoană din listă?",
-    "deleteRefused": "Persoana apare în ture. Unificați înregistrarea duplicat în loc.",
+    "deleteRefused": "Persoana nu a putut fi eliminată.",
+    "deleteRefusedCamp": "Persoana este pe lista unei tabere și nu poate fi eliminată cât timp rămâne acolo. Dacă este o înregistrare duplicat, unificați-o în loc.",
+    "heldByTrips": {
+      "title": "{{name}} nu poate fi eliminat(ă) încă",
+      "intro": "Persoana apare încă în ture, așa că înregistrarea ei nu poate fi eliminată. Fiecare tură de mai jos arată ce o ține acolo.",
+      "onRoster": "Pe listă",
+      "onRosterHelp": "Deschideți tura și scoateți persoana de pe lista ei.",
+      "reports": "Rapoarte de urmărire: {{count}}",
+      "notRemovable": "Rapoartele ei nu pot fi șterse de aici: este nevoie de dreptul de a edita această tură și de un jurnal de urmărire care a fost pornit.",
+      "elsewhere": "Persoana este ținută și de ceva ce nu apare aici — o tură pe care nu o puteți deschide, o tură ștearsă sau mai multe ture decât cuprinde această listă. Întrebați un administrator.",
+      "nothingLeft": "Nimic din ce apare aici nu mai ține această persoană.",
+      "deleteNow": "Eliminați persoana",
+      "deleted": "{{name}} a fost eliminat(ă) din listă.",
+      "stillHeld": "Ceva ține încă această persoană. Lista a fost citită din nou.",
+      "merge": "Unificați un duplicat în loc",
+      "mergeHint": "Dacă aceasta este a doua înregistrare a cuiva pe care lista îl are deja, unificați-o în loc: turele și rapoartele ei trec la înregistrarea care rămâne."
+    },
     "picker": {
       "picked": "Din lista de speologi.",
       "typed": "Nu a fost ales din listă, așa că se salvează ca nume: înseamnă persoana pe care lista de speologi o are deja exact sub acest nume, iar dacă nu este nimeni, o adaugă."

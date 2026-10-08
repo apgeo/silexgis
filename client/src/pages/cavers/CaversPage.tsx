@@ -26,6 +26,13 @@ import {
   useUpdateCaver,
   type CaverInfo,
 } from '../../api/hooks.ts';
+import { ApiError } from '../../api/client.ts';
+import { CaverHeldByTripsModal } from '../../components/cavers/CaverHeldByTripsModal.tsx';
+import {
+  CAVER_HELD_BY_CAMP_CODE,
+  caverHeldByTrips,
+  type CaverHeldByTrips,
+} from '../../components/cavers/caverHeldByTrips.ts';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 
@@ -103,6 +110,7 @@ export default function CaversPage() {
   const [editing, setEditing] = useState<CaverInfo | null>(null);
   const [merging, setMerging] = useState<CaverInfo | null>(null);
   const [counting, setCounting] = useState<CaverInfo | null>(null);
+  const [held, setHeld] = useState<{ caver: CaverInfo; by: CaverHeldByTrips } | null>(null);
   const [form] = Form.useForm<CaverForm>();
 
   // Contact fields and roster edits sit behind Cavers · Write (the label level every
@@ -228,12 +236,27 @@ export default function CaversPage() {
                       <Popconfirm
                         title={t('cavers.deleteConfirm')}
                         onConfirm={() =>
-                          deleteCaver
-                            .mutateAsync(caver.id)
-                            .catch(() => message.error(t('cavers.deleteRefused')))
+                          deleteCaver.mutateAsync(caver.id).catch((error: unknown) => {
+                            // Trips hold them: the refusal says which, and the dialog is where
+                            // something can be done about each.
+                            const by = caverHeldByTrips(error);
+                            if (by) {
+                              setHeld({ caver, by });
+                            } else if (error instanceof ApiError && error.code === CAVER_HELD_BY_CAMP_CODE) {
+                              message.error(t('cavers.deleteRefusedCamp'));
+                            } else {
+                              message.error(t('cavers.deleteRefused'));
+                            }
+                          })
                         }
                       >
-                        <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                        <Button
+                          size="small"
+                          type="text"
+                          danger
+                          icon={<DeleteOutlined />}
+                          data-testid={`caver-delete-${caver.id}`}
+                        />
                       </Popconfirm>
                     </Space>
                   ),
@@ -272,6 +295,18 @@ export default function CaversPage() {
       </Modal>
 
       {merging && <MergeModal target={merging} onClose={() => setMerging(null)} />}
+
+      {held && (
+        <CaverHeldByTripsModal
+          caver={held.caver}
+          held={held.by}
+          onClose={() => setHeld(null)}
+          onMerge={() => {
+            setMerging(held.caver);
+            setHeld(null);
+          }}
+        />
+      )}
 
       <Drawer
         title={counting?.name}

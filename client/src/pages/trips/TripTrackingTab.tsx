@@ -6,6 +6,7 @@ import {
   EditOutlined,
   EyeInvisibleOutlined,
   ImportOutlined,
+  MoreOutlined,
   PictureOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
@@ -14,6 +15,7 @@ import {
   App,
   Button,
   Checkbox,
+  Dropdown,
   Flex,
   Popconfirm,
   Select,
@@ -47,6 +49,7 @@ import TrackingMomentPictures from '../../components/trips/TrackingMomentPicture
 import TrackingEventEditDialog from '../../components/trips/TrackingEventEditDialog.tsx';
 import TrackingPicturesDialog from '../../components/trips/TrackingPicturesDialog.tsx';
 import TrackingPublicNameDialog from '../../components/trips/TrackingPublicNameDialog.tsx';
+import { RemoveReportsOfDialog } from '../../components/trips/RemoveReportsOfDialog.tsx';
 import TrackingHeldReports from '../../components/trips/TrackingHeldReports.tsx';
 import TrackingRemovedReports from '../../components/trips/TrackingRemovedReports.tsx';
 import TrackingReportForm from '../../components/trips/TrackingReportForm.tsx';
@@ -211,6 +214,8 @@ export default function TripTrackingTab({
   const [silenceFirst, setSilenceFirst] = useState(false);
   /** Whose caption on the published page is being set, or null while nobody's is. */
   const [naming, setNaming] = useState<TrackingParticipant | null>(null);
+  /** Whose reports are about to be removed from this trip for good, or null while nobody's are. */
+  const [removingReportsOf, setRemovingReportsOf] = useState<TrackingParticipant | null>(null);
   /**
    * The stations the model below turns out not to hold, as the viewer in it answers.
    *
@@ -1164,6 +1169,45 @@ export default function TripTrackingTab({
       </Flex>
     );
 
+  /**
+   * What can be done about one person of the party, beyond reporting on them — today one thing:
+   * removing every report this trip holds about them, for when they ask to be removed.
+   *
+   * Behind a menu rather than a button of its own in the row: the row is pressed all through a
+   * live watch, and an act that destroys somebody's reports should not sit one mis-tap away from
+   * the cell beside it. Offered to whoever may write this log, on every row — somebody the log
+   * shows nothing about may still have reports that were taken off it and kept, and those go too.
+   */
+  const personActions = (participant: TrackingParticipant) =>
+    rowsWritable ? (
+      <Dropdown
+        trigger={['click']}
+        menu={{
+          items: [
+            {
+              key: 'remove-reports',
+              danger: true,
+              icon: <DeleteOutlined />,
+              label: (
+                <span data-testid={`trip-tracking-remove-reports-of-${participant.caverId}`}>
+                  {t('trips.tracking.removeReportsOf.action')}
+                </span>
+              ),
+              onClick: () => setRemovingReportsOf(participant),
+            },
+          ],
+        }}
+      >
+        <Button
+          type="text"
+          size={controlSize}
+          icon={<MoreOutlined />}
+          aria-label={t('trips.tracking.personActions', { name: named(participant.caverId) })}
+          data-testid={`trip-tracking-person-actions-${participant.caverId}`}
+        />
+      </Dropdown>
+    ) : null;
+
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
       {/* The watch could not be re-read, said above everything it did not take away rather than in
@@ -1555,6 +1599,7 @@ export default function TripTrackingTab({
                               are read only after one of these has said which row to read. */}
                           {standingTag(row)}
                           {quietTag(row)}
+                          {personActions(row)}
                         </div>
                         <div className="tracking-stacked-facts">
                           {fact(t('trips.tracking.publicName.column'), publicNameCell(row))}
@@ -1615,9 +1660,30 @@ export default function TripTrackingTab({
                     key: 'position',
                     render: (_value, row) => positionCell(row),
                   },
+                  // Only for whoever may write the log: a column of nothing would be read as a
+                  // column that failed to load.
+                  ...(rowsWritable
+                    ? [
+                        {
+                          title: '',
+                          key: 'personActions',
+                          width: 48,
+                          render: (_value: unknown, row: TrackingParticipant) => personActions(row),
+                        },
+                      ]
+                    : []),
                 ]
           }
         />
+
+        {removingReportsOf !== null && (
+          <RemoveReportsOfDialog
+            tripLogId={trip.id}
+            caverId={removingReportsOf.caverId}
+            name={named(removingReportsOf.caverId)}
+            onClose={() => setRemovingReportsOf(null)}
+          />
+        )}
 
         {/* Mounted only while somebody is being named, so the field starts empty of the last
             person's caption whatever the dialog's own lifecycle does. */}

@@ -27,6 +27,8 @@ const restoreEvent = vi.fn();
 const removedQuery = vi.fn();
 const setTracking = vi.fn();
 const setLabel = vi.fn();
+const removeReportsOf = vi.fn();
+const reportsHeldOf = vi.fn();
 /** The trip's links, where a photograph hung on one of its moments lives. */
 const pictureLinks = vi.fn();
 const detachPicture = vi.fn();
@@ -106,6 +108,12 @@ vi.mock('../../api/hooks.ts', async () => ({
   // Naming somebody as a follower of the published page sees them. The dialog that does it has its
   // own tests; what this suite asks is whether the tab reaches it at all, which nothing did before.
   useSetTrackingParticipantLabel: () => ({ mutateAsync: setLabel, isPending: false }),
+  // Removing every report about one person. The confirmation has its own words to keep and is
+  // tested where it lives; what this suite asks is who is offered the act, and about whom.
+  useRemoveTrackingReportsOf: () => ({ mutateAsync: removeReportsOf, isPending: false }),
+  // How many reports the trip holds about the person, kept ones included — the number the
+  // confirmation names, which this tab cannot work out from the log it shows.
+  useTrackingReportsHeldOf: (...asked: unknown[]) => reportsHeldOf(...asked),
 }));
 
 // Saving a file is the browser's business; what this suite asks is which address was asked for.
@@ -316,6 +324,8 @@ beforeEach(() => {
   panelEventsTotal = undefined;
   setTracking.mockReset().mockResolvedValue(state());
   setLabel.mockReset().mockResolvedValue({ caverId: ANA, label: null });
+  removeReportsOf.mockReset().mockResolvedValue({ removed: 2 });
+  reportsHeldOf.mockReset().mockReturnValue({ data: 3, isPending: false });
 });
 
 afterEach(cleanup);
@@ -1028,6 +1038,92 @@ describe('TripTrackingTab', () => {
 
     const log = screen.getByTestId('trip-tracking-events');
     expect(within(log).getByTestId('trip-tracking-position-withheld')).toBeTruthy();
+  });
+
+  describe('when somebody asks to be removed', () => {
+    const openRemovalOf = async (caverId: string) => {
+      fireEvent.click(screen.getByTestId(`trip-tracking-person-actions-${caverId}`));
+      fireEvent.click(await screen.findByTestId(`trip-tracking-remove-reports-of-${caverId}`));
+      return screen.findByTestId('remove-reports-of-body');
+    };
+
+    // The party is a table on a wide screen and a stack of cards on a phone, and the menu is
+    // drawn by each: both are driven, so that neither can lose it or offer it to the wrong reader.
+    for (const layout of ['wide', 'stacked'] as const) {
+      it(`removes every report about one person only from their own menu, and only once confirmed (${layout})`, async () => {
+        narrow = layout === 'stacked';
+        show();
+
+        // Nothing destructive is one press away from the row: the act is inside a menu.
+        expect(screen.queryByTestId(`trip-tracking-remove-reports-of-${ANA}`)).toBeNull();
+        const body = await openRemovalOf(ANA);
+
+        expect(body).toHaveTextContent('replay');
+        expect(body).toHaveTextContent('published page');
+        // The number is asked for about her, on this trip, and said before anything is pressed.
+        expect(reportsHeldOf).toHaveBeenLastCalledWith('trip-1', ANA, true);
+        expect(
+          screen.getByText('Remove every report about Ana Popescu from this trip, for good? Reports: 3'),
+        ).toBeTruthy();
+        expect(removeReportsOf).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByTestId('remove-reports-of-confirm'));
+
+        // Hers, on this trip — the person named by the row that was opened, and nobody else.
+        await waitFor(() =>
+          expect(removeReportsOf).toHaveBeenCalledWith({ tripLogId: 'trip-1', caverId: ANA }),
+        );
+        expect(removeReportsOf).toHaveBeenCalledTimes(1);
+      });
+
+      it(`is not offered to a reader, nor on a watch whose log takes no writes (${layout})`, () => {
+        narrow = layout === 'stacked';
+        // Positive half first: the writer of a running watch is offered it on every row.
+        const writer = show();
+        expect(screen.getByTestId(`trip-tracking-person-actions-${ANA}`)).toBeTruthy();
+        expect(screen.getByTestId(`trip-tracking-person-actions-${BOGDAN}`)).toBeTruthy();
+        writer.unmount();
+
+        const reader = show(false);
+        expect(screen.getByTestId('trip-tracking-participants')).toBeTruthy();
+        expect(screen.queryByTestId(`trip-tracking-person-actions-${ANA}`)).toBeNull();
+        reader.unmount();
+
+        trackingQuery.mockReturnValue({ data: state({ state: 'off', armedAt: null }), isPending: false, error: null });
+        show();
+        expect(screen.getByTestId('trip-tracking-participants')).toBeTruthy();
+        expect(screen.queryByTestId(`trip-tracking-person-actions-${ANA}`)).toBeNull();
+      });
+    }
+
+    it('cannot be confirmed before the number of reports is on screen', async () => {
+      reportsHeldOf.mockReturnValue({ data: undefined, isPending: true });
+      show();
+      await openRemovalOf(ANA);
+
+      expect(screen.getByTestId('remove-reports-of-confirm')).toBeDisabled();
+      expect(screen.queryByText(/Reports: /)).toBeNull();
+    });
+
+    it('cannot be confirmed where there is nothing about the person to remove', async () => {
+      reportsHeldOf.mockReturnValue({ data: 0, isPending: false });
+      show();
+      await openRemovalOf(ANA);
+
+      expect(
+        screen.getByText('Remove every report about Ana Popescu from this trip, for good? Reports: 0'),
+      ).toBeTruthy();
+      expect(screen.getByTestId('remove-reports-of-confirm')).toBeDisabled();
+    });
+
+    it('names no number where the number could not be read, and still offers the act', async () => {
+      reportsHeldOf.mockReturnValue({ data: undefined, isPending: false, error: new Error('unreachable') });
+      show();
+      await openRemovalOf(ANA);
+
+      expect(screen.getByText('Remove every report about Ana Popescu from this trip, for good?')).toBeTruthy();
+      expect(screen.getByTestId('remove-reports-of-confirm')).toBeEnabled();
+    });
   });
 
   it('offers a reader who may not write the trip nothing to write with', () => {
