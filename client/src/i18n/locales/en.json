@@ -1508,7 +1508,19 @@
         "atStation": "At a station",
         "atDepth": "At a depth",
         "note": "Note",
-        "exited": "Came out"
+        "exited": "Came out",
+        "caveNote": "About the cave"
+      },
+      "caveNote": {
+        "who": "The cave",
+        "hint": "A note about the cave is about nobody. It moves no one on the model or in the table, whoever may read this trip can read it, and it is never on a published page.",
+        "words": "What to say about the cave",
+        "wordsRequired": "Say what there is to say — a note about the cave is its words.",
+        "station": "Station, if it is at one place",
+        "stationHelp": "Optional. Leave it empty for something about the cave as a whole. Nobody is placed at this station.",
+        "record": "Record the note about the cave",
+        "recorded": "Note about the cave recorded.",
+        "placeLabel": "About the cave, at"
       },
       "armedAt": "Tracking started",
       "closedAt": "Tracking closed",
@@ -1752,6 +1764,8 @@
         "speed": "{{value}}×",
         "scrub": "Moment of the trip",
         "note": "{{when}} · {{who}}: {{note}}",
+        "caveNote": "{{when}} · About the cave: {{note}}",
+        "caveNoteAt": "{{when}} · About the cave, at {{station}}: {{note}}",
         "noteNone": "Nothing had been said in words by this moment.",
         "notePrevious": "Previous note",
         "noteNext": "Next note"
@@ -1901,6 +1915,7 @@
         "stationUnknown": "The survey has no station by that name.",
         "toStationUnknown": "The survey has no station by the name given for the second station, the far end of the stretch.",
         "stretchSameStation": "Both ends of the stretch are the same station. Choose a different second station, or report at that one station.",
+        "reportSubjectFixed": "A report about a person cannot be turned into a note about the cave, nor a note about the cave into a report about a person. Take this one off the log and record the other.",
         "stationReadingOutdated": "That station has no name in the survey file, and this survey was read before such stations could be reported at. Read the survey again — \"Read again\", under \"3D survey models\" on the cave's page — and then report here.",
         "noStationAtDepth": "No station matches that depth under this trip's filter. Widen the filter, or report a station by name.",
         "caverNotParticipant": "Everybody a report is about has to be on the trip's roster first.",
@@ -3040,6 +3055,8 @@
     },
     "tracking": {
       "people": "Cavers ({{count}})",
+      "caveNotes": "About the cave: {{count}}",
+      "caveNoteMark": "Cave: {{note}}",
       "showLabels": "Show names on the model",
       "showTimes": "Show when each position was reported",
       "markerNameTime": "{{name}} · {{when}}",

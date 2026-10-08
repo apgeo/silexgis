@@ -330,6 +330,7 @@ public static class CaverEndpoints
         // its own, not only through the roster check above. Asked past the filter so that it
         // sees what the foreign key sees: the reports of a deleted trip, and a report somebody
         // took off a log, which is kept so that it can be put back and still names this person.
+        // A note about the cave names nobody, so it matches no one here and holds no one in place.
         var reports = await ReportsHoldingAsync(db, id, ct);
         if (reports.Count > 0)
         {
@@ -705,6 +706,9 @@ public static class CaverEndpoints
         // report still holds its person by the foreign key and is still theirs — put back
         // tomorrow, it has to come back about the entry that survived, and the duplicate could not
         // be removed at all while a row this read missed went on naming it.
+        //
+        // The notes about the cave on those same trips are about nobody: they are neither of the
+        // two entries' reports, are matched by neither read below, and stay exactly as they are.
         var sourceReports = await db.TripPositionEvents.IgnoreQueryFilters()
             .Where(e => e.CaverId == source.Id).ToListAsync(ct);
         // The acts of reporting the survivor already holds a report of, trip by trip — removed

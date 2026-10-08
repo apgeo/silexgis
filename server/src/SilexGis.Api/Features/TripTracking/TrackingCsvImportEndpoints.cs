@@ -163,13 +163,18 @@ public static class TrackingCsvImportEndpoints
         var trip = await TripTrackingEndpoints.ReadableTripAsync(db, access, ctx, tripLogId, ct);
         if (trip is null) return ApiProblems.NotFound("trip_log.not_found");
 
-        var events = await db.TripPositionEvents.AsNoTracking()
+        // What is said about people, and nothing else. A row of the sheet is found again by its
+        // person and its moment, and a note about the cave has no person: written out, it would
+        // come back as a row naming nobody, which the reader refuses, so a log written out here
+        // would no longer read back clean. It is left out, and the reader below never sees the
+        // stored ones either — a sheet can neither replace nor duplicate a note about the cave.
+        var events = await db.TripPositionEvents.AsNoTracking().AboutPeople()
             .Where(e => e.TripLogId == tripLogId)
             .OrderBy(e => e.RecordedAt).ThenBy(e => e.CreatedAt).ThenBy(e => e.Id)
             .ToListAsync(ct);
         var openCaves = await TrackingWithholding.OpenCavesOfAsync(db, access, protection, ctx, events, ct);
         var names = await CaverDirectory.ResolveLabelsAsync(
-            db, await userAccessor.GetAsync(ct), events.Select(e => e.CaverId), ct);
+            db, await userAccessor.GetAsync(ct), events.Select(e => e.Person()), ct);
         var teamIds = events.Where(e => e.TeamId is not null).Select(e => e.TeamId!.Value).Distinct().ToList();
         var teams = teamIds.Count == 0
             ? []
@@ -184,7 +189,7 @@ public static class TrackingCsvImportEndpoints
             var shown = TrackingWithholding.Shown(e, openCaves);
             return new TrackingCsvExportRow(
                 shown.RecordedAt,
-                names.GetValueOrDefault(e.CaverId) ?? string.Empty,
+                names.GetValueOrDefault(e.Person()) ?? string.Empty,
                 e.TeamId is { } team ? teams.GetValueOrDefault(team) : null,
                 shown.Kind,
                 shown.StationName,
@@ -471,7 +476,7 @@ public static class TrackingCsvImportEndpoints
         var openCaves = await TrackingWithholding.OpenCavesOfAsync(
             db, access, protection, loaded.Access, replaced, ct);
         return replaced.ToDictionary(
-            e => (e.CaverId, At: e.RecordedAt),
+            e => (CaverId: e.Person(), At: e.RecordedAt),
             e => TrackingWithholding.Shown(e, openCaves));
     }
 
@@ -619,9 +624,13 @@ public static class TrackingCsvImportEndpoints
         // and fail the whole sheet with nothing naming the rows. A key held once is one a sheet
         // corrects; a key held more than once maps to null and is one the planner refuses,
         // because which of the rows the sheet means is not the importer's to guess.
+        //
+        // The reports about people only. A sheet's row is about a person at a moment, so a note
+        // about the cave can be neither the row it corrects nor a second holder of its key; it is
+        // not loaded, and whatever the sheet does it is still on the log afterwards as it was.
         var log = forWriting ? db.TripPositionEvents : db.TripPositionEvents.AsNoTracking();
-        var stored = (await log.Where(e => e.TripLogId == tripLogId).ToListAsync(ct))
-            .GroupBy(e => (e.CaverId, At: e.RecordedAt))
+        var stored = (await log.AboutPeople().Where(e => e.TripLogId == tripLogId).ToListAsync(ct))
+            .GroupBy(e => (CaverId: e.Person(), At: e.RecordedAt))
             .ToDictionary(g => g.Key, g => g.Count() == 1 ? g.First() : null);
 
         // Where each report held once says the person was, for the rows that only repeat it —
@@ -633,7 +642,7 @@ public static class TrackingCsvImportEndpoints
         var storedPlaces = placedRows
             .Where(e => TrackingWithholding.PositionOpen(e, openCaves))
             .ToDictionary(
-                e => (e.CaverId, At: e.RecordedAt),
+                e => (CaverId: e.Person(), At: e.RecordedAt),
                 e => new TrackingCsvStoredPlace(e.Kind, e.ViewerStationName, e.DepthEnteredM, e.ViewerToStationName));
 
         var subject = new TrackingCsvSubject

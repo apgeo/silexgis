@@ -50,7 +50,12 @@ public sealed class TripTrackingJournalReads(
         // The log's own rows in the log's own order, turned round: the screen lists the newest
         // report first and a journal is read from the beginning. The whole of it — a tracked
         // trip's log is small, and the state read above has just folded every row of it too.
-        var rows = await TripTrackingEndpoints.NewestFirst(TripTrackingEndpoints.LogOf(db, tripLogId))
+        //
+        // The reports about people, which is what every line of a journal is keyed by: who, then
+        // what was said of them. A note about the cave is about nobody and is not carried, as it
+        // is not in the log written out as a sheet — printed in a line made for a person it would
+        // read as something said of somebody the document does not name.
+        var rows = await TripTrackingEndpoints.NewestFirst(TripTrackingEndpoints.LogOf(db, tripLogId).AboutPeople())
             .ToListAsync(ct);
         rows.Reverse();
 
@@ -90,12 +95,13 @@ public sealed class TripTrackingJournalReads(
             var claimsPlace = TrackingWithholding.HasPosition(row);
             var withheld = claimsPlace
                 && told.StationName is null && told.DepthEnteredM is null && told.SurveyModelId is null;
-            if (claimsPlace) lastPlaceWithheld[row.CaverId] = withheld;
+            var about = row.Person();
+            if (claimsPlace) lastPlaceWithheld[about] = withheld;
 
             entries.Add(new TripTrackingJournalEntry(
                 told.RecordedAt,
-                told.CaverId,
-                NameOf(told.CaverId),
+                about,
+                NameOf(about),
                 TeamOf(told.TeamId),
                 told.Kind,
                 told.StationName,

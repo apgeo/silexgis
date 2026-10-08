@@ -22,6 +22,7 @@ import {
   type TrackedCaver,
   type TrackedCaverPosition,
 } from '../../caveview/trackedCavers.ts';
+import type { CaveNoteMark } from '../../caveview/caveNotes.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import './CaveViewTrackingOverlay.css';
 
@@ -34,8 +35,11 @@ import './CaveViewTrackingOverlay.css';
  * light up instead.
  */
 export interface TrackedPlace {
-  kind: 'caver' | 'team';
-  /** A caver id, or a team id — null for the group of everybody on no team. */
+  kind: 'caver' | 'team' | 'caveNote';
+  /**
+   * A caver id, a team id — null for the group of everybody on no team — or the id of a note
+   * about the cave.
+   */
   id: string | null;
   /** The station to fly to, as the watch spells it. */
   station: string;
@@ -49,6 +53,16 @@ function samePlace(left: TrackedPlace | null, right: TrackedPlace | null): boole
 export interface CaveViewTrackingOverlayProps {
   /** Everybody on the watch — including those no marker could be drawn for. */
   cavers: readonly TrackedCaver[];
+  /**
+   * The notes about the cave in force, newest first — listed under the party, under a heading of
+   * their own, and never inside a team: a hazard is where it is, whoever passed it.
+   *
+   * Every one is listed, including those no mark could be drawn for — a note that names no
+   * station, one whose place this reader is not told, one made on another survey — because the
+   * words are the point and the mark is only where to look. Absent or empty, nothing is drawn for
+   * them at all, which is what every page for visitors gets.
+   */
+  caveNotes?: readonly CaveNoteMark[];
   /**
    * The stations the model on screen turned out not to hold, as the viewer answered it.
    *
@@ -175,6 +189,7 @@ export interface CaveViewTrackingOverlayProps {
  */
 export default function CaveViewTrackingOverlay({
   cavers,
+  caveNotes = [],
   unplacedStations = noStationsMissing,
   stretchFaults = noStretchFaults,
   showTimes,
@@ -447,6 +462,43 @@ export default function CaveViewTrackingOverlay({
     );
   };
 
+  /**
+   * One note about the cave. Pressable where its mark stands on the drawing — the camera goes to
+   * the station, as it does for a person — and plain words where there is nowhere to go.
+   */
+  const caveNoteRow = (note: CaveNoteMark) => {
+    const drawn =
+      note.stationName !== null && note.onThisModel && !unplacedStations.has(note.stationName);
+    const here: TrackedPlace | null =
+      drawn && note.stationName !== null
+        ? { kind: 'caveNote', id: note.id, station: note.stationName }
+        : null;
+    const marked = samePlace(shown, here);
+    return (
+      <Button
+        key={note.id}
+        type="text"
+        size="small"
+        className={`caveview-tracking-note${marked ? ' caveview-tracking-marked' : ''}`}
+        disabled={here === null}
+        aria-current={marked ? 'true' : undefined}
+        onClick={() => onShow(marked || here === null ? null : here)}
+        data-testid={`caveview-cave-note-${note.id}`}
+      >
+        <span className="caveview-tracking-note-words">{note.note}</span>
+        <span className="caveview-tracking-person-place">
+          {note.stationName === null
+            ? '—'
+            : drawn
+              ? shortNameOf(note.stationName)
+              : note.onThisModel
+                ? notOnModelTag()
+                : t('caveview.tracking.positionOtherModel')}
+        </span>
+      </Button>
+    );
+  };
+
   // Said on the element rather than left to a `:has()` in the stylesheet, so what the layout
   // branches on is a fact this component states and a test can read back: on a screen too short
   // to hold the list and a card at once, the card is what the reader asked for.
@@ -540,6 +592,17 @@ export default function CaveViewTrackingOverlay({
                   })
                 : cavers.map(caverRow)}
             </div>
+            {/* Under the party and apart from it. Each note says where it is, if this reader was
+                told and the drawing holds the place, and then what was said — in full, because a
+                mark on the model carries only the start of it. */}
+            {caveNotes.length > 0 && (
+              <div className="caveview-tracking-notes" data-testid="caveview-cave-notes">
+                <Typography.Text strong style={{ fontSize: 12 }}>
+                  {t('caveview.tracking.caveNotes', { count: caveNotes.length })}
+                </Typography.Text>
+                {caveNotes.map(caveNoteRow)}
+              </div>
+            )}
           </>
         )}
       </div>

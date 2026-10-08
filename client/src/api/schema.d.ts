@@ -26214,7 +26214,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
-            caverId: string;
+            caverId: null | string;
             /** Format: uuid */
             teamId: null | string;
             kind: components["schemas"]["TripPositionEventKind"];
@@ -26991,7 +26991,7 @@ export interface components {
             cavingGroupName: null | string;
         };
         /** @enum {unknown} */
-        TripPositionEventKind: "entered" | "atStation" | "atDepth" | "note" | "exited" | null;
+        TripPositionEventKind: "entered" | "atStation" | "atDepth" | "note" | "exited" | "caveNote" | null;
         TripPromotionDto: {
             /** Format: uuid */
             tripLogId: string;

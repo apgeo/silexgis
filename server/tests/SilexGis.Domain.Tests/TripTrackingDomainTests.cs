@@ -439,6 +439,45 @@ public class TripTrackingDomainTests
     }
 
     [Fact]
+    public void A_note_about_the_cave_says_nothing_of_where_anybody_stands()
+    {
+        // It is about nobody, and the readers that fold people leave it out before this rule is
+        // asked. Handed one anyway — alone, or among a person's reports — the rule is unmoved:
+        // a hazard at a station is not somebody underground at it.
+        Standing(TripPositionEventKind.CaveNote).ShouldBe(TripStanding.Unheard);
+        TripTrackingRules.StandingOf([new TripPositionEvent
+        {
+            Kind = TripPositionEventKind.CaveNote, ViewerStationName = "cave.deep.3", Note = "loose rock",
+        }]).ShouldBe(TripStanding.Unheard);
+        Standing(TripPositionEventKind.Entered, TripPositionEventKind.Exited, TripPositionEventKind.CaveNote)
+            .ShouldBe(TripStanding.Out);
+        Standing(TripPositionEventKind.Entered, TripPositionEventKind.CaveNote)
+            .ShouldBe(TripStanding.Underground);
+
+        // The twin: a station report in the same place does speak.
+        Standing(TripPositionEventKind.AtStation).ShouldBe(TripStanding.Underground);
+    }
+
+    [Fact]
+    public void A_report_about_nobody_refuses_to_be_read_as_somebodys()
+    {
+        var about = Guid.NewGuid();
+        new TripPositionEvent { CaverId = about }.Person().ShouldBe(about);
+
+        // A reader that folds people and did not leave the note out is stopped, not handed an id.
+        Should.Throw<InvalidOperationException>(
+            () => new TripPositionEvent { Kind = TripPositionEventKind.CaveNote }.Person());
+
+        // And leaving them out is one question, asked of the person.
+        var reports = new[]
+        {
+            new TripPositionEvent { CaverId = about, Kind = TripPositionEventKind.Note },
+            new TripPositionEvent { Kind = TripPositionEventKind.CaveNote },
+        };
+        reports.AsQueryable().AboutPeople().ShouldHaveSingleItem().CaverId.ShouldBe(about);
+    }
+
+    [Fact]
     public void The_last_report_that_states_a_standing_is_the_answer_however_often_it_changes()
     {
         Standing(TripPositionEventKind.Entered).ShouldBe(TripStanding.Underground);

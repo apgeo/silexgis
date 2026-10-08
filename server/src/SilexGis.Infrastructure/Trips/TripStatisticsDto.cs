@@ -66,8 +66,10 @@ namespace SilexGis.Infrastructure.Trips;
 /// state how many pictures were being withheld.
 /// </param>
 /// <param name="TrackedTrips">
-/// How many of the trips have a tracking log — at least one report of any kind. A fact about the
-/// trip, like an incident, so it is the same number whether the subject is a person or a club.
+/// How many of the trips have a tracking log — at least one report about somebody, of any kind.
+/// A note about the cave is about nobody, and a log holding nothing else followed no one. A fact
+/// about the trip, like an incident, so it is the same number whether the subject is a person or
+/// a club.
 /// </param>
 /// <param name="WatchUndergroundMinutes">
 /// Person-minutes underground as the tracking logs have them: each person's entries paired with

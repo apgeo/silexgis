@@ -1508,7 +1508,19 @@
         "atStation": "La o stație",
         "atDepth": "La o adâncime",
         "note": "Notă",
-        "exited": "A ieșit"
+        "exited": "A ieșit",
+        "caveNote": "Despre peșteră"
+      },
+      "caveNote": {
+        "who": "Peștera",
+        "hint": "O notă despre peșteră nu este despre nimeni. Nu mută pe nimeni pe model sau în tabel, o poate citi oricine poate citi tura și nu apare niciodată pe o pagină publicată.",
+        "words": "Ce este de spus despre peșteră",
+        "wordsRequired": "Scrie ce este de spus — o notă despre peșteră înseamnă cuvintele ei.",
+        "station": "Stația, dacă este într-un loc anume",
+        "stationHelp": "Opțional. Lasă gol pentru ceva despre peșteră în întregul ei. Nimeni nu este așezat la această stație.",
+        "record": "Înregistrează nota despre peșteră",
+        "recorded": "Nota despre peșteră a fost înregistrată.",
+        "placeLabel": "Despre peșteră, la"
       },
       "armedAt": "Urmărire începută",
       "closedAt": "Urmărire încheiată",
@@ -1752,6 +1764,8 @@
         "speed": "{{value}}×",
         "scrub": "Momentul din tură",
         "note": "{{when}} · {{who}}: {{note}}",
+        "caveNote": "{{when}} · Despre peșteră: {{note}}",
+        "caveNoteAt": "{{when}} · Despre peșteră, la {{station}}: {{note}}",
         "noteNone": "Până în acest moment nu s-a spus nimic în cuvinte.",
         "notePrevious": "Nota anterioară",
         "noteNext": "Nota următoare"
@@ -1901,6 +1915,7 @@
         "stationUnknown": "Ridicarea nu are nicio stație cu acel nume.",
         "toStationUnknown": "Ridicarea nu are nicio stație cu numele dat pentru a doua stație, capătul îndepărtat al porțiunii.",
         "stretchSameStation": "Ambele capete ale porțiunii sunt aceeași stație. Alege o altă a doua stație sau raportează la acea singură stație.",
+        "reportSubjectFixed": "Un raport despre o persoană nu poate fi transformat într-o notă despre peșteră, nici o notă despre peșteră într-un raport despre o persoană. Scoate-l pe acesta din jurnal și înregistrează-l pe celălalt.",
         "stationReadingOutdated": "Stația aceasta nu are nume în fișierul ridicării, iar ridicarea a fost citită înainte ca astfel de stații să poată fi raportate. Citește din nou ridicarea — „Citește din nou”, la „Modele topo 3D” pe pagina peșterii — și apoi raportează aici.",
         "noStationAtDepth": "Nicio stație nu corespunde acelei adâncimi sub filtrul acestei ture. Lărgește filtrul sau raportează o stație pe nume.",
         "caverNotParticipant": "Toți cei despre care este un raport trebuie să fie mai întâi pe lista turei.",
@@ -3040,6 +3055,8 @@
     },
     "tracking": {
       "people": "Speologi ({{count}})",
+      "caveNotes": "Despre peșteră: {{count}}",
+      "caveNoteMark": "Peșteră: {{note}}",
       "showLabels": "Arată numele pe model",
       "showTimes": "Arată când a fost raportată poziția",
       "markerNameTime": "{{name}} · {{when}}",

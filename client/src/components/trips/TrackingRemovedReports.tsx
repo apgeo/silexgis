@@ -40,7 +40,7 @@ export default function TrackingRemovedReports({
   controlSize,
 }: {
   tripLogId: string;
-  nameOf: (caverId: string) => string;
+  nameOf: (caverId: string | null) => string;
   /** What one report says about a place, as the log itself draws it — a withholding included. */
   placeOf: (report: TrackingEvent) => ReactNode;
   when: (value: string | null) => string;
@@ -132,7 +132,9 @@ export default function TrackingRemovedReports({
                     <Flex gap={8} align="center" wrap>
                       <Typography.Text strong>{when(report.recordedAt)}</Typography.Text>
                       <span>{nameOf(report.caverId)}</span>
-                      <Tag>{t(`trips.tracking.kinds.${report.kind}`)}</Tag>
+                      <Tag color={report.kind === 'caveNote' ? 'warning' : undefined}>
+                        {t(`trips.tracking.kinds.${report.kind}`)}
+                      </Tag>
                       <span data-testid={`trip-tracking-removed-place-${report.id}`}>
                         {placeOf(report)}
                       </span>

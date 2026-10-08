@@ -29,10 +29,24 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         // report's place is rewritten from several sides — a correction, a sheet, an import — and
         // one of them forgetting the second station would otherwise leave it standing beside a
         // place it was never recorded with.
-        builder.ToTable("trip_position_events", table => table.HasCheckConstraint(
-            StretchCheck,
-            "viewer_to_station_name IS NULL OR (kind = 1 AND viewer_station_name IS NOT NULL "
-                + "AND viewer_to_station_name <> viewer_station_name)"));
+        builder.ToTable("trip_position_events", table =>
+        {
+            table.HasCheckConstraint(
+                StretchCheck,
+                "viewer_to_station_name IS NULL OR (kind = 1 AND viewer_station_name IS NOT NULL "
+                    + "AND viewer_to_station_name <> viewer_station_name)");
+            // A note about the cave is the one row with no person, and no other row may lack one:
+            // everything that folds the log into people leaves out the rows without a person, so a
+            // person's report that lost its person would vanish from the party, and a note about
+            // the cave that gained one would move that person to wherever the hazard is. Such a
+            // note also always has words — it says nothing else — and neither a depth nor a team,
+            // which are facts about somebody. Each half is written so that a missing value fails
+            // the rule rather than passing it as unknown.
+            table.HasCheckConstraint(
+                CaveNoteCheck,
+                "(kind = 5) = (caver_id IS NULL) AND (kind <> 5 OR (note IS NOT NULL AND btrim(note) <> '' "
+                    + "AND depth_entered_m IS NULL AND team_id IS NULL))");
+        });
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.Kind).HasConversion<short>();
         // Provenance, stored beside the row and deliberately outside every read-side decision:
@@ -56,6 +70,7 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         // trip's rows out.
         builder.HasQueryFilter(x => x.TripLog.DeletedAt == null && x.RemovedAt == null);
         // Being tracked is a fact about the person; it blocks deleting the person, like the roster.
+        // Optional only for a note about the cave, which is about nobody (the check above).
         builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<TripTeam>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.SetNull);
         // SurveyModelId is deliberately a bare column with no foreign key. Under one the delete of
@@ -88,10 +103,17 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         // again what somebody removed on purpose. Named, in the model and in the database,
         // because the write that loses a race to its own duplicate recognises this constraint by
         // its name.
+        //
+        // "No person" is a value here, not an unknown. A unique index ordinarily lets any number
+        // of rows share a key when one of its columns is empty, which would let a note about the
+        // cave — the one row with no person — be written again by every repeat of its send. Said
+        // not to be distinct, two such rows under one key on one trip collide exactly as two
+        // rows about one person do, under the same name, and the same recovery answers both.
         builder.HasIndex(
                 [nameof(TripPositionEvent.TripLogId), TripPositionEvent.ClientKeyProperty, nameof(TripPositionEvent.CaverId)],
                 ClientKeyIndex)
             .IsUnique()
+            .AreNullsDistinct(false)
             .HasFilter("client_key IS NOT NULL")
             .HasDatabaseName(ClientKeyIndex);
     }
@@ -104,6 +126,12 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
 
     /// <summary>The database's name for the rule on where the far end of a stretch may stand.</summary>
     public const string StretchCheck = "ck_trip_position_events_stretch";
+
+    /// <summary>
+    /// The database's name for the rule that ties "about nobody" to a note about the cave and says
+    /// what such a note holds.
+    /// </summary>
+    public const string CaveNoteCheck = "ck_trip_position_events_cave_note";
 }
 
 public sealed class TripTrackingConfiguration : IEntityTypeConfiguration<TripTracking>

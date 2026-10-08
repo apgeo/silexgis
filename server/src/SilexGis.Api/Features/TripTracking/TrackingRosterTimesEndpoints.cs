@@ -268,11 +268,13 @@ public static class TrackingRosterTimesEndpoints
         var party = await TripTrackingPublicationEndpoints.RosterOrderAsync(db, trip.Id, ct);
 
         // The log's own order — by the instant a report speaks of, then by when it was written —
-        // which is the order the reading of entries and exits is defined over.
-        var reports = await db.TripPositionEvents.AsNoTracking()
+        // which is the order the reading of entries and exits is defined over. People's reports
+        // only: a note about the cave is about nobody, went in and came out with nobody, and is
+        // not somebody the log speaks of who has no row.
+        var reports = await db.TripPositionEvents.AsNoTracking().AboutPeople()
             .Where(e => e.TripLogId == trip.Id)
             .OrderBy(e => e.RecordedAt).ThenBy(e => e.CreatedAt).ThenBy(e => e.Id)
-            .Select(e => new { e.CaverId, e.Kind, e.RecordedAt })
+            .Select(e => new { CaverId = e.CaverId!.Value, e.Kind, e.RecordedAt })
             .ToListAsync(ct);
         var passages = reports.ToLookup(r => r.CaverId, r => new TrackingPassage(r.Kind, r.RecordedAt));
 

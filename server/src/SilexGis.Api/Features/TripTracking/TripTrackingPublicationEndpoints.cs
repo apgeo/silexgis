@@ -622,7 +622,11 @@ public static class TripTrackingPublicationEndpoints
         // apart) — fold the latest-per-caver in memory, exactly as the signed-in read does. Within
         // one trip the order is the order that trip's own read uses; the trip leads the ordering
         // only so that the index on trip and time serves it.
-        var events = (await db.TripPositionEvents.AsNoTracking()
+        //
+        // The reports about people, and no others. A note about the cave is on no published
+        // shape: it is not read here at all, so neither its words nor its station can reach one,
+        // and its cave is not among the caves asked about below.
+        var events = (await db.TripPositionEvents.AsNoTracking().AboutPeople()
                 .Where(e => ids.Contains(e.TripLogId))
                 .OrderBy(e => e.TripLogId).ThenBy(e => e.RecordedAt).ThenBy(e => e.CreatedAt).ThenBy(e => e.Id)
                 .ToListAsync(ct))
@@ -662,7 +666,7 @@ public static class TripTrackingPublicationEndpoints
         Dictionary<Guid, string> names, List<TripPositionEvent> events, HashSet<Guid> openCaves,
         Guid? drawnOnSurveyModelId)
     {
-        var byCaver = events.GroupBy(e => e.CaverId).ToDictionary(g => g.Key, g => g.ToList());
+        var byCaver = events.GroupBy(e => e.Person()).ToDictionary(g => g.Key, g => g.ToList());
         var participants = new List<PublicTripParticipantDto>();
         var withheldAny = false;
         foreach (var (caverId, ordinal) in roster)

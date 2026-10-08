@@ -1251,6 +1251,74 @@ describe('TripTrackingTab', () => {
     expect(within(log).getAllByTestId('trip-tracking-position-withheld')).toHaveLength(1);
   });
 
+  /**
+   * A note about the cave is a row of the log about nobody. It says so in the column that names
+   * who a report is about, its kind is coloured apart from every report about a person, and its
+   * station is printed as where the note is — beside a person's report at another station, which
+   * is the control: nothing in the party table moved to the note's station.
+   */
+  it('says a note about the cave is about the cave, and leaves the party table where it was', () => {
+    const base = state();
+    trackingQuery.mockReturnValue({
+      data: state({
+        participants: [
+          {
+            ...base.participants[0],
+            stationName: 'cave.deep.3',
+            depthM: null,
+            positionSurveyModelId: 'model-1',
+          },
+        ],
+      }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    const row = (over: Record<string, unknown>) => ({
+      teamId: null,
+      surveyModelId: 'model-1',
+      toStationName: null,
+      depthEnteredM: null,
+      note: null,
+      recordedAt: '2026-09-12T07:00:00Z',
+      ...over,
+    });
+    eventsQuery.mockReturnValue({
+      data: {
+        items: [
+          row({
+            id: 'event-cave',
+            caverId: null,
+            kind: 'caveNote',
+            stationName: 'cave.deep.9',
+            note: 'Loose rock above the second pitch',
+          }),
+          row({ id: 'event-ana', caverId: ANA, kind: 'atStation', stationName: 'cave.deep.3' }),
+        ],
+        page: 1,
+        pageSize: 20,
+        totalItems: 2,
+      },
+      isPending: false,
+    });
+    show(false);
+
+    const log = screen.getByTestId('trip-tracking-events');
+    const [caveRow, anaRow] = Array.from(log.querySelectorAll('tbody tr.ant-table-row'));
+    expect(within(caveRow as HTMLElement).getByText('The cave')).toBeInTheDocument();
+    const kind = within(caveRow as HTMLElement).getByText('About the cave');
+    expect(kind.closest('.ant-tag')).toHaveClass('ant-tag-warning');
+    expect(caveRow).toHaveTextContent('cave.deep.9');
+    expect(caveRow).toHaveTextContent('Loose rock above the second pitch');
+    // The control: a person's row names the person and wears the plain tag.
+    expect(within(anaRow as HTMLElement).getByText('Ana Popescu')).toBeInTheDocument();
+    expect(within(anaRow as HTMLElement).getByText('At a station').closest('.ant-tag')).not.toHaveClass(
+      'ant-tag-warning',
+    );
+    // And the note's station is nowhere outside the log: nobody on the party table stands there.
+    expect(document.body.textContent?.split('cave.deep.9')).toHaveLength(2);
+  });
+
   it('offers a reader who may not write the trip nothing to write with', () => {
     show(false);
 

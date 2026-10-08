@@ -309,9 +309,10 @@ public sealed class TrackingCsvImportReplacementTests : IAsyncLifetime, IDisposa
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var rows = await db.TripPositionEvents.AsNoTracking()
+        // The reports about people: the sheet neither loads nor writes a note about the cave.
+        var rows = await db.TripPositionEvents.AsNoTracking().AboutPeople()
             .Where(e => e.TripLogId == trip)
-            .Select(e => new { e.CaverId, e.RecordedAt, e.TeamId })
+            .Select(e => new { CaverId = e.CaverId!.Value, e.RecordedAt, e.TeamId })
             .ToListAsync();
         return rows.ToDictionary(r => (r.CaverId, r.RecordedAt), r => r.TeamId);
     }

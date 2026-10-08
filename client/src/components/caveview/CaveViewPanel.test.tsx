@@ -2038,3 +2038,63 @@ describe('the station index', () => {
     expect(onStationsLoaded).toHaveBeenLastCalledWith([]);
   });
 });
+
+/**
+ * The marks of notes about the cave: a set of its own on the model, beside the party's markers.
+ */
+describe('CaveViewPanel, notes about the cave', () => {
+  const rock = {
+    id: 'rock',
+    recordedAt: '2026-09-12T09:30:00Z',
+    note: 'Loose rock above the second pitch',
+    stationName: 'p.g.7',
+    onThisModel: true,
+  };
+
+  it('asks the viewer nothing about them on a surface that hands over none', async () => {
+    await renderReady({ trackedCavers: [caver({ caverId: 'a', name: 'Ana' })] });
+
+    expect(addLiveMarker.mock.calls.map(([id]) => id)).toEqual(['a']);
+  });
+
+  it('stands a mark of its own at the station a note names, and takes it off with the note', async () => {
+    const party = [caver({ caverId: 'a', name: 'Ana', position: { kind: 'station', station: 'p.g.2' } })];
+    const view = await renderReady({ trackedCavers: party, caveNotes: [rock] });
+
+    const mark = addLiveMarker.mock.calls.find(([id]) => id === 'cave-note:rock');
+    expect(mark?.[1]).toBe('p.g.7');
+    expect(mark?.[2]).toMatchObject({ label: 'Cave: Loose rock above the second pitch' });
+    // The person's marker is where the person is, and was touched by nothing the note did.
+    expect(addLiveMarker.mock.calls.find(([id]) => id === 'a')?.[1]).toBe('p.g.2');
+    expect(screen.getByTestId('caveview-cave-note-rock')).toBeInTheDocument();
+
+    view.rerender(
+      <CaveViewPanel
+        fileUrl="http://files.local/survey"
+        fileName="demo.lox"
+        surveyModelId={MODEL}
+        trackedCavers={party}
+        caveNotes={[]}
+      />,
+    );
+
+    await waitFor(() => expect(removeLiveMarker).toHaveBeenCalledWith('cave-note:rock'));
+    expect(removeLiveMarker).not.toHaveBeenCalledWith('a');
+  });
+
+  it('says a note collapsed with a party after its names, and never as its heading or its member', async () => {
+    await renderReady({
+      trackedCavers: [caver({ caverId: 'a', name: 'Ana' }), caver({ caverId: 'b', name: 'Bogdan' })],
+      caveNotes: [rock],
+    });
+
+    expect(clusterLabel('a', 'b', 'cave-note:rock')).toEqual([
+      'Team A',
+      'Ana',
+      'Bogdan',
+      'Cave: Loose rock above the second pitch',
+    ]);
+    // And the party's own block is exactly what it is with no note standing there.
+    expect(clusterLabel('a', 'b')).toEqual(['Team A', 'Ana', 'Bogdan']);
+  });
+});

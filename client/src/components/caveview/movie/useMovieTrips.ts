@@ -2,6 +2,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRereadTrackedTripReplays, useTrackedTripReplays, type TrackedTripReplay } from '../../../api/hooks.ts';
+import { aboutPeople } from '../../../caveview/caveNotes.ts';
 import type { MovieTripData } from '../../../caveview/movie/movieParty.ts';
 import {
   movieNewReports,
@@ -155,7 +156,11 @@ export function useMovieTrips(
         logFailed.push(tripLogId);
         continue;
       }
-      const { tracking, events } = replay;
+      const { tracking } = replay;
+      // A movie is a copy people keep and pass on, and a note about the cave is for whoever may
+      // read the trip: it is left out where the log comes in, so nothing that builds the movie —
+      // its party, its routes, its captions, the moments it stops at — ever holds one.
+      const events = aboutPeople(replay.events);
       const span = movieTripSpan(tripLogId, tracking, events, openedAt, surveyModelId);
       if (span === null) {
         empty.push(tripLogId);
@@ -205,7 +210,8 @@ export function useMovieTrips(
       if (again === undefined || !again.eventsComplete) {
         throw new Error('the log of a trip under way could not be read to its end');
       }
-      return { ...trip, events: again.events };
+      // The log comes in here too, and the notes about the cave are left out of it as above.
+      return { ...trip, events: aboutPeople(again.events) };
     });
   }, [reread]);
   return useMemo(() => ({ ...state, rereadLive }), [state, rereadLive]);

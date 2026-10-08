@@ -6,6 +6,7 @@ import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
 import { useRecordTrackingEvents, type TripPositionEventKind } from '../../api/hooks.ts';
+import { TRACKING_CAVE_NOTE_KIND } from '../../caveview/caveNotes.ts';
 import { signedInAccountId } from '../../auth/accountId.ts';
 import { renewSignIn, type SignInRenewal } from '../../auth/renewSignIn.ts';
 import {
@@ -104,6 +105,12 @@ export interface TrackingReportValues {
  * <b>An empty moment means the server's clock</b>, which is what a report made as it happens wants;
  * a filled one is written as an instant with its offset, because the reader's phone and the server
  * are not in the same place as often as they are.
+ *
+ * <b>A note about the cave is about nobody, whoever happens to be ticked.</b> Both surfaces keep a
+ * selection of people standing while the kind is changed, and the server refuses a note about the
+ * cave that names anybody rather than dropping the names. So the people and the team are left out
+ * here, once: the selection is not what this report is about. Its station is optional — a hazard
+ * may be at a place or simply in the cave — and an empty one is sent as none.
  */
 export function trackingReportBody(
   tripLogId: string,
@@ -111,15 +118,18 @@ export function trackingReportBody(
   values: TrackingReportValues,
 ) {
   const note = values.note?.trim();
+  const aboutTheCave = values.kind === TRACKING_CAVE_NOTE_KIND;
   const toStation = values.kind === 'atStation' ? values.toStationName?.trim() : undefined;
+  const station = (values.stationName ?? '').trim();
   return {
     tripLogId,
-    caverIds: [...caverIds],
+    caverIds: aboutTheCave ? [] : [...caverIds],
     kind: values.kind,
-    stationName: values.kind === 'atStation' ? (values.stationName ?? '').trim() : null,
+    stationName:
+      values.kind === 'atStation' ? station : aboutTheCave && station.length > 0 ? station : null,
     toStationName: toStation ? toStation : null,
     depthM: values.kind === 'atDepth' ? (values.depthM ?? null) : null,
-    teamId: values.teamId ?? null,
+    teamId: aboutTheCave ? null : (values.teamId ?? null),
     note: note ? note : null,
     recordedAt: values.recordedAt ? values.recordedAt.toISOString() : null,
   };
@@ -146,6 +156,23 @@ export function trackingStationRules(t: ReturnType<typeof useTranslation>['t']):
  */
 function answeredLater(error: ApiError): boolean {
   return error.status === 429 || error.status === 503;
+}
+
+/**
+ * What the words of a report have to be: anything or nothing, except on a note about the cave.
+ *
+ * Every other report says something without them — who went in, where somebody is. A note about
+ * the cave is its words and nothing else, so an empty one is refused beside the field, before it
+ * is sent; the server refuses it too. Shared by both surfaces so neither can come to accept what
+ * the other would not.
+ */
+export function trackingNoteRules(
+  t: ReturnType<typeof useTranslation>['t'],
+  kind: TripPositionEventKind,
+): Rule[] {
+  return kind === TRACKING_CAVE_NOTE_KIND
+    ? [{ required: true, whitespace: true, message: t('trips.tracking.caveNote.wordsRequired') }]
+    : [];
 }
 
 /**
@@ -279,7 +306,11 @@ export function useTrackingReport() {
         });
         if (kept) dropHeldReport(accountId, clientKey);
         unsettled.current = null;
-        message.success(t('trips.tracking.recorded', { count: created.length }));
+        message.success(
+          body.kind === TRACKING_CAVE_NOTE_KIND
+            ? t('trips.tracking.caveNote.recorded')
+            : t('trips.tracking.recorded', { count: created.length }),
+        );
         return { recorded: true, held: false, code: null };
       } catch (error) {
         if (!(error instanceof ApiError)) {

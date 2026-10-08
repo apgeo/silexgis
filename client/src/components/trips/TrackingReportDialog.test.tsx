@@ -265,7 +265,53 @@ describe('TrackingReportDialog', () => {
     const offered = Array.from(document.querySelectorAll('.ant-select-item-option')).map(
       (option) => option.getAttribute('title'),
     );
-    expect(offered).toEqual(['At a station', 'Went in', 'Came out', 'Note']);
+    // The last one is not about anybody: a hazard is reported by pointing at where it is.
+    expect(offered).toEqual(['At a station', 'Went in', 'Came out', 'Note', 'About the cave']);
+  });
+
+  it('records a note about the cave at the pressed station, about nobody, and asks for no people', async () => {
+    show({ teams: [{ id: 'team-1', title: 'Echipa 1' }] });
+    await chooseKind('About the cave');
+
+    // The station stays stated — a note about the cave is said of the place that was pressed —
+    // and the questions about people are gone, with the reason in their place.
+    expect(screen.getByTestId('trip-tracking-dialog-place')).toHaveTextContent('p.g.42');
+    expect(screen.queryByTestId('trip-tracking-dialog-cavers')).toBeNull();
+    expect(screen.queryByTestId('trip-tracking-dialog-team')).toBeNull();
+    expect(screen.getByTestId('trip-tracking-dialog-cave-note-hint')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('trip-tracking-dialog-note'), {
+      target: { value: 'Loose rock above the pitch' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Record the note about the cave' }));
+    });
+
+    await waitFor(() => expect(recordEvents).toHaveBeenCalledOnce());
+    expect(recordEvents.mock.calls[0][0]).toMatchObject({
+      kind: 'caveNote',
+      // Nobody, although somebody was ticked when the dialog opened.
+      caverIds: [],
+      teamId: null,
+      stationName: 'p.g.42',
+      toStationName: null,
+      depthM: null,
+      note: 'Loose rock above the pitch',
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('refuses a note about the cave that says nothing, beside the field, and sends nothing', async () => {
+    show();
+    await chooseKind('About the cave');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Record the note about the cave' }));
+    });
+
+    expect(await screen.findByText(/a note about the cave is its words/)).toBeInTheDocument();
+    expect(recordEvents).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('refuses a report about nobody rather than sending one', async () => {

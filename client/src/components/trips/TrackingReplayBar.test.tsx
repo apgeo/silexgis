@@ -218,6 +218,51 @@ describe('TrackingReplayBar', () => {
   });
 
   /**
+   * A note about the cave is about nobody: it is said as that, with its station where this reader
+   * is told one, and never under a person's name — beside a person's note in the same log, which
+   * goes on being said under theirs.
+   */
+  it('says a note about the cave as about the cave, with its station where one is told', () => {
+    show({
+      events: [
+        event('2026-09-12T06:25:00Z', {
+          kind: 'caveNote',
+          caverId: null,
+          // What a reader who may not be told the cave's positions is sent: the words, no place.
+          stationName: null,
+          note: 'rope rubbing at the rebelay',
+        }),
+        event('2026-09-12T06:20:00Z', {
+          kind: 'caveNote',
+          caverId: null,
+          stationName: 'cave.deep.3',
+          note: 'loose rock above the second pitch',
+        }),
+        event('2026-09-12T06:05:00Z', { note: 'radio check' }),
+        event('2026-09-12T06:02:00Z', { kind: 'entered' }),
+      ],
+    });
+    engage();
+
+    const note = () => screen.getByTestId('trip-tracking-replay-note').textContent ?? '';
+    const next = () => fireEvent.click(screen.getByTestId('trip-tracking-replay-note-next'));
+
+    // The positive control: a person's note names the person.
+    next();
+    expect(note()).toMatch(/ · Ana: radio check$/);
+
+    next();
+    expect(moment).toBe(at('2026-09-12T06:20:00Z'));
+    expect(note()).toMatch(/ · About the cave, at cave\.deep\.3: loose rock above the second pitch$/);
+    expect(note()).not.toMatch(/Ana|Somebody else/);
+
+    next();
+    expect(moment).toBe(at('2026-09-12T06:25:00Z'));
+    expect(note()).toMatch(/ · About the cave: rope rubbing at the rebelay$/);
+    expect(note()).not.toMatch(/Ana|Somebody else|cave, at /);
+  });
+
+  /**
    * Sized on the pointer and never on the width: a phone held sideways has the width of a desk and
    * a finger either way, so a layout that branched on room would hand that viewer the desk's
    * twenty-four-pixel targets. Guarded as a whole rather than control by control, because what is

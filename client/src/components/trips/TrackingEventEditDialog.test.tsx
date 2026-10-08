@@ -508,3 +508,73 @@ describe('TrackingEventEditDialog', () => {
     });
   });
 });
+
+/**
+ * Correcting a note about the cave. It stays what it is: the server refuses turning a report about
+ * a person into one about the cave or the reverse, so neither is offered the other side.
+ */
+describe('TrackingEventEditDialog, a note about the cave', () => {
+  const CAVE_NOTE: TrackingEvent = {
+    ...REPORT,
+    id: 'ev-cave',
+    caverId: null,
+    kind: 'caveNote',
+    stationName: 'cave.upper.2',
+    note: 'Loose rock above the pitch',
+  };
+
+  const kindsOffered = () => {
+    const kind = screen.getByTestId('trip-tracking-edit-kind');
+    fireEvent.mouseDown(kind.querySelector('.ant-select-selector') ?? kind);
+    return Array.from(document.querySelectorAll('.ant-select-item-option')).map((option) =>
+      option.getAttribute('title'),
+    );
+  };
+
+  it('offers a report about a person no way to become a note about the cave', () => {
+    render(
+      <App>
+        <TrackingEventEditDialog {...WATCH} tripLogId="trip-1" report={REPORT} teams={[]} onClose={() => {}} />
+      </App>,
+    );
+
+    expect(kindsOffered()).toEqual(['Went in', 'At a station', 'At a depth', 'Note', 'Came out']);
+  });
+
+  it('states the kind of a note about the cave rather than offering another, and sends its station and words about no team', async () => {
+    render(
+      <App>
+        <TrackingEventEditDialog
+          {...WATCH}
+          tripLogId="trip-1"
+          report={CAVE_NOTE}
+          teams={[{ id: 'team-1', title: 'Echipa 1' }]}
+          onClose={() => {}}
+        />
+      </App>,
+    );
+
+    expect(screen.getByTestId('trip-tracking-edit-kind')).toHaveClass('ant-select-disabled');
+    expect(screen.getByTestId('trip-tracking-edit-kind')).toHaveTextContent('About the cave');
+    expect(screen.queryByTestId('trip-tracking-edit-team')).toBeNull();
+    expect(screen.getByTestId('trip-tracking-edit-station')).toHaveValue('cave.upper.2');
+
+    fireEvent.change(screen.getByTestId('trip-tracking-edit-note'), {
+      target: { value: 'Loose rock above the second pitch' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save the correction/i }));
+    });
+
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    expect(update.mock.calls[0][0]).toMatchObject({
+      eventId: 'ev-cave',
+      kind: 'caveNote',
+      stationName: 'cave.upper.2',
+      toStationName: null,
+      depthM: null,
+      teamId: null,
+      note: 'Loose rock above the second pitch',
+    });
+  });
+});

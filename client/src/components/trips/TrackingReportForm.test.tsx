@@ -962,3 +962,107 @@ describe('TrackingReportForm, a report nobody answered', () => {
     expect(onRecorded).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * A note about the cave: the one report that is about nobody.
+ *
+ * What could go wrong here is all on the line between this kind and the others: a card that still
+ * demands ticks for a report about nobody, one that sends the ticked people anyway — which the
+ * server refuses — or one that lets the ticks go as though they had produced the note.
+ */
+describe('TrackingReportForm, a note about the cave', () => {
+  function showCard(caverIds: string[], onRecorded: () => void = vi.fn()) {
+    return render(
+      <App>
+        <TrackingReportForm
+          tripLogId="trip-1"
+          state="armed"
+          surveyModelId="model-1"
+          caveId={null}
+          caverIds={caverIds}
+          teams={[{ id: 'team-1', title: 'Echipa 1' }]}
+          onRecorded={onRecorded}
+        />
+      </App>,
+    );
+  }
+
+  async function toCaveNote() {
+    const kind = screen.getByTestId('trip-tracking-kind');
+    fireEvent.mouseDown(kind.querySelector('.ant-select-selector') ?? kind);
+    await act(async () => {
+      fireEvent.click(document.querySelector('.ant-select-item-option[title="About the cave"]')!);
+    });
+  }
+
+  it('needs nobody ticked: the warning stands down and the button is live', async () => {
+    showCard([]);
+    // The control: for a report about people, nobody ticked is a dead button with the reason.
+    expect(screen.getByTestId('trip-tracking-nobody')).toBeInTheDocument();
+    expect(screen.getByTestId('trip-tracking-record')).toBeDisabled();
+
+    await toCaveNote();
+
+    expect(screen.queryByTestId('trip-tracking-nobody')).toBeNull();
+    expect(screen.getByTestId('trip-tracking-record')).toBeEnabled();
+    expect(screen.getByTestId('trip-tracking-record')).toHaveTextContent(
+      'Record the note about the cave',
+    );
+    expect(screen.getByTestId('trip-tracking-cave-note-hint')).toBeInTheDocument();
+    // A team is who somebody was with.
+    expect(screen.queryByTestId('trip-tracking-team')).toBeNull();
+  });
+
+  it('sends the words and the station about nobody, and keeps the ticks for the next report', async () => {
+    const onRecorded = vi.fn();
+    showCard(['caver-1', 'caver-2'], onRecorded);
+    await toCaveNote();
+
+    fireEvent.change(screen.getByTestId('trip-tracking-station'), { target: { value: ' p.g.7 ' } });
+    fireEvent.change(screen.getByTestId('trip-tracking-note'), {
+      target: { value: 'Loose rock above the second pitch' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('trip-tracking-record'));
+    });
+
+    await waitFor(() => expect(recordEvents).toHaveBeenCalledOnce());
+    expect(recordEvents.mock.calls[0][0]).toMatchObject({
+      kind: 'caveNote',
+      caverIds: [],
+      teamId: null,
+      stationName: 'p.g.7',
+      toStationName: null,
+      depthM: null,
+      note: 'Loose rock above the second pitch',
+    });
+    await waitFor(() => expect(screen.getByTestId('trip-tracking-note')).toHaveValue(''));
+    // The ticks did not produce this report, so the selection is not let go.
+    expect(onRecorded).not.toHaveBeenCalled();
+  });
+
+  it('takes a note with no station as one about the cave as a whole', async () => {
+    showCard([]);
+    await toCaveNote();
+
+    fireEvent.change(screen.getByTestId('trip-tracking-note'), { target: { value: 'Water is up' } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('trip-tracking-record'));
+    });
+
+    await waitFor(() => expect(recordEvents).toHaveBeenCalledOnce());
+    expect(recordEvents.mock.calls[0][0]).toMatchObject({ kind: 'caveNote', stationName: null });
+  });
+
+  it('refuses one that says nothing, beside the field, and sends nothing', async () => {
+    showCard([]);
+    await toCaveNote();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('trip-tracking-record'));
+    });
+
+    expect(await screen.findByText(/a note about the cave is its words/)).toBeInTheDocument();
+    expect(recordEvents).not.toHaveBeenCalled();
+  });
+});

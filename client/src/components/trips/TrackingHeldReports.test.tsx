@@ -253,3 +253,21 @@ describe('the held reports above the report card', () => {
     expect(Object.keys(window.localStorage)).toEqual([`silexgis.trackingOutbox.${kept.clientKey}`]);
   });
 });
+
+describe('a held note about the cave', () => {
+  it('is kept and listed like any report, and says it is about the cave rather than naming nobody', () => {
+    const note = held(
+      {},
+      { kind: 'caveNote', caverIds: [], stationName: 'p.g.7', note: 'Loose rock above the pitch' },
+    );
+
+    show();
+    open();
+
+    const row = screen.getByTestId(`trip-tracking-outbox-${note.clientKey}`);
+    expect(row).toHaveTextContent('The cave');
+    expect(row).toHaveTextContent('About the cave');
+    expect(row).toHaveTextContent('p.g.7');
+    expect(row).toHaveTextContent('Loose rock above the pitch');
+  });
+});

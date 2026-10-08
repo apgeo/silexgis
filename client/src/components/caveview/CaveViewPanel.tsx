@@ -38,6 +38,12 @@ import {
   syncLiveMarkers,
   type DrawnMarker,
 } from '../../caveview/liveMarkerSync.ts';
+import {
+  CAVE_NOTE_MARKER_PREFIX,
+  caveNoteMarkWords,
+  wantedCaveNoteMarkers,
+  type CaveNoteMark,
+} from '../../caveview/caveNotes.ts';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
 import {
   noStretchFaults,
@@ -119,6 +125,15 @@ export interface CaveViewPanelProps {
    * pages, only one of which has a trip at all. Absent means no markers and no chrome for them.
    */
   trackedCavers?: readonly TrackedCaver[];
+  /**
+   * The notes about the cave in force — hazards and conditions somebody reported, about nobody —
+   * newest first, already read against this model by the caller.
+   *
+   * Drawn as marks of their own at the stations they name and listed under the party. Handed over
+   * only by a signed-in surface: a page for visitors is sent none and passes none, and then
+   * nothing here draws, lists or asks the viewer anything about them.
+   */
+  caveNotes?: readonly CaveNoteMark[];
   /**
    * How long ago a moment on a tracked person's card was, worded by the caller — passed straight
    * to the list over the model, which then prints the gap and keeps the clock reading as a title.
@@ -368,6 +383,7 @@ export default function CaveViewPanel({
   onPartPick,
   surveyModelId,
   trackedCavers,
+  caveNotes,
   trackedMomentInWords,
   markerMoveMs,
   onUnplacedStationsChange,
@@ -480,6 +496,8 @@ export default function CaveViewPanel({
   const viewerRef = useRef<{ viewer: CaveViewer; ui: CaveViewUi } | null>(null);
   /** What is drawn for each caver right now — the thing the next answer is compared against. */
   const drawnMarkersRef = useRef(new Map<string, DrawnMarker>());
+  /** The marks of notes about the cave last handed to the viewer, by the mark's own name. */
+  const drawnCaveNotesRef = useRef(new Map<string, DrawnMarker>());
   /** The stretch lines last handed to the viewer, by the stretch each one draws. */
   const drawnStretchesRef = useRef(new Map<string, DrawnStretch>());
 
@@ -540,6 +558,10 @@ export default function CaveViewPanel({
   const languageRef = useRef(i18n.language);
   languageRef.current = i18n.language;
 
+  /** The words a note's mark carries on the model: that it is about the cave, then what it says. */
+  const caveNoteLabelRef = useRef<(note: CaveNoteMark) => string>(() => '');
+  caveNoteLabelRef.current = (note) =>
+    t('caveview.tracking.caveNoteMark', { note: caveNoteMarkWords(note.note) });
   /**
    * What the one marker drawn in place of a party standing together says.
    *
@@ -573,7 +595,14 @@ export default function CaveViewPanel({
     const here = new Set(ids);
     const members = (trackedCavers ?? []).filter((caver) => here.has(caver.caverId));
     const line = { t, language: i18n.language, showTimes: showMarkerTimes, today };
-    return clusterLabelFor(members, (member) => markerLine(member, line));
+    const party = clusterLabelFor(members, (member) => markerLine(member, line));
+    // A note about the cave standing at the same station is collapsed with whoever is there, and
+    // is said after them, on a line of its own. Never above them and never as one of them: the
+    // heading is the claim that the names under it are one team, and a hazard is on no team.
+    const notes = (caveNotes ?? [])
+      .filter((note) => here.has(CAVE_NOTE_MARKER_PREFIX + note.id))
+      .map(caveNoteLabelRef.current);
+    return notes.length === 0 ? party : [...(party ?? []), ...notes];
   };
 
   // Which file is on screen, as distinct from the address it was last offered at. The address is
@@ -600,6 +629,7 @@ export default function CaveViewPanel({
     // A new viewer draws none of the old one's markers, so nothing is drawn until they are added
     // again — which the marker effect does as soon as this one reports the model loaded.
     drawnMarkersRef.current = new Map();
+    drawnCaveNotesRef.current = new Map();
     // The same of the lines drawn for people between two stations, and of what was learned about
     // which of them the model taken off the screen could not route.
     drawnStretchesRef.current = new Map();
@@ -818,6 +848,8 @@ export default function CaveViewPanel({
       // re-registers nothing and rebuilds no collapsed marker.
       showMarkerTimes ? caver.positionAt : null,
     ]),
+    // A note about the cave collapsed with the party is a line of the same label.
+    (caveNotes ?? []).map((note) => [note.id, note.note]),
   ]);
 
   useEffect(() => {
@@ -918,6 +950,29 @@ export default function CaveViewPanel({
     // in no dependency list of this effect.
     setUnplacedStations((known) => stationsNotOnModel(known, viewer.getLiveMarkers()));
   }, [trackedCavers, markerMoveMs, showMarkerTimes, status, t, i18n.language, today]);
+
+  // ---- The marks of notes about the cave ----
+  //
+  // A set of its own, brought into line separately from the party's markers and under names of its
+  // own, so that neither pass can take the other's markers for ones it no longer wants. What the
+  // drawing could not place is learned from the viewer exactly as it is for people: a note naming
+  // a station this file has no node for is drawn nowhere, and the list beside the model says so.
+  //
+  // A surface that hands over no notes — every page for visitors — never reaches the viewer here.
+  useEffect(() => {
+    const viewer = viewerRef.current?.viewer;
+    if (viewer === undefined || status !== 'ready') {
+      return;
+    }
+    const wanted = wantedCaveNoteMarkers(caveNotes ?? [], (note) =>
+      t('caveview.tracking.caveNoteMark', { note: caveNoteMarkWords(note.note) }),
+    );
+    if (wanted.size === 0 && drawnCaveNotesRef.current.size === 0) {
+      return;
+    }
+    drawnCaveNotesRef.current = syncLiveMarkers(viewer, drawnCaveNotesRef.current, wanted);
+    setUnplacedStations((known) => stationsNotOnModel(known, viewer.getLiveMarkers()));
+  }, [caveNotes, status, t, i18n.language]);
 
   // ---- The line of a position that is a stretch ----
   //
@@ -1337,6 +1392,7 @@ export default function CaveViewPanel({
       {trackedCavers !== undefined && trackedCavers.length > 0 && status !== 'error' && (
         <CaveViewTrackingOverlay
           cavers={trackedCavers}
+          caveNotes={caveNotes}
           // Which stations the model on screen has no node for, as the viewer answered it.
           unplacedStations={unplacedStations}
           // Which lines between two stations the model could not draw, as the viewer answered it.

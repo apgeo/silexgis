@@ -744,3 +744,88 @@ describe('CaveViewTrackingOverlay', () => {
     expect(screen.queryByTestId('caveview-position-not-on-map')).toBeNull();
   });
 });
+
+/**
+ * The notes about the cave, under the party.
+ *
+ * What is guarded: that a hazard is listed in full and apart from everybody — under no team and
+ * as nobody's row — that it leads to its place only where the drawing holds one, and that a
+ * surface handing over none draws nothing for them.
+ */
+describe('CaveViewTrackingOverlay, notes about the cave', () => {
+  const note = (id: string, over: Partial<import('../../caveview/caveNotes.ts').CaveNoteMark> = {}) => ({
+    id,
+    recordedAt: '2026-09-12T09:30:00Z',
+    note: `words of ${id}`,
+    stationName: 'pestera.galerie.9' as string | null,
+    onThisModel: true,
+    ...over,
+  });
+
+  function showNotes(
+    caveNotes: readonly import('../../caveview/caveNotes.ts').CaveNoteMark[] | undefined,
+    unplacedStations?: ReadonlySet<string>,
+  ) {
+    const shown: (TrackedPlace | null)[] = [];
+    render(
+      <CaveViewTrackingOverlay
+        cavers={[caver()]}
+        caveNotes={caveNotes}
+        unplacedStations={unplacedStations}
+        showTimes={false}
+        onShowTimesChange={() => {}}
+        showLabels
+        onShowLabelsChange={() => {}}
+        openCaverId={null}
+        onOpenCaver={() => {}}
+        shown={null}
+        onShow={(place) => shown.push(place)}
+      />,
+    );
+    return shown;
+  }
+
+  it('draws nothing for them on a surface that hands over none', () => {
+    showNotes(undefined);
+
+    expect(screen.queryByTestId('caveview-cave-notes')).toBeNull();
+    // The party is there all the same.
+    expect(screen.getByTestId('caveview-caver-caver-1')).toBeInTheDocument();
+  });
+
+  it('lists each one in full under a heading of its own, outside the list of people', () => {
+    showNotes([note('rock', { note: 'Loose rock above the second pitch' }), note('water')]);
+
+    const notes = screen.getByTestId('caveview-cave-notes');
+    expect(notes).toHaveTextContent('About the cave: 2');
+    expect(screen.getByTestId('caveview-cave-note-rock')).toHaveTextContent(
+      'Loose rock above the second pitch',
+    );
+    // Not a row of the party: the person's row is not inside the notes, nor a note among people.
+    expect(notes).not.toContainElement(screen.getByTestId('caveview-caver-caver-1'));
+    expect(screen.getByTestId('caveview-caver-caver-1').parentElement).not.toContainElement(
+      screen.getByTestId('caveview-cave-note-rock'),
+    );
+  });
+
+  it('leads to the station of a note the drawing holds, and nowhere for one it does not', () => {
+    const shown = showNotes(
+      [
+        note('drawn'),
+        note('nowhere', { stationName: null, onThisModel: false }),
+        note('elsewhere', { stationName: 'x.2', onThisModel: false }),
+        note('missing', { stationName: 'pestera.galerie.3' }),
+      ],
+      new Set(['pestera.galerie.3']),
+    );
+
+    fireEvent.click(screen.getByTestId('caveview-cave-note-drawn'));
+    expect(shown).toEqual([{ kind: 'caveNote', id: 'drawn', station: 'pestera.galerie.9' }]);
+
+    expect(screen.getByTestId('caveview-cave-note-nowhere')).toBeDisabled();
+    expect(screen.getByTestId('caveview-cave-note-elsewhere')).toBeDisabled();
+    expect(screen.getByTestId('caveview-cave-note-elsewhere')).toHaveTextContent('On another survey');
+    expect(screen.getByTestId('caveview-cave-note-missing')).toBeDisabled();
+    expect(screen.getByTestId('caveview-cave-note-missing')).toHaveTextContent('Not on the drawing');
+  });
+});

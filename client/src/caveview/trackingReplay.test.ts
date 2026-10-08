@@ -508,8 +508,15 @@ describe('the notes a replay can land on', () => {
     // Any report can carry words — the form offers the field whatever is being reported — so this
     // is not the note kind alone, and a note field left empty is not a mark.
     expect(replayNotes(log, window)).toEqual([
-      { at: at('2026-09-12T08:30:00Z'), caverId: ANA, kind: 'note', note: 'radio check' },
-      { at: at('2026-09-12T09:30:00Z'), caverId: ANA, kind: 'atStation', note: 'rigging the pitch' },
+      // No station on either: a person's words carry no place, whatever their report was placed at.
+      { at: at('2026-09-12T08:30:00Z'), caverId: ANA, kind: 'note', note: 'radio check', station: null },
+      {
+        at: at('2026-09-12T09:30:00Z'),
+        caverId: ANA,
+        kind: 'atStation',
+        note: 'rigging the pitch',
+        station: null,
+      },
     ]);
   });
 
@@ -959,5 +966,54 @@ describe('trackedRoutesAt', () => {
     const log = [event({ stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' })];
     expect(trackedRoutesAt(log, at('2026-09-12T10:00:00Z'), undefined).size).toBe(0);
     expect(trackedRoutesAt(log, Number.NaN, MODEL).size).toBe(0);
+  });
+});
+
+describe('a note about the cave in a replay', () => {
+  // The control every assertion below is read against: the same log with the note taken out.
+  const people = () =>
+    newestFirst([
+      event({ recordedAt: '2026-09-12T08:10:00Z', kind: 'entered' }),
+      event({ recordedAt: '2026-09-12T08:40:00Z', stationName: 'p.g.3' }),
+    ]);
+  const caveNote = () =>
+    event({
+      recordedAt: '2026-09-12T09:00:00Z',
+      caverId: null,
+      kind: 'caveNote',
+      stationName: 'p.g.7',
+      note: 'Loose rock above the second pitch',
+    });
+  const moment = at('2026-09-12T09:30:00Z');
+
+  it('moves nobody: the party stands exactly where it stood without the note', () => {
+    const without = trackedCaversAt(state(), people(), moment, nameOf, MODEL);
+    const withNote = trackedCaversAt(state(), newestFirst([...people(), caveNote()]), moment, nameOf, MODEL);
+
+    expect(withNote).toEqual(without);
+    // Said outright as well as by comparison: the station the note names is where the hazard is.
+    expect(withNote[0].position).toEqual({ kind: 'station', station: 'p.g.3' });
+    expect(withNote[0].lastRecordedAt).toBe('2026-09-12T08:40:00Z');
+  });
+
+  it('is nobody\'s step along a route', () => {
+    const routes = trackedRoutesAt(newestFirst([...people(), caveNote()]), moment, MODEL);
+
+    expect([...routes.keys()]).toEqual([ANA]);
+    expect(routes.get(ANA)).toEqual(['p.g.3']);
+  });
+
+  it('is carried among the notes with its place and no person, while a person\'s note carries no place', () => {
+    const log = newestFirst([
+      ...people(),
+      caveNote(),
+      event({ recordedAt: '2026-09-12T09:10:00Z', stationName: 'p.g.5', note: 'All well' }),
+    ]);
+    const notes = replayNotes(log, { from: at('2026-09-12T08:00:00Z'), to: moment });
+
+    expect(notes.map((note) => [note.caverId, note.kind, note.station, note.note])).toEqual([
+      [null, 'caveNote', 'p.g.7', 'Loose rock above the second pitch'],
+      [ANA, 'atStation', null, 'All well'],
+    ]);
   });
 });

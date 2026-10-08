@@ -103,6 +103,8 @@ interface GivenProps {
   ) => void;
   /** How the card over the model words a moment, or absent where it prints the clock. */
   trackedMomentInWords?: (iso: string) => string | null;
+  /** The notes about the cave to mark and list, newest first. */
+  caveNotes?: readonly { id: string; note: string; stationName: string | null; onThisModel: boolean }[];
   /** Which of the viewer's own controls this panel asks for — see the test that reads it. */
   toolbar?: boolean | { buttons?: readonly string[] };
   /**
@@ -774,6 +776,46 @@ describe('TrackingModelPanel', () => {
       station: 'p.g.3',
       toStation: 'p.g.4',
     });
+  });
+
+  /**
+   * The notes about the cave reach the viewer apart from the party: every one the log holds while
+   * the watch is live, and those said by the moment on screen while it is replayed. The person is
+   * the control throughout — she stands where her own report put her, never where the note is.
+   */
+  it('hands the viewer the notes about the cave in force, live and at a replayed moment, and moves nobody', () => {
+    const caveNote = (id: string, recordedAt: string, stationName: string) => ({
+      ...atStation(ANA, recordedAt, stationName),
+      id,
+      caverId: null,
+      kind: 'caveNote',
+      note: `words of ${id}`,
+    });
+    log = [
+      caveNote('late', '2026-09-12T06:50:00Z', 'p.g.9'),
+      atStation(ANA, '2026-09-12T06:40:00Z', 'p.g.3'),
+      caveNote('early', '2026-09-12T06:20:00Z', 'p.g.5'),
+      entered(ANA, '2026-09-12T06:10:00Z'),
+    ] as typeof log;
+    show(tracking(), log);
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+    expect(given!.caveNotes!.map((note) => [note.id, note.stationName, note.onThisModel])).toEqual([
+      ['late', 'p.g.9', true],
+      ['early', 'p.g.5', true],
+    ]);
+    const live = given!.trackedCavers![0].position;
+    expect(live).toMatchObject({ kind: 'station' });
+
+    // The replay opens at the trip's start, before anything was said about the cave.
+    fireEvent.click(screen.getByTestId('trip-tracking-replay-open'));
+    fireEvent.keyDown(screen.getByRole('slider'), { key: 'Home', keyCode: 36 });
+    expect(given!.caveNotes).toEqual([]);
+
+    fireEvent.keyDown(screen.getByRole('slider'), { key: 'End', keyCode: 35 });
+    expect(given!.caveNotes!.map((note) => note.id)).toEqual(['late', 'early']);
+    // Where her own report put her, with a later note about the cave at another station on the log.
+    expect(given!.trackedCavers![0].position).toEqual({ kind: 'station', station: 'p.g.3' });
   });
 
   /**

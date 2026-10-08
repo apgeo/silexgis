@@ -334,11 +334,20 @@ export default function TrackingReplayBar({
           >
             {standing === null
               ? t('trips.tracking.replay.noteNone')
-              : t('trips.tracking.replay.note', {
-                  when: clock(standing.at),
-                  who: nameOf(standing.caverId),
-                  note: standing.note,
-                })}
+              : standing.caverId === null
+                ? // A note about the cave: about nobody, and said with its place where it has one
+                  // this reader is told.
+                  t(
+                    standing.station === null
+                      ? 'trips.tracking.replay.caveNote'
+                      : 'trips.tracking.replay.caveNoteAt',
+                    { when: clock(standing.at), station: standing.station, note: standing.note },
+                  )
+                : t('trips.tracking.replay.note', {
+                    when: clock(standing.at),
+                    who: nameOf(standing.caverId),
+                    note: standing.note,
+                  })}
           </Typography.Text>
           <Button
             size={controlSize}

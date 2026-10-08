@@ -133,6 +133,47 @@ describe('sending a tracking report', () => {
   });
 
   /**
+   * A note about the cave is about nobody, whatever selection the surface was holding: the people
+   * and the team are left out in the one place a report is put together, its station is optional,
+   * and it is kept like any new report when nobody answers — still about nobody.
+   */
+  it('sends a note about the cave about nobody, with a station or none, and keeps it the same way', async () => {
+    const send = hook().current.send;
+    const words = 'Loose rock above the second pitch';
+
+    await sent(send, 'trip-1', ['caver-1', 'caver-2'], {
+      kind: 'caveNote',
+      stationName: ' p.g.7 ',
+      teamId: 'team-1',
+      note: words,
+    });
+    expect(posted()).toMatchObject({
+      kind: 'caveNote',
+      caverIds: [],
+      teamId: null,
+      stationName: 'p.g.7',
+      toStationName: null,
+      depthM: null,
+      note: words,
+    });
+    expect(screen.getByText('Note about the cave recorded.')).toBeInTheDocument();
+
+    await sent(send, 'trip-1', [], { kind: 'caveNote', stationName: '  ', note: 'Water is up' });
+    expect(posted(1)).toMatchObject({ kind: 'caveNote', caverIds: [], stationName: null });
+
+    recordEvents.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const outcome = await sent(send, 'trip-1', ['caver-1'], {
+      kind: 'caveNote',
+      stationName: 'p.g.7',
+      note: words,
+    });
+    expect(outcome).toMatchObject({ held: true });
+    expect(heldReportsOf(ANA).map((one) => one.body)).toEqual([
+      expect.objectContaining({ kind: 'caveNote', caverIds: [], stationName: 'p.g.7', note: words }),
+    ]);
+  });
+
+  /**
    * The report is in storage before the server has said anything — which is what is left if the
    * tab is discarded, the page reloaded or the phone put to sleep while the request is out.
    */

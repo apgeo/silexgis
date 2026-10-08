@@ -18,6 +18,7 @@ import LazyTrackingMovieDialog from '../caveview/movie/LazyTrackingMovieDialog.t
 import type { DeclaredPartsView } from '../../caveview/declaredParts.ts';
 import type { CaveViewMediaEntry } from '../../caveview/loadCaveView.ts';
 import { partFromStation, pathOf, type PickedModelPart } from '../../caveview/modelParts.ts';
+import { caveNotesAt } from '../../caveview/caveNotes.ts';
 import { trackedCaversFrom } from '../../caveview/trackedCavers.ts';
 import { withStretches, withStretchesAt } from '../../caveview/trackedStretch.ts';
 import { caveViewToolbarButtons } from '../../caveview/toolbarButtons.ts';
@@ -487,6 +488,24 @@ export default function TrackingModelPanel({
   );
 
   /**
+   * The notes about the cave to draw and list: those in force at the replayed moment while a
+   * replay is engaged over a whole log, and otherwise every one this page holds.
+   *
+   * They follow the party onto whichever of the two readings the viewer is showing, by the same
+   * test — a replay over part of a log is not shown, for people or for hazards. The live list is
+   * read off the whole log where it has been read and off the page's own rows until then; those
+   * rows are the newest reports, so a long log may list fewer notes for the moment it takes the
+   * rest to arrive, and never a wrong one.
+   */
+  const caveNotes = useMemo(
+    () =>
+      replaying && replayAt !== null && log.data !== undefined
+        ? caveNotesAt(log.data, replayAt, drawnModelId)
+        : caveNotesAt(log.data ?? events ?? [], null, drawnModelId),
+    [log.data, events, replaying, replayAt, drawnModelId],
+  );
+
+  /**
    * The party as a chooser takes it — the watch says who is on it, the roster says their names.
    *
    * Only the people the trip still names: the server takes no report about anybody else, so
@@ -923,6 +942,7 @@ export default function TrackingModelPanel({
                     height={modelHeight(narrow, large)}
                     surveyModelId={drawn.id}
                     trackedCavers={shown}
+                    caveNotes={caveNotes}
                     trackedMomentInWords={momentInWords}
                     // Handed straight through, replay or no replay: what comes back names stations of the
                     // drawing, which is the one thing about this panel a scrubbed moment cannot change.

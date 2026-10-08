@@ -633,8 +633,10 @@ public sealed class TripLogWriteService(
             .Where(t => t.TripLogId == tripId)
             .Select(t => (TripTrackingState?)t.State)
             .FirstOrDefaultAsync(ct) ?? TripTrackingState.Off;
-        var reported = await db.TripPositionEvents.AsNoTracking()
-            .AnyAsync(e => e.TripLogId == tripId && leaving.Contains(e.CaverId), ct);
+        // Reports about the people leaving. A note about the cave is about nobody and holds
+        // nobody on the roster.
+        var reported = await db.TripPositionEvents.AsNoTracking().AboutPeople()
+            .AnyAsync(e => e.TripLogId == tripId && leaving.Contains(e.CaverId!.Value), ct);
 
         if (!TripTrackingRules.MayLeaveRoster(watch, reported))
         {

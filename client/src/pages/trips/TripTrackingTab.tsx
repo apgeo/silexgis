@@ -393,7 +393,18 @@ export default function TripTrackingTab({
   );
   const chosen = [...selected].filter((caverId) => reportable.has(caverId));
   const teamTitles = new Map(data.teams.map((team) => [team.id, team.title]));
-  const named = (caverId: string) => names.get(caverId) ?? t('trips.tracking.unknownCaver');
+  // Who a report is about. A note about the cave is about nobody and says so in the same column,
+  // in words: an empty cell there would read as a name that failed to load.
+  const named = (caverId: string | null) =>
+    caverId === null
+      ? t('trips.tracking.caveNote.who')
+      : (names.get(caverId) ?? t('trips.tracking.unknownCaver'));
+  // What a row of the log is. A note about the cave is coloured apart from every report about a
+  // person: it is the one row a reader scanning for hazards is looking for, and the one that says
+  // nothing of where anybody is.
+  const logKindTag = (kind: TrackingEvent['kind']) => (
+    <Tag color={kind === 'caveNote' ? 'warning' : undefined}>{t(`trips.tracking.kinds.${kind}`)}</Tag>
+  );
   const when = (value: string | null) =>
     value ? new Date(value).toLocaleString(i18n.language) : '—';
   const standings = trackingStandings(data.participants);
@@ -1944,7 +1955,7 @@ export default function TripTrackingTab({
                           {fact(t('trips.tracking.columnCaver'), named(row.caverId))}
                           {fact(
                             t('trips.tracking.columnLastKind'),
-                            <Tag>{t(`trips.tracking.kinds.${row.kind}`)}</Tag>,
+                            logKindTag(row.kind),
                           )}
                           {fact(t('trips.tracking.columnPosition'), eventPlace(row))}
                           {fact(t('trips.tracking.columnNote'), row.note ?? '—')}
@@ -1967,14 +1978,12 @@ export default function TripTrackingTab({
                   {
                     title: t('trips.tracking.columnCaver'),
                     dataIndex: 'caverId',
-                    render: (caverId: string) => named(caverId),
+                    render: (caverId: string | null) => named(caverId),
                   },
                   {
                     title: t('trips.tracking.columnLastKind'),
                     dataIndex: 'kind',
-                    render: (kind: TrackingEvent['kind']) => (
-                      <Tag>{t(`trips.tracking.kinds.${kind}`)}</Tag>
-                    ),
+                    render: (kind: TrackingEvent['kind']) => logKindTag(kind),
                   },
                   {
                     title: t('trips.tracking.columnPosition'),

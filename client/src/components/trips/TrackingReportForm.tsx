@@ -8,12 +8,14 @@ import {
   type TripPositionEventKind,
   type TripTrackingState,
 } from '../../api/hooks.ts';
+import { TRACKING_CAVE_NOTE_KIND } from '../../caveview/caveNotes.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import TrackingPlaceFields from './TrackingPlaceFields.tsx';
 import TrackingWhenField from './TrackingWhenField.tsx';
 import { useTrackingPanelTheme } from './trackingControlSizes.ts';
 import { trackingLogWritable } from './trackingWatch.ts';
 import {
+  trackingNoteRules,
   trackingReportLeftTheForm,
   useTrackingReport,
   type TrackingReportValues,
@@ -117,7 +119,9 @@ export default function TrackingReportForm({
     // report has left this card, and leaving its text in the fields would invite sending it twice.
     if (trackingReportLeftTheForm(await report.send(tripLogId, caverIds, values))) {
       form.resetFields(['stationName', 'toStationName', 'depthM', 'note', 'recordedAt']);
-      onRecorded();
+      // A note about the cave was about nobody, so the ticks did not produce it and are kept: the
+      // next report is as likely as before to be about the people they name.
+      if (values.kind !== TRACKING_CAVE_NOTE_KIND) onRecorded();
     }
   };
 
@@ -153,6 +157,14 @@ export default function TrackingReportForm({
     await send({ kind: 'exited', teamId: form.getFieldValue('teamId') ?? null, recordedAt });
   };
 
+  /**
+   * Whether what is being written is about the cave rather than about anybody in it.
+   *
+   * It changes who the card needs: nobody. The ticks on the table are left exactly as they are —
+   * the next report is likely about the same people — and are simply not what this one is about,
+   * so the warning that nobody is ticked and the count on the button both stand down.
+   */
+  const aboutTheCave = kind === TRACKING_CAVE_NOTE_KIND;
   const nobody = caverIds.length === 0;
   /**
    * How big everything on this card is drawn. `large` is where the forty pixels come from — the
@@ -191,12 +203,26 @@ export default function TrackingReportForm({
           <Form.Item name="kind" label={t('trips.tracking.reportKind')}>
             <Select
               data-testid="trip-tracking-kind"
-              options={TRACKING_EVENT_KINDS.map((value) => ({
+              // The reports about people first, in the order a trip runs, and the one about the
+              // cave after them: it belongs to no moment of anybody's trip.
+              options={[...TRACKING_EVENT_KINDS, TRACKING_CAVE_NOTE_KIND].map((value) => ({
                 value,
                 label: t(`trips.tracking.kinds.${value}`),
               }))}
             />
           </Form.Item>
+
+          {/* Said where the kind is chosen, because it is what makes this kind worth choosing over
+              a note about whoever relayed the word: it moves nobody, and it is not published. */}
+          {aboutTheCave && (
+            <Alert
+              type="info"
+              showIcon
+              title={t('trips.tracking.caveNote.hint')}
+              style={{ marginBottom: 12 }}
+              data-testid="trip-tracking-cave-note-hint"
+            />
+          )}
 
           {/* Where they are. Drawn by the block the correction dialog draws too, inside this form,
               whose kind, station and depth it reads and fills. */}
@@ -209,7 +235,8 @@ export default function TrackingReportForm({
             caveId={caveId}
           />
 
-          {teams.length > 0 && (
+          {/* A team is who somebody was with; a note about the cave is about nobody. */}
+          {teams.length > 0 && !aboutTheCave && (
             <Form.Item name="teamId" label={t('trips.tracking.reportTeam')}>
               <Select
                 allowClear
@@ -220,7 +247,11 @@ export default function TrackingReportForm({
             </Form.Item>
           )}
 
-          <Form.Item name="note" label={t('trips.tracking.reportNote')}>
+          <Form.Item
+            name="note"
+            label={t(aboutTheCave ? 'trips.tracking.caveNote.words' : 'trips.tracking.reportNote')}
+            rules={trackingNoteRules(t, kind)}
+          >
             <Input.TextArea rows={2} data-testid="trip-tracking-note" />
           </Form.Item>
 
@@ -237,7 +268,7 @@ export default function TrackingReportForm({
         </Form>
       </ConfigProvider>
 
-      {nobody && (
+      {nobody && !aboutTheCave && (
         <Alert
           type="warning"
           showIcon
@@ -251,12 +282,14 @@ export default function TrackingReportForm({
         <Button
           type="primary"
           size={controlSize}
-          disabled={nobody}
+          disabled={nobody && !aboutTheCave}
           loading={report.isPending}
           onClick={() => void onRecord()}
           data-testid="trip-tracking-record"
         >
-          {t('trips.tracking.recordFor', { count: caverIds.length })}
+          {aboutTheCave
+            ? t('trips.tracking.caveNote.record')
+            : t('trips.tracking.recordFor', { count: caverIds.length })}
         </Button>
         <Button
           size={controlSize}

@@ -50,6 +50,9 @@ export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   // station is refused by the ordinary one above.
   'tracking.to_station_unknown': 'trips.tracking.problems.toStationUnknown',
   'tracking.stretch_same_station': 'trips.tracking.problems.stretchSameStation',
+  // A correction may change what a report says, never who it is about — and a note about the cave
+  // is about nobody, so neither kind of report can be corrected into the other.
+  'tracking.report_subject_fixed': 'trips.tracking.problems.reportSubjectFixed',
   'tracking.no_station_at_depth': 'trips.tracking.problems.noStationAtDepth',
   'tracking.caver_not_participant': 'trips.tracking.problems.caverNotParticipant',
   'tracking.recorded_in_future': 'trips.tracking.problems.recordedInFuture',

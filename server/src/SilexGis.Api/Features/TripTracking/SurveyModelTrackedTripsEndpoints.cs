@@ -62,7 +62,10 @@ public static class SurveyModelTrackedTripsEndpoints
         var watching = db.TripTrackings
             .Where(t => t.SurveyModelId == surveyModelId && t.State != TripTrackingState.Off)
             .Select(t => t.TripLogId);
-        var reporting = db.TripPositionEvents.Where(e => e.SurveyModelId == surveyModelId).Select(e => e.TripLogId);
+        // A tie is somebody reported at a place on the model. A note about the cave written at one
+        // of its stations places nobody, so it neither ties a trip to the model nor counts below.
+        var reporting = db.TripPositionEvents.AboutPeople()
+            .Where(e => e.SurveyModelId == surveyModelId).Select(e => e.TripLogId);
         var trips = await db.TripLogs.AsNoTracking()
             .VisibleTo(ctx, AccessDomain.TripLogs)
             .Where(t => watching.Contains(t.Id) || reporting.Contains(t.Id))
@@ -82,8 +85,10 @@ public static class SurveyModelTrackedTripsEndpoints
         // what a caller may be told — every row here names this model, so every row claims a
         // place, and whether a claimed place is open is decided by the cave it was claimed in.
         // The set is the ordinary filtered one: a report taken off the log and a deleted trip's
-        // reports are not in it, here as everywhere.
-        var reportGroups = await db.TripPositionEvents.AsNoTracking()
+        // reports are not in it, here as everywhere. People's reports only, and said inside the
+        // grouped read so that the database counts none of the others: a note about the cave at
+        // one of this model's stations places nobody and is not a report on the survey.
+        var reportGroups = await db.TripPositionEvents.AsNoTracking().AboutPeople()
             .Where(e => e.SurveyModelId == surveyModelId && tripIds.Contains(e.TripLogId))
             .GroupBy(e => new { e.TripLogId, e.CaveFeatureId })
             .Select(g => new ReportGroup(

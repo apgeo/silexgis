@@ -113,6 +113,11 @@ public static class TrackingProblemCodes
     /// <summary>A report gave the same station for both ends of a stretch.</summary>
     public const string StretchSameStation = "tracking.stretch_same_station";
 
+    /// <summary>
+    /// A correction would turn a report about a person into a note about the cave, or the reverse.
+    /// </summary>
+    public const string ReportSubjectFixed = "tracking.report_subject_fixed";
+
     /// <summary>No station matches the depth a report gave under the watch's depth filter.</summary>
     public const string NoStationAtDepth = "tracking.no_station_at_depth";
 

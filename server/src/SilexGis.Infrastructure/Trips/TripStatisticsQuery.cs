@@ -162,7 +162,10 @@ public static class TripStatisticsQuery
         ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(readableTripIds);
 
-        var log = db.TripPositionEvents.AsNoTracking().Where(e => readableTripIds.Contains(e.TripLogId));
+        // What the watch said about people. A note about the cave is about nobody: it is nobody's
+        // time underground, and a trip whose log holds nothing else followed no one.
+        var log = db.TripPositionEvents.AsNoTracking().AboutPeople()
+            .Where(e => readableTripIds.Contains(e.TripLogId));
 
         var trackedTrips = await log.Select(e => e.TripLogId).Distinct().CountAsync(ct);
         if (trackedTrips == 0)
@@ -181,7 +184,7 @@ public static class TripStatisticsQuery
             .OrderBy(e => e.RecordedAt)
             .ThenBy(e => e.CreatedAt)
             .ThenBy(e => e.Id)
-            .Select(e => new { e.TripLogId, e.CaverId, e.Kind, e.RecordedAt })
+            .Select(e => new { e.TripLogId, CaverId = e.CaverId!.Value, e.Kind, e.RecordedAt })
             .ToListAsync(ct);
 
         var minutes = 0;
@@ -429,7 +432,10 @@ public static class TripStatisticsQuery
 /// times, and kept apart from them on purpose: where a trip has both they describe the same
 /// hours, so no surface adds one to the other.
 /// </summary>
-/// <param name="TrackedTrips">Trips with at least one report in their log.</param>
+/// <param name="TrackedTrips">
+/// Trips with at least one report about somebody in their log. A note about the cave is about
+/// nobody and does not make a trip a tracked one.
+/// </param>
 /// <param name="UndergroundMinutes">Person-minutes between each entry and the exit that followed it.</param>
 /// <param name="TimedPersonTrips">(person, trip) pairs with at least one entry an exit followed.</param>
 public readonly record struct TripWatchTotals(int TrackedTrips, int UndergroundMinutes, int TimedPersonTrips);

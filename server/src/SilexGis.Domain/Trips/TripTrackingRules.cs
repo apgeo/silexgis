@@ -504,7 +504,9 @@ public static class TripTrackingRules
 
         return [.. storedUnderKey
             .Where(e => e.RemovedAt is null)
-            .OrderBy(e => asked.GetValueOrDefault(e.CaverId, int.MaxValue))
+            // A note about the cave names nobody and is its act's only row; it sorts with the
+            // reports about people the repeat did not name, which is to say it is simply there.
+            .OrderBy(e => e.CaverId is { } about ? asked.GetValueOrDefault(about, int.MaxValue) : int.MaxValue)
             .ThenBy(e => e.Id)];
     }
 
@@ -640,6 +642,12 @@ public static class TripTrackingRules
                     // Entered or Exited has spoken the standing is no longer Unheard, so this
                     // leaves it exactly as it found it.
                     if (standing == TripStanding.Unheard) standing = TripStanding.Underground;
+                    break;
+                case TripPositionEventKind.CaveNote:
+                    // About the cave and nobody in it, so it says nothing of where this person
+                    // stands — not even where it names a station, which is where the hazard is
+                    // and not where anybody was. It is never among one person's reports to begin
+                    // with; written out here so that the rule does not rest on that alone.
                     break;
                 default:
                     // Note — something happened, not where and not whether. A kind added later

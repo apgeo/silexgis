@@ -254,6 +254,24 @@ export default function TrackingPlaceFields({
     setListing(false);
   };
 
+  // Where a note about the cave is, if it is anywhere in particular: one station, offered from the
+  // survey's names as every other station is, and optional — "the water is up" is about the cave
+  // and no one place in it. Never a stretch, a depth or a declared place: the server takes one
+  // station on this kind or none, and the chooser above would turn the note into a report about
+  // where somebody is. The same field name as a station report's, so each surface sends what its
+  // own form holds.
+  if (kind === 'caveNote') {
+    return (
+      <Form.Item
+        name="stationName"
+        label={t('trips.tracking.caveNote.station')}
+        extra={t('trips.tracking.caveNote.stationHelp')}
+      >
+        <SurveyStationInput surveyModelId={surveyModelId} data-testid={`${idPrefix}-station`} />
+      </Form.Item>
+    );
+  }
+
   if (!claimsPlace) {
     return null;
   }

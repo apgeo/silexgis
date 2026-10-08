@@ -2462,8 +2462,8 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        return await db.TripPositionEvents.IgnoreQueryFilters().Where(e => e.TripLogId == trip)
-            .GroupBy(e => e.CaverId).ToDictionaryAsync(g => g.Key, g => g.Count());
+        return await db.TripPositionEvents.IgnoreQueryFilters().AboutPeople().Where(e => e.TripLogId == trip)
+            .GroupBy(e => e.CaverId!.Value).ToDictionaryAsync(g => g.Key, g => g.Count());
     }
 
     /// <summary>A full administrator: the refusal over a person is about history, not rights.</summary>

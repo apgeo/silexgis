@@ -23,6 +23,19 @@ public enum TripPositionEventKind : short
 
     /// <summary>The caver is out of the cave.</summary>
     Exited = 4,
+
+    /// <summary>
+    /// Something said about the cave itself — loose rock above a pitch, water rising in a passage
+    /// — and about nobody: the one kind whose row names no person. It may name a station, never
+    /// a depth, and it always has words.
+    /// </summary>
+    /// <remarks>
+    /// A kind of its own rather than a person's note with a place, because where a person is gets
+    /// read off their latest report that names a place: a hazard written down as a note about
+    /// whoever relayed it would move that person to the hazard on every surface that shows the
+    /// party. A row with no person is one no fold over people can pick up.
+    /// </remarks>
+    CaveNote = 5,
 }
 
 /// <summary>
@@ -48,8 +61,26 @@ public enum TripPositionEventSource : short
 }
 
 /// <summary>
-/// One report about one caver during a tracked trip, at the moment <see cref="RecordedAt"/>
-/// refers to. A wrong report is corrected in place, keeping its row and its identity — anything
+/// Where the rows about people are told from the rows about nobody, for every query over reports.
+/// </summary>
+public static class TripPositionEventQueries
+{
+    /// <summary>
+    /// The reports that are about somebody — every row but a note about the cave.
+    /// </summary>
+    /// <remarks>
+    /// One spelling of the condition, so that "this read is about the party" is said the same way
+    /// by every reader that folds, counts or publishes people's reports, and a new such reader has
+    /// one thing to call rather than a predicate to remember. Asked of the person and not of the
+    /// kind because the person is what those readers key on; the table ties the two together.
+    /// </remarks>
+    public static IQueryable<TripPositionEvent> AboutPeople(this IQueryable<TripPositionEvent> reports) =>
+        reports.Where(e => e.CaverId != null);
+}
+
+/// <summary>
+/// One report during a tracked trip, at the moment <see cref="RecordedAt"/> refers to — about one
+/// caver, or, for a note about the cave, about nobody. A wrong report is corrected in place, keeping its row and its identity — anything
 /// hung on that row survives the correction — and is taken off the log only when what it recorded
 /// never happened rather than happened differently. Both acts land on the trip's audit timeline,
 /// as recording does, and all three are refused on a watch that was never armed.
@@ -71,7 +102,28 @@ public class TripPositionEvent : ITimestamped, IAuditable, IAuditChild
     /// </summary>
     public TripLog TripLog { get; set; } = null!;
 
-    public Guid CaverId { get; set; }
+    /// <summary>
+    /// Who the report is about. Null on exactly one kind,
+    /// <see cref="TripPositionEventKind.CaveNote"/>, which is about the cave and nobody in it — the
+    /// table refuses a person on that kind and the lack of one on any other.
+    ///
+    /// <para>
+    /// <b>Everything that folds reports into people reads them through
+    /// <see cref="TripPositionEventQueries.AboutPeople"/></b>, which leaves the rows about nobody
+    /// out, and then takes the person with <see cref="Person"/>. A reader that does neither and
+    /// groups by this column fails on the first note about the cave, or — worse — quietly counts a
+    /// hazard as a party member's report.
+    /// </para>
+    /// </summary>
+    public Guid? CaverId { get; set; }
+
+    /// <summary>
+    /// The person this report is about, for a reader that has already left out the rows about
+    /// nobody. Asked of a note about the cave it throws rather than answering with an id that
+    /// names no one: such a reader has a row it was never meant to see.
+    /// </summary>
+    public Guid Person() => CaverId ?? throw new InvalidOperationException(
+        "A note about the cave names no person; it must be left out before reports are folded by person.");
 
     /// <summary>The caver's team at that moment; a team deleted later degrades to null.</summary>
     public Guid? TeamId { get; set; }
@@ -213,7 +265,9 @@ public class TripPositionEvent : ITimestamped, IAuditable, IAuditChild
     /// </para>
     /// <para>
     /// One act writes one row per person, so the key repeats across the rows of one act and is
-    /// unique only together with the trip and the person.
+    /// unique only together with the trip and the person. A note about the cave is one act and
+    /// one row with no person, and "no person" counts there as a value like any other: the same
+    /// key cannot hold two such rows on one trip.
     /// </para>
     /// </summary>
     public const string ClientKeyProperty = "ClientKey";

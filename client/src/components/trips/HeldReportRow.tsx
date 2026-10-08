@@ -59,8 +59,11 @@ export default function HeldReportRow({
     <Flex vertical gap={4} data-testid={`${testId}-${report.clientKey}`}>
       <Flex gap={8} align="center" wrap>
         <Typography.Text strong>{when}</Typography.Text>
-        <span>{who}</span>
-        <Tag>{t(`trips.tracking.kinds.${report.body.kind}`)}</Tag>
+        {/* A kept note about the cave names nobody, whatever its caller counted or listed. */}
+        <span>{report.body.kind === 'caveNote' ? t('trips.tracking.caveNote.who') : who}</span>
+        <Tag color={report.body.kind === 'caveNote' ? 'warning' : undefined}>
+          {t(`trips.tracking.kinds.${report.body.kind}`)}
+        </Tag>
         <span>{place}</span>
       </Flex>
       {report.body.note !== null && <div>{report.body.note}</div>}

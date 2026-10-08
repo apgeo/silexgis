@@ -310,6 +310,7 @@ const trackingKinds: Record<TripPositionEventKind, true> = {
   atDepth: true,
   note: true,
   exited: true,
+  caveNote: true,
 };
 
 const terrainBuildPhases: Record<TerrainBuildPhase, true> = {

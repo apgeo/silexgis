@@ -9,9 +9,11 @@ import {
   type TrackingTeam,
   type TripPositionEventKind,
 } from '../../api/hooks.ts';
+import { TRACKING_CAVE_NOTE_KIND } from '../../caveview/caveNotes.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { COARSE_CONTROL_HEIGHT, useTrackingPanelTheme } from './trackingControlSizes.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
+import { trackingNoteRules } from './trackingReport.ts';
 import TrackingPlaceFields from './TrackingPlaceFields.tsx';
 import TrackingWhenField from './TrackingWhenField.tsx';
 import './TrackingReportDialog.css';
@@ -194,6 +196,8 @@ function CorrectionForm({
   // paint rather than a tick later: a form whose place field appears late is one somebody can press
   // Save on while it is still empty.
   const kind = Form.useWatch('kind', form) ?? initial.kind;
+  /** Whether the report on the table is a note about the cave — decided by the row, not the form. */
+  const aboutTheCave = report.kind === TRACKING_CAVE_NOTE_KIND;
   // The moment as the form holds it now. Undefined is the form not having answered yet, when the
   // report's own moment is the answer; an emptied field is null and warns about nothing.
   const watchedWhen = Form.useWatch('recordedAt', form);
@@ -218,7 +222,13 @@ function CorrectionForm({
         // Sent as null rather than left out when the kind does not carry them: the server measures
         // the whole report again, and a station left over from the kind this report used to be
         // would be refused as belonging to the wrong sort of report.
-        stationName: values.kind === 'atStation' ? (values.stationName ?? null) : null,
+        // A note about the cave keeps its station if it has one, and an emptied one is none.
+        stationName:
+          values.kind === 'atStation'
+            ? (values.stationName ?? null)
+            : values.kind === TRACKING_CAVE_NOTE_KIND && values.stationName?.trim()
+              ? values.stationName.trim()
+              : null,
         // An emptied second station is a report at one station, said as an absence: the server
         // refuses a blank rather than guessing that.
         toStationName:
@@ -226,7 +236,7 @@ function CorrectionForm({
             ? values.toStationName.trim()
             : null,
         depthM: values.kind === 'atDepth' ? (values.depthM ?? null) : null,
-        teamId: values.teamId ?? null,
+        teamId: values.kind === TRACKING_CAVE_NOTE_KIND ? null : (values.teamId ?? null),
         note: values.note?.trim() ? values.note.trim() : null,
         recordedAt: values.recordedAt ? values.recordedAt.toISOString() : null,
       });
@@ -259,10 +269,17 @@ function CorrectionForm({
         <Form.Item name="kind" label={t('trips.tracking.reportKind')}>
           <Select
             data-testid="trip-tracking-edit-kind"
-            options={TRACKING_EVENT_KINDS.map((value) => ({
-              value,
-              label: t(`trips.tracking.kinds.${value}`),
-            }))}
+            // A correction changes what a report says, never who it is about, and a note about
+            // the cave is about nobody: the server refuses turning either sort into the other. So
+            // each is offered only its own side — a person's report the kinds a person's report
+            // may be, a note about the cave the one thing it is, stated rather than chosen.
+            disabled={aboutTheCave}
+            options={(aboutTheCave ? [TRACKING_CAVE_NOTE_KIND] : TRACKING_EVENT_KINDS).map(
+              (value) => ({
+                value,
+                label: t(`trips.tracking.kinds.${value}`),
+              }),
+            )}
           />
         </Form.Item>
 
@@ -278,7 +295,7 @@ function CorrectionForm({
           seedDepth={report.kind === 'atDepth' ? report.depthEnteredM : null}
         />
 
-        {teams.length > 0 && (
+        {teams.length > 0 && !aboutTheCave && (
           <Form.Item name="teamId" label={t('trips.tracking.reportTeam')}>
             <Select
               allowClear
@@ -288,7 +305,11 @@ function CorrectionForm({
           </Form.Item>
         )}
 
-        <Form.Item name="note" label={t('trips.tracking.reportNote')}>
+        <Form.Item
+          name="note"
+          label={t(aboutTheCave ? 'trips.tracking.caveNote.words' : 'trips.tracking.reportNote')}
+          rules={trackingNoteRules(t, kind)}
+        >
           <Input.TextArea rows={2} data-testid="trip-tracking-edit-note" />
         </Form.Item>
 

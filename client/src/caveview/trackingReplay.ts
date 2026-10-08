@@ -73,9 +73,16 @@ const PICTURE_WIDENING_MS = 24 * 60 * 60_000;
 /** A report carrying words, placed on the replay's clock. */
 export interface ReplayNote {
   at: number;
-  caverId: string;
+  /** Who the words are about, or null on a note about the cave, which is about nobody. */
+  caverId: string | null;
   kind: TrackingEvent['kind'];
   note: string;
+  /**
+   * The station a note about the cave names, as this reader was told it; null on every report
+   * about a person — whose place is the position fold's business and never read off a note — and
+   * on a note about the cave that names no station or whose place is kept from this reader.
+   */
+  station: string | null;
 }
 
 /** What one caver's reports up to the moment add up to. */
@@ -206,7 +213,15 @@ export function replayNotes(
   for (const { at, event } of datedEvents(events)) {
     const note = event.note ?? '';
     if (note.length > 0 && at >= window.from && at <= window.to) {
-      notes.push({ at, caverId: event.caverId, kind: event.kind, note });
+      notes.push({
+        at,
+        caverId: event.caverId,
+        kind: event.kind,
+        note,
+        // A note about the cave is carried with its place: where the hazard is belongs to what
+        // was said. A person's words carry none, however their report was placed.
+        station: event.kind === 'caveNote' && event.stationName ? event.stationName : null,
+      });
     }
   }
   return notes;
@@ -674,6 +689,10 @@ export function trackedRoutesAt(
     if (when > at) {
       break;
     }
+    // A note about the cave is nobody's step along a route, whatever station it names.
+    if (event.caverId === null) {
+      continue;
+    }
     const place = placeReported(event, surveyModelId);
     if (place?.kind !== 'station') {
       continue;
@@ -709,6 +728,12 @@ function historiesAt(
   for (const { at: when, event } of datedEvents(events)) {
     if (when > at) {
       break;
+    }
+    // A note about the cave is about nobody. Folded in, it would be kept under a person that does
+    // not exist, and anything walking these histories would then find a member of the party with
+    // no id whose last word was a hazard.
+    if (event.caverId === null) {
+      continue;
     }
     const history = histories.get(event.caverId) ?? {
       position: null,

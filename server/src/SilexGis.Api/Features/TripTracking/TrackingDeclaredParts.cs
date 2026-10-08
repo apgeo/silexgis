@@ -64,8 +64,14 @@ internal sealed class TrackingDeclaredParts
     /// Whether this report's station is known to lie outside the declared parts. Ask it only for a
     /// report whose place is being told to the caller.
     /// </summary>
+    /// <remarks>
+    /// Never said of a note about the cave. The declaration is where the party said it was going,
+    /// and the mark means somebody was reported away from it; a hazard written down at a station
+    /// puts nobody there.
+    /// </remarks>
     internal bool Outside(TripPositionEvent report) =>
         modelId is not null
+        && report.CaverId is not null
         && report.SurveyModelId == modelId
         && report.ViewerStationName is { } station
         && TrackingDepthResolver.OutsideDeclaredParts(

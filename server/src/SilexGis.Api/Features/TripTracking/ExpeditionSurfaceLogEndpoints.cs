@@ -167,10 +167,13 @@ public static class ExpeditionSurfaceLogEndpoints
         // selected, so they are not in this process to be sent by mistake. Oldest first, in the
         // order the trip's own watch folds them — and the log as that watch reads it: a report
         // taken off the log is left out of this set by the model, as it is out of every other.
-        var reportRows = await db.TripPositionEvents.AsNoTracking()
+        //
+        // People's reports only: a note about the cave is about nobody, counts nobody in or out,
+        // and is not word from anybody — the camp's "last heard" does not move for one.
+        var reportRows = await db.TripPositionEvents.AsNoTracking().AboutPeople()
             .Where(e => tripIds.Contains(e.TripLogId))
             .OrderBy(e => e.RecordedAt).ThenBy(e => e.CreatedAt).ThenBy(e => e.Id)
-            .Select(e => new { e.TripLogId, e.CaverId, e.Kind, e.RecordedAt })
+            .Select(e => new { e.TripLogId, CaverId = e.CaverId!.Value, e.Kind, e.RecordedAt })
             .ToListAsync(ct);
 
         // The name the trip's own page gives this caller for each person, from the one place

@@ -132,4 +132,20 @@ public class TripTrackingReplayTests
 
         ids.Keys.ShouldBe([once, twice], ignoreOrder: true);
     }
+
+    [Fact]
+    public void A_note_about_the_cave_is_the_answer_to_a_repeat_of_its_own_send()
+    {
+        // Its act names nobody and wrote one row with no person. The repeat names nobody either,
+        // and is answered with that row — or with nothing, once somebody has taken it off.
+        var note = new TripPositionEvent { Kind = TripPositionEventKind.CaveNote, Note = "loose rock" };
+
+        var answer = TripTrackingRules.ReplayAnswer([], [note]);
+
+        answer.ShouldNotBeNull();
+        answer.ShouldHaveSingleItem().ShouldBeSameAs(note);
+
+        note.RemovedAt = DateTimeOffset.UnixEpoch;
+        TripTrackingRules.ReplayAnswer([], [note]).ShouldBeEmpty();
+    }
 }

@@ -7,11 +7,13 @@ import type {
   TripPositionEventKind,
   TripTrackingState,
 } from '../../api/hooks.ts';
+import { TRACKING_CAVE_NOTE_KIND } from '../../caveview/caveNotes.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { TrackingStationField } from './TrackingPlaceFields.tsx';
 import TrackingWhenField from './TrackingWhenField.tsx';
 import { COARSE_CONTROL_HEIGHT, useTrackingPanelTheme } from './trackingControlSizes.ts';
 import {
+  trackingNoteRules,
   trackingReportLeftTheForm,
   useTrackingReport,
   type TrackingReportValues,
@@ -35,8 +37,18 @@ import './TrackingReportDialog.css';
  *
  * `atStation` first because it is the default and the reason this dialog was opened; the rest in
  * the order a trip runs.
+ *
+ * <b>And last, the one that is not about anybody: a note about the cave, at the pressed station.</b>
+ * "Loose rock above this pitch" is said by pointing at the pitch, which is what a press is — so it
+ * is offered here, keeps the station, and asks for nobody.
  */
-const DIALOG_KINDS: readonly TripPositionEventKind[] = ['atStation', 'entered', 'exited', 'note'];
+const DIALOG_KINDS: readonly TripPositionEventKind[] = [
+  'atStation',
+  'entered',
+  'exited',
+  'note',
+  TRACKING_CAVE_NOTE_KIND,
+];
 
 /** What the dialog asks for. The station is a fact rather than a field, and see below for why. */
 interface DialogForm extends TrackingReportValues {
@@ -135,6 +147,10 @@ export default function TrackingReportDialog({
   // for 0" for one frame, on the surface built for speed, is read as a form that lost the answer.
   const chosen = Form.useWatch('caverIds', form) ?? defaultCaverIds;
   const kind = Form.useWatch('kind', form) ?? 'atStation';
+  /** A note about the cave: it keeps the pressed station, and it is about nobody. */
+  const aboutTheCave = kind === TRACKING_CAVE_NOTE_KIND;
+  /** Whether what is being recorded is said of the pressed station. */
+  const atThePress = kind === 'atStation' || aboutTheCave;
 
   /**
    * Whether the server has said it has no station by the pressed name.
@@ -170,7 +186,9 @@ export default function TrackingReportDialog({
     // the press rather than from the form store, because a field that is not on screen is not a
     // field the form is keeping an answer for.
     const stationName = stationDisputed ? values.stationName : (station ?? '');
-    const outcome = await report.send(tripLogId, values.caverIds, {
+    // Nobody is asked for on a note about the cave, and a field that is not on screen answers
+    // nothing: the report's own rule leaves people out of such a note whatever is passed here.
+    const outcome = await report.send(tripLogId, values.caverIds ?? [], {
       ...values,
       stationName,
     });
@@ -203,7 +221,11 @@ export default function TrackingReportDialog({
         className="tracking-report-dialog"
         open={open}
         title={t('trips.tracking.recordHereTitle')}
-        okText={t('trips.tracking.recordFor', { count: chosen.length })}
+        okText={
+          aboutTheCave
+            ? t('trips.tracking.caveNote.record')
+            : t('trips.tracking.recordFor', { count: chosen.length })
+        }
         cancelText={t('common.cancel')}
         // Not disabled on an empty party: the field carries the rule that says so, and a refusal
         // that says which field is missing beats a button that is simply dead with no reason on
@@ -219,7 +241,7 @@ export default function TrackingReportDialog({
         destroyOnHidden
         data-testid="trip-tracking-record-here"
       >
-        {kind === 'atStation' ? (
+        {atThePress ? (
           <Flex
             gap={8}
             align="baseline"
@@ -228,7 +250,11 @@ export default function TrackingReportDialog({
             data-testid="trip-tracking-dialog-place"
           >
             <Typography.Text type="secondary">
-              {t('trips.tracking.reportPlaceLabel')}
+              {t(
+                aboutTheCave
+                  ? 'trips.tracking.caveNote.placeLabel'
+                  : 'trips.tracking.reportPlaceLabel',
+              )}
             </Typography.Text>
             <Typography.Text strong data-testid="trip-tracking-dialog-station-name">
               {station}
@@ -265,22 +291,35 @@ export default function TrackingReportDialog({
             kind: 'atStation' as TripPositionEventKind,
           }}
         >
-          <Form.Item
-            name="caverIds"
-            label={t('trips.tracking.reportWho')}
-            rules={[{ required: true, message: t('trips.tracking.reportWhoRequired') }]}
-          >
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder={t('trips.tracking.reportWhoPlaceholder')}
-              // A roster is a list of names somebody knows, so typing two letters of one beats
-              // scrolling a party of twenty on a screen the size of a hand.
-              optionFilterProp="label"
-              data-testid="trip-tracking-dialog-cavers"
-              options={cavers.map((caver) => ({ value: caver.caverId, label: caver.name }))}
+          {/* Not asked on a note about the cave, which is about nobody: a list of names over it
+              would say the hazard is theirs. Said instead, so the missing question reads as an
+              answer and not as a field that failed to draw. */}
+          {aboutTheCave ? (
+            <Alert
+              type="info"
+              showIcon
+              title={t('trips.tracking.caveNote.hint')}
+              style={{ marginBottom: 16 }}
+              data-testid="trip-tracking-dialog-cave-note-hint"
             />
-          </Form.Item>
+          ) : (
+            <Form.Item
+              name="caverIds"
+              label={t('trips.tracking.reportWho')}
+              rules={[{ required: true, message: t('trips.tracking.reportWhoRequired') }]}
+            >
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder={t('trips.tracking.reportWhoPlaceholder')}
+                // A roster is a list of names somebody knows, so typing two letters of one beats
+                // scrolling a party of twenty on a screen the size of a hand.
+                optionFilterProp="label"
+                data-testid="trip-tracking-dialog-cavers"
+                options={cavers.map((caver) => ({ value: caver.caverId, label: caver.name }))}
+              />
+            </Form.Item>
+          )}
 
           <Form.Item name="kind" label={t('trips.tracking.reportKind')}>
             <Select
@@ -294,7 +333,7 @@ export default function TrackingReportDialog({
 
           {/* Only after the server has refused the pressed spelling. The field is the card's own, so
               a correction this dialog accepts cannot be one the card would have refused. */}
-          {kind === 'atStation' && stationDisputed && (
+          {atThePress && stationDisputed && (
             <TrackingStationField
               idPrefix="trip-tracking-dialog"
               surveyModelId={surveyModelId}
@@ -302,7 +341,7 @@ export default function TrackingReportDialog({
             />
           )}
 
-          {teams.length > 0 && (
+          {teams.length > 0 && !aboutTheCave && (
             <Form.Item name="teamId" label={t('trips.tracking.reportTeam')}>
               <Select
                 allowClear
@@ -324,7 +363,11 @@ export default function TrackingReportDialog({
             required={afterClose}
           />
 
-          <Form.Item name="note" label={t('trips.tracking.reportNote')}>
+          <Form.Item
+            name="note"
+            label={t(aboutTheCave ? 'trips.tracking.caveNote.words' : 'trips.tracking.reportNote')}
+            rules={trackingNoteRules(t, kind)}
+          >
             <Input.TextArea rows={2} data-testid="trip-tracking-dialog-note" />
           </Form.Item>
         </Form>

@@ -248,7 +248,11 @@ public static class TripTrackingEndpoints
 
         // A tracked trip's whole event log is small (reports arrive by relayed word, minutes
         // apart) — fold the latest-per-caver in memory rather than in SQL.
-        var events = await db.TripPositionEvents.AsNoTracking()
+        //
+        // The party's reports only. A note about the cave is about nobody: it is left out of this
+        // read altogether, so that nobody's place, standing, last word or quiet mark can come from
+        // one, and so that whether its own place is withheld is the log's to say, row by row.
+        var events = await db.TripPositionEvents.AsNoTracking().AboutPeople()
             .Where(e => e.TripLogId == tripLogId)
             .OrderBy(e => e.RecordedAt).ThenBy(e => e.CreatedAt).ThenBy(e => e.Id)
             .ToListAsync(ct);
@@ -331,7 +335,7 @@ public static class TripTrackingEndpoints
             : [];
 
         var withheldAny = configHasVocabulary && !configOpen;
-        var byCaver = events.GroupBy(e => e.CaverId).ToDictionary(g => g.Key, g => g.ToList());
+        var byCaver = events.GroupBy(e => e.Person()).ToDictionary(g => g.Key, g => g.ToList());
 
         // <b>The party is everybody the trip names and everybody the log speaks of.</b> Folding the
         // roster alone dropped a person the moment they were taken off it, while every report about
@@ -341,9 +345,10 @@ public static class TripTrackingEndpoints
         // Who that is, and in which order, is Domain's answer rather than a loop here, because
         // this is not the only read that counts a party: a camp's head count asks the same
         // question of the same rule, and the two must never list different people. The events
-        // above are the log as it is read — oldest first, without the reports taken off it —
-        // which is what the rule is asked of.
-        var watched = TripTrackingRules.PartyOf(rosterCavers, events.Select(report => report.CaverId));
+        // above are the log as it is read — oldest first, without the reports taken off it and
+        // without the notes about the cave, which speak of nobody — which is what the rule is
+        // asked of.
+        var watched = TripTrackingRules.PartyOf(rosterCavers, events.Select(report => report.Person()));
         var onRoster = watched.OnRoster.ToHashSet();
         var offRoster = watched.OffRoster;
 
@@ -477,6 +482,8 @@ public static class TripTrackingEndpoints
         if (trip is null) return ApiProblems.NotFound("trip_log.not_found");
 
         var query = LogOf(db, tripLogId);
+        // Narrowed to one person, the log is that person's reports: a note about the cave is
+        // about nobody and is not among them.
         if (caverId is not null) query = query.Where(e => e.CaverId == caverId);
         if (from is not null) query = query.Where(e => e.RecordedAt >= from);
         if (to is not null) query = query.Where(e => e.RecordedAt <= to);
@@ -890,7 +897,9 @@ public static class TripTrackingEndpoints
             return ApiProblems.Conflict(TrackingProblemCodes.NotWritable, LogNotWritable);
         }
 
-        var caverIds = request.CaverIds!.Distinct().ToList();
+        // Nobody, for a note about the cave — the request's own rules have already refused a list
+        // of people on that kind and the lack of one on any other.
+        var caverIds = (request.CaverIds ?? []).Distinct().ToList();
 
         // A send whose act is already on record is answered here and goes no further. After the
         // two guards above, so a repeat is asked the same "may you write this log" as the send it
@@ -939,14 +948,21 @@ public static class TripTrackingEndpoints
         // first. Left to themselves the ids of one send fall in no order, and two sends of an act
         // could each write one person and wait for the other until the database failed one of
         // them as a deadlock — which is not the lost race answered below, and was an error for a
-        // report that had been received.
+        // report that had been received. A note about the cave is one row about nobody: it has
+        // no second row to be ordered against and takes an id of its own below.
         var reportIds = TripTrackingRules.ReportIdsInPersonOrder(caverIds);
         var created = new List<TripPositionEvent>();
-        foreach (var caverId in caverIds)
+        // One row per person the act names — and for a note about the cave, which names nobody,
+        // exactly one row with no person. Without that a note would be a loop over nobody: nothing
+        // written, and an empty success in answer.
+        IEnumerable<Guid?> subjects = kind == TripPositionEventKind.CaveNote
+            ? [null]
+            : caverIds.Select(id => (Guid?)id);
+        foreach (var caverId in subjects)
         {
             created.Add(new TripPositionEvent
             {
-                Id = reportIds[caverId],
+                Id = caverId is { } person ? reportIds[person] : Guid.CreateVersion7(),
                 TripLogId = tripLogId,
                 CaverId = caverId,
                 TeamId = request.TeamId,
@@ -1073,7 +1089,13 @@ public static class TripTrackingEndpoints
         decimal? depthEntered = null;
         TrackingDepthPlacementOutcome? placement = null;
 
-        if (kind is TripPositionEventKind.AtStation or TripPositionEventKind.AtDepth)
+        // A note about the cave that says where is placed exactly as a station report is: on the
+        // survey the watch is on, behind the same gate on placing anything in that cave, and
+        // anchored to the same cave — which is what later keeps its station from a reader who may
+        // not be told the cave's positions. One that says nowhere is asked nothing and holds no
+        // survey and no cave, like a person's note.
+        var placedCaveNote = kind == TripPositionEventKind.CaveNote && stationName is not null;
+        if (kind is TripPositionEventKind.AtStation or TripPositionEventKind.AtDepth || placedCaveNote)
         {
             if (tracking.SurveyModelId is null)
             {
@@ -1085,7 +1107,7 @@ public static class TripTrackingEndpoints
             surveyModelId = usable.Value.Model.Id;
             caveFeatureId = usable.Value.Cave.Id;
 
-            if (kind == TripPositionEventKind.AtStation)
+            if (kind == TripPositionEventKind.AtStation || placedCaveNote)
             {
                 // Matched by resolving the name against the model rather than by comparing strings:
                 // the two sides of this application spell one station of a Therion model
@@ -1248,6 +1270,17 @@ public static class TripTrackingEndpoints
         var row = await db.TripPositionEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.TripLogId == tripLogId, ct);
         if (row is null) return ApiProblems.NotFound(TrackingProblemCodes.EventNotFound);
 
+        // Who a report is about is not editable, and a note about the cave is about nobody: a
+        // correction that would make a person's report into one, or one into a person's report,
+        // is changing the subject by another door. The first would have to forget the person and
+        // the second to invent one. Refused here in words; the table would refuse it too.
+        if ((request.Kind == TripPositionEventKind.CaveNote) != (row.CaverId is null))
+        {
+            return ApiProblems.BadRequest(TrackingProblemCodes.ReportSubjectFixed,
+                "A report about a person cannot become a note about the cave, nor the reverse. "
+                + "Take this one off the log and record the other.");
+        }
+
         var now = DateTimeOffset.UtcNow;
         // To UTC for the same reason the record route does it: the column accepts no other offset.
         var recordedAt = (request.RecordedAt ?? row.RecordedAt).ToUniversalTime();
@@ -1261,6 +1294,26 @@ public static class TripTrackingEndpoints
             var teamKnown = await db.TripTeams.AsNoTracking()
                 .AnyAsync(t => t.Id == request.TeamId && t.TripLogId == tripLogId, ct);
             if (!teamKnown) return ApiProblems.NotFound(TrackingProblemCodes.TeamNotFound);
+        }
+
+        // A note about the cave may say where or not, and its place is withheld row by row: to a
+        // log writer who may not be told the cave's positions a placed note reads exactly like one
+        // that names no place. Their correction therefore arrives with no station whether or not
+        // they meant to remove one, and they cannot have meant to remove what they were never
+        // shown. So the place they cannot see stays as it is and only the words and the moment are
+        // corrected — nothing else keeps a hazard's station once it is cleared, the trip's history
+        // holds no place to put back. A person's report has no such case: the kinds that hold a
+        // place require one on every correction, and this caller is refused when placing it.
+        if (row.CaverId is null && request.StationName is null && TrackingWithholding.HasPosition(row)
+            && !TrackingWithholding.PositionOpen(
+                row, await TrackingWithholding.OpenCavesOfAsync(db, access, protection, ctx, [row], ct)))
+        {
+            row.TeamId = request.TeamId;
+            row.Note = request.Note;
+            row.RecordedAt = recordedAt;
+            await db.SaveChangesAsync(ct);
+            // Through the per-row withholding, so the place that was kept is not echoed back.
+            return TypedResults.Ok((await ShownToAsync(db, access, protection, ctx!, tripLogId, [row], ct))[0]);
         }
 
         var placed = await ResolvePlaceAsync(
@@ -1496,9 +1549,12 @@ public static class TripTrackingEndpoints
         }
         else
         {
+            // Asked only of a report about somebody. A note about the cave places nobody
+            // underground, so there is no roster entry it could be missing.
             if (tracking.State == TripTrackingState.Armed
+                && row.CaverId is { } about
                 && !await db.TripLogParticipants.AsNoTracking()
-                    .AnyAsync(p => p.TripLogId == tripLogId && p.CaverId == row.CaverId, ct))
+                    .AnyAsync(p => p.TripLogId == tripLogId && p.CaverId == about, ct))
             {
                 return ApiProblems.BadRequest(TrackingProblemCodes.CaverNotParticipant,
                     "This report is about somebody who is no longer on the trip's roster. "

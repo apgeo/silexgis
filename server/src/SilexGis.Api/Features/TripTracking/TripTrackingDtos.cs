@@ -391,9 +391,14 @@ public sealed record TrackingStateDto(
 /// and this station of the same survey. Null on a report at one station, and taken out together
 /// with the first station wherever the place is withheld. Signed-in log only.
 /// </param>
+/// <param name="CaverId">
+/// Who the report is about; null on a note about the cave, which is about nobody. Such a note is
+/// on the signed-in log only — nothing a visitor without an account reads holds one — and it is in
+/// no answer about the party: nobody's standing, place, last word or number comes from it.
+/// </param>
 public sealed record TrackingEventDto(
     Guid Id,
-    Guid CaverId,
+    Guid? CaverId,
     Guid? TeamId,
     TripPositionEventKind Kind,
     Guid? SurveyModelId,
@@ -777,7 +782,19 @@ internal static class TrackingReportFieldRules
         validator.RuleFor(x => x.StationName).NotEmpty().MaximumLength(TripTrackingRules.MaxStationNameLength)
             .When(x => x.Kind == TripPositionEventKind.AtStation);
         validator.RuleFor(x => x.StationName).Null()
-            .When(x => x.Kind is not null && x.Kind != TripPositionEventKind.AtStation);
+            .When(x => x.Kind is not null && x.Kind != TripPositionEventKind.AtStation
+                && x.Kind != TripPositionEventKind.CaveNote);
+        // A note about the cave may say where — one station, never a stretch and never a depth —
+        // or nowhere. A blank station is refused as it is on a stretch's far end: a sender that
+        // means "nowhere" leaves the field out. Its words are the whole of it, so they are owed;
+        // and it names no team, a team being who somebody was with.
+        validator.RuleFor(x => x.StationName).NotEmpty().MaximumLength(TripTrackingRules.MaxStationNameLength)
+            .When(x => x.StationName is not null && x.Kind == TripPositionEventKind.CaveNote);
+        validator.RuleFor(x => x.Note).Must(words => !string.IsNullOrWhiteSpace(words))
+            .WithMessage("A note about the cave has to say something.")
+            .When(x => x.Kind == TripPositionEventKind.CaveNote);
+        validator.RuleFor(x => x.TeamId).Null()
+            .When(x => x.Kind == TripPositionEventKind.CaveNote);
         // The far end of a stretch is said by a station report or not at all. An empty string is
         // refused rather than read as "none": a sender that means no stretch leaves the field out,
         // and one that sends a blank has a second station field it forgot to fill. Whether the two
@@ -804,8 +821,15 @@ public sealed class TrackingEventRequestValidator : AbstractValidator<TrackingEv
 {
     public TrackingEventRequestValidator()
     {
-        // Its own, and the only thing a correction does not say: who the report is about.
-        RuleFor(x => x.CaverIds).NotEmpty();
+        // Its own, and the only thing a correction does not say: who the report is about. A note
+        // about the cave is about nobody, and says so by naming nobody: a list of people on one is
+        // refused rather than dropped, because whoever sent it meant a report about those people
+        // and would otherwise be answered as though it had been written.
+        RuleFor(x => x.CaverIds).NotEmpty()
+            .When(x => x.Kind != TripPositionEventKind.CaveNote);
+        RuleFor(x => x.CaverIds).Empty()
+            .WithMessage("A note about the cave is about nobody; it names no people.")
+            .When(x => x.Kind == TripPositionEventKind.CaveNote);
         RuleFor(x => x.CaverIds!.Count).LessThanOrEqualTo(TripTrackingRules.MaxCaversPerWrite)
             .When(x => x.CaverIds is not null);
         // No key is the ordinary send. The all-zero key is what a sender that forgot to mint one

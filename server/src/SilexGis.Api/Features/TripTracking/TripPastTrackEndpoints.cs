@@ -275,7 +275,9 @@ public static class TripPastTrackEndpoints
         // one — the drawability half is asked through the rule that owns it rather than restated.
         var placedOn = ids.Count == 0
             ? []
-            : await db.TripPositionEvents.AsNoTracking()
+            // A person's place. A note about the cave that names a station draws nobody, and a
+            // trip whose only station is one is not a trip with a track to play.
+            : await db.TripPositionEvents.AsNoTracking().AboutPeople()
                 .Where(e => ids.Contains(e.TripLogId)
                     && e.CaveFeatureId == configCave
                     && (e.ViewerStationName != null || e.DepthEnteredM != null))
@@ -400,7 +402,11 @@ public static class TripPastTrackEndpoints
 
         // Oldest first, because that is the order a playback runs in, and bounded from that end so
         // that what a very long log loses is its tail rather than its beginning.
-        var rows = await db.TripPositionEvents.AsNoTracking()
+        //
+        // The reports about people only: a note about the cave is on no published shape, is not
+        // read here, and does not count toward the bound — a log is not cut short for a visitor
+        // by rows the visitor is never shown.
+        var rows = await db.TripPositionEvents.AsNoTracking().AboutPeople()
             .Where(e => e.TripLogId == trip.Id)
             .OrderBy(e => e.RecordedAt).ThenBy(e => e.CreatedAt).ThenBy(e => e.Id)
             .Take(MaxTrackFixes + 1)
@@ -416,7 +422,7 @@ public static class TripPastTrackEndpoints
             .Append(configCave).Distinct().ToList();
         var openCaves = await TrackingWithholding.PublishableCaveIdsAsync(db, protection, caveIds, ct);
 
-        var byCaver = rows.GroupBy(e => e.CaverId).ToDictionary(g => g.Key, g => g.ToList());
+        var byCaver = rows.GroupBy(e => e.Person()).ToDictionary(g => g.Key, g => g.ToList());
         var participants = new List<PublicPastTrackParticipantDto>();
         var withheldAny = false;
         // The first and the last report this answer holds, which is what its replay runs out to.
