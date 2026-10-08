@@ -833,7 +833,7 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
     /// <summary>A layout a club wrote itself, stored under a name of its own.</summary>
     private async Task<Guid> CreateLayoutAsync(string kind, string body)
     {
-        using var response = await admin.PostAsJsonAsync("/api/v1/trip-report-templates/", new
+        using var response = await admin.PostAsJsonAsync("/api/v1/report-templates/", new
         {
             name = $"{kind} layout {Guid.NewGuid():N}",
             body,
