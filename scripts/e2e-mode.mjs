@@ -16,8 +16,9 @@
 //     desktop page is proved on the desktop project first.
 //   - the specs that draw a 3D scene are left out. There is no graphics card here, every scene is
 //     rendered in software, and several at once starve each other.
-//   - two specs that count the installation's trips are left out, because side by side with
-//     everything else the number does not stand still for them.
+//   - the spec that holds the trip listing's counts to one another is left out, because the
+//     server takes them in separate queries and side by side with everything else a trip is
+//     written between two of them often enough to show.
 //
 // It is for the look taken while a piece of work is in progress. A pass in this form is not the
 // browser suite's verdict, and the runner's last line says what did not run. A failure seen only
@@ -50,13 +51,17 @@ const DRAWS_A_3D_SCENE = [
 ];
 
 /**
- * The specs that read how many trips the installation holds and expect the number to stand
- * still while they work. Any test that makes or deletes a trip in those seconds moves it. One
- * file after another that is rare; with the tests of every file side by side there is nearly
- * always such a test running, and these two failed in most fast runs by one trip more or less.
- * They are sound in the ordinary form and say nothing in this one, so this form does not ask.
+ * The spec that holds the counts of one answer of the trip listing to one another: unnarrowed,
+ * the two halves of "Showing N of M" are one number, and the options of the state control add up
+ * to the second. Every count it follows from one moment to the next is of trips it wrote itself,
+ * which no other test moves. These two are inside a single answer — but the server takes each
+ * count in a query of its own, and a trip made or deleted between two of them leaves that answer
+ * a trip apart from itself. One file after another that needs a write within a few milliseconds;
+ * with the tests of every file side by side the writes are many and the queries further apart,
+ * so this form does not ask. It comes back the day one answer is counted over one view of the
+ * table.
  */
-const COUNTS_WHAT_EVERY_TEST_MAY_CHANGE = ['trip-list.spec.ts', 'trip-stats.spec.ts'];
+const COUNTS_WHAT_EVERY_TEST_MAY_CHANGE = ['trip-list.spec.ts'];
 
 /** Everything the fast form leaves out of the desktop project, by file name. */
 export const LEFT_OUT_OF_FAST = [...DRAWS_A_3D_SCENE, ...COUNTS_WHAT_EVERY_TEST_MAY_CHANGE];
