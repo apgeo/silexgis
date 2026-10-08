@@ -66,6 +66,9 @@ const PHONE_ONLY_SPECS = [
   // A camp's head count held in a hand at a cave entrance: three counts across and every
   // standing on the screen are claims about measured boxes at a phone's width.
   /(^|\/)expedition-watch-mobile\.spec\.ts$/,
+  // The movie dialog where the browser's video encoder may be missing or may write nothing:
+  // Chromium has every encoder, so only the suite's other engine can show how that is said.
+  /(^|\/)tracking-movie-webkit\.spec\.ts$/,
 ];
 
 export default defineConfig({
@@ -128,9 +131,13 @@ export default defineConfig({
       // one thing chromium cannot answer: Safari raises no contextmenu over a canvas, so
       // the long-press menu is the app's own timer or it does not exist on an iPhone.
       // Emulation is still not an iPhone, so it proves the code path, not the platform.
+      //
+      // It is also the suite's only engine that is not Chromium, so the one spec whose question
+      // is the engine's rather than the phone's — what the movie dialog says where the browser
+      // cannot write a video — runs here too, in a window it sizes for itself.
       name: 'mobile-ios-smoke',
       use: { ...devices['iPhone 14'] },
-      testMatch: /mobile-ios\.spec\.ts/,
+      testMatch: /(mobile-ios|tracking-movie-webkit)\.spec\.ts/,
     },
   ],
   webServer: {

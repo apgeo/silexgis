@@ -112,6 +112,7 @@ export const specs = {
     'checklists.spec.ts', 'tracking-therion.spec.ts', 'expedition-watch.spec.ts',
     'expedition-watch-mobile.spec.ts', 'trip-tracking-held-reports.spec.ts',
     'trip-tracking-held-reports-mobile.spec.ts', 'trip-removal-and-roster-times.spec.ts',
+    'tracking-movie-webkit.spec.ts',
   ],
   uploads: ['uploads.spec.ts'],
   users: ['settings.spec.ts', 'permission-groups.spec.ts'],
