@@ -17,6 +17,10 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* Type checking. Of the strict family only this member is on: what a `catch` receives is
+       `unknown`, so a block has to establish what was thrown before it reads anything off it. */
+    "useUnknownInCatchVariables": true,
+
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
