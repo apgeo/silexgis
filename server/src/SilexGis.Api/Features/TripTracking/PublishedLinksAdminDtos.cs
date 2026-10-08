@@ -175,6 +175,43 @@ public sealed record PublishedLinkDto(
 public sealed record PublishedLinkStatusCountDto(PublishedLinkStatus Status, int Count);
 
 /// <summary>
+/// The installation's settings that the statuses in the list are decided by, as they are in
+/// force on the server that answered.
+/// </summary>
+/// <remarks>
+/// A status is worded by what it means — "just closed", "in the archive" — and how long each
+/// lasts is a setting. Without these beside the list, its reader has to ask whoever installed the
+/// server what a row is about to do. Periods are whole seconds, so that a reader can say them in
+/// whatever unit divides them; a period an installation has not limited is null, never a large
+/// number standing in for "no limit".
+/// </remarks>
+/// <param name="ShareLifetimeSeconds">
+/// How long after the end of its trip's last day a link runs out by itself.
+/// </param>
+/// <param name="ShareGraceAfterCloseSeconds">
+/// How long a link goes on opening its page after its watch is closed — never past the moment
+/// the link runs out. Zero where an installation allows none.
+/// </param>
+/// <param name="ArchiveRetentionSeconds">
+/// How long after the end of its last day a finished trip stays readable as history; null where
+/// the installation sets no limit. It says nothing where the archive is switched off.
+/// </param>
+/// <param name="PublicReadsPerMinute">
+/// How many requests one address may make in a minute across the published pages before it is
+/// told to wait.
+/// </param>
+/// <param name="SiblingWindowAfterLapseSeconds">
+/// How long after its own trip is over a link goes on listing the parties being followed in its
+/// cave now; null where the installation sets no limit.
+/// </param>
+public sealed record PublishedLinkSettingsDto(
+    long ShareLifetimeSeconds,
+    long ShareGraceAfterCloseSeconds,
+    long? ArchiveRetentionSeconds,
+    int PublicReadsPerMinute,
+    long? SiblingWindowAfterLapseSeconds);
+
+/// <summary>
 /// A page of the installation's published links, with what a reader needs to understand it.
 /// </summary>
 /// <param name="TotalItems">How many links match what was asked for, across every page.</param>
@@ -204,6 +241,9 @@ public sealed record PublishedLinkStatusCountDto(PublishedLinkStatus Status, int
 /// Shown to the person who made the request and to nobody else, and it changes nothing about how
 /// requests are counted.
 /// </param>
+/// <param name="Settings">
+/// The periods and the limit the statuses above rest on, said once for the installation.
+/// </param>
 public sealed record PublishedLinksDto(
     IReadOnlyList<PublishedLinkDto> Items,
     int Page,
@@ -213,7 +253,8 @@ public sealed record PublishedLinksDto(
     IReadOnlyList<PublishedLinkStatusCountDto> Counts,
     bool PublishesRealNames,
     bool ArchiveEnabled,
-    string? SeenFrom);
+    string? SeenFrom,
+    PublishedLinkSettingsDto Settings);
 
 /// <summary>
 /// What withdrawing every link of the installation has to be asked with.

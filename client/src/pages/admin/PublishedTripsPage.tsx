@@ -34,6 +34,7 @@ import {
 } from '../../api/hooks.ts';
 import FreshFollowLink from '../../components/trips/FreshFollowLink.tsx';
 import { trackingProblemMessage } from '../../components/trips/trackingProblems.ts';
+import PublishedLinkSettingsNote from './PublishedLinkSettingsNote.tsx';
 import { PUBLISHED_LINK_STATUSES } from './publishedLinkStatuses.ts';
 
 /**
@@ -95,10 +96,11 @@ type Pending =
  *
  * <b>Every status on this page is the server's.</b> What a link opens depends on its watch, on a
  * grace window and a retention that are installation settings, and on whether its cave may be
- * published at all — none of which this page is sent, and all of which the published pages
- * themselves are served by. A status worked out here from the dates in a row would sooner or
- * later describe a page that answers differently, so the page prints the word it was given and
- * the instant that word was decided at.
+ * published at all — all of which the published pages themselves are served by. A status worked
+ * out here from the dates in a row would sooner or later describe a page that answers
+ * differently, so the page prints the word it was given and the instant that word was decided
+ * at. The settings are printed beside the list, once, so that "just closed" and "in the archive"
+ * can be read as periods; they are printed and nothing is computed from them.
  *
  * <b>The three acts each say what goes with them before they are done.</b> Taking links back is
  * not only "the page stops answering": a finished trip whose last link is gone also leaves its
@@ -310,6 +312,10 @@ export default function PublishedTripsPage() {
             : t('publishedTrips.namesHidden')}
           {!data.archiveEnabled && <> {t('publishedTrips.archiveOff')}</>}
         </Typography.Paragraph>
+      )}
+
+      {data !== undefined && (
+        <PublishedLinkSettingsNote settings={data.settings} archiveEnabled={data.archiveEnabled} />
       )}
 
       {data !== undefined && (

@@ -139,6 +139,59 @@ public sealed class PublishedLinksAdminTests : IAsyncLifetime, IDisposable, ICla
     }
 
     /// <summary>
+    /// The list says what its statuses rest on: the installation's own periods and its read
+    /// limit, as shipped on one host and as set on another — and says it to a full administrator
+    /// only.
+    /// </summary>
+    /// <remarks>
+    /// Two hosts over one database, so that what differs between the two answers is the settings
+    /// and nothing else: an answer that printed constants would pass on the first and fail on the
+    /// second.
+    /// </remarks>
+    [Fact]
+    public async Task The_list_states_the_settings_its_statuses_rest_on_to_an_administrator_only()
+    {
+        // As shipped: two weeks, two days, an archive with no limit, 120 reads a minute, and no
+        // limit on how long an old link lists today's parties.
+        var shipped = (await ListAsync(admin, "?pageSize=1")).GetProperty("settings");
+        shipped.GetProperty("shareLifetimeSeconds").GetInt64().ShouldBe(14 * 86_400);
+        shipped.GetProperty("shareGraceAfterCloseSeconds").GetInt64().ShouldBe(2 * 86_400);
+        shipped.GetProperty("archiveRetentionSeconds").ValueKind.ShouldBe(JsonValueKind.Null);
+        shipped.GetProperty("publicReadsPerMinute").GetInt32().ShouldBe(120);
+        shipped.GetProperty("siblingWindowAfterLapseSeconds").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var settings = HostSettings();
+        settings["TripTracking:ShareLifetime"] = "21.00:00:00";
+        settings["TripTracking:ShareGraceAfterClose"] = "00:00:00";
+        settings["TripPastTracks:Retention"] = "365.00:00:00";
+        settings["TripTracking:PublicRateLimitPerMinute"] = "45";
+        settings["TripTracking:SiblingWindowAfterLapse"] = "1.12:00:00";
+        using var host = new SilexGisApiFactory(connectionString, settings, JobWorkers.RemoveFrom);
+        var hostAdmin = await AuthHelper.BearerClientAsync(host, adminEmail);
+
+        var set = (await ListAsync(hostAdmin, "?pageSize=1")).GetProperty("settings");
+        set.GetProperty("shareLifetimeSeconds").GetInt64().ShouldBe(21 * 86_400);
+        // No grace is a period of nothing, said as zero: it is a setting an installation chose,
+        // not an absent one.
+        set.GetProperty("shareGraceAfterCloseSeconds").GetInt64().ShouldBe(0);
+        set.GetProperty("archiveRetentionSeconds").GetInt64().ShouldBe(365 * 86_400);
+        set.GetProperty("publicReadsPerMinute").GetInt32().ShouldBe(45);
+        set.GetProperty("siblingWindowAfterLapseSeconds").GetInt64().ShouldBe(36 * 3_600);
+
+        // The settings of an installation are not for whoever publishes on it. An editor reads
+        // past every visibility setting and is refused the whole answer, on the host with the
+        // settings changed as on the other; so is somebody with no account.
+        var hostEditor = await AuthHelper.BearerClientAsync(host, ownerEmail);
+        var refused = await hostEditor.GetAsync(List);
+        refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        var refusal = await refused.Content.ReadAsStringAsync();
+        Code(refusal).ShouldBe("access.forbidden");
+        refusal.ShouldNotContain("shareLifetimeSeconds");
+        refusal.ShouldNotContain("publicReadsPerMinute");
+        (await host.CreateClient().GetAsync(List)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    /// <summary>
     /// One link through its whole life on one clock, the list and the pages asked together.
     /// </summary>
     /// <remarks>

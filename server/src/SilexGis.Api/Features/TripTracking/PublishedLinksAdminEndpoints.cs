@@ -79,6 +79,10 @@ public static class PublishedLinksAdminEndpoints
                 + "at the one instant the answer names, by the rules the published pages are served by. "
                 + "seenFrom is the address this request was counted under once the stated reverse proxies "
                 + "were walked past: the reader's own when the proxy settings are right. "
+                + "settings carries what the statuses rest on in this installation: how long a link lives "
+                + "after its trip, the grace after a watch is closed, how long the archive keeps a trip, "
+                + "the published pages' requests-a-minute limit, and how long an old link goes on listing "
+                + "the parties followed now — periods in whole seconds, null where there is no limit. "
                 + "No token is carried: a link is named by a short prefix of its stored hash, the same "
                 + "handle the request log writes.");
 
@@ -283,6 +287,7 @@ public static class PublishedLinksAdminEndpoints
         IUserContextAccessor userAccessor,
         IOptions<TripTrackingOptions> live,
         IOptions<TripPastTrackOptions> past,
+        IConfiguration configuration,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -497,8 +502,31 @@ public static class PublishedLinksAdminEndpoints
             counts,
             live.Value.PublishRealNames,
             archiveEnabled,
-            SeenFrom(http)));
+            SeenFrom(http),
+            SettingsOf(live.Value, past.Value, configuration)));
     }
+
+    /// <summary>
+    /// The settings the statuses are decided by, as this server holds them.
+    /// </summary>
+    /// <remarks>
+    /// The read limit is not an options object: it is read from configuration once, while the
+    /// application is put together, and handed to the limiter. It is read here through the same
+    /// routine, key and default, so that what the page prints cannot be a second opinion about
+    /// what the limiter was given — and a value the application would have refused to start with
+    /// cannot reach this line.
+    /// </remarks>
+    private static PublishedLinkSettingsDto SettingsOf(
+        TripTrackingOptions live, TripPastTrackOptions past, IConfiguration configuration) =>
+        new(
+            WholeSeconds(live.ShareLifetime),
+            WholeSeconds(live.ShareGraceAfterClose),
+            past.Retention is { } retention ? WholeSeconds(retention) : null,
+            PerMinuteLimit.Read(
+                configuration, PublicTripRateLimits.ConfigurationKey, PublicTripRateLimits.DefaultPerMinute),
+            live.SiblingWindowAfterLapse is { } window ? WholeSeconds(window) : null);
+
+    private static long WholeSeconds(TimeSpan period) => (long)Math.Floor(period.TotalSeconds);
 
     /// <summary>
     /// The address this request was counted under, as a reader would write it.

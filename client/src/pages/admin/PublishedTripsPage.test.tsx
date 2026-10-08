@@ -3,7 +3,7 @@ import { App, ConfigProvider } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { PublishedLink, PublishedLinks, PublishedLinksParams } from '../../api/hooks.ts';
 
@@ -37,6 +37,15 @@ function link(overrides: Partial<PublishedLink>): PublishedLink {
   };
 }
 
+/** The settings of an installation that changed none of them. */
+const SHIPPED: PublishedLinks['settings'] = {
+  shareLifetimeSeconds: 14 * 86_400,
+  shareGraceAfterCloseSeconds: 2 * 86_400,
+  archiveRetentionSeconds: null,
+  publicReadsPerMinute: 120,
+  siblingWindowAfterLapseSeconds: null,
+};
+
 function answer(items: PublishedLink[], overrides: Partial<PublishedLinks> = {}): PublishedLinks {
   const tally = (status: PublishedLink['status']) =>
     items.filter((item) => item.status === status).length;
@@ -52,6 +61,7 @@ function answer(items: PublishedLink[], overrides: Partial<PublishedLinks> = {})
     publishesRealNames: true,
     archiveEnabled: true,
     seenFrom: '203.0.113.7',
+    settings: SHIPPED,
     ...overrides,
   };
 }
@@ -363,6 +373,187 @@ describe('the page of everything published', () => {
       'The server could not tell which address this request came from.',
     );
     expect(screen.queryByTestId('published-trips-seen-from-address')).toBeNull();
+  });
+
+  /**
+   * "Just closed" and "in the archive" are periods, and how long each lasts is a setting the
+   * reader of this page very often did not type. The page prints the server's figures once: as
+   * shipped, then as an installation set them — where what differs is the figures and nothing
+   * else, so a page that printed its own idea of the defaults passes the first half only.
+   */
+  it('prints the settings the statuses rest on, as the server holds them', () => {
+    const told = show();
+
+    const shipped = screen.getByTestId('published-trips-settings');
+    expect(shipped).toHaveTextContent('What these statuses rest on in this installation');
+    expect(screen.getByTestId('published-trips-setting-lifetime')).toHaveTextContent(/days: 14$/);
+    expect(screen.getByTestId('published-trips-setting-grace')).toHaveTextContent(
+      /^“Just closed” lasts this long after tracking is closed.* — days: 2$/,
+    );
+    expect(screen.getByTestId('published-trips-setting-retention')).toHaveTextContent(
+      '“In the archive” has no time limit here.',
+    );
+    expect(screen.getByTestId('published-trips-setting-siblings')).toHaveTextContent(
+      /^An old link goes on listing the parties tracked in its cave now, with no time limit\.$/,
+    );
+    expect(screen.getByTestId('published-trips-setting-read-limit')).toHaveTextContent(/: 120$/);
+    told.unmount();
+
+    list = settled(
+      answer([link({})], {
+        settings: {
+          shareLifetimeSeconds: 21 * 86_400,
+          shareGraceAfterCloseSeconds: 0,
+          archiveRetentionSeconds: 365 * 86_400,
+          publicReadsPerMinute: 45,
+          siblingWindowAfterLapseSeconds: 36 * 3_600,
+        },
+      }),
+    );
+    const set = show();
+
+    expect(screen.getByTestId('published-trips-setting-lifetime')).toHaveTextContent(/days: 21$/);
+    // No grace is said as the status not being used, not as a period of nothing.
+    expect(screen.getByTestId('published-trips-setting-grace')).toHaveTextContent(
+      /^“Just closed” is not used here/,
+    );
+    expect(screen.getByTestId('published-trips-setting-grace')).not.toHaveTextContent(/: 0/);
+    expect(screen.getByTestId('published-trips-setting-retention')).toHaveTextContent(/days: 365$/);
+    // A day and a half is thirty-six hours, not "1.5 days" and not "2 days". And with a period
+    // on the archive the window is not the whole answer: the list ends with the archive too.
+    expect(screen.getByTestId('published-trips-setting-siblings')).toHaveTextContent(
+      /and never after its trip has left the archive — hours: 36$/,
+    );
+    expect(screen.getByTestId('published-trips-setting-read-limit')).toHaveTextContent(/: 45$/);
+    set.unmount();
+
+    // An old link that may list nobody is said so, not printed as a period of nothing.
+    list = settled(
+      answer([link({})], { settings: { ...SHIPPED, siblingWindowAfterLapseSeconds: 0 } }),
+    );
+    const none = show();
+    expect(screen.getByTestId('published-trips-setting-siblings')).toHaveTextContent(
+      /^An old link stops listing the parties tracked in its cave now as soon as/,
+    );
+    none.unmount();
+
+    // Where past trips are switched off the line above the list already says no link is ever in
+    // the archive, and a period for it would contradict that.
+    list = settled(
+      answer([link({})], {
+        archiveEnabled: false,
+        settings: { ...SHIPPED, archiveRetentionSeconds: 365 * 86_400, siblingWindowAfterLapseSeconds: 0 },
+      }),
+    );
+    show();
+
+    expect(screen.getByTestId('published-trips-notes')).toHaveTextContent(/Past trips are switched off here/);
+    expect(screen.queryByTestId('published-trips-setting-retention')).toBeNull();
+    expect(screen.getByTestId('published-trips-setting-lifetime')).toHaveTextContent(/days: 14$/);
+  });
+
+  /**
+   * An old link lists today's parties only while its own trip can still be read among the past
+   * trips, so the line about it depends on the archive's two settings as much as on its own. The
+   * page used to print it from its own setting alone: "no time limit" under a line saying past
+   * trips are switched off, and under an archive that keeps a trip for a year.
+   */
+  it.each([
+    {
+      name: 'past trips off, no window set',
+      archiveEnabled: false,
+      retention: null,
+      window: null,
+      says: /^An old link lists nobody here: with past trips switched off/,
+    },
+    {
+      name: 'past trips off, a window set',
+      archiveEnabled: false,
+      retention: null,
+      window: 90 * 86_400,
+      says: /^An old link lists nobody here: with past trips switched off/,
+    },
+    {
+      name: 'the archive keeps a trip for a year, no window set',
+      archiveEnabled: true,
+      retention: 365 * 86_400,
+      window: null,
+      says: /for as long as its own trip stays in the archive \(the line above\)\.$/,
+    },
+    {
+      name: 'the archive keeps a trip for a year, a window set',
+      archiveEnabled: true,
+      retention: 365 * 86_400,
+      window: 90 * 86_400,
+      says: /and never after its trip has left the archive — days: 90$/,
+    },
+    {
+      name: 'the archive has no limit, a window set',
+      archiveEnabled: true,
+      retention: null,
+      window: 90 * 86_400,
+      says: /for this long after its own trip's last day — days: 90$/,
+    },
+  ])('says of an old link only what the other settings leave true: $name', ({ archiveEnabled, retention, window, says }) => {
+    list = settled(
+      answer([link({})], {
+        archiveEnabled,
+        settings: {
+          ...SHIPPED,
+          archiveRetentionSeconds: retention,
+          siblingWindowAfterLapseSeconds: window,
+        },
+      }),
+    );
+    show();
+
+    const line = screen.getByTestId('published-trips-setting-siblings');
+    expect(line).toHaveTextContent(says);
+    expect(line).not.toHaveTextContent(/no time limit/);
+    if (!archiveEnabled) {
+      expect(line).not.toHaveTextContent(/days:/);
+    }
+  });
+
+  /**
+   * The same block in Romanian: every line has its wording, and none prints a key.
+   */
+  it('prints the settings in Romanian too', async () => {
+    await i18n.changeLanguage('ro');
+    try {
+      show();
+
+      const block = screen.getByTestId('published-trips-settings');
+      expect(block).toHaveTextContent('Pe ce se sprijină aceste stări în această instalare');
+      expect(screen.getByTestId('published-trips-setting-lifetime')).toHaveTextContent(/zile: 14$/);
+      expect(screen.getByTestId('published-trips-setting-grace')).toHaveTextContent(
+        /^„Abia încheiată” ține atât după încheierea urmăririi.* — zile: 2$/,
+      );
+      expect(block).not.toHaveTextContent(/publishedTrips\./);
+
+      // The three wordings an old link's line takes from the archive's settings have theirs too.
+      for (const [archiveEnabled, retention, window, says] of [
+        [false, null, null, /^Un link vechi nu arată aici nicio echipă/],
+        [true, 365 * 86_400, null, /cât timp tura lui rămâne în arhivă/],
+        [true, 365 * 86_400, 90 * 86_400, /niciodată după ce tura lui a ieșit din arhivă — zile: 90$/],
+      ] as const) {
+        cleanup();
+        list = settled(
+          answer([link({})], {
+            archiveEnabled,
+            settings: {
+              ...SHIPPED,
+              archiveRetentionSeconds: retention,
+              siblingWindowAfterLapseSeconds: window,
+            },
+          }),
+        );
+        show();
+        expect(screen.getByTestId('published-trips-setting-siblings')).toHaveTextContent(says);
+      }
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 
   /**

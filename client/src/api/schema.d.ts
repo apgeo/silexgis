@@ -14800,7 +14800,7 @@ export interface paths {
         };
         /**
          * Every published trip link of the installation, with what each does for its holder right now.
-         * @description For full administrators. One row per link, revoked ones included; a link whose trip or watch is gone is not listed, and opens nothing. status narrows to one status, spelled as the answers spell it; sort is one of createdAt (the default, newest first), expiresAt, tripDate, tripTitle, status, watchArmedAt; descending reverses a named order. armedLongerThanDays keeps only links whose watch is running and was started more than that many days ago — nothing closes a watch but a person, so this is how a forgotten one is found. Every status is decided at the one instant the answer names, by the rules the published pages are served by. seenFrom is the address this request was counted under once the stated reverse proxies were walked past: the reader's own when the proxy settings are right. No token is carried: a link is named by a short prefix of its stored hash, the same handle the request log writes.
+         * @description For full administrators. One row per link, revoked ones included; a link whose trip or watch is gone is not listed, and opens nothing. status narrows to one status, spelled as the answers spell it; sort is one of createdAt (the default, newest first), expiresAt, tripDate, tripTitle, status, watchArmedAt; descending reverses a named order. armedLongerThanDays keeps only links whose watch is running and was started more than that many days ago — nothing closes a watch but a person, so this is how a forgotten one is found. Every status is decided at the one instant the answer names, by the rules the published pages are served by. seenFrom is the address this request was counted under once the stated reverse proxies were walked past: the reader's own when the proxy settings are right. settings carries what the statuses rest on in this installation: how long a link lives after its trip, the grace after a watch is closed, how long the archive keeps a trip, the published pages' requests-a-minute limit, and how long an old link goes on listing the parties followed now — periods in whole seconds, null where there is no limit. No token is carried: a link is named by a short prefix of its stored hash, the same handle the request log writes.
          */
         get: {
             parameters: {
@@ -24562,6 +24562,19 @@ export interface components {
             publishesRealNames: boolean;
             archiveEnabled: boolean;
             seenFrom: null | string;
+            settings: components["schemas"]["PublishedLinkSettingsDto"];
+        };
+        PublishedLinkSettingsDto: {
+            /** Format: int64 */
+            shareLifetimeSeconds: number;
+            /** Format: int64 */
+            shareGraceAfterCloseSeconds: number;
+            /** Format: int64 */
+            archiveRetentionSeconds: null | number;
+            /** Format: int32 */
+            publicReadsPerMinute: number;
+            /** Format: int64 */
+            siblingWindowAfterLapseSeconds: null | number;
         };
         /** @enum {unknown} */
         PublishedLinkStatus: "followable" | "inGrace" | "inArchive" | "withheld" | "lapsed" | "revoked";
