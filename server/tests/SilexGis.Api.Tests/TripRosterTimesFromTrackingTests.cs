@@ -157,6 +157,39 @@ public sealed class TripRosterTimesFromTrackingTests : IAsyncLifetime, IDisposab
     // ---- the write ----------------------------------------------------------------------------
 
     /// <summary>
+    /// A note about the cave is about nobody: it went in with nobody and came out with nobody.
+    /// With one on the log the proposal lists exactly the people it would list without it — the
+    /// note is not somebody the log speaks of who has no row — and each of them is read the
+    /// times the reports about them give.
+    /// </summary>
+    [Fact]
+    public async Task A_note_about_the_cave_on_the_log_adds_nobody_to_the_proposal_and_moves_no_time()
+    {
+        var (trip, cavers) = await CreateTripAsync("Times beside a hazard", guests: 2);
+        await FollowedAsync(trip);
+        await ReportAsync(trip, "entered", At(6, 0), cavers);
+        await ReportAsync(trip, "exited", At(14, 0), cavers);
+
+        // Said after everybody was out: read as anybody's report it would be the last word of the day.
+        var note = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", new
+        {
+            kind = "caveNote", note = "Loose rock above the pitch", recordedAt = At(15, 0),
+        });
+        note.StatusCode.ShouldBe(HttpStatusCode.OK, await note.Content.ReadAsStringAsync());
+
+        var times = await TimesAsync(owner, trip, Bucharest);
+        times.GetProperty("people").GetArrayLength().ShouldBe(2);
+        foreach (var caver in cavers)
+        {
+            var person = Person(times, caver);
+            person.GetProperty("onRoster").GetBoolean().ShouldBeTrue();
+            person.GetProperty("enteredAt").GetDateTimeOffset().ShouldBe(At(6, 0));
+            person.GetProperty("exitedAt").GetDateTimeOffset().ShouldBe(At(14, 0));
+            person.GetProperty("problem").ValueKind.ShouldBe(JsonValueKind.Null);
+        }
+    }
+
+    /// <summary>
     /// The people ticked get the reviewed times on every roster row they have — a person with two
     /// jobs has two — nobody else's row moves, the trip's history says where the times came from,
     /// and a second press writes nothing.

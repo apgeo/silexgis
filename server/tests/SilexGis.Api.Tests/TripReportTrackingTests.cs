@@ -206,6 +206,45 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
     }
 
     /// <summary>
+    /// A note about the cave is about nobody, and every line of the journal is about somebody. A
+    /// trip whose log holds one is still written up, with the reports about its people as they
+    /// were: the note's words are not printed under a person the document does not name, and the
+    /// station it names is not stated on its account — to the account that may place the cave no
+    /// more than to anybody else.
+    /// </summary>
+    [Fact]
+    public async Task A_note_about_the_cave_in_the_log_is_not_printed_in_the_journal_as_somebodys_report()
+    {
+        var (trip, cavers) = await CreateTripAsync("Followed past a hazard", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await PutConfigAsync(owner, trip, new { state = "armed", surveyModelId = model }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ReportAsync(trip, new { caverIds = cavers, kind = "entered", recordedAt = At(9, 0) });
+        await ReportAsync(trip, new
+        {
+            caverIds = new[] { cavers[0] }, kind = "atStation", stationName = "cave.upper.2", recordedAt = At(10, 0),
+        });
+        // At a station nobody was reported at, so nothing else in the log names it.
+        var note = await ReportAsync(trip, new
+        {
+            kind = "caveNote", note = "Loose rock, qzx", stationName = "cave.parallel.2", recordedAt = At(10, 30),
+        });
+        note.GetArrayLength().ShouldBe(1);
+        note[0].GetProperty("caverId").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var journal = await DocumentTextAsync(owner, trip, layoutId);
+        journal.ShouldContain("Followed underground");
+        journal.ShouldContain("2026-09-12 10:00 UTC");
+        journal.ShouldContain("At a station · cave.upper.2");
+        journal.ShouldContain("Guest 1");
+        journal.ShouldNotContain("Loose rock, qzx");
+        journal.ShouldNotContain("cave.parallel.2");
+        journal.ShouldNotContain("2026-09-12 10:30 UTC");
+        journal.ShouldNotContain("A person not named here");
+    }
+
+    /// <summary>
     /// A copy kept on a trip is a file, and a file does not ask again what its readers may be
     /// told. So when the cave the trip was followed in comes under protection, the copy comes off
     /// the trip: nobody who reads the trip finds it there any more or can fetch it, and the copy
