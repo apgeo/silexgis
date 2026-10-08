@@ -31,6 +31,13 @@ vi.mock('../../api/hooks.ts', () => ({
   useSurveyModelStationSearch: () => ({ data: undefined }),
 }));
 
+// Who the tab is signed in as, which decides whether a report nobody answered can be kept for
+// them. Nobody by default, so every case that is not about keeping one leaves storage alone.
+let account: string | null = null;
+vi.mock('../../auth/accountId.ts', () => ({
+  signedInAccountId: () => Promise.resolve(account),
+}));
+
 /** Asking the check again, the way the button on a failed reading does. */
 const checkAgain = vi.fn();
 
@@ -135,6 +142,8 @@ function panelSizes(): string {
 
 beforeEach(() => {
   coarse = false;
+  account = null;
+  window.localStorage.clear();
   placesAsked.mockClear();
   recordEvents.mockReset().mockResolvedValue([{}]);
   // Nothing declared by default, which is the state of every cave until somebody declares
@@ -877,5 +886,79 @@ describe('TrackingReportForm, the moment in each state of the watch', () => {
     expect((recordEvents.mock.calls[0][0] as { recordedAt: string }).recordedAt).toBe(
       new Date(2026, 8, 12, 11, 5, 0).toISOString(),
     );
+  });
+});
+
+/**
+ * What the card does with itself once a report has been sent and nobody answered.
+ *
+ * Three outcomes that look alike from the button and must not be treated alike: kept in the
+ * browser to be sent later (the card is done with it and clears, as for a report that landed),
+ * refused by the server (the text stays, to be changed and sent again), and neither answered nor
+ * kept (the text stays, because the card is the only copy).
+ */
+describe('TrackingReportForm, a report nobody answered', () => {
+  function showWith(onRecorded: () => void) {
+    return render(
+      <App>
+        <TrackingReportForm
+          tripLogId="trip-1"
+          state="armed"
+          surveyModelId="model-1"
+          caveId={null}
+          caverIds={['caver-1']}
+          teams={[]}
+          onRecorded={onRecorded}
+        />
+      </App>,
+    );
+  }
+
+  async function recordANote(text: string) {
+    fireEvent.change(screen.getByTestId('trip-tracking-note'), { target: { value: text } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('trip-tracking-record'));
+    });
+    await waitFor(() => expect(recordEvents).toHaveBeenCalledOnce());
+  }
+
+  it('clears and lets the selection go when the report is kept to be sent later', async () => {
+    account = 'account-ana';
+    recordEvents.mockRejectedValue(new TypeError('Failed to fetch'));
+    const onRecorded = vi.fn();
+    showWith(onRecorded);
+
+    await recordANote('all four at the sump');
+
+    await waitFor(() => expect(onRecorded).toHaveBeenCalled());
+    expect(screen.getByTestId('trip-tracking-note')).toHaveValue('');
+    expect(await screen.findByText(/kept in this browser/)).toBeInTheDocument();
+    expect(Object.keys(window.localStorage)).toHaveLength(1);
+  });
+
+  it('keeps what was typed when the server refused it', async () => {
+    account = 'account-ana';
+    const { ApiError } = await import('../../api/client.ts');
+    recordEvents.mockRejectedValue(new ApiError(409, 'tracking.model_missing'));
+    const onRecorded = vi.fn();
+    showWith(onRecorded);
+
+    await recordANote('all four at the sump');
+
+    await waitFor(() => expect(Object.keys(window.localStorage)).toEqual([]));
+    expect(screen.getByTestId('trip-tracking-note')).toHaveValue('all four at the sump');
+    expect(onRecorded).not.toHaveBeenCalled();
+  });
+
+  it('keeps what was typed when nobody answered and the browser could not keep it', async () => {
+    recordEvents.mockRejectedValue(new TypeError('Failed to fetch'));
+    const onRecorded = vi.fn();
+    showWith(onRecorded);
+
+    await recordANote('all four at the sump');
+
+    expect(await screen.findByText(/^Not sent:/)).toBeInTheDocument();
+    expect(screen.getByTestId('trip-tracking-note')).toHaveValue('all four at the sump');
+    expect(onRecorded).not.toHaveBeenCalled();
   });
 });

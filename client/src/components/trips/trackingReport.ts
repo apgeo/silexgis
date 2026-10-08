@@ -2,9 +2,19 @@
 import { App } from 'antd';
 import type { Rule } from 'antd/es/form';
 import type { Dayjs } from 'dayjs';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
 import { useRecordTrackingEvents, type TripPositionEventKind } from '../../api/hooks.ts';
+import { signedInAccountId } from '../../auth/accountId.ts';
+import { renewSignIn, type SignInRenewal } from '../../auth/renewSignIn.ts';
+import {
+  claimHeldReport,
+  dropHeldReport,
+  holdReport,
+  releaseHeldReport,
+} from './trackingOutbox.ts';
+import { heldReportsSignInLapsed, retryHeldReportsLater } from './trackingOutboxDrain.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
 
 /**
@@ -35,14 +45,31 @@ import { trackingProblemMessage } from './trackingProblems.ts';
  * Anything else is shown and nothing more.
  *
  * One shape rather than two: `code` is null where the report landed, and also where it was refused
- * by something that named no code — a network that never answered, or a rule the client applied
- * before asking. A surface that wants to act on a particular refusal tests for that refusal by
+ * by something that named no code — a request nobody answered that the browser could not keep
+ * either, or a rule the client applied before asking. A surface that wants to act on a particular refusal tests for that refusal by
  * name, so all three of those cases fall through to "nothing to do about it here", which is what
  * they are.
+ *
+ * <b>`held` is the third thing that can become of a report, and it is not a refusal.</b> The server
+ * gave no answer at all, and the report is kept in this browser to be sent when it can be. For what
+ * a surface does with itself that is the same as `recorded` — the report has left the form, so the
+ * form clears and the dialog closes; keeping the text on screen as well would invite sending it a
+ * second time as a second report. {@link trackingReportLeftTheForm} is that question, asked once.
+ * At most one of `recorded` and `held` is true.
  */
 export interface TrackingReportOutcome {
   recorded: boolean;
+  held: boolean;
   code: string | null;
+}
+
+/**
+ * Whether the surface that composed a report is done with it: it is on the log, or it is kept to
+ * be sent. False is a report still in its author's hands — refused with a reason they can act on,
+ * or not sent and not kept — and the surface must then leave what was typed where it is.
+ */
+export function trackingReportLeftTheForm(outcome: TrackingReportOutcome): boolean {
+  return outcome.recorded || outcome.held;
 }
 
 /** What either surface has filled in, in the form's own types. */
@@ -100,35 +127,142 @@ export function trackingStationRules(t: ReturnType<typeof useTranslation>['t']):
 /**
  * The one way a report is sent, and the one place its answer is worded.
  *
- * Answers whether the report landed, so a surface can decide what to do with itself — the card
+ * Answers what became of the report, so a surface can decide what to do with itself — the card
  * keeps standing and clears its fields, the dialog closes — without either of them having to know
  * how a refusal is told apart from a success, and without either of them wording one.
  *
  * A concurrent write is said as a warning and everything else as an error, because that one is not
  * a mistake anybody made: somebody else wrote to the same watch in the same moment, and the answer
  * is to look and try again rather than to change anything.
+ *
+ * <b>A report is never silently lost and never written twice, and both follow from its key.</b>
+ * Every send mints the key of its act and, before asking the server anything, writes the report to
+ * the browser's own storage under it. Whatever happens next, one of three things is true:
+ *
+ * - the server answered yes: the kept copy is removed, the report is on the log;
+ * - the server answered no: the kept copy is removed and the refusal is shown exactly as it always
+ *   was, the form untouched — a refusal its author is looking at is theirs to act on, not something
+ *   to queue;
+ * - no answer came — no signal, a dropped connection, a request that timed out, a tab the phone put
+ *   to sleep: the kept copy stays, and is sent again under the same key. If the first request did
+ *   reach the server after all, the repeat is answered with what it wrote and writes nothing.
+ *
+ * <b>Only "no answer at all" holds a report.</b> Anything the server said — a validation error, a
+ * refusal of permission, a watch that cannot be written — is an answer, however unwelcome.
+ *
+ * <b>A sign-in that ran out is not an answer about the report.</b> The request was refused as
+ * coming from nobody, which a tab meets after any outage longer than its token lasts. The sign-in
+ * is renewed and the same request sent once more under the same key. If it cannot be renewed the
+ * kept copy <em>stays</em>: the only way to sign in again is to leave the page, which throws away
+ * the form — and the form would otherwise be the report's only copy.
+ *
+ * <b>The moment is fixed when the report is composed.</b> A report made as it happens goes out with
+ * no moment, meaning the server's clock, exactly as before: the phone's clock is not trusted while
+ * the server's is to hand. The kept copy is different. It may leave an hour later, so it carries
+ * this browser's clock at composition — otherwise it would land at the minute the signal returned.
+ *
+ * <b>Where the browser will not keep it</b> (a private window, blocked site data) nothing changes
+ * from before there was a queue: the report is sent, and if no answer comes its author is told it
+ * was not sent and the form keeps what they typed.
  */
 export function useTrackingReport() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const record = useRecordTrackingEvents();
+  // The last report this surface sent that is still in its author's hands, and the key it went
+  // under. Pressing the button again on the very same report is the same act, not a second one, and
+  // must carry the same key: an answer that came from something in front of the server — a gateway
+  // that gave up waiting — does not say whether the server wrote the report, and a fresh key would
+  // then write it twice.
+  const unsettled = useRef<{ said: string; clientKey: string } | null>(null);
 
   const send = async (
     tripLogId: string,
     caverIds: readonly string[],
     values: TrackingReportValues,
   ): Promise<TrackingReportOutcome> => {
+    const body = trackingReportBody(tripLogId, caverIds, values);
+    const composedAt = new Date().toISOString();
+    const said = JSON.stringify(body);
+    const clientKey =
+      unsettled.current?.said === said ? unsettled.current.clientKey : crypto.randomUUID();
+    unsettled.current = { said, clientKey };
+
+    // Claimed before it is written, so that nothing else in this tab finds a held report and sends
+    // it while its author is still waiting on this very request.
+    claimHeldReport(clientKey, 'first');
     try {
-      const created = await record.mutateAsync(trackingReportBody(tripLogId, caverIds, values));
-      message.success(t('trips.tracking.recorded', { count: created.length }));
-      return { recorded: true, code: null };
-    } catch (error) {
-      if (isConcurrencyConflict(error)) {
-        message.warning(trackingProblemMessage(error, t));
-      } else {
-        message.error(trackingProblemMessage(error, t));
+      const accountId = await signedInAccountId();
+      const kept =
+        accountId !== null &&
+        holdReport({
+          clientKey,
+          accountId,
+          tripLogId,
+          body: {
+            caverIds: body.caverIds,
+            kind: body.kind,
+            stationName: body.stationName,
+            depthM: body.depthM,
+            teamId: body.teamId,
+            note: body.note,
+            recordedAt: body.recordedAt ?? composedAt,
+          },
+          composedAt,
+          state: 'held',
+          problemCode: null,
+          attempts: 1,
+        });
+
+      // Written from inside the send below, so held in something that outlives it.
+      const renewal: { was: SignInRenewal | null } = { was: null };
+      const post = () => record.mutateAsync({ ...body, clientKey });
+      try {
+        const created = await post().catch(async (refused: unknown) => {
+          if (!(refused instanceof ApiError) || refused.status !== 401) throw refused;
+          renewal.was = await renewSignIn();
+          if (renewal.was !== 'renewed') throw refused;
+          return post();
+        });
+        if (kept) dropHeldReport(accountId, clientKey);
+        unsettled.current = null;
+        message.success(t('trips.tracking.recorded', { count: created.length }));
+        return { recorded: true, held: false, code: null };
+      } catch (error) {
+        if (!(error instanceof ApiError)) {
+          // No answer at all. The transport raises its own error type for anything the server
+          // said, whatever the status, so anything else is a request nobody answered.
+          if (kept) {
+            // Now the queue's: the same text typed again is a new report with a key of its own.
+            unsettled.current = null;
+            // The browser may never have thought itself offline, and then it will never announce
+            // a connection either: the send is tried again a little later whatever it says.
+            retryHeldReportsLater();
+            message.warning({ content: t('trips.tracking.outbox.held'), duration: 8 });
+            return { recorded: false, held: true, code: null };
+          }
+          message.error({ content: t('trips.tracking.outbox.notKept'), duration: 8 });
+          return { recorded: false, held: false, code: null };
+        }
+        if (error.status === 401 && kept) {
+          // Refused as coming from nobody, and the sign-in could not be renewed. Held, like a
+          // report nobody answered — and for the same reason handed to the queue.
+          unsettled.current = null;
+          if (renewal.was === 'noAnswer') retryHeldReportsLater();
+          else heldReportsSignInLapsed(true);
+          message.warning({ content: t('trips.tracking.outbox.heldSignedOut'), duration: 10 });
+          return { recorded: false, held: true, code: null };
+        }
+        if (kept) dropHeldReport(accountId, clientKey);
+        if (isConcurrencyConflict(error)) {
+          message.warning(trackingProblemMessage(error, t));
+        } else {
+          message.error(trackingProblemMessage(error, t));
+        }
+        return { recorded: false, held: false, code: error.code ?? null };
       }
-      return { recorded: false, code: error instanceof ApiError ? (error.code ?? null) : null };
+    } finally {
+      releaseHeldReport(clientKey);
     }
   };
 

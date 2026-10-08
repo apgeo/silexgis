@@ -8788,14 +8788,16 @@ export function useSurveyModelTrackedTrips(surveyModelId: string | undefined, en
  * where somebody is — so the two are always invalidated together, and the event list is reached
  * by its prefix because it is held once per narrowing.
  */
+function invalidateTripTracking(queryClient: QueryClient, tripLogId: string) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.tripTracking(tripLogId) });
+  void queryClient.invalidateQueries({ queryKey: ['trip-logs', 'tracking-events', tripLogId] });
+  // A report or a re-pointed watch changes which trips a model lists and what each counts.
+  void queryClient.invalidateQueries({ queryKey: ['trip-logs', 'tracked-on-model'] });
+}
+
 function useInvalidateTripTracking() {
   const queryClient = useQueryClient();
-  return (tripLogId: string) => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.tripTracking(tripLogId) });
-    void queryClient.invalidateQueries({ queryKey: ['trip-logs', 'tracking-events', tripLogId] });
-    // A report or a re-pointed watch changes which trips a model lists and what each counts.
-    void queryClient.invalidateQueries({ queryKey: ['trip-logs', 'tracked-on-model'] });
-  };
+  return (tripLogId: string) => invalidateTripTracking(queryClient, tripLogId);
 }
 
 /**
@@ -8972,6 +8974,69 @@ export function useSetTrackingParticipantLabel() {
   });
 }
 
+/** One report as it is asked of the server, whoever is asking and for whichever time. */
+export interface TrackingReportRequest {
+  tripLogId: string;
+  caverIds: string[];
+  kind: TripPositionEventKind;
+  stationName?: string | null;
+  depthM?: number | null;
+  teamId?: string | null;
+  note?: string | null;
+  /** Null means now, on the server's clock — the ordinary case of a report made as it happens. */
+  recordedAt?: string | null;
+  /**
+   * The key of this act of reporting, minted once by whoever may have to send it again. A send
+   * repeated under the same key is answered with what the first one wrote and writes nothing.
+   * Null is a send that is an act of its own and can never be recognised as a repeat.
+   */
+  clientKey?: string | null;
+}
+
+/** The one request a report makes: its first send and every later one are this same call. */
+function postTrackingReport({
+  tripLogId,
+  caverIds,
+  kind,
+  stationName = null,
+  depthM = null,
+  teamId = null,
+  note = null,
+  recordedAt = null,
+  clientKey = null,
+}: TrackingReportRequest) {
+  return unwrap(
+    api.POST('/api/v1/trip-logs/{tripLogId}/tracking/events', {
+      params: { path: { tripLogId } },
+      body: { caverIds, kind, stationName, depthM, teamId, note, recordedAt, clientKey },
+    }),
+  );
+}
+
+/**
+ * Sends again a report this browser kept because its first send was never answered.
+ *
+ * <b>A plain request and not a mutation, on purpose.</b> A mutation belongs to the surface that
+ * made it: its pending state turns that surface's button, and its failure is announced by whoever
+ * awaited it. A kept report is sent from the signed-in shell, with no surface of its own — possibly
+ * while its trip is not on screen at all — and what becomes of it is decided by the queue it came
+ * from, which must see the failure itself: whether the server answered, with what status, and what
+ * wait it named. So the answer and the error are handed back exactly as the transport produced
+ * them, and the only thing done here is what any write to a log owes the screen: the trip's
+ * tracking reads are asked again once the report is on it.
+ */
+export function useSendHeldTrackingReport() {
+  const queryClient = useQueryClient();
+  return useCallback(
+    async (report: TrackingReportRequest) => {
+      const written = await postTrackingReport(report);
+      invalidateTripTracking(queryClient, report.tripLogId);
+      return written;
+    },
+    [queryClient],
+  );
+}
+
 /**
  * Records one report about one or many cavers at once.
  *
@@ -8987,39 +9052,13 @@ export function useSetTrackingParticipantLabel() {
 export function useRecordTrackingEvents() {
   const invalidate = useInvalidateTripTracking();
   return useMutation({
-    mutationFn: ({
-      tripLogId,
-      caverIds,
-      kind,
-      stationName = null,
-      depthM = null,
-      teamId = null,
-      note = null,
-      recordedAt = null,
-      clientKey = null,
-    }: {
-      tripLogId: string;
-      caverIds: string[];
-      kind: TripPositionEventKind;
-      stationName?: string | null;
-      depthM?: number | null;
-      teamId?: string | null;
-      note?: string | null;
-      /** Null means now, on the server's clock — the ordinary case of a report made as it happens. */
-      recordedAt?: string | null;
-      /**
-       * The key of this act of reporting, minted once by whoever may have to send it again. A send
-       * repeated under the same key is answered with what the first one wrote and writes nothing.
-       * Null is a send that is an act of its own, which is what every caller here makes today.
-       */
-      clientKey?: string | null;
-    }) =>
-      unwrap(
-        api.POST('/api/v1/trip-logs/{tripLogId}/tracking/events', {
-          params: { path: { tripLogId } },
-          body: { caverIds, kind, stationName, depthM, teamId, note, recordedAt, clientKey },
-        }),
-      ),
+    mutationFn: postTrackingReport,
+    // Asked whatever the browser believes about its connection. Left to the default, a write made
+    // while the browser knows it is offline is neither sent nor failed: it waits, unseen, for the
+    // connection, and a reload in the meantime loses it — and when it does go, a report made "now"
+    // is stamped with the minute the signal came back. Sent regardless, it fails at once with no
+    // answer, and its caller keeps it under its key with the moment it was about.
+    networkMode: 'always',
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),
   });
 }

@@ -1080,6 +1080,7 @@ describe('TrackingModelPanel', () => {
         teamId: null,
         note: null,
         recordedAt: null,
+        clientKey: expect.any(String),
       });
       // And the selection that produced it is let go, exactly as the card's own report does.
       await waitFor(() => expect(onRecorded).toHaveBeenCalled());

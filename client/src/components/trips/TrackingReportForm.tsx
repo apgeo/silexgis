@@ -13,7 +13,11 @@ import TrackingPlaceFields from './TrackingPlaceFields.tsx';
 import TrackingWhenField from './TrackingWhenField.tsx';
 import { useTrackingPanelTheme } from './trackingControlSizes.ts';
 import { trackingLogWritable } from './trackingWatch.ts';
-import { useTrackingReport, type TrackingReportValues } from './trackingReport.ts';
+import {
+  trackingReportLeftTheForm,
+  useTrackingReport,
+  type TrackingReportValues,
+} from './trackingReport.ts';
 
 interface ReportForm extends TrackingReportValues {
   kind: TripPositionEventKind;
@@ -109,7 +113,9 @@ export default function TrackingReportForm({
   }
 
   const send = async (values: TrackingReportValues) => {
-    if ((await report.send(tripLogId, caverIds, values)).recorded) {
+    // On the log, or kept in this browser to be sent when the connection returns: either way the
+    // report has left this card, and leaving its text in the fields would invite sending it twice.
+    if (trackingReportLeftTheForm(await report.send(tripLogId, caverIds, values))) {
       form.resetFields(['stationName', 'depthM', 'note', 'recordedAt']);
       onRecorded();
     }

@@ -14,6 +14,13 @@ vi.mock('../../api/hooks.ts', () => ({
   useSurveyModelStationSearch: () => ({ data: undefined }),
 }));
 
+// Who the tab is signed in as, which decides whether a report nobody answered can be kept for
+// them. Nobody by default, so every case that is not about keeping one leaves storage alone.
+let account: string | null = null;
+vi.mock('../../auth/accountId.ts', () => ({
+  signedInAccountId: () => Promise.resolve(account),
+}));
+
 // What decides how big every target in this dialog is drawn. False by default: the machine this
 // suite is read on has a mouse.
 let coarse = false;
@@ -73,6 +80,8 @@ async function chooseKind(label: string) {
 
 beforeEach(() => {
   coarse = false;
+  account = null;
+  window.localStorage.clear();
   recordEvents.mockReset().mockResolvedValue([{}]);
   onClose.mockReset();
   onRecorded.mockReset();
@@ -124,6 +133,8 @@ describe('TrackingReportDialog', () => {
       // Trimmed, because a note of spaces is not a note — the same reading the card has.
       note: 'waiting at the pitch head',
       recordedAt: null,
+      // The key of this act of reporting, by which a repeat of it is recognised.
+      clientKey: expect.any(String),
     });
     await waitFor(() => expect(onRecorded).toHaveBeenCalled());
     expect(onClose).toHaveBeenCalled();
@@ -269,11 +280,56 @@ describe('TrackingReportDialog', () => {
   it('keeps the dialog standing when the server refuses the report', async () => {
     // Closing on a refusal would take the only copy of what somebody typed away with it, at the
     // moment they most need to change one field of it and try again.
-    recordEvents.mockRejectedValue(new Error('nope'));
+    account = 'account-ana';
+    recordEvents.mockRejectedValue(new ApiError(409, 'tracking.not_writable'));
     show();
 
     await accept();
 
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onRecorded).not.toHaveBeenCalled();
+    // An answer is not something to keep and send again by itself.
+    expect(Object.keys(window.localStorage)).toEqual([]);
+  });
+
+  /**
+   * No answer at all is the other case, and it goes the other way: the report is kept in the
+   * browser to be sent when it can be, so the dialog is done with it. Left standing, its button
+   * would be pressed again, and that is a second report.
+   */
+  it('closes when nobody answered and the report is kept to be sent later', async () => {
+    account = 'account-ana';
+    recordEvents.mockRejectedValue(new TypeError('Failed to fetch'));
+    show();
+    fireEvent.change(screen.getByTestId('trip-tracking-dialog-note'), {
+      target: { value: 'waiting at the pitch head' },
+    });
+
+    await accept();
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(onRecorded).toHaveBeenCalled();
+    // What was typed went with the dialog, and is in the kept copy.
+    const kept = Object.keys(window.localStorage);
+    expect(kept).toHaveLength(1);
+    expect(JSON.parse(window.localStorage.getItem(kept[0])!)).toMatchObject({
+      accountId: 'account-ana',
+      tripLogId: 'trip-1',
+      state: 'held',
+      body: { stationName: 'p.g.42', note: 'waiting at the pitch head' },
+    });
+    expect(await screen.findByText(/kept in this browser/)).toBeInTheDocument();
+  });
+
+  it('keeps the dialog standing when nobody answered and the report could not be kept', async () => {
+    // Signed in as nobody the tab can name, so there is nobody to keep it for: the typed text in
+    // the dialog is then the only copy there is.
+    recordEvents.mockRejectedValue(new TypeError('Failed to fetch'));
+    show();
+
+    await accept();
+
+    expect(await screen.findByText(/^Not sent:/)).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
     expect(onRecorded).not.toHaveBeenCalled();
   });

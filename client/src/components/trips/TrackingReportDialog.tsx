@@ -11,7 +11,11 @@ import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { TrackingStationField } from './TrackingPlaceFields.tsx';
 import TrackingWhenField from './TrackingWhenField.tsx';
 import { COARSE_CONTROL_HEIGHT, useTrackingPanelTheme } from './trackingControlSizes.ts';
-import { useTrackingReport, type TrackingReportValues } from './trackingReport.ts';
+import {
+  trackingReportLeftTheForm,
+  useTrackingReport,
+  type TrackingReportValues,
+} from './trackingReport.ts';
 import { trackingLogWritable } from './trackingWatch.ts';
 import './TrackingReportDialog.css';
 
@@ -170,7 +174,10 @@ export default function TrackingReportDialog({
       ...values,
       stationName,
     });
-    if (outcome.recorded) {
+    // Recorded, or kept in this browser to be sent when the connection returns. A dialog left
+    // standing over a report that is already kept would have its button pressed again, and what
+    // that sends is a second report. Closing discards the typed text, and may: the kept copy has it.
+    if (trackingReportLeftTheForm(outcome)) {
       onRecorded();
       onClose();
       return;
