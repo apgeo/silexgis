@@ -219,6 +219,9 @@ public static class TripLiveSiblingEndpoints
                 tracking.State,
                 tracking.ArmedAt,
                 tracking.ClosedAt,
+                // The one column of the trip's plan this list may ever say; whether it does is
+                // decided below, by the rule the followed page asks.
+                trip.ExpectedReturnAt,
             })
             // One row past the bound, read only to learn whether there is one: "the read came back
             // full" is also what a cave with exactly that many candidates looks like, and saying
@@ -284,6 +287,8 @@ public static class TripLiveSiblingEndpoints
                 row.State,
                 row.ArmedAt,
                 row.ClosedAt,
+                TripTrackingRules.PublishedExpectedReturn(
+                    live.PublishExpectedReturn, row.ExpectedReturnAt, row.ArmedAt),
                 party.PositionsWithheld,
                 party.Teams,
                 party.Participants));

@@ -96,6 +96,17 @@ public sealed record PublicTripTrackingEnvelopeDto(
     TripTrackingState State,
     DateTimeOffset? ArmedAt,
     DateTimeOffset? ClosedAt,
+    /// <summary>
+    /// The hour the party planned to be out by, or null.
+    /// </summary>
+    /// <remarks>
+    /// Always null on an installation that does not publish it, which is how one is installed.
+    /// Where it is published it is the plan the party stated and nothing else: it is null when the
+    /// trip records none and when the recorded hour is not later than <see cref="ArmedAt"/>, and
+    /// it says nothing about whether anybody is checking on the party or has been alerted — no
+    /// member of this shape does.
+    /// </remarks>
+    DateTimeOffset? ExpectedReturnAt,
     /// <summary>True when at least one position existed but could not be shown here.</summary>
     bool PositionsWithheld,
     PublicTripSurveyModelDto? Model,

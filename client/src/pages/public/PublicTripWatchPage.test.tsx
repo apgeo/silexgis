@@ -160,6 +160,7 @@ function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelo
     state: 'armed',
     armedAt: '2026-09-14T06:00:00Z',
     closedAt: null,
+    expectedReturnAt: null,
     positionsWithheld: false,
     model: MODEL,
     teams: [],
@@ -179,6 +180,7 @@ function row(overrides: Partial<PublicLiveTrip> = {}): PublicLiveTrip {
     state: 'armed',
     armedAt: '2026-09-14T07:00:00Z',
     closedAt: null,
+    expectedReturnAt: null,
     positionsWithheld: false,
     teams: [],
     participants: [

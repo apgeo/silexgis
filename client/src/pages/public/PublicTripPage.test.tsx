@@ -145,6 +145,7 @@ function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelo
     state: 'armed',
     armedAt: '2026-09-14T06:00:00Z',
     closedAt: null,
+    expectedReturnAt: null,
     positionsWithheld: false,
     model: null,
     teams: [
@@ -666,6 +667,68 @@ describe('a followed page left open', () => {
       dataUpdatedAt: NOON - 40_000,
     };
   };
+
+  it('says the hour the party planned to be out by, under since when, and no more once it has gone by', () => {
+    // Planned out an hour and a half after noon.
+    followed({ expectedReturnAt: at(-90) });
+    render(<PublicTripPage />);
+    const line = screen.getByTestId('public-trip-expected');
+    expect(line.textContent).toMatch(/^Planned out by .*1:30/);
+    // Under the line that says since when, in the same block of the header.
+    const since = screen.getByTestId('public-trip-since');
+    expect(since.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(line.parentElement).toBe(since.parentElement);
+
+    // Two hours on the hour is behind, and the page has been told nothing new.
+    pass(120);
+
+    const after = screen.getByTestId('public-trip-expected').textContent ?? '';
+    expect(after).toMatch(/^The plan was to be out by .*1:30/);
+    // It states the plan and the hour. It is not an alarm and must not read as one.
+    expect(after).not.toMatch(/late|overdue|missing|alarm|alert|warning|still|hr|min/i);
+    expect(screen.getByTestId('public-trip-expected')).not.toHaveClass('ant-typography-danger');
+    expect(screen.getByTestId('public-trip-expected')).not.toHaveClass('ant-typography-warning');
+  });
+
+  it('says nothing of a plan where it was sent none, which is every installation that does not publish it', () => {
+    followed({ expectedReturnAt: null });
+    const view = render(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-expected')).toBeNull();
+    expect(screen.getByTestId('public-trip-since')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/planned|plan was/i);
+
+    // The twin: the same page, sent an hour.
+    answer = { ...answer, data: envelope({ armedAt: at(190), participants: [ana()], expectedReturnAt: at(-90) }) };
+    view.rerender(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-expected')).toBeInTheDocument();
+  });
+
+  it('says nothing of a plan once nobody is underground, or once the watch is closed', () => {
+    const out = participant({ ordinal: 1, label: 'Ana', out: true, lastRecordedAt: at(5) });
+    // Past the hour, and everybody is out: people who are out are not expected out.
+    followed({ expectedReturnAt: at(60), participants: [out] });
+    const view = render(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-expected')).toBeNull();
+
+    // Somebody still recorded as in, and the watch closed by a person: the trip is over.
+    answer = {
+      ...answer,
+      data: envelope({
+        state: 'closed',
+        armedAt: at(190),
+        closedAt: at(10),
+        expectedReturnAt: at(60),
+        participants: [ana()],
+      }),
+    };
+    view.rerender(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-expected')).toBeNull();
+
+    // The twin: that hour, that person, a watch that is running.
+    answer = { ...answer, data: envelope({ armedAt: at(190), expectedReturnAt: at(60), participants: [ana()] }) };
+    view.rerender(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-expected')).toHaveTextContent(/^The plan was to be out by/);
+  });
 
   it('moves every gap on with no read landing', () => {
     followed();

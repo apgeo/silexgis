@@ -82,6 +82,13 @@ public sealed record PublicLiveTripDto(
     SilexGis.Domain.Entities.TripTrackingState State,
     DateTimeOffset? ArmedAt,
     DateTimeOffset? ClosedAt,
+    /// <summary>
+    /// The hour this party planned to be out by, or null — the same member, decided by the same
+    /// rule, as on the followed page, so that a party read from this list is told about in the
+    /// same words as the one the link is for. Always null on an installation that does not
+    /// publish it.
+    /// </summary>
+    DateTimeOffset? ExpectedReturnAt,
     bool PositionsWithheld,
     IReadOnlyList<PublicTripTeamDto> Teams,
     IReadOnlyList<PublicTripParticipantDto> Participants);

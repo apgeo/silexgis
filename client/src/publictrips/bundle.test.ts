@@ -44,6 +44,7 @@ const PUBLISHED_NAMES = [
   'pastReplayWindow',
   'pastReportMoments',
   'placeOnModel',
+  'plannedReturn',
   'publicPlaceReported',
   'publicTrackedCavers',
   'readPastLink',

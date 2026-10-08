@@ -77,8 +77,21 @@ export type {
   TrackedCaverTeam,
 } from '../caveview/trackedCavers.ts';
 
-export { standingOf, partyStandings, partyByTeam, instantOf } from '../pages/public/publicTripParty.ts';
-export type { PublicTripStanding, PublicTripPartyGroup } from '../pages/public/publicTripParty.ts';
+export {
+  standingOf,
+  partyStandings,
+  partyByTeam,
+  instantOf,
+  // Whether a followed trip's planned hour is worth a line, and whether that hour has gone by:
+  // asked here so that an article and this application cannot answer it differently. It words
+  // nothing — the article says it in its own language.
+  plannedReturn,
+} from '../pages/public/publicTripParty.ts';
+export type {
+  PublicTripStanding,
+  PublicTripPartyGroup,
+  PlannedReturn,
+} from '../pages/public/publicTripParty.ts';
 
 // ---- a finished trip, played back ------------------------------------------------------------
 

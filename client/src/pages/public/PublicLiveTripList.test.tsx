@@ -27,6 +27,7 @@ function party(tripLogId: string, state: PublicLiveTrip['state'], title: string)
     state,
     armedAt: '2026-09-14T08:00:00Z',
     closedAt: state === 'closed' ? '2026-09-14T16:00:00Z' : null,
+    expectedReturnAt: null,
     positionsWithheld: false,
     teams: [],
     participants: [

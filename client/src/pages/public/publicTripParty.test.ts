@@ -10,6 +10,7 @@ import {
   instantOf,
   partyByTeam,
   partyStandings,
+  plannedReturn,
   positionAgeInWords,
   sinceInWords,
   standingOf,
@@ -288,6 +289,51 @@ describe('a length of time in words', () => {
     expect(durationInWords(from, from - 1, 'en')).toBeNull();
     expect(durationInWords(Number.NaN, from, 'en')).toBeNull();
     expect(durationInWords(from, Number.NaN, 'en')).toBeNull();
+  });
+});
+
+describe('the hour a party planned to be out by', () => {
+  const DUE = '2026-09-14T15:00:00Z';
+  const due = Date.parse(DUE);
+  const underground = [participant({ ordinal: 1, in: true }), participant({ ordinal: 2, out: true })];
+  const trip = (overrides: Partial<Parameters<typeof plannedReturn>[0]> = {}) => ({
+    expectedReturnAt: DUE,
+    state: 'armed',
+    participants: underground,
+    ...overrides,
+  });
+
+  it('is the planned hour while somebody is underground, and says when it has gone by', () => {
+    expect(plannedReturn(trip(), due - 60_000)).toEqual({ dueAt: due, passed: false });
+    expect(plannedReturn(trip(), due)).toEqual({ dueAt: due, passed: true });
+    expect(plannedReturn(trip(), due + 5 * 3_600_000)).toEqual({ dueAt: due, passed: true });
+  });
+
+  it('is nothing where the trip was sent no hour, or one that is not a moment', () => {
+    expect(plannedReturn(trip({ expectedReturnAt: null }), due)).toBeNull();
+    expect(plannedReturn(trip({ expectedReturnAt: undefined }), due)).toBeNull();
+    expect(plannedReturn({ state: 'armed', participants: underground }, due)).toBeNull();
+    expect(plannedReturn(trip({ expectedReturnAt: 'about five' }), due)).toBeNull();
+  });
+
+  it('is nothing once nobody is underground, however long ago the hour was', () => {
+    const everybodyOut = [participant({ ordinal: 1, out: true }), participant({ ordinal: 2, out: true })];
+    expect(plannedReturn(trip({ participants: everybodyOut }), due + 3_600_000)).toBeNull();
+    expect(plannedReturn(trip({ participants: everybodyOut }), due - 3_600_000)).toBeNull();
+    // Somebody nobody has reported has not been said to be in.
+    expect(plannedReturn(trip({ participants: [participant({ ordinal: 1 })] }), due)).toBeNull();
+    expect(plannedReturn(trip({ participants: [] }), due)).toBeNull();
+    // Somebody both in and out is out.
+    expect(
+      plannedReturn(trip({ participants: [participant({ ordinal: 1, in: true, out: true })] }), due),
+    ).toBeNull();
+    // The twin: one person still in, and it is said again.
+    expect(plannedReturn(trip({ participants: [participant({ ordinal: 1, in: true })] }), due)).not.toBeNull();
+  });
+
+  it('is nothing once the watch is closed, whoever is still recorded as in', () => {
+    expect(plannedReturn(trip({ state: 'closed' }), due + 60_000)).toBeNull();
+    expect(plannedReturn(trip({ state: 'off' }), due - 60_000)).toBeNull();
   });
 });
 

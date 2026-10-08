@@ -59,6 +59,7 @@ function own(): PublicTripEnvelope {
     state: 'closed',
     armedAt: '2026-09-14T06:00:00Z',
     closedAt: '2026-09-14T12:00:00Z',
+    expectedReturnAt: '2026-09-14T11:00:00Z',
     positionsWithheld: false,
     model: MODEL,
     teams: [],
@@ -76,6 +77,7 @@ function row(tripLogId: string, title: string): PublicLiveTrip {
     state: 'armed',
     armedAt: '2026-09-15T07:00:00Z',
     closedAt: null,
+    expectedReturnAt: '2026-09-15T16:00:00Z',
     positionsWithheld: true,
     teams: [{ id: 'dddddddd-0000-0000-0000-000000000001', title: 'Survey' }],
     participants: [person(1, 'Mircea', 'other.4'), person(2, 'Ileana', null)],
@@ -94,6 +96,8 @@ describe('a row of the list as the party a page draws', () => {
       state: 'armed',
       armedAt: '2026-09-15T07:00:00Z',
       closedAt: null,
+      // The watched party's own plan, not the plan of the trip the link is for.
+      expectedReturnAt: '2026-09-15T16:00:00Z',
       positionsWithheld: true,
       expedition: { name: 'Summer camp' },
     });

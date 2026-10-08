@@ -12,6 +12,7 @@ import {
   pastReplayWindow,
   pastReportMoments,
 } from './pastTrackReplay.ts';
+import { plannedReturn } from './publicTripParty.ts';
 
 const TEAM_A = '11111111-1111-1111-1111-111111111111';
 const TEAM_B = '22222222-2222-2222-2222-222222222222';
@@ -90,6 +91,25 @@ describe('winding a published past trip back to a moment', () => {
         out: false,
       },
     ]);
+  });
+
+  it('carries no planned hour, at any moment, so a replay never prints one', () => {
+    const source = track({
+      participants: [
+        { ordinal: 1, label: 'Ana', track: [fix({ recordedAt: '2019-07-06T09:00:00Z', in: true })] },
+      ],
+    });
+    for (const moment of [at('2019-07-06T08:00:00Z'), at('2019-07-06T11:00:00Z'), Number.NaN]) {
+      const folded = pastEnvelopeAt(source, moment);
+      expect(folded).toHaveProperty('expectedReturnAt', null);
+      expect(plannedReturn(folded, at('2019-07-06T11:00:00Z'))).toBeNull();
+    }
+    // The twin: the fold does put somebody underground at the middle moment, so what keeps the
+    // line off a replay is the replay, not an empty party.
+    expect(pastEnvelopeAt(source, at('2019-07-06T11:00:00Z')).participants[0].in).toBe(true);
+    // And a track that somehow carried such a member would still not have it read.
+    const carrying = { ...source, expectedReturnAt: '2019-07-06T15:00:00Z' };
+    expect(pastEnvelopeAt(carrying, at('2019-07-06T11:00:00Z')).expectedReturnAt).toBeNull();
   });
 
   it('never says a past trip is armed, whatever the trip did', () => {

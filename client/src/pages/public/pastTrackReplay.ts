@@ -253,6 +253,9 @@ export function pastEnvelopeAt(track: PublicPastTrack, at: number): PublicTripEn
     state: 'closed',
     armedAt: track.armedAt,
     closedAt: track.closedAt,
+    // A finished trip is sent no planned hour and a replay never has one: the hour a party meant
+    // to be out by is a line for the people waiting on them, and nobody is waiting on this one.
+    expectedReturnAt: null,
     positionsWithheld: track.positionsWithheld,
     model: track.model,
     teams: track.teams,

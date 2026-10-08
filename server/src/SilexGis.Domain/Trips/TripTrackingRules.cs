@@ -141,6 +141,41 @@ public static class TripTrackingRules
         state == TripTrackingState.Armed && armedAt is { } since && now - since > longerThan;
 
     /// <summary>
+    /// The hour a visitor without an account may be told the party planned to be out by, or null
+    /// when there is none to tell.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Null in three cases, and each is a different reason.</b> The installation does not
+    /// publish the hour (<paramref name="published"/> is false): that is its owner's choice and
+    /// nothing about the trip overrides it. The trip records no such hour. Or the hour is not
+    /// later than the moment the watch was started — and that one is about truth rather than
+    /// permission: a trip record is reused, its watch can be started again another day, and an
+    /// hour left over from an earlier outing describes nothing the watch a visitor is reading is
+    /// about. "Planned out by 17:00" under a party that went in at 19:00 is a false statement on
+    /// the one page a family reads, so it is not made. A watch with no recorded start cannot be
+    /// compared and is treated the same way: what cannot be shown to belong to this watch is not
+    /// told.
+    /// </para>
+    /// <para>
+    /// <b>It is the plan and only the plan.</b> The same trip may carry an overdue check — an
+    /// alarm hour, where that check stands, when it was last looked at. None of those is read
+    /// here, none is derived here, and nothing this returns says whether anybody has been alerted:
+    /// a published page states what the party said, and what the people responsible for the party
+    /// are doing about it is theirs.
+    /// </para>
+    /// <para>
+    /// Not null once the hour has passed. Whether the plan is still worth a line then depends on
+    /// whether anybody is still underground, which is read from the reports, not from this.
+    /// </para>
+    /// </remarks>
+    public static DateTimeOffset? PublishedExpectedReturn(
+        bool published, DateTimeOffset? expectedReturnAt, DateTimeOffset? armedAt) =>
+        published && expectedReturnAt is { } planned && armedAt is { } started && planned > started
+            ? planned
+            : null;
+
+    /// <summary>
     /// Whether a position recorded against <paramref name="recordedOn"/> may be drawn on the model
     /// <paramref name="modelInUse"/>.
     /// </summary>

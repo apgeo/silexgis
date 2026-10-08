@@ -494,6 +494,10 @@ public static class TripTrackingPublicationEndpoints
             tracking.State,
             tracking.ArmedAt,
             tracking.ClosedAt,
+            // The plan, and only where this installation publishes it. Nothing else of the trip's
+            // overdue check is read on this route.
+            TripTrackingRules.PublishedExpectedReturn(
+                options.Value.PublishExpectedReturn, trip.ExpectedReturnAt, tracking.ArmedAt),
             party.PositionsWithheld,
             model,
             party.Teams,

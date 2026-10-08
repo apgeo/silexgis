@@ -359,6 +359,51 @@ export function watchStartedAt(trip: { armedAt: string | null | undefined }): nu
   return instantOf(trip.armedAt);
 }
 
+/** The hour a party planned to be out by, and whether that hour has gone by. */
+export interface PlannedReturn {
+  /** The planned hour, in milliseconds since the epoch. */
+  dueAt: number;
+  /** True once the planned hour is no longer ahead. A statement about a clock, never about a party. */
+  passed: boolean;
+}
+
+/**
+ * What a followed page may say about the hour its party planned to be out by, or null when it
+ * has nothing to say.
+ *
+ * <b>Null far more often than not, and each case is deliberate.</b> The trip carries no such hour
+ * — which is every trip of an installation that does not publish it, and every replay. The watch
+ * is not running: a person closed it, which is how this page is told that the trip is over, and a
+ * plan for a trip that is over is nobody's business tonight. Or nobody is recorded underground:
+ * people who are out are not expected out, whatever the hour, and people nobody has reported yet
+ * have not been said to be in.
+ *
+ * <b>`passed` is about the clock and says nothing else.</b> Word from underground travels at the
+ * pace of whoever climbs to where a telephone works, so a party past its planned hour on this page
+ * is, nearly always, a party whose exit has not been typed in yet. The line worded from this has
+ * to stay a statement of the plan — never "late", never "overdue" — because the people reading it
+ * are waiting at home and this page is not how anybody is alerted.
+ *
+ * Numbers and strings only, so that a page with no build step can ask the same question.
+ */
+export function plannedReturn(
+  trip: {
+    expectedReturnAt?: string | null | undefined;
+    state: string;
+    participants: readonly Pick<PublicTripParticipant, 'in' | 'out'>[];
+  },
+  now: number,
+): PlannedReturn | null {
+  const dueAt = instantOf(trip.expectedReturnAt);
+  if (dueAt === null || trip.state !== 'armed') {
+    return null;
+  }
+  if (partyStandings(trip.participants).underground === 0) {
+    return null;
+  }
+  return { dueAt, passed: now >= dueAt };
+}
+
 /**
  * From when to when a finished trip was followed, as one range — "8:40 AM – 2:10 PM", with the
  * date where it is not today — or null where the trip does not say both ends.

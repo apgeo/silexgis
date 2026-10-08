@@ -863,7 +863,7 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         string[] envelopeMembers =
         [
             "tripLogId", "expedition", "title", "tripDate", "tripDateEnd", "state", "armedAt", "closedAt",
-            "positionsWithheld", "model", "teams", "participants",
+            "expectedReturnAt", "positionsWithheld", "model", "teams", "participants",
         ];
         string[] participantMembers =
         [

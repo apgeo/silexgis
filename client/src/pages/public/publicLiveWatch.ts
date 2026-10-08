@@ -31,6 +31,9 @@ export function liveTripAsEnvelope(row: PublicLiveTrip, own: PublicTripEnvelope)
     state: row.state,
     armedAt: row.armedAt,
     closedAt: row.closedAt,
+    // The watched party's own plan, never the link's: the two parties went in at different hours
+    // and said different things about coming out.
+    expectedReturnAt: row.expectedReturnAt,
     positionsWithheld: row.positionsWithheld,
     model: own.model,
     teams: row.teams,

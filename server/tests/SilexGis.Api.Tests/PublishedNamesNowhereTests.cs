@@ -267,7 +267,7 @@ public sealed class PublishedNamesNowhereTests : IAsyncLifetime, IDisposable, IC
         Members(followed).ShouldBe(
             [
                 "tripLogId", "expedition", "title", "tripDate", "tripDateEnd", "state", "armedAt",
-                "closedAt", "positionsWithheld", "teams", "participants",
+                "closedAt", "expectedReturnAt", "positionsWithheld", "teams", "participants",
             ],
             ignoreOrder: true);
         Members(followed.GetProperty("expedition")).ShouldBe(["id", "name"], ignoreOrder: true);

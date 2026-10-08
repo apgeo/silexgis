@@ -62,6 +62,7 @@ import {
   momentOrAge,
   partyByTeam,
   partyStandings,
+  plannedReturn,
   standingOf,
   tripDateRange,
   watchStartedAt,
@@ -1018,6 +1019,24 @@ export default function PublicTripPage() {
       : t('publicTrip.since.span', { span });
   })();
 
+  /**
+   * The hour the party in the header planned to be out by, where this installation publishes it.
+   *
+   * <b>A statement of the plan, in both its wordings.</b> Ahead, it is "planned out by"; once the
+   * hour has gone by it is the same plan in the past tense, and nothing else changes — no colour,
+   * no "late", no count of hours. Somebody waiting at home reads this, a party past its hour here
+   * is nearly always one whose exit has not been typed in yet, and this page is not how anybody is
+   * alerted. Nothing at all once nobody is underground, once the watch is closed, and on every
+   * replay.
+   */
+  const planned = head === null ? null : plannedReturn(head, present);
+  const plannedLine =
+    planned === null
+      ? null
+      : t(planned.passed ? 'publicTrip.planned.passed' : 'publicTrip.planned.ahead', {
+          clock: clockInWords(planned.dueAt, present, i18n.language),
+        });
+
   return (
     <div className="public-trip" style={palette} data-testid="public-trip">
       {/* The title and the dates are of whatever is on screen — a past trip has its own, and a
@@ -1049,6 +1068,15 @@ export default function PublicTripPage() {
                 data-testid="public-trip-since"
               >
                 {followedLine}
+              </Typography.Text>
+            )}
+            {plannedLine !== null && (
+              <Typography.Text
+                type="secondary"
+                className="public-trip-since"
+                data-testid="public-trip-expected"
+              >
+                {plannedLine}
               </Typography.Text>
             )}
           </div>

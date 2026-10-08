@@ -231,6 +231,50 @@ public class TripTrackingDomainTests
         TripTrackingRules.ArmedForLongerThan(TripTrackingState.Armed, null, now, week).ShouldBeFalse();
     }
 
+    [Fact]
+    public void The_planned_hour_is_told_only_where_it_is_published_and_only_when_it_is_after_the_start_of_the_watch()
+    {
+        var started = new DateTimeOffset(2026, 10, 7, 9, 0, 0, TimeSpan.Zero);
+        var planned = started.AddHours(8);
+
+        // Published, recorded, and later than the start: told, as the instant it is.
+        TripTrackingRules.PublishedExpectedReturn(true, planned, started).ShouldBe(planned);
+
+        // The same trip on an installation that does not publish it: told to nobody.
+        TripTrackingRules.PublishedExpectedReturn(false, planned, started).ShouldBeNull();
+
+        // A trip that records no plan has none to tell, published or not.
+        TripTrackingRules.PublishedExpectedReturn(true, null, started).ShouldBeNull();
+        TripTrackingRules.PublishedExpectedReturn(false, null, started).ShouldBeNull();
+
+        // An hour from before the watch was started belongs to an earlier outing of the record.
+        TripTrackingRules.PublishedExpectedReturn(true, started.AddHours(-3), started).ShouldBeNull();
+        // "Later than" is strict: the very moment the watch started is not a plan to be out by.
+        TripTrackingRules.PublishedExpectedReturn(true, started, started).ShouldBeNull();
+        TripTrackingRules.PublishedExpectedReturn(true, started.AddSeconds(1), started)
+            .ShouldBe(started.AddSeconds(1));
+
+        // A watch with no recorded start cannot be compared with, so the hour is not told.
+        TripTrackingRules.PublishedExpectedReturn(true, planned, null).ShouldBeNull();
+    }
+
+    [Fact]
+    public void The_planned_hour_is_the_same_instant_however_its_zone_is_written_and_is_still_told_once_it_has_passed()
+    {
+        var started = new DateTimeOffset(2026, 10, 7, 9, 0, 0, TimeSpan.Zero);
+
+        // 11:30 at +03:00 is 08:30 in UTC, half an hour before the start: compared as instants,
+        // not as the clock faces they were written with.
+        var writtenElsewhere = new DateTimeOffset(2026, 10, 7, 11, 30, 0, TimeSpan.FromHours(3));
+        TripTrackingRules.PublishedExpectedReturn(true, writtenElsewhere, started).ShouldBeNull();
+        var laterElsewhere = new DateTimeOffset(2026, 10, 7, 20, 0, 0, TimeSpan.FromHours(3));
+        TripTrackingRules.PublishedExpectedReturn(true, laterElsewhere, started).ShouldBe(laterElsewhere);
+
+        // The rule takes no "now": an hour that has passed is still the plan the party stated.
+        TripTrackingRules.PublishedExpectedReturn(true, started.AddMinutes(1), started)
+            .ShouldBe(started.AddMinutes(1));
+    }
+
     // The whole table, because it is six cells and exactly one of them refuses: a rule this small
     // is cheapest to keep right by writing every case down, so that widening the refusal to a
     // closed watch (which would make a finished trip's list uncorrectable) or to people nobody has

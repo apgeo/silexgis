@@ -24224,6 +24224,8 @@ export interface components {
             armedAt: null | string;
             /** Format: date-time */
             closedAt: null | string;
+            /** Format: date-time */
+            expectedReturnAt: null | string;
             positionsWithheld: boolean;
             teams: components["schemas"]["PublicTripTeamDto"][];
             participants: components["schemas"]["PublicTripParticipantDto"][];
@@ -24383,6 +24385,8 @@ export interface components {
             armedAt: null | string;
             /** Format: date-time */
             closedAt: null | string;
+            /** Format: date-time */
+            expectedReturnAt: null | string;
             positionsWithheld: boolean;
             model: null | components["schemas"]["PublicTripSurveyModelDto"];
             teams: components["schemas"]["PublicTripTeamDto"][];

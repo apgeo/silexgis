@@ -4007,6 +4007,10 @@
       "started": "Urmărirea a pornit la {{clock}}",
       "span": "Urmărită {{span}}"
     },
+    "planned": {
+      "ahead": "Ieșire plănuită până la {{clock}}",
+      "passed": "Ieșirea era plănuită până la {{clock}}"
+    },
     "updated": {
       "running": "Pagină împrospătată {{since}}",
       "settled": "Citită ultima dată la {{clock}}"

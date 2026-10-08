@@ -4007,6 +4007,10 @@
       "started": "Following started {{clock}}",
       "span": "Followed {{span}}"
     },
+    "planned": {
+      "ahead": "Planned out by {{clock}}",
+      "passed": "The plan was to be out by {{clock}}"
+    },
     "updated": {
       "running": "Page updated {{since}}",
       "settled": "Last read at {{clock}}"

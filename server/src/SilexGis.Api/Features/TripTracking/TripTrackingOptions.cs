@@ -44,6 +44,32 @@ public sealed class TripTrackingOptions
     public bool PublishRealNames { get; set; } = true;
 
     /// <summary>
+    /// Whether a published trip says the hour its party planned to be out by. <b>Off unless an
+    /// installation turns it on.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off, because it tells people without an account something about the party's plan that no
+    /// published page has said before, and whether a club wants that said in public is its own to
+    /// decide. Turned off, the followed page and the list of a cave's followed trips carry the
+    /// member empty whatever the trip records, and are otherwise exactly what they were.
+    /// </para>
+    /// <para>
+    /// What it widens, exactly: one instant, on the two reads about trips being followed now —
+    /// never on a finished trip's replay or on the list of finished trips, where a plan is history
+    /// nobody is waiting on. It is published only when it is later than the moment the watch was
+    /// started, which is decided by
+    /// <see cref="SilexGis.Domain.Trips.TripTrackingRules.PublishedExpectedReturn"/>.
+    /// </para>
+    /// <para>
+    /// <b>It publishes nothing about an overdue check.</b> The alarm hour, where that check
+    /// stands and when it was last looked at stay where they are, behind an account; and switching
+    /// this on sends nothing, raises nothing and stands nothing down.
+    /// </para>
+    /// </remarks>
+    public bool PublishExpectedReturn { get; set; }
+
+    /// <summary>
     /// How long a follow link goes on working after the trip it is about. <b>Two weeks unless an
     /// installation says otherwise.</b>
     /// </summary>
