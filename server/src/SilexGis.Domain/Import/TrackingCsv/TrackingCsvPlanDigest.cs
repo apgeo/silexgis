@@ -48,7 +48,7 @@ public static class TrackingCsvPlanDigest
     /// Said first, so that a change to how the rest is written down gives every plan a new name
     /// rather than, by accident, an old plan's.
     /// </summary>
-    private const string Shape = "tracking-sheet-plan/4";
+    private const string Shape = "tracking-sheet-plan/5";
 
     /// <summary>The name, as 64 lower-case hexadecimal digits.</summary>
     /// <param name="plan">What the sheet would write.</param>

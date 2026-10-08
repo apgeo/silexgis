@@ -92,7 +92,7 @@ public class TrackingCsvPlanDigestTests
         // restart of the server, or on another of its instances.
         var plan = PlanOf(Report(), Report() with { Line = 3, CaverId = Maria, TeamId = null, Note = null, DepthM = null });
 
-        plan.Digest().ShouldBe("d49b5d5e7bb18225252250bbcdc8106fca11670d427dadb76a318725cb8e0c45");
+        plan.Digest().ShouldBe("98a14163fe283779f86993e94622b734d46015030d4213f49312c5ee7b3e4e2e");
         plan.Digest().ShouldBe(TrackingCsvPlanDigest.Of(plan));
     }
 
