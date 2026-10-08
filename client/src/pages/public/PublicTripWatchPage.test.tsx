@@ -256,6 +256,7 @@ beforeEach(() => {
       closedAt: '2019-07-06T18:00:00Z',
       positionsWithheld: false,
       trackTruncated: false,
+      pictures: [],
       model: MODEL,
       teams: [{ id: TEAM, title: 'Advance' }],
       participants: [

@@ -150,6 +150,7 @@ function pastTrack(): PublicPastTrack {
     closedAt: '2019-07-06T18:00:00Z',
     positionsWithheld: false,
     trackTruncated: false,
+    pictures: [],
     model,
     teams: [
       { id: TEAM_A, title: 'Advance' },

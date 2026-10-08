@@ -9897,6 +9897,7 @@ export type PublicPastTrip = components['schemas']['PublicPastTripDto'];
 export type PublicPastTrack = components['schemas']['PublicPastTrackDto'];
 export type PublicPastTrackParticipant = components['schemas']['PublicPastTrackParticipantDto'];
 export type PublicPastTrackFix = components['schemas']['PublicPastTrackFixDto'];
+export type PublicPastTrackPicture = components['schemas']['PublicPastTrackPictureDto'];
 
 /**
  * How long the list of a cave's past trips is believed before it is worth asking for again.
@@ -9955,6 +9956,22 @@ export function usePublicPastTrips(token: string | undefined, enabled: boolean) 
 }
 
 /**
+ * How often a past trip's answer is read again: never, unless it came with photographs.
+ *
+ * Returns `false` for an answer that carries no photograph — every answer of an installation that
+ * does not publish them — and the interval the followed page keeps its own pictures alive by for
+ * one that does.
+ */
+export function publicPastTrackPollInterval(track: PublicPastTrack | undefined) {
+  // A photograph's address is signed for a few minutes and is spent when the clock reaches its
+  // moment — which, on a replay somebody is watching, can be an hour after the answer landed. So
+  // an answer that carries any is read again on the interval the followed page keeps its own
+  // pictures alive by. One that carries none — every answer of an installation that does not
+  // publish them, and every answer from before the list existed — is read once, as it always was.
+  return (track?.pictures?.length ?? 0) > 0 ? PUBLIC_PICTURE_REFRESH_MS : (false as const);
+}
+
+/**
  * One past trip of this link's cave, played back.
  *
  * <b>Never fetched until a visitor has chosen a trip.</b> `tripLogId` undefined is the whole of the
@@ -9967,6 +9984,9 @@ export function usePublicPastTrips(token: string | undefined, enabled: boolean) 
  * not change. Its model's delivery URL does expire, but the survey file behind it is fetched the
  * moment the viewer is handed the address, which is the moment this answer lands — so there is no
  * later spend for a poll to keep alive, unlike the station pictures on the live envelope.
+ *
+ * <b>The one exception is a replay that came with photographs on its moments</b>, which only an
+ * installation that publishes them sends: see {@link publicPastTrackPollInterval}.
  */
 export function usePublicPastTrack(token: string | undefined, tripLogId: string | undefined) {
   return useQuery({
@@ -9979,6 +9999,7 @@ export function usePublicPastTrack(token: string | undefined, tripLogId: string 
       ),
     enabled: !!token && !!tripLogId,
     staleTime: Infinity,
+    refetchInterval: (query) => publicPastTrackPollInterval(query.state.data),
   });
 }
 

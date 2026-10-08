@@ -225,6 +225,61 @@ public class TripPastTrackWindowTests
     }
 
     [Fact]
+    public void A_replay_runs_from_the_watch_starting_to_its_closing_and_out_to_the_reports_it_holds()
+    {
+        var armed = Now.AddDays(-6);
+        var closed = armed.AddHours(8);
+
+        // The watch's own stretch, with nothing reported outside it.
+        TripPastTrackWindow.ReplayedStretch(armed, closed, truncated: false, armed.AddHours(1), armed.AddHours(7))
+            .ShouldBe((armed, closed));
+        // A report said before the watch was started, and one written down after it was closed,
+        // each carry their end outwards.
+        TripPastTrackWindow.ReplayedStretch(armed, closed, truncated: false, armed.AddHours(-2), closed.AddHours(3))
+            .ShouldBe((armed.AddHours(-2), closed.AddHours(3)));
+        // Nothing reported at all: the watch's stretch as it stands.
+        TripPastTrackWindow.ReplayedStretch(armed, closed, truncated: false, null, null)
+            .ShouldBe((armed, closed));
+    }
+
+    [Fact]
+    public void A_replay_cut_short_or_never_closed_ends_at_its_last_report_and_one_never_started_has_no_stretch()
+    {
+        var armed = Now.AddDays(-6);
+        var closed = armed.AddHours(8);
+        var lastHeld = armed.AddHours(3);
+
+        // The same trip, whole and cut short: only the second stops at the last report it holds.
+        TripPastTrackWindow.ReplayedStretch(armed, closed, truncated: false, armed, lastHeld)
+            .ShouldBe((armed, closed));
+        TripPastTrackWindow.ReplayedStretch(armed, closed, truncated: true, armed, lastHeld)
+            .ShouldBe((armed, lastHeld));
+        // Switched off rather than closed: no closing instant, the same ending.
+        TripPastTrackWindow.ReplayedStretch(armed, null, truncated: false, armed, lastHeld)
+            .ShouldBe((armed, lastHeld));
+        // Never started: nothing is replayed, whatever was reported.
+        TripPastTrackWindow.ReplayedStretch(null, closed, truncated: false, armed, lastHeld).ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_moment_is_replayed_only_inside_the_stretch_and_at_either_end_of_it()
+    {
+        var armed = Now.AddDays(-6);
+        var closed = armed.AddHours(8);
+        var stretch = TripPastTrackWindow.ReplayedStretch(armed, closed, truncated: false, null, null);
+
+        TripPastTrackWindow.IsReplayed(stretch, armed).ShouldBeTrue();
+        TripPastTrackWindow.IsReplayed(stretch, armed.AddHours(4)).ShouldBeTrue();
+        TripPastTrackWindow.IsReplayed(stretch, closed).ShouldBeTrue();
+        TripPastTrackWindow.IsReplayed(stretch, armed.AddSeconds(-1)).ShouldBeFalse();
+        TripPastTrackWindow.IsReplayed(stretch, closed.AddSeconds(1)).ShouldBeFalse();
+        // A camera whose clock was never set.
+        TripPastTrackWindow.IsReplayed(stretch, DateTimeOffset.UnixEpoch).ShouldBeFalse();
+        // And no stretch replays no moment, the one inside the watch included.
+        TripPastTrackWindow.IsReplayed(null, armed.AddHours(4)).ShouldBeFalse();
+    }
+
+    [Fact]
     public void A_revoked_link_opens_neither_window_even_when_the_trip_has_another_link()
     {
         // Revocation is somebody deciding now, and it has to end this link whatever else is true of

@@ -6,10 +6,12 @@ import {
   PUBLIC_IDLE_POLL_MS,
   publicLiveTripsPollInterval,
   publicLiveTripsRefetchOnReturn,
+  publicPastTrackPollInterval,
   publicPastTripsRefetchOnReturn,
   publicTripPollInterval,
   publicTripRefetchInterval,
   type PublicLiveTripList,
+  type PublicPastTrack,
   type PublicTripEnvelope,
   type TripTrackingState,
 } from './hooks.ts';
@@ -220,5 +222,40 @@ describe('the past trips of a cave, on a return to the tab', () => {
   it('are believed for minutes — long against a glance, short against an afternoon', () => {
     expect(PUBLIC_ARCHIVE_FRESH_MS).toBeGreaterThanOrEqual(60_000);
     expect(PUBLIC_ARCHIVE_FRESH_MS).toBeLessThanOrEqual(15 * 60_000);
+  });
+});
+
+/**
+ * A finished trip's replay is read once — unless it came with photographs on its moments, which
+ * only an installation that publishes them sends, and whose addresses are good for a few minutes.
+ */
+describe('how a replay of a finished trip is kept fresh', () => {
+  const replay = (pictures: number | undefined): PublicPastTrack =>
+    ({
+      pictures:
+        pictures === undefined
+          ? undefined
+          : Array.from({ length: pictures }, (_, i) => ({
+              at: '2019-07-06T10:00:00Z',
+              ordinal: null,
+              thumbnailUrl: `/api/v1/files/f${i}/thumbnail?size=480&token=sig`,
+              caption: null,
+            })),
+    }) as unknown as PublicPastTrack;
+
+  it('is asked about once where it carries no photograph, which is every installation as installed', () => {
+    expect(publicPastTrackPollInterval(replay(0))).toBe(false);
+    // An answer from before the list existed, and no answer yet.
+    expect(publicPastTrackPollInterval(replay(undefined))).toBe(false);
+    expect(publicPastTrackPollInterval(undefined)).toBe(false);
+  });
+
+  it('is read again, inside the life of a signed address, while it carries photographs', () => {
+    const interval = publicPastTrackPollInterval(replay(1));
+    expect(interval).toBeTypeOf('number');
+    // The same interval the followed page keeps its own pictures alive by.
+    expect(interval).toBe(publicTripPollInterval(published('closed', 1)));
+    // Signed addresses are good for ten minutes; a re-read later than that would be too late.
+    expect(interval as number).toBeLessThan(10 * 60_000);
   });
 });

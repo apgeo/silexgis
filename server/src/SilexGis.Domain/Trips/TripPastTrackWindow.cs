@@ -209,4 +209,54 @@ public static class TripPastTrackWindow
         retention is not { } window
         || TripPublicationWindow.IsBeforeEndOfPeriod(
             now, TripPublicationWindow.EndOfTrip(tripDate, tripDateEnd), window);
+
+    /// <summary>
+    /// The stretch of time a finished trip's published replay runs over, or null when it has none.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// From the moment the watch was started to the moment it was closed, carried outwards by the
+    /// reports the answer actually holds — one relayed out of a cave is stamped with when it was
+    /// said, and can fall either side of the watch's own stretch. A watch that was never started
+    /// has no stretch, and nothing is replayed over it.
+    /// </para>
+    /// <para>
+    /// <b>A record cut short ends where its reports end</b>, not where the trip did: an answer
+    /// that carries only the first part of a long log says so, and the replay made from it stops
+    /// at the last report it was given. A watch with no closing instant ends the same way.
+    /// </para>
+    /// <para>
+    /// It exists so that what is published <em>at a moment</em> of a replay is bounded by the
+    /// replay itself. A photograph's moment is whatever its camera's clock said, and a camera
+    /// whose battery died says 1970: such a moment is outside every trip, and a published answer
+    /// has no business carrying it to a reader who could never be shown it.
+    /// </para>
+    /// </remarks>
+    /// <param name="truncated">Whether the answer holds only the first part of the trip's log.</param>
+    /// <param name="firstReport">The earliest report the answer holds, or null when it holds none.</param>
+    /// <param name="lastReport">The latest report the answer holds, or null when it holds none.</param>
+    public static (DateTimeOffset From, DateTimeOffset To)? ReplayedStretch(
+        DateTimeOffset? armedAt, DateTimeOffset? closedAt, bool truncated,
+        DateTimeOffset? firstReport, DateTimeOffset? lastReport)
+    {
+        if (armedAt is not { } armed)
+        {
+            return null;
+        }
+
+        var from = firstReport is { } first && first < armed ? first : armed;
+        var to = !truncated && closedAt is { } closed && closed > armed ? closed : armed;
+        if (lastReport is { } last && last > to)
+        {
+            to = last;
+        }
+
+        return (from, to);
+    }
+
+    /// <summary>
+    /// Whether a moment falls inside the stretch a replay runs over, its two ends included.
+    /// </summary>
+    public static bool IsReplayed((DateTimeOffset From, DateTimeOffset To)? stretch, DateTimeOffset moment) =>
+        stretch is { } replayed && moment >= replayed.From && moment <= replayed.To;
 }

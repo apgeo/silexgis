@@ -51,6 +51,7 @@ function trip2019(tripLogId: string): PublicPastTrack {
     closedAt: '2019-07-06T18:00:00Z',
     positionsWithheld: false,
     trackTruncated: false,
+    pictures: [],
     model: null,
     teams: [],
     participants: [

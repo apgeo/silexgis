@@ -91,4 +91,37 @@ public sealed class TripPastTrackOptions
     /// what <see cref="Enabled"/> is for.
     /// </remarks>
     public int EffectiveListSize => Math.Clamp(ListSize, 1, MaxListSize);
+
+    /// <summary>
+    /// Whether a finished trip's replay comes with the photographs hung on its moments. <b>Off
+    /// unless an installation turns it on.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off, because a photograph hung on a moment of a trip is, more often than not, a photograph
+    /// of somebody at a time — and the act that put it in the installation's public gallery was
+    /// taken about the picture, not about showing it beside a person's place in a party at the
+    /// minute it was taken. Whether people without an account are to see that is the club's to
+    /// decide. Turned off, the member is there and empty whatever the trip holds, no link of the
+    /// trip is read for it, and the answer is otherwise exactly what it was.
+    /// </para>
+    /// <para>
+    /// What it widens, exactly: on the one read that replays a finished trip, each photograph that
+    /// is in the public gallery and hangs on a moment inside the replay, as its moment, an address
+    /// that opens a rendering of it and never the upload, the gallery's own caption, and — when
+    /// the picture is about one person who is on the published party — that person's number in the
+    /// party. Never an identifier of a person and never a name. A picture about somebody who is
+    /// not on the published party comes as a picture of the moment only.
+    /// </para>
+    /// <para>
+    /// <b>It opens nothing about a protected cave</b>, which has no published page for these to
+    /// appear on, and nothing the gallery flag has not already opened: a photograph nobody put in
+    /// the public gallery is not sent whichever way this is set.
+    /// </para>
+    /// <para>
+    /// It lives here rather than with the settings of a trip being followed because it is a fact
+    /// about the archive: no page of a party still underground carries these.
+    /// </para>
+    /// </remarks>
+    public bool PublishMomentPictures { get; set; }
 }

@@ -387,8 +387,14 @@ export function replayPictures(
  * places across a window that is hours long, so it never lands on an instant a camera recorded;
  * "in force" is what makes a picture reachable at all, and it is the same reading the note beside
  * it already has.
+ *
+ * It reads nothing of a picture but its moment, and is asked the same question about the
+ * photographs a published replay comes with — which is why it takes anything placed on the clock.
  */
-export function picturesAt(pictures: readonly ReplayPicture[], at: number): ReplayPicture[] {
+export function picturesAt<Picture extends { at: number }>(
+  pictures: readonly Picture[],
+  at: number,
+): Picture[] {
   let moment: number | null = null;
   for (const picture of pictures) {
     if (picture.at > at) {

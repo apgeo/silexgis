@@ -16,6 +16,7 @@ import {
   Button,
   ConfigProvider,
   Flex,
+  Image,
   Input,
   Segmented,
   Select,
@@ -27,9 +28,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { TripTrackingState } from '../../api/hooks.ts';
 import { trackedCaverTeams, type TrackedCaver } from '../../caveview/trackedCavers.ts';
+import { picturesAt } from '../../caveview/trackingReplay.ts';
 import { COARSE_SLIDER, REPLAY_SPEEDS } from '../../caveview/useReplayClock.ts';
+import { thumbnailAtSize } from '../../components/documents/derivativeUrl.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import { pastPictures } from './pastTrackPictures.ts';
 import { followedName, momentAfter, momentBefore, type PastFollow } from './pastTrackReplay.ts';
 import { tripDateRange } from './publicTripParty.ts';
 import type { PastTripPlayback } from './usePastTripPlayback.ts';
@@ -137,6 +141,10 @@ export default function PublicPastBar({
   // The clock belongs to the playback, not to this strip: the drawing beside it reads whether it
   // is playing to decide how the markers move, in the same render the moment changes.
   const { span, at, moments, followedMoments, track, transport } = playback;
+
+  // The photographs this replay came with, placed on its clock once per answer rather than at
+  // every tick. Empty on every installation that does not publish them, which is most.
+  const pictures = useMemo(() => pastPictures(track), [track]);
 
   // Held still across renders: a fresh object here is a fresh theme five times a second while the
   // replay plays, and every one of those has the whole slider's styles derived again.
@@ -561,6 +569,83 @@ export default function PublicPastBar({
     };
   };
 
+  /**
+   * The photographs of the moment on the clock, under the rail — or nothing at all.
+   *
+   * <b>Nothing is drawn where there is nothing to show</b>: no heading, no empty row. A replay
+   * read from an installation that publishes no photographs is the strip it always was.
+   *
+   * <b>Which photographs belong to the moment is the coordinator's replay's own rule</b> — those
+   * of the latest moment at or before the clock that carries any — and the line above them says
+   * which moment that is, because a handle almost never stands on the instant a camera recorded.
+   *
+   * <b>A person is named by the page's own name for that place in the party</b>: the answer
+   * carries a number and nothing else about them, so somebody this page calls "Caver 2" is called
+   * that here as well.
+   */
+  const strip = (moment: number) => {
+    const shown = picturesAt(pictures, moment);
+    if (shown.length === 0) {
+      return null;
+    }
+    const heading = t('publicTrip.past.pictures.heading', { when: clock(shown[0].at) });
+    return (
+      <div
+        className="public-past-pictures"
+        role="group"
+        aria-label={heading}
+        data-testid="public-past-pictures"
+      >
+        <Typography.Text type="secondary" data-testid="public-past-pictures-when">
+          {heading}
+        </Typography.Text>
+        <div className="public-past-pictures-row">
+          <Image.PreviewGroup>
+            {shown.map((picture, index) => {
+              const who =
+                picture.ordinal === null
+                  ? null
+                  : (cavers.find((caver) => caver.caverId === String(picture.ordinal))?.name ??
+                    null);
+              const alt =
+                who === null
+                  ? t('publicTrip.past.pictures.ofMoment')
+                  : t('publicTrip.past.pictures.of', { who });
+              // Keyed by the picture and not by its address: the address is signed afresh on
+              // every read, and a key that changed with it would rebuild the strip under a reader.
+              const [path] = picture.thumbnailUrl.split('?');
+              return (
+                <figure
+                  key={`${path}#${index}`}
+                  className="public-past-picture"
+                  data-testid="public-past-picture"
+                >
+                  <Image
+                    src={thumbnailAtSize(picture.thumbnailUrl, 160)}
+                    alt={alt}
+                    preview={{ src: thumbnailAtSize(picture.thumbnailUrl, 1200) }}
+                  />
+                  {(who !== null || picture.caption !== null) && (
+                    <figcaption>
+                      {who !== null && (
+                        <span className="public-past-picture-who" data-testid="public-past-picture-who">
+                          {who}
+                        </span>
+                      )}
+                      {picture.caption !== null && (
+                        <span data-testid="public-past-picture-caption">{picture.caption}</span>
+                      )}
+                    </figcaption>
+                  )}
+                </figure>
+              );
+            })}
+          </Image.PreviewGroup>
+        </div>
+      </div>
+    );
+  };
+
   /** The page's strip under its statement: everything, laid out together. */
   const body = () => {
     if (without === 'failed') {
@@ -631,6 +716,7 @@ export default function PublicPastBar({
           {drawn.fine}
         </Flex>
         {drawn.rail}
+        {strip(drawn.at)}
 
         {momentAddress !== undefined && (
           <div className="public-past-links" data-testid="public-past-links">
@@ -766,6 +852,7 @@ export default function PublicPastBar({
         {drawn !== null && (
           <>
             {drawn.rail}
+            {strip(drawn.at)}
             <Flex gap="small" align="center" wrap>
               {drawn.fine}
             </Flex>

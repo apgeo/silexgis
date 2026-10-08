@@ -4079,7 +4079,12 @@
       "copiedMoment": "Link copiat. Deschide această tură la {{when}}.",
       "copiedPlaying": "Link copiat. Deschide această tură la {{when}} și pornește redarea.",
       "copyRefused": "Browserul nu a permis copierea. Linkul este mai jos: selectează-l și copiază-l manual.",
-      "copyByHand": "Linkul către acest moment"
+      "copyByHand": "Linkul către acest moment",
+      "pictures": {
+        "heading": "Fotografii de la {{when}}",
+        "of": "Fotografie cu {{who}}",
+        "ofMoment": "Fotografie din acest moment"
+      }
     },
     "live": {
       "heading": "Urmărite acum",

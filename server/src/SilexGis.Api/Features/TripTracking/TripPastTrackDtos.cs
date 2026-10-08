@@ -126,7 +126,52 @@ public sealed record PublicPastTrackDto(
     bool TrackTruncated,
     PublicTripSurveyModelDto? Model,
     IReadOnlyList<PublicTripTeamDto> Teams,
-    IReadOnlyList<PublicPastTrackParticipantDto> Participants);
+    IReadOnlyList<PublicPastTrackParticipantDto> Participants,
+    /// <summary>
+    /// The photographs hung on moments of this trip, oldest moment first — always present, and
+    /// empty on an installation that has not chosen to publish them.
+    /// </summary>
+    /// <remarks>
+    /// Apart from the pictures the survey itself comes with, which are of places: those hang on a
+    /// station whenever the drawing is shown, these on an instant of this one trip.
+    /// </remarks>
+    IReadOnlyList<PublicPastTrackPictureDto> Pictures);
+
+/// <summary>
+/// One photograph at the moment of a past trip it was hung on.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Four members and no fifth.</b> No identifier of the photograph, of the link that hung it or
+/// of a person; no name; and not the words typed beside it when it was hung on the trip, which
+/// were written for the trip's own members and were no part of the act that published the picture.
+/// </para>
+/// <para>
+/// Only ever a photograph in the installation's public gallery, reached through a link that names
+/// nothing guarded — the gates a picture hung on a station passes, applied by the same routine.
+/// </para>
+/// </remarks>
+/// <param name="At">
+/// The moment the picture was hung on — what its camera's clock said, or what the person hanging
+/// it typed. Always inside the stretch the replay runs over; one outside it is not sent.
+/// </param>
+/// <param name="Ordinal">
+/// The number in the party of the person the picture is about — the number the track's own rows
+/// carry — or null when it is about the party as a whole, about more than one person, or about
+/// somebody who is not on the published party. Null means "a picture of this moment", and says
+/// nothing about which of those it was.
+/// </param>
+/// <param name="ThumbnailUrl">
+/// An address that opens a rendering of the picture for a short while, and never the upload.
+/// </param>
+/// <param name="Caption">
+/// The caption the gallery shows under the picture, failing that the photograph's title, or null.
+/// </param>
+public sealed record PublicPastTrackPictureDto(
+    DateTimeOffset At,
+    int? Ordinal,
+    string ThumbnailUrl,
+    string? Caption);
 
 /// <summary>
 /// One member of a past party and everything that was reported about them, oldest first.

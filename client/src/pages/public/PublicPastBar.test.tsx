@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { PublicPastTrack } from '../../api/hooks.ts';
+import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
 import PublicPastBar from './PublicPastBar.tsx';
 import type { PastTripPlayback } from './usePastTripPlayback.ts';
 
@@ -35,6 +36,7 @@ function track(overrides: Partial<PublicPastTrack> = {}): PublicPastTrack {
     model: null,
     teams: [],
     participants: [],
+    pictures: [],
     ...overrides,
   };
 }
@@ -104,6 +106,170 @@ describe('the rail a past trip is scrubbed on', () => {
 
     expect(marks()).toBe(0);
     expect(screen.getByTestId('public-past-report-next')).toBeEnabled();
+  });
+});
+
+describe('the photographs of the moment on the clock', () => {
+  const hour = (clock: string) => at(`2019-07-06T${clock}:00Z`);
+  const picture = (clock: string, ordinal: number | null, file: string, caption: string | null) => ({
+    at: `2019-07-06T${clock}:00Z`,
+    ordinal,
+    thumbnailUrl: `/api/v1/files/${file}/thumbnail?size=480&token=sig`,
+    caption,
+  });
+  /** The party at 10:00, and one person of it; somebody else at 12:00. */
+  const withPictures = track({
+    pictures: [
+      picture('10:00', null, 'all', 'The whole party'),
+      picture('10:00', 2, 'two', null),
+      picture('12:00', 1, 'one', 'At the pitch'),
+    ],
+  });
+  /** The page's own names for two places in the party; the answer carries only the numbers. */
+  const party = [
+    { caverId: '1', name: 'Ana' },
+    { caverId: '2', name: 'Caver 2' },
+  ] as TrackedCaver[];
+  const span = [hour('08:00'), hour('18:00')];
+  const addresses = () =>
+    within(screen.getByTestId('public-past-pictures'))
+      .getAllByRole('img')
+      .map((image) => image.getAttribute('src'));
+
+  it('draws no strip, no heading and no empty row for a replay that came with none', () => {
+    // What every installation that does not publish them sends: the list, empty.
+    render(
+      <PublicPastBar playback={playback(span, { at: hour('12:00') })} liveState="closed" cavers={party} />,
+    );
+
+    expect(screen.queryByTestId('public-past-pictures')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('public-past-picture')).not.toBeInTheDocument();
+    // The strip it stands under is there: the absence is the pictures', not the whole bar's.
+    expect(screen.getByTestId('public-past-scrub')).toBeInTheDocument();
+  });
+
+  it('draws nothing before the first moment that carries a photograph', () => {
+    render(
+      <PublicPastBar
+        playback={playback(span, { track: withPictures, at: hour('09:59') })}
+        liveState="closed"
+        cavers={party}
+      />,
+    );
+
+    expect(screen.queryByTestId('public-past-pictures')).not.toBeInTheDocument();
+  });
+
+  it('shows those of the latest moment at or before the clock, each at the width it is drawn at', () => {
+    render(
+      <PublicPastBar
+        playback={playback(span, { track: withPictures, at: hour('11:30') })}
+        liveState="closed"
+        cavers={party}
+      />,
+    );
+
+    // The 10:00 pair and not the 12:00 one, which the clock has not reached.
+    expect(addresses()).toEqual([
+      '/api/v1/files/all/thumbnail?size=160&token=sig',
+      '/api/v1/files/two/thumbnail?size=160&token=sig',
+    ]);
+    expect(screen.getAllByTestId('public-past-picture')).toHaveLength(2);
+  });
+
+  it('names a person by the page’s own name for that place in the party, and the party by nobody', () => {
+    render(
+      <PublicPastBar
+        playback={playback(span, { track: withPictures, at: hour('11:30') })}
+        liveState="closed"
+        cavers={party}
+      />,
+    );
+
+    const [ofAll, ofTwo] = screen.getAllByTestId('public-past-picture');
+    // A picture of the moment: the gallery's caption, and nobody's name.
+    expect(within(ofAll).getByRole('img')).toHaveAccessibleName('Photograph of this moment');
+    expect(within(ofAll).queryByTestId('public-past-picture-who')).not.toBeInTheDocument();
+    expect(within(ofAll).getByTestId('public-past-picture-caption')).toHaveTextContent('The whole party');
+    // A picture of place 2 in the party, who this page calls "Caver 2".
+    expect(within(ofTwo).getByRole('img')).toHaveAccessibleName('Photograph of Caver 2');
+    expect(within(ofTwo).getByTestId('public-past-picture-who')).toHaveTextContent('Caver 2');
+    expect(within(ofTwo).queryByTestId('public-past-picture-caption')).not.toBeInTheDocument();
+  });
+
+  it('replaces them at the next moment that carries any, and says which moment they are of', () => {
+    // On the photograph's own instant the line and the clock say the same time.
+    const { unmount } = render(
+      <PublicPastBar
+        playback={playback(span, { track: withPictures, at: hour('12:00') })}
+        liveState="closed"
+        cavers={party}
+      />,
+    );
+    const atNoon = screen.getByTestId('public-past-clock').textContent;
+    const said = screen.getByTestId('public-past-pictures-when').textContent;
+    expect(said).toBe(`Photographs from ${atNoon}`);
+    unmount();
+
+    render(
+      <PublicPastBar
+        playback={playback(span, { track: withPictures, at: hour('15:00') })}
+        liveState="closed"
+        cavers={party}
+      />,
+    );
+
+    expect(addresses()).toEqual(['/api/v1/files/one/thumbnail?size=160&token=sig']);
+    expect(screen.getByTestId('public-past-picture-who')).toHaveTextContent('Ana');
+    // Three hours on the photograph is still the noon one, and the line still says noon — the
+    // photograph's moment, not the clock's.
+    expect(screen.getByTestId('public-past-clock').textContent).not.toBe(atNoon);
+    expect(screen.getByTestId('public-past-pictures-when').textContent).toBe(said);
+  });
+
+  it('names a number the page has no name for by nobody, rather than printing the number', () => {
+    render(
+      <PublicPastBar
+        playback={playback(span, { track: withPictures, at: hour('15:00') })}
+        liveState="closed"
+        cavers={[]}
+      />,
+    );
+
+    expect(screen.getByRole('img', { name: 'Photograph of this moment' })).toBeInTheDocument();
+    expect(screen.queryByTestId('public-past-picture-who')).not.toBeInTheDocument();
+  });
+
+  it('stands under the rail in the sheet a frame keeps its controls in, and not on the frame’s one line', () => {
+    const framed = playback(span, { track: withPictures, at: hour('11:30') });
+    const { unmount } = render(
+      <PublicPastBar playback={framed} liveState="closed" cavers={party} layout="sheet" />,
+    );
+    expect(screen.getAllByTestId('public-past-picture')).toHaveLength(2);
+    unmount();
+
+    render(<PublicPastBar playback={framed} liveState="closed" cavers={party} layout="line" />);
+    expect(screen.queryByTestId('public-past-pictures')).not.toBeInTheDocument();
+  });
+
+  it('is worded in Romanian with the same words in the same places', async () => {
+    const i18n = (await import('../../i18n')).default;
+    await i18n.changeLanguage('ro');
+    try {
+      render(
+        <PublicPastBar
+          playback={playback(span, { track: withPictures, at: hour('11:30') })}
+          liveState="closed"
+          cavers={party}
+        />,
+      );
+
+      expect(screen.getByTestId('public-past-pictures-when')).toHaveTextContent(/^Fotografii de la /);
+      expect(screen.getByRole('img', { name: 'Fotografie din acest moment' })).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Fotografie cu Caver 2' })).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 });
 

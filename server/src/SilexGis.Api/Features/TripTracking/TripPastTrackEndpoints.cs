@@ -419,6 +419,9 @@ public static class TripPastTrackEndpoints
         var byCaver = rows.GroupBy(e => e.CaverId).ToDictionary(g => g.Key, g => g.ToList());
         var participants = new List<PublicPastTrackParticipantDto>();
         var withheldAny = false;
+        // The first and the last report this answer holds, which is what its replay runs out to.
+        DateTimeOffset? firstReport = null;
+        DateTimeOffset? lastReport = null;
         foreach (var (caverId, ordinal) in roster)
         {
             var own = byCaver.GetValueOrDefault(caverId) ?? [];
@@ -457,6 +460,8 @@ public static class TripPastTrackEndpoints
                 if (!placed && !statesStanding) continue;
 
                 var standing = TripTrackingRules.StandingOf(prefix);
+                if (firstReport is null || report.RecordedAt < firstReport) firstReport = report.RecordedAt;
+                if (lastReport is null || report.RecordedAt > lastReport) lastReport = report.RecordedAt;
                 track.Add(new PublicPastTrackFixDto(
                     // The row's own hour, kept whatever happened to the row's place — and this
                     // looks, from the live page, like the opposite rule, so here is why it is not.
@@ -505,6 +510,18 @@ public static class TripPastTrackEndpoints
             db, protection, crs, tokens, tracking.SurveyModelId, configCave,
             live.Value.PublishDepthPlaces, ct);
 
+        // The photographs hung on this trip's moments, where the installation publishes them and
+        // not otherwise: switched off, no link of the trip is read and the list is sent empty.
+        // Bounded by the stretch this very answer replays, and numbered by the roster its own rows
+        // are numbered by, so a picture cannot name a moment or a person the answer does not hold.
+        IReadOnlyList<PublicPastTrackPictureDto> pictures = past.Value.PublishMomentPictures
+            ? await TripTrackingPublicationEndpoints.MomentPicturesAsync(
+                db, protection, tokens, trip.Id, roster,
+                TripPastTrackWindow.ReplayedStretch(
+                    tracking.ArmedAt, tracking.ClosedAt, truncated, firstReport, lastReport),
+                ct)
+            : [];
+
         diagnostics.Served(PublicTripRoute.PastTrip);
         return TypedResults.Ok(new PublicPastTrackDto(
             trip.Id,
@@ -521,7 +538,8 @@ public static class TripPastTrackEndpoints
             // cave is not handed over, and a superseded survey is drawn as itself or not at all.
             model,
             [.. teams.Select(t => new PublicTripTeamDto(t.Id, t.Title))],
-            participants));
+            participants,
+            pictures));
     }
 
     // ---- the gate ----------------------------------------------------------------------------

@@ -24252,6 +24252,7 @@ export interface components {
             model: null | components["schemas"]["PublicTripSurveyModelDto"];
             teams: components["schemas"]["PublicTripTeamDto"][];
             participants: components["schemas"]["PublicPastTrackParticipantDto"][];
+            pictures: components["schemas"]["PublicPastTrackPictureDto"][];
         };
         PublicPastTrackFixDto: {
             /** Format: date-time */
@@ -24270,6 +24271,14 @@ export interface components {
             ordinal: number;
             label: null | string;
             track: components["schemas"]["PublicPastTrackFixDto"][];
+        };
+        PublicPastTrackPictureDto: {
+            /** Format: date-time */
+            at: string;
+            /** Format: int32 */
+            ordinal: null | number;
+            thumbnailUrl: string;
+            caption: null | string;
         };
         PublicPastTripDto: {
             /** Format: uuid */

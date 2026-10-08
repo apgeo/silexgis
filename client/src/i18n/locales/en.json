@@ -4079,7 +4079,12 @@
       "copiedMoment": "Link copied. It opens this trip at {{when}}.",
       "copiedPlaying": "Link copied. It opens this trip at {{when}} and starts playing.",
       "copyRefused": "This browser did not allow copying. The link is below: select it and copy it by hand.",
-      "copyByHand": "Link to this moment"
+      "copyByHand": "Link to this moment",
+      "pictures": {
+        "heading": "Photographs from {{when}}",
+        "of": "Photograph of {{who}}",
+        "ofMoment": "Photograph of this moment"
+      }
     },
     "live": {
       "heading": "Being followed now",

@@ -118,6 +118,15 @@ export type { PastFollow } from '../pages/public/pastTrackReplay.ts';
 
 export type { ReplayWindow } from '../caveview/trackingReplay.ts';
 
+// The photographs to show at a moment of a replay, read off the list a published replay may come
+// with (`pictures`): those of the latest moment at or before the clock that carries any, by the
+// rule a coordinator's replay shows its own by. The list is empty on every installation that does
+// not publish photographs at their moment, and absent from an older answer; both answer nothing.
+// A picture carries a place in the party (`ordinal`, matching a participant's) or null, never
+// anything else about a person — the article names that place in its own words.
+export { pastPicturesAt } from '../pages/public/pastTrackPictures.ts';
+export type { PastPicture, PublishedMomentPicture } from '../pages/public/pastTrackPictures.ts';
+
 // ---- the same request written into an address ------------------------------------------------
 
 export { PAST_LINK_PARAMS, readPastLink, writePastLink } from '../pages/public/pastTripLink.ts';

@@ -5,6 +5,7 @@ import { build } from 'vite';
 import type { PublicPastTrack, PublicPastTrackFix } from '../api/hooks.ts';
 import { placeLabelFor } from '../caveview/publicPlaces.ts';
 import { publicTrackedCavers } from '../caveview/publicTrackedCavers.ts';
+import { pastPicturesAt } from '../pages/public/pastTrackPictures.ts';
 import {
   pastEnvelopeAt,
   pastReportMoments,
@@ -42,6 +43,7 @@ const PUBLISHED_NAMES = [
   'partyByTeam',
   'partyStandings',
   'pastEnvelopeAt',
+  'pastPicturesAt',
   'pastReplayWindow',
   'pastReportMoments',
   'placeLabelFor',
@@ -88,6 +90,26 @@ const TRACK: PublicPastTrack = {
   positionsWithheld: false,
   trackTruncated: false,
   model: null,
+  pictures: [
+    {
+      at: '2019-07-06T10:00:00Z',
+      ordinal: null,
+      thumbnailUrl: '/api/v1/files/all/thumbnail?size=480&token=sig',
+      caption: 'The whole party',
+    },
+    {
+      at: '2019-07-06T10:00:00Z',
+      ordinal: 1,
+      thumbnailUrl: '/api/v1/files/ana/thumbnail?size=480&token=sig',
+      caption: null,
+    },
+    {
+      at: '2019-07-06T12:30:00Z',
+      ordinal: 3,
+      thumbnailUrl: '/api/v1/files/radu/thumbnail?size=480&token=sig',
+      caption: null,
+    },
+  ],
   teams: [{ id: TEAM_A, title: 'Advance' }],
   participants: [
     {
@@ -246,6 +268,27 @@ describe('the fold, compiled for a page that has no build step', () => {
     }
     // Pinned to the words as well: two compilations that both answered null would agree.
     expect(labelThere('cave.deep.3', places)).toBe('Sifonul');
+  });
+
+  it('shows the photographs of a moment as this application does, and none from an empty list', async () => {
+    const { api } = await buildBundle('iife');
+    const picturesThere = api.pastPicturesAt as typeof pastPicturesAt;
+
+    for (const moment of MOMENTS) {
+      expect(picturesThere(TRACK, moment), new Date(moment).toISOString()).toEqual(
+        pastPicturesAt(TRACK, moment),
+      );
+      // What every installation that publishes none sends, and what an older answer lacks.
+      expect(picturesThere({ ...TRACK, pictures: [] }, moment)).toEqual([]);
+      expect(picturesThere({}, moment)).toEqual([]);
+    }
+    // Pinned to the pictures themselves as well: two compilations that both answered nothing
+    // would agree. Before the first photograph, on its moment's pair, and after the second.
+    const shown = (clock: string) =>
+      picturesThere(TRACK, Date.parse(`2019-07-06T${clock}:00Z`)).map((picture) => picture.ordinal);
+    expect(shown('09:59')).toEqual([]);
+    expect(shown('11:30')).toEqual([null, 1]);
+    expect(shown('14:00')).toEqual([3]);
   });
 
   it('lists the reports of a followed team or caver as this application does', async () => {

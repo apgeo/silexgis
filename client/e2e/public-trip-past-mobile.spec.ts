@@ -157,6 +157,7 @@ const pastTrack = (truncated = false) => ({
   closedAt: '2019-07-06T18:00:00Z',
   positionsWithheld: false,
   trackTruncated: truncated,
+  pictures: [],
   model,
   teams: [{ id: TEAM_SURVEY, title: 'Survey' }],
   participants: [

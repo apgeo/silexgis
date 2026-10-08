@@ -1116,6 +1116,208 @@ public static class TripTrackingPublicationEndpoints
             .ToListAsync(ct);
         if (linkIds.Count == 0) return [];
 
+        var links = await PublishedPicturesOfAsync(db, protection, linkIds, ct);
+
+        var pictures = new List<PublicTripStationPictureDto>();
+        var perStation = new Dictionary<string, int>(StringComparer.Ordinal);
+        var placed = new HashSet<(string Station, Guid Document)>();
+
+        foreach (var link in links)
+        {
+            // Only stations of the model on screen. A link can anchor to a station of some other
+            // model as well, and that name means nothing in this drawing.
+            var stations = link.Members
+                .Where(m => m.EntityType == AttachedEntityType.SurveyModel
+                    && m.EntityId == surveyModelId
+                    && m.AnchorKind == AnchorKind.ModelStation)
+                .Select(m => StationOf(m.Anchor))
+                .OfType<string>()
+                .ToList();
+            if (stations.Count == 0) continue;
+
+            // A link holding several stations and several pictures puts all of its pictures on all
+            // of its stations: what it says is that these things belong together, and it names no
+            // pairing inside itself for this to read one out of.
+            foreach (var station in stations)
+            {
+                foreach (var picture in link.Pictures)
+                {
+                    if (pictures.Count >= MaxPictures) return pictures;
+                    if (perStation.GetValueOrDefault(station) >= MaxPicturesPerStation) break;
+                    // The same photograph reaches one station through two links as often as not —
+                    // it is linked to the station and to the passage the station stands in — and
+                    // the strip would otherwise show it twice.
+                    if (!placed.Add((station, picture.DocumentId))) continue;
+
+                    pictures.Add(new PublicTripStationPictureDto(
+                        station, picture.Address(tokens), picture.Caption));
+                    perStation[station] = perStation.GetValueOrDefault(station) + 1;
+                }
+            }
+        }
+
+        return pictures;
+    }
+
+    /// <summary>
+    /// How many photographs one moment of a replay is published with — the bound a station has,
+    /// for the reason it has it: the strip fetches a thumbnail per entry as it appears.
+    /// </summary>
+    private const int MaxPicturesPerMoment = 12;
+
+    /// <summary>
+    /// The photographs hung on moments of one finished trip, as its replay is told them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The same stored shape the signed-in replay reads, selected by the same test</b>: a link
+    /// of the documenting relation whose <em>main</em> member is this trip at a moment. A link
+    /// somebody authored another way that merely mentions a moment of the trip is not one of
+    /// these, here as there. Newest links first and bounded before any join, as a station's are.
+    /// </para>
+    /// <para>
+    /// <b>Which of them are published is not decided here.</b> The consent gate, the link gate and
+    /// the reach of every address are the station pictures', applied by the one routine both
+    /// call; this adds only what a moment needs that a station does not.
+    /// </para>
+    /// <para>
+    /// <em>The moment has to be one the replay shows.</em> A moment is what a camera's clock
+    /// said, so one outside the stretch the replay runs over is left out rather than sent to a
+    /// reader who could never be brought to it.
+    /// </para>
+    /// <para>
+    /// <em>A person is a number in the party or nothing.</em> A link about exactly one person
+    /// carries that person's number when — and only when — they are on the published party, read
+    /// from the roster this answer numbers its own rows by. Somebody since taken off the trip, a
+    /// link about two people and a link about nobody all come as a picture of the moment. No
+    /// identifier of a person is read into the answer on any branch.
+    /// </para>
+    /// <para>
+    /// <em>The words typed beside a picture when it was hung on the trip are not sent.</em> They
+    /// were written for the trip's members, they routinely name people, and nobody publishing the
+    /// photograph was asked about them. The caption is the gallery's, as on a station.
+    /// </para>
+    /// </remarks>
+    /// <param name="roster">The published party and its numbers, as the same answer lists them.</param>
+    /// <param name="replayed">The stretch the replay runs over; null replays nothing.</param>
+    internal static async Task<IReadOnlyList<PublicPastTrackPictureDto>> MomentPicturesAsync(
+        SilexGisDbContext db, FeatureProtection protection, IFileAccessTokenService tokens,
+        Guid tripLogId, IReadOnlyList<TripPartyPlace> roster,
+        (DateTimeOffset From, DateTimeOffset To)? replayed, CancellationToken ct)
+    {
+        if (replayed is null) return [];
+
+        var moments = db.ResLinkMembers.AsNoTracking()
+            .Where(m => m.EntityType == AttachedEntityType.TripLog
+                && m.EntityId == tripLogId
+                && m.AnchorKind == AnchorKind.TripMoment
+                && m.IsMain);
+        var documenting = db.ResLinkRelationTypes.AsNoTracking()
+            .Where(r => r.Code == TripMomentPictures.RelationCode);
+        var linkIds = await db.ResLinks.AsNoTracking()
+            .Where(l => documenting.Any(r => r.Id == l.RelationTypeId)
+                && moments.Any(m => m.ResLinkId == l.Id))
+            .OrderByDescending(l => l.CreatedAt)
+            .ThenBy(l => l.Id)
+            .Select(l => l.Id)
+            .Take(MaxPictureLinks)
+            .ToListAsync(ct);
+        if (linkIds.Count == 0) return [];
+
+        var links = await PublishedPicturesOfAsync(db, protection, linkIds, ct);
+
+        var numberOf = roster.ToDictionary(place => place.CaverId, place => place.Number);
+        var found = new List<(DateTimeOffset At, int? Number, PublishedPicture Picture)>();
+        var perMoment = new Dictionary<DateTimeOffset, int>();
+        var hung = new HashSet<(DateTimeOffset At, int? Number, Guid Document)>();
+
+        foreach (var link in links)
+        {
+            if (found.Count >= MaxPictures) break;
+
+            var moment = link.Members.FirstOrDefault(m => m.EntityType == AttachedEntityType.TripLog
+                && m.EntityId == tripLogId
+                && m.AnchorKind == AnchorKind.TripMoment
+                && m.IsMain);
+            if (moment is null || TripMomentAnchor.Read(moment.Anchor) is not { } read) continue;
+            // One spelling of an instant, so two links written with different offsets are one moment.
+            var at = read.ToUniversalTime();
+            if (!TripPastTrackWindow.IsReplayed(replayed, at)) continue;
+
+            // Exactly one person, as the route that hangs these reads it back: a link naming two
+            // is about neither of them in particular.
+            var subjects = link.Members.Where(m => m.EntityType == AttachedEntityType.Caver).ToList();
+            int? number = subjects.Count == 1
+                && subjects[0].EntityId is { } subject
+                && numberOf.TryGetValue(subject, out var given)
+                    ? given
+                    : null;
+
+            foreach (var picture in link.Pictures)
+            {
+                if (found.Count >= MaxPictures) break;
+                if (perMoment.GetValueOrDefault(at) >= MaxPicturesPerMoment) break;
+                if (!hung.Add((at, number, picture.DocumentId))) continue;
+
+                found.Add((at, number, picture));
+                perMoment[at] = perMoment.GetValueOrDefault(at) + 1;
+            }
+        }
+
+        // Oldest moment first, which is the order a replay meets them in — and a stated order, so
+        // two reads of one state are the same answer whatever order the links were looked at in.
+        // Within a moment the pictures of the party come before those of a person, then by number;
+        // the sort keeps the order they were found in for the rest.
+        return [.. found
+            .OrderBy(p => p.At)
+            .ThenBy(p => p.Number ?? 0)
+            .Select(p => new PublicPastTrackPictureDto(
+                p.At, p.Number, p.Picture.Address(tokens), p.Picture.Caption))];
+    }
+
+    /// <summary>
+    /// One photograph a published page may show, as the gates below leave it.
+    /// </summary>
+    /// <remarks>
+    /// It holds the file only to mint an address from, and <see cref="Address"/> is the one way to
+    /// an address there is: a rendering at the published width, never the upload. A caller cannot
+    /// publish one of these any other way.
+    /// </remarks>
+    private sealed record PublishedPicture(Guid DocumentId, Guid FileId, string? Caption)
+    {
+        /// <summary>The address a page is handed: a rendering, signed for a short while.</summary>
+        public string Address(IFileAccessTokenService tokens) =>
+            ThumbnailUrl(tokens, FileId, PublishedPictureSize);
+    }
+
+    /// <summary>
+    /// One link that passed the link gate and holds at least one published photograph: its
+    /// members, for the caller to read where the pictures hang, and its pictures in the order the
+    /// link lists them.
+    /// </summary>
+    private sealed record PublishedLink(
+        IReadOnlyList<ResLinkMember> Members, IReadOnlyList<PublishedPicture> Pictures);
+
+    /// <summary>
+    /// The photographs of these links that may be shown to somebody without an account — the
+    /// consent gate, the link gate and the reach, in the one place they are written.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every published surface that shows a photograph through a link calls this and differs only
+    /// in which links it asks about and where it hangs what comes back: on a station of a drawing,
+    /// or on a moment of a trip. The reasoning for each gate is on the station pictures above.
+    /// </para>
+    /// <para>
+    /// The answer keeps the order of <paramref name="linkIds"/> and leaves out every link that
+    /// names anything guarded or holds no published photograph, so a caller's bounds count only
+    /// what could be shown.
+    /// </para>
+    /// </remarks>
+    private static async Task<IReadOnlyList<PublishedLink>> PublishedPicturesOfAsync(
+        SilexGisDbContext db, FeatureProtection protection, IReadOnlyList<Guid> linkIds,
+        CancellationToken ct)
+    {
         var members = await db.ResLinkMembers.AsNoTracking()
             .Where(m => linkIds.Contains(m.ResLinkId))
             .OrderBy(m => m.ResLinkId).ThenBy(m => m.SortOrder).ThenBy(m => m.Id)
@@ -1170,61 +1372,34 @@ public static class TripTrackingPublicationEndpoints
                 .ToListAsync(ct);
         var pictureOf = published
             .GroupBy(row => row.DocumentId)
-            .ToDictionary(g => g.Key, g => g.First());
+            .ToDictionary(
+                g => g.Key,
+                g => new PublishedPicture(
+                    g.Key,
+                    g.First().FileId,
+                    string.IsNullOrWhiteSpace(g.First().Caption)
+                        ? NullIfBlank(g.First().Title)
+                        : g.First().Caption));
         if (pictureOf.Count == 0) return [];
 
-        var pictures = new List<PublicTripStationPictureDto>();
-        var perStation = new Dictionary<string, int>(StringComparer.Ordinal);
-        var placed = new HashSet<(string Station, Guid Document)>();
         var byLink = members.GroupBy(m => m.ResLinkId).ToDictionary(g => g.Key, g => g.ToList());
-
+        var links = new List<PublishedLink>();
         foreach (var linkId in linkIds)
         {
             var own = byLink.GetValueOrDefault(linkId) ?? [];
             if (!LinkIsUnguarded(own, caveOfModel, unguarded)) continue;
 
-            // Only stations of the model on screen. A link can anchor to a station of some other
-            // model as well, and that name means nothing in this drawing.
-            var stations = own
-                .Where(m => m.EntityType == AttachedEntityType.SurveyModel
-                    && m.EntityId == surveyModelId
-                    && m.AnchorKind == AnchorKind.ModelStation)
-                .Select(m => StationOf(m.Anchor))
-                .OfType<string>()
-                .ToList();
-            if (stations.Count == 0) continue;
-
             var linked = own
                 .Where(m => m.EntityType == AttachedEntityType.Document && m.EntityId != null)
                 .Select(m => pictureOf.GetValueOrDefault(m.EntityId!.Value))
-                .Where(row => row is not null)
+                .OfType<PublishedPicture>()
                 .ToList();
             if (linked.Count == 0) continue;
 
-            // A link holding several stations and several pictures puts all of its pictures on all
-            // of its stations: what it says is that these things belong together, and it names no
-            // pairing inside itself for this to read one out of.
-            foreach (var station in stations)
-            {
-                foreach (var row in linked)
-                {
-                    if (pictures.Count >= MaxPictures) return pictures;
-                    if (perStation.GetValueOrDefault(station) >= MaxPicturesPerStation) break;
-                    // The same photograph reaches one station through two links as often as not —
-                    // it is linked to the station and to the passage the station stands in — and
-                    // the strip would otherwise show it twice.
-                    if (!placed.Add((station, row!.DocumentId))) continue;
-
-                    pictures.Add(new PublicTripStationPictureDto(
-                        station,
-                        ThumbnailUrl(tokens, row.FileId, PublishedPictureSize),
-                        string.IsNullOrWhiteSpace(row.Caption) ? NullIfBlank(row.Title) : row.Caption));
-                    perStation[station] = perStation.GetValueOrDefault(station) + 1;
-                }
-            }
+            links.Add(new PublishedLink(own, linked));
         }
 
-        return pictures;
+        return links;
     }
 
     /// <summary>
