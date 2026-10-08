@@ -151,6 +151,95 @@ off the trip; whether a [callout](checklists-and-callout.md) was arranged, and w
 fired, is not involved in any of them — if somebody must be told when a party is late, arrange
 the callout. A published page shows none of the three.
 
+## Reporting with no signal
+
+Whoever relays the calls is often standing at a cave entrance with a phone at the edge of its
+signal. A report recorded there is not lost: if the server gives **no answer at all**, the report
+is kept in the browser and sent by itself when the connection returns.
+
+**What you see.** You press **Record for N selected** as always. Instead of *"Recorded for 1."* the page says
+*"No answer from the server — not sent yet. The report is kept in this browser and is sent by
+itself when the connection returns."* The card clears, as it does after any report — do not type
+the report again, or there will be two. Above the card a notice appears, **Held reports: N**,
+and the same count stands on a small upload button in the top bar, on every page, for as
+long as anything is held. **Show them** lists each held report — when, who, what, the note —
+with **Discard** beside it. The button in the top bar opens the same list for **every** trip at
+once, with **Open the trip** on each row; there the people are counted rather than named. That
+list is also the one place to find a report held for a trip that can no longer be opened — one
+deleted meanwhile, or one you may no longer read.
+
+**When it is sent.** By itself: when the browser announces that the connection is back, when the
+page comes back into view after the phone slept, when the application is opened again, and when
+the server answers anything else the page asks it. A send that gets no answer is tried again
+after five seconds, then less and less often — once a minute at the slowest — for as long as the
+application stays open. Or press **Send now**, on the notice or in the top bar's list. Held
+reports go oldest first, one at a time, and the page says *"Held reports sent: N."* The notice
+and the count disappear when nothing is held.
+
+**Discarding.** **Discard** deletes the copy in this browser, and that copy is not sent again.
+It does **not** mean the report never reached the server: "no answer" covers the send that
+arrived and whose answer was lost. The confirmation says so. After discarding, look at the trip's
+log, and if the report is listed there remove it there.
+
+**It lands at the minute it was about.** A held report carries the time on the phone when you
+pressed the button (or the moment you filled in under **When it was said**), not the time the
+signal came back — so a party reported at the pitch head at 14:05 is on the log at 14:05 even if
+the report left at 15:30. If the phone's clock is more than a couple of minutes fast, the server
+refuses the report as being about the future; see *A refused report* below.
+
+**It is written once.** "No answer" can mean the report never left the phone, or that it arrived
+and the answer was lost on the way back. The page cannot tell which, so it holds the report in
+both cases — and every report carries a key of its own, by which the server recognises a second
+send of the same report and writes nothing. Pressing **Send now** twice, having the trip open in
+two tabs, or a send that turns out to have arrived the first time: none of them doubles a
+report.
+
+**Where it is kept, and for whom.** In this browser's own storage, on this device — nowhere
+else, and not on the server until it is sent. What is kept is the report as typed, the note
+included, so the notice says so in words: *"Their text is kept in this browser, for this account
+only, until each one is sent or discarded."* It is removed the moment it is sent or discarded.
+A held report belongs to the account that recorded it: somebody else signing in on the same
+browser is neither shown it nor sends it, and it waits until its own account signs in again.
+Clearing the browser's site data deletes held reports unsent.
+
+**A page reload does not lose it**, and neither does the phone going to sleep or the browser
+closing the tab. But this is not an offline application: with no signal the page itself cannot
+be opened or reloaded, and nothing is sent while the application is closed. A held report leaves
+the next time the application is open, signed in as you, with a connection.
+
+**A refused report.** If, when a held report is finally sent, the server answers that it will not
+take it — tracking was never started, the person is no longer on the trip, the report is about
+the future — the report is **not** thrown away and **not** tried again by itself. It stays in the
+notice marked *Refused:* with the server's reason. Put the reason right and press **Send again**,
+or press **Discard**. (A report refused as being about the future because the phone's clock runs
+fast is taken when it is sent again once that minute has passed.) Reports held behind a refused
+one are still sent.
+
+**A report somebody removed meanwhile.** If the report did reach the server the first time and a
+coordinator has since taken it off the log, sending it again does not put it back: the page says
+*"Held reports the server already had, and that were taken off the log since: N. Nothing was
+written again."* The removed report is under **Removed reports**, where it can be put back.
+(Only if it was meanwhile **deleted for good** is a late send written again, as a new report.)
+
+**When the sign-in has lapsed or the server is busy.** The reports stay held. A sign-in that ran
+out during a long spell with no signal is renewed by the page itself, and the report sent again,
+without anything being pressed. Where it cannot be renewed the page says *"Your sign-in has
+lapsed"*, and the top bar's list offers **Sign in again**: that leaves the page and comes back to
+it, the held reports stay in the browser meanwhile, and they are sent once you are back. A report
+recorded while the sign-in is lapsed is held in the same way rather than refused. When the server
+asks to be left alone for a while, the page waits as long as it was asked before trying.
+
+**When the browser will not keep it.** A private window, or a browser with site data blocked,
+refuses to store anything. Nothing is held there: the page says *"Not sent: no answer came from
+the server, and this browser would not keep the report to send it later. What you typed is still
+here — send it again when the connection is back."* and leaves the card filled in.
+
+**Only new reports are held.** A report recorded on the card or by **Record here** on the
+drawing. A correction, a deletion, a report put back and a spreadsheet import are never held —
+with no answer they fail as before, and nothing has changed on the log. A refusal the server
+gives while you are still looking at the card (a station it does not know, say) is shown as
+always and is not held either: the card keeps what you typed.
+
 ## The party on the survey
 
 The model panel marks each person where they were last reported, with **Underground**, **Out**
@@ -1069,6 +1158,9 @@ outside, what one link answers. The full table, with the reason word for each ca
 | *"That survey belongs to a different cave…"* | A running watch stays in its cave — close it first |
 | *"No station matches that depth under this trip's filter…"* | Widen **Where the party said it was going**, or report a station |
 | *"A report cannot be about the future."* | Check the time on it |
+| *"No answer from the server — not sent yet. The report is kept in this browser…"* | Not a refusal: the server could not be reached, and the report is held to be sent when the connection returns — see *Reporting with no signal* |
+| *"Not sent: no answer came from the server, and this browser would not keep the report…"* | The server could not be reached and the browser stores nothing (a private window, blocked site data). The card still has what you typed: send it again when the connection is back |
+| *"Refused:"* on a held report | The server answered no when the held report was finally sent. It is kept until you **Send again** or **Discard** it |
 | *"That report is on the log again — somebody put it back. Take it off first, then delete it for good."* | Somebody else pressed **Put back** on it while your list of removed reports was open. Nothing was destroyed; if it still has to go, delete it from the log again |
 | *"Say when this was said. The tracking is closed, so the report cannot be stamped with the present time."* | A report added to a closed watch is being written up afterwards: fill in **When it was said** with the moment it was made during the trip |
 | *"This trip has no watch to import reports onto."* | Choose a survey and save the tracking setup first |

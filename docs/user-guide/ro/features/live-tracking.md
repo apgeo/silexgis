@@ -161,6 +161,101 @@ un [apel de urgență](checklists-and-callout.md) și dacă acesta s-a declanșa
 niciunul dintre ele — dacă cineva trebuie anunțat când echipa întârzie, stabiliți apelul de
 urgență. O pagină publicată nu arată niciunul dintre cele trei.
 
+## Raportarea fără semnal
+
+Cine preia mesajele stă adesea la intrarea peșterii, cu telefonul la marginea semnalului. Un
+raport înregistrat acolo nu se pierde: dacă serverul **nu răspunde deloc**, raportul este păstrat
+în browser și se trimite singur când revine conexiunea.
+
+**Ce vedeți.** Apăsați **Înregistrează pentru N selectați** ca de obicei. În loc de *„Înregistrat pentru 1."* pagina
+spune *„Serverul nu a răspuns — raportul nu a fost încă trimis. Este păstrat în acest browser și
+se trimite singur când revine conexiunea."* Cardul se golește, ca după orice raport — nu scrieți
+raportul din nou, altfel vor fi două. Deasupra cardului apare o notă, **Rapoarte în așteptare:
+N**, iar același număr stă pe un mic buton de încărcare din bara de sus, pe orice pagină,
+cât timp există ceva în așteptare. **Arată-le** listează fiecare raport în așteptare — când,
+cine, ce, nota — cu **Aruncă** alături. Butonul din bara de sus deschide aceeași listă pentru
+**toate** turele deodată, cu **Deschide tura** pe fiecare rând; acolo oamenii sunt numărați, nu
+numiți. Lista aceea este și singurul loc în care găsiți un raport în așteptare pentru o tură
+care nu mai poate fi deschisă — una ștearsă între timp sau una pe care nu o mai puteți citi.
+
+**Când se trimite.** Singur: când browserul anunță că a revenit conexiunea, când pagina revine
+în față după ce telefonul a stat blocat, când aplicația este deschisă din nou și când serverul
+răspunde la orice altceva îi cere pagina. O trimitere rămasă fără răspuns este reîncercată după
+cinci secunde, apoi din ce în ce mai rar — cel mai rar o dată pe minut — cât timp aplicația
+rămâne deschisă. Sau apăsați **Trimite acum**, pe notă sau în lista din bara de sus. Rapoartele
+în așteptare pleacă de la cel mai vechi, câte unul, iar pagina spune *„Rapoarte în așteptare
+trimise: N."* Nota și numărul dispar când nu mai este nimic în așteptare.
+
+**Aruncarea unui raport.** **Aruncă** șterge copia din acest browser, iar acea copie nu mai este
+trimisă. **Nu** înseamnă că raportul nu a ajuns niciodată la server: „niciun răspuns" acoperă și
+trimiterea care a ajuns și al cărei răspuns s-a pierdut. Întrebarea de confirmare o spune. După
+ce aruncați un raport, uitați-vă în jurnalul turei și, dacă raportul apare acolo, ștergeți-l de
+acolo.
+
+**Ajunge în jurnal la minutul despre care era.** Un raport în așteptare poartă ora telefonului
+din clipa în care ați apăsat butonul (sau momentul trecut la **Când s-a spus**), nu ora
+la care a revenit semnalul — o echipă raportată la capul puțului la 14:05 este în jurnal la
+14:05 chiar dacă raportul a plecat la 15:30. Dacă ceasul telefonului este cu mai mult de câteva
+minute înainte, serverul refuză raportul ca fiind despre viitor; vedeți *Un raport refuzat*, mai
+jos.
+
+**Se scrie o singură dată.** „Niciun răspuns" poate însemna că raportul nu a plecat de pe
+telefon sau că a ajuns și răspunsul s-a pierdut pe drumul înapoi. Pagina nu poate ști care
+dintre ele, așa că păstrează raportul în ambele cazuri — iar fiecare raport poartă o cheie a
+lui, după care serverul recunoaște a doua trimitere a aceluiași raport și nu scrie nimic. Dacă
+apăsați **Trimite acum** de două ori, dacă aveți tura deschisă în două file sau dacă trimiterea
+ajunsese de fapt din prima: niciuna nu dublează un raport.
+
+**Unde este păstrat și pentru cine.** În spațiul de stocare al acestui browser, pe acest
+dispozitiv — nicăieri altundeva, și nu pe server până nu este trimis. Se păstrează raportul așa
+cum a fost scris, cu tot cu notă, iar nota de deasupra cardului o spune în cuvinte: *„Textul lor
+este păstrat în acest browser, doar pentru acest cont, până când fiecare este trimis sau
+aruncat."* Este șters în clipa în care este trimis sau aruncat. Un raport în așteptare aparține
+contului care l-a înregistrat: altcineva care se autentifică în același browser nici nu îl vede,
+nici nu îl trimite, iar raportul așteaptă până când contul lui se autentifică din nou. Ștergerea
+datelor de site ale browserului șterge rapoartele în așteptare, netrimise.
+
+**Reîncărcarea paginii nu îl pierde**, și nici blocarea telefonului sau închiderea filei de
+către browser. Dar aceasta nu este o aplicație care lucrează fără conexiune: fără semnal pagina
+însăși nu poate fi deschisă sau reîncărcată și nu se trimite nimic cât timp aplicația este
+închisă. Un raport în așteptare pleacă data viitoare când aplicația este deschisă, cu contul
+dumneavoastră autentificat și cu conexiune.
+
+**Un raport refuzat.** Dacă, atunci când un raport în așteptare este în sfârșit trimis, serverul
+răspunde că nu îl primește — urmărirea nu a fost pornită niciodată, omul nu mai este pe tură,
+raportul este despre viitor — raportul **nu** este aruncat și **nu** este reîncercat de la sine.
+Rămâne în notă marcat *Refuzat:*, cu motivul dat de server. Îndreptați cauza și apăsați **Trimite
+din nou**, sau apăsați **Aruncă**. (Un raport refuzat ca fiind despre viitor pentru că ceasul
+telefonului merge înainte este primit când îl trimiteți din nou după ce a trecut acel minut.)
+Rapoartele aflate în așteptare după unul refuzat se trimit în continuare.
+
+**Un raport scos între timp de cineva.** Dacă raportul ajunsese totuși la server din prima și un
+coordonator l-a scos între timp din jurnal, trimiterea lui din nou nu îl pune înapoi: pagina
+spune *„Rapoarte în așteptare pe care serverul le avea deja și care au fost scoase din jurnal
+între timp: N. Nu s-a mai scris nimic."* Raportul scos este la **Rapoarte scoase**, de unde poate
+fi pus înapoi. (Doar dacă între timp a fost **șters definitiv**, o trimitere târzie este scrisă
+din nou, ca raport nou.)
+
+**Când autentificarea a expirat sau serverul este ocupat.** Rapoartele rămân în așteptare. O
+autentificare expirată în timpul unei perioade lungi fără semnal este reînnoită de pagină, iar
+raportul este trimis din nou, fără să apăsați nimic. Acolo unde nu poate fi reînnoită, pagina
+spune *„Nu mai ești autentificat"*, iar lista din bara de sus oferă **Autentifică-te din nou**:
+aceasta părăsește pagina și revine la ea, rapoartele în așteptare rămân între timp în browser și
+se trimit după ce vă întoarceți. Un raport înregistrat cât timp autentificarea este expirată
+este păstrat la fel, nu refuzat. Când serverul cere să fie lăsat un timp, pagina așteaptă cât i
+s-a cerut înainte să încerce.
+
+**Când browserul nu vrea să îl păstreze.** O fereastră privată sau un browser cu datele de site
+blocate refuză să stocheze orice. Acolo nu se păstrează nimic: pagina spune *„Netrimis: serverul
+nu a răspuns, iar acest browser nu a putut păstra raportul ca să-l trimită mai târziu. Ce ai
+scris este încă aici — trimite-l din nou când revine conexiunea."* și lasă cardul completat.
+
+**Doar rapoartele noi sunt păstrate.** Un raport înregistrat pe card sau prin **Înregistrează
+aici** pe desen. O corectare, o ștergere, un raport pus înapoi și importul unei foi nu sunt
+păstrate niciodată — fără răspuns eșuează ca până acum, iar în jurnal nu s-a schimbat nimic. Un
+refuz pe care serverul îl dă cât încă vă uitați la card (o stație pe care nu o cunoaște, de
+pildă) este arătat ca întotdeauna și nu este păstrat nici el: cardul păstrează ce ați scris.
+
 ## Echipa pe ridicare
 
 Panoul modelului marchează fiecare om acolo unde a fost raportat ultima dată, cu **În peșteră**,
@@ -1115,6 +1210,9 @@ instalare](../../../INSTALL.md#when-a-published-page-or-the-article-showing-it-s
 | *„Acea ridicare aparține altei peșteri…"* | O urmărire pornită rămâne în peștera ei — închideți-o întâi |
 | *„Nicio stație nu corespunde acelei adâncimi sub filtrul acestei ture…"* | Lărgiți **Unde a spus echipa că merge** sau raportați o stație |
 | *„Un raport nu poate fi despre viitor."* | Verificați ora de pe el |
+| *„Serverul nu a răspuns — raportul nu a fost încă trimis. Este păstrat în acest browser…"* | Nu este un refuz: serverul nu a putut fi contactat, iar raportul este păstrat ca să fie trimis când revine conexiunea — vedeți *Raportarea fără semnal* |
+| *„Netrimis: serverul nu a răspuns, iar acest browser nu a putut păstra raportul…"* | Serverul nu a putut fi contactat, iar browserul nu stochează nimic (fereastră privată, date de site blocate). Cardul are încă ce ați scris: trimiteți din nou când revine conexiunea |
+| *„Refuzat:"* pe un raport în așteptare | Serverul a răspuns nu când raportul în așteptare a fost în sfârșit trimis. Rămâne păstrat până când apăsați **Trimite din nou** sau **Aruncă** |
 | *„Acel raport este din nou în jurnal — l-a pus cineva înapoi. Scoate-l mai întâi, apoi șterge-l definitiv."* | Altcineva a apăsat **Pune înapoi** pe el cât timp lista dumneavoastră de rapoarte scoase era deschisă. Nu s-a distrus nimic; dacă tot trebuie să dispară, ștergeți-l din nou din jurnal |
 | *„Spune când s-a spus. Urmărirea este încheiată, așa că raportul nu poate fi marcat cu ora de acum."* | Un raport adăugat pe o urmărire încheiată este completat ulterior: treceți la **Când s-a spus** momentul în care a fost făcut, în timpul turei |
 | *„Această tură nu are nicio urmărire pe care să fie importate rapoarte."* | Alegeți o ridicare și salvați întâi configurarea urmăririi |

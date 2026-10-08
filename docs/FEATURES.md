@@ -434,6 +434,16 @@ feature and walkthroughs of whole jobs.
   paged and can be narrowed to one person, a report that was changed after it was written is
   marked **Corrected**, and a report added once tracking is closed has to say when it was made
   rather than being stamped with the hour it was typed.
+  **A report recorded with no signal is not lost.** When the server gives no answer at all, a new
+  report is kept in the browser — for the account that recorded it only, and saying in words
+  that its text is there — and is sent by itself when the connection returns, after a reload
+  included; it lands at the minute it was about and is written once however many times it is
+  sent. A sign-in that ran out during the outage is renewed and the report sent again, or the
+  page says the reports are waiting for a new sign-in and offers it. A held report the server
+  then refuses stays, with the reason, to be sent again or discarded — from the trip, or from a
+  list in the top bar that also reaches a report whose trip can no longer be opened. This is
+  the one thing the application holds offline: nothing is read or cached without the server,
+  and corrections, deletions and imports are never held.
   The tab also tells whoever is coordinating three things it used to leave them to work out:
   somebody underground with **no word for hours** (three by default, an installation setting),
   the trip's **planned hour out and how late** the party is once it has passed with people

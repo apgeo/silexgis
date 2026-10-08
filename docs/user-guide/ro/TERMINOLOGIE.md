@@ -150,6 +150,9 @@ odată cu ea — și apoi paginile.
 | Removed reports (taken off the log, still kept) | Rapoarte scoase |
 | Put back (a removed report) / Undo (on the notice) | Pune înapoi / Anulează |
 | Delete for good | Șterge definitiv |
+| Held reports (recorded with no answer from the server, kept in the browser) | Rapoarte în așteptare |
+| Send now / Send again / Discard (a held report) | Trimite acum / Trimite din nou / Aruncă |
+| Open the trip / Sign in again (in the top bar's list of held reports) | Deschide tura / Autentifică-te din nou |
 | First started / Started again (a watch) | Începută prima dată / Începută din nou |
 | Import a sheet | Importă o foaie |
 | What this cave's depths mean | Ce înseamnă adâncimile acestei peșteri |
