@@ -60,6 +60,9 @@ const PHONE_ONLY_SPECS = [
   // Correcting, importing and reporting by place under a finger: the log, the sheet's preview and
   // the report card each have a phone layout of their own, and only a phone profile draws them.
   /(^|\/)trip-tracking-writes-mobile\.spec\.ts$/,
+  // A report recorded with no signal, on the device that loses its signal: the notice of held
+  // reports and its count in the header are sized for a finger and a narrow header only here.
+  /(^|\/)trip-tracking-held-reports-mobile\.spec\.ts$/,
   // A camp's head count held in a hand at a cave entrance: three counts across and every
   // standing on the screen are claims about measured boxes at a phone's width.
   /(^|\/)expedition-watch-mobile\.spec\.ts$/,
