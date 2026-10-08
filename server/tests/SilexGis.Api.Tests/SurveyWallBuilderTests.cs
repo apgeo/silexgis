@@ -582,9 +582,9 @@ public class SurveyWallBuilderTests
             "invented.lox");
 
     private static CaveModel Survex(
-        SurveyFileSamples.Station[] stations,
-        SurveyFileSamples.Leg[] legs,
-        SurveyFileSamples.CrossSection[][] passages) =>
+        InventedSurveyFile.Station[] stations,
+        InventedSurveyFile.Leg[] legs,
+        InventedSurveyFile.CrossSection[][] passages) =>
         CaveModelReader.Read(SurveyFileSamples.Survex3d(stations, legs, passages), "invented.3d");
 
     /// <summary>
