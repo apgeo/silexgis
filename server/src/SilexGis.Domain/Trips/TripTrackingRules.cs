@@ -392,6 +392,34 @@ public static class TripTrackingRules
     }
 
     /// <summary>
+    /// The id each report of one act is written under: one for every person the send names,
+    /// rising as the people's own ids rise, in whatever order the send names them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why the ids are handed out together rather than left to each report.</b> The reports of
+    /// one save are written in the order of their ids, and ids made within the same millisecond
+    /// fall in no order at all. Two sends of one act that name the same people could therefore
+    /// write them in opposite orders, each get its first person in, and each then wait at the
+    /// other's — because an act holds one report per person, the second writer of a person waits
+    /// for the first to finish. The database ends such a wait by failing one of the two as a
+    /// deadlock: a send refused although nothing is wrong with it, and with nothing written yet
+    /// that it could be answered from.
+    /// </para>
+    /// <para>
+    /// With ids that rise as the people's do, every send of an act writes the same person first.
+    /// Whichever gets there first writes them all; every other waits at that first person and is
+    /// then told the act is already on record, which is the lost race a write is answered for.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyDictionary<Guid, Guid> ReportIdsInPersonOrder(IEnumerable<Guid> caverIds)
+    {
+        var people = caverIds.Distinct().Order().ToList();
+        var ids = people.Select(_ => Guid.CreateVersion7()).Order().ToList();
+        return people.Zip(ids).ToDictionary(pair => pair.First, pair => pair.Second);
+    }
+
+    /// <summary>
     /// Where one member of the party stands, folded from every report about them.
     /// </summary>
     /// <param name="reports">

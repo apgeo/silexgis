@@ -96,4 +96,40 @@ public class TripTrackingReplayTests
         answer.ShouldNotBeNull();
         answer.Select(e => e.CaverId).ShouldBe([named, unnamedEarlier, unnamedLater]);
     }
+
+    /// <summary>
+    /// Every send of one act has to write its people in one order, or two of them can each write
+    /// one person and wait for the other. The order a save writes in is the order of the ids, so
+    /// the ids are what is asserted: sorted by id, the reports are sorted by person — every time,
+    /// since ids left to chance agree with any given order about once in the number of ways the
+    /// people can be arranged, and a rule that held most of the time is the fault itself.
+    /// </summary>
+    [Fact]
+    public void The_reports_of_one_act_are_given_ids_that_rise_as_its_people_do_however_the_send_names_them()
+    {
+        var people = Enumerable.Range(0, 6).Select(_ => Guid.NewGuid()).ToList();
+        var inOrder = people.Order().ToList();
+
+        for (var attempt = 0; attempt < 200; attempt++)
+        {
+            // Named forwards by one send and backwards by the next, as two phones might.
+            var named = attempt % 2 == 0 ? people : [.. Enumerable.Reverse(people)];
+
+            var ids = TripTrackingRules.ReportIdsInPersonOrder(named);
+
+            ids.Keys.ShouldBe(people, ignoreOrder: true);
+            ids.Values.Distinct().Count().ShouldBe(people.Count);
+            ids.OrderBy(pair => pair.Value).Select(pair => pair.Key).ShouldBe(inOrder);
+        }
+    }
+
+    [Fact]
+    public void Somebody_named_twice_by_one_send_is_given_one_id()
+    {
+        var (once, twice) = (Guid.NewGuid(), Guid.NewGuid());
+
+        var ids = TripTrackingRules.ReportIdsInPersonOrder([twice, once, twice]);
+
+        ids.Keys.ShouldBe([once, twice], ignoreOrder: true);
+    }
 }

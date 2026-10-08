@@ -938,11 +938,18 @@ public static class TripTrackingEndpoints
             request.StationName, request.DepthM, ct);
         if (placed.Refusal is { } placeRefused) return placeRefused;
         var kind = request.Kind!.Value;
+        // Ids that rise as the people's do, so that every send of one act writes the same person
+        // first. Left to themselves the ids of one send fall in no order, and two sends of an act
+        // could each write one person and wait for the other until the database failed one of
+        // them as a deadlock — which is not the lost race answered below, and was an error for a
+        // report that had been received.
+        var reportIds = TripTrackingRules.ReportIdsInPersonOrder(caverIds);
         var created = new List<TripPositionEvent>();
         foreach (var caverId in caverIds)
         {
             created.Add(new TripPositionEvent
             {
+                Id = reportIds[caverId],
                 TripLogId = tripLogId,
                 CaverId = caverId,
                 TeamId = request.TeamId,

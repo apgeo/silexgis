@@ -3049,6 +3049,55 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     }
 
     /// <summary>
+    /// The same of an act that names several people, which is where two sends can do worse than
+    /// arrive second: each writes a report per person, and were they to write the people in
+    /// different orders, each could get one person in and wait for the other's until the database
+    /// failed one of them — a send answered with an error for a report that was received. So
+    /// every send has to write the people in one order, whatever order it names them in: half of
+    /// these name them backwards. Asked several times over, because the first sends an
+    /// application ever takes are slow enough to fall into an order by themselves.
+    /// </summary>
+    [Fact]
+    public async Task One_act_naming_several_people_sent_many_times_at_once_leaves_one_report_each_and_every_send_succeeds()
+    {
+        const int People = 6;
+        const int Acts = 4;
+        var (trip, cavers) = await CreateTripAsync("Several sent at once", guests: People);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var backwards = Enumerable.Reverse(cavers).ToList();
+
+        var answers = new List<List<Guid>>();
+        for (var act = 0; act < Acts; act++)
+        {
+            var clientKey = Guid.NewGuid();
+            var recordedAt = At(13, act);
+            var sends = await Task.WhenAll(Enumerable.Range(0, 24).Select(send => PostEventAsync(owner, trip, new
+            {
+                caverIds = send % 2 == 0 ? cavers : backwards,
+                kind = "atStation", stationName = "cave.upper.1", recordedAt, clientKey,
+            })));
+
+            foreach (var send in sends)
+            {
+                send.StatusCode.ShouldBe(HttpStatusCode.OK, await send.Content.ReadAsStringAsync());
+                answers.Add([.. (await BodyAsync(send)).EnumerateArray().Select(e => e.GetProperty("id").GetGuid())]);
+            }
+        }
+
+        var log = (await LogAsync(owner, trip)).Select(e => e.GetProperty("id").GetGuid()).ToList();
+        log.Count.ShouldBe(People * Acts);
+        answers.ShouldAllBe(ids => ids.Count == People && ids.All(id => log.Contains(id)));
+        // Each act answered every one of its sends with the same reports, and no two acts share one.
+        answers.Select(ids => string.Join(',', ids.Order())).Distinct().Count().ShouldBe(Acts);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.AuditEntries.CountAsync(a => a.RootEntityId == trip.ToString()
+            && a.EntityType == nameof(TripPositionEvent))).ShouldBe(People * Acts);
+    }
+
+    /// <summary>
     /// Two people named by one act can be folded into one: the report that moves stops claiming
     /// the act, so the fold does not fail on "one act, one report per person", and a later repeat
     /// is still recognised by the survivor's own report and still writes nothing. An act that
