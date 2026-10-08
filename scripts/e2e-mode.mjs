@@ -16,6 +16,8 @@
 //     desktop page is proved on the desktop project first.
 //   - the specs that draw a 3D scene are left out. There is no graphics card here, every scene is
 //     rendered in software, and several at once starve each other.
+//   - two specs that count the installation's trips are left out, because side by side with
+//     everything else the number does not stand still for them.
 //
 // It is for the look taken while a piece of work is in progress. A pass in this form is not the
 // browser suite's verdict, and the runner's last line says what did not run. A failure seen only
@@ -39,13 +41,25 @@ const spread = (argv) => (argv.includes(SPREAD) ? argv : [...argv, SPREAD]);
  * The specs whose subject is a 3D scene, by file name. Kept as names rather than measured at run
  * time: what makes them slow is what they are, not how busy the machine was.
  */
-export const LEFT_OUT_OF_FAST = [
+const DRAWS_A_3D_SCENE = [
   'scene3d.spec.ts',
   'scene3d-walls.spec.ts',
   'terrain.spec.ts',
   'terrain-derivatives.spec.ts',
   'tracking-movie.spec.ts',
 ];
+
+/**
+ * The specs that read how many trips the installation holds and expect the number to stand
+ * still while they work. Any test that makes or deletes a trip in those seconds moves it. One
+ * file after another that is rare; with the tests of every file side by side there is nearly
+ * always such a test running, and these two failed in most fast runs by one trip more or less.
+ * They are sound in the ordinary form and say nothing in this one, so this form does not ask.
+ */
+const COUNTS_WHAT_EVERY_TEST_MAY_CHANGE = ['trip-list.spec.ts', 'trip-stats.spec.ts'];
+
+/** Everything the fast form leaves out of the desktop project, by file name. */
+export const LEFT_OUT_OF_FAST = [...DRAWS_A_3D_SCENE, ...COUNTS_WHAT_EVERY_TEST_MAY_CHANGE];
 
 /** Playwright options that take their value as the next argument; the value is not a spec. */
 const TAKES_A_VALUE = new Set([
@@ -195,7 +209,9 @@ export function describeFast(leftOut) {
   const parts = [];
   if (leftOut.phoneProjects) parts.push('the three phone projects');
   if (leftOut.specs.length > 0) {
-    parts.push(`${leftOut.specs.length} specs that draw a 3D scene (${leftOut.specs.join(', ')})`);
+    parts.push(
+      `${leftOut.specs.length} specs that draw a 3D scene or count what other tests change `
+        + `(${leftOut.specs.join(', ')})`);
   }
   const together = 'the tests of a file ran side by side';
   return parts.length === 0

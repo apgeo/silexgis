@@ -120,7 +120,7 @@ test('a project named without a spec keeps its own meaning', () => {
 test('a fast run says what it did not run', () => {
   assert.match(
     describeFast({ phoneProjects: true, specs: ['scene3d.spec.ts', 'terrain.spec.ts'] }),
-    /NOT the whole browser suite: the tests of a file ran side by side, and left out the three phone projects and 2 specs that draw a 3D scene \(scene3d\.spec\.ts, terrain\.spec\.ts\)/,
+    /NOT the whole browser suite: the tests of a file ran side by side, and left out the three phone projects and 2 specs that draw a 3D scene or count what other tests change \(scene3d\.spec\.ts, terrain\.spec\.ts\)/,
   );
   assert.match(describeFast({ phoneProjects: true, specs: [] }), /left out the three phone projects$/);
   assert.match(describeFast({ phoneProjects: false, specs: [] }), /nothing was left out/);
