@@ -343,7 +343,7 @@ public sealed class WriteUpPdfTests : IAsyncLifetime, IDisposable, IClassFixture
             filed[0].ShouldEndWith(".docx");
         }
 
-        // Filing a write-up never goes near the conversion service.
+        // The request that files a write-up never goes near the conversion service.
         converter.Asked.ShouldBe(before);
     }
 
@@ -351,6 +351,12 @@ public sealed class WriteUpPdfTests : IAsyncLifetime, IDisposable, IClassFixture
     {
         ["Files:Root"] = Path.Combine(filesRoot, name),
         ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+        // The job worker is switched off in this class's hosts. A filed word-processor document
+        // is queued for conversion whenever a converter is configured, and the worker that takes
+        // the queue calls the same stand-in these tests count: left polling, it adds calls of its
+        // own to a count that is meant to say what a download or a filing request did, a couple
+        // of seconds after the filing and so only on a slow run.
+        ["Jobs:PollSeconds"] = "0",
     };
 
     /// <summary>The ordinary installation: no conversion service, and the real client saying so.</summary>
