@@ -10,4 +10,38 @@
     <Product>SilexGIS</Product>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
   </PropertyGroup>
+
+  <!--
+    Five advisories against SixLabors.ImageSharp, accepted here by name rather than fixed.
+
+    NPOI 2.7.6 brings ImageSharp 2.x in transitively. The advisories cover every ImageSharp release
+    up to 4.1.1 and are first patched in 4.1.2, whose API NPOI 2.7.6 cannot use — so there is no
+    version to move to. NPOI's own answer is 2.8.1, which drops ImageSharp for SkiaSharp, but 2.8.x
+    requires accepting the Open Source Maintenance Fee EULA: a paid-licence commitment, which is a
+    decision for the project's owner and not a way to fix a build.
+
+    What is being accepted. All five are in image decoding and processing — ICC colour-profile
+    parsing and histogram equalisation. Nothing in this solution decodes an image through NPOI: it
+    is used by two classes, one writing spreadsheet cells and one extracting text from legacy
+    Office files, and neither mentions a picture, an image or a drawing. The vulnerable code ships
+    in the package and is not reached from here.
+
+    Here rather than in the project that references NPOI, because an audit suppression does not
+    cross a project reference: the API project sees the same transitive package and failed on it
+    while Infrastructure was quiet.
+
+    Named advisories and not the NU1902/NU1903 categories, deliberately — the next advisory against
+    anything at all is still an error that stops the build, which is the only reason this one was
+    noticed. A clean restore had begun failing while warm caches went on succeeding.
+
+    Revisit when the owner has decided about the NPOI licence, or when a 2.7.x release asks for
+    ImageSharp 4.1.2.
+  -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-gwg2-r3hj-4w44" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j3p4-wp97-rph4" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j9gm-c75j-xc9q" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-jjfr-hcj7-qf5w" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wmxv-xphr-5c9g" />
+  </ItemGroup>
 </Project>
