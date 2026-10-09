@@ -558,7 +558,9 @@ citirea o spune de îndată, la fel cum ar spune-o importul.
    calea cea mai scurtă. Caracterele și separatorul de coloane sunt deduse din foaie și arătate
    lângă ea; **Setări fișier** le poate schimba pe oricare, **Zi și lună** stabilește ordinea
    acolo unde datele foii nu pot decide care număr este ziua, iar **Fusul orar al foii** spune
-   după al cui ceas au fost scrise orele.
+   după al cui ceas au fost scrise orele. Bifați acolo **Toate adâncimile sunt sub intrare**
+   pentru o foaie care scrie adâncimile ca numere simple sau amestecă *−350* cu *350* pentru
+   același loc: fiecare este citită atunci ca metri sub intrare.
 3. **Citește.** Citirea nu scrie nimic: ce primiți înapoi este exact ce ar face importul, rând
    cu rând — **Nou**, **Înlocuiește** sau refuzat — cu **Observații** lângă fiecare rând.
    Deasupra rândurilor, dialogul spune cum au fost citite orele și datele. Un loc numit în foaie
@@ -568,7 +570,9 @@ citirea o spune de îndată, la fel cum ar spune-o importul.
    poate fi comunicat, scrie *Nu îți este arătată*, în loc să rămână gol.
 4. **Setări coloane** — indicați un câmp către o coloană doar acolo unde detecția a greșit.
    **Cuvinte pentru intrare**, **Cuvinte pentru ieșire** și **Cuvinte pentru o notă** le
-   înlocuiesc pe cele obișnuite pentru partea respectivă.
+   înlocuiesc pe cele obișnuite pentru partea respectivă. Orice alt cuvânt din acea coloană —
+   *coborâre*, *echipare*, *somn* — este păstrat pe raport drept activitatea echipei, arătat
+   lângă loc în tabel și ca etichetă în fața notei în jurnal.
 5. **Debifați** rândurile pe care nu le vreți (un rând al foii care numește mai multe persoane
    este luat sau lăsat deoparte întreg), bifați **Suprascrie ce are deja jurnalul la aceste
    momente** dacă asta vreți, și **Importă**.
@@ -591,6 +595,8 @@ Alegerea se face pentru toată foaia, la fiecare citire; nimic din ea nu se păs
 
 | Regulă | De ce |
 |---|---|
+| **O adâncime își păstrează semnul dacă nu spuneți altfel** | *−40* înseamnă patruzeci de metri deasupra intrării, iar *40* patruzeci dedesubt: o peșteră cu galerii deasupra intrării are nevoie de amândouă. **Toate adâncimile sunt sub intrare** citește fiecare cifră doar după mărime |
+| **Activitatea echipei este suprascrisă doar de o foaie care are acea coloană** | Ca echipa și nota: o foaie de ore și adâncimi lasă cuvântul pe care raportul îl are deja. Un jurnal scos ca foaie scrie cuvântul înapoi, deci recitirea acelei foi nu schimbă nimic |
 | **Un raport este identificat prin persoană și moment** | O foaie corectată, importată din nou, schimbă rândurile corectate în loc să le dubleze |
 | **Suprascrierea schimbă doar ce are coloană în foaie** | Acolo unde jurnalul are deja raportul, locul în care era persoana este scris atunci când rândul spune altceva decât raportul; echipa doar dacă foaia are coloană de echipă, iar nota doar dacă are coloană de notă sau de detalii — o celulă goală sub o asemenea coloană o șterge. Excepție face o celulă de echipă care este numele mai multor echipe ale turei: nu se poate decide care echipă este, așa că raportul își păstrează echipa, iar rândul spune acest lucru (dați celor două echipe nume diferite și citiți foaia din nou). O foaie cu ore și adâncimi lasă neatinsă o notă introdusă de mână. Rapoartele care spun deja ce spune foaia nu sunt scrise din nou și sunt numărate separat, ca *deja așa cum spune foaia* |
 | **Importul face ce arăta tabelul, sau nimic** | Foaia este citită din nou când apăsați **Importă**. Dacă tura s-a schimbat între timp — cineva a introdus un raport la unul dintre momentele foii sau a corectat unul pe care foaia l-ar înlocui, o echipă sau un participant s-a schimbat, un loc a fost declarat în peșteră, urmărirea a fost mutată pe altă ridicare — nu se scrie nimic, foaia este citită din nou și dialogul o spune: verificați rândurile, bifați din nou suprascrierea dacă încă o vreți și apăsați **Importă** |

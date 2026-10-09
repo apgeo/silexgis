@@ -528,7 +528,9 @@ started takes no sheet: reading one says so at once, as importing it would.
    copied from your spreadsheet, header row first, which is the quick way on a phone. The
    characters and the column separator are worked out from the sheet and shown beside it;
    **File settings** overrules either, sets **Day and month** where the sheet's own dates cannot
-   settle which number is the day, and sets the **Sheet's time zone**.
+   settle which number is the day, and sets the **Sheet's time zone**. Tick **Every depth is
+   below the entrance** there for a sheet that writes depths as plain numbers, or mixes *−350*
+   with *350* for one place: each is then read as metres below the entrance.
 3. **Read it.** Reading writes nothing: what comes back is exactly what importing would do,
    row by row — **New**, **Replaces**, or refused — with **Findings** beside each row. Above the
    rows the dialog states how the times and dates were read. A place the sheet named is shown
@@ -538,7 +540,9 @@ started takes no sheet: reading one says so at once, as importing it would.
    it reads *Not shown to you* rather than being left blank.
 4. **Column settings** — point a field at a header only where the detection got it wrong. The
    **Words for going in**, **Words for coming out** and **Words for a note** replace the usual
-   lists for that side.
+   lists for that side. Any other word in that column — *descending*, *rigging*, *asleep* — is
+   kept on the report as what the party was doing, shown beside the place in the table and as a
+   label in front of the note in the log.
 5. **Untick** any row you do not want (a line naming several people is taken or left out
    whole), tick **Overwrite what the log already holds at these moments** if you mean to, and
    **Import**.
@@ -560,6 +564,8 @@ made for the whole sheet, each time it is read; nothing about it is remembered o
 
 | Rule | Why |
 |---|---|
+| **A depth keeps its sign unless you say otherwise** | *−40* is forty metres above the entrance and *40* forty below: a cave with passages over its entrance needs both. **Every depth is below the entrance** reads each figure by its size alone |
+| **What the party was doing is overwritten only by a sheet that has that column** | Like the team and the note: a sheet of times and depths leaves the word a report already carries. A log taken out as a sheet writes the word back, so reading that sheet in again changes nothing |
 | **A report is filed under the person and the moment** | A corrected sheet imported again corrects the rows it corrected instead of doubling them |
 | **Overwriting changes only what the sheet has a column for** | Where the log already holds the report, where the person was is written when the row says something else than the report does; the team only if the sheet has a team column, and the note only if it has a note or a details column — an empty cell under such a column clears it. A team cell that is the name of more than one of the trip's teams is the exception: which team is meant cannot be decided, so the report keeps the team it has and the row says so (give the two teams different names and read the sheet again). A sheet of times and depths leaves a note typed by hand standing. Reports that already say what the sheet says are not written again, and are counted apart as *already as the sheet says* |
 | **Import does what the table showed, or nothing** | The sheet is read again when you press **Import**. If the trip changed in between — somebody typed a report at one of the sheet's moments or corrected one the sheet would replace, a team or a participant changed, a place was declared in the cave, the watch was put on another survey — nothing is written, the sheet is read again and the dialog says so: check the rows, tick the overwrite again if you still mean to, and press **Import** |

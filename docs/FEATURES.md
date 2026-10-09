@@ -431,6 +431,11 @@ feature and walkthroughs of whole jobs.
   The sheet may be a file or rows pasted from a phone's spreadsheet, may keep the date and the
   time in one column or two — or times alone, for a sheet kept in a day — and may be read on a
   named time zone's clocks, summer and winter time included, instead of exactly as written.
+  A word in its state column that is neither going in nor coming out — *descending*, *rigging*,
+  *asleep* — is kept on the report as what the party was doing, and a sheet from a pothole's
+  mouth may be told that every depth it writes is below the entrance, whatever its sign.
+  A caver has a short name beside the full one — what their party calls them — which a sheet
+  may name them by and which published trips show.
   A row that would replace a report shows the report as it stands beside the report as it would
   be left, a replacement changes only what the sheet has a column for, and the import writes
   what the preview showed or nothing: if the trip changed in between, the sheet is read again
