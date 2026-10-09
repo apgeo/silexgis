@@ -70,6 +70,18 @@ public sealed record TrackingCsvRow
     /// <summary>Went in, came out or a note, where the row says so; null for the ordinary case.</summary>
     public TripPositionEventKind? State { get; init; }
 
+    /// <summary>
+    /// What the standing column said, as written, whether or not it named a standing.
+    /// </summary>
+    /// <remarks>
+    /// A club's word for what a party was doing is not a controlled vocabulary and this importer
+    /// has no business deciding which of its words are real. Two of them — going in, coming out —
+    /// also say something the log's shape depends on, so those additionally set
+    /// <see cref="State"/>; the rest are simply what the record says the party was doing, and are
+    /// carried through rather than reported as words nobody knows.
+    /// </remarks>
+    public string? Activity { get; init; }
+
     /// <summary>The note, with anything a further details column carried folded in after it.</summary>
     public string? Note { get; init; }
 

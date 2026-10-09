@@ -409,7 +409,9 @@ public sealed record TrackingEventDto(
     DateTimeOffset RecordedAt,
     bool Corrected,
     bool OutsideDeclaredParts,
-    TrackingDepthPlacementOutcome? DepthPlacement = null);
+    TrackingDepthPlacementOutcome? DepthPlacement = null,
+    /// <summary>What the record says the party was doing, in the club's own words.</summary>
+    string? Activity = null);
 
 /// <summary>
 /// A report that was taken off the log and is still kept: what it said, read under the same

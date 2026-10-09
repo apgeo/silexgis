@@ -48,7 +48,7 @@ public static class TrackingCsvPlanDigest
     /// Said first, so that a change to how the rest is written down gives every plan a new name
     /// rather than, by accident, an old plan's.
     /// </summary>
-    private const string Shape = "tracking-sheet-plan/5";
+    private const string Shape = "tracking-sheet-plan/6";
 
     /// <summary>The name, as 64 lower-case hexadecimal digits.</summary>
     /// <param name="plan">What the sheet would write.</param>
@@ -89,6 +89,9 @@ public static class TrackingCsvPlanDigest
             Put(text, report.ViewerToStationName);
             Put(text, Depth(report.DepthM));
             Put(text, report.Note);
+            // What the party was doing is stored, so a sheet that changes only that word is a
+            // sheet that changes the log, and the name has to move with it.
+            Put(text, report.Activity);
             Put(text, report.Replaces ? "1" : "0");
             // Whether the place is written or left as the log holds it is a difference in what a
             // commit does to the row, with every other value here the same.
@@ -112,6 +115,7 @@ public static class TrackingCsvPlanDigest
             Put(text, stood.ToStationName);
             Put(text, Depth(stood.DepthM));
             Put(text, stood.Note);
+            Put(text, stood.Activity);
             Put(text, stood.Corrected ? "1" : "0");
         }
 
@@ -150,4 +154,6 @@ public sealed record TrackingCsvReplacedReport(
     decimal? DepthM,
     string? Note,
     bool Corrected,
-    string? ToStationName = null);
+    string? ToStationName = null,
+    /// <summary>What the stored report says the party was doing.</summary>
+    string? Activity = null);

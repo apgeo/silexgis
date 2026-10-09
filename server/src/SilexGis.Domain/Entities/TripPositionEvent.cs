@@ -215,6 +215,26 @@ public class TripPositionEvent : ITimestamped, IAuditable, IAuditChild
     public string? Note { get; set; }
 
     /// <summary>
+    /// What the party was doing at that moment, in a few words — descending, rigging, asleep.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Its own field rather than the first line of <see cref="Note"/>, because the two are read
+    /// differently: this is a short, repeated phrase that a list can show in a column and a
+    /// replay can show beside a marker, while a note is whatever the person relaying the message
+    /// happened to say and can run to paragraphs. Folding the first into the second means a page
+    /// that wants to show the activity has to parse prose to find it.
+    /// </para>
+    /// <para>
+    /// <b>Deliberately free text and not an enumeration.</b> A club's own vocabulary for this is
+    /// its own — one journal's fourteen phrases are another's six — and a fixed list would either
+    /// refuse a club's words or quietly map them onto somebody else's. Nothing branches on the
+    /// value; it is shown, grouped and counted as written.
+    /// </para>
+    /// </remarks>
+    public string? Activity { get; set; }
+
+    /// <summary>
     /// The moment the report is about — caller-supplied, because word arrives out of the cave
     /// minutes or hours late. Never after the write itself.
     /// </summary>

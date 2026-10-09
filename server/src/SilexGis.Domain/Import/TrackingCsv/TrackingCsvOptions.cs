@@ -59,6 +59,32 @@ public sealed record TrackingCsvOptions
     /// <summary>The words this sheet writes "went in", "came out" and "a note" in.</summary>
     public TrackingCsvStateWords StateWords { get; init; } = TrackingCsvStateWords.Default;
 
+    /// <summary>
+    /// Whether this sheet writes a depth as a height below the entrance — that is, negative.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off by default, and the default is the careful reading: a cave has passage above its
+    /// entrance as well as below, the stored field is signed for that reason, and "-40" in a sheet
+    /// that also writes "40" is two different places rather than one written twice. So a sign is
+    /// normally kept exactly as the column wrote it.
+    /// </para>
+    /// <para>
+    /// A club whose cave lies entirely below its entrance writes every figure negative and means
+    /// a depth by all of them. Read as written, each of those is a height <em>above</em> the
+    /// entrance, and every row of such a sheet lands on the wrong side of the datum — so the
+    /// reviewer says once, for the file, that this column counts downwards, and the magnitude is
+    /// taken. A figure written without a sign in such a sheet means the same as one written with
+    /// it.
+    /// </para>
+    /// <para>
+    /// Said per import rather than inferred from the figures, because "every one is negative" is
+    /// also exactly what a genuine sheet of passage above an entrance looks like, and counting
+    /// signs cannot tell the two apart.
+    /// </para>
+    /// </remarks>
+    public bool DepthsAreBelowEntrance { get; init; }
+
     /// <summary>A bound on the width of a sheet, so a mangled file is refused rather than folded.</summary>
     public int MaxColumns { get; init; } = 512;
 

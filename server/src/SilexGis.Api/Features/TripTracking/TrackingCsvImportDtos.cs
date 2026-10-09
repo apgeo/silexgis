@@ -33,7 +33,12 @@ public sealed record TrackingCsvImportOptionsDto(
     IReadOnlyList<string>? CameOutWords,
     string? TimeZone = null,
     DateOnly? Day = null,
-    IReadOnlyList<string>? NotedWords = null);
+    IReadOnlyList<string>? NotedWords = null,
+    /// <summary>
+    /// True where this sheet's depth column counts downwards from the entrance, so that its
+    /// negative figures mean depth rather than height above the datum.
+    /// </summary>
+    bool DepthsAreBelowEntrance = false);
 
 /// <summary>A sheet to read, and how to read it.</summary>
 public sealed record TrackingCsvImportRequest(

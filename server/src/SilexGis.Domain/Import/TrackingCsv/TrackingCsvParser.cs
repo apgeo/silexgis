@@ -412,7 +412,7 @@ public static class TrackingCsvParser
         var stationName = Text(TrackingCsvField.Station);
         var toStationName = Text(TrackingCsvField.ToStation);
         var placeLabel = Text(TrackingCsvField.Place);
-        var (depth, depthProblem) = ReadDepth(Text(TrackingCsvField.Depth));
+        var (depth, depthProblem) = ReadDepth(Text(TrackingCsvField.Depth), options.DepthsAreBelowEntrance);
         if (depthProblem is { } problem)
         {
             diagnostics.Add(new TrackingCsvDiagnostic(
@@ -427,7 +427,20 @@ public static class TrackingCsvParser
 
         var stateText = Text(TrackingCsvField.State);
         var state = options.StateWords.KindOf(stateText);
-        if (stateText is not null && state is null)
+
+        // <b>An unlisted word is ordinary and is carried, not reported.</b> Most of what a club
+        // writes in this column is what the party was doing — descending, rigging, asleep — and
+        // only two of its words also say somebody went in or came out. Reporting the rest produced
+        // a warning on nearly every record of a real journal, which buries the findings a reviewer
+        // is actually there for under the ordinary contents of the file. They are carried as the
+        // record's activity instead.
+        //
+        // The one word still reported is the reserved one, which says the sheet is deliberately
+        // not giving this row's place. That is not an activity and must not be read as one: a
+        // re-import that replaced would otherwise write "nowhere" over the place the log holds.
+        var withheldPlace = stateText is not null
+            && TripImportNames.Key(stateText) == TripImportNames.Key(TrackingCsvStateWords.Withheld);
+        if (withheldPlace)
         {
             diagnostics.Add(new TrackingCsvDiagnostic(
                 TrackingCsvSeverity.Warning, TrackingCsvProblem.StateWordUnknown,
@@ -503,6 +516,8 @@ public static class TrackingCsvParser
             DepthM = depth,
             Decides = decides,
             State = state,
+            // The reserved word is not something the party was doing, so it is not carried as one.
+            Activity = withheldPlace ? null : stateText,
             Note = note,
             Diagnostics = diagnostics,
         };
@@ -517,7 +532,7 @@ public static class TrackingCsvParser
     /// "40" is two different places, not one written twice. A comma is accepted as the decimal
     /// mark because that is what a Romanian spreadsheet exports.
     /// </remarks>
-    private static (decimal? Depth, TrackingCsvProblem? Problem) ReadDepth(string? text)
+    private static (decimal? Depth, TrackingCsvProblem? Problem) ReadDepth(string? text, bool below)
     {
         if (text is null)
         {
@@ -533,6 +548,14 @@ public static class TrackingCsvParser
         if (Math.Abs(depth) > TripTrackingRules.MaxDepthAbsM)
         {
             return (null, TrackingCsvProblem.DepthOutOfRange);
+        }
+
+        // Where the reviewer has said the column counts downwards, the magnitude is the depth —
+        // including for a figure written without a sign, which in such a sheet means the same as
+        // one written with it rather than a height above the entrance.
+        if (below)
+        {
+            depth = Math.Abs(depth);
         }
 
         // In the form the log stores it — one decimal — from the moment it is read, so the preview

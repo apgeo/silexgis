@@ -208,6 +208,10 @@ internal static class TrackingWithholding
             open ? e.DepthEnteredM : null,
             e.Note, e.RecordedAt,
             TripTrackingRules.ChangedSinceWritten(e.CreatedAt, e.UpdatedAt),
-            open && declaredParts is not null && declaredParts.Outside(e));
+            open && declaredParts is not null && declaredParts.Outside(e),
+            // Carried whether or not the place is, exactly as the note beside it is. What the
+            // party was doing is not where they were: a reader kept from the station names still
+            // learns nothing about the cave from being told somebody was asleep or rigging.
+            Activity: e.Activity);
     }
 }

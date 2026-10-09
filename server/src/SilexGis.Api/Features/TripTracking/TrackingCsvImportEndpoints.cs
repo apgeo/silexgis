@@ -403,6 +403,7 @@ public static class TrackingCsvImportEndpoints
                         TripCsvValues.Single(row.Note, options.SkipTokens), report.Note, StringComparison.Ordinal))
                 {
                     row.Note = report.Note;
+                    row.Activity = report.Activity;
                 }
 
                 // Counted as changed only where a stored value really is another one, asked of the
@@ -426,6 +427,7 @@ public static class TrackingCsvImportEndpoints
                 ViewerToStationName = report.ViewerToStationName,
                 DepthEnteredM = report.Kind == TripPositionEventKind.AtDepth ? report.DepthM : null,
                 Note = report.Note,
+                Activity = report.Activity,
                 RecordedAt = report.At,
                 RecordedByUserId = user.UserId,
             };
@@ -491,7 +493,8 @@ public static class TrackingCsvImportEndpoints
             b => b.Key,
             b => new TrackingCsvReplacedReport(
                 b.Value.Id, b.Value.TeamId, b.Value.Kind, b.Value.SurveyModelId, b.Value.StationName,
-                b.Value.DepthEnteredM, b.Value.Note, b.Value.Corrected, b.Value.ToStationName));
+                b.Value.DepthEnteredM, b.Value.Note, b.Value.Corrected, b.Value.ToStationName,
+                b.Value.Activity));
 
     // ---- the trip a sheet is read against -----------------------------------------------
 
@@ -752,6 +755,11 @@ public static class TrackingCsvImportEndpoints
         if (dto.DateOrder is { } order)
         {
             options = options with { DateOrder = order };
+        }
+
+        if (dto.DepthsAreBelowEntrance)
+        {
+            options = options with { DepthsAreBelowEntrance = true };
         }
 
         // Named words replace the shipped list rather than adding to it, and each side is replaced

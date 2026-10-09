@@ -190,6 +190,9 @@ public sealed record TrackingCsvPlannedReport
 
     public string? Note { get; init; }
 
+    /// <summary>What the record said the party was doing, as written.</summary>
+    public string? Activity { get; init; }
+
     /// <summary>Whether a report with this key already exists, so importing would change it.</summary>
     public bool Replaces { get; init; }
 
@@ -467,6 +470,7 @@ public static class TrackingCsvPlanner
                     PlaceLabel = stood is null ? placed.PlaceLabel : null,
                     DepthM = stood is null ? placed.DepthM : stood.DepthM,
                     Note = row.Note,
+                    Activity = row.Activity,
                     Replaces = subject.Existing.Contains(key),
                     KeepsStoredPlace = stood is not null,
                     Diagnostics = notes,

@@ -29,6 +29,9 @@ public sealed class CaverConfiguration : IEntityTypeConfiguration<Caver>
         builder.ToTable("cavers");
         builder.Property(x => x.Id).ValueGeneratedNever(); // uuid v7 generated app-side
         builder.Property(x => x.FullName).HasMaxLength(200);
+        // What a party calls somebody: shorter than a roster name by nature, and the length says
+        // so rather than leaving room for a second full name to be typed in by mistake.
+        builder.Property(x => x.ShortName).HasMaxLength(80);
         builder.Property(x => x.Email).HasMaxLength(320);
         builder.Property(x => x.Phone).HasMaxLength(40);
 

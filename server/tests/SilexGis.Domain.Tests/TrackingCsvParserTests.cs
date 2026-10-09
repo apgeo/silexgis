@@ -115,6 +115,40 @@ public class TrackingCsvParserTests
     }
 
     [Fact]
+    public void A_sheet_whose_cave_is_all_below_its_entrance_can_say_so_once_for_the_file()
+    {
+        // The journal of a cave with nothing above its entrance writes every figure negative and
+        // means a depth by each. Read as written those are heights above the datum, and every row
+        // of the sheet lands on the wrong side of it.
+        const string sheet = "Data,Adancime,Speologi\r\n"
+            + "12.09.2026 09:00,-138,Ion\r\n"
+            + "12.09.2026 10:00,-96.5,Ion\r\n"
+            // Unsigned in a sheet that counts downwards means the same as signed, not the opposite.
+            + "12.09.2026 11:00,40,Ion\r\n";
+
+        var asWritten = TrackingCsvParser.Parse(sheet).Rows;
+        asWritten.Select(r => r.DepthM).ShouldBe([-138m, -96.5m, 40m]);
+
+        var below = TrackingCsvParser.Parse(
+            sheet,
+            TrackingCsvOptions.Default with { DepthsAreBelowEntrance = true }).Rows;
+        below.Select(r => r.DepthM).ShouldBe([138m, 96.5m, 40m]);
+        below.ShouldAllBe(r => r.Importable);
+    }
+
+    [Fact]
+    public void Saying_a_column_counts_downwards_is_a_choice_and_never_guessed_from_the_figures()
+    {
+        // The guard on the option above: a sheet of passage above an entrance looks identical to
+        // one that writes depths negative, so nothing may read the signs and decide for itself.
+        // Left alone, "-40" stays a height above the datum.
+        var row = TrackingCsvParser.Parse(
+            "Data,Adancime,Speologi\r\n12.09.2026 09:00,-40,Ion\r\n").Rows[0];
+
+        row.DepthM.ShouldBe(-40m);
+    }
+
+    [Fact]
     public void A_depth_keeps_the_sign_it_was_written_with()
     {
         // A cave has passage above its entrance as well as below, the stored field is signed for
@@ -262,16 +296,20 @@ public class TrackingCsvParserTests
     }
 
     [Fact]
-    public void A_word_neither_state_list_knows_is_reported_and_the_row_still_imports()
+    public void A_word_neither_state_list_knows_is_what_the_party_was_doing_and_is_carried_as_that()
     {
+        // Not reported. A club's words for what a party was doing are its own, and most of a real
+        // journal's state column is exactly that — descending, rigging, asleep. Reporting each one
+        // put a warning on nearly every record and buried the findings worth reading.
         var row = TrackingCsvParser.Parse(
             "Data,Adancime,Speologi,Stare\r\n"
             + "12.09.2026 09:00,96,Ion,bivuac\r\n").Rows[0];
 
         row.State.ShouldBeNull();
+        row.Activity.ShouldBe("bivuac");
         row.Kind.ShouldBe(TripPositionEventKind.AtDepth);
         row.Importable.ShouldBeTrue();
-        row.Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.StateWordUnknown);
+        row.Diagnostics.ShouldBeEmpty();
     }
 
     [Fact]
@@ -594,9 +632,11 @@ public class TrackingCsvParserTests
 
         rows[0].State.ShouldBe(TripPositionEventKind.Entered);
         // Named words replace the defaults rather than adding to them, so the shipped Romanian
-        // spelling is no longer a standing here and is reported as a word nobody knows.
+        // spelling is no longer a standing here — it is simply what the record says the party was
+        // doing, and is carried as that rather than remarked on.
         rows[1].State.ShouldBeNull();
-        rows[1].Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.StateWordUnknown);
+        rows[1].Activity.ShouldBe("intrare");
+        rows[1].Diagnostics.ShouldBeEmpty();
     }
 
     [Fact]
@@ -691,13 +731,14 @@ public class TrackingCsvParserTests
         // What to change is still said on the cell, beside the refusal.
         rows[0].Diagnostics.ShouldContain(d =>
             d.Problem == TrackingCsvProblem.DepthUnreadable && d.Detail == "96 cm");
-        rows[1].Diagnostics.ShouldContain(d =>
-            d.Problem == TrackingCsvProblem.StateWordUnknown && d.Detail == "afara");
+        // Its word is carried rather than remarked on; what refuses the row is the place it does
+        // not give, which is asserted for all three rows above.
+        rows[1].Activity.ShouldBe("afara");
         rows[2].Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.DepthOutOfRange);
     }
 
     [Fact]
-    public void A_word_nobody_listed_beside_a_place_that_was_read_still_imports_as_that_place()
+    public void A_word_nobody_listed_beside_a_place_that_was_read_is_the_place_and_the_activity()
     {
         // The twin: the standing was not understood, but the row says where somebody was all the
         // same, so it is the report its place makes it and the word is remarked on.
@@ -708,7 +749,10 @@ public class TrackingCsvParserTests
         row.Importable.ShouldBeTrue();
         row.Kind.ShouldBe(TripPositionEventKind.AtDepth);
         row.Note.ShouldBe("dormim aici");
-        row.Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.StateWordUnknown);
+        // The note is what the reporter said; the activity is what they were doing. Two fields
+        // because a list can show the second in a column and cannot parse it out of the first.
+        row.Activity.ShouldBe("bivuac");
+        row.Diagnostics.ShouldBeEmpty();
     }
 
     [Theory]
@@ -792,6 +836,9 @@ public class TrackingCsvParserTests
         result.Rows[0].Importable.ShouldBeFalse();
         result.Rows[0].Diagnostics.Select(d => d.Problem).ShouldBe(
             [TrackingCsvProblem.StateWordUnknown, TrackingCsvProblem.NoPlaceAndNoState]);
+        // And never read as something the party was doing: a re-import that replaced would write
+        // that over the place the log holds.
+        result.Rows[0].Activity.ShouldBeNull();
         result.Rows[1].Importable.ShouldBeTrue();
         result.Rows[1].Kind.ShouldBe(TripPositionEventKind.Note);
     }

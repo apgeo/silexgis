@@ -1013,7 +1013,7 @@ public static class TripTrackingEndpoints
             e.DepthEnteredM, e.Note, e.RecordedAt,
             TripTrackingRules.ChangedSinceWritten(e.CreatedAt, e.UpdatedAt),
             declaredParts.Outside(e),
-            placed.Placement))];
+            placed.Placement, e.Activity))];
         return TypedResults.Ok(dtos);
     }
 
@@ -1345,7 +1345,7 @@ public static class TripTrackingEndpoints
             // where they were, and the answer then says what the next read of the log will say.
             TripTrackingRules.ChangedSinceWritten(row.CreatedAt, row.UpdatedAt),
             declaredParts.Outside(row),
-            placed.Placement));
+            placed.Placement, row.Activity));
     }
 
     /// <summary>

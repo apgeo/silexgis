@@ -69,6 +69,10 @@ public class TrackingCsvPlanDigestTests
         (nameof(TrackingCsvPlannedReport.ViewerToStationName), true, r => r with { ViewerToStationName = "3" }),
         (nameof(TrackingCsvPlannedReport.DepthM), true, r => r with { DepthM = 96.1m }),
         (nameof(TrackingCsvPlannedReport.Note), true, r => r with { Note = "apa mica" }),
+        // Written, because what the party was doing is stored on the row: a sheet that changes
+        // only that word still changes the log, and a name that ignored it would let the change
+        // through as "nothing to do".
+        (nameof(TrackingCsvPlannedReport.Activity), true, r => r with { Activity = "urcare" }),
         (nameof(TrackingCsvPlannedReport.Replaces), true, r => r with { Replaces = true }),
         (nameof(TrackingCsvPlannedReport.KeepsStoredPlace), true, r => r with { KeepsStoredPlace = true }),
         // "No team" written over a report and the report's team left alone are the same null
@@ -92,7 +96,10 @@ public class TrackingCsvPlanDigestTests
         // restart of the server, or on another of its instances.
         var plan = PlanOf(Report(), Report() with { Line = 3, CaverId = Maria, TeamId = null, Note = null, DepthM = null });
 
-        plan.Digest().ShouldBe("98a14163fe283779f86993e94622b734d46015030d4213f49312c5ee7b3e4e2e");
+        // Re-pinned when the activity joined the plan, which moved the shape to its sixth form.
+        // Worked out the same way as the first: from the written-down encoding, by a script
+        // outside this language, rather than by copying what the code answered.
+        plan.Digest().ShouldBe("1dec2f6f945d234fed7fd56b10973453ed3cd34f47070f77aed6ffe56c863abd");
         plan.Digest().ShouldBe(TrackingCsvPlanDigest.Of(plan));
     }
 
@@ -244,6 +251,9 @@ public class TrackingCsvPlanDigestTests
             (nameof(TrackingCsvReplacedReport.DepthM), Stood() with { DepthM = 50m }),
             (nameof(TrackingCsvReplacedReport.Note), Stood() with { Note = "alta nota" }),
             (nameof(TrackingCsvReplacedReport.Corrected), Stood() with { Corrected = true }),
+            // Shown to the reviewer as part of what is there now, so a colleague who changed only
+            // what the stored report says the party was doing changes the pair they agreed to.
+            (nameof(TrackingCsvReplacedReport.Activity), Stood() with { Activity = "coborare" }),
         ];
         changes.Select(c => c.Property).Order().ToList().ShouldBe(declared);
 
