@@ -436,6 +436,9 @@ feature and walkthroughs of whole jobs.
   mouth may be told that every depth it writes is below the entrance, whatever its sign.
   The same phrase can be typed on a report made by hand, kept with one held for lack of signal,
   and changed when a report is corrected.
+  The survey viewer lays itself out for the size it is shown at — smaller dials in a small pane,
+  a station's pictures in a column at the model's left edge, people's labels kept clear of one
+  another — and the size of station names is each reader's to set, kept per browser.
   A caver has a short name beside the full one — what their party calls them — which a sheet
   may name them by and which published trips show.
   The clubs a caver belongs to are changed from the caver's own entry as well as from each

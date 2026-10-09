@@ -3039,6 +3039,8 @@
     "loadError": "Failed to load the 3D model",
     "linkThisPart": "Link this…",
     "notInThisModel": "That point is not in this model",
+    "labelSize": "Size of station names",
+    "labelSizeValue": "{{percent}}%",
     "stationPicture": "Picture at this station",
     "compare": {
       "open": "Compare with…",

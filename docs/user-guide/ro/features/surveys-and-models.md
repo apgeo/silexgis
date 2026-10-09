@@ -27,6 +27,21 @@ Un model este desenat în **vizualizatorul topografic** (CaveView.js) și, pentr
 topografia însăși conține destul ca să fie construiți —
 [făcuți din `.lox` sau `.3d`](#pereți-dintr-un-lox-sau-3d).
 
+**Vizualizatorul se așază după mărimea la care este arătat**, adică după panoul în care stă, nu
+după ecranul dumneavoastră. Într-un panou mai îngust de aproximativ 1000 de pixeli, busola și
+cadranul de înclinare sunt desenate la jumătate din mărime, iar pe telefon la un sfert, ca să nu
+stea peste peștera pe care trebuie să o orienteze. **Fotografiile unei stații** stau într-o
+coloană la marginea stângă a modelului, la jumătate din mărimea pe care o aveau lângă stație,
+unde nu acoperă nicio galerie; descrierea unei fotografii apare când o indicați și în
+vizualizatorul în care se deschide. Când mai mulți oameni dintr-o tură urmărită sunt la stații
+apropiate pe ecran, etichetele cu numele lor sunt puse una sub alta, nu una peste alta.
+
+**Mărimea numelor de stații o alegeți dumneavoastră.** Împreună cu bara de unelte a
+vizualizatorului apare, în colțul din stânga sus al modelului, un mic control **Aa**: 40 %, 60 %,
+80 %, 100 %, 125 % sau 150 % din mărimea vizualizatorului. O topografie numește fiecare stație cu
+toată calea ei, iar o galerie aglomerată la mărime întreagă este un zid de text; micșorați-o până
+nu mai este. Alegerea se păstrează în browserul dumneavoastră și se aplică oricărui model deschis.
+
 ### Modelul curent
 
 O peșteră păstrează fiecare model încărcat vreodată — încărcările nu se suprascriu, așa că un

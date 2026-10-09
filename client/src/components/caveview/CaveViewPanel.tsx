@@ -26,6 +26,9 @@ import {
 import { declaredPartsView, type DeclaredPartsView } from '../../caveview/declaredParts.ts';
 import { noStationsMissing, stationsNotOnModel } from '../../caveview/placedOnModel.ts';
 import { mediaForStation } from '../../caveview/stationMedia.ts';
+import { modelLabelScale } from '../../caveview/labelScale.ts';
+import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+import CaveViewLabelScale from './CaveViewLabelScale.tsx';
 import {
   compareToolbarButtons,
   comparisonUnderWay,
@@ -1285,6 +1288,24 @@ export default function CaveViewPanel({
     };
   }, [status, toolbarWanted, toolbarPlacement, toolbarButtonKey]);
 
+  // ---- The size of the model's own writing ----
+  //
+  // The reader's choice, kept per browser, written to the viewer once a model is up and again
+  // whenever it changes. Set on the loaded viewer rather than in the construction config for the
+  // reason the station label is: the choice can change while a model is on screen, and a viewer
+  // is not rebuilt for it.
+  const storedLabelScale = useUiPrefsStore((state) => state.modelLabelScale);
+  useEffect(() => {
+    const viewer = viewerRef.current?.viewer;
+    if (viewer === undefined || status !== 'ready') {
+      return;
+    }
+    const scale = modelLabelScale(storedLabelScale);
+    if (viewer.stationLabelScale !== scale) {
+      viewer.stationLabelScale = scale;
+    }
+  }, [status, storedLabelScale]);
+
   // ---- Station pictures ----
   //
   // The strip is drawn for the station the viewer is tracking, and it only tracks one while it is
@@ -1346,6 +1367,8 @@ export default function CaveViewPanel({
       {status === 'error' && (
         <Alert type="error" showIcon title={t('caveview.loadError')} description={errorDetail} />
       )}
+      {/* Beside the viewer's own controls, which is where the names it sizes are turned on. */}
+      {toolbarWanted && status === 'ready' && <CaveViewLabelScale />}
       {missingPart && (
         <Alert
           className="caveview-panel-notice"

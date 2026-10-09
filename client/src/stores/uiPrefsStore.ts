@@ -111,6 +111,13 @@ interface UiPrefsState {
   movieGifCalibration?: MovieGifCalibration;
   setMovieGifCalibration: (calibration: MovieGifCalibration | undefined) => void;
   /**
+   * How large the names of a 3D model's stations are written, as a multiple of the viewer's own
+   * size. One choice for every model this person opens: it is about their screen and their eyes,
+   * not about any one survey. Undefined is the viewer's own size.
+   */
+  modelLabelScale?: number;
+  setModelLabelScale: (scale: number | undefined) => void;
+  /**
    * How each selection panel is arranged, keyed by which panel it is. Every mount keeps its own,
    * so a pop-out somebody set up to show one thing is not rearranged by the main window.
    */
@@ -177,6 +184,8 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       setMovieSettings: (settings) => set({ movieSettings: settings }),
       movieGifCalibration: undefined,
       setMovieGifCalibration: (calibration) => set({ movieGifCalibration: calibration }),
+      modelLabelScale: undefined,
+      setModelLabelScale: (scale) => set({ modelLabelScale: scale }),
       selectors: {},
       setSelectorPrefs: (key, patch) =>
         set((state) => ({

@@ -26,6 +26,21 @@ A model is drawn in the **survey viewer** (CaveView.js) and, for walls, in the
 [3D scene](3d-view.md). Walls are either a `.stl` you upload or, where the survey itself holds
 enough to build them, [made from the `.lox` or `.3d`](#walls-from-a-lox-or-3d).
 
+**The viewer lays itself out for the size it is shown at**, which is a question about the pane
+it is in and not about your screen. In a pane under about 1000 pixels wide the compass and the
+inclination dial are drawn at half their size, and on a phone at a quarter, so that they do not
+stand over the cave they are there to orient. The **pictures of a station** stand in a column at
+the left edge of the model, at half the size they used to have beside the station, where they
+cover none of the passages; a picture's caption is shown when you point at it and in the viewer
+it opens in. Where several people of a tracked trip are at stations that are close together on
+screen, their name labels are set one under the other instead of over each other.
+
+**The size of station names is yours to set.** With the viewer's toolbar comes a small **Aa**
+control in the model's top left corner: 40 %, 60 %, 80 %, 100 %, 125 % or 150 % of the viewer's
+own size. A survey names every station by its whole path, and a busy passage at full size is a
+wall of text; make it smaller until it is not. The choice is kept in your browser and applies to
+every model you open.
+
 ### The current model
 
 A cave keeps every model ever uploaded — uploads are never overwritten, so a corrected re-export

@@ -382,3 +382,28 @@
   min-width: 0;
   max-width: 100%;
 }
+
+/* The control for the size of station names: in the model's top left corner, which nothing of
+   the viewer's occupies here (its own side panel is not mounted), over the model and under a
+   notice. Translucent until it is pointed at, so that it is not one more thing over the cave. */
+.caveview-panel-label-scale {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 9;
+  min-width: 32px;
+  opacity: 0.75;
+  font-weight: 600;
+}
+
+.caveview-panel-label-scale:hover,
+.caveview-panel-label-scale:focus-visible {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  .caveview-panel-label-scale {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}

@@ -3039,6 +3039,8 @@
     "loadError": "Modelul 3D nu a putut fi încărcat",
     "linkThisPart": "Leagă asta…",
     "notInThisModel": "Acel punct nu se află în acest model",
+    "labelSize": "Mărimea numelor de stații",
+    "labelSizeValue": "{{percent}}%",
     "stationPicture": "Fotografie la această stație",
     "compare": {
       "open": "Compară cu…",
