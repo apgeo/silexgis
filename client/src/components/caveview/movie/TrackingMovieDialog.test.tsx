@@ -47,6 +47,9 @@ const reads = vi.hoisted(() => ({
   movieEndsAsked: [] as number[],
   /** Whether each read was told to leave the logs of trips under way alone. */
   moviePausedAsked: [] as boolean[],
+  /** The photographs hung on the chosen trips' moments, and whether each read asked for them. */
+  photographs: { pictures: [], images: new Map(), loading: 0, failed: 0 } as import('./useMoviePictures.ts').MoviePicturesState,
+  photographsAsked: [] as { ids: readonly string[]; enabled: boolean }[],
 }));
 vi.mock('../../../api/hooks.ts', () => ({
   useSurveyModel: () => ({ data: { name: 'Main survey', caveId: 'cave-1' } }),
@@ -56,6 +59,12 @@ vi.mock('../../../api/hooks.ts', () => ({
     isPending: false,
     error: reads.trackedError,
   }),
+}));
+vi.mock('./useMoviePictures.ts', () => ({
+  useMoviePictures: (ids: readonly string[], enabled: boolean) => {
+    reads.photographsAsked.push({ ids, enabled });
+    return reads.photographs;
+  },
 }));
 vi.mock('./useMovieTrips.ts', () => ({
   useMovieTrips: (_model: string, ids: readonly string[], liveEnd: number, paused: boolean) => {
@@ -323,6 +332,8 @@ beforeEach(() => {
   reads.trackedError = null;
   reads.movie = ready();
   reads.movieIdsAsked = [];
+  reads.photographs = { pictures: [], images: new Map(), loading: 0, failed: 0 };
+  reads.photographsAsked = [];
   reads.movieEndsAsked = [];
   reads.moviePausedAsked = [];
   recordMovie.mockReset();
@@ -378,7 +389,7 @@ describe('the tracking movie dialog', () => {
     open();
 
     expect(await screen.findByTestId('movie-preview')).toBeInTheDocument();
-    for (const group of ['Trips', 'Output', 'Motion', 'Cavers', 'View', 'Captions']) {
+    for (const group of ['Trips', 'Output', 'Motion', 'Cavers', 'View', 'Captions', 'Photographs']) {
       expect(screen.getByText(group)).toBeInTheDocument();
     }
     expect(screen.getByTestId('movie-privacy')).toHaveTextContent('Share it only with people who may see both.');
@@ -390,6 +401,53 @@ describe('the tracking movie dialog', () => {
     // Nothing is chosen, so there is nothing to export yet — and the reader is told what to do.
     expect(screen.getByTestId('movie-export')).toBeDisabled();
     expect(screen.getByText('Choose at least one trip to preview and export a movie.')).toBeInTheDocument();
+  });
+
+  it('reads the trips\' photographs while the movie is to show them, and says how many there are', async () => {
+    reads.photographs = {
+      pictures: [
+        { key: '/p/1', tripLogId: 'trip-a', at: Date.parse(ARMED) + 3_600_000, caverId: null, caption: null },
+        { key: '/p/2', tripLogId: 'trip-a', at: Date.parse(ARMED) + 7_200_000, caverId: null, caption: null },
+      ],
+      images: new Map(),
+      loading: 1,
+      failed: 0,
+    };
+    open(['trip-a']);
+    await screen.findByTestId('movie-preview');
+
+    // A first opening shows none, and so asks for none: nothing is loaded for a setting that is off.
+    expect(reads.photographsAsked.at(-1)).toEqual({ ids: ['trip-a'], enabled: false });
+    fireEvent.click(screen.getByText('Photographs'));
+    expect(await screen.findByTestId('movie-picture-seconds')).toBeDisabled();
+    expect(screen.queryByTestId('movie-picture-count')).not.toBeInTheDocument();
+
+    fireEvent.mouseDown(within(screen.getByTestId('movie-picture-mode')).getByRole('combobox'));
+    fireEvent.click(await screen.findByText('In a corner'));
+    await waitFor(() => expect(reads.photographsAsked.at(-1)).toEqual({ ids: ['trip-a'], enabled: true }));
+    expect(await screen.findByTestId('movie-picture-count')).toHaveTextContent(
+      'Photographs on these trips\' moments: 2; still loading: 1.',
+    );
+    expect(screen.getByTestId('movie-picture-seconds')).not.toBeDisabled();
+    // A corner is chosen only for a picture that is in one.
+    expect(within(screen.getByTestId('movie-picture-corner')).getByRole('combobox')).not.toBeDisabled();
+    fireEvent.mouseDown(within(screen.getByTestId('movie-picture-mode')).getByRole('combobox'));
+    fireEvent.click(await screen.findByText('Over the whole frame'));
+    await waitFor(() =>
+      expect(within(screen.getByTestId('movie-picture-corner')).getByRole('combobox')).toBeDisabled(),
+    );
+  });
+
+  it('says so where the trips have no photograph on any moment', async () => {
+    open(['trip-a']);
+    await screen.findByTestId('movie-preview');
+    fireEvent.click(screen.getByText('Photographs'));
+    fireEvent.mouseDown(within(await screen.findByTestId('movie-picture-mode')).getByRole('combobox'));
+    fireEvent.click(await screen.findByText('In a corner'));
+
+    expect(await screen.findByTestId('movie-picture-count')).toHaveTextContent(
+      'No photograph is hung on a moment of these trips.',
+    );
   });
 
   it('keeps the trips in the order they were ticked, which is what keeps each trip its colour', async () => {
@@ -567,6 +625,14 @@ describe('the tracking movie dialog', () => {
     const alpha = movieTrip('trip-a', 'Alpha');
     const bravo = movieTrip('trip-b', 'Bravo');
     reads.movie = ready(bravo, alpha);
+    // One photograph on a moment of one of them, its image in hand.
+    const image = { width: 4, height: 3 } as unknown as HTMLImageElement;
+    reads.photographs = {
+      pictures: [{ key: '/p/1', tripLogId: 'trip-a', at: Date.parse(ARMED) + 3_600_000, caverId: null, caption: null }],
+      images: new Map([['/p/1', image]]),
+      loading: 0,
+      failed: 0,
+    };
     const file = new Blob(['GIF89a'], { type: 'image/gif' });
     recordMovie.mockImplementation(async (recording) => {
       recording.onProgress?.({ stage: 'rendering', done: 1, total: 2, step: 1, steps: 2 });
@@ -585,6 +651,9 @@ describe('the tracking movie dialog', () => {
     expect(recording.trips.map((trip) => trip.tripLogId)).toEqual(['trip-b', 'trip-a']);
     expect(recording.settings.format).toBe('gif');
     expect(recording.signal?.aborted).toBe(false);
+    // The trips' photographs go to the recorder with the images loaded for them.
+    expect(recording.pictures?.all).toBe(reads.photographs.pictures);
+    expect(recording.pictures?.images.get('/p/1')).toBe(image);
     // Several trips are called by the cave and the days they span on the frame; the file is called
     // by the cave and the one date it was made, not by a second date in the reader's own order.
     const days = new Date(2026, 8, 12).toLocaleDateString(i18n.language);

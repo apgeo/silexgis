@@ -5,7 +5,13 @@ import { syncLiveMarkers, type DrawnMarker } from '../liveMarkerSync.ts';
 import { openMovieEncoder, type MovieEncoder } from './encode/movieEncoder.ts';
 import { isMovieSinkMismatch, type MovieSink } from './encode/movieSink.ts';
 import { drawMovieCaptions, movieCaptionColors, movieCaptionsAt } from './movieCaptions.ts';
-import { movieParty, type MovieParty, type MovieTripData } from './movieParty.ts';
+import { movieMarkerId, movieParty, type MovieParty, type MovieTripData } from './movieParty.ts';
+import {
+  drawMoviePictureAt,
+  moviePictureSchedule,
+  type MoviePicture,
+  type MoviePictureImage,
+} from './moviePictures.ts';
 import { movieSize, type MovieSettings } from './movieSettings.ts';
 import { movieFrames, type MovieTimeline } from './movieTimeline.ts';
 import {
@@ -89,6 +95,12 @@ export interface MovieRecording {
   surveyModelId: string;
   /** The title caption, as the preview draws it; null when the caption is off. */
   title: string | null;
+  /**
+   * The photographs hung on the trips' moments, and the image of each that could be loaded, by
+   * the picture's key. Left out, the movie has none. A picture with no image here is left out of
+   * its frames and the movie is made without it.
+   */
+  pictures?: { all: readonly MoviePicture[]; images: ReadonlyMap<string, MoviePictureImage> };
   words: { t: TFunction; language: string; today: string };
   /**
    * What the viewer's grouped markers were labelled with before the recording, set back when it
@@ -205,6 +217,20 @@ function movieStage(
   );
   const drawnTrails = new Map<string, string>();
   let capturing = false;
+  // When each photograph is on screen, worked out once: like everything else about a frame it is
+  // a function of the frame's number. Somebody left out of the movie is left out of its pictures.
+  const pictures = recording.pictures;
+  const pictureSchedule =
+    pictures === undefined
+      ? []
+      : moviePictureSchedule(
+          pictures.all,
+          trips.map((trip) => trip.tripLogId),
+          timeline,
+          frames,
+          settings,
+          (tripLogId, caverId) => !excluded.has(movieMarkerId(tripLogId, caverId)),
+        );
 
   const syncTrails = (party: MovieParty) => {
     for (const [id, trail] of party.trails) {
@@ -267,6 +293,10 @@ function movieStage(
         advance: advanceMs,
         into: context,
       });
+      // Under the captions, so the clock and the bar go on being read while a photograph is up.
+      if (pictures !== undefined) {
+        drawMoviePictureAt(context, width, height, pictureSchedule, frame.index, settings, pictures.images);
+      }
       drawMovieCaptions(context, width, height, movieCaptionsAt(settings, title, party, timeline, frame, words));
     },
 

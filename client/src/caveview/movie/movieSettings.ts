@@ -56,6 +56,15 @@ export type MovieViewLayer =
  */
 export type MovieViewDirection = 'plan' | 'north' | 'south' | 'east' | 'west';
 
+/** How the photographs hung on a trip's moments are shown in its movie: not at all, over the whole frame, or in a corner of it. */
+export type MoviePictureMode = 'off' | 'full' | 'corner';
+export type MoviePictureCorner = 'bottomRight' | 'bottomLeft' | 'topRight' | 'topLeft';
+
+export const MOVIE_PICTURE_MODES: readonly MoviePictureMode[] = ['off', 'corner', 'full'];
+export const MOVIE_PICTURE_CORNERS: readonly MoviePictureCorner[] = ['bottomRight', 'bottomLeft', 'topRight', 'topLeft'];
+/** The seconds of a movie one photograph may be given. */
+export const MOVIE_PICTURE_SECONDS_RANGE = { min: 0.5, max: 15 } as const;
+
 /** Every view a movie can start from, in the order they are offered. */
 export const MOVIE_VIEW_DIRECTIONS: readonly MovieViewDirection[] = ['plan', 'north', 'south', 'east', 'west'];
 
@@ -126,6 +135,25 @@ export interface MovieSettings {
     note: boolean;
     /** A multiplier on the caption sizes, which otherwise follow the frame height. */
     size: number;
+  };
+  /**
+   * The photographs hung on the trips' moments.
+   *
+   * Not shown until the reader asks, for the reason the notes and the altitudes are not: the file
+   * goes on to people nobody checked, and a photograph of the party says more about them than a
+   * first name on a marker. `seconds` is of the movie, not of the trip — see
+   * {@link moviePictureSchedule}.
+   */
+  pictures: {
+    mode: MoviePictureMode;
+    /** How long each photograph is on screen, in seconds of the movie. */
+    seconds: number;
+    /** Whether a photograph comes up and goes down gradually. */
+    fade: boolean;
+    /** Which corner, in the corner mode. Bottom right is the one no caption stands in. */
+    corner: MoviePictureCorner;
+    /** Whether a photograph's own caption is written along its bottom edge. */
+    captions: boolean;
   };
 }
 
@@ -237,6 +265,7 @@ export const DEFAULT_MOVIE_SETTINGS: MovieSettings = {
     note: false,
     size: 1,
   },
+  pictures: { mode: 'off', seconds: 2, fade: true, corner: 'bottomRight', captions: true },
 };
 
 // ---- repair ----------------------------------------------------------------------------------
@@ -300,6 +329,7 @@ export function normaliseMovieSettings(raw: unknown): MovieSettings {
   const cavers = record(top.cavers);
   const view = record(top.view);
   const captions = record(top.captions);
+  const pictures = record(top.pictures);
 
   const format = oneOf<MovieFormat>(top.format, ['gif', 'webm', 'mp4'], d.format);
   const known = MOVIE_SIZES.find((size) => size.id === top.size);
@@ -382,6 +412,18 @@ export function normaliseMovieSettings(raw: unknown): MovieSettings {
       progress: flag(captions.progress, d.captions.progress),
       note: flag(captions.note, d.captions.note),
       size: number(captions.size, d.captions.size, 0.5, 2),
+    },
+    pictures: {
+      mode: oneOf<MoviePictureMode>(pictures.mode, MOVIE_PICTURE_MODES, d.pictures.mode),
+      seconds: number(
+        pictures.seconds,
+        d.pictures.seconds,
+        MOVIE_PICTURE_SECONDS_RANGE.min,
+        MOVIE_PICTURE_SECONDS_RANGE.max,
+      ),
+      fade: flag(pictures.fade, d.pictures.fade),
+      corner: oneOf<MoviePictureCorner>(pictures.corner, MOVIE_PICTURE_CORNERS, d.pictures.corner),
+      captions: flag(pictures.captions, d.pictures.captions),
     },
   };
 }

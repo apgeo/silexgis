@@ -15,7 +15,7 @@ import type {
 import { MemoryMovieSink } from './encode/memoryMovieSink.ts';
 import type { MovieEncoder, MovieEncoderOptions } from './encode/movieEncoder.ts';
 import { MovieSinkMismatch } from './encode/movieSink.ts';
-import { movieParty, type MovieTripData } from './movieParty.ts';
+import { movieMarkerId, movieParty, type MovieTripData } from './movieParty.ts';
 import {
   isMovieAbort,
   movieSampleFrames,
@@ -675,6 +675,88 @@ describe('recordMovie', () => {
     expect(fake.viewer.endCapture).not.toHaveBeenCalled();
     expect(encoder.calls).toEqual(['close']);
     expect(scene(fake)).toEqual(before);
+  });
+});
+
+describe('the photographs of a recording', () => {
+  /** A canvas whose context keeps, in order, the pictures drawn on it and the texts written. */
+  function watched() {
+    const steps: string[][] = [];
+    const createCanvas = (width: number, height: number) => {
+      const element = canvas(width, height);
+      const context = element.getContext('2d') as CanvasRenderingContext2D;
+      Object.assign(context, {
+        drawImage: (image: { name?: string }) => steps[steps.length - 1]?.push(`picture:${image.name ?? '?'}`),
+        fillText: () => steps[steps.length - 1]?.push('text'),
+      });
+      return element;
+    };
+    return { steps, createCanvas };
+  }
+  const image = (name: string) => ({ name, width: 400, height: 300 }) as unknown as HTMLImageElement;
+  const hung = (key: string, at: string, caverId: string | null = null) => ({
+    key,
+    tripLogId: 'trip-1',
+    at: Date.parse(at),
+    caverId,
+    caption: null,
+  });
+
+  /** Records thirty frames and answers, frame by frame, what was drawn after the viewer's own picture. */
+  async function drawnPerFrame(overrides: Partial<MovieRecording>) {
+    const fake = fakeViewer();
+    const { steps, createCanvas } = watched();
+    const capture = fake.viewer.captureFrame.bind(fake.viewer);
+    fake.viewer.captureFrame = ((options: Parameters<typeof capture>[0]) => {
+      steps.push([]);
+      return capture(options);
+    }) as typeof fake.viewer.captureFrame;
+    await recordMovie(recording(fake, fakeEncoder(), { createCanvas, ...overrides }));
+    return steps;
+  }
+
+  it('draws each on the frames its schedule gives it, under the captions, and on no other', async () => {
+    // Four hours over twenty frames of replay: 10:00 is reached on frame 10. Half a second is five frames.
+    const steps = await drawnPerFrame({
+      settings: { ...settings(), pictures: { ...DEFAULT_MOVIE_SETTINGS.pictures, mode: 'corner', seconds: 0.5, fade: false } },
+      pictures: { all: [hung('at-ten', '2026-09-12T10:00:00Z')], images: new Map([['at-ten', image('at-ten')]]) },
+    });
+
+    expect(steps).toHaveLength(30);
+    const withPicture = steps.map((frame, index) => (frame.includes('picture:at-ten') ? index : -1)).filter((index) => index >= 0);
+    expect(withPicture).toEqual([10, 11, 12, 13, 14]);
+    // Drawn before the frame's captions, so the clock stays readable over it.
+    expect(steps[10][0]).toBe('picture:at-ten');
+    expect(steps[10].slice(1).every((step) => step === 'text')).toBe(true);
+    expect(steps[10].length).toBeGreaterThan(1);
+  });
+
+  it('draws none when the movie is told to show none, and none of somebody left out', async () => {
+    const all = [hung('of-ana', '2026-09-12T09:00:00Z', 'ana'), hung('party', '2026-09-12T11:00:00Z')];
+    const images = new Map([['of-ana', image('of-ana')], ['party', image('party')]]);
+
+    // Left as a first opening has it: a movie shows no photograph until it is told to.
+    const off = await drawnPerFrame({ pictures: { all, images } });
+    expect(off.flat().some((step) => step.startsWith('picture:'))).toBe(false);
+
+    const shown = { ...settings(), pictures: { ...DEFAULT_MOVIE_SETTINGS.pictures, mode: 'full' as const } };
+    const withoutAna = await drawnPerFrame({
+      settings: shown,
+      excluded: new Set([movieMarkerId('trip-1', 'ana')]),
+      pictures: { all, images },
+    });
+    const pictures = new Set(withoutAna.flat().filter((step) => step.startsWith('picture:')));
+    expect([...pictures]).toEqual(['picture:party']);
+  });
+
+  it('makes the movie without a photograph whose image never loaded', async () => {
+    const steps = await drawnPerFrame({
+      settings: { ...settings(), pictures: { ...DEFAULT_MOVIE_SETTINGS.pictures, mode: 'corner' } },
+      pictures: { all: [hung('lost', '2026-09-12T10:00:00Z')], images: new Map() },
+    });
+
+    expect(steps).toHaveLength(30);
+    expect(steps.flat().some((step) => step.startsWith('picture:'))).toBe(false);
   });
 });
 

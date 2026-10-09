@@ -22,6 +22,9 @@ import {
   MOVIE_GIF_MAX_FRAMES,
   MOVIE_GIF_MAX_WIDTH,
   MOVIE_LABEL_SIZE_RANGE,
+  MOVIE_PICTURE_CORNERS,
+  MOVIE_PICTURE_MODES,
+  MOVIE_PICTURE_SECONDS_RANGE,
   MOVIE_SIZES,
   MOVIE_VIDEO_FRAME_RATES,
   MOVIE_VIEW_DIRECTIONS,
@@ -94,6 +97,12 @@ export interface MovieSettingsFormProps {
   onPreset: (preset: MoviePresetId) => void;
   /** Puts every setting back to what a first opening shows. */
   onReset: () => void;
+  /**
+   * The photographs hung on the chosen trips' moments: how many there are, how many are still
+   * loading and how many could not be loaded. Null until the trips' photographs have been asked
+   * for, which is only while the setting wants them.
+   */
+  photographs: { count: number; loading: number; failed: number } | null;
 }
 
 function Row({ label, help, children }: { label: ReactNode; help?: ReactNode; children: ReactNode }) {
@@ -189,6 +198,7 @@ export default function MovieSettingsForm({
   layers,
   terrain,
   autoTitle,
+  photographs,
   trips,
   summary,
   onViewAgain,
@@ -199,7 +209,7 @@ export default function MovieSettingsForm({
   const formatNumber = (value: number, digits: number) =>
     value.toLocaleString(i18n.language, { maximumFractionDigits: digits });
   const change = (next: MovieSettings) => onChange(normaliseMovieSettings(next));
-  const patch = <G extends 'rotation' | 'timeline' | 'cavers' | 'view' | 'captions'>(
+  const patch = <G extends 'rotation' | 'timeline' | 'cavers' | 'view' | 'captions' | 'pictures'>(
     group: G,
     values: Partial<MovieSettings[G]>,
   ) => change({ ...settings, [group]: { ...settings[group], ...values } });
@@ -376,7 +386,7 @@ export default function MovieSettingsForm({
     </Flex>
   );
 
-  const { rotation, timeline, cavers, view, captions } = settings;
+  const { rotation, timeline, cavers, view, captions, pictures } = settings;
   const motion = (
     <Flex vertical gap="middle">
       <Row label={t('caveview.movie.rotation')}>
@@ -775,6 +785,83 @@ export default function MovieSettingsForm({
     </Flex>
   );
 
+  const picturesOff = pictures.mode === 'off';
+  const pictureSettings = (
+    <Flex vertical gap="middle">
+      <Row label={t('caveview.movie.pictureMode')} help={t(`caveview.movie.pictureModeHelp.${pictures.mode}`)}>
+        <Select
+          value={pictures.mode}
+          onChange={(mode) => patch('pictures', { mode })}
+          popupMatchSelectWidth={false}
+          data-testid="movie-picture-mode"
+          aria-label={t('caveview.movie.pictureMode')}
+          options={MOVIE_PICTURE_MODES.map((mode) => ({
+            value: mode,
+            label: t(`caveview.movie.pictureModes.${mode}`),
+          }))}
+        />
+      </Row>
+      {/* Said where the choice is made: a setting about photographs reads as broken on a trip
+          that has none, and a photograph the server would not hand over is not in the file. */}
+      {!picturesOff && photographs !== null && (
+        <Typography.Text type="secondary" className="movie-setting-help" data-testid="movie-picture-count">
+          {photographs.count === 0
+            ? t('caveview.movie.picturesNone')
+            : photographs.loading > 0
+              ? t('caveview.movie.picturesLoading', { count: photographs.count, loading: photographs.loading })
+              : photographs.failed > 0
+                ? t('caveview.movie.picturesFailed', { count: photographs.count, failed: photographs.failed })
+                : t('caveview.movie.picturesCount', { count: photographs.count })}
+        </Typography.Text>
+      )}
+      <Row label={t('caveview.movie.pictureSeconds')} help={t('caveview.movie.pictureSecondsHelp')}>
+        <InputNumber
+          min={MOVIE_PICTURE_SECONDS_RANGE.min}
+          max={MOVIE_PICTURE_SECONDS_RANGE.max}
+          step={0.5}
+          disabled={disabled || picturesOff}
+          value={pictures.seconds}
+          onChange={(value) => value !== null && patch('pictures', { seconds: value })}
+          data-testid="movie-picture-seconds"
+          aria-label={t('caveview.movie.pictureSeconds')}
+        />
+      </Row>
+      <Row label={t('caveview.movie.pictureFade')}>
+        <Switch
+          disabled={disabled || picturesOff}
+          checked={pictures.fade}
+          onChange={(fade) => patch('pictures', { fade })}
+          data-testid="movie-picture-fade"
+          aria-label={t('caveview.movie.pictureFade')}
+        />
+      </Row>
+      <Row label={t('caveview.movie.pictureCorner')}>
+        <Select
+          // Only a picture in a corner has a corner to be in.
+          disabled={disabled || pictures.mode !== 'corner'}
+          value={pictures.corner}
+          onChange={(corner) => patch('pictures', { corner })}
+          popupMatchSelectWidth={false}
+          data-testid="movie-picture-corner"
+          aria-label={t('caveview.movie.pictureCorner')}
+          options={MOVIE_PICTURE_CORNERS.map((corner) => ({
+            value: corner,
+            label: t(`caveview.movie.pictureCorners.${corner}`),
+          }))}
+        />
+      </Row>
+      <Row label={t('caveview.movie.pictureCaptions')}>
+        <Switch
+          disabled={disabled || picturesOff}
+          checked={pictures.captions}
+          onChange={(shown) => patch('pictures', { captions: shown })}
+          data-testid="movie-picture-captions"
+          aria-label={t('caveview.movie.pictureCaptions')}
+        />
+      </Row>
+    </Flex>
+  );
+
   const group = (key: MovieSettingsGroup, children: ReactNode) => ({
     key,
     label: t(`caveview.movie.groups.${key}`),
@@ -835,6 +922,7 @@ export default function MovieSettingsForm({
             group('cavers', caverSettings),
             group('view', viewSettings),
             group('captions', captionSettings),
+            group('pictures', pictureSettings),
           ]}
         />
       </div>

@@ -25,7 +25,7 @@ export const MOVIE_ASPECTS: readonly { id: '16x9' | '4x3'; ratio: number }[] = [
   { id: '4x3', ratio: 4 / 3 },
 ];
 
-export type MovieSettingsGroup = 'trips' | 'output' | 'motion' | 'cavers' | 'view' | 'captions';
+export type MovieSettingsGroup = 'trips' | 'output' | 'motion' | 'cavers' | 'view' | 'captions' | 'pictures';
 
 /** The ids the settings' labels are looked up by, for the test that holds both locales to them. */
 export const MOVIE_SETTINGS_GROUPS: readonly MovieSettingsGroup[] = [
@@ -35,4 +35,5 @@ export const MOVIE_SETTINGS_GROUPS: readonly MovieSettingsGroup[] = [
   'cavers',
   'view',
   'captions',
+  'pictures',
 ];

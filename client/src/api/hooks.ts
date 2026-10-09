@@ -9536,6 +9536,29 @@ export function useTripMomentPictureLinks(tripLogId: string | undefined, enabled
 }
 
 /**
+ * The same links for several trips at once, in the order the trips were given: what a movie of
+ * more than one trip reads its photographs from. Each trip's own query, under the key the one-trip
+ * hook uses, so a trip whose strip is open elsewhere is not asked twice. A trip whose links have
+ * not arrived, or could not be read, answers an empty list.
+ */
+export function useTripsMomentPictureLinks(tripLogIds: readonly string[], enabled = true): ResLink[][] {
+  const params: ResLinkPageParams = { relation: 'documents', pageSize: RESLINK_PAGE_MAX };
+  return useQueries({
+    queries: tripLogIds.map((tripLogId) => ({
+      queryKey: queryKeys.resLinksForTarget('tripLog', tripLogId, params),
+      queryFn: () =>
+        unwrap(
+          api.GET('/api/v1/reslinks/for-target', {
+            params: { query: { type: 'tripLog', id: tripLogId, ...params } },
+          }),
+        ),
+      enabled: enabled && tripLogId.length > 0,
+    })),
+    combine: (results) => results.map((result) => result.data?.items ?? []),
+  });
+}
+
+/**
  * Hangs photographs on the moments they were taken at — a memory card at a time.
  *
  * Bulk because that is the act. Nobody uploads from underground, so these arrive days later when

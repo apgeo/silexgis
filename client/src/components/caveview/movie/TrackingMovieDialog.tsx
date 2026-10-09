@@ -81,6 +81,8 @@ import { formatTripDates } from '../../trips/tripDates.ts';
 import { movieTripDays } from './movieDays.ts';
 import MoviePreviewHost, { type MoviePreviewHandle } from './MoviePreviewHost.tsx';
 import MovieSettingsForm from './MovieSettingsForm.tsx';
+import { drawMoviePictureAt, moviePictureSchedule } from '../../../caveview/movie/moviePictures.ts';
+import { useMoviePictures } from './useMoviePictures.ts';
 import { useMovieTrips } from './useMovieTrips.ts';
 import './TrackingMovieDialog.css';
 
@@ -503,6 +505,35 @@ function MovieDialogBody({
     [movie.trips],
   );
   const frames = useMemo(() => (timeline === null ? null : movieFrames(timeline, settings)), [timeline, settings]);
+  // ---- the photographs hung on the trips' moments ----
+  // Read and loaded while the dialog is open and the setting asks for them, so that a frame —
+  // composed in one task — never has to wait for one. Held as they were under an export, like the
+  // trips: the frames being recorded are of the movie as it was when the export began.
+  const photographs = useMoviePictures(chosenIds, open && settings.pictures.mode !== 'off');
+  const pictureSchedule = useMemo(
+    () =>
+      timeline === null || frames === null
+        ? []
+        : moviePictureSchedule(
+            photographs.pictures,
+            movie.trips.map((trip) => trip.tripLogId),
+            timeline,
+            frames,
+            settings,
+            (tripLogId, caverId) => !excluded.has(movieMarkerId(tripLogId, caverId)),
+          ),
+    [photographs.pictures, movie.trips, timeline, frames, settings, excluded],
+  );
+  // What the settings say of them, held while the three numbers stand: the form is not drawn
+  // again for every frame of an export, and an object made on each drawing would have it be.
+  const picturesWanted = settings.pictures.mode !== 'off';
+  const photographsSummary = useMemo(
+    () =>
+      picturesWanted
+        ? { count: photographs.pictures.length, loading: photographs.loading, failed: photographs.failed }
+        : null,
+    [picturesWanted, photographs.pictures.length, photographs.loading, photographs.failed],
+  );
   const frameCount = movieFrameCount(settings).count;
   const frameSize = movieSize(settings);
   const { width, height } = frameSize;
@@ -734,6 +765,8 @@ function MovieDialogBody({
       context.clearRect(0, 0, canvas.width, canvas.height);
       if (party !== null && timeline !== null && frames !== null) {
         const frame = frames.frame(index);
+        // As the export draws a frame: the photograph first, the captions over it.
+        drawMoviePictureAt(context, canvas.width, canvas.height, pictureSchedule, frame.index, settings, photographs.images);
         drawMovieCaptions(
           context,
           canvas.width,
@@ -756,6 +789,9 @@ function MovieDialogBody({
     title,
     playing,
     clusterLabel,
+    pictureSchedule,
+    photographs.images,
+    photographs.loading,
   ]);
 
   // While an export runs, the preview shows the frame just recorded; the captions over it are
@@ -781,13 +817,27 @@ function MovieDialogBody({
       ...words,
       excluded,
     });
+    drawMoviePictureAt(context, canvas.width, canvas.height, pictureSchedule, frame.index, settings, photographs.images);
     drawMovieCaptions(
       context,
       canvas.width,
       canvas.height,
       movieCaptionsAt(settings, title, party, timeline, frame, words),
     );
-  }, [recording, recordedFrame, timeline, frames, movie.trips, surveyModelId, settings, words, excluded, title]);
+  }, [
+    recording,
+    recordedFrame,
+    timeline,
+    frames,
+    movie.trips,
+    surveyModelId,
+    settings,
+    words,
+    excluded,
+    title,
+    pictureSchedule,
+    photographs.images,
+  ]);
 
   // ---- what the file will be called ----
   // Its name is shown before the export, not only said afterwards: with the title caption on it
@@ -907,6 +957,7 @@ function MovieDialogBody({
         surveyModelId,
         title,
         words,
+        pictures: { all: photographs.pictures, images: photographs.images },
         clusterLabelAfter: clusterLabel,
         signal: controller.signal,
         onProgress: (progress) => setRun((before) => before && { ...before, progress, now: performance.now() }),
@@ -985,6 +1036,7 @@ function MovieDialogBody({
           surveyModelId,
           title,
           words,
+          pictures: { all: photographs.pictures, images: photographs.images },
           clusterLabelAfter: clusterLabel,
         },
         index,
@@ -1236,6 +1288,7 @@ function MovieDialogBody({
             layers={preview?.layers ?? null}
             terrain={preview?.terrain === true}
             autoTitle={autoTitle}
+            photographs={photographsSummary}
             summary={summary}
             onViewAgain={previewReady ? viewAgain : null}
             trips={tripPicker}
