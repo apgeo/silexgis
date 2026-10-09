@@ -566,8 +566,10 @@ feature and walkthroughs of whole jobs.
   movie only, stored nowhere. After the clock the movie says how many times faster than life it
   runs (**×240**). And where a survey's file carries its own **terrain**, a switch draws the
   surface over the cave — off until you turn it on, because a cave shown under its hills can be
-  placed by whoever gets the file. The
-  [user guide](user-guide/features/tracking-movie.md) has the whole of it.
+  placed by whoever gets the file. The photographs hung on a trip's moments can be drawn into
+  its movie — in a corner or over the whole frame, each for a number of seconds you choose,
+  fading in and out, one after the other where they would overlap — off until you turn them on.
+  The [user guide](user-guide/features/tracking-movie.md) has the whole of it.
 - **Being asked onto a trip does not open the cave, so somebody who can open it is told** — an
   invitation grants nothing, so when a person asked onto a trip cannot read a cave the trip is about,
   the cave's owner and the full administrators get a message, whether the cave was already on the trip

@@ -162,6 +162,9 @@ presetare, cât și după o revenire la valorile implicite.
 | | **Traseul parcurs** | O linie în urma fiecărui marcaj |
 | **Vedere** | Straturile ridicării, **Relieful de deasupra peșterii**, **Colorare**, **Cameră**, **Grosimea liniilor**, **Scara verticală** | Ce se desenează din ridicare și cum. Un strat pe care ridicarea nu îl are este gri; colorările după adâncime au nevoie de o ridicare care stă pe relief real |
 | **Texte** | **Titlu**, **Ceas**, **Factor de accelerare**, **Legendă**, **Bară de progres**, **Ultima notă**, **Mărimea textelor** | Ce se scrie peste imagine |
+| **Fotografii** | **Fotografiile de pe momentele turelor** | *Nu apar*, *Într-un colț* sau *Pe tot cadrul*. Fotografiile sunt cele prinse de un moment al unei ture bifate, din jurnalul ei de urmărire; fiecare apare când filmul ajunge la momentul ei. Sub alegere, dialogul spune câte sunt, câte încă se încarcă și câte nu au putut fi încărcate și vor lipsi |
+| | **Secunde pentru fiecare** | Secunde din film, nu din tură — echipa continuă să se miște dedesubt. Fotografiile care s-ar suprapune apar una după alta, în ordinea în care au fost făcute; cea pe care ar tăia-o sfârșitul filmului este scurtată |
+| | **Apare și dispare treptat**, **Colț**, **Legendele lor** | Dacă o fotografie apare și dispare treptat; în ce colț (dreapta jos este cel în care nu stă niciun text); dacă legenda ei este scrisă de-a lungul marginii de jos |
 
 **Revino la valorile implicite** stă sub presetări și nu este una dintre ele: readuce *fiecare*
 setare la ce arată o primă deschidere — textele, etichetele și vederea, nu doar fișierul, și
@@ -260,6 +263,7 @@ Merită deci să știți ce se află în el.
 | **Numele intrărilor** | Pornite | Debifați-le sub **Vedere** |
 | **Numele stațiilor**, **Comentariile stațiilor** | Oprite | — |
 | **Ultima notă** — text liber scris de cineva odată cu un raport | Oprită, fiindcă *„Notele sunt text liber și pot conține detalii de siguranță"* | — |
+| **Fotografiile** prinse de momentele turelor, cu legendele lor | Oprite. Pornite, fiecare fotografie de pe un moment al unei ture bifate este desenată în cadre, mai puțin cele despre cineva pe care l-ați lăsat în afara filmului | **Fotografiile de pe momentele turelor**: *Nu apar* |
 | **Busola și afișajul de altitudine** | Oprite. Pornite, ele *„scriu altitudini și un azimut în fiecare cadru"* | — |
 | **Suprafața de deasupra peșterii** — dealuri, văi și locul intrărilor printre ele, acolo unde fișierul ridicării își conține relieful | Oprită. Pornită, peștera este desenată sub propriul ei peisaj, pe care cineva care cunoaște zona îl poate recunoaște | — lăsați **Relieful de deasupra peșterii** oprit. Alegerea este ținută minte, deci priviți previzualizarea înainte de a trimite un film făcut după unul care îl avea pornit |
 | **Numele fișierului** | Urmează titlul — vedeți mai jos | **Titlu** oprit |

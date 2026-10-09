@@ -158,6 +158,9 @@ through a reset alike.
 | | **Trail of the route walked** | A line behind each marker |
 | **View** | The survey's layers, **Terrain over the cave**, **Shading**, **Camera**, **Line width**, **Vertical scale** | What of the survey is drawn and how. A layer the survey does not have is greyed; the depth shadings need a survey that stands on real terrain |
 | **Captions** | **Title**, **Clock**, **Time-lapse figure**, **Legend**, **Progress bar**, **Latest note**, **Caption size** | What is written over the picture |
+| **Photographs** | **Photographs on the trips' moments** | *Not shown*, *In a corner* or *Over the whole frame*. The photographs are the ones hung on a moment of a ticked trip from its tracking log; each comes up when the movie reaches its moment. Under the choice the dialog says how many there are, how many are still loading, and how many could not be loaded and will be left out |
+| | **Seconds each is shown** | Seconds of the movie, not of the trip — the party goes on moving underneath. Photographs that would overlap are shown one after the other, in the order they were taken; one the end of the movie would cut into is cut short |
+| | **Fade in and out**, **Corner**, **Their captions** | Whether a photograph comes up and goes down gradually; which corner (bottom right is the one no caption stands in); whether its own caption is written along its bottom edge |
 
 **Reset to defaults** stands under the presets and is not one of them: it puts *every* setting
 back to what a first opening shows — the captions, the labels and the view as well as the file,
@@ -250,6 +253,7 @@ on, to people the installation never checked. So it is worth knowing what is in 
 | **Entrance names** | On | Untick it under **View** |
 | **Station names**, **station comments** | Off | — |
 | **The latest note** — free text somebody typed with a report | Off, because *"Notes are free text and can carry safety details"* | — |
+| **Photographs** hung on the trips' moments, with their captions | Off. Switched on, every photograph on a moment of a ticked trip is drawn into the frames, a photograph about somebody you left out of the movie excepted | **Photographs on the trips' moments**: *Not shown* |
 | **Compass and altitude display** | Off. Switched on, it *"prints altitudes and a bearing into every frame"* | — |
 | **The surface over the cave** — hills, valleys and where the entrances lie among them, where the survey's file carries its terrain | Off. Switched on, the cave is drawn under its own landscape, which somebody who knows the area can recognise | — leave **Terrain over the cave** off. It is remembered, so look at the preview before sending a movie made after one that had it on |
 | **The file's own name** | Follows the title — see below | **Title** off |
