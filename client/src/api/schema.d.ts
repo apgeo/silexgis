@@ -24373,6 +24373,8 @@ export interface components {
             positionOnOtherModel: boolean;
             in: boolean;
             out: boolean;
+            activity?: null | string;
+            note?: null | string;
         };
         PublicPastTrackParticipantDto: {
             /** Format: int32 */

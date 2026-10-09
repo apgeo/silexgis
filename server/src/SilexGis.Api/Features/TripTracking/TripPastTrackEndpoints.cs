@@ -427,6 +427,9 @@ public static class TripPastTrackEndpoints
         var byCaver = rows.GroupBy(e => e.Person()).ToDictionary(g => g.Key, g => g.ToList());
         var participants = new List<PublicPastTrackParticipantDto>();
         var withheldAny = false;
+        // Whether this installation tells a report's own words — what the party was doing, what
+        // was noted — to somebody without an account. Read here, on each read.
+        var tellsWords = past.Value.PublishReportWords;
         // The first and the last report this answer holds, which is what its replay runs out to.
         DateTimeOffset? firstReport = null;
         DateTimeOffset? lastReport = null;
@@ -500,7 +503,11 @@ public static class TripPastTrackEndpoints
                     shown ? report.DepthEnteredM : null,
                     PositionOnOtherModel: elsewhere,
                     In: standing == TripStanding.Underground,
-                    Out: standing == TripStanding.Out));
+                    Out: standing == TripStanding.Out,
+                    // The report's own words, where the installation publishes them — and never
+                    // beside a place that is withheld, which a note is as likely as not to name.
+                    Activity: tellsWords && positionOpen ? report.Activity : null,
+                    Note: tellsWords && positionOpen ? report.Note : null));
             }
 
             participants.Add(new PublicPastTrackParticipantDto(

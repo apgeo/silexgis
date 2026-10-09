@@ -234,4 +234,11 @@ public sealed record PublicPastTrackFixDto(
     decimal? DepthM,
     bool PositionOnOtherModel,
     bool In,
-    bool Out);
+    bool Out,
+    /// <summary>
+    /// What the party was doing, in the words of the log, or null: null on every installation
+    /// that has not chosen to publish a report's words, and on a report whose place is withheld.
+    /// </summary>
+    string? Activity = null,
+    /// <summary>What was noted with the report, on the same terms as <see cref="Activity"/>.</summary>
+    string? Note = null);

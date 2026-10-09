@@ -93,6 +93,32 @@ public sealed class TripPastTrackOptions
     public int EffectiveListSize => Math.Clamp(ListSize, 1, MaxListSize);
 
     /// <summary>
+    /// Whether a finished trip's replay says, of each report, what the party was doing and what
+    /// was noted with it. <b>Off unless an installation turns it on.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off, because a note is a coordinator's free text about a person — typed during a callout,
+    /// for the people running it — and has never been on a published surface; what a party was
+    /// doing is one word of the same log. A club that publishes its expedition's journal as an
+    /// article wants exactly these beside each report, and whether people without an account are
+    /// to read them is the club's to decide.
+    /// </para>
+    /// <para>
+    /// What it widens, exactly: on the one read that replays a finished trip, each report that
+    /// read already carries gains the two texts stored with it. A report whose place is withheld
+    /// carries neither — a note is where a place is most often written out. A note that is a
+    /// report of its own, with no place and no standing, is still not part of a replay. The page
+    /// of a trip still being followed never carries either.
+    /// </para>
+    /// <para>
+    /// Read as each replay is opened, so it applies to links already handed out, in both
+    /// directions.
+    /// </para>
+    /// </remarks>
+    public bool PublishReportWords { get; set; }
+
+    /// <summary>
     /// Whether a finished trip's replay comes with the photographs hung on its moments. <b>Off
     /// unless an installation turns it on.</b>
     /// </summary>

@@ -39,6 +39,7 @@ namespace SilexGis.Api.Tests;
 public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const string PublishKey = "TripPastTracks:PublishMomentPictures";
+    private const string WordsKey = "TripPastTracks:PublishReportWords";
 
     // Nobody else in this fixture — no title, no station, no file name, no caption — shares a word
     // with these, so finding one in an answer can only mean a person was named.
@@ -52,6 +53,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
     private readonly SilexGisApiFactory asInstalled;
     private readonly SilexGisApiFactory publishing;
     private readonly SilexGisApiFactory publishingUnnamed;
+    private readonly SilexGisApiFactory publishingWords;
     private readonly TestTimeProvider clock = new(DateTimeOffset.UtcNow);
     private readonly string filesRoot;
     private readonly string connectionString;
@@ -73,6 +75,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         asInstalled = HostWith();
         publishing = HostWith((PublishKey, "true"));
         publishingUnnamed = HostWith((PublishKey, "true"), ("TripTracking:PublishRealNames", "false"));
+        publishingWords = HostWith((WordsKey, "true"));
     }
 
     /// <summary>
@@ -120,6 +123,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
     public void Dispose()
     {
         publishingUnnamed.Dispose();
+        publishingWords.Dispose();
         publishing.Dispose();
         asInstalled.Dispose();
         try { Directory.Delete(filesRoot, recursive: true); } catch { /* best effort */ }
@@ -275,6 +279,65 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
     /// people carries no word of anybody's name on any of the four routes — although a note typed
     /// beside one of the pictures names its subject.
     /// </summary>
+    /// <summary>
+    /// What a report says the party was doing, and what was noted with it, reach a replay only on
+    /// an installation that publishes a report's words — and the page of a party still underground
+    /// on neither.
+    /// </summary>
+    [Fact]
+    public async Task A_reports_own_words_are_told_only_where_the_installation_publishes_them()
+    {
+        var cave = await PublishedCaveAsync();
+        var then = cave.Then.Trip;
+        // Words no title, station or name in this fixture shares, so that finding one in an
+        // answer can only mean the report's own text was sent.
+        const string doing = "lucru: vextralare";
+        const string noted = "Zorvath la baza putului";
+        using (var scope = asInstalled.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            foreach (var report in await db.TripPositionEvents.Where(e => e.TripLogId == then || e.TripLogId == cave.Now.Trip).ToListAsync())
+            {
+                report.Activity = doing;
+                report.Note = noted;
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        var start = Stamp(clock.Now.AddDays(-6));
+        await FinishAsync(then, start, start.AddHours(8));
+
+        // As installed: the members are there and say nothing, and neither text is anywhere.
+        var quiet = await ReadAsync(visitor, cave.PastTrip);
+        quiet.Status.ShouldBe(HttpStatusCode.OK, quiet.Body);
+        var quietFix = Json(quiet).GetProperty("participants").EnumerateArray()
+            .SelectMany(p => p.GetProperty("track").EnumerateArray()).ShouldHaveSingleItem();
+        quietFix.GetProperty("activity").ValueKind.ShouldBe(JsonValueKind.Null);
+        quietFix.GetProperty("note").ValueKind.ShouldBe(JsonValueKind.Null);
+        quiet.Body.ShouldNotContain("vextralare");
+        quiet.Body.ShouldNotContain("Zorvath");
+
+        // Publishing them: the same fix, with its two texts as they were stored.
+        var told = await ReadAsync(publishingWords.CreateClient(), cave.PastTrip);
+        told.Status.ShouldBe(HttpStatusCode.OK, told.Body);
+        var toldFix = Json(told).GetProperty("participants").EnumerateArray()
+            .SelectMany(p => p.GetProperty("track").EnumerateArray()).ShouldHaveSingleItem();
+        toldFix.GetProperty("activity").GetString().ShouldBe(doing);
+        toldFix.GetProperty("note").GetString().ShouldBe(noted);
+        toldFix.GetProperty("stationName").GetString().ShouldBe(quietFix.GetProperty("stationName").GetString());
+
+        // And the party underground now is told as it always was, on either installation: the
+        // three other reads carry neither text.
+        foreach (var route in new[] { cave.Follow, cave.Live, cave.Past })
+        {
+            var answer = await ReadAsync(publishingWords.CreateClient(), route);
+            answer.Status.ShouldBe(HttpStatusCode.OK, $"{route}: {answer.Body}");
+            answer.Body.ShouldNotContain("vextralare", Case.Insensitive, route);
+            answer.Body.ShouldNotContain("Zorvath", Case.Insensitive, route);
+        }
+    }
+
     [Fact]
     public async Task With_names_switched_off_a_replay_carrying_pictures_of_people_carries_no_word_of_a_name()
     {
