@@ -579,7 +579,8 @@ public static class TrackingCsvImportEndpoints
         // refuse the one person a sheet is most likely to name.
         var roster = await db.TripLogParticipants.AsNoTracking()
             .Where(p => p.TripLogId == tripLogId)
-            .Join(db.Cavers.AsNoTracking(), p => p.CaverId, c => c.Id, (_, c) => new { c.Id, c.FullName })
+            .Join(db.Cavers.AsNoTracking(), p => p.CaverId, c => c.Id,
+                (_, c) => new { c.Id, c.FullName, c.ShortName })
             .Distinct()
             .ToListAsync(ct);
 
@@ -599,6 +600,17 @@ public static class TrackingCsvImportEndpoints
                 && !string.Equals(label, person.FullName, StringComparison.Ordinal))
             {
                 names.Add((person.Id, label));
+            }
+
+            // And under what their party calls them, which is the name a log kept at a cave
+            // entrance is actually written in. Matched whole rather than left to the ladder's
+            // lower rungs, because a short name is not always the first word of the long one — a
+            // nickname shares no word with it at all — and those rungs would find nobody, or,
+            // worse, somebody else whose given name it happens to be.
+            if (!string.IsNullOrWhiteSpace(person.ShortName)
+                && !string.Equals(person.ShortName, person.FullName, StringComparison.Ordinal))
+            {
+                names.Add((person.Id, person.ShortName));
             }
         }
 

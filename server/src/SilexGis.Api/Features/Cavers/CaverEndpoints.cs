@@ -23,11 +23,18 @@ public sealed record CaverDto(
     string? Email,
     string? Phone,
     string? Notes,
-    IReadOnlyList<CaverMembershipDto> CavingGroups);
+    IReadOnlyList<CaverMembershipDto> CavingGroups,
+    /// <summary>
+    /// What this person's party calls them, where somebody has said. Shown wherever a name has
+    /// little room — a marker over a survey, a line of a log — and never instead of
+    /// <see cref="Name"/>, which is what identifies them.
+    /// </summary>
+    string? ShortName = null);
 
 public sealed record CaverMembershipDto(Guid CavingGroupId, string Name, CavingGroupRole Role);
 
-public sealed record CaverWriteRequest(string FullName, string? Email, string? Phone, string? Notes);
+public sealed record CaverWriteRequest(
+    string FullName, string? Email, string? Phone, string? Notes, string? ShortName = null);
 
 public sealed record CaverAccountLinkRequest(Guid UserId);
 
@@ -55,6 +62,7 @@ public sealed class CaverWriteRequestValidator : AbstractValidator<CaverWriteReq
     public CaverWriteRequestValidator()
     {
         RuleFor(x => x.FullName).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.ShortName).MaximumLength(80);
         // Length only, deliberately: the address on a roster entry is a contact note somebody
         // keeps about a person who may have no account here, and nothing is ever sent to it —
         // mail goes to the account's own address. A format check there only refuses the entry
@@ -213,6 +221,7 @@ public static class CaverEndpoints
         var caver = new Caver
         {
             FullName = request.FullName.Trim(),
+            ShortName = Trimmed(request.ShortName),
             Email = Trimmed(request.Email),
             Phone = Trimmed(request.Phone),
             Notes = Trimmed(request.Notes),
@@ -254,6 +263,7 @@ public static class CaverEndpoints
         }
 
         caver.FullName = request.FullName.Trim();
+        caver.ShortName = Trimmed(request.ShortName);
         caver.Email = Trimmed(request.Email);
         caver.Phone = Trimmed(request.Phone);
         if (canKeepRoster)
@@ -893,7 +903,10 @@ public static class CaverEndpoints
                 [.. memberships
                     .Where(m => m.CaverId == caver.Id)
                     .OrderBy(m => m.Name)
-                    .Select(m => new CaverMembershipDto(m.CavingGroupId, m.Name, m.Role))]);
+                    .Select(m => new CaverMembershipDto(m.CavingGroupId, m.Name, m.Role))],
+                // Travels with the name it abbreviates: it says less than that name does, so a
+                // caller shown one is told nothing more by being shown the other.
+                caver.ShortName);
         })];
     }
 

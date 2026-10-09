@@ -330,8 +330,10 @@ public static class TripTrackingEndpoints
         var publishedNames = options.Value.PublishRealNames
             ? await db.Cavers.AsNoTracking()
                 .Where(c => rosterCavers.Contains(c.Id))
-                .Select(c => new { c.Id, c.FullName })
-                .ToDictionaryAsync(c => c.Id, c => c.FullName, ct)
+                .Select(c => new { c.Id, c.FullName, c.ShortName })
+                // What the party calls them where somebody has said, the roster name otherwise:
+                // decided in one place so that every published surface names a person the same way.
+                .ToDictionaryAsync(c => c.Id, c => TripPartyNames.Shown(c.FullName, c.ShortName), ct)
             : [];
 
         var withheldAny = configHasVocabulary && !configOpen;

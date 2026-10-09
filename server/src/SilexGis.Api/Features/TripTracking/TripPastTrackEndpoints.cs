@@ -396,8 +396,10 @@ public static class TripPastTrackEndpoints
         var names = live.Value.PublishRealNames
             ? await db.Cavers.AsNoTracking()
                 .Where(c => rosterIds.Contains(c.Id))
-                .Select(c => new { c.Id, c.FullName })
-                .ToDictionaryAsync(c => c.Id, c => c.FullName, ct)
+                .Select(c => new { c.Id, c.FullName, c.ShortName })
+                // What the party calls them where somebody has said, the roster name otherwise:
+                // decided in one place so that every published surface names a person the same way.
+                .ToDictionaryAsync(c => c.Id, c => TripPartyNames.Shown(c.FullName, c.ShortName), ct)
             : [];
 
         // Oldest first, because that is the order a playback runs in, and bounded from that end so

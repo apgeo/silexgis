@@ -614,8 +614,10 @@ public static class TripTrackingPublicationEndpoints
         var names = options.PublishRealNames
             ? await db.Cavers.AsNoTracking()
                 .Where(c => everybody.Contains(c.Id))
-                .Select(c => new { c.Id, c.FullName })
-                .ToDictionaryAsync(c => c.Id, c => c.FullName, ct)
+                .Select(c => new { c.Id, c.FullName, c.ShortName })
+                // What the party calls them where somebody has said, the roster name otherwise:
+                // decided in one place so that every published surface names a person the same way.
+                .ToDictionaryAsync(c => c.Id, c => TripPartyNames.Shown(c.FullName, c.ShortName), ct)
             : [];
 
         // A tracked trip's whole event log is small (reports arrive by relayed word, minutes
