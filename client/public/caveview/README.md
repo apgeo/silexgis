@@ -3,8 +3,8 @@
 Source: https://github.com/apgeo/CaveView.js — this project's fork of
 https://github.com/aardgoose/CaveView.js (MIT license, see `LICENSE` in this directory).
 
-Vendored build: distribution version **2.9.0-slx.16**, built from the fork's `silexgis`
-branch at commit `02abcae5` — the upstream **2.9.0 release tag** plus the fork's changes
+Vendored build: distribution version **2.9.0-slx.18**, built from the fork's `silexgis`
+branch at commit `6b3ef586` — the upstream **2.9.0 release tag** plus the fork's changes
 (each also kept on its own dev-based `feature/*` branch so upstream can take them): the
 dispose-handler typo fix, the `crsLookup` configuration option the app uses to resolve
 coordinate systems locally instead of via epsg.io, a navigation and hover API
@@ -243,6 +243,42 @@ at its first step, which calls a method that bundle does not have; all 71 pass a
 One of the new assertions was also run against a build without its fix: with the first of two
 coinciding files held back so that it is read last, that build draws it over the second.
 
+**What slx.17 and slx.18 add over slx.16** — a viewer that is laid out for the size it is shown at.
+(slx.17 was stamped and never vendored: the work of slx.18 was asked for before it left the fork.)
+
+- **`stationLabelScale`** — how large station names and their comments are written, as a multiple of
+  the theme's size, in the configuration or set while a model is up. A survey names every station by
+  its whole path, and a busy passage at the theme's size is a wall of text. It is the viewer's, kept
+  from model to model, and is not among the view settings a reader saves as their default. This
+  application offers it as a control on the model and keeps the choice per browser.
+- **A size class.** `sizeClass` is `large`, `medium` or `small` by the width of the container (under
+  1000px is medium, under 600px small), and `mobile` is true on a screen as narrow as the
+  stylesheet's narrow layout; the container carries a class for each. It is a question about the
+  container, not the screen: a model in one pane of this application is small on a large monitor.
+- **The compass and the inclination dial are drawn smaller where the viewer is** — half their size in
+  a medium or small container, a quarter on a mobile screen — about their corner, and are driven
+  through regions of the same size. `hudScale` in the configuration says otherwise.
+- **A toolbar can be given a strip beside the viewer** (`strip` in its options) and is laid out there,
+  in the flow of the page, while the viewer is not large: over a model 400px wide, fifteen controls
+  cover a third of the cave. *Not taken up here yet* — the panel still draws the bar over the model
+  at every size; the club's website does use it.
+- **The pictures of a station stand at the left of the model**, one under the other, at half the size
+  they had (32px, 44px under a finger), instead of in a row beside the station where they lay over
+  the passages. A caption is the title of its thumbnail. `stationMediaPlacement: 'station'` asks for
+  the row. **This changes what every panel showing station pictures looks like.**
+- **Markers' labels are set clear of one another.** Markers at one station were already one marker;
+  markers at stations a few pixels apart on the screen — two parties at neighbouring stations, the
+  whole cave in view — had their labels written over one another. For each frame drawn a label that
+  would lie over one already placed is drawn lower, a backed line at a time, and `labelShift` on a
+  listed marker says by how much.
+- **The tab that closes one of the viewer's own panels is in the viewer's corner on a narrow screen**,
+  not fixed to the screen's. This application does not mount those panels.
+
+The fork's test went from 71 assertions to 86, all passing against this bundle from a clean clone
+(sha256 of `js/CaveView2.min.js`: `ca37741419983f0f5b699a5a9a7090a08faf5695cf85dbad308830b47e3e8047`).
+Besides the bundle only the stylesheet differs from slx.16's; the four workers, the logo and the
+catalogue are byte-identical.
+
 Not taken: moving the `.3d` and `.lox` readers onto the worker path the `.ply` reader uses. They
 write into a shared survey graph (stations shared by identity between legs, a tree with methods,
 CRS resolution through the host's `crsLookup` during the parse), so a worker would need a flat
@@ -260,11 +296,11 @@ CaveView.js is not published on npm; it ships as a prebuilt browser bundle. This
 directory contains the runtime subset the app needs, under a directory named by the
 distribution version:
 
-- `v2.9.0-slx.16/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
-- `v2.9.0-slx.16/js/workers/` — web workers the bundle spawns at runtime (paths resolved
+- `v2.9.0-slx.18/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
+- `v2.9.0-slx.18/js/workers/` — web workers the bundle spawns at runtime (paths resolved
   against the viewer's `home` option, which the app points at this directory)
-- `v2.9.0-slx.16/css/caveview.css`, `v2.9.0-slx.16/images/logo.svg` — runtime assets
-- `v2.9.0-slx.16/lib/lang-ro.json` — the Romanian catalogue, fetched when the interface is Romanian
+- `v2.9.0-slx.18/css/caveview.css`, `v2.9.0-slx.18/images/logo.svg` — runtime assets
+- `v2.9.0-slx.18/lib/lang-ro.json` — the Romanian catalogue, fetched when the interface is Romanian
 
 The version directory exists for cache correctness: these URLs are fetched outside the
 app bundle's hashed-asset pipeline, so a new build must arrive under new URLs or
@@ -285,8 +321,8 @@ after. (Earlier `2.9.0-slx.*` directories were removed rather than kept: none re
 browser can be holding it.) Do not edit the vendored files in place.
 
 `v2.9.0-slx.12/` is kept beside the current one under that rule: it is the build the last release
-loads, so it is the one a browser can still be holding. `v2.9.0-slx.15/` went with slx.16 without
-being kept, because it never reached an installation either; `v2.9.0-slx.13/` went with slx.14 without
+loads, so it is the one a browser can still be holding. `v2.9.0-slx.16/` went with slx.18 without
+being kept, and `v2.9.0-slx.15/` with slx.16, because neither reached a release; `v2.9.0-slx.13/` went with slx.14 without
 being kept, because it never reached an installation, and `v2.9.0-slx.14/` went with slx.15 the
 same way, replaced on the branch it was vendored on before that branch was merged;
 `v2.9.0-slx.9/` went with slx.13 (it had
@@ -297,7 +333,7 @@ any further change to the fork — a fix found while vendoring included — is a
 version and a new directory. slx.12 was rebuilt in its own directory once, from `563b763b` to
 `5f14d910`, before it reached a release; that was the last time.
 
-**This build was verified to reproduce.** `v2.9.0-slx.16/js/CaveView2.min.js` (SHA-256
+**This build was verified to reproduce.** `v2.9.0-slx.18/js/CaveView2.min.js` (SHA-256
 `c38f5f5157669cb82a3d6093cab0a8431bc09d844c53b521eccfd1c2d16d7382`) is byte-identical to a
 fresh `npm ci && npm run build` of commit `02abcae5` in a clean clone of the fork, made
 separately from the build it was copied from — as is every other file vendored here: the four

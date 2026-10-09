@@ -15,7 +15,7 @@ import { userManager } from '../auth/auth.tsx';
  * stale cached viewer across upgrades. A new vendored build lands in a new directory and
  * changes this constant in the same commit, so every asset URL changes with it.
  */
-export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.16/';
+export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.18/';
 
 const SCRIPT_URL = `${CAVEVIEW_HOME}js/CaveView2.min.js`;
 const CSS_URL = `${CAVEVIEW_HOME}css/caveview.css`;
@@ -298,6 +298,11 @@ export interface CaveViewLiveMarker {
   payload?: unknown;
   /** Whether the loaded model holds the station named. An unresolved marker is drawn nowhere. */
   resolved: boolean;
+  /**
+   * How many lines of its own text the label is drawn below its dot, where the viewer has moved it
+   * to stand clear of another marker's label; 0 for one on the line of its dot.
+   */
+  labelShift?: number;
 }
 
 /** What a focus does besides moving the camera. */
@@ -501,6 +506,15 @@ export interface CaveViewer extends CaveViewLayers {
   liveMarkerLabelSize: number | null;
   /** Whether a plate is drawn behind each marker's label. On by default. */
   liveMarkerLabelBacking: boolean;
+  /**
+   * How large the names of the stations, and the comments on them, are written: a multiple of the
+   * size the viewer's theme gives them, 1 until it is set. The viewer's own, kept from model to
+   * model, and not among the view settings its "save as default" stores. Anything that is not a
+   * finite number above zero is refused with a warning.
+   */
+  stationLabelScale: number;
+  /** How large the viewer is displayed, by the width of its container. Read only. */
+  readonly sizeClass: 'large' | 'medium' | 'small';
   /** How long a marker's move between two stations takes by default, in milliseconds. */
   liveMarkerMoveTime: number;
   /**
@@ -623,6 +637,11 @@ export interface CaveViewUi {
 export interface CaveViewToolbarOptions {
   placement?: 'top' | 'bottom';
   buttons?: readonly string[];
+  /**
+   * An element beside the viewer, or its id, that the bar is laid out in while the viewer is shown
+   * at less than its large size, so that it covers none of the model.
+   */
+  strip?: HTMLElement | string;
 }
 
 export interface CaveViewToolbar {
