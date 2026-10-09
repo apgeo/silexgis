@@ -29,7 +29,8 @@ public sealed record TrackingCsvExportRow(
     string? StationName,
     decimal? DepthM,
     string? Note,
-    string? ToStationName = null);
+    string? ToStationName = null,
+    string? Activity = null);
 
 /// <summary>
 /// A tracking log written as the sheet the importer reads: the importer's own columns, in its own
@@ -144,9 +145,11 @@ public static class TrackingCsvWriter
                 case TripPositionEventKind.AtStation when !string.IsNullOrWhiteSpace(row.StationName):
                     station = row.StationName;
                     toStation = IsStretch(row) ? row.ToStationName : null;
+                    state = ActivityCell(row.Activity, words);
                     break;
                 case TripPositionEventKind.AtDepth when row.DepthM is { } metres:
                     depth = metres.ToString(CultureInfo.InvariantCulture);
+                    state = ActivityCell(row.Activity, words);
                     break;
                 default:
                     // A placed report with no place to write — kept back from this reader, or a
@@ -173,6 +176,25 @@ public static class TrackingCsvWriter
         }
 
         return sheet.ToString();
+    }
+
+    /// <summary>
+    /// What a placed report's state cell says the party was doing, or nothing.
+    /// </summary>
+    /// <remarks>
+    /// The column a going-in and a coming-out are written in is the one an importer reads an
+    /// activity from, so a log written out and read back keeps what its reports say the party was
+    /// doing — and a sheet with that column and an empty cell would otherwise take it away. An
+    /// activity that happens to be one of the words the column means something else by is left
+    /// out: written, it would read back as a going-in, a note or a place kept back, which is a
+    /// different report.
+    /// </remarks>
+    private static string? ActivityCell(string? activity, TrackingCsvStateWords words)
+    {
+        if (string.IsNullOrWhiteSpace(activity)) return null;
+        if (words.KindOf(activity) is not null) return null;
+        if (TripImportNames.Key(activity) == TripImportNames.Key(TrackingCsvStateWords.Withheld)) return null;
+        return TextCell(activity.Trim());
     }
 
     /// <summary>

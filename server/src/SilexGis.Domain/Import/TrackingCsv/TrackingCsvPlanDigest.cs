@@ -48,7 +48,7 @@ public static class TrackingCsvPlanDigest
     /// Said first, so that a change to how the rest is written down gives every plan a new name
     /// rather than, by accident, an old plan's.
     /// </summary>
-    private const string Shape = "tracking-sheet-plan/6";
+    private const string Shape = "tracking-sheet-plan/7";
 
     /// <summary>The name, as 64 lower-case hexadecimal digits.</summary>
     /// <param name="plan">What the sheet would write.</param>
@@ -69,6 +69,7 @@ public static class TrackingCsvPlanDigest
         Put(text, Shape);
         Put(text, plan.CarriesTeam ? "1" : "0");
         Put(text, plan.CarriesNote ? "1" : "0");
+        Put(text, plan.CarriesActivity ? "1" : "0");
         // The anchor reaches only rows that are placed by this plan, so a plan with none does not
         // name it: a row that claims no station writes no anchor, and neither does one that leaves
         // the place the log holds standing.

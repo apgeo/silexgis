@@ -241,6 +241,15 @@ public sealed record TrackingCsvPlan
     /// <summary>Whether the sheet has a column for the note, or for the details that are folded into it.</summary>
     public bool CarriesNote { get; init; }
 
+    /// <summary>Whether the sheet has a column for what the party was doing.</summary>
+    /// <remarks>
+    /// The column a going-in and a coming-out are also read from, since a sheet writes all three
+    /// in one place. As with the team and the note: a sheet without it says nothing about what a
+    /// report already in the log records the party as doing, and a row that replaces that report
+    /// leaves it standing.
+    /// </remarks>
+    public bool CarriesActivity { get; init; }
+
     /// <summary>The survey every row that claims a station would be anchored to.</summary>
     public Guid? SurveyModelId { get; init; }
 
@@ -490,6 +499,7 @@ public static class TrackingCsvPlanner
             CarriesTeam = parsed.ResolvedColumns.ContainsKey(TrackingCsvField.Team),
             CarriesNote = parsed.ResolvedColumns.ContainsKey(TrackingCsvField.Note)
                 || parsed.ResolvedColumns.ContainsKey(TrackingCsvField.Details),
+            CarriesActivity = parsed.ResolvedColumns.ContainsKey(TrackingCsvField.State),
         };
     }
 

@@ -47,6 +47,7 @@ public class TrackingCsvPlanDigestTests
         Reports = reports,
         CarriesTeam = true,
         CarriesNote = true,
+        CarriesActivity = true,
     };
 
     /// <summary>
@@ -96,10 +97,11 @@ public class TrackingCsvPlanDigestTests
         // restart of the server, or on another of its instances.
         var plan = PlanOf(Report(), Report() with { Line = 3, CaverId = Maria, TeamId = null, Note = null, DepthM = null });
 
-        // Re-pinned when the activity joined the plan, which moved the shape to its sixth form.
+        // Re-pinned when the activity joined the plan, which moved the shape to its sixth form,
+        // and again when whether the sheet carries one did, which moved it to its seventh.
         // Worked out the same way as the first: from the written-down encoding, by a script
         // outside this language, rather than by copying what the code answered.
-        plan.Digest().ShouldBe("1dec2f6f945d234fed7fd56b10973453ed3cd34f47070f77aed6ffe56c863abd");
+        plan.Digest().ShouldBe("5eeb7e74aac2e620a1b1af91c165d3c731309e94246fa27462120b0cad49c191");
         plan.Digest().ShouldBe(TrackingCsvPlanDigest.Of(plan));
     }
 
@@ -125,6 +127,7 @@ public class TrackingCsvPlanDigestTests
         string[] named =
         [
             nameof(TrackingCsvPlan.Reports), nameof(TrackingCsvPlan.CarriesTeam), nameof(TrackingCsvPlan.CarriesNote),
+            nameof(TrackingCsvPlan.CarriesActivity),
             nameof(TrackingCsvPlan.SurveyModelId), nameof(TrackingCsvPlan.CaveFeatureId),
         ];
         string[] derivedOrShown =
@@ -193,6 +196,7 @@ public class TrackingCsvPlanDigestTests
 
         (PlanOf(Report()) with { CarriesTeam = false }).Digest().ShouldNotBe(name);
         (PlanOf(Report()) with { CarriesNote = false }).Digest().ShouldNotBe(name);
+        (PlanOf(Report()) with { CarriesActivity = false }).Digest().ShouldNotBe(name);
     }
 
     [Fact]
@@ -332,6 +336,10 @@ public class TrackingCsvPlanDigestTests
         bare.Reports.Count.ShouldBe(1);
         bare.CarriesTeam.ShouldBeFalse();
         bare.CarriesNote.ShouldBeFalse();
+        // The column a going-in is read from is the one an activity is read from.
+        bare.CarriesActivity.ShouldBeTrue();
+        Read("Data si ora,Speologi,Adancime", "12.09.2026 08:15,Ion Popescu,-40")
+            .CarriesActivity.ShouldBeFalse();
 
         var withTeam = Read("Data si ora,Speologi,Echipa,Stare", "12.09.2026 08:15,Ion Popescu,,intrare");
         withTeam.CarriesTeam.ShouldBeTrue();

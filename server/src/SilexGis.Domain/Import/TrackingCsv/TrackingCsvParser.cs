@@ -516,8 +516,10 @@ public static class TrackingCsvParser
             DepthM = depth,
             Decides = decides,
             State = state,
-            // The reserved word is not something the party was doing, so it is not carried as one.
-            Activity = withheldPlace ? null : stateText,
+            // What the party was doing is a word the lists do not know. A going-in, a coming-out
+            // and a note are already what the row is, and the reserved word is not something the
+            // party was doing, so none of those is carried as an activity as well.
+            Activity = state is null && !withheldPlace ? stateText : null,
             Note = note,
             Diagnostics = diagnostics,
         };

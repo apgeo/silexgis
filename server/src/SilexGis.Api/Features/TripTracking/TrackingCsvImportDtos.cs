@@ -191,7 +191,12 @@ public sealed record TrackingCsvPreviewRowDto(
     string? Note,
     bool Replaces,
     TrackingEventDto? Before,
-    IReadOnlyList<TrackingCsvDiagnosticDto> Diagnostics);
+    IReadOnlyList<TrackingCsvDiagnosticDto> Diagnostics,
+    /// <summary>
+    /// What the row says the party was doing, as the sheet words it, or null. Written over a
+    /// report the row replaces only where the sheet has a column for it.
+    /// </summary>
+    string? Activity = null);
 
 /// <summary>What reading a sheet against this trip found.</summary>
 /// <param name="Header">The header as written, so a mapping screen can offer the real spellings.</param>

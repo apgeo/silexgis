@@ -222,6 +222,50 @@ public class TrackingCsvWriterTests
     }
 
     [Fact]
+    public void What_a_placed_report_says_the_party_was_doing_is_written_and_reads_back()
+    {
+        // The state column is where an importer reads it from, so a log written out and read
+        // back under "replace" keeps the word — and without it, that column's empty cell would
+        // take the word off every report.
+        var read = Read(
+            Row(TripPositionEventKind.AtDepth, depth: 96m) with { Activity = "lucru: echipare" },
+            Row(TripPositionEventKind.AtStation, station: "upper.2", at: Nine.AddMinutes(5)) with { Activity = "pauză / odihnă" },
+            Row(TripPositionEventKind.AtDepth, depth: 120m, at: Nine.AddMinutes(10)),
+            Row(TripPositionEventKind.Entered, at: Nine.AddMinutes(-30)) with { Activity = "intrare în aven" });
+
+        read.Rows.Count.ShouldBe(4);
+        read.Rows.SelectMany(r => r.Diagnostics).ShouldBeEmpty();
+        read.Rows[0].Activity.ShouldBe("lucru: echipare");
+        read.Rows[0].State.ShouldBeNull();
+        read.Rows[0].DepthM.ShouldBe(96m);
+        read.Rows[1].Activity.ShouldBe("pauză / odihnă");
+        read.Rows[1].StationName.ShouldBe("upper.2");
+        read.Rows[2].Activity.ShouldBeNull();
+        // Going in is what the row is; the word a club wrote for it is not carried as an
+        // activity as well, so the sheet's own word for it reads back as the same report.
+        read.Rows[3].State.ShouldBe(TripPositionEventKind.Entered);
+        read.Rows[3].Activity.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("intrare")]
+    [InlineData("iesire")]
+    [InlineData("nota")]
+    [InlineData("retinut")]
+    public void An_activity_that_is_one_of_the_state_columns_own_words_is_not_written(string word)
+    {
+        // Written, it would read back as a going-in, a coming-out, a note or a place kept back:
+        // a different report from the one in the log.
+        var read = Read(Row(TripPositionEventKind.AtDepth, depth: 96m) with { Activity = word });
+
+        read.Rows.Count.ShouldBe(1);
+        read.Rows[0].State.ShouldBeNull();
+        read.Rows[0].Activity.ShouldBeNull();
+        read.Rows[0].DepthM.ShouldBe(96m);
+        read.Rows[0].Diagnostics.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void A_log_with_nothing_in_it_is_a_header_and_nothing_else()
     {
         TrackingCsvWriter.Write([]).ShouldBe("Data si ora,Adancime,Statie,Loc,Speologi,Echipa,Nota,Stare\r\n");

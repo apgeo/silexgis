@@ -195,7 +195,8 @@ public static class TrackingCsvImportEndpoints
                 shown.StationName,
                 shown.DepthEnteredM,
                 shown.Note,
-                shown.ToStationName);
+                shown.ToStationName,
+                shown.Activity);
         }));
 
         return TypedResults.File(
@@ -235,7 +236,8 @@ public static class TrackingCsvImportEndpoints
                 report.MatchedBy.ToString(), TeamAfter(report), report.Kind, report.ViewerStationName,
                 report.ViewerToStationName, report.PlaceLabel, report.DepthM, report.Note, report.Replaces,
                 report.Replaces ? before.GetValueOrDefault((report.CaverId, report.At)) : null,
-                [.. report.Diagnostics.Select(Diagnostic)]);
+                [.. report.Diagnostics.Select(Diagnostic)],
+                report.Activity);
 
         return TypedResults.Ok(new TrackingCsvPreviewDto(
             parsed.Header,
@@ -403,6 +405,13 @@ public static class TrackingCsvImportEndpoints
                         TripCsvValues.Single(row.Note, options.SkipTokens), report.Note, StringComparison.Ordinal))
                 {
                     row.Note = report.Note;
+                }
+
+                // What the party was doing, on the same terms as the team and the note: written
+                // where the sheet has a column for it and the word is another one. A sheet of
+                // times and depths with no such column leaves what the log records standing.
+                if (plan.CarriesActivity && !string.Equals(row.Activity, report.Activity, StringComparison.Ordinal))
+                {
                     row.Activity = report.Activity;
                 }
 
