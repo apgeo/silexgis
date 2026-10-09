@@ -237,9 +237,9 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Closest approach | Cea mai mică distanță |
 | Distributions | Distribuții |
 | Trip statistics | Statistici din ture |
-| Insights (the button) / Trip insights (the page) | Sinteză / Sinteza ieșirilor |
-| The current filter / All trips | Filtrul curent / Toate ieșirile |
-| Trips per year / What they were for / Where they went / Who was on them | Ieșiri pe an / Cu ce scop / Unde s-a mers / Cine a fost |
+| Insights (the button) / Trip insights (the page) | Sinteză / Sinteza turelor |
+| The current filter / All trips | Filtrul curent / Toate turele |
+| Trips per year / What they were for / Where they went / Who was on them | Ture pe an / Cu ce scop / Unde s-a mers / Cine a fost |
 | Imports | Importuri |
 | Review and import | Verifică și importă |
 | Undo (an import) | Anulează |

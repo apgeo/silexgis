@@ -228,11 +228,11 @@ redirecționează și se citește luni mai târziu.
 > citească. Turele proprii sunt la *Jurnale de tură → Turele mele*, calculate din cine este
 > autentificat.
 
-### Sinteza ieșirilor
+### Sinteza turelor
 
 **Sinteză**, deasupra listei de ture, adună turele pe care le arată lista — ia cu ea filtrul
-listei. Patru grafice: *Ieșiri pe an*, *Cu ce scop*, *Unde s-a mers* și *Cine a fost*. Titlul
-fiecărui grafic spune peste câte ture a fost desenat, iar **Filtrul curent · Toate ieșirile**
+listei. Patru grafice: *Ture pe an*, *Cu ce scop*, *Unde s-a mers* și *Cine a fost*. Titlul
+fiecărui grafic spune peste câte ture a fost desenat, iar **Filtrul curent · Toate turele**
 comută între filtrul cu care ați venit și tot ce puteți citi, astfel încât o vedere restrânsă
 să aibă cu ce fi comparată.
 
