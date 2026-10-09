@@ -32,6 +32,18 @@ nu poate răspunde la o invitație. Trebuie contactat altfel.
 
 Marcați **Fără cont** acolo unde nu există autentificare în spatele fișei.
 
+**Cluburile din care face parte cineva se pot schimba din fișa persoanei.** *Editare* arată
+grupurile de speologie și vă lasă să adăugați sau să scoateți oricare dintre ele; persoana intră
+ca membru obișnuit, iar cine conduce un club se stabilește în continuare pe pagina clubului. De
+îndată ce alegerea diferă de ce este salvat, formularul spune ce înseamnă: *„Apartenența la un
+grup este cea care dă contului unei persoane drepturile grupului: membrii citesc și modifică ce
+împarte grupul și văd poziția exactă a peșterilor pe care acesta le protejează, și sunt anunțați
+când sunt adăugați. Scoaterea cuiva îi retrage imediat aceste drepturi. Nimic din ce s-a
+înregistrat despre persoană — ture, ore, rapoarte — nu se schimbă."* Fiecare club este o scriere
+separată, care cere dreptul de a modifica *acel* club; unde îl aveți pentru unele și nu pentru
+altele, persoana este salvată, cluburile pe care le puteți modifica sunt schimbate, iar
+formularul le numește pe cele rămase neschimbate.
+
 Cineva ajunge în listă pe una din patru căi: îl adaugă aici cine ține lista; un cont își
 primește fișa proprie când este creat; unei foi importate cu ture vechi i se poate spune să
 creeze persoanele pe care le numește; iar **un nume scris pe o tură sau pe

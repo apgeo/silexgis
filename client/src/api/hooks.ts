@@ -5049,6 +5049,53 @@ export function useUpsertCavingGroupMember(cavingGroupId: string) {
 }
 
 /**
+ * Puts one person in some caving groups and takes them out of others: one roster write per
+ * group, from the person's side.
+ *
+ * A group's roster is written group by group, each asking the right to edit that group, so some
+ * of a set may be refused while the rest go through. The refused ones are answered rather than
+ * thrown: whoever asked is owed the names of the groups that did not change, not one failure
+ * standing for a save that mostly happened. Somebody joined here joins as an ordinary member —
+ * who runs a group is said on the group's own page.
+ */
+export function useChangeCaverCavingGroups() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ caverId, join, leave }: { caverId: string; join: string[]; leave: string[] }) => {
+      const refused: string[] = [];
+      for (const id of join) {
+        const { error } = await api.POST('/api/v1/caving-groups/{id}/members', {
+          params: { path: { id } },
+          body: { caverId, role: 'member' },
+        });
+        if (error !== undefined) {
+          refused.push(id);
+        }
+      }
+      for (const id of leave) {
+        const { error } = await api.DELETE('/api/v1/caving-groups/{id}/members/{caverId}', {
+          params: { path: { id, caverId } },
+        });
+        if (error !== undefined) {
+          refused.push(id);
+        }
+      }
+      return { refused };
+    },
+    // Whatever was refused, the rest was written: every list that shows who is in what is stale.
+    onSettled: (_data, _error, { join, leave }) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cavers });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cavingGroups });
+      for (const id of [...join, ...leave]) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.cavingGroupMembers(id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.cavingGroupAudience(id) });
+      }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.capabilities });
+    },
+  });
+}
+
+/**
  * How many people an announcement to this caving group would reach, asked before one is written.
  *
  * Not the roster's size: the members with no account have nowhere to receive anything and the

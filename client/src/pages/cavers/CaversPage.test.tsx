@@ -15,12 +15,19 @@ import '../../i18n';
 
 const get = vi.fn();
 const put = vi.fn();
+const post = vi.fn();
+const del = vi.fn();
 
 vi.mock('../../api/client.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/client.ts')>('../../api/client.ts');
   return {
     ...actual,
-    api: { GET: (...args: unknown[]) => get(...args), PUT: (...args: unknown[]) => put(...args) },
+    api: {
+      GET: (...args: unknown[]) => get(...args),
+      PUT: (...args: unknown[]) => put(...args),
+      POST: (...args: unknown[]) => post(...args),
+      DELETE: (...args: unknown[]) => del(...args),
+    },
   };
 });
 
@@ -118,6 +125,76 @@ describe('the name a party calls somebody by', () => {
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
     await waitFor(() => expect(put).toHaveBeenCalledOnce());
     expect(put.mock.calls[0][1].body).toMatchObject({ fullName: 'Ana Invented', shortName: 'Anca' });
+  });
+});
+
+describe('the groups somebody belongs to', () => {
+  const OLD = { id: 'group-old', name: 'Old Club Invented' };
+  const NEW = { id: 'group-new', name: 'New Club Invented' };
+  const ANA_IN_OLD = { ...ANA, cavingGroups: [{ cavingGroupId: OLD.id, name: OLD.name, role: 'member' }] };
+
+  beforeEach(() => {
+    get.mockImplementation((path: string) => {
+      if (path === '/api/v1/me/capabilities') {
+        return Promise.resolve(answer({ domains: { cavers: rosterRights } }));
+      }
+      if (path === '/api/v1/cavers') {
+        return Promise.resolve(answer([ANA_IN_OLD, BOGDAN]));
+      }
+      if (path === '/api/v1/caving-groups') {
+        return Promise.resolve(answer([OLD, NEW]));
+      }
+      return Promise.reject(new Error(`unexpected read of ${path}`));
+    });
+    put.mockResolvedValue(answer(ANA_IN_OLD));
+    post.mockResolvedValue(answer({ caverId: ANA.id, name: ANA.name, userId: null, role: 'member' }));
+    del.mockResolvedValue({ response: new Response(null, { status: 204 }) });
+  });
+
+  /** Opens Ana's form and its list of groups. */
+  async function openGroups() {
+    show();
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit' }))[0]);
+    const field = await screen.findByTestId('caver-caving-groups');
+    fireEvent.mouseDown(field.querySelector('.ant-select-selector') ?? field);
+  }
+
+  it('writes no roster for a save that left them alone, and warns of nothing', async () => {
+    show();
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit' }))[0]);
+    await screen.findByTestId('caver-caving-groups');
+    expect(screen.queryByTestId('caver-caving-groups-warning')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    expect(post).not.toHaveBeenCalled();
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it('moves somebody to another group: says what that means, then joins the new and leaves the old', async () => {
+    await openGroups();
+    fireEvent.click(await screen.findByTitle(NEW.name));
+    // The warning appears with the first difference from what is stored.
+    expect(await screen.findByTestId('caver-caving-groups-warning')).toHaveTextContent(/rights/);
+    fireEvent.click(document.querySelector(`.ant-select-item-option[title="${OLD.name}"]`)!);
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(del).toHaveBeenCalledOnce());
+    expect(post).toHaveBeenCalledOnce();
+    expect(post.mock.calls[0][0]).toBe('/api/v1/caving-groups/{id}/members');
+    expect(post.mock.calls[0][1]).toMatchObject({ params: { path: { id: NEW.id } }, body: { caverId: ANA.id, role: 'member' } });
+    expect(del.mock.calls[0][1]).toMatchObject({ params: { path: { id: OLD.id, caverId: ANA.id } } });
+    expect(await screen.findByText('Saved.')).toBeInTheDocument();
+  });
+
+  it('names the group that could not be changed, the person having been saved', async () => {
+    post.mockResolvedValue({ error: { code: 'access.forbidden' }, response: new Response(null, { status: 403 }) });
+    await openGroups();
+    fireEvent.click(await screen.findByTitle(NEW.name));
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    expect(await screen.findByText(/could not be changed: New Club Invented/)).toBeInTheDocument();
+    expect(put).toHaveBeenCalledOnce();
   });
 });
 

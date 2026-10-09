@@ -436,6 +436,8 @@ feature and walkthroughs of whole jobs.
   mouth may be told that every depth it writes is below the entrance, whatever its sign.
   A caver has a short name beside the full one — what their party calls them — which a sheet
   may name them by and which published trips show.
+  The clubs a caver belongs to are changed from the caver's own entry as well as from each
+  club's page, with the form saying what membership gives an account before it is saved.
   A row that would replace a report shows the report as it stands beside the report as it would
   be left, a replacement changes only what the sheet has a column for, and the import writes
   what the preview showed or nothing: if the trip changed in between, the sheet is read again

@@ -32,6 +32,17 @@ cannot answer an invitation. They have to be reached another way.
 
 Marked **No account** where there is no sign-in behind the entry.
 
+**The clubs somebody belongs to can be changed from their own entry.** *Edit* lists the caving
+groups and lets you add or remove any of them; the person joins as an ordinary member, and who
+runs a club is still set on [the club's own page](#membership-and-roles). As soon as the choice
+differs from what is stored the form says what it means: *"Belonging to a group is what gives a
+person's account the group's rights: its members read and edit what the group shares and see the
+exact position of the caves it protects, and they are told when they are added. Taking somebody
+out takes those rights away at once. Nothing recorded about them — trips, hours, reports — is
+changed."* Each club is a separate write that asks the right to edit *that* club, so where you
+hold it for some and not others the person is saved, the clubs you may edit are changed, and the
+form names the ones that were not.
+
 Somebody comes onto the roster in one of four ways: whoever keeps it adds them here; an
 account gets an entry of its own when it is created; an imported sheet of old trips may be
 told to create the people it names; and **a name typed on a trip, or on a
@@ -108,7 +119,8 @@ Groups matter for three reasons:
 ### Membership and roles
 
 Members hold a role in the group: **Member · Admin · Owner**. Manage the roster from the
-group's page.
+group's page — or put one person in a club, or take them out, from
+[their entry on the caver roster](#the-caver-roster).
 
 > **Being allowed to edit a club's roster is not the same as being allowed to write to
 > everyone on it.** The two rights are granted separately. A club's founder can write to
