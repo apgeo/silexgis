@@ -21,12 +21,31 @@ namespace SilexGis.Domain.Entities;
 /// </remarks>
 public class Expedition : IProtectedEntity, ITimestamped, IAuditable
 {
+    /// <summary>
+    /// How long <see cref="PublicNote"/> may be: a few sentences above a page's figures, not a
+    /// second description.
+    /// </summary>
+    public const int PublicNoteMaxLength = 1000;
+
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
     public required string Name { get; set; }
 
     /// <summary>What the camp is for and what it is about — the narrative, free text.</summary>
     public string? Description { get; set; }
+
+    /// <summary>
+    /// What the camp says to whoever reads its published trips — a sentence put above the
+    /// figures a page works out from them, such as how far those figures are to be trusted while
+    /// the records are still being completed.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="Description"/> because the two have different readers. The
+    /// description is for whoever may read the camp; this goes out with every published trip of
+    /// the camp to people with no account, which the description never does. Writing it is the
+    /// act of publishing it, and the form says so beside the field.
+    /// </remarks>
+    public string? PublicNote { get; set; }
 
     /// <summary>The first day of the camp.</summary>
     public DateOnly StartDate { get; set; }

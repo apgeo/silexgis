@@ -34,6 +34,14 @@ aproximativ, niciodată strâns în jurul unei intrări care trebuie să rămân
 
 O tabără introdusă fără a atinge datele este o tabără de o zi, astăzi. Salvarea deschide tabăra.
 
+Un câmp al formularului este scris pentru străini: **nota pentru cititorii turelor publicate**.
+Pleacă împreună cu fiecare [tură publicată](live-tracking.md) a taberei, către persoane fără
+cont, iar o pagină care calculează statistici din acele ture — ore sub pământ, adâncime, ture pe
+speolog — o spune deasupra lor. Aici spune clubul cât de mult se poate conta pe asemenea cifre
+cât timp înregistrările sunt încă în curs de completare. Descrierea nu părăsește niciodată
+aplicația; această notă este singurul lucru al unei tabere care o face, iar pagina taberei o
+arată sub numele ei, ca cine ține tabăra să vadă ce se spune. Golită, nu se mai spune nimic.
+
 O tabără nouă este o **ciornă**, iar pagina o spune oricui ar putea-o anunța: *„Aceasta este o
 ciornă. Nu a fost anunțată încă — anunțați-o când planul este stabilit sau marcați-o efectuată
 după ce a avut loc."*

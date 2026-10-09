@@ -33,6 +33,12 @@ public sealed record ExpeditionDto
 
     public string? Description { get; init; }
 
+    /// <summary>
+    /// What the camp says to whoever reads its published trips. Unlike everything else here it
+    /// is also carried by the published routes, to readers with no account.
+    /// </summary>
+    public string? PublicNote { get; init; }
+
     public required DateOnly StartDate { get; init; }
 
     /// <summary>
@@ -76,6 +82,12 @@ public sealed record ExpeditionWriteRequest
     public string Name { get; init; } = string.Empty;
 
     public string? Description { get; init; }
+
+    /// <summary>
+    /// What the camp says to whoever reads its published trips; nothing, or blank, says nothing.
+    /// It goes out with every published trip of the camp, so it is written for strangers.
+    /// </summary>
+    public string? PublicNote { get; init; }
 
     public DateOnly StartDate { get; init; }
 
@@ -155,6 +167,7 @@ public sealed class ExpeditionWriteRequestValidator : AbstractValidator<Expediti
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(255);
         RuleFor(x => x.Description).MaximumLength(10000);
+        RuleFor(x => x.PublicNote).MaximumLength(Expedition.PublicNoteMaxLength);
 
         RuleFor(x => x.EndDate)
             .GreaterThanOrEqualTo(x => x.StartDate)

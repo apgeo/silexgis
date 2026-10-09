@@ -246,6 +246,16 @@ export default function ExpeditionDetailPage() {
             </Typography.Paragraph>
           </>
         )}
+        {/* Shown here under its own name, so whoever keeps the camp can see what its published
+            trips are saying to strangers without opening the editor to find out. */}
+        {camp.publicNote && (
+          <>
+            <Typography.Text strong>{t('expeditions.publicNote')}</Typography.Text>
+            <Typography.Paragraph style={{ marginTop: 4, whiteSpace: 'pre-wrap' }} data-testid="expedition-public-note">
+              {camp.publicNote}
+            </Typography.Paragraph>
+          </>
+        )}
       </Card>
 
       {/* Everything else the camp is tied to — the partner club, the permit, the write-up filed

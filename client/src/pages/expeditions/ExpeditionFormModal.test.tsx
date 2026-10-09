@@ -105,6 +105,24 @@ describe('ExpeditionFormModal', () => {
     expect(createCamp).not.toHaveBeenCalled();
   });
 
+  it('sends the note for readers of published trips on every save, an untouched one included', async () => {
+    // The server writes what a save gives it: a form that drew the note and left it out of what
+    // it sends would take it off every published trip of a camp whose dates were corrected.
+    show(camp({ publicNote: 'Figures are provisional.' }));
+    expect(screen.getByTestId('expedition-form-public-note')).toHaveValue('Figures are provisional.');
+
+    const body = await savedBody(updateCamp);
+    expect(body.publicNote).toBe('Figures are provisional.');
+  });
+
+  it('sends an emptied note as none', async () => {
+    show(camp({ publicNote: 'Figures are provisional.' }));
+    fireEvent.change(screen.getByTestId('expedition-form-public-note'), { target: { value: '   ' } });
+
+    const body = await savedBody(updateCamp);
+    expect(body.publicNote).toBeNull();
+  });
+
   it('refuses to save a camp with no name rather than sending one the server would refuse', async () => {
     show(null);
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));

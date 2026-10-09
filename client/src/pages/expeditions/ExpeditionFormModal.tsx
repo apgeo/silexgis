@@ -31,6 +31,7 @@ interface FormValues {
   visibility: ExpeditionInfo['visibility'];
   cavingGroupId?: string;
   description?: string;
+  publicNote?: string;
   geom?: TripGeometry | null;
 }
 
@@ -66,6 +67,7 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
           visibility: camp.visibility,
           cavingGroupId: camp.cavingGroupId ?? undefined,
           description: camp.description ?? undefined,
+          publicNote: camp.publicNote ?? undefined,
           geom: camp.geom ?? null,
         });
       } else {
@@ -97,6 +99,9 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
     const body: ExpeditionWrite = {
       name: values.name.trim(),
       description: values.description?.trim() || null,
+      // Sent on every save, an empty one included: the server writes what it is given, so a
+      // form that left it out would take the note off every published trip of the camp.
+      publicNote: values.publicNote?.trim() || null,
       startDate,
       endDate: tripDateEndForWrite(startDate, end ? end.format('YYYY-MM-DD') : null),
       geom: values.geom ?? null,
@@ -165,6 +170,11 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
         </Form.Item>
         <Form.Item name="description" label={t('features.description')}>
           <Input.TextArea rows={4} maxLength={10000} />
+        </Form.Item>
+        {/* The one field here that people with no account read: it goes out with every published
+            trip of the camp, which the hint says where it is typed. */}
+        <Form.Item name="publicNote" label={t('expeditions.publicNote')} extra={t('expeditions.publicNoteHint')}>
+          <Input.TextArea rows={2} maxLength={1000} showCount data-testid="expedition-form-public-note" />
         </Form.Item>
         {/* Roughly where the camp works — the shape somebody draws on the plan, not a position
             anybody navigates by and not derived from the caves its trips reach. It carries no

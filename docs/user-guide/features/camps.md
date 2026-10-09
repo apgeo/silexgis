@@ -34,6 +34,14 @@ never tightly around an entrance that must stay protected.
 
 A camp entered without touching the dates is a one-day camp today. Saving opens the camp.
 
+One field on the form is written for strangers: the **note for readers of published trips**. It
+goes out with every [published trip](live-tracking.md) of the camp, to people with no account,
+and a page that works figures out from those trips — hours underground, depth, trips per caver —
+says it above them. It is where a club says how far such figures are to be trusted while its
+records are still being completed. The description never leaves the application; this note is
+the only thing on a camp that does, and the camp's page shows it under its own name so that
+whoever keeps the camp can see what is being said. Empty it and nothing is said.
+
 A new camp is a **draft**, and the page says so to anybody who could announce it: *"This is a
 draft. It has not been announced yet — announce it when the plan is settled, or record it as
 done once it has happened."*

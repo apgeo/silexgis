@@ -742,7 +742,8 @@ public static class TripTrackingPublicationEndpoints
     /// </para>
     /// <para>
     /// <b>No visibility filter, and that needs saying.</b> The camp's own record is not being read
-    /// out — only its name, and only for a trip that somebody published deliberately. Filtering by
+    /// out — only its name and the note it wrote for these readers, and only for a trip that
+    /// somebody published deliberately. Filtering by
     /// what an anonymous caller may see would answer null for every camp on every installation,
     /// since nothing is visible to a caller with no account; the disclosure is argued on the
     /// published trip instead, where the decision was actually taken.
@@ -760,7 +761,7 @@ public static class TripTrackingPublicationEndpoints
             from join_ in db.ExpeditionTrips.AsNoTracking()
             join camp in db.Expeditions.AsNoTracking() on join_.ExpeditionId equals camp.Id
             where tripLogIds.Contains(join_.TripLogId)
-            select new { join_.TripLogId, camp.Id, camp.Name }).ToListAsync(ct);
+            select new { join_.TripLogId, camp.Id, camp.Name, camp.PublicNote }).ToListAsync(ct);
 
         // At most one camp per trip is carried by a unique index on the join, so the last writer
         // here would be picking between rows that cannot both exist. Grouped anyway rather than
@@ -768,7 +769,7 @@ public static class TripTrackingPublicationEndpoints
         // than as an exception in front of a reader.
         return rows
             .GroupBy(row => row.TripLogId)
-            .ToDictionary(g => g.Key, g => new PublicTripExpeditionDto(g.First().Id, g.First().Name));
+            .ToDictionary(g => g.Key, g => new PublicTripExpeditionDto(g.First().Id, g.First().Name, g.First().PublicNote));
     }
 
     /// <summary>

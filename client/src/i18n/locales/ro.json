@@ -2312,6 +2312,8 @@
     },
     "new": "Tabără nouă",
     "edit": "Editare tabără",
+    "publicNote": "Notă pentru cititorii turelor publicate",
+    "publicNoteHint": "Apare deasupra statisticilor pe care o pagină le calculează din turele publicate ale taberei — de exemplu cât de mult se poate conta pe ele cât timp înregistrările sunt încă în curs de completare. Spre deosebire de descriere, o citesc și persoane fără cont: oricine poate deschide o tură publicată a acestei tabere.",
     "workingArea": "Zonă de lucru",
     "workingAreaHint": "Aproximativ unde lucrează tabăra: forma trasată pe plan, nu o poziție după care navighează cineva și nu derivată din peșterile la care ajung turele taberei.",
     "workingAreaWarning": "Arătată exact tuturor celor care pot citi tabăra.",

@@ -21772,6 +21772,7 @@ export interface components {
             id: string;
             name: string;
             description?: null | string;
+            publicNote?: null | string;
             /** Format: date */
             startDate: string;
             /** Format: date */
@@ -21973,6 +21974,7 @@ export interface components {
         ExpeditionWriteRequest: {
             name?: string;
             description?: null | string;
+            publicNote?: null | string;
             /** Format: date */
             startDate?: string;
             /** Format: date */
@@ -24431,6 +24433,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            note?: null | string;
         };
         PublicTripMapPointDto: {
             station: string;

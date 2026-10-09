@@ -360,8 +360,14 @@ public sealed record PublicTripStationPictureDto(
 /// Publishing a camp in its own right needs an anchor set across several caves and a rule for
 /// refusing when one of them may not be published — recorded as work, not built.
 /// </para>
+/// <para>
+/// <b><c>Note</c> is the camp's own word to these readers</b>: the one thing on a camp that is
+/// written to be published, said above whatever a page works out from the trips — typically how
+/// far its figures are to be trusted while the records are being completed. Absent where the
+/// camp says nothing. It is not the camp's description, which never leaves the application.
+/// </para>
 /// </remarks>
-public sealed record PublicTripExpeditionDto(Guid Id, string Name);
+public sealed record PublicTripExpeditionDto(Guid Id, string Name, string? Note = null);
 
 public sealed record PublicTripTeamDto(Guid Id, string Title);
 

@@ -501,7 +501,8 @@ feature and walkthroughs of whole jobs.
   the framed viewer tells that article what it is showing. The same link lists
   the cave's other parties being followed now — in a list shut until the reader opens it, from
   which any of them can be watched on the link's own survey under a banner saying whose party it
-  is — and its finished published trips, gathered by camp, each playable as
+  is — and its finished published trips, gathered by camp (with the note the camp wrote for
+  these readers, where it wrote one), each playable as
   a replay on the survey its reports were measured in; any moment of a replay can be copied as a
   link that opens there, standing or already playing. Three more things are told to a visitor only
   where the installation turns them on, each by a setting of its own that is off as installed:

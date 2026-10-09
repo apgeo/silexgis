@@ -270,7 +270,7 @@ public sealed class PublishedNamesNowhereTests : IAsyncLifetime, IDisposable, IC
                 "closedAt", "expectedReturnAt", "positionsWithheld", "teams", "participants",
             ],
             ignoreOrder: true);
-        Members(followed.GetProperty("expedition")).ShouldBe(["id", "name"], ignoreOrder: true);
+        Members(followed.GetProperty("expedition")).ShouldBe(["id", "name", "note"], ignoreOrder: true);
         Members(followed.GetProperty("teams").EnumerateArray().ShouldHaveSingleItem())
             .ShouldBe(["id", "title"], ignoreOrder: true);
         var party = followed.GetProperty("participants").EnumerateArray().ToList();
@@ -296,7 +296,7 @@ public sealed class PublishedNamesNowhereTests : IAsyncLifetime, IDisposable, IC
                 "participantCount", "playable",
             ],
             ignoreOrder: true);
-        Members(finished.GetProperty("expedition")).ShouldBe(["id", "name"], ignoreOrder: true);
+        Members(finished.GetProperty("expedition")).ShouldBe(["id", "name", "note"], ignoreOrder: true);
 
         Holds(liveText, published.Followed).ShouldBeTrue("the search finds an identifier that is there");
         Holds(pastText, published.Finished).ShouldBeTrue("the search finds an identifier that is there");

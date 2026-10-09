@@ -19,6 +19,7 @@ public sealed class ExpeditionConfiguration : IEntityTypeConfiguration<Expeditio
 
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.Name).HasMaxLength(255);
+        builder.Property(x => x.PublicNote).HasMaxLength(Expedition.PublicNoteMaxLength);
         builder.Property(x => x.Visibility).HasConversion<short>();
         builder.Property(x => x.State).HasConversion<short>();
 

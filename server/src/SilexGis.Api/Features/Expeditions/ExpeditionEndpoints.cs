@@ -731,6 +731,8 @@ public static class ExpeditionEndpoints
     {
         expedition.Name = request.Name;
         expedition.Description = request.Description;
+        // Blank is nothing: a note of spaces would be published as an empty line above the figures.
+        expedition.PublicNote = string.IsNullOrWhiteSpace(request.PublicNote) ? null : request.PublicNote.Trim();
         expedition.StartDate = request.StartDate;
         expedition.EndDate = DayRange.EndForStorage(request.StartDate, request.EndDate);
         expedition.Geom = request.Geom?.ToGeometryOrNull();
@@ -747,6 +749,7 @@ public static class ExpeditionEndpoints
         Id = expedition.Id,
         Name = expedition.Name,
         Description = expedition.Description,
+        PublicNote = expedition.PublicNote,
         StartDate = expedition.StartDate,
         EndDate = expedition.EndDate,
         Geom = expedition.Geom is null ? null : GeoJsonGeometry.From(expedition.Geom),

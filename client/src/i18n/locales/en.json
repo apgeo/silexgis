@@ -2312,6 +2312,8 @@
     },
     "new": "New camp",
     "edit": "Edit camp",
+    "publicNote": "Note for readers of published trips",
+    "publicNoteHint": "Said above the figures a page works out from this camp's published trips — for example how far they are to be trusted while the records are still being completed. Unlike the description, it is read by people with no account: everybody who can open a published trip of this camp.",
     "workingArea": "Working area",
     "workingAreaHint": "Roughly where the camp works: the shape drawn on the plan, not a position anybody navigates by, and not derived from the caves the camp's trips reach.",
     "workingAreaWarning": "Shown exactly to everybody who may read the camp.",

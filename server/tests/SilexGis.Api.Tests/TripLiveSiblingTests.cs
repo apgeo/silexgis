@@ -974,6 +974,75 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
         archived.GetProperty("expedition").GetProperty("id").GetGuid().ShouldBe(camp);
     }
 
+    /// <summary>
+    /// What a camp writes for the readers of its published trips goes out with each of them, on
+    /// every shape a page reads; a camp that wrote nothing says nothing; and the camp's own
+    /// description, which is for people who may read the camp, never goes out at all.
+    /// </summary>
+    [Fact]
+    public async Task A_camps_note_to_its_readers_travels_with_every_published_trip_and_its_description_never_does()
+    {
+        const string Note = "Cifrele sunt orientative: câteva înregistrări lipsesc încă.";
+        const string Inside = "Numai pentru cei din tabără: bugetul și lista de materiale.";
+
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var joined = await PublishedTripAsync("In the camp", cave, model);
+        var camp = await CreateExpeditionAsync("Tabăra cu notă");
+        (await owner.PostAsJsonAsync($"/api/v1/expeditions/{camp}/trips", new { tripLogId = joined.Trip }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Nothing written, nothing said.
+        var before = await Json(anonymous.GetAsync(Follow(joined.Token)));
+        before.GetProperty("expedition").GetProperty("note").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var written = await WriteCampAsync(camp, "Tabăra cu notă", Note, Inside);
+        written.StatusCode.ShouldBe(HttpStatusCode.OK, await written.Content.ReadAsStringAsync());
+        var saved = await written.Content.ReadFromJsonAsync<JsonElement>();
+        saved.GetProperty("publicNote").GetString().ShouldBe(Note);
+        saved.GetProperty("description").GetString().ShouldBe(Inside);
+
+        // The followed envelope and the live list.
+        var followedText = await (await anonymous.GetAsync(Follow(joined.Token))).Content.ReadAsStringAsync();
+        JsonDocument.Parse(followedText).RootElement.GetProperty("expedition").GetProperty("note").GetString().ShouldBe(Note);
+        followedText.ShouldNotContain("bugetul");
+        var live = await LiveListAsync(joined.Token);
+        TripIn(live, joined.Trip).GetProperty("expedition").GetProperty("note").GetString().ShouldBe(Note);
+
+        // The archive list and the track a replay is drawn from, once the trip is over.
+        await CloseAsync(joined.Trip, DateTimeOffset.UtcNow.AddDays(-5));
+        var pastText = await (await anonymous.GetAsync(PastList(joined.Token))).Content.ReadAsStringAsync();
+        JsonDocument.Parse(pastText).RootElement.GetProperty("trips").EnumerateArray()
+            .Single(t => t.GetProperty("tripLogId").GetGuid() == joined.Trip)
+            .GetProperty("expedition").GetProperty("note").GetString().ShouldBe(Note);
+        pastText.ShouldNotContain("bugetul");
+        var trackText = await (await anonymous.GetAsync($"{PastList(joined.Token)}/{joined.Trip}")).Content.ReadAsStringAsync();
+        JsonDocument.Parse(trackText).RootElement.GetProperty("expedition").GetProperty("note").GetString().ShouldBe(Note);
+        trackText.ShouldNotContain("bugetul");
+
+        // A note of spaces is no note, and is published as none.
+        (await WriteCampAsync(camp, "Tabăra cu notă", "   ", Inside)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var cleared = await Json(anonymous.GetAsync(PastList(joined.Token)));
+        cleared.GetProperty("trips").EnumerateArray()
+            .Single(t => t.GetProperty("tripLogId").GetGuid() == joined.Trip)
+            .GetProperty("expedition").GetProperty("note").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // A few sentences, not a second description.
+        (await WriteCampAsync(camp, "Tabăra cu notă", new string('n', 1001), Inside))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    private Task<HttpResponseMessage> WriteCampAsync(Guid camp, string name, string? publicNote, string? description) =>
+        owner.PutWithIfMatchAsync($"/api/v1/expeditions/{camp}", new
+        {
+            name,
+            description,
+            publicNote,
+            startDate = "2026-09-20",
+            endDate = "2026-09-27",
+            visibility = "authenticated",
+        });
+
     private async Task<Guid> CreateExpeditionAsync(string name)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/expeditions", new
