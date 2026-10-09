@@ -566,6 +566,53 @@ describe('TrackingCsvImportDialog', () => {
     expect(after).not.toHaveTextContent('la baza puitului');
   });
 
+  it('says what a new row has the party doing, beside where', async () => {
+    look.mockResolvedValue({
+      ...PREVIEW,
+      rows: [{ ...PREVIEW.rows[0], activity: 'lucru: echipare' }, PREVIEW.rows[1]],
+    });
+    open();
+    await drop('x');
+    await readIt();
+
+    expect(screen.getByTestId('trip-tracking-csv-row-activity-2')).toHaveTextContent(
+      'upper.2 · lucru: echipare',
+    );
+  });
+
+  it('leaves what the log says the party was doing where the sheet has no column for it', async () => {
+    // The stored report says what the party was doing; this sheet is times and depths. The line
+    // has to show the word kept, or it reads exactly like the word erased.
+    const stored = { ...PREVIEW.rows[1].before!, activity: 'somn' };
+    look.mockResolvedValue({ ...PREVIEW, rows: [PREVIEW.rows[0], { ...PREVIEW.rows[1], before: stored }] });
+    open();
+    await drop('x');
+    await readIt();
+
+    expect(screen.getByTestId('trip-tracking-csv-row-before-3')).toHaveTextContent(
+      'In the log now: At a station · deep.3 · somn · “la baza puitului”',
+    );
+    expect(screen.getByTestId('trip-tracking-csv-row-after-3')).toHaveTextContent(
+      'After the import: At a depth · upper.2, 96 m · somn · “la baza puitului”',
+    );
+  });
+
+  it('writes the sheet\'s word over it where the sheet has that column, an empty cell included', async () => {
+    const stored = { ...PREVIEW.rows[1].before!, activity: 'somn' };
+    look.mockResolvedValue({
+      ...PREVIEW,
+      header: [...PREVIEW.header, 'Stare'],
+      resolvedColumns: { ...PREVIEW.resolvedColumns, State: 'Stare' },
+      rows: [PREVIEW.rows[0], { ...PREVIEW.rows[1], before: stored, activity: null }],
+    });
+    open();
+    await drop('x');
+    await readIt();
+
+    expect(screen.getByTestId('trip-tracking-csv-row-before-3')).toHaveTextContent('somn');
+    expect(screen.getByTestId('trip-tracking-csv-row-after-3')).not.toHaveTextContent('somn');
+  });
+
   it('counts a details column as carrying the note', async () => {
     look.mockResolvedValue({
       ...PREVIEW,
@@ -693,16 +740,18 @@ describe('TrackingCsvImportDialog', () => {
   });
 
   it('words a row\'s own findings beside the row, and counts them among the things to read', async () => {
-    // The finding that changes what a row means: a "went out" word the reader did not know
-    // leaves the row filed as still underground. It reaches the reviewer beside the row it is
-    // about, worded, and in the fold's count — not only in the response.
+    // The finding that changes what a row means: the word a written-out log puts where a place
+    // was kept back from whoever took the sheet, which is read as nothing at all. It reaches the
+    // reviewer beside the row it is about, worded, and in the fold's count — not only in the
+    // response. (A word the lists do not know is no finding any more: it is what the party was
+    // doing, and is carried as that.)
     look.mockResolvedValue({
       ...PREVIEW,
       rows: [
         {
           ...PREVIEW.rows[0],
           diagnostics: [
-            { severity: 'Warning', problem: 'StateWordUnknown', line: 2, column: 'State', detail: 'plecat' },
+            { severity: 'Warning', problem: 'StateWordUnknown', line: 2, column: 'State', detail: 'retinut' },
           ],
         },
         PREVIEW.rows[1],
@@ -714,8 +763,8 @@ describe('TrackingCsvImportDialog', () => {
     await waitFor(() => expect(screen.getByTestId('trip-tracking-csv-rows')).toBeInTheDocument());
 
     const beside = screen.getByTestId('trip-tracking-csv-row-findings-2');
-    expect(beside).toHaveTextContent('Neither list of words knows this one');
-    expect(beside).toHaveTextContent('plecat');
+    expect(beside).toHaveTextContent('place was kept back from whoever wrote the sheet out');
+    expect(beside).toHaveTextContent('retinut');
     expect(screen.queryByText('StateWordUnknown')).not.toBeInTheDocument();
     expect(screen.queryByTestId('trip-tracking-csv-row-findings-3')).toBeNull();
 
@@ -1066,6 +1115,23 @@ describe('TrackingCsvImportDialog', () => {
       fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
       await waitFor(() => expect(look).toHaveBeenCalledTimes(2));
       expect(look.mock.calls[1][0].options.delimiter).toBe(',');
+    });
+
+    it('reads every depth as below the entrance only once the reviewer has said so', async () => {
+      open();
+      await drop('x');
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
+      await waitFor(() => expect(look).toHaveBeenCalledOnce());
+      // A sheet's "-40" is forty metres above the datum unless somebody says otherwise.
+      expect(look.mock.calls[0][0].options.depthsAreBelowEntrance).toBe(false);
+
+      fireEvent.click(screen.getByText('File settings'));
+      fireEvent.click(await screen.findByTestId('trip-tracking-csv-depths-below'));
+      // A reading the table no longer describes: the sheet has to be read again before Import.
+      expect(screen.getByTestId('trip-tracking-csv-commit')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('trip-tracking-csv-preview'));
+      await waitFor(() => expect(look).toHaveBeenCalledTimes(2));
+      expect(look.mock.calls[1][0].options.depthsAreBelowEntrance).toBe(true);
     });
 
     it('sends the day-and-month reading only once the reviewer has chosen one', async () => {

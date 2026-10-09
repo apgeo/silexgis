@@ -183,6 +183,15 @@ export default function TrackingCsvImportDialog({
   const [wentIn, setWentIn] = useState('');
   const [cameOut, setCameOut] = useState('');
   const [noted, setNoted] = useState('');
+  /**
+   * Whether every depth the sheet writes is a depth below the entrance, whatever its sign.
+   *
+   * Off unless the reviewer says so: a sheet's "-40" is ordinarily forty metres above the datum,
+   * and a cave with passages over its entrance needs it read that way. A log kept at a pothole's
+   * mouth writes "-350" and "350" for the same place, though, and nobody should have to edit
+   * three hundred cells to say so.
+   */
+  const [depthsBelow, setDepthsBelow] = useState(false);
   const [preview, setPreview] = useState<TrackingCsvPreview | null>(null);
   /**
    * Whether the table on screen is a second reading, made because the first could not be imported.
@@ -251,8 +260,9 @@ export default function TrackingCsvImportDialog({
       notedWords: words(noted).length > 0 ? words(noted) : null,
       timeZone: zone === SHEET_ZONE_AS_WRITTEN ? null : zone,
       day: asksForDay && day.length > 0 ? day : null,
+      depthsAreBelowEntrance: depthsBelow,
     };
-  }, [mapping, wentIn, cameOut, noted, effectiveDelimiter, dateOrder, zone, asksForDay, day]);
+  }, [mapping, wentIn, cameOut, noted, effectiveDelimiter, dateOrder, zone, asksForDay, day, depthsBelow]);
 
   // The zones offered, the importer's own first: it is the answer for nearly every sheet, and
   // nobody should have to know how their own zone is spelled to find it in a list of hundreds.
@@ -310,6 +320,7 @@ export default function TrackingCsvImportDialog({
   const typeWentIn = rereadWith(setWentIn);
   const typeCameOut = rereadWith(setCameOut);
   const typeNoted = rereadWith(setNoted);
+  const chooseDepthsBelow = rereadWith(setDepthsBelow);
   const mapField = (field: string, headerName: string | undefined) => {
     setMapping((current) => ({ ...current, [field]: headerName ?? '' }));
     setPreview(null);
@@ -369,6 +380,7 @@ export default function TrackingCsvImportDialog({
     setWentIn('');
     setCameOut('');
     setNoted('');
+    setDepthsBelow(false);
     onClose();
   };
 
@@ -580,6 +592,7 @@ export default function TrackingCsvImportDialog({
     depthM: number | string | null | undefined;
     team: string | null;
     note: string | null | undefined;
+    activity?: string | null;
   }) => {
     const claimsPlace = report.kind === 'atStation' || report.kind === 'atDepth';
     const depth =
@@ -593,6 +606,8 @@ export default function TrackingCsvImportDialog({
     return [
       t(`trips.tracking.kinds.${report.kind}`),
       where,
+      // What the party was doing there, in the sheet's own word.
+      report.activity ? report.activity : null,
       report.team,
       report.note ? t('trips.tracking.csvImport.noteQuoted', { note: report.note }) : null,
     ]
@@ -608,13 +623,24 @@ export default function TrackingCsvImportDialog({
    */
   const placeAndChangeOf = (row: TrackingCsvPreviewRow) => {
     const before = row.before;
-    if (!row.replaces || !before) return placeOf(row);
+    if (!row.replaces || !before) {
+      // A new row says what the party was doing beside where, since that word is written too.
+      return row.activity ? (
+        <span data-testid={`trip-tracking-csv-row-activity-${row.line}`}>
+          {placeOf(row)} · {row.activity}
+        </span>
+      ) : (
+        placeOf(row)
+      );
+    }
     // What the import would leave, not what the sheet says: a replacement writes the team and the
     // note only where the sheet has a column for them, so without one the report keeps its own —
     // and the line has to show it kept, or a note left standing reads exactly like a note erased.
     const columns = preview?.resolvedColumns ?? {};
     const teamAfter = 'Team' in columns ? (row.teamId ?? null) : (before.teamId ?? null);
     const noteAfter = 'Note' in columns || 'Details' in columns ? row.note : before.note;
+    // And the same of what the party was doing, which the sheet writes in its state column.
+    const activityAfter = 'State' in columns ? row.activity : before.activity;
     // A team is named on both lines or on neither: where only one of the two reports has one, the
     // other says so, because a team taken away is a change like any other.
     const teamInWords = (teamId: string | null) =>
@@ -635,6 +661,7 @@ export default function TrackingCsvImportDialog({
             depthM: before.depthEnteredM,
             team: teamInWords(before.teamId ?? null),
             note: before.note,
+            activity: before.activity,
           })}
         </span>
         <span data-testid={`trip-tracking-csv-row-after-${row.line}`}>
@@ -647,6 +674,7 @@ export default function TrackingCsvImportDialog({
             depthM: row.depthM,
             team: teamInWords(teamAfter),
             note: noteAfter,
+            activity: activityAfter,
           })}
         </span>
       </Flex>
@@ -989,6 +1017,22 @@ export default function TrackingCsvImportDialog({
                       />
                     </Form.Item>
                   </Flex>
+                  {/* A box of its own rather than a third reading of a chooser: it is a statement
+                      about the cave the sheet was kept at, and unticked is the reading every
+                      other sheet needs. */}
+                  <Checkbox
+                    checked={depthsBelow}
+                    onChange={(event) => chooseDepthsBelow(event.target.checked)}
+                    aria-describedby={fieldId('depths-below-help')}
+                    data-testid="trip-tracking-csv-depths-below"
+                  >
+                    {t('trips.tracking.csvImport.depthsBelow')}
+                  </Checkbox>
+                  <div>
+                    <Typography.Text type="secondary" id={fieldId('depths-below-help')}>
+                      {t('trips.tracking.csvImport.depthsBelowHelp')}
+                    </Typography.Text>
+                  </div>
                 </Form>
               </>
             ),

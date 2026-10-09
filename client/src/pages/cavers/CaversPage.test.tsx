@@ -14,10 +14,14 @@ import '../../i18n';
  */
 
 const get = vi.fn();
+const put = vi.fn();
 
 vi.mock('../../api/client.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/client.ts')>('../../api/client.ts');
-  return { ...actual, api: { GET: (...args: unknown[]) => get(...args) } };
+  return {
+    ...actual,
+    api: { GET: (...args: unknown[]) => get(...args), PUT: (...args: unknown[]) => put(...args) },
+  };
 });
 
 const { default: CaversPage } = await import('./CaversPage.tsx');
@@ -87,6 +91,33 @@ describe('who is offered the delete button', () => {
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(2));
     expect(screen.queryByTestId('caver-delete-caver-ana')).not.toBeInTheDocument();
     expect(screen.queryByTestId('caver-delete-caver-bogdan')).not.toBeInTheDocument();
+  });
+});
+
+describe('the name a party calls somebody by', () => {
+  it('is shown beside the full name, and goes back with a save that never touched it', async () => {
+    // The server writes what a save gives it. A form that drew the short name and left it out
+    // of what it sends would take it off everybody whose telephone number was corrected.
+    get.mockImplementation((path: string) => {
+      if (path === '/api/v1/me/capabilities') {
+        return Promise.resolve(answer({ domains: { cavers: rosterRights } }));
+      }
+      if (path === '/api/v1/cavers') {
+        return Promise.resolve(answer([{ ...ANA, shortName: 'Anca' }, BOGDAN]));
+      }
+      return Promise.reject(new Error(`unexpected read of ${path}`));
+    });
+    put.mockResolvedValue(answer({ ...ANA, shortName: 'Anca' }));
+    show();
+
+    expect(await screen.findByText('(Anca)')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
+    const field = await screen.findByTestId('caver-short-name');
+    expect(field).toHaveValue('Anca');
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    expect(put.mock.calls[0][1].body).toMatchObject({ fullName: 'Ana Invented', shortName: 'Anca' });
   });
 });
 

@@ -1958,6 +1958,7 @@ export default function TripTrackingTab({
                             logKindTag(row.kind),
                           )}
                           {fact(t('trips.tracking.columnPosition'), eventPlace(row))}
+                          {row.activity && fact(t('trips.tracking.columnActivity'), row.activity)}
                           {fact(t('trips.tracking.columnNote'), row.note ?? '—')}
                         </div>
                       </div>
@@ -1993,7 +1994,17 @@ export default function TripTrackingTab({
                   {
                     title: t('trips.tracking.columnNote'),
                     dataIndex: 'note',
-                    render: (note: string | null) => note ?? '—',
+                    // What the party was doing, where a sheet said, in front of what was noted:
+                    // one word a report, so it reads as a label and not as a second note.
+                    render: (note: string | null, row: TrackingEvent) =>
+                      row.activity ? (
+                        <>
+                          <Tag data-testid={`trip-tracking-event-activity-${row.id}`}>{row.activity}</Tag>
+                          {note}
+                        </>
+                      ) : (
+                        (note ?? '—')
+                      ),
                   },
                   // No column at all where no control applies, rather than an empty one: a
                   // blank last column reads as controls that failed to load.

@@ -38,6 +38,7 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 
 interface CaverForm {
   fullName: string;
+  shortName?: string;
   email?: string;
   phone?: string;
   notes?: string;
@@ -129,6 +130,9 @@ export default function CaversPage() {
     const values = await form.validateFields();
     const body = {
       fullName: values.fullName,
+      // Sent on every save, an empty one included: the server writes what it is given, so a
+      // form that left the field out would take the short name off whoever was edited.
+      shortName: values.shortName?.trim() || null,
       email: values.email || null,
       phone: values.phone || null,
       notes: values.notes || null,
@@ -152,6 +156,7 @@ export default function CaversPage() {
     setEditing(caver);
     form.setFieldsValue({
       fullName: caver.name,
+      shortName: caver.shortName ?? undefined,
       email: caver.email ?? undefined,
       phone: caver.phone ?? undefined,
       notes: caver.notes ?? undefined,
@@ -194,6 +199,7 @@ export default function CaversPage() {
             render: (name: string, caver) => (
               <Space>
                 {name}
+                {caver.shortName && <Typography.Text type="secondary">({caver.shortName})</Typography.Text>}
                 {!caver.userId && <Tag>{t('cavers.noAccount')}</Tag>}
               </Space>
             ),
@@ -290,6 +296,9 @@ export default function CaversPage() {
         <Form form={form} layout="vertical">
           <Form.Item name="fullName" label={t('cavers.name')} rules={[{ required: true }]}>
             <Input maxLength={200} />
+          </Form.Item>
+          <Form.Item name="shortName" label={t('cavers.shortName')} extra={t('cavers.shortNameHint')}>
+            <Input maxLength={80} data-testid="caver-short-name" />
           </Form.Item>
           <Form.Item name="email" label={t('cavers.email')}>
             <Input maxLength={320} />

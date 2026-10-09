@@ -20804,6 +20804,7 @@ export interface components {
             phone: null | string;
             notes: null | string;
             cavingGroups: components["schemas"]["CaverMembershipDto"][];
+            shortName?: null | string;
         };
         CaverMembershipDto: {
             /** Format: uuid */
@@ -20820,6 +20821,7 @@ export interface components {
             email: null | string;
             phone: null | string;
             notes: null | string;
+            shortName?: null | string;
         };
         CaveStatisticsDto: {
             /** Format: uuid */
@@ -26148,6 +26150,8 @@ export interface components {
             /** Format: date */
             day?: null | string;
             notedWords?: null | string[];
+            /** @default false */
+            depthsAreBelowEntrance: boolean;
         };
         TrackingCsvImportRequest: {
             text: null | string;
@@ -26198,6 +26202,7 @@ export interface components {
             replaces: boolean;
             before: null | components["schemas"]["TrackingEventDto"];
             diagnostics: components["schemas"]["TrackingCsvDiagnosticDto"][];
+            activity?: null | string;
         };
         TrackingDepthCandidateDto: {
             stationName: string;
@@ -26230,6 +26235,7 @@ export interface components {
             corrected: boolean;
             outsideDeclaredParts: boolean;
             depthPlacement?: null | components["schemas"]["TrackingDepthPlacementOutcome"];
+            activity?: null | string;
         };
         TrackingEventEditRequest: {
             kind: null | components["schemas"]["TripPositionEventKind"];
