@@ -9094,6 +9094,8 @@ export interface TrackingReportRequest {
   depthM?: number | null;
   teamId?: string | null;
   note?: string | null;
+  /** What the people were doing, in the party's own words; null or absent says nothing. */
+  activity?: string | null;
   /** Null means now, on the server's clock — the ordinary case of a report made as it happens. */
   recordedAt?: string | null;
   /**
@@ -9114,13 +9116,19 @@ function postTrackingReport({
   depthM = null,
   teamId = null,
   note = null,
+  activity = null,
   recordedAt = null,
   clientKey = null,
 }: TrackingReportRequest) {
   return unwrap(
     api.POST('/api/v1/trip-logs/{tripLogId}/tracking/events', {
       params: { path: { tripLogId } },
-      body: { caverIds, kind, stationName, toStationName, depthM, teamId, note, recordedAt, clientKey },
+      // The phrase goes only where there is one: a report that says none is the request it has
+      // always been, and the server reads its absence as none.
+      body: {
+        caverIds, kind, stationName, toStationName, depthM, teamId, note, recordedAt, clientKey,
+        ...(activity ? { activity } : {}),
+      },
     }),
   );
 }
@@ -9200,6 +9208,7 @@ export function useUpdateTrackingEvent() {
       depthM = null,
       teamId = null,
       note = null,
+      activity = null,
       recordedAt = null,
     }: {
       tripLogId: string;
@@ -9211,13 +9220,18 @@ export function useUpdateTrackingEvent() {
       depthM?: number | null;
       teamId?: string | null;
       note?: string | null;
+      /**
+       * What the person was doing. A correction says the whole report again, so leaving this out
+       * leaves the report with none: whoever corrects a report sends back what it showed them.
+       */
+      activity?: string | null;
       /** Null leaves the moment the report already claims, which is the ordinary case. */
       recordedAt?: string | null;
     }) =>
       unwrap(
         api.PUT('/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}', {
           params: { path: { tripLogId, eventId } },
-          body: { kind, stationName, toStationName, depthM, teamId, note, recordedAt },
+          body: { kind, stationName, toStationName, depthM, teamId, note, recordedAt, ...(activity ? { activity } : {}) },
         }),
       ),
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),

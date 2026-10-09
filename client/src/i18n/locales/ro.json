@@ -1589,6 +1589,8 @@
       "reportTeam": "Echipă",
       "reportTeamNone": "Fără echipă",
       "reportNote": "Notă",
+      "reportActivity": "Activitate",
+      "reportActivityHint": "Ce făceau, cu vorbele echipei — echipare, topografie, somn. Opțional.",
       "reportAt": "Când s-a spus",
       "reportAtHelp": "Lăsat gol, raportul este marcat acum. Completează-l pentru un mesaj transmis mai târziu decât a fost spus; o oră din viitor este refuzată.",
       "reportAtHelpAfterClose": "Momentul în care s-a făcut raportul, în timpul turei. O oră din viitor este refuzată.",

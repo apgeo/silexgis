@@ -517,6 +517,13 @@ public static class TripTrackingEndpoints
         log.OrderByDescending(e => e.RecordedAt).ThenByDescending(e => e.CreatedAt).ThenByDescending(e => e.Id);
 
     /// <summary>
+    /// What somebody was doing, as it is stored: trimmed, and nothing where it says nothing — a
+    /// phrase of spaces would otherwise be drawn as an empty label beside every such report.
+    /// </summary>
+    private static string? ActivityAsStored(string? activity) =>
+        string.IsNullOrWhiteSpace(activity) ? null : activity.Trim();
+
+    /// <summary>
     /// Stored reports of one trip as <paramref name="ctx"/> reads them, in the order given: each
     /// through the per-row withholding, a place only where the caller may be told that row's cave.
     /// </summary>
@@ -975,6 +982,7 @@ public static class TripTrackingEndpoints
                 ViewerToStationName = placed.ToStationName,
                 DepthEnteredM = placed.DepthEnteredM,
                 Note = request.Note,
+                Activity = ActivityAsStored(request.Activity),
                 RecordedAt = recordedAt,
                 RecordedByUserId = user!.UserId,
             });
@@ -1333,6 +1341,7 @@ public static class TripTrackingEndpoints
         row.ViewerToStationName = placed.ToStationName;
         row.DepthEnteredM = placed.DepthEnteredM;
         row.Note = request.Note;
+        row.Activity = ActivityAsStored(request.Activity);
         row.RecordedAt = recordedAt;
         await db.SaveChangesAsync(ct);
 

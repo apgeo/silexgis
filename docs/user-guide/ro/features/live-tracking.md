@@ -74,7 +74,9 @@ Cardul **Înregistrează un raport**:
    | **A ieșit** | Niciun loc |
    | **Despre peșteră** | Cuvinte despre peștera însăși, cu o stație sau fără — despre nimeni, deci nu trebuie bifat nimeni (*O notă despre peșteră*, mai jos) |
 
-3. Opțional o **Echipă** și o **Notă**.
+3. Opțional o **Echipă**, o **Activitate** și o **Notă**. Activitatea este ce făceau, cu vorbele
+   echipei — *echipare*, *topografie*, *somn* — o expresie scurtă, arătată ca etichetă lângă loc
+   în tabel. O notă despre peșteră nu are: este despre nimeni.
 4. **Când s-a spus** — lăsat gol, raportul este marcat acum. Completați-l pentru un mesaj
    transmis mai târziu decât a fost spus. Un raport nu poate fi niciodată despre viitor. După
    ce urmărirea a fost încheiată, câmpul trebuie completat (*Scrierea unui raport după tură*,
@@ -398,8 +400,8 @@ Vedeți [Tabere → Cine e în peșteră](camps.md#cine-e-în-peșteră).
 
 Fiecare rând din **Rapoarte** oferă două comenzi, și ele înseamnă lucruri diferite:
 
-- **Corectează** — pentru un raport notat greșit. Schimbă momentul, locul, echipa sau nota, iar
-  **raportul își păstrează locul în jurnal și tot ce e prins de el**. Persoana nu se poate
+- **Corectează** — pentru un raport notat greșit. Schimbă momentul, locul, echipa, activitatea
+  sau nota, iar **raportul își păstrează locul în jurnal și tot ce e prins de el**. Persoana nu se poate
   schimba: un raport despre altcineva este alt raport, așa că îl ștergeți pe acesta și îl
   înregistrați pe celălalt. Dialogul spune limpede că asta schimbă ce spune jurnalul că s-a
   întâmplat — reluarea și pagina publicată îl urmează.

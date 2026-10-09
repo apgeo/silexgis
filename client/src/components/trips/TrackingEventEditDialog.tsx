@@ -47,6 +47,7 @@ interface EditForm {
   depthM?: number | null;
   teamId?: string | null;
   note?: string;
+  activity?: string;
   recordedAt?: dayjs.Dayjs;
 }
 
@@ -190,6 +191,7 @@ function CorrectionForm({
     depthM: report.depthEnteredM ?? null,
     teamId: report.teamId ?? null,
     note: report.note ?? undefined,
+    activity: report.activity ?? undefined,
     recordedAt: dayjs(report.recordedAt),
   };
   // Falls back to the report's own kind so the field belonging to it is drawn on the very first
@@ -238,6 +240,11 @@ function CorrectionForm({
         depthM: values.kind === 'atDepth' ? (values.depthM ?? null) : null,
         teamId: values.kind === TRACKING_CAVE_NOTE_KIND ? null : (values.teamId ?? null),
         note: values.note?.trim() ? values.note.trim() : null,
+        // Said again on every correction of a report that has one, an untouched one included: the
+        // server writes the whole report again, so a form that drew this and left it out would
+        // take it off every report whose hour was corrected.
+        activity:
+          values.kind !== TRACKING_CAVE_NOTE_KIND && values.activity?.trim() ? values.activity.trim() : null,
         recordedAt: values.recordedAt ? values.recordedAt.toISOString() : null,
       });
       message.success(t('trips.tracking.eventCorrected'));
@@ -302,6 +309,16 @@ function CorrectionForm({
               data-testid="trip-tracking-edit-team"
               options={teams.map((team) => ({ value: team.id, label: team.title }))}
             />
+          </Form.Item>
+        )}
+
+        {!aboutTheCave && (
+          <Form.Item
+            name="activity"
+            label={t('trips.tracking.reportActivity')}
+            extra={t('trips.tracking.reportActivityHint')}
+          >
+            <Input maxLength={200} data-testid="trip-tracking-edit-activity" />
           </Form.Item>
         )}
 

@@ -434,6 +434,8 @@ feature and walkthroughs of whole jobs.
   A word in its state column that is neither going in nor coming out — *descending*, *rigging*,
   *asleep* — is kept on the report as what the party was doing, and a sheet from a pothole's
   mouth may be told that every depth it writes is below the entrance, whatever its sign.
+  The same phrase can be typed on a report made by hand, kept with one held for lack of signal,
+  and changed when a report is corrected.
   A caver has a short name beside the full one — what their party calls them — which a sheet
   may name them by and which published trips show.
   The clubs a caver belongs to are changed from the caver's own entry as well as from each

@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Identity;
 
 namespace SilexGis.Infrastructure.Persistence.Configurations;
@@ -60,7 +61,7 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         builder.Property(x => x.Note).HasMaxLength(2000);
         // Short by intent: a few words a list can show in a column. A club writing a paragraph
         // here is writing a note, and the column length is what says so.
-        builder.Property(x => x.Activity).HasMaxLength(200);
+        builder.Property(x => x.Activity).HasMaxLength(TripTrackingRules.MaxActivityLength);
 
         builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
         // Where a party was is read from the model's side and from a person's side as well as

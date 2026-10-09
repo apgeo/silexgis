@@ -707,6 +707,13 @@ public interface ITrackingReportFields
 
     string? Note { get; }
 
+    /// <summary>
+    /// What the person was doing, in the party's own words — <i>rigging</i>, <i>surveying</i>,
+    /// <i>asleep</i>. A phrase and not a place, a kind or a note; absent on a report that says
+    /// none, and never on a note about the cave, which is about nobody.
+    /// </summary>
+    string? Activity { get; }
+
     DateTimeOffset? RecordedAt { get; }
 }
 
@@ -743,7 +750,8 @@ public sealed record TrackingEventRequest(
     Guid? TeamId,
     string? Note,
     DateTimeOffset? RecordedAt,
-    Guid? ClientKey) : ITrackingReportFields;
+    Guid? ClientKey,
+    string? Activity = null) : ITrackingReportFields;
 
 /// <summary>
 /// A correction to one report already on the log.
@@ -754,6 +762,11 @@ public sealed record TrackingEventRequest(
 /// which is a deletion and a new report rather than an edit. Carrying a caver here would be a field
 /// the route is obliged to ignore, and a request shape that demands what it discards is a contract
 /// nobody can read.
+/// <para>
+/// <b>It says the whole report again</b>, what the person was doing included: a correction that
+/// leaves <paramref name="Activity"/> out leaves the report with none, exactly as one that leaves
+/// the note out does. Whoever corrects a report sends back what it showed them.
+/// </para>
 /// </remarks>
 public sealed record TrackingEventEditRequest(
     TripPositionEventKind? Kind,
@@ -762,7 +775,8 @@ public sealed record TrackingEventEditRequest(
     decimal? DepthM,
     Guid? TeamId,
     string? Note,
-    DateTimeOffset? RecordedAt) : ITrackingReportFields;
+    DateTimeOffset? RecordedAt,
+    string? Activity = null) : ITrackingReportFields;
 
 /// <summary>
 /// The rules over what a report says, applied to whichever request is carrying it.
@@ -778,6 +792,12 @@ internal static class TrackingReportFieldRules
     {
         validator.RuleFor(x => x.Kind).NotNull().IsInEnum();
         validator.RuleFor(x => x.Note).MaximumLength(TripTrackingRules.MaxNoteLength);
+        // What somebody was doing is said of somebody: a note about the cave carries none, and
+        // one sent with it is refused rather than dropped, as its list of people is.
+        validator.RuleFor(x => x.Activity).MaximumLength(TripTrackingRules.MaxActivityLength);
+        validator.RuleFor(x => x.Activity).Must(string.IsNullOrWhiteSpace)
+            .WithMessage("A note about the cave is about nobody; it says what nobody was doing.")
+            .When(x => x.Kind == TripPositionEventKind.CaveNote);
 
         // A station name belongs to a station report and a depth to a depth report — a request
         // carrying the wrong one is a confused caller, not a permissive default.

@@ -94,6 +94,34 @@ describe('the outbox of tracking reports', () => {
     expect(read).toEqual(new Map([[stretch.clientKey, 'p.g.44']]));
   });
 
+  /**
+   * What the people were doing is kept with the report that says it, and a report kept without
+   * one — by this version or by the one before it — reads as it was written, with no member
+   * added. A phrase that is not text makes the item something this version did not write.
+   */
+  it('keeps what the people were doing, adds nothing to a report that says none, and reads no item whose phrase is not text', async () => {
+    const before = await openTab();
+    const said = report({ clientKey: 'said', body: { ...report().body, activity: 'rigging' } });
+    const silent = report({ clientKey: 'silent' });
+    before.holdReport(said);
+    before.holdReport(silent);
+    window.localStorage.setItem(
+      'silexgis.trackingOutbox.odd',
+      JSON.stringify({
+        ...report({ clientKey: 'odd' }),
+        body: { ...report({ clientKey: 'odd' }).body, activity: 7 },
+        v: 1,
+      }),
+    );
+
+    const after = await openTab();
+
+    const read = new Map(after.heldReportsOf(ANA).map((one) => [one.clientKey, one.body]));
+    expect([...read.keys()].sort()).toEqual(['said', 'silent']);
+    expect(read.get('said')).toMatchObject({ activity: 'rigging' });
+    expect(read.get('silent')).not.toHaveProperty('activity');
+  });
+
   it('lists oldest composition first, and one trip at a time when asked', async () => {
     const outbox = await openTab();
     const late = report({ composedAt: '2026-05-01T12:00:00.000Z' });

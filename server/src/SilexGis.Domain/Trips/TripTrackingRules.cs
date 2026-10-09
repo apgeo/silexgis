@@ -61,6 +61,8 @@ public static class TripTrackingRules
 {
     public const int MaxTitleLength = 200;
     public const int MaxNoteLength = 2000;
+    /// <summary>How long what a party was doing may be: a phrase, as a journal's column holds one.</summary>
+    public const int MaxActivityLength = 200;
     public const int MaxStationNameLength = 400;
     public const int MaxDepthFilterEntries = 200;
     public const decimal MaxDepthAbsM = 5000m;

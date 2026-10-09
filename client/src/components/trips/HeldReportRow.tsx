@@ -65,6 +65,7 @@ export default function HeldReportRow({
           {t(`trips.tracking.kinds.${report.body.kind}`)}
         </Tag>
         <span>{place}</span>
+        {report.body.activity ? <Tag>{report.body.activity}</Tag> : null}
       </Flex>
       {report.body.note !== null && <div>{report.body.note}</div>}
       {report.state === 'refused' && (

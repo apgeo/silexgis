@@ -133,6 +133,33 @@ describe('sending a tracking report', () => {
   });
 
   /**
+   * What the people were doing travels with a report that says, trimmed, and is kept with a held
+   * one so that it is sent later as it was written. A report that says none is the request it has
+   * always been — the phrase is not sent as an empty member — and a note about the cave, which is
+   * about nobody, never carries one whatever was left in the field.
+   */
+  it('sends what the people were doing where a report says, keeps it with a held report, and never on a note about the cave', async () => {
+    const send = hook().current.send;
+
+    await sent(send, 'trip-1', ['caver-1'], { ...AT_STATION, activity: '  rigging  ' });
+    expect(posted()).toMatchObject({ stationName: 'p.g.42', activity: 'rigging' });
+
+    await sent(send, 'trip-1', ['caver-1'], { ...AT_STATION, activity: '   ' });
+    expect(posted(1)).not.toHaveProperty('activity');
+
+    await sent(send, 'trip-1', ['caver-1'], { kind: 'caveNote', note: 'Water is up', activity: 'rigging' });
+    expect(posted(2)).toMatchObject({ kind: 'caveNote', caverIds: [] });
+    expect(posted(2)).not.toHaveProperty('activity');
+
+    recordEvents.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const outcome = await sent(send, 'trip-1', ['caver-1'], { ...AT_STATION, activity: 'surveying' });
+    expect(outcome).toMatchObject({ held: true });
+    expect(heldReportsOf(ANA).map((one) => one.body)).toEqual([
+      expect.objectContaining({ stationName: 'p.g.42', activity: 'surveying' }),
+    ]);
+  });
+
+  /**
    * A note about the cave is about nobody, whatever selection the surface was holding: the people
    * and the team are left out in the one place a report is put together, its station is optional,
    * and it is kept like any new report when nobody answers — still about nobody.

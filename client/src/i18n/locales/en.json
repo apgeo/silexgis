@@ -1589,6 +1589,8 @@
       "reportTeam": "Team",
       "reportTeamNone": "No team",
       "reportNote": "Note",
+      "reportActivity": "Activity",
+      "reportActivityHint": "What they were doing, in the party's own words — rigging, surveying, asleep. Optional.",
       "reportAt": "When it was said",
       "reportAtHelp": "Left empty, the report is stamped now. Fill it in for word relayed out some time after it was said; a time in the future is refused.",
       "reportAtHelpAfterClose": "The moment the report was made, during the trip. A time in the future is refused.",

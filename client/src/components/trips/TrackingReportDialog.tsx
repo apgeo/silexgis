@@ -363,6 +363,16 @@ export default function TrackingReportDialog({
             required={afterClose}
           />
 
+          {!aboutTheCave && (
+            <Form.Item
+              name="activity"
+              label={t('trips.tracking.reportActivity')}
+              extra={t('trips.tracking.reportActivityHint')}
+            >
+              <Input maxLength={200} data-testid="trip-tracking-dialog-activity" />
+            </Form.Item>
+          )}
+
           <Form.Item
             name="note"
             label={t(aboutTheCave ? 'trips.tracking.caveNote.words' : 'trips.tracking.reportNote')}

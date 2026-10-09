@@ -99,6 +99,48 @@ describe('TrackingEventEditDialog', () => {
     expect(screen.getByTestId('trip-tracking-edit-note')).toHaveValue('first call');
   });
 
+  /**
+   * The server writes a corrected report whole. So what the person was doing has to go back with
+   * a correction that never touched it — a form that drew the phrase and left it out of what it
+   * sends would take it off every report whose hour was corrected — and an emptied one has to go
+   * back as none.
+   */
+  it('opens holding what the person was doing, sends it back with an untouched save, and sends an emptied one as none', async () => {
+    const view = render(
+      <App>
+        <TrackingEventEditDialog
+          {...WATCH}
+          tripLogId="trip-1"
+          report={{ ...REPORT, activity: 'rigging' }}
+          teams={[]}
+          onClose={() => {}}
+        />
+      </App>,
+    );
+    expect(screen.getByTestId('trip-tracking-edit-activity')).toHaveValue('rigging');
+
+    fireEvent.click(screen.getByRole('button', { name: /save the correction/i }));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect(update.mock.calls[0][0]).toMatchObject({ eventId: 'ev-1', activity: 'rigging', note: 'first call' });
+    view.unmount();
+
+    render(
+      <App>
+        <TrackingEventEditDialog
+          {...WATCH}
+          tripLogId="trip-1"
+          report={{ ...REPORT, activity: 'rigging' }}
+          teams={[]}
+          onClose={() => {}}
+        />
+      </App>,
+    );
+    fireEvent.change(screen.getByTestId('trip-tracking-edit-activity'), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: /save the correction/i }));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+    expect(update.mock.calls[1][0].activity).toBeNull();
+  });
+
   it('says that a correction changes what the log records, rather than doing it silently', () => {
     render(
       <App>

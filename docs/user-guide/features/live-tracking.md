@@ -71,7 +71,9 @@ The **Record a report** card:
    | **Came out** | No place |
    | **About the cave** | Words about the cave itself, with one station or none — about nobody, so nobody needs ticking (*A note about the cave*, below) |
 
-3. Optionally a **Team** and a **Note**.
+3. Optionally a **Team**, an **Activity** and a **Note**. The activity is what they were doing,
+   in the party's own words — *rigging*, *surveying*, *asleep* — a phrase, shown as a label
+   beside the place in the table. A note about the cave has none: it is about nobody.
 4. **When it was said** — left empty, the report is stamped now. Fill it in for word relayed
    out some time after it was said. A report can never be about the future. Once tracking is
    closed the field has to be filled in (*Writing a report up after the trip*, below).
@@ -375,8 +377,9 @@ See [Camps → Who is underground](camps.md#who-is-underground).
 
 Each row of **Reports** offers two controls, and they mean different things:
 
-- **Correct** — for a report written down wrongly. It changes the moment, the place, the team
-  or the note, and **the report keeps its place on the log and everything pinned to it**. The
+- **Correct** — for a report written down wrongly. It changes the moment, the place, the team,
+  the activity or the note, and **the report keeps its place on the log and everything pinned to
+  it**. The
   person cannot be changed: a report about somebody else is a different report, so delete this
   one and record that one. The dialog says plainly that this changes what the log says
   happened — the replay and the published page follow it.

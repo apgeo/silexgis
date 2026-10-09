@@ -86,6 +86,8 @@ export interface TrackingReportValues {
   depthM?: number | null;
   teamId?: string | null;
   note?: string;
+  /** What the people were doing, in the party's own words. */
+  activity?: string;
   recordedAt?: Dayjs | null;
 }
 
@@ -111,6 +113,10 @@ export interface TrackingReportValues {
  * cave that names anybody rather than dropping the names. So the people and the team are left out
  * here, once: the selection is not what this report is about. Its station is optional — a hazard
  * may be at a place or simply in the cave — and an empty one is sent as none.
+ *
+ * <b>What somebody was doing is said of somebody.</b> A note about the cave is about nobody, so a
+ * phrase left in the field from the report before it is not sent with one — the server refuses it
+ * there rather than dropping it.
  */
 export function trackingReportBody(
   tripLogId: string,
@@ -118,6 +124,7 @@ export function trackingReportBody(
   values: TrackingReportValues,
 ) {
   const note = values.note?.trim();
+  const activity = values.activity?.trim();
   const aboutTheCave = values.kind === TRACKING_CAVE_NOTE_KIND;
   const toStation = values.kind === 'atStation' ? values.toStationName?.trim() : undefined;
   const station = (values.stationName ?? '').trim();
@@ -132,6 +139,8 @@ export function trackingReportBody(
     teamId: aboutTheCave ? null : (values.teamId ?? null),
     note: note ? note : null,
     recordedAt: values.recordedAt ? values.recordedAt.toISOString() : null,
+    // Only where there is one, so a report that says none is the request it has always been.
+    ...(!aboutTheCave && activity ? { activity } : {}),
   };
 }
 
@@ -287,6 +296,7 @@ export function useTrackingReport() {
             teamId: body.teamId,
             note: body.note,
             recordedAt: body.recordedAt ?? composedAt,
+            ...(body.activity ? { activity: body.activity } : {}),
           },
           composedAt,
           state: 'held',

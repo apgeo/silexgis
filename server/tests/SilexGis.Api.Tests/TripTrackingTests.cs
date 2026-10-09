@@ -1332,6 +1332,85 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     }
 
     /// <summary>
+    /// What somebody was doing — a party's own phrase — can be said on a report made by hand and
+    /// corrected like the rest of it, not only read from a sheet.
+    /// </summary>
+    /// <remarks>
+    /// A correction says the whole report again, so one that leaves the phrase out leaves the
+    /// report with none: the same rule the note follows, and the reason the form sends back what
+    /// it was shown.
+    /// </remarks>
+    [Fact]
+    public async Task What_somebody_was_doing_is_said_on_a_report_and_corrected_like_the_rest_of_it()
+    {
+        var (trip, cavers) = await CreateTripAsync("Said by hand", guests: 2);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var recorded = await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers,
+            kind = "atStation",
+            stationName = "cave.upper.2",
+            activity = "  echipare  ",
+            recordedAt = At(10, 0),
+        });
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK, await recorded.Content.ReadAsStringAsync());
+        var written = (await recorded.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().ToList();
+        written.Count.ShouldBe(2);
+        written.ShouldAllBe(e => e.GetProperty("activity").GetString() == "echipare", "said of each of them, trimmed");
+        var id = written[0].GetProperty("id").GetGuid();
+        var other = written[1].GetProperty("id").GetGuid();
+
+        async Task<string?> ActivityOnLogAsync(Guid report)
+        {
+            var response = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events");
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+            return (await BodyAsync(response)).GetProperty("items").EnumerateArray()
+                .Single(e => e.GetProperty("id").GetGuid() == report).GetProperty("activity").GetString();
+        }
+
+        (await ActivityOnLogAsync(id)).ShouldBe("echipare");
+
+        // Corrected to another phrase: this report alone.
+        var changed = await PutEventAsync(owner, trip, id, new
+        {
+            kind = "atStation",
+            stationName = "cave.upper.2",
+            activity = "topografie",
+            recordedAt = At(10, 0),
+        });
+        changed.StatusCode.ShouldBe(HttpStatusCode.OK, await changed.Content.ReadAsStringAsync());
+        (await changed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("activity").GetString().ShouldBe("topografie");
+        (await ActivityOnLogAsync(id)).ShouldBe("topografie");
+        (await ActivityOnLogAsync(other)).ShouldBe("echipare");
+
+        // A correction that says none leaves none, and so does one of spaces.
+        (await PutEventAsync(owner, trip, id, new { kind = "atStation", stationName = "cave.upper.2", recordedAt = At(10, 0) }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ActivityOnLogAsync(id)).ShouldBeNull();
+        (await PutEventAsync(owner, trip, other, new { kind = "atStation", stationName = "cave.upper.2", activity = "   ", recordedAt = At(10, 0) }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ActivityOnLogAsync(other)).ShouldBeNull();
+
+        // A phrase, not a paragraph.
+        (await PutEventAsync(owner, trip, id, new
+        {
+            kind = "atStation",
+            stationName = "cave.upper.2",
+            activity = new string('a', TripTrackingRules.MaxActivityLength + 1),
+            recordedAt = At(10, 0),
+        })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // A note about the cave is about nobody, so nobody was doing anything in it.
+        (await PostEventAsync(owner, trip, new { kind = "caveNote", note = "Apă mare la sifon", activity = "echipare", recordedAt = At(11, 0) }))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await PostEventAsync(owner, trip, new { kind = "caveNote", note = "Apă mare la sifon", recordedAt = At(11, 0) }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
     /// A correction passes every gate the original report passed, asked again through the same code.
     /// </summary>
     [Fact]

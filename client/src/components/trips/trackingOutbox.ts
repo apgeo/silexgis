@@ -59,6 +59,8 @@ export interface HeldReportBody {
   depthM: number | null;
   teamId: string | null;
   note: string | null;
+  /** What the people were doing, on a report that says; absent on one that says none. */
+  activity?: string;
   recordedAt: string;
 }
 
@@ -151,6 +153,7 @@ function parseEntry(storageKey: string, raw: string | null): HeldReport | null {
     !isNullOr(isNumber)(body.depthM) ||
     !isNullOr(isString)(body.teamId) ||
     !isNullOr(isString)(body.note) ||
+    !(body.activity === undefined || isString(body.activity)) ||
     !isString(body.recordedAt)
   ) {
     return null;
@@ -172,6 +175,7 @@ function parseEntry(storageKey: string, raw: string | null): HeldReport | null {
       teamId: body.teamId,
       note: body.note,
       recordedAt: body.recordedAt,
+      ...(isString(body.activity) ? { activity: body.activity } : {}),
     },
   };
 }
