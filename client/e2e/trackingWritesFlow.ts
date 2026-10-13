@@ -12,7 +12,9 @@ import { apiJson, bearerToken, uploadMapPng } from './rastermapApi.ts';
  * nothing the second time, a sheet that corrects one cell changes that cell and nothing else, the
  * log taken out as a sheet reads straight back with nothing to do, a photograph is shown where it
  * will be drawn before it is attached, the log can be narrowed to one person, and a report added
- * once the watch is closed has to say when it was made.
+ * once the watch is closed has to say when it was made. One of the reports typed here also says
+ * what the person was doing, and that is corrected with the rest of it: the words then have to
+ * come through every sheet this walk takes out and reads back.
  *
  * <b>Why this is a browser flow and not only a component suite.</b> Each of these has a component
  * suite, and each suite stubs every write — which is how a sentence looked up with its arguments
@@ -78,6 +80,15 @@ const SHEET_NOTE = { written: 'apa mare in meandru', corrected: 'apa foarte mare
 /** The line of the sample sheet that note is on, counted as the dialog counts: the header is 1. */
 const SHEET_NOTE_LINE = 4;
 
+/**
+ * What somebody is said to be doing, typed on a report and then corrected.
+ *
+ * No comma, for the reason the note above has none; and neither wording is one a sheet would read
+ * as a standing — going in, coming out — which is the one thing that column means something else
+ * by.
+ */
+const DOING = { typed: 'E2E rigging the pitch', corrected: 'E2E derigging the pitch' };
+
 /** What is typed on the closed watch, for a call nobody wrote down at the time. */
 const LATE_NOTE = 'E2E written up after the watch was closed';
 
@@ -89,6 +100,7 @@ interface Report {
   surveyModelId: string | null;
   stationName: string | null;
   depthEnteredM: number | null;
+  activity: string | null;
   note: string | null;
   recordedAt: string;
   corrected: boolean;
@@ -331,6 +343,8 @@ export async function correctImportAndReportByPlace(page: Page) {
     .locator(`.ant-select-item-option[title="${PLACE.label} — ${PLACE.depthM} m"]`)
     .click();
   await expect(page.getByTestId('trip-tracking-depth')).toHaveValue(String(PLACE.depthM));
+  // And what Ion is doing there, in a few words of the coordinator's own.
+  await page.getByTestId('trip-tracking-activity').fill(DOING.typed);
   await page.getByTestId('trip-tracking-record').click();
   await expect(page.getByText('Recorded for 1.')).toBeVisible({ timeout: 15_000 });
   // The server read the depth through the very declaration that was chosen, so the station on the
@@ -340,6 +354,14 @@ export async function correctImportAndReportByPlace(page: Page) {
       (await logOf()).find((row) => row.caverId === ion && row.kind === 'atDepth')?.stationName,
     )
     .toBe(DECLARED_STATION);
+  // The words are stored with that report and with no other, are read on the log beside it, and
+  // the card lets them go with the rest of what was typed: the next report is not about the same
+  // thing unless somebody says so.
+  expect(
+    (await logOf()).map((row) => [row.kind, row.activity]).filter(([, activity]) => activity !== null),
+  ).toEqual([['atDepth', DOING.typed]]);
+  await expect(log).toContainText(DOING.typed, { timeout: 15_000 });
+  await expect(page.getByTestId('trip-tracking-activity')).toHaveValue('');
 
   // ---- Somebody between two stations, and a note about the cave ----
   // Two things said on the card and read back off the log and the party table: Maria somewhere
@@ -415,6 +437,8 @@ export async function correctImportAndReportByPlace(page: Page) {
   await page.locator('.ant-select-item-option[title="About the cave"]').click();
   await expect(page.getByTestId('trip-tracking-cave-note-hint')).toBeVisible();
   await expect(page.getByTestId('trip-tracking-nobody')).toHaveCount(0);
+  // Nor for what anybody is doing: a note about the cave is about nobody.
+  await expect(page.getByTestId('trip-tracking-activity')).toHaveCount(0);
   await nameStation('trip-tracking-station', hazardStation);
   await page.getByTestId('trip-tracking-note').fill(hazardWords);
   await page.getByTestId('trip-tracking-record').click();
@@ -534,6 +558,10 @@ export async function correctImportAndReportByPlace(page: Page) {
   await expect(correction.getByTestId('trip-tracking-edit-place')).toContainText(
     `${PLACE.label} — ${PLACE.depthM} m`,
   );
+  // And on what Ion was said to be doing, which is corrected here like the rest of the report.
+  const doing = correction.getByTestId('trip-tracking-edit-activity');
+  await expect(doing).toHaveValue(DOING.typed);
+  await doing.fill(DOING.corrected);
   // Re-read as a station report, the station chosen from the survey's names as on the cave's card.
   await chooseOption(page, correction.getByTestId('trip-tracking-edit-kind'), 'At a station');
   const correctedStation = correction.getByTestId('trip-tracking-edit-station');
@@ -547,9 +575,11 @@ export async function correctImportAndReportByPlace(page: Page) {
   await expect
     .poll(async () => {
       const row = (await logOf()).find((entry) => entry.id === ionBelow.id);
-      return [row?.kind, row?.stationName, row?.corrected];
+      return [row?.kind, row?.stationName, row?.activity, row?.corrected];
     })
-    .toEqual(['atStation', DECLARED_STATION, true]);
+    .toEqual(['atStation', DECLARED_STATION, DOING.corrected, true]);
+  await expect(log).toContainText(DOING.corrected, { timeout: 15_000 });
+  await expect(log).not.toContainText(DOING.typed);
 
   // ---- A photograph, shown where it will be drawn before it is attached ----
   // Noise of this run's own, filed on the trip the way its gallery files one. It carries no time

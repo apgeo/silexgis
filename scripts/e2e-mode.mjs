@@ -48,6 +48,7 @@ const DRAWS_A_3D_SCENE = [
   'terrain.spec.ts',
   'terrain-derivatives.spec.ts',
   'tracking-movie.spec.ts',
+  'tracking-movie-pictures.spec.ts',
 ];
 
 /**

@@ -49,3 +49,33 @@ export function uniquePng(size = 24) {
     chunk('IEND', Buffer.alloc(0)),
   ]);
 }
+
+/**
+ * A real PNG of one colour, which no other run will have produced either.
+ *
+ * For a picture that has to be recognised where it is drawn: noise is told from nothing in
+ * particular, a flat colour the scene never uses is told from everything else by one pixel. Its
+ * last row is noise, for the reason given above — the archive would refuse a second file of the
+ * same bytes — so the colour is the whole picture but for that row.
+ */
+export function tintedPng(size: number, [red, green, blue]: readonly [number, number, number]) {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header[8] = 8; // bit depth
+  header[9] = 2; // truecolour RGB
+
+  const flat = Buffer.concat([Buffer.from([0]), Buffer.alloc(size * 3, Buffer.from([red, green, blue]))]);
+  const noise = Buffer.concat([
+    Buffer.from([0]),
+    Buffer.from(Uint8Array.from({ length: size * 3 }, () => Math.floor(Math.random() * 256))),
+  ]);
+  const raw = Buffer.concat([...Array.from({ length: size - 1 }, () => flat), noise]);
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}

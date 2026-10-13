@@ -297,6 +297,63 @@ test('a camp is made from the list, renamed, announced, opened for its permissio
 });
 
 /**
+ * What a camp says to the readers of its published trips: one field of its form, and the only one
+ * people with no account ever read.
+ *
+ * Driven through the form both ways because the form sends the field on every save. Written, it
+ * has to be on the camp's own page afterwards — that is where somebody checks what the camp's
+ * trips are saying to strangers — and still there after a reload, which is the server's copy and
+ * not the form's. Emptied, it has to be gone rather than kept as it was: a form that left an empty
+ * field out of the save would leave a sentence published that its author had taken back.
+ */
+test("a camp's note to its readers is written in its form, shown on its page and taken back by emptying it", async ({
+  page,
+}) => {
+  const authorization = await authorizedHeader(page);
+  const stored = async (id: string) => {
+    const response = await page.request.get(`/api/v1/expeditions/${id}`, { headers: { authorization } });
+    expect(response.ok()).toBe(true);
+    return ((await response.json()) as { publicNote: string | null }).publicNote;
+  };
+
+  await gotoRoute(page, '/expeditions');
+  await page.getByTestId('expedition-new').click();
+  const name = `E2E camp with a note ${Date.now()}`;
+  // Two lines, and room around them: the page keeps the line break, and the server keeps neither
+  // the leading nor the trailing space.
+  const note = 'E2E figures up to the last day.\nThe survey is still being drawn.';
+  await page.getByTestId('expedition-form-name').fill(name);
+  await page.getByTestId('expedition-form-public-note').fill(`  ${note}  `);
+  await page.getByRole('button', { name: 'OK' }).click();
+
+  await expect(page).toHaveURL(/\/expeditions\/[0-9a-f-]{36}$/, { timeout: 20_000 });
+  await expect(page.getByTestId('expedition-name')).toHaveText(name, { timeout: 15_000 });
+  const campId = /\/expeditions\/([0-9a-f-]{36})$/.exec(page.url())![1];
+  const shown = page.getByTestId('expedition-public-note');
+  await expect(shown).toHaveText(note, { useInnerText: true, timeout: 15_000 });
+  expect(await stored(campId)).toBe(note);
+
+  // A reload reads the camp again from the server.
+  await page.reload();
+  await expect(shown).toHaveText(note, { useInnerText: true, timeout: 30_000 });
+
+  // The form opens on what is stored, and an emptied field is a note taken back.
+  await page.getByTestId('expedition-edit').click();
+  const field = page.getByTestId('expedition-form-public-note');
+  await expect(field).toHaveValue(note);
+  await field.fill('');
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(shown).toHaveCount(0, { timeout: 15_000 });
+  expect(await stored(campId)).toBeNull();
+  // The rest of the camp is as it was: the save that emptied the note carried the name with it.
+  await expect(page.getByTestId('expedition-name')).toHaveText(name);
+
+  await page.getByTestId('expedition-delete').click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page).toHaveURL(/\/expeditions$/, { timeout: 15_000 });
+});
+
+/**
  * A camp's roster kept from its own tab: somebody the club's directory does not hold is named on
  * a stay, the stay appears, and the person is in the directory afterwards — once.
  *
