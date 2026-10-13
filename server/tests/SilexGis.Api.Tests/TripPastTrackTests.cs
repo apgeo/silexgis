@@ -737,6 +737,9 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
     /// older than all of them: it is the last row read, it is listed, and nothing is older. One
     /// more such trip makes two hundred and one, the past trip is the one beyond the bound, and
     /// the list — now empty — has to say so. The same rows give both answers, a single trip apart.
+    /// Read on a host that keeps a grace after a watch closes, because it is the grace that makes
+    /// a trip closed a moment ago a candidate the rule then drops: with none, which is how an
+    /// installation starts, every one of them would be a past trip.
     /// </remarks>
     [Fact]
     public async Task The_list_says_more_only_when_a_trip_lies_beyond_the_bounded_read()
@@ -745,14 +748,16 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
         var model = await ModelAsync(cave);
         var past = await PastTripAsync("The one past trip", cave, model, tripDate: "2026-03-01");
         await SeedJustClosedPublishedTripsAsync(cave, model, count: 199, from: new DateOnly(2026, 3, 2), past.ShareId);
+        using var graced = HostWith(("TripTracking:ShareGraceAfterClose", "2.00:00:00"));
+        using var reader = graced.CreateClient();
 
-        var full = await ListAsync(past.Token);
+        var full = await Json(reader.GetAsync(PastList(past.Token)));
         ListedIds(full).ShouldBe(new[] { past.Trip });
         full.GetProperty("more").GetBoolean().ShouldBeFalse();
 
         await SeedJustClosedPublishedTripsAsync(cave, model, count: 1, from: new DateOnly(2026, 9, 20), past.ShareId);
 
-        var beyond = await ListAsync(past.Token);
+        var beyond = await Json(reader.GetAsync(PastList(past.Token)));
         ListedIds(beyond).ShouldBeEmpty();
         beyond.GetProperty("more").GetBoolean().ShouldBeTrue();
     }

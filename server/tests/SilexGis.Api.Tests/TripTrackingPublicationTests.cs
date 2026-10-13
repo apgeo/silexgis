@@ -557,9 +557,10 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Two hosts over one database, and only the grace setting differs between them — so what is
-    /// being read is the window rather than the fact that the watch was closed. The same token, the
-    /// same rows, two answers.
+    /// Three hosts over one database, and only the grace setting differs between them — so what
+    /// is being read is the window rather than the fact that the watch was closed. The same token,
+    /// the same rows: one answer where a grace is kept, and the other both where none was set and
+    /// where none was written out, which is the same installation said two ways.
     /// </para>
     /// <para>
     /// The grace window is the half that is easy to argue away: the instant a coordinator closes
@@ -577,20 +578,27 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         (await PutConfigAsync(owner, trip.Trip, new { state = "closed" }))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // Still answering, and still answering with the party — which is the whole point of the
-        // window rather than merely of the status code.
-        var final = await FollowAsync(share.Token);
+        // Where a grace is kept: still answering, and still answering with the party — which is
+        // the whole point of the window rather than merely of the status code.
+        using var graced = GraceFactory();
+        using var reader = graced.CreateClient();
+        var final = await FollowAsync(share.Token, reader);
         final.GetProperty("state").GetString().ShouldBe("closed");
         final.GetProperty("participants").GetArrayLength().ShouldBeGreaterThan(0);
 
+        // Where none is: the followed page is over the moment the watch is closed. The settings as
+        // shipped and a zero an operator wrote are read alike.
         using var noGrace = NoGraceFactory();
         using var strangerElsewhere = noGrace.CreateClient();
-        var refused = await strangerElsewhere.GetAsync(Follow(share.Token));
-        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await RefusalShapeAsync(refused)).ShouldBe(
-            await RefusalShapeAsync(
-                await strangerElsewhere.GetAsync(Follow("Zm9yZ2VkLXRva2VuLXRoYXQtd2FzLW5ldmVyLW1pbnRlZA"))),
-            "a link whose watch has closed must be indistinguishable from one that never existed");
+        foreach (var stranger in new[] { anonymous, strangerElsewhere })
+        {
+            var refused = await stranger.GetAsync(Follow(share.Token));
+            refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            (await RefusalShapeAsync(refused)).ShouldBe(
+                await RefusalShapeAsync(
+                    await stranger.GetAsync(Follow("Zm9yZ2VkLXRva2VuLXRoYXQtd2FzLW5ldmVyLW1pbnRlZA"))),
+                "a link whose watch has closed must be indistinguishable from one that never existed");
+        }
     }
 
     /// <summary>
@@ -908,8 +916,12 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
             .GetProperty("caverId").GetGuid().ShouldBe(other);
 
         // Published: the roster, in the shape it always had — and the one who stayed under the
-        // number they already had, whichever of the two that was.
-        var raw = await (await anonymous.GetAsync(Follow(token))).Content.ReadAsStringAsync();
+        // number they already had, whichever of the two that was. Read where the followed page is
+        // kept up after its watch closes: nobody is taken off a running watch, so the page that
+        // shows a roster with somebody gone from it is always a closed one.
+        using var graced = GraceFactory();
+        using var reader = graced.CreateClient();
+        var raw = await (await reader.GetAsync(Follow(token))).Content.ReadAsStringAsync();
         raw.Contains("onRoster", StringComparison.OrdinalIgnoreCase).ShouldBeFalse();
         var after = JsonDocument.Parse(raw).RootElement;
         after.EnumerateObject().Select(m => m.Name).ShouldBe(envelopeMembers, ignoreOrder: true);
@@ -2075,6 +2087,18 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     {
         var settings = HostSettings();
         settings["TripTracking:ShareGraceAfterClose"] = "00:00:00";
+        return new SilexGisApiFactory(connectionString, settings, JobWorkers.RemoveFrom);
+    }
+
+    /// <summary>
+    /// A second host over the same database, run by an operator who keeps the followed page up
+    /// for two days after a watch closes. An installation keeps it up for no time at all unless it
+    /// says so, so a check that reads a closed watch's own page reads it here.
+    /// </summary>
+    private SilexGisApiFactory GraceFactory()
+    {
+        var settings = HostSettings();
+        settings["TripTracking:ShareGraceAfterClose"] = "2.00:00:00";
         return new SilexGisApiFactory(connectionString, settings, JobWorkers.RemoveFrom);
     }
 

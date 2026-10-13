@@ -151,18 +151,19 @@ public sealed class PublishedLinksAdminTests : IAsyncLifetime, IDisposable, ICla
     [Fact]
     public async Task The_list_states_the_settings_its_statuses_rest_on_to_an_administrator_only()
     {
-        // As shipped: two weeks, two days, an archive with no limit, 120 reads a minute, and no
-        // limit on how long an old link lists today's parties.
+        // As shipped: two weeks, no grace after a watch closes, an archive with no limit, 120
+        // reads a minute, and no limit on how long an old link lists today's parties. No grace is
+        // a period of nothing, said as zero: it is a setting, not an absent one.
         var shipped = (await ListAsync(admin, "?pageSize=1")).GetProperty("settings");
         shipped.GetProperty("shareLifetimeSeconds").GetInt64().ShouldBe(14 * 86_400);
-        shipped.GetProperty("shareGraceAfterCloseSeconds").GetInt64().ShouldBe(2 * 86_400);
+        shipped.GetProperty("shareGraceAfterCloseSeconds").GetInt64().ShouldBe(0);
         shipped.GetProperty("archiveRetentionSeconds").ValueKind.ShouldBe(JsonValueKind.Null);
         shipped.GetProperty("publicReadsPerMinute").GetInt32().ShouldBe(120);
         shipped.GetProperty("siblingWindowAfterLapseSeconds").ValueKind.ShouldBe(JsonValueKind.Null);
 
         var settings = HostSettings();
         settings["TripTracking:ShareLifetime"] = "21.00:00:00";
-        settings["TripTracking:ShareGraceAfterClose"] = "00:00:00";
+        settings["TripTracking:ShareGraceAfterClose"] = "06:00:00";
         settings["TripPastTracks:Retention"] = "365.00:00:00";
         settings["TripTracking:PublicRateLimitPerMinute"] = "45";
         settings["TripTracking:SiblingWindowAfterLapse"] = "1.12:00:00";
@@ -171,9 +172,7 @@ public sealed class PublishedLinksAdminTests : IAsyncLifetime, IDisposable, ICla
 
         var set = (await ListAsync(hostAdmin, "?pageSize=1")).GetProperty("settings");
         set.GetProperty("shareLifetimeSeconds").GetInt64().ShouldBe(21 * 86_400);
-        // No grace is a period of nothing, said as zero: it is a setting an installation chose,
-        // not an absent one.
-        set.GetProperty("shareGraceAfterCloseSeconds").GetInt64().ShouldBe(0);
+        set.GetProperty("shareGraceAfterCloseSeconds").GetInt64().ShouldBe(6 * 3_600);
         set.GetProperty("archiveRetentionSeconds").GetInt64().ShouldBe(365 * 86_400);
         set.GetProperty("publicReadsPerMinute").GetInt32().ShouldBe(45);
         set.GetProperty("siblingWindowAfterLapseSeconds").GetInt64().ShouldBe(36 * 3_600);

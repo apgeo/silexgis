@@ -126,8 +126,9 @@ public class TripTrackingOptionsTests
     public void A_closing_grace_of_nothing_starts_and_a_negative_one_does_not()
     {
         // Zero is a real choice — the page stops answering the moment the watch is closed — and
-        // it is what a rehearsal of the archive is run with, so it must not be refused along with
-        // the values that mean nothing.
+        // it is what an installation has when it sets nothing, so it must not be refused along
+        // with the values that mean nothing.
+        new TripTrackingOptions().ShareGraceAfterClose.ShouldBe(TimeSpan.Zero);
         new TripTrackingOptionsValidator().Validate(
                 null, new TripTrackingOptions { ShareGraceAfterClose = TimeSpan.Zero })
             .Succeeded.ShouldBeTrue();
@@ -312,7 +313,7 @@ public class TripTrackingOptionsTests
         // Setting it moves nothing else: the two periods beside it keep their own defaults.
         var beside = Bound(("TripTracking:SiblingWindowAfterLapse", "90.00:00:00"));
         beside.ShareLifetime.ShouldBe(TimeSpan.FromDays(14));
-        beside.ShareGraceAfterClose.ShouldBe(TimeSpan.FromDays(2));
+        beside.ShareGraceAfterClose.ShouldBe(TimeSpan.Zero);
     }
 
     [Theory]

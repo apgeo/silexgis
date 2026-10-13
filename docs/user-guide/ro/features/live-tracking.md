@@ -42,8 +42,9 @@ Apoi **Pornește urmărirea**. Tura arată acum *În urmărire* și se pot înre
   numele de stații nu înseamnă nimic, sau înseamnă altceva, în altă ridicare; pagina avertizează
   înainte de salvare.
 - **Încheie urmărirea** când au ieșit toți. Confirmarea spune ce urmează: grupul nu mai este
-  urmărit; o pagină publicată spune că tura s-a încheiat și nu o mai arată după ce trece perioada
-  de grație de după încheiere. **Jurnalul rămâne însă deschis** — rapoartele pot fi înregistrate,
+  urmărit, și nici o pagină publicată nu îl mai urmărește — imediat sau, pe o instalare care
+  păstrează o perioadă de grație după încheiere, când aceasta trece; până atunci pagina spune că
+  tura s-a încheiat. **Jurnalul rămâne însă deschis** — rapoartele pot fi înregistrate,
   corectate sau șterse și după aceea, așa că nu trebuie terminat totul înainte.
   **Pornește urmărirea din nou** redeschide urmărirea. O urmărire pornită din nou arată ambele
   momente pe cardul de configurare — **Începută prima dată** și **Începută din nou** — așa că
@@ -733,9 +734,12 @@ numește din nou. Coloana
 întâietate față de acea setare în ambele sensuri — *„al treilea din echipă"* ține o persoană
 departe de o pagină care altfel ar numi-o, fără a opri numele pentru tot clubul.
 
-**Un link se încheie singur.** Funcționează cât timp urmărirea este pornită, apoi o perioadă de
-grație după încheiere (două zile, implicit) ca cei care urmăresc să poată citi că au ieșit toți,
-și oricum doar până la data arătată de panou (implicit, două săptămâni după ultima zi a turei).
+**Un link se încheie singur.** Urmărește echipa cât timp urmărirea este pornită — iar pe o
+instalare care a stabilit o perioadă de grație, încă atât după încheiere, ca cei care urmăresc să
+poată citi pe aceeași pagină că au ieșit toți; perioada nu există dacă instalarea nu o stabilește,
+iar tura este atunci printre turele trecute ale peșterii din clipa în care urmărirea este încheiată.
+Oricum, urmărește doar până la data arătată de panou (implicit, două săptămâni după ultima zi a
+turei).
 **Retrage-l** îl încheie imediat. Fiecare link apare ca **Activ**, **Inactiv** sau **Expirat**.
 
 **Un link expirat rămâne în listă și încă contează.** Expirarea încheie urmărirea, nu
@@ -1134,8 +1138,8 @@ Publicarea îi dă unei ture **două durate de viață**, care se încheie separ
 **Pagina proprie a linkului — cât timp echipa este urmărită.** Adresa răspunde cât timp sunt
 adevărate **toate** acestea:
 
-- urmărirea este pornită sau a fost încheiată de mai puțin decât perioada de grație (două zile,
-  implicit);
+- urmărirea este pornită sau a fost încheiată de mai puțin decât perioada de grație (care nu
+  există dacă instalarea nu o stabilește);
 - data arătată de panoul de publicare nu a trecut (implicit, două săptămâni după ultima zi a
   turei, sau după crearea linkului, dacă aceasta este mai târzie);
 - linkul nu a fost retras;
@@ -1152,8 +1156,8 @@ linkului; un link **retras** nu mai funcționează niciodată.
 fi reluată printr-un link către orice tură publicată a aceleiași peșteri. Este acolo cât timp
 sunt adevărate **toate** acestea:
 
-- urmărirea ei este încheiată și pagina ei proprie nu mai răspunde (deci nu în perioada de
-  grație);
+- urmărirea ei este încheiată și pagina ei proprie nu mai răspunde (imediat, sau după perioada
+  de grație pe o instalare care are una);
 - cel puțin un link către ea **nu a fost retras** — un link care doar a expirat la dată
   contează în continuare;
 - instalarea oferă ture trecute, iar tura este mai nouă decât limita stabilită de instalare,
@@ -1231,7 +1235,7 @@ momentul scris deasupra tabelului:
 | Stare | Adresa deschide |
 |---|---|
 | **Urmărire în curs** | Echipa, așa cum este raportată — urmărirea este pornită |
-| **Abia încheiată** | Aceeași pagină, care spune că au ieșit toți, pe perioada de grație de după încheiere |
+| **Abia încheiată** | Aceeași pagină, care spune că au ieșit toți, pe perioada de grație de după încheiere — doar pe o instalare care a stabilit una |
 | **În arhivă** | Tura ca istoric și celelalte ture publicate și încheiate ale peșterii |
 | **Reținut** | Nimic, *deocamdată*: urmărirea și-a pierdut peștera sau poziția peșterii a fost protejată între timp. Răspunde ca un link necunoscut cât timp ține asta și începe iar să răspundă dacă nu mai ține |
 | **Nu deschide nimic** | Nimic: a expirat, urmărirea a fost oprită sau turele trecute sunt oprite ori nu îl mai acoperă. Nu l-a retras nimeni |
@@ -1362,7 +1366,7 @@ cel care administrează serverul):
 | **Retras** | Cineva a retras linkul sau l-a înlocuit | Nu poate fi pus la loc. Dați mai departe adresa arătată de **Înlocuiește linkul** sau publicați tura din nou |
 | Nu există niciun rând pentru acea adresă | Adresa din articol nu este un link al acestei instalări: tăiată la lipire, scrisă greșit, ori tura ei a fost ștearsă | Copiați din nou linkul din panoul de publicare al turei |
 | **În arhivă** | Nu este nimic în neregulă. Urmărirea a fost încheiată și perioada de grație a trecut: pagina proprie a linkului s-a terminat, iar tura este printre turele trecute ale peșterii, pe care același link le deschide | — |
-| **Abia încheiată**, iar tura nu este printre turele trecute | Nu este nimic în neregulă. O tură abia încheiată rămâne pe pagina ei, marcată *Abia încheiată*, și trece printre turele trecute când se termină perioada de grație (două zile, dacă instalarea nu spune altfel) | Așteptați sfârșitul perioadei |
+| **Abia încheiată**, iar tura nu este printre turele trecute | Nu este nimic în neregulă. Instalarea a stabilit o perioadă de grație: o tură abia încheiată rămâne pe pagina ei, marcată *Abia încheiată*, și trece printre turele trecute când se termină perioada. Fără una — cum pornește orice instalare — o tură încheiată este tură trecută imediat, iar această stare nu apare | Așteptați sfârșitul perioadei |
 | **Nu deschide nimic**, cu urmărirea încă pornită | Linkul a expirat și nimeni nu încheiase urmărirea | **Încheie urmărirea** pe tură — devine tură trecută — sau **Înlocuiește linkul** |
 | **Nu deschide nimic**, altfel | Turele trecute sunt oprite pentru instalare (o spune un rând deasupra tabelului) sau tura este mai veche decât perioada cât sunt păstrate turele trecute | O setare a instalării: întrebați-l pe cel care administrează serverul |
 | **Reținut** | Poziția peșterii a fost protejată între timp sau urmărirea și-a pierdut peștera | Intenționat. Răspunde iar de la sine dacă asta nu mai ține |

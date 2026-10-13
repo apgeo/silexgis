@@ -194,10 +194,11 @@ const apiEnv = {
   // only measure how fast the suite runs. The integration factory lifts it the same way.
   SILEXGIS__Auth__RateLimitPerMinute: '100000',
   // No grace after a watch closes. The archive of a cave's past trips lists a closed trip only once
-  // it has left the live window, which by default is two days after it closed; the spec that stands
-  // a real archive up closes its trip a moment before reading it, and fails rather than skipping
-  // with the default. An ordinary operator setting, not a test hook. Nothing else in the suite
-  // reads a closed trip's public link from the server, so nothing else notices the difference.
+  // it has left the live window; the spec that stands a real archive up closes its trip a moment
+  // before reading it, and fails rather than skipping where a grace is set. None is what an
+  // installation has when it sets nothing — written out here so that the spec does not come to
+  // depend on a default. Nothing else in the suite reads a closed trip's public link from the
+  // server, so nothing else notices the difference.
   SILEXGIS__TripTracking__ShareGraceAfterClose: '00:00:00',
   // The SPA is served from the e2e dev port, so that is where the authorization server has to
   // be willing to send a browser back to. Without this every sign-in dies at the redirect.

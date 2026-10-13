@@ -125,19 +125,34 @@ public sealed class TripTrackingOptions
     public TimeSpan ShareLifetime { get; set; } = TimeSpan.FromDays(14);
 
     /// <summary>
-    /// How long a followed page keeps answering after the watch is closed. <b>Two days.</b>
+    /// How long a followed page keeps answering after the watch is closed. <b>No time at all unless
+    /// an installation sets one.</b>
     /// </summary>
     /// <remarks>
-    /// Not zero, and that is the whole reason it is a setting rather than an absence. The moment a
-    /// coordinator closes the watch is the moment the page has its most important thing to say —
-    /// everybody is out — and it is the moment the people who have been refreshing it all evening
-    /// are looking at it. A page that answered nothing the instant the party came out would fail
-    /// precisely the readers it exists for, and would look exactly like the party having stopped
-    /// being reported. Two days lets anybody who was following read the ending, and then it stops.
-    /// Never longer than <see cref="ShareLifetime"/> allows: the expiry is the outer bound and this
-    /// window cannot push past it.
+    /// <para>
+    /// While it lasts, a closed trip is still on its own page — saying that everybody is out — and
+    /// still in the list of trips being followed, and it is <em>not</em> yet among the cave's past
+    /// trips: the archive begins exactly where the live page ends, so no trip is ever both.
+    /// </para>
+    /// <para>
+    /// <b>Zero is the default because of what the gap costs.</b> It used to be two days, argued
+    /// from the people who had been refreshing the page all evening: the moment the watch closes
+    /// is the moment the page has its most important thing to say. But for those two days the trip
+    /// could not be played back from anywhere a reader without an account could reach, and a club
+    /// that enters a finished expedition's trips after the fact — every one of them closed long
+    /// after its last day — published an archive that stayed empty for two days with nothing
+    /// saying why. With no grace a closed trip is a past trip at once, and the same link that
+    /// followed the party opens it there, where it reads as finished and can be replayed. That
+    /// needs the archive of past trips to be on, which it is unless an installation turns it off;
+    /// with the archive off and no grace, a link answers nothing from the moment its watch closes.
+    /// </para>
+    /// <para>
+    /// An installation that wants the followed page itself to say "everybody is out" for a while
+    /// sets a period here. Never longer than <see cref="ShareLifetime"/> allows: the expiry is the
+    /// outer bound and this window cannot push past it.
+    /// </para>
     /// </remarks>
-    public TimeSpan ShareGraceAfterClose { get; set; } = TimeSpan.FromDays(2);
+    public TimeSpan ShareGraceAfterClose { get; set; } = TimeSpan.Zero;
 
     /// <summary>
     /// How long after its own trip is over a link goes on listing the parties being followed in

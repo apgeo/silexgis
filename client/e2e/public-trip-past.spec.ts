@@ -34,11 +34,11 @@ import { settledScreenshot } from './settled.ts';
  * of the test cannot say — and a surface strangers read has nobody watching its console.
  *
  * <b>One thing is arranged rather than waited for: a closed trip stops being live only after the
- * installation's grace, which is two days by default.</b> The run is driven against an API started
- * with `SILEXGIS__TripTracking__ShareGraceAfterClose=00:00:00`, which is an ordinary operator
- * setting and not a test hook — with the default the spec would have to sleep for two days or reach
- * into the database and move a timestamp. The spec says so out loud and fails, rather than passing
- * vacuously, if the archive does not open.
+ * installation's grace, where it has set one.</b> The run is driven against an API started with
+ * `SILEXGIS__TripTracking__ShareGraceAfterClose=00:00:00`, which is the setting as shipped and
+ * not a test hook — against a server with a grace the spec would have to sleep for the length of
+ * it or reach into the database and move a timestamp. The spec says so out loud and fails, rather
+ * than passing vacuously, if the archive does not open.
  */
 
 /** Two stations of the committed survey fixture: where the past party was reported. */

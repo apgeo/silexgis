@@ -41,8 +41,9 @@ Then **Start tracking**. The trip now shows *Tracking*, and reports can be recor
   the depth datum and the filter, because station names mean nothing, or something else, in
   another survey; the page warns before saving.
 - **Close tracking** when everybody is out. The confirmation says what follows: the party stops
-  being followed; a published page says the trip is over, and stops showing it once the grace
-  period after closing has run out. **The log itself stays open** — reports can still be
+  being followed, and a published page stops following it too — at once, or, on an installation
+  that keeps a grace period after closing, when that has run out, saying meanwhile that the trip
+  is over. **The log itself stays open** — reports can still be
   recorded, corrected or removed afterwards, so the write-up does not have to be finished
   first. **Start tracking again** reopens the watch. A watch that was started again shows both
   moments on the setup card — **First started** and **Started again** — so the hour the party
@@ -699,9 +700,11 @@ again. The
 **caption** outranks that setting in both directions — *"third of the party"* keeps one person
 off a page that would otherwise name them, without turning names off for the club.
 
-**A link ends on its own.** It works while the watch is running, then for a grace period after
-closing (two days by default) so the people following can read that everybody is out, and in
-any case only until the date the panel shows (by default two weeks after the trip's last day).
+**A link ends on its own.** It follows the party while the watch is running — and, on an
+installation that has set a grace period, for that long after closing, so the people following
+can read on the same page that everybody is out; there is none unless the installation sets one,
+and the trip is then among the cave's past trips the moment the watch is closed. In any case it
+follows only until the date the panel shows (by default two weeks after the trip's last day).
 **Take it back** ends it at once. Each link is listed as **Live**, **Not open** or **Run out**.
 
 **A link that has run out is still listed, and still matters.** Running out ends the following,
@@ -1090,7 +1093,8 @@ Publishing gives a trip **two lifetimes**, and they end separately.
 **The link's own page — while the party is being followed.** The address answers while **all**
 of these hold:
 
-- the watch is running, or was closed less than the grace period ago (two days by default);
+- the watch is running, or was closed less than the grace period ago (there is no grace period
+  unless the installation sets one);
 - the date the publish panel shows has not passed (by default two weeks after the trip's last
   day, or after the link was made when that is later);
 - the link has not been taken back;
@@ -1106,7 +1110,8 @@ never works again.
 **The cave's past trips — after it is over.** A finished trip is listed, and can be replayed,
 through a link to any published trip of the same cave. It is there while **all** of these hold:
 
-- its watch is closed and its own page has stopped answering (so not during the grace period);
+- its watch is closed and its own page has stopped answering (at once, or after the grace
+  period on an installation that has one);
 - at least one link to it was **not taken back** — a link that merely ran out by date still
   counts;
 - the installation offers past trips, and the trip is younger than the limit the installation
@@ -1183,7 +1188,7 @@ holds it at the moment printed above the table:
 | Status | The address opens |
 |---|---|
 | **Followed now** | The party, as it is reported — the watch is running |
-| **Just closed** | The same page, saying everybody is out, for the grace period after closing |
+| **Just closed** | The same page, saying everybody is out, for the grace period after closing — only on an installation that has set one |
 | **In the archive** | The trip as history, and the cave's other finished published trips |
 | **Withheld** | Nothing, *for now*: the watch has lost its cave, or the cave's position has been protected since. It answers like an unknown link for as long as that holds, and starts answering again if it stops holding |
 | **Opens nothing** | Nothing: it ran out, its watch was stood down, or past trips are switched off or no longer cover it. Nobody took it back |
@@ -1306,7 +1311,7 @@ its trip, or by the **Log code** if whoever runs the server gave you one):
 | **Taken back** | Somebody took the link back, or replaced it | It cannot be put back. Hand out the address **Replace link** showed, or publish the trip again |
 | There is no row for that address | The address in the article is not one of this installation's links: cut short when pasted, mistyped, or its trip was deleted | Copy the link again from the trip's publish panel |
 | **In the archive** | Nothing is wrong. Tracking was closed and the grace period is over: the link's own page has ended and the trip is among its cave's past trips, which the same link opens | — |
-| **Just closed**, and the trip is not among the past trips | Nothing is wrong. A trip just closed stays on its own page, marked *Just finished*, and joins the past trips when the grace period ends (two days unless the installation says otherwise) | Wait for the period to end |
+| **Just closed**, and the trip is not among the past trips | Nothing is wrong. The installation has set a grace period: a trip just closed stays on its own page, marked *Just finished*, and joins the past trips when the period ends. Without one — which is how an installation starts — a closed trip is a past trip at once and this state does not occur | Wait for the period to end |
 | **Opens nothing**, its tracking still running | The link ran out and nobody had closed the tracking | **Close tracking** on the trip — it becomes a past trip — or **Replace link** |
 | **Opens nothing**, otherwise | Past trips are switched off for the installation (a line above the table says so), or the trip is older than past trips are kept | An installation setting: ask whoever runs the server |
 | **Withheld** | The cave's position has been protected since, or the tracking lost its cave | Deliberate. It answers again by itself if that stops holding |

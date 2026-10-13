@@ -53,8 +53,9 @@ public sealed class TripTrackingOptionsValidator : IValidateOptions<TripTracking
             failures.Add(
                 $"{Setting(nameof(TripTrackingOptions.ShareGraceAfterClose))} must not be negative; got "
                 + $"{options.ShareGraceAfterClose}. It is how long a followed page keeps answering after its "
-                + "watch is closed, written days.hours:minutes:seconds. 00:00:00 is allowed and means the "
-                + "page stops answering the moment the watch is closed.");
+                + "watch is closed, written days.hours:minutes:seconds. 00:00:00 is allowed and is what an "
+                + "installation has when it sets nothing: the page stops answering the moment the watch is "
+                + "closed, and the trip is among its cave's past trips from then.");
         }
 
         if (options.SiblingWindowAfterLapse is { } siblings && siblings < TimeSpan.Zero)

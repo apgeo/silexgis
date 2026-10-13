@@ -205,9 +205,15 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
-    /// The grace window after a watch closes belongs to this list, not the archive — and the trip
-    /// says which case it is, so a page never draws somebody as underground who came out.
+    /// Where an installation keeps a grace window after a watch closes, that window belongs to
+    /// this list, not the archive — and the trip says which case it is, so a page never draws
+    /// somebody as underground who came out. Where it keeps none, which is how an installation
+    /// starts, a trip closed moments ago is history at once.
     /// </summary>
+    /// <remarks>
+    /// Two hosts over one database, so that the same trip, closed at the same moment, is read
+    /// both ways and what differs is the one setting.
+    /// </remarks>
     [Fact]
     public async Task A_watch_closed_moments_ago_is_still_here_saying_it_is_closed_and_is_not_yet_archived()
     {
@@ -217,7 +223,9 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
         var justOut = await PublishedTripAsync("Just out", cave, model);
         await CloseAsync(justOut.Trip, DateTimeOffset.UtcNow.AddMinutes(-5));
 
-        var list = await LiveListAsync(armed.Token);
+        using var graced = HostWith(("TripTracking:ShareGraceAfterClose", "2.00:00:00"));
+        using var gracedAnonymous = graced.CreateClient();
+        var list = await Json(gracedAnonymous.GetAsync(LiveList(armed.Token)));
 
         // Both present, and distinguishable — the state is what a page must read.
         StateOf(list, armed.Trip).ShouldBe("armed");
@@ -225,12 +233,17 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
 
         // The archive does not have it yet. Both halves matter: this is the boundary the two
         // windows share, and asserting only one side could not tell a handover from an overlap.
-        ListedIds(await Json(anonymous.GetAsync(PastList(armed.Token)))).ShouldBeEmpty();
+        ListedIds(await Json(gracedAnonymous.GetAsync(PastList(armed.Token)))).ShouldBeEmpty();
 
-        // Past the grace it crosses over, and is gone from here.
-        await CloseAsync(justOut.Trip, DateTimeOffset.UtcNow.AddDays(-5));
+        // With no grace — the settings as shipped — the same trip has already crossed over: gone
+        // from the parties being followed, and the one trip the archive holds.
         ListedIds(await LiveListAsync(armed.Token)).ShouldBe([armed.Trip]);
         ListedIds(await Json(anonymous.GetAsync(PastList(armed.Token)))).ShouldBe([justOut.Trip]);
+
+        // Past the grace it crosses over where there is one, too.
+        await CloseAsync(justOut.Trip, DateTimeOffset.UtcNow.AddDays(-5));
+        ListedIds(await Json(gracedAnonymous.GetAsync(LiveList(armed.Token)))).ShouldBe([armed.Trip]);
+        ListedIds(await Json(gracedAnonymous.GetAsync(PastList(armed.Token)))).ShouldBe([justOut.Trip]);
     }
 
     /// <summary>

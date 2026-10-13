@@ -98,16 +98,17 @@ describe('publishing a tracked trip', () => {
   it('says a link ends on its own, and says so before there is one', () => {
     view();
 
-    // True of the grace period: a closed watch does not end the link at once. The page goes on
-    // answering, saying the trip is over, until the grace after closing has run out — which is
-    // what the confirmation of closing a watch says too. "Stops working when the watch is
-    // closed" told the person about to paste the address something the page does not do.
+    // True with a grace period and without one. An installation keeps none unless it sets one,
+    // so the following ends when the watch is closed; where one is kept, the page goes on
+    // answering, saying the trip is over, until it has run out — which is what the confirmation
+    // of closing a watch says too. And neither is the link stopping "working": the sentence is
+    // about following, and goes on to say what the address still opens.
     const ends = screen.getByTestId('trip-tracking-publish-ends');
     expect(ends).toHaveTextContent(
-      /Once the watch is closed the page says the trip is over, and the link stops opening that page when the grace period after closing has run out/,
+      /stops following on its own: when the watch is closed — or, where this installation keeps a grace period after closing, when that has run out/,
     );
-    expect(ends).not.toHaveTextContent(/when the watch is closed/);
-    expect(ends).toHaveTextContent(/in any case it stops on the date below/);
+    expect(ends).not.toHaveTextContent(/stops working/);
+    expect(ends).toHaveTextContent(/in any case on the date below/);
     // And true of what comes after: the address is not dead then. Past trips are on unless an
     // installation switches them off, and a link that has run out still opens its trip among
     // them, party and all, until somebody takes it back. The sentence used to promise the
@@ -502,10 +503,10 @@ describe('publishing a tracked trip', () => {
     );
     const dormant = screen.getByTestId(`trip-tracking-publish-expires-${SHARE}`);
     expect(dormant).toHaveTextContent(/opens nothing at the moment/);
-    // And why, without denying the grace period: the page answers past the closing of the
-    // watch for a while, so "only while the watch is running" was not the rule.
+    // And why, without denying a grace period where one is kept: the page then answers past the
+    // closing of the watch for a while, so "only while the watch is running" is not the rule.
     expect(dormant).toHaveTextContent(
-      /while the watch is running and until the grace period after its closing has run out/,
+      /while the watch is running — and through any grace period this installation keeps after its closing/,
     );
     expect(dormant).not.toHaveTextContent(/only while the watch is running/);
     // Still listed, and still revocable. A closed watch can be armed again and a protection can be
