@@ -66,6 +66,9 @@ const PHONE_ONLY_SPECS = [
   // A camp's head count held in a hand at a cave entrance: three counts across and every
   // standing on the screen are claims about measured boxes at a phone's width.
   /(^|\/)expedition-watch-mobile\.spec\.ts$/,
+  // The control for the size of station names among the viewer's own controls, which are laid
+  // out differently at a phone's width and sized differently under a finger.
+  /(^|\/)caveview-label-size-mobile\.spec\.ts$/,
   // The movie dialog where the browser's video encoder may be missing or may write nothing:
   // Chromium has every encoder, so only the suite's other engine can show how that is said.
   /(^|\/)tracking-movie-webkit\.spec\.ts$/,

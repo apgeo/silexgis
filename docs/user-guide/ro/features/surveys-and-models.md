@@ -37,7 +37,7 @@ vizualizatorul în care se deschide. Când mai mulți oameni dintr-o tură urmă
 apropiate pe ecran, etichetele cu numele lor sunt puse una sub alta, nu una peste alta.
 
 **Mărimea numelor de stații o alegeți dumneavoastră.** Împreună cu bara de unelte a
-vizualizatorului apare, în colțul din stânga sus al modelului, un mic control **Aa**: 40 %, 60 %,
+vizualizatorului apare, în colțul din dreapta sus al modelului, un mic control **Aa**: 40 %, 60 %,
 80 %, 100 %, 125 % sau 150 % din mărimea vizualizatorului. O topografie numește fiecare stație cu
 toată calea ei, iar o galerie aglomerată la mărime întreagă este un zid de text; micșorați-o până
 nu mai este. Alegerea se păstrează în browserul dumneavoastră și se aplică oricărui model deschis.

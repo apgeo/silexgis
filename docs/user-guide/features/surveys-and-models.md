@@ -36,7 +36,7 @@ it opens in. Where several people of a tracked trip are at stations that are clo
 screen, their name labels are set one under the other instead of over each other.
 
 **The size of station names is yours to set.** With the viewer's toolbar comes a small **Aa**
-control in the model's top left corner: 40 %, 60 %, 80 %, 100 %, 125 % or 150 % of the viewer's
+control in the model's top right corner: 40 %, 60 %, 80 %, 100 %, 125 % or 150 % of the viewer's
 own size. A survey names every station by its whole path, and a busy passage at full size is a
 wall of text; make it smaller until it is not. The choice is kept in your browser and applies to
 every model you open.

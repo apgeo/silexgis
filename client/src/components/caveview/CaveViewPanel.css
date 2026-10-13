@@ -383,17 +383,37 @@
   max-width: 100%;
 }
 
-/* The control for the size of station names: in the model's top left corner, which nothing of
-   the viewer's occupies here (its own side panel is not mounted), over the model and under a
-   notice. Translucent until it is pointed at, so that it is not one more thing over the cave. */
+/* The control for the size of station names: in the model's top right corner, over the model and
+   under a notice. Translucent until it is pointed at, so that it is not one more thing over the
+   cave.
+
+   <b>The corner is chosen by what the viewer and this application already keep in the others.</b>
+   The top left is the viewer's own column of tabs, forty pixels wide and stacked far above
+   anything placed here — a control put under it is drawn and cannot be pressed, which is where
+   this one first was. The bottom left is the list of who is underground, the bottom right the
+   viewer's two dials, and the right edge below them its colour key, which starts a good way down.
+   The toolbar is centred along the top and ends short of this corner on every surface wide
+   enough to hold it on one row.
+
+   <b>On a narrow screen the viewer lays its tabs along the top instead</b>, in a box as wide as
+   the model that takes every press along that edge, and the toolbar moves to a row of its own
+   under them and can reach both sides. So there the control goes under both — under the taller
+   row the toolbar is beneath a finger, measured at 48 to 102 pixels down on a phone. The breakpoint
+   is the viewer's own, which is of the window and not of the model. */
 .caveview-panel-label-scale {
   position: absolute;
   top: 8px;
-  left: 8px;
+  right: 8px;
   z-index: 9;
   min-width: 32px;
   opacity: 0.75;
   font-weight: 600;
+}
+
+@media (max-width: 767px) {
+  .caveview-panel-label-scale {
+    top: 110px;
+  }
 }
 
 .caveview-panel-label-scale:hover,
