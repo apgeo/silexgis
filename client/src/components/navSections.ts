@@ -28,7 +28,7 @@ export const NAV_SECTIONS = [
   'caving-groups', 'cavers',
   'admin/audit', 'admin/notification-health', 'admin/messaging', 'admin/message-templates',
   'admin/published-trips',
-  'admin/permission-groups',
+  'admin/permission-groups', 'admin/users',
   'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',
   'admin/terrain',
   // The three the rail offers under configuration. Missing here, they matched nothing and

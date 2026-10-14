@@ -24,7 +24,10 @@ export const always = ['smoke.spec.ts'];
 export const specs = {
   about: [],
   access: ['permission-groups.spec.ts', 'cave-grant-link.spec.ts', 'expedition-sharing.spec.ts'],
-  admin: ['settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts'],
+  admin: [
+    'settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts',
+    'users-admin.spec.ts',
+  ],
   audit: ['panel.spec.ts'],
   cabinets: ['documents.spec.ts'],
   calendar: ['calendar.spec.ts', 'calendar-feed.spec.ts'],
@@ -121,7 +124,7 @@ export const specs = {
     'tracking-movie-webkit.spec.ts', 'tracking-movie-pictures.spec.ts',
   ],
   uploads: ['uploads.spec.ts'],
-  users: ['settings.spec.ts', 'permission-groups.spec.ts'],
+  users: ['settings.spec.ts', 'permission-groups.spec.ts', 'users-admin.spec.ts'],
   workAreas: ['karst-density.spec.ts'],
 };
 
