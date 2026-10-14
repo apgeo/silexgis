@@ -73,7 +73,10 @@
     <PackageReference Include="PdfPig" Version="0.1.15" />
     <!-- Transitive only: the legacy Office reader asks for a version carrying known advisories,
          and the build treats the audit warning as an error. Raised here to a clean one. -->
-    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.10" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.13" />
+    <!-- Transitive only, the same way: the mail library asks for 10.0.0, which carries published
+         advisories, and nothing else in the graph lifts it. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
   <PropertyGroup>
