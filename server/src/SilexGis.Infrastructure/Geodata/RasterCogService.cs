@@ -73,12 +73,14 @@ public sealed class RasterCogService
              gt[3] + gt[4] * source.RasterXSize + gt[5] * source.RasterYSize),
         };
 
-        var sourceSrs = new SpatialReference(projection);
+        // Each of these holds native memory the garbage collector cannot see, so they are released
+        // here rather than whenever a finalizer gets round to it.
+        using var sourceSrs = new SpatialReference(projection);
         sourceSrs.SetAxisMappingStrategy(AxisMappingStrategy.OAMS_TRADITIONAL_GIS_ORDER);
-        var target = new SpatialReference("");
+        using var target = new SpatialReference("");
         target.ImportFromEPSG(4326);
         target.SetAxisMappingStrategy(AxisMappingStrategy.OAMS_TRADITIONAL_GIS_ORDER);
-        var transform = new CoordinateTransformation(sourceSrs, target);
+        using var transform = new CoordinateTransformation(sourceSrs, target);
 
         var envelope = new Envelope();
         foreach (var (x, y) in corners)

@@ -276,6 +276,12 @@ public sealed class PageRenderService(IFileStore fileStore)
         // A page the document does not have is reported by the library as a dataset it will not
         // open, which is also how it reports a file it cannot read. The caller tells the two
         // apart by having opened the file successfully once already.
+        //
+        // Quieting the library here needs no lock although this service answers requests
+        // concurrently and other raster work runs in the same process: the library keeps its stack
+        // of error handlers per thread, and the push and the pop below run on one thread with
+        // nothing awaited between them, so no other caller ever sees this handler.
+        // ErrorHandlerScopeTests proves the per-thread half; keep this method synchronous.
         Gdal.PushErrorHandler("CPLQuietErrorHandler");
         try
         {
