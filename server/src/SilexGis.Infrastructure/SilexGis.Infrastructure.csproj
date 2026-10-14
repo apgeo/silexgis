@@ -24,22 +24,22 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Dapper" Version="2.1.79" />
+    <PackageReference Include="Dapper" Version="2.1.89" />
     <!-- Converts the pre-2007 binary Word and PowerPoint formats into the packaged ones so the
          reader for those can read them. MIT, and on this framework they pull one shared MIT
          package with no dependencies of its own. Do NOT add the renderer package alongside
          them: it is not needed here and it carries commercial terms. -->
-    <PackageReference Include="DocSharp.Binary.Doc" Version="0.20.0" />
-    <PackageReference Include="DocSharp.Binary.Ppt" Version="0.20.0" />
+    <PackageReference Include="DocSharp.Binary.Doc" Version="0.21.0" />
+    <PackageReference Include="DocSharp.Binary.Ppt" Version="0.21.0" />
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
     <PackageReference Include="JsonSchema.Net" Version="9.4.0" />
-    <PackageReference Include="MailKit" Version="4.17.0" />
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.16.0" />
-    <PackageReference Include="MaxRev.Gdal.Core" Version="3.13.1.534" />
-    <PackageReference Include="MaxRev.Gdal.LinuxRuntime.Minimal" Version="3.13.1.534" />
-    <PackageReference Include="MaxRev.Gdal.WindowsRuntime.Minimal" Version="3.13.1.534" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
+    <PackageReference Include="MailKit" Version="4.18.1" />
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.17.2" />
+    <PackageReference Include="MaxRev.Gdal.Core" Version="3.13.3.580" />
+    <PackageReference Include="MaxRev.Gdal.LinuxRuntime.Minimal" Version="3.13.3.580" />
+    <PackageReference Include="MaxRev.Gdal.WindowsRuntime.Minimal" Version="3.13.3.580" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
     <!-- Reads the SQLite database inside a phone's export archive. The capability this project
          already carried was GDAL's OGR SQLite driver, and it was measured rather than assumed:
          it opens such a file and runs arbitrary SQL over it, but it types every result column
@@ -58,22 +58,22 @@
          10.0.9 resolves SQLitePCLRaw 2.1.11, which carries a known high-severity advisory that
          the audit turns into a build error here; 10.0.12 resolves 2.1.12 and audits clean. -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.9" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.12" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" Version="10.0.3" />
     <!-- Pinned to the last Apache-2.0 release: 2.8.0 moved to a maintenance-fee licence whose
          terms this project cannot ship under. Do not upgrade past 2.7.x without re-reading it. -->
-    <PackageReference Include="NPOI" Version="2.7.6" />
-    <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
-    <PackageReference Include="PdfPig" Version="0.1.15" />
+    <PackageReference Include="NPOI" Version="2.8.1" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="7.7.1" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
     <!-- Transitive only: the legacy Office reader asks for a version carrying known advisories,
          and the build treats the audit warning as an error. Raised here to a clean one. -->
-    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.10" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.12" />
   </ItemGroup>
 
   <PropertyGroup>
