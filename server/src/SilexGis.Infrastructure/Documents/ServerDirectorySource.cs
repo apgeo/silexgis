@@ -30,14 +30,32 @@ public sealed class ServerDirectorySource(IOptions<FilesOptions> options)
     /// not be read.
     /// </summary>
     /// <remarks>
-    /// Links are resolved before containment is judged, and that is the whole of the check
-    /// being worth anything: without it, a symbolic link placed inside an allowed directory is
-    /// a way to read whatever it points at, which is precisely what the allow-list exists to
-    /// stop.
+    /// <para>
+    /// Containment is judged before existence, and a path outside the roots gets the same answer
+    /// whether or not anything is there. Asking the disk first would turn this route into an
+    /// oracle over the whole server's filesystem — "not found" for one path, "not allowed" for
+    /// another — for anybody able to call it. Only inside an allowed root, whose contents the
+    /// caller may see anyway, does "it is not there" become an answer of its own.
+    /// </para>
+    /// <para>
+    /// Every link along the path is resolved, not only the last one, and containment is judged
+    /// again on the real location: without that, a symbolic link placed anywhere inside an
+    /// allowed directory — <c>root/link/sub</c> as much as <c>root/link</c> — is a way to read
+    /// whatever it points at, which is precisely what the allow-list exists to stop. A link
+    /// that leads anywhere but into a root, or towards one, is refused as outside before its
+    /// target is looked at.
+    /// </para>
+    /// <para>
+    /// The first judgement is made on the path as written, against the roots both as the
+    /// operator configured them and as they really are, so a root that is itself a link still
+    /// admits paths spelled through it. A path spelled through a link that lies OUTSIDE every
+    /// root is refused even when it happens to lead into one: admitting it would mean reading
+    /// the disk outside the roots to find out.
+    /// </para>
     /// </remarks>
     public (string? Resolved, string? Code) Resolve(string? requestedPath)
     {
-        var roots = ResolvedRoots();
+        var roots = Roots(out var configuredRoots);
         if (roots.Count == 0)
         {
             return (null, ServerImportPaths.NoRootsCode);
@@ -48,30 +66,60 @@ public sealed class ServerDirectorySource(IOptions<FilesOptions> options)
             return (null, ServerImportPaths.NotFoundCode);
         }
 
-        string resolved;
+        string written;
         try
         {
-            var info = new DirectoryInfo(Path.GetFullPath(requestedPath));
-            if (!info.Exists)
-            {
-                return (null, ServerImportPaths.NotFoundCode);
-            }
+            written = Path.GetFullPath(requestedPath);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // Not a path on any filesystem, so refusing it says nothing about this one.
+            return (null, ServerImportPaths.OutsideRootsCode);
+        }
 
-            // LinkTarget is null for an ordinary directory and the real path for a link.
-            resolved = Path.GetFullPath(
-                info.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? info.FullName);
+        if (!ServerImportPaths.IsWithinRoots(roots, written)
+            && !ServerImportPaths.IsWithinRoots(configuredRoots, written))
+        {
+            return (null, ServerImportPaths.OutsideRootsCode);
+        }
+
+        string? resolved;
+        try
+        {
+            // A link is followed only when it leads into a root or towards one — a root's own
+            // parent directory reached through a link the operator laid. One that leads anywhere
+            // else is refused before anything past it is looked at.
+            resolved = RealPath(
+                written,
+                target => ServerImportPaths.IsWithinRoots(roots, target)
+                    || ServerImportPaths.IsWithinRoots(configuredRoots, target)
+                    || roots.Concat(configuredRoots).Any(r => ServerImportPaths.IsWithinRoots([target], r)),
+                out var escaped);
+            if (escaped)
+            {
+                return (null, ServerImportPaths.OutsideRootsCode);
+            }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            // A path the process cannot even look at is answered as "not there", the same as
-            // one that is not: the difference between the two is itself information about the
-            // server's filesystem.
+            // Inside a root, a part of the path the process cannot look at is "not there".
             return (null, ServerImportPaths.NotFoundCode);
         }
 
-        return ServerImportPaths.IsWithinRoots(roots, resolved)
+        if (resolved is null)
+        {
+            // A cycle of links, or a chain longer than any honest layout needs.
+            return (null, ServerImportPaths.NotFoundCode);
+        }
+
+        if (!ServerImportPaths.IsWithinRoots(roots, resolved))
+        {
+            return (null, ServerImportPaths.OutsideRootsCode);
+        }
+
+        return Directory.Exists(resolved)
             ? (resolved, null)
-            : (null, ServerImportPaths.OutsideRootsCode);
+            : (null, ServerImportPaths.NotFoundCode);
     }
 
     /// <summary>Whether this installation has the feature switched on at all.</summary>
@@ -79,6 +127,99 @@ public sealed class ServerDirectorySource(IOptions<FilesOptions> options)
 
     /// <summary>The configured roots as absolute, link-resolved paths.</summary>
     public IReadOnlyList<string> Roots() => ResolvedRoots();
+
+    /// <summary>
+    /// The real location of an absolute path: every component that is a symbolic link replaced
+    /// by what it points at, until no component is one. <c>null</c> when the links go round in a
+    /// circle or run longer than <see cref="MaxLinkHops"/>.
+    /// </summary>
+    /// <remarks>
+    /// The platform's own resolution only follows the LAST component, which leaves a link in
+    /// the middle of a path standing — and a containment check run on a path with a link still
+    /// in it is a check of the spelling, not of the location. Components that do not exist are
+    /// kept as written; there is nothing left in them to follow.
+    /// </remarks>
+    internal static string? RealPath(string absolutePath) => RealPath(absolutePath, null, out _);
+
+    /// <summary>
+    /// <see cref="RealPath(string)"/>, stopping at the first link whose target
+    /// <paramref name="mayFollow"/> refuses; <paramref name="escaped"/> then says so and the
+    /// result is <c>null</c>.
+    /// </summary>
+    internal static string? RealPath(string absolutePath, Func<string, bool>? mayFollow, out bool escaped)
+    {
+        escaped = false;
+        var pending = new List<string>(Components(absolutePath, out var current));
+        var hops = 0;
+
+        for (var i = 0; i < pending.Count; i++)
+        {
+            var next = Path.Combine(current, pending[i]);
+            var target = new FileInfo(next).LinkTarget;
+            if (target is null)
+            {
+                current = next;
+                continue;
+            }
+
+            if (++hops > MaxLinkHops)
+            {
+                return null;
+            }
+
+            // A relative target is relative to the directory holding the link, which is already
+            // real; the target's own components are resolved in their turn.
+            var targetPath = Path.GetFullPath(Path.IsPathRooted(target) ? target : Path.Combine(current, target));
+            if (mayFollow is not null && !mayFollow(targetPath))
+            {
+                escaped = true;
+                return null;
+            }
+
+            var rest = pending.Skip(i + 1).ToList();
+            pending = [.. Components(targetPath, out current), .. rest];
+            i = -1;
+        }
+
+        return current;
+    }
+
+    /// <summary>The longest chain of links <see cref="RealPath"/> follows, as the kernel does.</summary>
+    internal const int MaxLinkHops = 40;
+
+    private static string[] Components(string absolutePath, out string root)
+    {
+        root = Path.GetPathRoot(absolutePath) ?? string.Empty;
+        return absolutePath[root.Length..].Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    private List<string> Roots(out List<string> configured)
+    {
+        configured = [];
+        foreach (var root in options.Value.ImportRoots)
+        {
+            if (string.IsNullOrWhiteSpace(root))
+            {
+                continue;
+            }
+
+            try
+            {
+                configured.Add(Path.GetFullPath(root));
+            }
+            catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                // Not a path; it admits nothing.
+            }
+        }
+
+        // Only roots that really exist admit anything, here as in the real-location check.
+        var resolved = ResolvedRoots();
+        configured = configured.Where(c => Directory.Exists(c)).ToList();
+        return resolved;
+    }
 
     /// <summary>
     /// Every file under <paramref name="resolvedRoot"/>, named by its path relative to that
@@ -169,11 +310,12 @@ public sealed class ServerDirectorySource(IOptions<FilesOptions> options)
 
                 // A root that does not exist is dropped rather than kept as a string: an
                 // allow-list entry that names nothing admits nothing, and keeping it would
-                // make a prefix comparison against a path that was never a directory.
-                if (info.Exists)
+                // make a prefix comparison against a path that was never a directory. Resolved
+                // the same way a requested path is, every component, or a root reached through
+                // a linked parent directory would never contain anything asked for.
+                if (info.Exists && RealPath(info.FullName) is { } real)
                 {
-                    resolved.Add(Path.GetFullPath(
-                        info.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? info.FullName));
+                    resolved.Add(real);
                 }
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
