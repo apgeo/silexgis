@@ -76,4 +76,114 @@ describe('LoginPage', () => {
       await screen.findByText(/Full control of the installation/),
     ).toBeInTheDocument();
   });
+
+  describe('after an external provider held the sign-in at its second factor', () => {
+    const returnUrl = '/connect/authorize?client_id=silexgis-spa&state=s';
+    const entry = `/login?mfa=required&returnUrl=${encodeURIComponent(returnUrl)}`;
+
+    function stubPendingSignIn(verify: (body: Record<string, unknown>) => { status: number; body: unknown }) {
+      const calls: Record<string, unknown>[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((url: string, init?: RequestInit) => {
+          if (url === '/api/v1/auth/2fa/verify') {
+            const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+            calls.push(body);
+            const answer = verify(body);
+            return Promise.resolve({
+              ok: answer.status < 300,
+              status: answer.status,
+              json: () => Promise.resolve(answer.body),
+            } as unknown as Response);
+          }
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ openRegistration: false, externalOnly: false, providers: [] }),
+          } as unknown as Response);
+        }),
+      );
+      return calls;
+    }
+
+    it('asks for the code alone and resumes the authorize flow once it is accepted', async () => {
+      const assign = vi.fn();
+      vi.stubGlobal('location', { ...window.location, assign });
+      const calls = stubPendingSignIn((body) =>
+        body.code
+          ? { status: 200, body: { userId: 'u', email: 'a@t.local', displayName: null } }
+          : {
+              status: 401,
+              body: {
+                code: 'auth.mfa_required',
+                methods: ['authenticator'],
+                preferredMethod: 'authenticator',
+                recoveryAccepted: true,
+              },
+            },
+      );
+
+      render(
+        <MemoryRouter initialEntries={[entry]}>
+          <LoginPage />
+        </MemoryRouter>,
+      );
+
+      const code = await screen.findByLabelText('Two-factor code');
+      // The provider already vouched for the account: no password is asked for, and no provider
+      // buttons are offered in the middle of a sign-in.
+      expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+      expect(screen.getByText('Enter your second-factor code.')).toBeInTheDocument();
+
+      fireEvent.change(code, { target: { value: '123456' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+      await waitFor(() => expect(assign).toHaveBeenCalledWith(returnUrl));
+      expect(calls.at(-1)).toEqual({ code: '123456', method: 'authenticator' });
+    });
+
+    it('sends a recovery code with its prefix and says so when the code is wrong', async () => {
+      const calls = stubPendingSignIn((body) =>
+        body.code
+          ? { status: 401, body: { code: 'auth.mfa_invalid' } }
+          : {
+              status: 401,
+              body: {
+                code: 'auth.mfa_required',
+                methods: ['authenticator'],
+                preferredMethod: 'authenticator',
+                recoveryAccepted: true,
+              },
+            },
+      );
+
+      render(
+        <MemoryRouter initialEntries={[entry]}>
+          <LoginPage />
+        </MemoryRouter>,
+      );
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Use a recovery code instead' }));
+      fireEvent.change(screen.getByLabelText('Recovery code'), { target: { value: 'abcd-efgh' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+      expect(await screen.findByText('The two-factor code is not valid.')).toBeInTheDocument();
+      expect(calls.at(-1)).toEqual({ code: 'recovery:abcd-efgh' });
+    });
+
+    it('offers to start again when no sign-in is waiting any more', async () => {
+      stubPendingSignIn(() => ({ status: 401, body: { code: 'auth.mfa_not_pending' } }));
+
+      render(
+        <MemoryRouter initialEntries={[entry]}>
+          <LoginPage />
+        </MemoryRouter>,
+      );
+
+      expect(
+        await screen.findByText('The sign-in waited too long for its code. Start again.'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Start signing in again' })).toHaveAttribute('href', '/login');
+      expect(screen.queryByLabelText('Two-factor code')).not.toBeInTheDocument();
+    });
+  });
 });

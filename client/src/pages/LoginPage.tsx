@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GithubOutlined, GoogleOutlined, InfoCircleOutlined, LoginOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Divider, Flex, Form, Input, Popover, Segmented, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -39,6 +39,61 @@ interface MfaChallenge {
   recoveryAccepted: boolean;
 }
 
+/** The 401 body that opens or refuses the second-factor step. */
+interface AuthProblemBody {
+  code?: string;
+  methods?: TwoFactorMethod[];
+  preferredMethod?: TwoFactorMethod | null;
+  recoveryAccepted?: boolean;
+}
+
+interface TwoFactorFieldsProps {
+  challenge: MfaChallenge;
+  method: TwoFactorMethod | null;
+  useRecovery: boolean;
+  sending: boolean;
+  onMethod: (next: TwoFactorMethod) => void;
+  onResend: () => void;
+}
+
+/**
+ * The code step's fields: which method, the code itself, and asking for it to be sent again.
+ * Shared by the password sign-in and by a sign-in an external provider started, so the second
+ * factor looks and behaves the same whichever way the account arrived.
+ */
+function TwoFactorFields({ challenge, method, useRecovery, sending, onMethod, onResend }: TwoFactorFieldsProps) {
+  const { t } = useTranslation();
+  const deliverable = method === 'email' || method === 'sms';
+  return (
+    <>
+      {challenge.methods.length > 1 && !useRecovery && (
+        <Form.Item label={t('auth.mfaMethod')}>
+          <Segmented<TwoFactorMethod>
+            block
+            value={method ?? challenge.methods[0]}
+            onChange={onMethod}
+            options={challenge.methods.map((m) => ({ label: t(`auth.mfaMethod_${m}`), value: m }))}
+          />
+        </Form.Item>
+      )}
+
+      <Form.Item
+        name="twoFactorCode"
+        label={useRecovery ? t('auth.recoveryCode') : t('auth.mfaCode')}
+        rules={[{ required: true }]}
+      >
+        <Input autoComplete="one-time-code" autoFocus placeholder={useRecovery ? undefined : '123456'} />
+      </Form.Item>
+
+      {deliverable && !useRecovery && (
+        <Button type="link" block loading={sending} onClick={onResend}>
+          {t('auth.mfaResend')}
+        </Button>
+      )}
+    </>
+  );
+}
+
 function providerIcon(name: string) {
   if (name === 'google') return <GoogleOutlined />;
   if (name === 'github') return <GithubOutlined />;
@@ -71,6 +126,9 @@ export default function LoginPage() {
   const [config, setConfig] = useState<AuthConfig | null>(null);
 
   const returnUrl = params.get('returnUrl');
+  // An external provider vouched for the account and the server is holding the sign-in at its
+  // second factor: only the code is asked for here, never the password.
+  const pendingExternal = params.get('mfa') === 'required';
 
   useEffect(() => {
     // A failed external sign-in bounces back with ?error=<code>.
@@ -83,6 +141,30 @@ export default function LoginPage() {
       .catch(() => setConfig(null));
   }, [params, t]);
 
+  // Asked once, not on every render: with an emailed or texted code as the preferred method the
+  // answer triggers a send, and a second send moments later would only be refused as too soon.
+  const pendingAsked = useRef(false);
+  useEffect(() => {
+    if (!pendingExternal || pendingAsked.current) {
+      return;
+    }
+    pendingAsked.current = true;
+    void (async () => {
+      const response = await fetch('/api/v1/auth/2fa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      }).catch(() => null);
+      const problem = (await response?.json().catch(() => null)) as AuthProblemBody | null;
+      if (problem?.code === 'auth.mfa_required') {
+        beginChallenge(problem);
+      } else {
+        setError(verifyError(problem?.code ?? 'auth.mfa_not_pending'));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- asked once on arrival; the ref guards re-runs
+  }, [pendingExternal]);
+
   const externalHref = (name: string) => {
     const target = new URLSearchParams();
     if (returnUrl) {
@@ -90,6 +172,21 @@ export default function LoginPage() {
     }
     const query = target.toString();
     return `/api/v1/auth/external/${encodeURIComponent(name)}${query ? `?${query}` : ''}`;
+  };
+
+  /** Only resume OIDC authorize URLs — never follow arbitrary redirect targets. */
+  const resume = () => {
+    if (returnUrl?.startsWith('/connect/')) {
+      window.location.assign(returnUrl);
+    } else {
+      navigate('/', { replace: true });
+    }
+  };
+
+  const verifyError = (code: string | undefined) => {
+    if (code === 'auth.mfa_not_pending') return t('auth.mfaPendingExpired');
+    if (code === 'auth.locked_out') return t('auth.lockedOut');
+    return t('auth.mfaInvalid');
   };
 
   const sendCode = async (target: TwoFactorMethod) => {
@@ -117,6 +214,26 @@ export default function LoginPage() {
       setError(t('auth.mfaSendFailed'));
     } finally {
       setSending(false);
+    }
+  };
+
+  const beginChallenge = (problem: AuthProblemBody) => {
+    const methods = problem.methods ?? [];
+    const preferred = problem.preferredMethod ?? methods[0] ?? null;
+    setChallenge({
+      methods,
+      preferredMethod: preferred,
+      recoveryAccepted: problem.recoveryAccepted ?? true,
+    });
+    setMethod(preferred);
+    // Nothing can be delivered, so a recovery code is the only way through — say so up
+    // front instead of showing an empty chooser.
+    setUseRecovery(methods.length === 0);
+    setError(methods.length === 0 ? t('auth.mfaRecoveryOnly') : t('auth.mfaRequired'));
+    // A code the user cannot produce unaided is requested for them, so the common case is
+    // one click: choose nothing, read the mail, type the code.
+    if (preferred === 'email' || preferred === 'sms') {
+      void sendCode(preferred);
     }
   };
 
@@ -154,28 +271,10 @@ export default function LoginPage() {
       });
 
       if (!response.ok) {
-        const problem = (await response.json().catch(() => null)) as
-          | { code?: string; methods?: TwoFactorMethod[]; preferredMethod?: TwoFactorMethod | null; recoveryAccepted?: boolean }
-          | null;
+        const problem = (await response.json().catch(() => null)) as AuthProblemBody | null;
 
         if (problem?.code === 'auth.mfa_required') {
-          const methods = problem.methods ?? [];
-          const preferred = problem.preferredMethod ?? methods[0] ?? null;
-          setChallenge({
-            methods,
-            preferredMethod: preferred,
-            recoveryAccepted: problem.recoveryAccepted ?? true,
-          });
-          setMethod(preferred);
-          // Nothing can be delivered, so a recovery code is the only way through — say so up
-          // front instead of showing an empty chooser.
-          setUseRecovery(methods.length === 0);
-          setError(methods.length === 0 ? t('auth.mfaRecoveryOnly') : t('auth.mfaRequired'));
-          // A code the user cannot produce unaided is requested for them, so the common case is
-          // one click: choose nothing, read the mail, type the code.
-          if (preferred === 'email' || preferred === 'sms') {
-            void sendCode(preferred);
-          }
+          beginChallenge(problem);
           return;
         }
         if (problem?.code === 'auth.mfa_invalid') {
@@ -191,20 +290,61 @@ export default function LoginPage() {
         return;
       }
 
-      // Only resume OIDC authorize URLs — never follow arbitrary redirect targets.
-      if (returnUrl?.startsWith('/connect/')) {
-        window.location.assign(returnUrl);
-      } else {
-        navigate('/', { replace: true });
-      }
+      resume();
     } finally {
       setSubmitting(false);
     }
   };
 
-  const providers = config?.providers ?? [];
-  const showPasswordForm = !config?.externalOnly || providers.length === 0;
-  const deliverable = method === 'email' || method === 'sms';
+  /** The answer to a provider sign-in held at its second factor: the code alone. */
+  const onVerify = async (values: Pick<LoginFormValues, 'twoFactorCode'>) => {
+    setSubmitting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const code = values.twoFactorCode?.trim();
+      const response = await fetch('/api/v1/auth/2fa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: code ? (useRecovery ? `recovery:${code}` : code) : undefined,
+          method: code && !useRecovery ? (method ?? 'authenticator') : undefined,
+        }),
+      });
+      if (!response.ok) {
+        const problem = (await response.json().catch(() => null)) as AuthProblemBody | null;
+        setError(verifyError(problem?.code));
+        return;
+      }
+      resume();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const chooseMethod = (next: TwoFactorMethod) => {
+    setMethod(next);
+    setNotice(null);
+    if (next === 'email' || next === 'sms') {
+      void sendCode(next);
+    }
+  };
+
+  const recoveryToggle = challenge?.recoveryAccepted && challenge.methods.length > 0 && (
+    <Button
+      type="link"
+      block
+      onClick={() => {
+        setUseRecovery((previous) => !previous);
+        setNotice(null);
+      }}
+    >
+      {useRecovery ? t('auth.mfaUseMethod') : t('auth.mfaUseRecovery')}
+    </Button>
+  );
+
+  const providers = pendingExternal ? [] : (config?.providers ?? []);
+  const showPasswordForm = !pendingExternal && (!config?.externalOnly || providers.length === 0);
   const testLogins = showPasswordForm ? (config?.testLogins ?? []) : [];
 
   // Literal keys, not `t(\`…_${role}\`)`: the translation guard verifies keys it can read
@@ -300,59 +440,51 @@ export default function LoginPage() {
               <Input.Password autoComplete="current-password" disabled={challenge !== null} />
             </Form.Item>
 
-            {challenge && challenge.methods.length > 1 && !useRecovery && (
-              <Form.Item label={t('auth.mfaMethod')}>
-                <Segmented<TwoFactorMethod>
-                  block
-                  value={method ?? challenge.methods[0]}
-                  onChange={(next) => {
-                    setMethod(next);
-                    setNotice(null);
-                    if (next === 'email' || next === 'sms') {
-                      void sendCode(next);
-                    }
-                  }}
-                  options={challenge.methods.map((m) => ({ label: t(`auth.mfaMethod_${m}`), value: m }))}
-                />
-              </Form.Item>
-            )}
-
             {challenge && (
-              <Form.Item
-                name="twoFactorCode"
-                label={useRecovery ? t('auth.recoveryCode') : t('auth.mfaCode')}
-                rules={[{ required: true }]}
-              >
-                <Input
-                  autoComplete="one-time-code"
-                  autoFocus
-                  placeholder={useRecovery ? undefined : '123456'}
-                />
-              </Form.Item>
-            )}
-
-            {challenge && deliverable && !useRecovery && (
-              <Button type="link" block loading={sending} onClick={() => void sendCode(method!)}>
-                {t('auth.mfaResend')}
-              </Button>
+              <TwoFactorFields
+                challenge={challenge}
+                method={method}
+                useRecovery={useRecovery}
+                sending={sending}
+                onMethod={chooseMethod}
+                onResend={() => void sendCode(method!)}
+              />
             )}
 
             <Button type="primary" htmlType="submit" block loading={submitting}>
               {t('auth.signIn')}
             </Button>
 
-            {challenge?.recoveryAccepted && challenge.methods.length > 0 && (
-              <Button
-                type="link"
-                block
-                onClick={() => {
-                  setUseRecovery((previous) => !previous);
-                  setNotice(null);
-                }}
-              >
-                {useRecovery ? t('auth.mfaUseMethod') : t('auth.mfaUseRecovery')}
+            {recoveryToggle}
+          </Form>
+        )}
+
+        {pendingExternal && (
+          <Form<Pick<LoginFormValues, 'twoFactorCode'>>
+            layout="vertical"
+            onFinish={onVerify}
+            requiredMark={false}
+          >
+            {challenge && (
+              <TwoFactorFields
+                challenge={challenge}
+                method={method}
+                useRecovery={useRecovery}
+                sending={sending}
+                onMethod={chooseMethod}
+                onResend={() => void sendCode(method!)}
+              />
+            )}
+            {challenge ? (
+              <Button type="primary" htmlType="submit" block loading={submitting}>
+                {t('auth.signIn')}
+              </Button>
+            ) : (
+              <Button block href="/login">
+                {t('auth.mfaStartAgain')}
               </Button>
             )}
+            {recoveryToggle}
           </Form>
         )}
 

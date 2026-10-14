@@ -374,6 +374,8 @@
     "mfaUseRecovery": "Folosiți un cod de recuperare",
     "mfaUseMethod": "Folosiți un cod obișnuit",
     "mfaRecoveryOnly": "Nicio metodă de al doilea factor nu este disponibilă acum. Introduceți un cod de recuperare.",
+    "mfaPendingExpired": "Autentificarea a așteptat prea mult codul. Începeți din nou.",
+    "mfaStartAgain": "Reîncepeți autentificarea",
     "recoveryCode": "Cod de recuperare",
     "emailNotConfirmed": "Confirmați adresa de e-mail înainte de autentificare.",
     "resendConfirmation": "Retrimiteți e-mailul de confirmare",

@@ -20,9 +20,6 @@ namespace SilexGis.Api.Auth;
 /// </summary>
 public static class AuthEndpoints
 {
-    /// <summary>Prefix marking a recovery code, which is accepted whatever the enabled methods are.</summary>
-    private const string RecoveryPrefix = "recovery:";
-
     public static RouteGroupBuilder MapAuthEndpoints(this RouteGroupBuilder api)
     {
         var auth = api.MapGroup("/auth").WithTags("Auth").AllowAnonymous().RequireRateLimiting("auth");
@@ -87,7 +84,10 @@ public static class AuthEndpoints
 
         if (result.RequiresTwoFactor)
         {
-            return await TwoFactorAsync(request, user, signInManager, policy, mailConfigured, smsDelivery, ct);
+            // The password was right and a second factor is due: this request either learns which
+            // methods the account can use, or carries the code that finishes the sign-in.
+            return await TwoFactorSignIn.AnswerAsync(
+                signInManager, user, request.TwoFactorCode, request.TwoFactorMethod, policy, mailConfigured, smsDelivery, ct);
         }
 
         if (!result.Succeeded)
@@ -96,80 +96,6 @@ public static class AuthEndpoints
         }
 
         return TypedResults.Ok(new SessionDto(user.Id, user.Email!, user.DisplayName));
-    }
-
-    /// <summary>
-    /// The password was right and a second factor is due. With no code supplied this answers which
-    /// methods the account can use, so the client can offer a choice and ask for the code to be
-    /// sent; with a code it completes the sign-in.
-    /// </summary>
-    private static async Task<IResult> TwoFactorAsync(
-        LoginRequest request,
-        SilexGisUser user,
-        SignInManager<SilexGisUser> signInManager,
-        SecuritySettings policy,
-        bool mailConfigured,
-        ISmsDelivery smsDelivery,
-        CancellationToken ct)
-    {
-        var state = user.ToTwoFactorState();
-        var smsConfigured = await smsDelivery.IsConfiguredAsync(ct);
-        var available = TwoFactorPolicy.AvailableMethods(state, policy, mailConfigured, smsConfigured);
-
-        if (string.IsNullOrWhiteSpace(request.TwoFactorCode))
-        {
-            return AuthProblem(
-                StatusCodes.Status401Unauthorized,
-                "auth.mfa_required",
-                "A two-factor code is required.",
-                new Dictionary<string, object?>
-                {
-                    ["methods"] = available.Select(m => m.ToString().ToLowerInvariant()).ToArray(),
-                    ["preferredMethod"] = TwoFactorPolicy
-                        .PreferredMethod(state, policy, mailConfigured, smsConfigured)?.ToString().ToLowerInvariant(),
-                    // Every method can be taken away by someone other than the person signing in:
-                    // they turn one off, an administrator disallows it, or a channel stops working.
-                    // Recovery codes are what stops that from being a lockout, so the client is
-                    // always told they will be accepted.
-                    ["recoveryAccepted"] = true,
-                });
-        }
-
-        var code = request.TwoFactorCode.Trim();
-        var signIn = code.StartsWith(RecoveryPrefix, StringComparison.OrdinalIgnoreCase)
-            ? await signInManager.TwoFactorRecoveryCodeSignInAsync(
-                code[RecoveryPrefix.Length..].Replace(" ", string.Empty))
-            : await SignInWithMethodAsync(signInManager, request, code, available);
-
-        if (!signIn.Succeeded)
-        {
-            return signIn.IsLockedOut
-                ? AuthProblem(StatusCodes.Status401Unauthorized, "auth.locked_out", "Account temporarily locked after repeated failures.")
-                : AuthProblem(StatusCodes.Status401Unauthorized, "auth.mfa_invalid", "The two-factor code is not valid.");
-        }
-
-        return TypedResults.Ok(new SessionDto(user.Id, user.Email!, user.DisplayName));
-    }
-
-    private static async Task<SignInResult> SignInWithMethodAsync(
-        SignInManager<SilexGisUser> signInManager,
-        LoginRequest request,
-        string code,
-        IReadOnlyList<TwoFactorMethod> available)
-    {
-        // No stated method means the authenticator, which is the only one that needs no prior
-        // request and the only one older clients ever sent.
-        var method = request.TwoFactorMethod ?? TwoFactorMethod.Authenticator;
-        if (!available.Contains(method))
-        {
-            return SignInResult.Failed;
-        }
-
-        var stripped = code.Replace(" ", string.Empty);
-        return method == TwoFactorMethod.Authenticator
-            ? await signInManager.TwoFactorAuthenticatorSignInAsync(stripped, isPersistent: true, rememberClient: false)
-            : await signInManager.TwoFactorSignInAsync(
-                TwoFactorProviders.For(method), stripped, isPersistent: true, rememberClient: false);
     }
 
     private static async Task<IResult> LogoutAsync(SignInManager<SilexGisUser> signInManager)
@@ -339,7 +265,7 @@ public static class AuthEndpoints
         return TypedResults.Accepted((string?)null);
     }
 
-    private static IResult AuthProblem(
+    internal static IResult AuthProblem(
         int status, string code, string detail, Dictionary<string, object?>? extensions = null)
     {
         var payload = extensions ?? [];

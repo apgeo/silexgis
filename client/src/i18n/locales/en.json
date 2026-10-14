@@ -374,6 +374,8 @@
     "mfaUseRecovery": "Use a recovery code instead",
     "mfaUseMethod": "Use a code instead",
     "mfaRecoveryOnly": "None of your second-factor methods can be used right now. Enter a recovery code.",
+    "mfaPendingExpired": "The sign-in waited too long for its code. Start again.",
+    "mfaStartAgain": "Start signing in again",
     "recoveryCode": "Recovery code",
     "emailNotConfirmed": "Confirm your email address before signing in.",
     "resendConfirmation": "Send the confirmation email again",
