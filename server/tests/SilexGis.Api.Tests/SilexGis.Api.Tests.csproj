@@ -23,7 +23,7 @@
          reference as "unused" breaks the restore, for a reason nothing near the removal
          explains. It goes when the container library's own floor moves past the advisory. -->
     <PackageReference Include="SSH.NET" Version="2026.0.0" />
-    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.10" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.13" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.14.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
