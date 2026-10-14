@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.Extensions.Options;
 using Shouldly;
+using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Documents;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Files;
@@ -19,7 +20,7 @@ public sealed class ServerDirectoryContainmentTests : IDisposable
 
     public ServerDirectoryContainmentTests()
     {
-        scratch = Path.Combine(Path.GetTempPath(), $"silexgis-containment-{Guid.NewGuid():N}");
+        scratch = Path.Combine(TestScratch.Root, $"silexgis-containment-{Guid.NewGuid():N}");
         root = Path.Combine(scratch, "archive");
         outside = Path.Combine(scratch, "elsewhere");
         Directory.CreateDirectory(root);
