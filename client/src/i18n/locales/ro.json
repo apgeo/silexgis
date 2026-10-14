@@ -426,6 +426,11 @@
     "clearAnswer": "Șterge răspunsul",
     "configure": "Configurare"
   },
+  "notFoundPage": {
+    "title": "Nicio pagină la această adresă",
+    "description": "Adresa poate fi greșită, sau pagina pe care o numea s-a mutat ori nu mai există. Venind aici nu s-a schimbat nimic.",
+    "home": "Mergi la pagina de start"
+  },
   "errorBoundary": {
     "title": "Ceva nu a funcționat pe acest ecran",
     "description": "Pagina nu a mai putut fi afișată. De obicei reîncărcarea o aduce înapoi.",

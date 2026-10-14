@@ -401,10 +401,9 @@ describe('AppLayout nav destinations', () => {
   };
 
   it('offers no destination the router cannot match', () => {
-    // Selecting an item navigates to `/<key>`, and this application's router has no fallback
-    // route and no error element: an unmatched path does not land on an empty page, it replaces
-    // header, sider and content with the router's own error screen, leaving no way back inside
-    // the application. So every key the rail can offer has to resolve.
+    // Selecting an item navigates to `/<key>`, and an address no page answers lands on the
+    // not-found page: the frame survives, but whoever clicked is told there is nothing there.
+    // So every key the rail can offer has to resolve to a real page.
     const destinations = allEntries()
       .map((entry) => entry.key)
       .filter((key) => !key.startsWith(GROUP_PREFIX));
@@ -415,7 +414,11 @@ describe('AppLayout nav destinations', () => {
     expect(destinations).toContain('admin/trip-types');
     expect(destinations.length).toBeGreaterThan(15);
 
-    const unmatched = destinations.filter((key) => matchRoutes(routes, `/${key}`) === null);
+    // The catch-all matches every address, so it does not count as an answer here.
+    const unmatched = destinations.filter((key) => {
+      const matched = matchRoutes(routes, `/${key}`);
+      return matched === null || matched.at(-1)?.route.path === '*';
+    });
     expect(unmatched).toEqual([]);
   });
 

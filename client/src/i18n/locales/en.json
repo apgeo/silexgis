@@ -426,6 +426,11 @@
     "clearAnswer": "Clear answer",
     "configure": "Configure"
   },
+  "notFoundPage": {
+    "title": "No page at this address",
+    "description": "The address may be mistyped, or the page it named has moved or gone. Nothing was changed by coming here.",
+    "home": "Go to the start page"
+  },
   "errorBoundary": {
     "title": "Something went wrong on this screen",
     "description": "The page stopped rendering. Reloading usually gets it back.",

@@ -87,7 +87,7 @@ export const specs = {
   resLinks: ['reslinks.spec.ts', 'annotated-text.spec.ts', 'cave-grant-link.spec.ts'],
   scene: ['scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts'],
   search: ['documents.spec.ts'],
-  settings: ['settings.spec.ts'],
+  settings: ['settings.spec.ts', 'not-found.spec.ts'],
   sms: ['notifications.spec.ts', 'notification-health.spec.ts'],
   statistics: [
     'registry-statistics.spec.ts', 'cave-statistics.spec.ts', 'cave-morphometry.spec.ts',

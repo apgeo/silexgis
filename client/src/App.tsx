@@ -5,10 +5,12 @@ import { createBrowserRouter, Navigate, RouterProvider, type RouteObject } from 
 import { AuthProvider } from './auth/auth.tsx';
 import RequireAuth from './auth/RequireAuth.tsx';
 import AppLayout from './components/AppLayout.tsx';
+import RouteErrorPage from './components/RouteErrorPage.tsx';
 import CallbackPage from './pages/CallbackPage.tsx';
 import LandingRoute from './pages/LandingRoute.tsx';
 import ConfirmEmailPage from './pages/ConfirmEmailPage.tsx';
 import LoginPage from './pages/LoginPage.tsx';
+import NotFoundPage from './pages/NotFoundPage.tsx';
 import ResetPasswordPage from './pages/ResetPasswordPage.tsx';
 import UnsubscribePage from './pages/UnsubscribePage.tsx';
 import LegacySecurityRedirect from './pages/settings/LegacySecurityRedirect.tsx';
@@ -107,17 +109,26 @@ function Loadable({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Gives every top-level route the application's own error screen, so a failure anywhere is never
+ * met by the router's bare one, which offers no way back.
+ */
+function guarded(table: RouteObject[]): RouteObject[] {
+  return table.map((route) => ({ errorElement: <RouteErrorPage />, ...route }));
+}
+
+/**
  * Every address this application answers, named so it can be checked from both directions.
  *
- * There is no catch-all and no error element by design, which is what makes both checks worth
- * running. An unmatched path does not land on an empty page — it costs the entire shell and
- * replaces it with the router's own error screen, leaving no way back inside the application.
+ * An address nobody answers lands on the not-found page inside the signed-in frame (the last
+ * route of the frame's list), and a page that fails is caught around the frame's content, so
+ * neither costs the navigation. That makes a missing route quieter, not harmless: whoever was
+ * sent there is still stranded on a page that says nothing is here.
  *
  * So the sidebar is checked against this table, and this table against the addresses the
- * application *hands out* — a chip's route, the link in a notification about a grant. A route
- * named somewhere and missing here does not fail to navigate; it strands the reader.
+ * application *hands out* — a chip's route, the link in a notification about a grant — and
+ * those checks must not count the catch-all as an answer.
  */
-export const routes: RouteObject[] = [
+export const routes: RouteObject[] = guarded([
   { path: '/login', element: <LoginPage /> },
   { path: '/auth/callback', element: <CallbackPage /> },
   { path: '/confirm-email', element: <ConfirmEmailPage /> },
@@ -233,11 +244,13 @@ export const routes: RouteObject[] = [
           },
           // The security page used to live here; links out in the wild still point at it.
           { path: '/account/security', element: <LegacySecurityRedirect /> },
+          // Last, and the only route that matches anything: an address nobody answers.
+          { path: '*', element: <NotFoundPage /> },
         ],
       },
     ],
   },
-];
+]);
 
 const router = createBrowserRouter(routes);
 
