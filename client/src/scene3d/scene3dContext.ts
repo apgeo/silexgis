@@ -19,7 +19,7 @@ import {
   GroundPolylineGeometry,
   GroundPolylinePrimitive,
   HeightReference,
-  type ImageryLayer,
+  ImageryLayer,
   Ion,
   Material,
   Math as CesiumMath,
@@ -718,10 +718,21 @@ class CesiumScene3D implements Scene3DCore {
       // Nothing in this application picks features out of a raster basemap, and leaving it on
       // invites a request to a per-tile feature-info URL the catalog never configured.
       enablePickFeatures: false,
+      // Past the source's last zoom the engine stretches that level instead of asking for tiles
+      // that do not exist — blurry rather than blank, as the 2D map does, and no refused requests.
+      // The provider's tiling is the same web-mercator pyramid the template's {z} counts in.
+      ...(options.maximumLevel !== undefined ? { maximumLevel: options.maximumLevel } : {}),
     });
-    const layer = this.widget.scene.imageryLayers.addImageryProvider(provider);
-    layer.show = options.visible ?? true;
-    layer.alpha = options.opacity ?? 1;
+    const layer = new ImageryLayer(provider, {
+      show: options.visible ?? true,
+      alpha: options.opacity ?? 1,
+      // The lower end hides the layer, as in 2D, rather than asking for a continent of tiles: the
+      // provider's own minimum would make the engine request every tile of that level at once. It
+      // is stated in the ground's levels, whose pyramid starts with two tiles where the imagery's
+      // starts with one, so ground level n is about imagery zoom n + 1.
+      ...(options.minimumLevel ? { minimumTerrainLevel: Math.max(0, options.minimumLevel - 1) } : {}),
+    });
+    this.widget.scene.imageryLayers.add(layer);
     this.imageryById.set(id, layer);
     if (options.attribution) {
       this.imageryCredit.set(id, options.attribution);

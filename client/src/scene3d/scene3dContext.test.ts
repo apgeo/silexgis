@@ -289,6 +289,27 @@ describe('holding and releasing the scene', () => {
 });
 
 describe('imagery layers', () => {
+  it('stops asking a source for tiles past its last zoom, and hides it below its first', async () => {
+    const session = acquire();
+    session.engine.addImageryLayer('base:1', {
+      urlTemplate: 'https://a/{z}/{x}/{y}',
+      minimumLevel: 0,
+      maximumLevel: 17,
+    });
+    session.engine.addImageryLayer('overlay:2', {
+      urlTemplate: 'https://b/{z}/{x}/{y}',
+      minimumLevel: 10,
+      maximumLevel: 16,
+    });
+
+    expect(engine.engineState.providers.map((p) => p.maximumLevel)).toEqual([17, 16]);
+    const [base, overlay] = engine.engineState.widgets[0].scene.imageryLayers.layers;
+    // From the start means no lower bound at all, not a bound at the first level.
+    expect(base.options.minimumTerrainLevel).toBeUndefined();
+    // The ground's levels start one step coarser than the imagery's.
+    expect(overlay.options.minimumTerrainLevel).toBe(9);
+  });
+
   it('adds, lists and removes layers by the id the caller chose', async () => {
     const session = acquire();
 

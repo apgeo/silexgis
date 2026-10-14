@@ -78,6 +78,16 @@ export interface Scene3DImageryOptions {
   visible?: boolean;
   /** 0..1; 1 is fully opaque. */
   opacity?: number;
+  /**
+   * The lowest tile zoom the source publishes; below it the layer is not drawn. Absent or 0 means
+   * from the start.
+   */
+  minimumLevel?: number;
+  /**
+   * The highest tile zoom the source publishes. Closer than that, the scene stretches the last
+   * level it has instead of asking for tiles that do not exist. Absent means no ceiling.
+   */
+  maximumLevel?: number;
 }
 
 /**
