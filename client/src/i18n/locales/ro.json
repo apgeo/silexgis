@@ -3990,6 +3990,7 @@
       "name_email_confirm_address": "Confirmarea adresei",
       "name_email_change_address": "Confirmarea unei adrese noi",
       "name_email_password_reset": "Resetarea parolei",
+      "name_email_account_invitation": "Invitație la un cont nou",
       "name_email_two_factor_code": "Cod de autentificare prin e-mail",
       "name_sms_two_factor_code": "Cod de autentificare prin SMS",
       "name_sms_verify_phone": "Cod de verificare a telefonului",

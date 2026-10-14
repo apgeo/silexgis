@@ -3990,6 +3990,7 @@
       "name_email_confirm_address": "Confirm your address",
       "name_email_change_address": "Confirm a new address",
       "name_email_password_reset": "Password reset",
+      "name_email_account_invitation": "Invitation to a new account",
       "name_email_two_factor_code": "Sign-in code by email",
       "name_sms_two_factor_code": "Sign-in code by text",
       "name_sms_verify_phone": "Phone verification code",

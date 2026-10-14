@@ -74,6 +74,38 @@ public static class AccountMessages
             },
             ct);
 
+    /// <summary>
+    /// Invites somebody an administrator opened an account for to choose their password. Carries
+    /// the sign-in address as well as the link, because the person did not choose it and may not
+    /// know which of their addresses the account was opened under.
+    /// </summary>
+    public static Task<MessageResult> SendAccountInvitationAsync(
+        IMessageDispatcher dispatcher,
+        IConfiguration configuration,
+        SilexGisUser user,
+        string token,
+        CancellationToken ct = default) =>
+        dispatcher.SendAsync(
+            MessageTemplateCatalog.EmailAccountInvitation,
+            user.Email!,
+            user.Locale,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["displayName"] = Greeting(user),
+                ["email"] = user.Email!,
+                ["url"] = InvitationUrl(configuration, user.Email!, token),
+                ["expiresHours"] = LinkLifetimeHours,
+            },
+            ct);
+
+    /// <summary>
+    /// Where an invitation lands: the password-reset page, told that this is a first password so
+    /// it can say "choose" rather than "reset". Public because an installation without mail hands
+    /// this same address to the administrator instead of sending it.
+    /// </summary>
+    public static string InvitationUrl(IConfiguration configuration, string email, string token) =>
+        $"{ResetUrl(configuration, email, token)}&invite=1";
+
     /// <summary>Sends a sign-in code on whichever channel the chosen method uses.</summary>
     public static Task<MessageResult> SendTwoFactorCodeAsync(
         IMessageDispatcher dispatcher,
