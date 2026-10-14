@@ -75,7 +75,7 @@ export const groups = {
     'DocumentLanguageTests', 'DocumentMetadataTests', 'DocumentModelTests',
     'DocumentSurfaceProtectionSweepTests', 'DocumentViewerBytesTests',
     'LegacyOfficeFixtureTests', 'PageTextTests', 'PdfAndOfficeTextExtractorTests',
-    'TextExtractionPipelineTests', 'TextExtractorTests',
+    'TextExtractionPipelineTests', 'TextExtractorTests', 'ServerDirectoryContainmentTests',
     // What becomes of a generated write-up when the record it was written for goes is decided
     // beside the documents, for trips and camps alike, and these two are what ask it.
     'ExpeditionDeleteCleanupTests', 'TripPurgeTests',
@@ -141,6 +141,7 @@ export const groups = {
     'FilterParityTests', 'FilterSpikeTests', 'FilterWorldConformanceTests',
   ],
   files: [
+    'ErrorHandlerScopeTests',
     'AttachmentReachListingTests', 'FileAccessBatchParityTests', 'FileAttachmentTests',
     'UploadDestinationTests',
   ],
@@ -153,6 +154,7 @@ export const groups = {
   history: ['AccessHistoryTests', 'HistoryTests'],
   imports: [
     'ArchiveUpgradeMigrationTests', 'BulkImportTests', 'PhotoImportTests',
+    'ServerDirectoryContainmentTests',
     'SpeleolocTripImportTests', 'StagedImportTests', 'TripTrackImportTests',
   ],
   jobs: [
