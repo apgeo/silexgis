@@ -185,6 +185,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 function show(model: SurveyModelInfo | null = MODEL) {
@@ -237,20 +238,22 @@ describe('SurveyModelViewerModal', () => {
 
   it('loads the trial viewer only while its tab is shown, without remounting the embedded one', () => {
     linksAnswer = [];
+    const fetched = vi.fn(async () => new Response(new ArrayBuffer(8)));
+    vi.stubGlobal('fetch', fetched);
     show();
-    // Nothing of the second viewer is fetched until somebody asks for it.
-    expect(screen.queryByTestId('lochviewer-frame')).not.toBeInTheDocument();
+    // Nothing of the second viewer is loaded, and the file is not read for it, until somebody asks.
+    expect(screen.queryByTestId('dankez-caveview-frame')).not.toBeInTheDocument();
+    expect(fetched).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('tab', { name: 'LochViewer (trial)' }));
-    const frame = screen.getByTestId('lochviewer-frame');
-    // The signed file address travels in the fragment, never in what the server sees.
-    const [page, hash] = frame.getAttribute('src')!.split('#');
-    expect(page).not.toContain('files.local');
-    expect(new URLSearchParams(hash).get('model')).toBe('http://files.local/model?name=P8_Master.3d');
+    const frame = screen.getByTestId('dankez-caveview-frame');
+    // The viewer is handed the bytes; its own address carries nothing of where they came from.
+    expect(frame.getAttribute('src')).not.toContain('files.local');
+    expect(fetched).toHaveBeenCalledWith('http://files.local/model');
 
     fireEvent.click(screen.getByRole('tab', { name: '3D' }));
     // Its drawing context is given back the moment it is off screen…
-    expect(screen.queryByTestId('lochviewer-frame')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dankez-caveview-frame')).not.toBeInTheDocument();
     // …and the embedded viewer was never taken down to make room for it.
     expect(panelLifecycle.mounts).toBe(1);
     expect(panelLifecycle.unmounts).toBe(0);

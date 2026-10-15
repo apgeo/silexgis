@@ -17,7 +17,7 @@ import { useRasterMapLinks } from '../../rastermap/useRasterMapLinks.ts';
 import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import AddMemberModal from '../reslinks/AddMemberModal.tsx';
 import CaveViewPanel from './CaveViewPanel.tsx';
-import LochViewerPane from './LochViewerPane.tsx';
+import DankezCaveViewPane from './DankezCaveViewPane.tsx';
 
 interface SurveyModelViewerModalProps {
   /** The model to show, or null for a closed modal. */
@@ -27,8 +27,8 @@ interface SurveyModelViewerModalProps {
 
 /** The key of the embedded viewer's tab. */
 const TAB_3D = '3d';
-/** The key of the tab trying the same file in LochViewer, a second viewer on trial. */
-const TAB_LOCHVIEWER = 'lochviewer';
+/** The key of the tab trying the same file in dankez-caveview (LochViewer), a second viewer on trial. */
+const TAB_DANKEZ = 'dankez-caveview';
 
 /**
  * A survey model over the whole window, mounted by whichever page the viewer asked from.
@@ -112,7 +112,7 @@ export default function SurveyModelViewerModal({ model, onClose }: SurveyModelVi
   useEffect(() => {
     if (
       activeTab !== TAB_3D &&
-      activeTab !== TAB_LOCHVIEWER &&
+      activeTab !== TAB_DANKEZ &&
       !maps.some((map) => map.linkId === activeTab)
     ) {
       setActiveTab(TAB_3D);
@@ -291,12 +291,12 @@ export default function SurveyModelViewerModal({ model, onClose }: SurveyModelVi
                 ),
               },
               {
-                key: TAB_LOCHVIEWER,
-                label: t('caveview.lochViewer.tab'),
+                key: TAB_DANKEZ,
+                label: t('caveview.dankezCaveView.tab'),
                 // Mounted only while shown, unlike every other pane here: it is a whole second
                 // viewer with a drawing context of its own, and loading it is the reader's choice.
                 children:
-                  activeTab === TAB_LOCHVIEWER ? <LochViewerPane model={model} height="70vh" /> : null,
+                  activeTab === TAB_DANKEZ ? <DankezCaveViewPane model={model} height="70vh" /> : null,
               },
               ...maps.map((declaration) => ({
                 key: declaration.linkId,

@@ -3088,10 +3088,13 @@
     "saveImageFailed": "This view could not be saved as an image."
   },
   "caveview": {
-    "lochViewer": {
+    "dankezCaveView": {
       "tab": "LochViewer (trial)",
       "trialNotice": "A second viewer on trial, showing the same file. It is a separate application: its settings, measurements and sharing are its own and are not saved here.",
-      "openWindow": "Open in a new window"
+      "openWindow": "Open in a new window",
+      "sending": "Handing the survey to the viewer…",
+      "loaded": "Stations loaded: {{count}}",
+      "station": "Station clicked: {{name}}"
     },
     "loadError": "Failed to load the 3D model",
     "linkThisPart": "Link this…",
