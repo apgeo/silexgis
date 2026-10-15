@@ -29,7 +29,7 @@ docker run --rm \
 	alpine tar czf /backup/files.tar.gz -C /data .
 
 echo "==> Done: $OUT_ABS"
-echo "    (data-protection keys are NOT backed up; losing them only invalidates"
+echo "    (data-protection keys and token certificates are NOT backed up; losing them only invalidates"
 echo "     outstanding file links and sessions, not stored data.)"
 echo "    (baked terrain is NOT backed up either: it is derived data whose recipe is in"
 echo "     the database, it is the largest and least valuable thing on disk, and losing it"

@@ -175,6 +175,10 @@ export const groups = {
     'MfaAndRateLimitTests', 'PerMinuteLimitTests', 'ProfileVisibilityTests', 'ProxyHopsCheckTests',
     'StartupSettingsTests', 'TestLoginTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
     'UserAdministrationLastAdministratorTests', 'UserAdministrationTests',
+    // The certificates tokens are signed and encrypted with, kept in the keys directory.
+    'TokenCertificateTests',
+    // Finished sign-in tokens and authorizations are pruned on a schedule.
+    'TokenStorePruneTests',
   ],
   resLinks: [
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
@@ -202,7 +206,7 @@ export const groups = {
   // With the smoke test because it asks the same kind of question one step earlier: not whether
   // the application answers, but whether each test was given the application its mode promises.
   about: ['ApiSmokeTests', 'TestModeTests'],
-  audit: ['AccessHistoryTests', 'HistoryTests'],
+  audit: ['AccessHistoryTests', 'HistoryTests', 'AuditClientAddressTests'],
   admin: [
     'AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests', 'SeededGroupUpgradeTests',
     // Which map backgrounds a document may copy is an administrator's setting, kept across

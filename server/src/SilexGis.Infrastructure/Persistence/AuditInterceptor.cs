@@ -16,8 +16,13 @@ namespace SilexGis.Infrastructure.Persistence;
 /// name ("Feature:Cave", …, see <see cref="FeatureAudit"/>). Property names cannot
 /// collide inside a merged row — one id has exactly one kind.
 /// </para>
+/// <para>
+/// Every audit row added in a save — the ones written here and the ones a feature adds itself (an
+/// export, a permission change) — carries the client address of the request that caused it, when
+/// there is one.
+/// </para>
 /// </summary>
-public sealed class AuditInterceptor(ICurrentUser currentUser) : SaveChangesInterceptor
+public sealed class AuditInterceptor(ICurrentUser currentUser, IRequestOrigin origin) : SaveChangesInterceptor
 {
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData, InterceptionResult<int> result)
@@ -96,6 +101,20 @@ public sealed class AuditInterceptor(ICurrentUser currentUser) : SaveChangesInte
         {
             context.Set<AuditEntry>().AddRange(entries);
         }
+
+        var address = origin.ClientAddress;
+        if (address is null)
+        {
+            return;
+        }
+
+        foreach (var added in context.ChangeTracker.Entries<AuditEntry>())
+        {
+            if (added.State == EntityState.Added && added.Entity.Ip is null)
+            {
+                added.Entity.Ip = address;
+            }
+        }
     }
 
     private AuditEntry ToRow(PendingEntry p) => new()
@@ -164,4 +183,10 @@ public sealed class AuditInterceptor(ICurrentUser currentUser) : SaveChangesInte
 public sealed class AnonymousCurrentUser : ICurrentUser
 {
     public Guid? UserId => null;
+}
+
+/// <summary>No request behind the work, so no address: the default outside the web host.</summary>
+public sealed class NoRequestOrigin : IRequestOrigin
+{
+    public System.Net.IPAddress? ClientAddress => null;
 }

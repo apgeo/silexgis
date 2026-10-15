@@ -159,9 +159,7 @@ try
 
     // Data-protection keys persist to disk so file-access tokens (and cookies) survive
     // restarts and container recreation; deployments mount a volume at Keys:Path.
-    var keysPath = Path.GetFullPath(
-        builder.Configuration.GetValue<string>("Keys:Path") ?? Path.Combine("data", "keys"),
-        AppContext.BaseDirectory);
+    var keysPath = SilexGis.Api.Common.KeysDirectory.Resolve(builder.Configuration);
     Directory.CreateDirectory(keysPath);
     builder.Services.AddDataProtection()
         .SetApplicationName("silexgis")

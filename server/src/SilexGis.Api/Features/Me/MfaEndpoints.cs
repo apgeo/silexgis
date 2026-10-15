@@ -421,8 +421,10 @@ public static class MfaEndpoints
     /// <summary>
     /// Keeps Identity's single flag equal to "any method is on". Everything that makes a sign-in
     /// stop and ask for a second factor reads that flag, so it can never drift from these three.
+    /// Also called when removing the phone number takes the texted code away with it, so that
+    /// path warns exactly as switching the last method off here does.
     /// </summary>
-    private static async Task SyncMasterSwitchAsync(
+    internal static async Task SyncMasterSwitchAsync(
         SilexGisUser user, UserManager<SilexGisUser> userManager, SilexGisDbContext db, CancellationToken ct)
     {
         var any = TwoFactorPolicy.AnyEnabled(user.ToTwoFactorState());

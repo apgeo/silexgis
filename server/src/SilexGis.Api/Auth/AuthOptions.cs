@@ -58,6 +58,24 @@ public sealed class AuthOptions
         TimeSpan.FromDays(Math.Clamp(SpeleoLocRefreshTokenDays, 1, 365));
 
     /// <summary>
+    /// A PKCS#12 (.pfx) file holding the certificate tokens are signed with, private key included.
+    /// Unset (the default), one is made on first start and kept in the keys directory.
+    /// </summary>
+    public string? SigningCertificatePath { get; set; }
+
+    /// <summary>Password of <see cref="SigningCertificatePath"/>, when the file has one.</summary>
+    public string? SigningCertificatePassword { get; set; }
+
+    /// <summary>
+    /// A PKCS#12 (.pfx) file holding the certificate tokens only the server reads are encrypted
+    /// with. Unset (the default), one is made on first start and kept in the keys directory.
+    /// </summary>
+    public string? EncryptionCertificatePath { get; set; }
+
+    /// <summary>Password of <see cref="EncryptionCertificatePath"/>, when the file has one.</summary>
+    public string? EncryptionCertificatePassword { get; set; }
+
+    /// <summary>
     /// External identity providers (Google / GitHub / generic OIDC). Empty by default —
     /// the login page shows provider buttons only for entries configured here.
     /// </summary>

@@ -59,6 +59,7 @@ public sealed class AnonymousSurfaceTests(PostgresFixture postgres) : IDisposabl
         ("POST", "/api/v1/auth/email/confirm", "the emailed token is the whole claim"),
         ("POST", "/api/v1/auth/email/resend", "the confirmation has not happened yet"),
         ("POST", "/api/v1/auth/2fa/send", "sent in the middle of signing in, before there is a session"),
+        ("POST", "/api/v1/auth/2fa/verify", "finishes a sign-in held at its second factor, before there is a session"),
         ("GET", "/api/v1/auth/config", "which sign-in methods to offer, needed to draw the sign-in page"),
         ("GET", "/api/v1/auth/external/{provider}", "begins a sign-in at an external provider"),
         ("GET", "/api/v1/auth/external/{provider}/callback", "the provider returns here, carrying its own proof"),

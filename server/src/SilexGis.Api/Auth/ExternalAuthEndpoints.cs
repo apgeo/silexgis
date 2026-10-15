@@ -139,8 +139,28 @@ public static class ExternalAuthEndpoints
             return Results.Redirect($"/login?error={federation.ErrorCode}");
         }
 
-        await signInManager.SignInAsync(federation.User, isPersistent: true);
-        return Results.Redirect(returnUrl);
+        // Signed in through the login just matched rather than straight into the account, so that
+        // Identity applies the rules it applies after a password: an account with a second factor
+        // is held at the half-finished sign-in instead of being let in, and a locked-out account
+        // is refused. The provider proves who the person is at the provider; it says nothing about
+        // the second factor this installation asks of the account.
+        var signIn = await signInManager.ExternalLoginSignInAsync(
+            info.LoginProvider, info.ProviderKey, isPersistent: true, bypassTwoFactor: false);
+        if (signIn.Succeeded)
+        {
+            return Results.Redirect(returnUrl);
+        }
+
+        if (signIn.RequiresTwoFactor)
+        {
+            // The sign-in page asks for the code and then resumes the same flow a password sign-in
+            // would have resumed.
+            return Results.Redirect(Append("/login?mfa=required", "returnUrl", returnUrl));
+        }
+
+        return Results.Redirect(signIn.IsLockedOut
+            ? "/login?error=auth.locked_out"
+            : "/login?error=auth.external_not_allowed");
     }
 
     private static async Task<IResult> LinkAsync(

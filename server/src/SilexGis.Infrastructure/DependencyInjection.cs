@@ -32,6 +32,7 @@ public static class DependencyInjection
         }
 
         services.AddSingleton<ICurrentUser, AnonymousCurrentUser>();
+        services.AddSingleton<IRequestOrigin, NoRequestOrigin>();
         services.AddSingleton<TimestampInterceptor>();
         services.AddSingleton<AuditInterceptor>();
         services.AddSingleton<FeatureAggregateInterceptor>();

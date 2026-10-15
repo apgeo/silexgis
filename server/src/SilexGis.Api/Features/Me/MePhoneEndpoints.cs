@@ -75,7 +75,7 @@ public static class MePhoneEndpoints
             .WithValidation<PhoneConfirmRequest>()
             .WithSummary("Completes a pending phone change with the texted code.");
         phone.MapDelete("/", RemoveAsync)
-            .WithSummary("Removes the number, switching off SMS as a second factor with it.");
+            .WithSummary("Removes the number, switching off SMS as a second factor with it (and two-factor sign-in, when it was the last method).");
 
         return api;
     }
@@ -269,12 +269,11 @@ public static class MePhoneEndpoints
             user.PreferredTwoFactorMethod = null;
         }
 
-        if (!TwoFactorPolicy.AnyEnabled(user.ToTwoFactorState()) && user.TwoFactorEnabled)
-        {
-            await userManager.SetTwoFactorEnabledAsync(user, false);
-        }
-
-        await db.SaveChangesAsync(ct);
+        // When the texted code was the last method, two-factor sign-in goes off with the number,
+        // and the account holder is warned exactly as when they switch the last method off
+        // themselves — a stolen session removing the number must not quietly leave the account
+        // protected by its password alone.
+        await MfaEndpoints.SyncMasterSwitchAsync(user, userManager, db, ct);
         return TypedResults.NoContent();
     }
 

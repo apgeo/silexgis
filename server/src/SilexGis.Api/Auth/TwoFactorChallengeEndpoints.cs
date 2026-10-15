@@ -26,6 +26,22 @@ public sealed class TwoFactorSendRequestValidator : AbstractValidator<TwoFactorS
     }
 }
 
+/// <summary>
+/// The answer to a sign-in that is waiting on a second factor. With no code the response says
+/// which methods the account can use; a recovery code carries the <c>recovery:</c> prefix, exactly
+/// as it does on the password sign-in.
+/// </summary>
+public sealed record TwoFactorVerifyRequest(string? Code = null, TwoFactorMethod? Method = null);
+
+public sealed class TwoFactorVerifyRequestValidator : AbstractValidator<TwoFactorVerifyRequest>
+{
+    public TwoFactorVerifyRequestValidator()
+    {
+        RuleFor(x => x.Code).MaximumLength(64);
+        RuleFor(x => x.Method).IsInEnum();
+    }
+}
+
 /// <summary>Where the code went, masked, and how long it is good for.</summary>
 public sealed record TwoFactorSentDto(TwoFactorMethod Method, string Destination, int ExpiresMinutes);
 
@@ -47,6 +63,11 @@ public static class TwoFactorChallengeEndpoints
         group.MapPost("/send", SendAsync)
             .WithValidation<TwoFactorSendRequest>()
             .WithSummary("Sends a sign-in code to the pending account's email or phone.");
+        group.MapPost("/verify", VerifyAsync)
+            .WithValidation<TwoFactorVerifyRequest>()
+            .Produces<SessionDto>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithSummary("Completes a sign-in that is waiting on a second factor, or lists the methods it accepts when no code is given.");
 
         return api;
     }
@@ -109,6 +130,43 @@ public static class TwoFactorChallengeEndpoints
 
         await SendThrottle.MarkSentAsync(userManager, user, method, SendThrottle.SignIn);
         return TypedResults.Ok(new TwoFactorSentDto(method, Mask(user, method), lifetime));
+    }
+
+    /// <summary>
+    /// Finishes a sign-in whose first half happened elsewhere — at an external provider, whose
+    /// callback cannot ask for a code itself because it ends in a browser redirect. The password
+    /// sign-in reaches the same rules through its own route, so a code is judged identically
+    /// whichever way the account arrived.
+    /// </summary>
+    private static async Task<IResult> VerifyAsync(
+        TwoFactorVerifyRequest request,
+        SignInManager<SilexGisUser> signInManager,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        CancellationToken ct)
+    {
+        // Identity's half-finished sign-in is the only thing that says who this is. It lasts
+        // minutes, so its absence usually means the person waited too long and must start again.
+        var user = await signInManager.GetTwoFactorAuthenticationUserAsync();
+        if (user is null)
+        {
+            return AuthEndpoints.AuthProblem(
+                StatusCodes.Status401Unauthorized,
+                "auth.mfa_not_pending",
+                "No sign-in is waiting for a code. Start signing in again.");
+        }
+
+        var policy = await settings.GetSecurityAsync(ct);
+        return await TwoFactorSignIn.AnswerAsync(
+            signInManager,
+            user,
+            request.Code,
+            request.Method,
+            policy,
+            await emailDelivery.IsConfiguredAsync(ct),
+            smsDelivery,
+            ct);
     }
 
     private static string Mask(SilexGisUser user, TwoFactorMethod method) =>
