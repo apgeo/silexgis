@@ -40,6 +40,10 @@ export const TERRAIN_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'terrain_build.being_extended': 'terrain.problems.beingExtended',
   'terrain_build.active': 'terrain.problems.active',
   'terrain_build.running': 'terrain.problems.running',
+  // Calling a build off and running a stopped one again.
+  'terrain_build.not_cancellable': 'terrain.problems.notCancellable',
+  'terrain_build.not_retryable': 'terrain.problems.notRetryable',
+  'terrain_build.bake_stopping': 'terrain.problems.bakeStopping',
   // The pictures computed from a build: asking for one over a build that is gone, and removing
   // one that already is. The third is answered to a tile reader fetching a picture before it is
   // finished, which the register never does — worded all the same, because the code exists.

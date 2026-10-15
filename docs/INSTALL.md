@@ -906,18 +906,36 @@ should come from, and presses the button. The application then does every step t
 route does — obtain, convert, bake, check, publish — and reports which one it is in and how far
 through it is, on a list of builds that survives leaving the page and coming back.
 
-**A build that has started cannot be called off.** There is no cancel control on the page and no
-route behind one: a build runs to its own end, whether that end is success, failure, or stopping at
-a step this installation cannot do. Only then can it be removed. So the moment to reconsider a
-rectangle is before the button, not after it — which is what the area reported beside the rectangle
-is for.
+**A build can be called off, and a stopped one can be run again.** **Call off** on a queued build
+stops it at once — nothing has been done, and nothing will be. On a running build it asks the build
+to stop, and the list shows it as *being cancelled* until it does: the steps the application does
+itself stop at the next point they look (between two downloaded cells, between two rasters, between
+two steps), and while tiles are being made the tile-making service is told to stop the tool and the
+build waits — up to a minute — for it to say it has, so that nothing it writes afterwards can be
+mistaken for a finished pyramid. Whatever tiles that bake had written are then thrown away. A build
+that has started publishing finishes: publishing is two renames, and a build that was called off is
+never published.
+
+A called-off build is kept, as a stopped build like any other, with everything it had obtained and
+prepared still on disk. **Run again** puts a stopped build — called off, or stopped for any other
+reason — back on the queue, and it carries on from the first step whose work is not already there:
+a build that stopped at the tile-making step makes tiles and nothing else, and one called off while
+downloading downloads only what it had not yet got. A bake that went wrong had its tiles thrown away
+when it stopped, so it is baked again, and so is a pyramid the check refused. Run again is refused,
+with a sentence saying why, while another build of the same rectangle is unfinished, for a build that
+added to another build that has since been deleted, and — briefly — for a build called off while
+making tiles whose tool has not yet confirmed it stopped; that answer arrives as soon as the
+tile-making service is running.
+
+If the tile-making service is not running when a bake is called off, nothing can confirm it stopped,
+and the build says so; it can be run again once the service has been started, which answers at once.
 
 **Who may use it — two different bars, on purpose.**
 
 | What | What it needs |
 |---|---|
 | Seeing the page, the list of builds, their status and their size on disk | the **Terrain** permission with **Read** |
-| Starting a build, choosing which finished build the 3D view draws, clearing that choice | the **Terrain** permission with **Execute** |
+| Starting a build, calling one off, running a stopped one again, choosing which finished build the 3D view draws, clearing that choice | the **Terrain** permission with **Execute** |
 | Deleting a build and getting its disk back | the **Terrain** permission with **Delete** |
 | Naming a **directory on the server** as the source of elevation data | **Full Administrator** — nothing less |
 
@@ -1024,9 +1042,10 @@ needs a service this stack does not start unless it is asked to, so on a default
 build gets as far as the tile-making step and stops there. The page says so **before** the button
 is pressed as well as after, names the setting and the exact command that enables it, and is plain
 about what has happened: the work already done stands and its data is on disk under that build,
-there is no way to carry that build any further, and once the service is running a new build must
-be started and the stopped one removed to get the disk back. That is the honest state of it —
-nothing re-queues a stopped build.
+and once the service is running, **Run again** on that build carries it on from the tile-making
+step without obtaining or converting anything a second time. Nothing re-queues it on its own — a
+stopped build waits for somebody to press the button, because only a person knows the service is
+now there.
 
 ### Running the tile-making service
 
@@ -1046,6 +1065,15 @@ keep it alive and hand it work. That something is the worker this overlay adds. 
 port, holds no database credentials and cannot start containers of its own: it watches one
 directory on the terrain volume, bakes what it finds there, and writes the answer back beside the
 request.
+
+**After upgrading, rebuild it.** Calling a bake off is the application leaving a `cancel` file
+beside the request and the worker stopping the tool when it sees one; a worker built from an older
+image does not look for that file, so a bake called off under it runs to its end before it answers,
+and the build cannot be run again until it has:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.terrain-worker.yml up -d --build terrain-worker
+```
 
 **Give it memory.** The tile-maker takes its heap as a percentage of the container's memory limit
 and offers no other setting for it, so that limit is the only control there is — and running short
@@ -1148,7 +1176,9 @@ What that leaves you responsible for, if it matters to you: **rasters that exist
 Elevation data downloaded from Copernicus can always be downloaded again, and a directory on the
 server you filled yourself is yours and is presumably already in whatever backs that machine up —
 but a raster somebody uploaded through the browser has exactly one copy, on this volume, and no
-copy in the file store. If your installation is fed that way, add the volume:
+copy in the file store. (One that no build names is deleted after a day — see
+`SILEXGIS__Terrain__UploadRetentionHours` — so the ones worth keeping are the ones a build names.)
+If your installation is fed that way, add the volume:
 
 ```bash
 docker run --rm -v silexgis_silexgis-terrain:/data:ro -v "$PWD/backups":/backup \
@@ -1637,6 +1667,7 @@ the reasoning beside each one.
 | `SILEXGIS__Terrain__BakeEnabled` | `false` | whether this installation has anything that can turn rasters into tiles. Set by the same deployment that starts the terrain worker; switched on with no worker running, a build waits for a bake nothing will ever do |
 | `SILEXGIS__Terrain__SpoolRoot` | `data/terrain/spool` (the compose stack sets `/data/terrain/spool`) | the directory the application and the terrain worker leave files for each other in. Both sides must name the same directory, on a volume they share, and both compose files already do |
 | `SILEXGIS__Terrain__BakePickupSeconds` | `300` (5 min) | how long a build waits for the worker to take its bake before deciding nothing is going to. Generous, because an image this size takes a while to start and a request left waiting costs nothing. Values outside 5 s to 1 h are brought back inside that range — `0` does **not** mean "wait indefinitely" and becomes 5 s, which reports a worker that is merely starting as absent |
+| `SILEXGIS__Terrain__UploadRetentionHours` | `24` | how long a raster sent through the browser for a terrain build is kept when **no build names it**. The build form sends each raster the moment it is chosen, so one picked and then abandoned would otherwise stay on the terrain volume for ever; an hourly sweep deletes those once they are this old. A raster any build names — queued, running, finished or stopped — is never deleted, whatever its age; deleting the build is what releases it. Values outside 1 hour to a year (8760) are brought back inside that range, so `0` does **not** mean "never" |
 | `SILEXGIS__Terrain__BakeTimeoutSeconds` | `43200` (12 h) | how long one bake may run before it is abandoned. The queue a build runs on has no limit of its own, so this is the only one there is, and it is meant to catch a bake that has stopped making progress rather than to cap a large one. Values outside 60 s to 7 days are brought back inside that range — `0` does **not** mean "no limit" and becomes 60 s, which abandons every real bake after a minute |
 | `SILEXGIS__MapLayers__CatalogPath` | — (the file shipped in the image) | the XML file listing the tile sources this installation offers. Set it to a path outside the image — that is the only way an edit of yours survives an upgrade. Start from a copy of the shipped `map-layers.xml` |
 | `SILEXGIS__MapLayers__ApiKeys__<name>` | — | the access key a catalogue entry names, e.g. `SILEXGIS__MapLayers__ApiKeys__Thunderforest`. An entry whose key is not set is **not offered at all**, rather than offered and broken: a tile address still carrying the placeholder answers 401 for every tile, which on screen looks exactly like a source that is down |

@@ -238,9 +238,10 @@ test('a build on an installation with no tile-making service stops there, and th
     'docker compose -f docker-compose.yml -f docker-compose.terrain-worker.yml up -d',
   );
 
-  // And it is honest about what is left: the work before the stopped step stands, and there is no
-  // way to carry that build further from here.
-  await expect(notice).toContainText('There is no way to take that build further');
+  // And it is honest about what is left: the work before the stopped step stands, and the stopped
+  // build is carried on from there once the service runs — so the control it names is on the build.
+  await expect(notice).toContainText('press Run again on the stopped build');
+  await expect(page.locator('[data-testid^="terrain-retry-"]').first()).toBeVisible();
 
   // The build's own panel says the same thing in short, and does not also shout it as a failure —
   // one screen carrying the same alert twice makes neither of them read as the answer.

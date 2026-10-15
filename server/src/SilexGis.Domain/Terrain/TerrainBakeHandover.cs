@@ -39,6 +39,19 @@ public static class TerrainBakeHandover
     public const string ResultFileName = "result";
 
     /// <summary>
+    /// The file the application writes to withdraw a request it has already issued, because
+    /// somebody called the build off.
+    /// </summary>
+    /// <remarks>
+    /// Its presence is the whole message; what it holds is only a timestamp for whoever reads the
+    /// directory later. The other side checks for it before it starts a request and every second
+    /// while the tile-maker runs, stops the tile-maker when it appears, and answers
+    /// <c>status=cancelled</c> like any other answer — so the application learns that the bake has
+    /// stopped writing into the output directory from the same file it learns everything else from.
+    /// </remarks>
+    public const string CancelFileName = "cancel";
+
+    /// <summary>
     /// The suffix a file carries while it is being written, before it is renamed into place.
     /// </summary>
     public const string PartialSuffix = ".part";
@@ -167,6 +180,12 @@ public enum TerrainBakeOutcome
     /// with the data; the output is half written and the attempt is worth making again.
     /// </summary>
     Interrupted = 4,
+
+    /// <summary>
+    /// The request was withdrawn, and the other side stopped the tile-maker (or never started
+    /// it). The output is whatever had been written by then and is never to be believed.
+    /// </summary>
+    Cancelled = 5,
 }
 
 /// <summary>What the other side answers.</summary>
@@ -222,6 +241,7 @@ public sealed record TerrainBakeResult(TerrainBakeOutcome Outcome, int? ExitCode
             "failed" => TerrainBakeOutcome.Failed,
             "refused" => TerrainBakeOutcome.Refused,
             "interrupted" => TerrainBakeOutcome.Interrupted,
+            "cancelled" => TerrainBakeOutcome.Cancelled,
             _ => TerrainBakeOutcome.Unreadable,
         };
 

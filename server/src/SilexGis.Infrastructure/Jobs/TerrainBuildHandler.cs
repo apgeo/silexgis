@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Permissions;
@@ -42,13 +44,34 @@ public sealed record TerrainBuildPayload(Guid TerrainBuildId);
 /// step whose output is already there and checks out is skipped rather than redone, and a build
 /// that has already ended badly is stopped rather than started again.
 /// </para>
+/// <para>
+/// A run can be called off. The request to stop is a column on the build row, written by the route
+/// an administrator presses, and a small watcher reads it while the run goes on; every step is
+/// handed a token that fires when it appears. The steps run inside this process stop at the next
+/// point they look — between two files, between two cells, between two steps. The meshing step
+/// runs in another program, which is asked to stop through the directory the two share and is
+/// waited for, briefly, so that nothing it writes afterwards is mistaken for a pyramid. Publishing
+/// is the one step that does not listen: it is two renames, it is the moment a build becomes
+/// something a viewer can be served, and a run called off is never published — so the request is
+/// looked at before it starts, and after that the build finishes.
+/// </para>
 /// </remarks>
 public sealed class TerrainBuildHandler(
     SilexGisDbContext db,
     IEnumerable<ITerrainPhase> phases,
     TerrainWorkspace workspace,
+    IServiceScopeFactory scopeFactory,
+    IOptions<TerrainBuildOptions> options,
     ILogger<TerrainBuildHandler> logger) : IProcessingJobHandler
 {
+    /// <summary>How often a running build's row is read for a request to call it off.</summary>
+    /// <remarks>
+    /// One indexed read of one row, so it costs nothing worth counting against a run that lasts
+    /// minutes to hours, and two seconds is well inside the time a person waits for a button to
+    /// visibly do something.
+    /// </remarks>
+    private static readonly TimeSpan CancelPoll = TimeSpan.FromSeconds(2);
+
     /// <summary>
     /// How many times one build may be handed to a worker before it is stopped for good.
     /// </summary>
@@ -85,6 +108,13 @@ public sealed class TerrainBuildHandler(
             return;
         }
 
+        if (TerrainBuildStopRules.IsCancelled(build.Status, build.ErrorCode))
+        {
+            // Called off while it waited, in the moment between a worker claiming its queue row and
+            // the route closing it. The row already says what happened; nothing is started.
+            return;
+        }
+
         if (StoppedForRepeating(build, job) is { } reason)
         {
             logger.LogWarning(
@@ -103,7 +133,27 @@ public sealed class TerrainBuildHandler(
             return;
         }
 
-        await TerrainBuildWrites.StartAsync(db, build.Id, TerrainBuildPhase.Pending, ct);
+        if (!await TerrainBuildWrites.StartAsync(db, build.Id, TerrainBuildPhase.Pending, ct))
+        {
+            // Called off between being read above and being marked running.
+            return;
+        }
+
+        // Fires when somebody calls this run off, and only then. The host stopping is the other
+        // token and means something different: a shutdown is not a verdict and the run resumes at
+        // the next start, while a called-off run is recorded as stopped and does not.
+        using var calledOff = new CancellationTokenSource();
+        using var stepToken = CancellationTokenSource.CreateLinkedTokenSource(ct, calledOff.Token);
+        using var stopWatching = new CancellationTokenSource();
+        var watcher = WatchForCancellationAsync(build.Id, calledOff, stopWatching.Token);
+
+        if (build.CancelRequestedAt is not null)
+        {
+            // Asked to stop before a restart and handed back after it. Finishing the cancellation
+            // is the only thing left to do — resuming would be carrying on with a build somebody
+            // called off, because the process happened to die in between.
+            await calledOff.CancelAsync();
+        }
 
         // Two different phases, and confusing them is how a failure reports the wrong step. One is
         // the last step that finished, which is where a successful run stops; the other is the step
@@ -160,7 +210,12 @@ public sealed class TerrainBuildHandler(
 
             foreach (var phase in TerrainPhases.Order)
             {
+                // Looked at before every step, publishing included, and not inside publishing: once
+                // a pyramid starts moving to where it is served, the build finishes.
+                stepToken.Token.ThrowIfCancellationRequested();
+
                 attempting = phase;
+                var token = phase == TerrainBuildPhase.Publish ? ct : stepToken.Token;
                 var step = phases.FirstOrDefault(p => p.Phase == phase);
                 if (step is null)
                 {
@@ -177,9 +232,9 @@ public sealed class TerrainBuildHandler(
                     requester,
                     (line, token) => TerrainBuildWrites.AppendLogAsync(db, build.Id, line, token));
 
-                await context.ReportAsync(0, null, ct);
+                await context.ReportAsync(0, null, token);
 
-                if (await step.IsAlreadyDoneAsync(context, ct))
+                if (await step.IsAlreadyDoneAsync(context, token))
                 {
                     logger.LogInformation(
                         "Terrain build {BuildId} skips {Phase}: its output is already there",
@@ -187,7 +242,7 @@ public sealed class TerrainBuildHandler(
                 }
                 else
                 {
-                    await step.RunAsync(context, ct);
+                    await step.RunAsync(context, token);
                 }
 
                 reached = phase;
@@ -203,6 +258,14 @@ public sealed class TerrainBuildHandler(
             // The host is shutting down, which is not this build's fault and not its verdict. The
             // row is left as it is so the sweep that runs at the next start picks it up again.
             throw;
+        }
+        catch (OperationCanceledException) when (calledOff.IsCancellationRequested)
+        {
+            // A run stopped before it reached any step — handed back after a restart with the
+            // request already on its row — stops where the build had got to, not at "pending".
+            await StopAsCancelledAsync(
+                build.Id, attempting == TerrainBuildPhase.Pending ? build.Phase : attempting, ct);
+            throw BoundedForTheQueue(build.Id, TerrainBuildFailures.Cancelled, null);
         }
         catch (TerrainBuildException e)
         {
@@ -234,7 +297,93 @@ public sealed class TerrainBuildHandler(
             {
                 Sweep(directories.Scratch);
             }
+
+            await stopWatching.CancelAsync();
+            await watcher;
         }
+    }
+
+    /// <summary>
+    /// Reads the build's row every few seconds and fires <paramref name="calledOff"/> when somebody
+    /// has asked for the run to stop.
+    /// </summary>
+    /// <remarks>
+    /// On a database context of its own: the run is using the handler's context the whole time, and
+    /// a context is not something two things may use at once. Nothing here may end the run — a read
+    /// that fails is logged and tried again on the next tick, because a watcher that died would
+    /// leave a build that can no longer be called off with nothing anywhere saying so.
+    /// </remarks>
+    private async Task WatchForCancellationAsync(
+        Guid buildId, CancellationTokenSource calledOff, CancellationToken stop)
+    {
+        while (!stop.IsCancellationRequested && !calledOff.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(CancelPoll, stop);
+
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var reader = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+                var asked = await reader.TerrainBuilds.AsNoTracking()
+                    .Where(b => b.Id == buildId)
+                    .Select(b => b.CancelRequestedAt)
+                    .FirstOrDefaultAsync(stop);
+
+                if (asked is not null)
+                {
+                    logger.LogInformation("Terrain build {BuildId} was called off; stopping it", buildId);
+                    await calledOff.CancelAsync();
+                }
+            }
+            catch (OperationCanceledException) when (stop.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(e, "Could not read whether terrain build {BuildId} was called off", buildId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Finishes calling a run off: withdraws a bake the tile-maker may still be doing, discards
+    /// whatever no run of the meshing step stood behind, and records the stop.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// In this order because the second is only safe after the first. The tile-maker writes into
+    /// this build's own tiles directory, so emptying it while the tile-maker is still writing
+    /// would leave the end of a bake behind — a pyramid a later attempt finds and believes. It is
+    /// asked to stop and given a short while to say it has; the time is the pickup window, capped
+    /// at a minute, because both measure how quickly the other side reacts to a file appearing.
+    /// </para>
+    /// <para>
+    /// What came before the bake is kept — the rasters obtained and prepared — so running the build
+    /// again carries on from there, and a pyramid whose bake was already judged good is kept for the
+    /// same reason. Recorded with the host's token for the wait and none for the write: a build
+    /// called off must be able to say so even while the host is going down, and if the host goes
+    /// down during the wait instead, the request is still on the row and the next start finishes it.
+    /// </para>
+    /// </remarks>
+    private async Task StopAsCancelledAsync(Guid buildId, TerrainBuildPhase phase, CancellationToken ct)
+    {
+        var wait = TimeSpan.FromSeconds(Math.Clamp(options.Value.BakePickupSeconds, 5, 60));
+        var confirmed = await workspace.WithdrawBakeAsync(buildId, wait, ct);
+        workspace.DiscardUnjudgedTiles(buildId);
+
+        var said = confirmed
+            ? "Called off. What it had obtained and prepared is kept, so running it again carries on from there."
+            : "Called off. The tile maker was asked to stop and has not yet said it has, so whatever "
+                + "it writes from now on will be discarded; this build can be run again once it has "
+                + "answered — at once if the terrain worker is running, or when it is next started.";
+
+        logger.LogInformation(
+            "Terrain build {BuildId} called off at {Phase} (tile maker confirmed: {Confirmed})",
+            buildId, phase, confirmed);
+
+        await TerrainBuildWrites.FailAsync(
+            db, buildId, phase, TerrainBuildFailures.Cancelled, said, said, CancellationToken.None);
     }
 
     /// <summary>
@@ -312,7 +461,7 @@ public sealed class TerrainBuildHandler(
     /// the queue row reading as running for ever and never re-claimed. The long version is already
     /// on the build row's log tail, truncated, which is where somebody diagnosing this looks.
     /// </remarks>
-    private static InvalidOperationException BoundedForTheQueue(Guid buildId, string code, Exception inner) =>
+    private static InvalidOperationException BoundedForTheQueue(Guid buildId, string code, Exception? inner) =>
         new($"Terrain build {buildId} failed: {code}.", inner);
 
     private void Sweep(string scratch)

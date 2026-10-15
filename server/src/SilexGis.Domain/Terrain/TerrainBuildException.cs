@@ -19,6 +19,16 @@ public static class TerrainBuildFailures
     /// </summary>
     public const string RepeatedFailure = "terrain_build.repeated_failure";
 
+    /// <summary>An administrator called the build off.</summary>
+    /// <remarks>
+    /// A reason for stopping like any other, recorded on a build whose status is the ordinary
+    /// failed one: a called-off build is exactly a build that stopped without producing a usable
+    /// pyramid, and everything that treats a failed build correctly — the list, the delete, the
+    /// retry, the guard against building one area twice — treats this one correctly too. What it
+    /// has done so far is kept, so running it again carries on rather than starting over.
+    /// </remarks>
+    public const string Cancelled = "terrain_build.cancelled";
+
     /// <summary>Rasters could not be obtained for the area asked for.</summary>
     public const string FetchFailed = "terrain_build.fetch_failed";
 

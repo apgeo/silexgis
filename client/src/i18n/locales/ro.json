@@ -119,6 +119,10 @@
       "succeeded": "Încheiată",
       "failed": "Eșuată"
     },
+    "cancelStates": {
+      "cancelling": "Se anulează",
+      "cancelled": "Anulată"
+    },
     "phases": {
       "pending": "Așteaptă să îi vină rândul — încă nu a început nimic.",
       "fetch": "Obținere",
@@ -148,13 +152,21 @@
       "stop": "Nu mai desena",
       "stopped": "Scena desenează din nou teren gol.",
       "delete": "Șterge",
-      "deleteConfirm": "Ștergi această generare și cei {{size}} pe care îi ține pe disc pentru {{area}}?"
+      "deleteConfirm": "Ștergi această generare și cei {{size}} pe care îi ține pe disc pentru {{area}}?",
+      "cancel": "Oprește",
+      "cancelConfirm": "Anulezi această generare? Ce a obținut și a pregătit deja se păstrează, așa că poate fi rulată din nou mai târziu, de unde s-a oprit.",
+      "cancelled": "Generarea a fost anulată.",
+      "cancelAsked": "Generarea se va opri la primul punct la care poate; până atunci apare ca fiind în curs de anulare.",
+      "retry": "Rulează din nou",
+      "retried": "Generarea este din nou la coadă și va continua de unde s-a oprit."
     },
     "detail": {
       "title": "Această generare",
       "sources": "Făcută din",
       "noSources": "Pentru această generare nu s-a înregistrat încă nimic.",
       "failed": "Această generare s-a oprit înainte să se încheie.",
+      "cancelled": "Această generare a fost anulată.",
+      "cancelling": "Această generare se anulează. Se oprește la primul punct la care poate — între două fișiere sau, cât timp se fac dalele, după ce unealta care face dalele a confirmat că s-a oprit.",
       "log": "Ce a spus unealta",
       "noLog": "Încă nu s-a spus nimic."
     },
@@ -163,7 +175,7 @@
       "body": "Obținerea datelor de altitudine și pregătirea lor funcționează așa cum sunt. Transformarea lor în dale are nevoie de un serviciu separat, pe care o instalare obișnuită nu îl pornește: imaginea lui trece binișor de un gigabyte, iar o instalare care nu generează niciodată relief nu are de ce să o țină.",
       "setting": "În fișierul de mediu de lângă fișierele compose ale instalării:",
       "command": "Apoi, din același director:",
-      "resumes": "Tot ce s-a întâmplat înainte de acest pas rămâne făcut, iar ce a obținut și a pregătit generarea este în continuare pe disc sub ea. Generarea aceea nu poate fi dusă mai departe de aici: după ce serviciul rulează, pornește din nou o generare peste același dreptunghi și șterge-o pe cea oprită ca să recuperezi discul pe care îl ține."
+      "resumes": "Tot ce s-a întâmplat înainte de acest pas rămâne făcut, iar ce a obținut și a pregătit generarea este în continuare pe disc sub ea. După ce serviciul rulează, apasă „Rulează din nou” pe generarea oprită: continuă de la pasul la care s-a oprit, fără să mai obțină sau să mai pregătească nimic a doua oară."
     },
     "problems": {
       "notFound": "Generarea nu mai există.",
@@ -182,6 +194,9 @@
       "notPublished": "Generarea nu are nicio suprafață de desenat. Fie dalele nu au fost niciodată recitite și găsite întregi, fie nu mai sunt acolo de unde se servește relieful.",
       "active": "Generarea aceasta este relieful pe care îl desenează scena. Alege alt relief sau oprește desenarea acestuia înainte de a-l șterge.",
       "running": "Generarea nu s-a încheiat. Fișierele ei se scriu chiar acum, așa că poate fi ștearsă după ce se oprește, oricum s-ar opri.",
+      "notCancellable": "Generarea s-a oprit deja, așa că nu mai este nimic de anulat.",
+      "notRetryable": "Doar o generare oprită poate fi rulată din nou. Aceasta este încă la coadă sau în curs, ori s-a încheiat.",
+      "bakeStopping": "Generarea a fost anulată în timp ce i se făceau dalele, iar unealta care face dalele nu a confirmat încă oprirea. Răspunde imediat ce serviciul de relief rulează; rulează generarea din nou după aceea.",
       "derivativeBuildNotFound": "Generarea nu mai există sau nu are din ce desena terenul.",
       "derivativeNotFound": "Imaginea nu mai există.",
       "derivativeNotReady": "Imaginea nu este încă gata, așa că nu este nimic de adus.",

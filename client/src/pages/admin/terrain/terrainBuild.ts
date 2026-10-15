@@ -50,6 +50,72 @@ export function bakeWorkerMissing(build: TerrainBuild): boolean {
   return build.status === 'failed' && build.errorCode === 'terrain_build.bake_unavailable';
 }
 
+/** The reason a build carries when somebody called it off. */
+export const TERRAIN_CANCELLED_CODE = 'terrain_build.cancelled';
+
+/**
+ * What a build's state is, in the words the screen uses for it.
+ *
+ * Two of these are not statuses of their own on the server, deliberately. A build being cancelled
+ * is still running until it reaches a point where it can stop — between two files, or once the
+ * tile maker has said it stopped — and the request is a time on the row; a build that was called
+ * off is a failed build whose reason says so. Both are told apart here so that the list does not
+ * show a red "failed" for something a person chose to do, and does not show a plain "running" for
+ * a build somebody has already asked to stop.
+ */
+export type TerrainBuildState =
+  | 'queued'
+  | 'running'
+  | 'cancelling'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
+
+export function buildState(build: TerrainBuild): TerrainBuildState {
+  if (build.status === 'running' && build.cancelRequestedAt) {
+    return 'cancelling';
+  }
+  if (build.status === 'failed' && build.errorCode === TERRAIN_CANCELLED_CODE) {
+    return 'cancelled';
+  }
+  return build.status;
+}
+
+/**
+ * The words for each state, written out rather than built from the state's name.
+ *
+ * The four that are server statuses are labelled where the statuses are — that list is held to
+ * exactly the values the server sends — and the two that are not have labels of their own beside
+ * it. Written out also so the scan for keys nobody translated can see every one of them.
+ */
+export const TERRAIN_BUILD_STATE_LABELS: Record<TerrainBuildState, string> = {
+  queued: 'terrain.statuses.queued',
+  running: 'terrain.statuses.running',
+  succeeded: 'terrain.statuses.succeeded',
+  failed: 'terrain.statuses.failed',
+  cancelling: 'terrain.cancelStates.cancelling',
+  cancelled: 'terrain.cancelStates.cancelled',
+};
+
+/**
+ * Whether a build can be called off: one that has not stopped and that nobody has already asked to
+ * stop. The server answers a second request as done rather than refusing it, so offering it again
+ * would only be a button that does nothing.
+ */
+export function mayCancel(build: TerrainBuild): boolean {
+  const state = buildState(build);
+  return state === 'queued' || state === 'running';
+}
+
+/**
+ * Whether a build can be run again: one that stopped, whichever way. The server can still refuse —
+ * another build of the same area may be under way, or a called-off bake may not yet be confirmed
+ * stopped — and each refusal is worded, because neither is visible from this row.
+ */
+export function mayRetry(build: TerrainBuild): boolean {
+  return build.status === 'failed';
+}
+
 /**
  * The steps a build goes through, in the order it goes through them.
  *

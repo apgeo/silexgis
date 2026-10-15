@@ -231,6 +231,73 @@ public sealed class TerrainUploads(TerrainWorkspace workspace)
     }
 
     /// <summary>
+    /// Deletes what no build will ever read: uploads last written before <paramref name="cutoff"/>
+    /// whose reference is not in <paramref name="named"/>, and fragments an interrupted upload left.
+    /// </summary>
+    /// <returns>How many entries were removed.</returns>
+    /// <remarks>
+    /// <para>
+    /// Age is the time the file was last written, which for an upload is when it finished arriving.
+    /// It is deliberately not "how long since a build last used it": a raster a build names is
+    /// never taken at all, whatever its age, and one nothing names has only ever had one moment
+    /// that matters.
+    /// </para>
+    /// <para>
+    /// A partly written file and a conversion's working directory are taken by the same age and
+    /// without asking who names them: neither carries a name a build can quote, so nothing can. A
+    /// fresh one may be an upload still arriving, which is why they are not taken sooner.
+    /// </para>
+    /// <para>
+    /// Every removal is best effort. A file another process holds open is left for the next pass,
+    /// rather than costing the rest of this one.
+    /// </para>
+    /// </remarks>
+    public int SweepAbandoned(DateTimeOffset cutoff, IReadOnlySet<string> named)
+    {
+        var root = new DirectoryInfo(Directory);
+        if (!root.Exists)
+        {
+            return 0;
+        }
+
+        var removed = 0;
+        foreach (var entry in root.EnumerateFileSystemInfos())
+        {
+            if (entry.LastWriteTimeUtc >= cutoff.UtcDateTime || named.Contains(entry.Name))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (entry is DirectoryInfo directory)
+                {
+                    // Only a conversion's working directory is ever made here, so anything else
+                    // shaped like a directory is not this class's to remove.
+                    if (!directory.Name.EndsWith(StagingSuffix, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    directory.Delete(recursive: true);
+                }
+                else
+                {
+                    entry.Delete();
+                }
+
+                removed++;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Left for the next pass.
+            }
+        }
+
+        return removed;
+    }
+
+    /// <summary>
     /// Whether a raster with this name is one this application will try to read at all.
     /// </summary>
     public static bool IsAcceptedRaster(string fileName) => TerrainRasterFiles.IsRaster(fileName);

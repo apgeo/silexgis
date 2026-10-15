@@ -3,7 +3,7 @@ import { Alert, Card, Descriptions, Empty, Flex, Progress, Skeleton, Steps, Typo
 import { useTranslation } from 'react-i18next';
 import { useTerrainBuild } from '../../../api/hooks.ts';
 import type { TerrainBuildSource } from '../../../api/hooks.ts';
-import { TERRAIN_PHASE_ORDER, bakeWorkerMissing, phaseIndex } from './terrainBuild.ts';
+import { TERRAIN_PHASE_ORDER, bakeWorkerMissing, buildState, phaseIndex } from './terrainBuild.ts';
 import TerrainWorkerMissing from './TerrainWorkerMissing.tsx';
 
 interface Props {
@@ -39,6 +39,7 @@ export default function TerrainBuildProgress({ buildId }: Props) {
   const current = phaseIndex(build.phase);
   const failed = build.status === 'failed';
   const succeeded = build.status === 'succeeded';
+  const state = buildState(build);
 
   return (
     <Card size="small" title={t('terrain.detail.title')} data-testid="terrain-build-detail">
@@ -53,11 +54,13 @@ export default function TerrainBuildProgress({ buildId }: Props) {
                 ? 'finish'
                 : index > current
                   ? 'wait'
-                  : failed
-                    ? 'error'
-                    : succeeded
-                      ? 'finish'
-                      : 'process',
+                  : state === 'cancelled'
+                    ? 'wait'
+                    : failed
+                      ? 'error'
+                      : succeeded
+                        ? 'finish'
+                        : 'process',
           }))}
         />
 
@@ -72,8 +75,22 @@ export default function TerrainBuildProgress({ buildId }: Props) {
           data-testid="terrain-build-progress"
           // Never "active": that animation says a thing is moving at a rate, and this bar covers
           // both a build that finishes before it is looked at and one that runs overnight.
-          status={failed ? 'exception' : succeeded ? 'success' : 'normal'}
+          status={state === 'failed' ? 'exception' : succeeded ? 'success' : 'normal'}
         />
+
+        {/*
+          Asked to stop and not stopped yet. Said in so many words, because for the seconds — or,
+          when the tile maker is slow to answer, the minute — this lasts, the bar and the steps
+          look exactly like a build that nobody asked to stop.
+        */}
+        {state === 'cancelling' && (
+          <Alert
+            type="warning"
+            showIcon
+            data-testid="terrain-build-cancelling"
+            title={t('terrain.detail.cancelling')}
+          />
+        )}
 
         {build.message !== null && !failed && (
           <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
@@ -91,7 +108,21 @@ export default function TerrainBuildProgress({ buildId }: Props) {
         */}
         {failed && bakeWorkerMissing(build) && <TerrainWorkerMissing compact />}
 
-        {failed && !bakeWorkerMissing(build) && (
+        {/*
+          Called off by somebody, which is not an alarm. What the server says matters here too:
+          it is where a tile maker that has not yet confirmed it stopped is mentioned.
+        */}
+        {state === 'cancelled' && (
+          <Alert
+            type="info"
+            showIcon
+            data-testid="terrain-build-cancelled"
+            title={t('terrain.detail.cancelled')}
+            description={build.message ?? undefined}
+          />
+        )}
+
+        {failed && state !== 'cancelled' && !bakeWorkerMissing(build) && (
           <Alert
             type="error"
             showIcon

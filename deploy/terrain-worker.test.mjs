@@ -9,7 +9,18 @@
 //
 // Run with the rest: `node --test "deploy/**/*.test.mjs"`.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -134,5 +145,110 @@ describe('the overlay', () => {
       overlay,
       /\$\{SILEXGIS__Terrain__BakeEnabled:\?set SILEXGIS__Terrain__BakeEnabled=true[^}]*\}/,
     );
+  });
+});
+
+describe('a bake that is called off', { skip: process.platform === 'win32' }, () => {
+  // Run for real rather than read as text: what matters here is that a pre-baker which is running
+  // stops, and that the answer the application waits for is written only once it has. A stand-in
+  // for `java` on the path plays the pre-baker — it either finishes at once or waits to be killed,
+  // and says which process it is so the test can tell whether it is still alive.
+  const until = async (check, what, seconds = 15) => {
+    const deadline = Date.now() + seconds * 1000;
+    while (Date.now() < deadline) {
+      if (check()) return;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.fail(`timed out waiting for ${what}`);
+  };
+
+  const alive = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  it('stops a running pre-baker, answers cancelled, and never runs one withdrawn before it started', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'silexgis-bake-worker-'));
+    const bin = join(root, 'bin');
+    const spool = join(root, 'spool');
+    mkdirSync(bin);
+    mkdirSync(spool);
+    writeFileSync(join(root, 'terrainer.jar'), '');
+    writeFileSync(
+      join(bin, 'java'),
+      [
+        '#!/bin/sh',
+        'out=""',
+        'while [ $# -gt 0 ]; do [ "$1" = -o ] && out="$2"; shift; done',
+        'case "$out" in *quick*) echo "Done"; exit 0 ;; esac',
+        'echo $$ > "$out.pid"',
+        'echo "Generating tiles for level 13"',
+        'exec sleep 60',
+        '',
+      ].join('\n'),
+    );
+    chmodSync(join(bin, 'java'), 0o755);
+
+    const request = (name, output) => {
+      const input = join(root, 'builds', name, 'prepared');
+      mkdirSync(input, { recursive: true });
+      const directory = join(spool, name);
+      mkdirSync(directory);
+      writeFileSync(join(directory, 'request.part'), `input=${input}\noutput=${output}\nmaxDepth=13\n`);
+      return directory;
+    };
+    const result = (directory) => {
+      const path = join(directory, 'result');
+      return existsSync(path) ? readFileSync(path, 'utf8') : '';
+    };
+
+    const worker = spawn('sh', [join(deployDir, 'terrain-worker', 'bake-worker.sh')], {
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH}`,
+        SILEXGIS_TERRAIN_ROOT: root,
+        SILEXGIS_TERRAIN_JAR: join(root, 'terrainer.jar'),
+        SILEXGIS_TERRAIN_POLL_SECONDS: '1',
+      },
+      stdio: 'ignore',
+    });
+
+    try {
+      // Withdrawn before the worker ever saw it: answered, and nothing run.
+      const early = request('early', join(root, 'builds', 'early', 'tiles'));
+      writeFileSync(join(early, 'cancel'), 'now\n');
+      renameSync(join(early, 'request.part'), join(early, 'request'));
+      await until(() => result(early) !== '', 'the withdrawn request to be answered');
+      assert.match(result(early), /^status=cancelled$/m);
+      assert.ok(!existsSync(join(early, 'started')), 'a withdrawn request is never started');
+      assert.ok(!existsSync(join(root, 'builds', 'early', 'tiles.pid')), 'nothing was run');
+
+      // Running, then withdrawn: the pre-baker is stopped and only then is the answer written.
+      const tiles = join(root, 'builds', 'running', 'tiles');
+      const running = request('running', tiles);
+      renameSync(join(running, 'request.part'), join(running, 'request'));
+      await until(() => existsSync(`${tiles}.pid`), 'the pre-baker to start');
+      const pid = Number(readFileSync(`${tiles}.pid`, 'utf8').trim());
+      assert.ok(alive(pid));
+      assert.equal(result(running), '', 'a running bake has no answer yet');
+
+      writeFileSync(join(running, 'cancel'), 'now\n');
+      await until(() => result(running) !== '', 'the running bake to be answered');
+      assert.match(result(running), /^status=cancelled$/m);
+      assert.ok(!alive(pid), 'the pre-baker has exited by the time the answer is written');
+
+      // And an ordinary request after both is baked as before.
+      const quick = request('quick', join(root, 'builds', 'quick', 'tiles'));
+      renameSync(join(quick, 'request.part'), join(quick, 'request'));
+      await until(() => result(quick) !== '', 'the ordinary request to be answered');
+      assert.match(result(quick), /^status=succeeded$/m);
+    } finally {
+      worker.kill('SIGKILL');
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

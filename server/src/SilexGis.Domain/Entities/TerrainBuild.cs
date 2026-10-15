@@ -272,6 +272,28 @@ public class TerrainBuild : ITimestamped, IAuditable
     /// <summary>When the build stopped, whether it succeeded or failed.</summary>
     public DateTimeOffset? FinishedAt { get; set; }
 
+    /// <summary>
+    /// When somebody asked for this run to be called off, or null when nobody has.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A column rather than a message passed to the worker in memory, for three reasons that each
+    /// hold on their own. The run is in a background worker that the request asking for the stop
+    /// never meets, so the two have to communicate through something both can read. A process
+    /// that restarts between the request and the stop must still stop rather than resume the
+    /// build somebody called off. And the screen has to be able to say "being cancelled" for the
+    /// seconds — or, when the tile-maker is slow to answer, the minute — between the request and
+    /// the stop, which is a fact about this row and nothing else.
+    /// </para>
+    /// <para>
+    /// Not a status of its own. A build being cancelled is still running until it reaches a point
+    /// where it can stop, and a build that has stopped this way is a failed build with its own
+    /// reason; a fifth status would be a value every switch over the status had to learn for a
+    /// distinction the reason already carries. Cleared when the build is run again.
+    /// </para>
+    /// </remarks>
+    public DateTimeOffset? CancelRequestedAt { get; set; }
+
     public DateTimeOffset UpdatedAt { get; set; }
 
     public string AuditId => Id.ToString();

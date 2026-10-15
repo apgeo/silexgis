@@ -6023,6 +6023,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("base_build_id");
 
+                    b.Property<DateTimeOffset?>("CancelRequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancel_requested_at");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
