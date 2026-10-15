@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -78,6 +80,57 @@ public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClas
 
         (await admin.GetAsync($"/api/v1/users/{Guid.NewGuid()}")).StatusCode
             .ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// The single read names the permission groups an account belongs to, and for each one whether
+    /// the account is named itself or reaches it through a caving group of its roster entry.
+    /// </summary>
+    [Fact]
+    public async Task The_single_read_names_each_permission_group_and_the_paths_to_it()
+    {
+        var direct = new PermissionGroup { Name = $"Direct {tag}", Slug = $"ua-direct-{tag}" };
+        var throughClub = new PermissionGroup { Name = $"Through the club {tag}", Slug = $"ua-club-{tag}" };
+        var club = new CavingGroup { Name = $"Club {tag}", Slug = $"ua-club-{tag}" };
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.PermissionGroups.AddRange(direct, throughClub);
+            db.CavingGroups.Add(club);
+            var caverId = await db.Cavers.Where(c => c.UserId == subjectId).Select(c => c.Id).SingleAsync();
+            db.CavingGroupMemberships.Add(new CavingGroupMembership { CaverId = caverId, CavingGroupId = club.Id });
+            db.PermissionGroupMembers.AddRange(
+                new PermissionGroupMember
+                {
+                    PermissionGroupId = direct.Id, MemberKind = AccessSubjectKind.User, MemberId = subjectId,
+                },
+                new PermissionGroupMember
+                {
+                    PermissionGroupId = throughClub.Id, MemberKind = AccessSubjectKind.CavingGroup, MemberId = club.Id,
+                });
+            await db.SaveChangesAsync();
+        }
+
+        var one = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/users/{subjectId}");
+        var groups = one.GetProperty("permissionGroups").EnumerateArray().ToList();
+
+        var named = groups.Single(g => g.GetProperty("id").GetGuid() == direct.Id);
+        named.GetProperty("name").GetString().ShouldBe(direct.Name);
+        named.GetProperty("direct").GetBoolean().ShouldBeTrue();
+        named.GetProperty("through").GetArrayLength().ShouldBe(0);
+
+        var reached = groups.Single(g => g.GetProperty("id").GetGuid() == throughClub.Id);
+        reached.GetProperty("direct").GetBoolean().ShouldBeFalse();
+        reached.GetProperty("through").EnumerateArray()
+            .Select(c => (c.GetProperty("id").GetGuid(), c.GetProperty("name").GetString()))
+            .ShouldBe([(club.Id, club.Name)]);
+
+        // A group the account is in by no path is not listed.
+        var admins = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/users/{adminId}");
+        admins.GetProperty("permissionGroups").EnumerateArray()
+            .Select(g => g.GetProperty("id").GetGuid())
+            .ShouldNotContain(direct.Id);
     }
 
     /// <summary>

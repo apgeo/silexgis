@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using OpenIddict.Abstractions;
 using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Auth;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Profiles;
 using SilexGis.Infrastructure.Identity;
@@ -31,8 +35,44 @@ public sealed record AdminUserDto(
     DateTimeOffset? LockoutEnd,
     bool IsFullAdministrator,
     bool HasPassword,
+    bool TwoFactorEnabled,
     Guid? CaverId,
     DateTimeOffset CreatedAt);
+
+/// <summary>A caving group through which an account reaches a permission group.</summary>
+public sealed record AdminUserCavingGroupRefDto(Guid Id, string Name);
+
+/// <summary>A permission group an account belongs to, and how it gets there.</summary>
+/// <param name="Direct">The account is named as a member itself.</param>
+/// <param name="Through">
+/// The caving groups of the account's roster entry that are members — each one a path by which
+/// the account holds the group, independent of the direct membership and of each other.
+/// </param>
+public sealed record AdminUserPermissionGroupDto(
+    Guid Id, string Name, bool Direct, IReadOnlyList<AdminUserCavingGroupRefDto> Through);
+
+/// <summary>
+/// One account as the register shows it, with the permission groups it belongs to beside it.
+/// </summary>
+/// <remarks>
+/// The groups come only with the single read: the list would have to resolve them for every row
+/// of every page, and the page asks for them only when somebody opens an account. They are a
+/// reading of the membership the permission-groups page edits, not a second place to edit it.
+/// The implicit group every account belongs to is not listed, because no row puts anybody in it.
+/// </remarks>
+public sealed record AdminUserDetailDto(
+    Guid Id,
+    string Label,
+    string? Email,
+    bool EmailConfirmed,
+    bool IsLockedOut,
+    DateTimeOffset? LockoutEnd,
+    bool IsFullAdministrator,
+    bool HasPassword,
+    bool TwoFactorEnabled,
+    Guid? CaverId,
+    DateTimeOffset CreatedAt,
+    IReadOnlyList<AdminUserPermissionGroupDto> PermissionGroups);
 
 /// <summary>What an administrator may change about an account.</summary>
 /// <remarks>
@@ -116,6 +156,8 @@ public static class UserAdminEndpoints
             .WithSummary("Locks or unlocks an account (Write on the Users domain).");
         users.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes an account (Delete on the Users domain).");
+        users.MapPost("/{id:guid}/two-factor/reset", ResetTwoFactorAsync)
+            .WithSummary("Switches every second factor of an account off and ends its sessions (Write on the Users domain).");
 
         return api;
     }
@@ -314,7 +356,7 @@ public static class UserAdminEndpoints
             AuthenticationSetup.EmailLinkLifetimeHours);
     }
 
-    private static async Task<Results<Ok<AdminUserDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
+    private static async Task<Results<Ok<AdminUserDetailDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
         Guid id,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
@@ -339,7 +381,57 @@ public static class UserAdminEndpoints
 
         var administrators = await FullAdministratorIdsAsync(db, ct);
         var caverIds = await CaverIdsByUserAsync(db, ct);
-        return TypedResults.Ok(ToDto(user, administrators, caverIds));
+        var dto = ToDto(user, administrators, caverIds);
+        return TypedResults.Ok(new AdminUserDetailDto(
+            dto.Id,
+            dto.Label,
+            dto.Email,
+            dto.EmailConfirmed,
+            dto.IsLockedOut,
+            dto.LockoutEnd,
+            dto.IsFullAdministrator,
+            dto.HasPassword,
+            dto.TwoFactorEnabled,
+            dto.CaverId,
+            dto.CreatedAt,
+            await PermissionGroupsOfAsync(db, id, ct)));
+    }
+
+    /// <summary>
+    /// The permission groups an account sits in, each with the paths that put it there.
+    /// </summary>
+    /// <remarks>
+    /// The caving groups and the membership rows are read through the resolver that computes the
+    /// account's rights, so the list cannot name a group the account does not actually hold, or
+    /// miss one it does.
+    /// </remarks>
+    private static async Task<IReadOnlyList<AdminUserPermissionGroupDto>> PermissionGroupsOfAsync(
+        SilexGisDbContext db, Guid id, CancellationToken ct)
+    {
+        var cavingGroupIds = (await AccessContextResolver.ResolveAsync(db, id, ct)).CavingGroupIds.ToArray();
+
+        var rows = await (
+            from member in AccessContextResolver.MembershipRowsOf(db, id, cavingGroupIds)
+            join permissionGroup in db.PermissionGroups.AsNoTracking()
+                on member.PermissionGroupId equals permissionGroup.Id
+            select new { permissionGroup.Id, permissionGroup.Name, member.MemberKind, member.MemberId })
+            .ToListAsync(ct);
+
+        var cavingGroupNames = await db.CavingGroups.AsNoTracking()
+            .Where(g => cavingGroupIds.Contains(g.Id))
+            .ToDictionaryAsync(g => g.Id, g => g.Name, ct);
+
+        return [.. rows
+            .GroupBy(r => (r.Id, r.Name))
+            .OrderBy(g => g.Key.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(g => new AdminUserPermissionGroupDto(
+                g.Key.Id,
+                g.Key.Name,
+                g.Any(r => r.MemberKind == AccessSubjectKind.User),
+                [.. g.Where(r => r.MemberKind == AccessSubjectKind.CavingGroup)
+                    .Select(r => new AdminUserCavingGroupRefDto(
+                        r.MemberId, cavingGroupNames.GetValueOrDefault(r.MemberId, string.Empty)))
+                    .OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase)]))];
     }
 
     /// <summary>
@@ -479,6 +571,108 @@ public static class UserAdminEndpoints
         return TypedResults.NoContent();
     }
 
+    /// <summary>
+    /// Switches off every second factor an account has, for a member who has lost both their
+    /// authenticator and their recovery codes and would otherwise be shut out for good.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// What each method held goes with it — the authenticator key is replaced and the recovery
+    /// codes are removed — through the same switch the account holder's own "turn it all off"
+    /// uses, so the two cannot disagree about what "off" leaves behind. Every session the account
+    /// holds is ended, as a password change ends them, because whoever was asked to do this could
+    /// have been asked by somebody who is not the owner; and the owner is told by the same security
+    /// alert that switching the last method off always sends. The account row is not recorded
+    /// field by field, so the act is written to the audit trail by hand. All of it commits
+    /// together or not at all.
+    /// </para>
+    /// <para>
+    /// Three refusals. The caller's own account, which they manage from their security settings
+    /// where switching a factor off is one deliberate act rather than an administrative one. An
+    /// account with nothing on, which has nothing to reset. And a full administrator's account
+    /// when the caller is not one: a second factor is what stands between a password and the
+    /// highest seat in the installation, and a delegated right over accounts must not be a way of
+    /// taking it down.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<AdminUserDto>, UnauthorizedHttpResult, ProblemHttpResult>> ResetTwoFactorAsync(
+        Guid id,
+        SilexGisDbContext db,
+        UserManager<SilexGisUser> userManager,
+        IOpenIddictTokenManager issuedTokens,
+        IOpenIddictAuthorizationManager grants,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Users, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null)
+        {
+            return ApiProblems.NotFound("user.not_found");
+        }
+
+        if (user.Id == ctx.UserId)
+        {
+            return ApiProblems.BadRequest(
+                "user.cannot_reset_own_two_factor",
+                "You manage your own second factor from your security settings.");
+        }
+
+        // Asked of the account's resolved rights rather than of the register's administrator
+        // column, which leaves locked administrators out: a locked full administrator is still one
+        // the moment the lock is lifted.
+        if (!ctx.IsFullAdmin && (await AccessContextResolver.ResolveAsync(db, id, ct)).IsFullAdmin)
+        {
+            return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
+        }
+
+        var before = user.ToTwoFactorState();
+        if (!TwoFactorPolicy.AnyEnabled(before))
+        {
+            return ApiProblems.Conflict(
+                "user.two_factor_not_enabled",
+                "This account has no second factor switched on, so there is nothing to reset.");
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // Staged first so that the switch's own save writes it, in the same transaction. Only the
+        // three switches are named, never anything they held.
+        db.AuditEntries.Add(new AuditEntry
+        {
+            UserId = ctx.UserId,
+            Action = AuditActions.TwoFactorReset,
+            EntityType = nameof(SilexGisUser),
+            EntityId = user.Id.ToString(),
+            Changes = JsonSerializer.Serialize(new Dictionary<string, Dictionary<string, object?>>
+            {
+                [nameof(SilexGisUser.TwoFactorAuthenticatorEnabled)] = Switched(before.AuthenticatorEnabled),
+                [nameof(SilexGisUser.TwoFactorEmailEnabled)] = Switched(before.EmailEnabled),
+                [nameof(SilexGisUser.TwoFactorSmsEnabled)] = Switched(before.SmsEnabled),
+            }),
+        });
+
+        await TwoFactorSwitch.SwitchAllOffAsync(user, userManager, db, ct);
+        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, user.Id, ct);
+        await transaction.CommitAsync(ct);
+
+        var administrators = await FullAdministratorIdsAsync(db, ct);
+        var caverIds = await CaverIdsByUserAsync(db, ct);
+        return TypedResults.Ok(ToDto(user, administrators, caverIds));
+
+        static Dictionary<string, object?> Switched(bool was) => new() { ["old"] = was, ["new"] = false };
+    }
+
     /// <summary>The accounts that hold full administration and can sign in.</summary>
     /// <remarks>
     /// Read from the one query that defines that membership rather than from a second copy, so
@@ -507,6 +701,7 @@ public static class UserAdminEndpoints
             user.LockoutEnd,
             administrators.Contains(user.Id),
             user.PasswordHash is not null,
+            TwoFactorPolicy.AnyEnabled(user.ToTwoFactorState()),
             caverIds.TryGetValue(user.Id, out var caverId) ? caverId : null,
             user.CreatedAt);
 }

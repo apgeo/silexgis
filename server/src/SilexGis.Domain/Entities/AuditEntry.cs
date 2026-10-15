@@ -54,6 +54,14 @@ public static class AuditActions
     public const string Login = "login";
 
     /// <summary>
+    /// An administrator switched off every second factor of somebody else's account. Its own name
+    /// because account rows are deliberately not recorded field by field, and this is the act on
+    /// one most worth reconstructing: whoever did it decided that somebody could, for a while, sign
+    /// in with a password alone.
+    /// </summary>
+    public const string TwoFactorReset = "two_factor_reset";
+
+    /// <summary>
     /// Data left the installation as a file. Its own name because it is not a change to
     /// anything: nothing in the database is different afterwards, and yet it is the act most
     /// worth being able to reconstruct later — a file outlives every permission check that

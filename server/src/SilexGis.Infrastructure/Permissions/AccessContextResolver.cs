@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Permissions;
@@ -85,9 +86,7 @@ public static class AccessContextResolver
 
         var wellKnown = await WellKnownAsync(db, ct);
 
-        var memberOf = await db.PermissionGroupMembers.AsNoTracking()
-            .Where(m => (m.MemberKind == AccessSubjectKind.User && m.MemberId == userId)
-                || (m.MemberKind == AccessSubjectKind.CavingGroup && cavingGroupIds.Contains(m.MemberId)))
+        var memberOf = await MembershipRowsOf(db, userId, cavingGroupIds)
             .Select(m => m.PermissionGroupId)
             .Distinct()
             .ToListAsync(ct);
@@ -115,6 +114,18 @@ public static class AccessContextResolver
             cavingGroupIds,
             [.. entries.Select(e => e.ToSnapshot())]);
     }
+
+    /// <summary>
+    /// The membership rows through which an account sits in permission groups: those naming the
+    /// account, and those naming one of the caving groups it belongs to (as the context it
+    /// resolves to lists them). Shared so that a screen showing somebody's groups names exactly
+    /// the ones their rights are computed from. The implicit All Users group has no rows.
+    /// </summary>
+    public static IQueryable<PermissionGroupMember> MembershipRowsOf(
+        SilexGisDbContext db, Guid userId, Guid[] cavingGroupIds) =>
+        db.PermissionGroupMembers.AsNoTracking()
+            .Where(m => (m.MemberKind == AccessSubjectKind.User && m.MemberId == userId)
+                || (m.MemberKind == AccessSubjectKind.CavingGroup && cavingGroupIds.Contains(m.MemberId)));
 
     /// <summary>
     /// The two groups the resolver keys on by slug: the escape hatch, whose membership is

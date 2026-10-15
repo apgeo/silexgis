@@ -19159,7 +19159,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["AdminUserDto"];
+                        "application/json": components["schemas"]["AdminUserDetailDto"];
                     };
                 };
             };
@@ -19246,6 +19246,44 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["AdminUserCreatedDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}/two-factor/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Switches every second factor of an account off and ends its sessions (Write on the Users domain). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminUserDto"];
                     };
                 };
             };
@@ -20212,6 +20250,11 @@ export interface components {
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
+        AdminUserCavingGroupRefDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
         AdminUserCreatedDto: {
             user: components["schemas"]["AdminUserDto"];
             invitationSent: boolean;
@@ -20222,6 +20265,24 @@ export interface components {
         AdminUserCreateRequest: {
             email: string;
             displayName: string;
+        };
+        AdminUserDetailDto: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            email: null | string;
+            emailConfirmed: boolean;
+            isLockedOut: boolean;
+            /** Format: date-time */
+            lockoutEnd: null | string;
+            isFullAdministrator: boolean;
+            hasPassword: boolean;
+            twoFactorEnabled: boolean;
+            /** Format: uuid */
+            caverId: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            permissionGroups: components["schemas"]["AdminUserPermissionGroupDto"][];
         };
         AdminUserDto: {
             /** Format: uuid */
@@ -20234,10 +20295,18 @@ export interface components {
             lockoutEnd: null | string;
             isFullAdministrator: boolean;
             hasPassword: boolean;
+            twoFactorEnabled: boolean;
             /** Format: uuid */
             caverId: null | string;
             /** Format: date-time */
             createdAt: string;
+        };
+        AdminUserPermissionGroupDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            direct: boolean;
+            through: components["schemas"]["AdminUserCavingGroupRefDto"][];
         };
         AdminUserUpdateRequest: {
             locked: boolean;

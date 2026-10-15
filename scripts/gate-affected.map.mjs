@@ -176,7 +176,7 @@ export const groups = {
     'AuthFlowTests', 'CredentialRevocationTests', 'EmailVerificationTests', 'ExternalAuthTests',
     'MfaAndRateLimitTests', 'PerMinuteLimitTests', 'ProfileVisibilityTests', 'ProxyHopsCheckTests',
     'StartupSettingsTests', 'TestLoginTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
-    'UserAdministrationLastAdministratorTests', 'UserAdministrationTests',
+    'UserAdministrationLastAdministratorTests', 'UserAdministrationTests', 'UserTwoFactorResetTests',
     // The certificates tokens are signed and encrypted with, kept in the keys directory.
     'TokenCertificateTests',
     // Finished sign-in tokens and authorizations are pruned on a schedule.
@@ -435,7 +435,7 @@ export const crossCutting = {
     'TripStatisticsTests', 'TripTrackImportTests', 'TripTrackingCaveNoteTests',
     'TripTrackingPicturesTests', 'TripTrackingPublicationTests', 'TripTrackingTests',
     'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
-    'UserAdministrationTests',
+    'UserAdministrationTests', 'UserTwoFactorResetTests',
   ],
   locationClasses: [
     'AccessAnchorCleanupTests', 'AccessHistoryTests', 'AclAndCavingGroupTests',
