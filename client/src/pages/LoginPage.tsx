@@ -61,7 +61,11 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // Arriving from a password change, which signed this browser out along with every other: say
+  // why, so the form does not read as a session that simply expired.
+  const [notice, setNotice] = useState<string | null>(() =>
+    params.get('passwordChanged') === '1' ? t('auth.passwordChangedSignIn') : null,
+  );
   const [submitting, setSubmitting] = useState(false);
   const [sending, setSending] = useState(false);
   const [challenge, setChallenge] = useState<MfaChallenge | null>(null);

@@ -379,6 +379,7 @@
     "emailNotConfirmed": "Confirmați adresa de e-mail înainte de autentificare.",
     "resendConfirmation": "Retrimiteți e-mailul de confirmare",
     "confirmationResent": "Dacă adresa are un cont, e-mailul de confirmare este pe drum.",
+    "passwordChangedSignIn": "Parola a fost schimbată și ați fost deconectat peste tot. Autentificați-vă cu parola nouă.",
     "confirmEmailTitle": "Confirmați adresa",
     "confirmEmailWorking": "Se confirmă adresa",
     "confirmEmailDone": "Adresa este confirmată. Vă puteți autentifica.",
@@ -2825,6 +2826,18 @@
   },
   "security": {
     "title": "Securitatea contului",
+    "password": {
+      "title": "Parolă",
+      "intro": "Schimbați parola cu care vă autentificați. Aveți nevoie de cea pe care o folosiți acum.",
+      "current": "Parola actuală",
+      "currentRequired": "Introduceți parola pe care o folosiți acum.",
+      "incorrect": "Aceasta nu este parola dumneavoastră actuală.",
+      "rejected": "Această parolă nu este acceptată. Folosiți cel puțin 10 caractere.",
+      "notSet": "Acest cont se autentifică fără parolă.",
+      "signsOut": "Schimbarea parolei vă deconectează peste tot, inclusiv aici. Apoi vă autentificați din nou cu cea nouă.",
+      "submit": "Schimbă parola",
+      "changed": "Parola a fost schimbată."
+    },
     "mfa": "Autentificare în doi pași",
     "statusOn": "Activă",
     "statusOff": "Inactivă",

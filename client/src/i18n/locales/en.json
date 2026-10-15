@@ -379,6 +379,7 @@
     "emailNotConfirmed": "Confirm your email address before signing in.",
     "resendConfirmation": "Send the confirmation email again",
     "confirmationResent": "If that address has an account, a confirmation email is on its way.",
+    "passwordChangedSignIn": "Your password was changed and you were signed out everywhere. Sign in with the new password.",
     "confirmEmailTitle": "Confirm your address",
     "confirmEmailWorking": "Confirming your address",
     "confirmEmailDone": "Your address is confirmed. You can sign in now.",
@@ -2825,6 +2826,18 @@
   },
   "security": {
     "title": "Account security",
+    "password": {
+      "title": "Password",
+      "intro": "Change the password you sign in with. You need the one you use now.",
+      "current": "Current password",
+      "currentRequired": "Enter the password you use now.",
+      "incorrect": "This is not your current password.",
+      "rejected": "This password is not accepted. Use at least 10 characters.",
+      "notSet": "This account signs in without a password.",
+      "signsOut": "Changing your password signs you out everywhere, including here. You then sign in again with the new one.",
+      "submit": "Change password",
+      "changed": "Your password was changed."
+    },
     "mfa": "Two-factor authentication",
     "statusOn": "Enabled",
     "statusOff": "Off",
