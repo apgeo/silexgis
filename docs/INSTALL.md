@@ -1339,7 +1339,9 @@ Register this redirect URI with the provider (using the `Name` value):
 (generic — also set `__Authority`). External identities link into local accounts; a new local
 account is created on first sign-in only when the provider block sets `__AllowCreate=true`
 and the email is verified by the provider. To hide the password form entirely once a provider
-is configured, set `SILEXGIS__Auth__ExternalOnly=true`.
+is configured, set `SILEXGIS__Auth__ExternalOnly=true`. A provider proves who someone is at the provider and
+nothing more: an account with two-factor sign-in switched on is still asked for its code after
+signing in through one, exactly as after its password.
 
 A block may carry four more lines, each optional:
 
