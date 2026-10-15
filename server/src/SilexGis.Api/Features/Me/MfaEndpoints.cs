@@ -8,11 +8,9 @@ using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Auth;
-using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Identity;
-using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Me;
@@ -266,7 +264,7 @@ public static class MfaEndpoints
 
         SetMethod(user, parsed, true);
         user.PreferredTwoFactorMethod ??= parsed;
-        await SyncMasterSwitchAsync(user, userManager, db, ct);
+        await TwoFactorSwitch.SyncMasterSwitchAsync(user, userManager, db, ct);
 
         var codes = first
             ? await userManager.GenerateNewTwoFactorRecoveryCodesAsync(user, 10)
@@ -306,7 +304,7 @@ public static class MfaEndpoints
             user.PreferredTwoFactorMethod = null;
         }
 
-        await SyncMasterSwitchAsync(user, userManager, db, ct);
+        await TwoFactorSwitch.SyncMasterSwitchAsync(user, userManager, db, ct);
         return TypedResults.Ok(await StatusForAsync(user, userManager, settings, emailDelivery, smsDelivery, ct));
     }
 
@@ -349,12 +347,7 @@ public static class MfaEndpoints
             return TypedResults.Unauthorized();
         }
 
-        user.TwoFactorAuthenticatorEnabled = false;
-        user.TwoFactorEmailEnabled = false;
-        user.TwoFactorSmsEnabled = false;
-        user.PreferredTwoFactorMethod = null;
-        await userManager.ResetAuthenticatorKeyAsync(user);
-        await SyncMasterSwitchAsync(user, userManager, db, ct);
+        await TwoFactorSwitch.SwitchAllOffAsync(user, userManager, db, ct);
         return TypedResults.NoContent();
     }
 
@@ -417,35 +410,6 @@ public static class MfaEndpoints
         TwoFactorMethod.Sms => user.TwoFactorSmsEnabled,
         _ => false,
     };
-
-    /// <summary>
-    /// Keeps Identity's single flag equal to "any method is on". Everything that makes a sign-in
-    /// stop and ask for a second factor reads that flag, so it can never drift from these three.
-    /// Also called when removing the phone number takes the texted code away with it, so that
-    /// path warns exactly as switching the last method off here does.
-    /// </summary>
-    internal static async Task SyncMasterSwitchAsync(
-        SilexGisUser user, UserManager<SilexGisUser> userManager, SilexGisDbContext db, CancellationToken ct)
-    {
-        var any = TwoFactorPolicy.AnyEnabled(user.ToTwoFactorState());
-        if (user.TwoFactorEnabled != any)
-        {
-            // Only the transition to "nothing left" is worth a warning: switching one method off
-            // while another remains has not weakened the account. Every enable and disable path
-            // passes through here, so this one place covers them all.
-            if (!any)
-            {
-                NotificationQueue.Enqueue(
-                    db, user.Id, NotificationCategory.SecurityAlerts,
-                    MessageTemplateCatalog.NotifySecurityTwoFactorDisabled,
-                    new Dictionary<string, string>());
-            }
-
-            await userManager.SetTwoFactorEnabledAsync(user, any);
-        }
-
-        await db.SaveChangesAsync(ct);
-    }
 
     private static async Task<MfaStatusDto> StatusForAsync(
         SilexGisUser user,

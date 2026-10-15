@@ -273,7 +273,7 @@ public static class MePhoneEndpoints
         // and the account holder is warned exactly as when they switch the last method off
         // themselves — a stolen session removing the number must not quietly leave the account
         // protected by its password alone.
-        await MfaEndpoints.SyncMasterSwitchAsync(user, userManager, db, ct);
+        await TwoFactorSwitch.SyncMasterSwitchAsync(user, userManager, db, ct);
         return TypedResults.NoContent();
     }
 
