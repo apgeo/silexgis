@@ -172,6 +172,22 @@ export const MOVIE_SIZES: readonly { id: string; width: number; height: number; 
   { id: '640x480', width: 640, height: 480, gif: true },
   { id: '800x600', width: 800, height: 600, gif: true },
   { id: '1024x768', width: 1024, height: 768, gif: false },
+  // The shapes social media plays: square posts; the 4:5 and 3:4 portraits of a feed; and 9:16,
+  // the full-screen vertical video of Reels, TikTok, Shorts and Stories. Each has GIF sizes (at
+  // most 800 wide, like every GIF) and the 1080-wide video those services ask for.
+  { id: '480x480', width: 480, height: 480, gif: true },
+  { id: '720x720', width: 720, height: 720, gif: true },
+  { id: '1080x1080', width: 1080, height: 1080, gif: false },
+  { id: '640x800', width: 640, height: 800, gif: true },
+  { id: '864x1080', width: 864, height: 1080, gif: false },
+  { id: '1080x1350', width: 1080, height: 1350, gif: false },
+  { id: '600x800', width: 600, height: 800, gif: true },
+  { id: '810x1080', width: 810, height: 1080, gif: false },
+  { id: '1080x1440', width: 1080, height: 1440, gif: false },
+  { id: '360x640', width: 360, height: 640, gif: true },
+  { id: '450x800', width: 450, height: 800, gif: true },
+  { id: '720x1280', width: 720, height: 1280, gif: true },
+  { id: '1080x1920', width: 1080, height: 1920, gif: false },
 ];
 
 /** Frame rates offered for the video formats. */

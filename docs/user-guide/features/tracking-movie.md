@@ -135,6 +135,11 @@ stored.
 |---|---|
 | **For a chat** | A GIF, 480 × 270, 10 frames a second, 15 seconds, medium quality — small enough to send in a message |
 | **HD video** | 1280 × 720, 30 frames a second, high quality, as an **MP4** where your browser can write one and a **WebM** where it cannot. Where it can write neither, nothing changes and the dialog says so |
+| **Reels / TikTok** | Full-screen vertical video for Instagram and Facebook Reels, TikTok, YouTube Shorts and Stories: an **MP4**, 1080 × 1920 (9:16), 30 frames a second, 30 seconds, high quality. The title, clock, legend and progress bar keep out of the strips those apps cover with their own buttons and text |
+| **Instagram feed** | A portrait post for the Instagram and Facebook feed: an **MP4**, 1080 × 1350 (4:5), 30 frames a second, 30 seconds |
+| **Square post** | A square post for Instagram, Facebook or X: an **MP4**, 1080 × 1080, 30 frames a second, 30 seconds |
+
+The three social-media presets write **MP4 only**, since Instagram takes no WebM: where your browser cannot write an MP4 that size, nothing changes and the dialog says so.
 
 A preset changes **the file only** — the settings of the *Output* group. Who is labelled and how,
 what of the model shows and which captions are written are yours and are never touched by one. The
@@ -144,7 +149,7 @@ through a reset alike.
 | Group | Setting | What it decides |
 |---|---|---|
 | **Output** | **Format** | GIF, WebM or MP4 — see [Which format](#which-format) |
-| | **Frame size** | Wide (16:9) from 320 × 180 to 1920 × 1080, or standard (4:3) from 320 × 240 to 1024 × 768 |
+| | **Frame size** | Wide (16:9) from 320 × 180 to 1920 × 1080; vertical (9:16, Reels, TikTok, Shorts, Stories) from 360 × 640 to 1080 × 1920; square (1:1) from 480 × 480 to 1080 × 1080; portrait 4:5 (Instagram and Facebook feed) from 640 × 800 to 1080 × 1350 and 3:4 from 600 × 800 to 1080 × 1440; or standard (4:3) from 320 × 240 to 1024 × 768. A GIF is at most 800 pixels wide |
 | | **Frames a second** | 10 to 30 for a video; a GIF holds only 10, 12.5, 20 and 25 exactly |
 | | **Length (seconds)** | How long the replay lasts, 1 to 300 seconds, however long the trips really were |
 | | **Still at the end (seconds)** | The last frame held, so the eye can rest on where everybody ended up |

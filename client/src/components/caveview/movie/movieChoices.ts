@@ -20,8 +20,12 @@ export const MOVIE_QUALITIES: readonly MovieQuality[] = ['low', 'medium', 'high'
 export const MOVIE_CAVER_LABELS: readonly MovieCaverLabels[] = ['first', 'full', 'initials', 'off'];
 export const MOVIE_COLOUR_BY: readonly MovieColourBy[] = ['auto', 'trip', 'team', 'single'];
 /** The frame shapes the sizes are grouped by, named by their ratio. */
-export const MOVIE_ASPECTS: readonly { id: '16x9' | '4x3'; ratio: number }[] = [
+export const MOVIE_ASPECTS: readonly { id: '16x9' | '9x16' | '1x1' | '4x5' | '3x4' | '4x3'; ratio: number }[] = [
   { id: '16x9', ratio: 16 / 9 },
+  { id: '9x16', ratio: 9 / 16 },
+  { id: '1x1', ratio: 1 },
+  { id: '4x5', ratio: 4 / 5 },
+  { id: '3x4', ratio: 3 / 4 },
   { id: '4x3', ratio: 4 / 3 },
 ];
 

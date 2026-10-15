@@ -16,10 +16,10 @@ import { MOVIE_SIZES, normaliseMovieSettings, type MovieSettings } from './movie
 /** The settings that say what file is written, and nothing about what is drawn in it. */
 export type MovieOutput = Pick<MovieSettings, 'format' | 'size' | 'fps' | 'durationS' | 'holdEndS' | 'quality'>;
 
-export type MoviePresetId = 'chat' | 'hd';
+export type MoviePresetId = 'chat' | 'hd' | 'vertical' | 'feed' | 'square';
 
 /** The presets, in the order they are offered. */
-export const MOVIE_PRESETS: readonly MoviePresetId[] = ['chat', 'hd'];
+export const MOVIE_PRESETS: readonly MoviePresetId[] = ['chat', 'hd', 'vertical', 'feed', 'square'];
 
 /** A GIF small enough to be sent in a chat: a few megabytes, played in place by whatever shows it. */
 export const MOVIE_CHAT_OUTPUT: Partial<MovieOutput> = {
@@ -35,6 +35,19 @@ export const MOVIE_CHAT_OUTPUT: Partial<MovieOutput> = {
  * what the browser can encode, and is asked when the preset is pressed.
  */
 export const MOVIE_HD_OUTPUT = { size: '1280x720', fps: 30, quality: 'high' } as const satisfies Partial<MovieOutput>;
+
+/**
+ * The files social media asks for, each the 1080-wide MP4 at 30 frames a second those services
+ * recommend: full-screen vertical video (Reels, TikTok, Shorts, Stories — 9:16), a feed post in
+ * portrait (Instagram and Facebook — 4:5), and a square post (1:1). Thirty seconds, under every one
+ * of their limits. <b>MP4 or nothing</b>: Instagram takes no WebM, so where this browser cannot write
+ * MP4 at the size the preset leaves the settings as they are, as a preset with no file to make does.
+ */
+export const MOVIE_SOCIAL_OUTPUT = {
+  vertical: { size: '1080x1920', fps: 30, durationS: 30, holdEndS: 2, quality: 'high' },
+  feed: { size: '1080x1350', fps: 30, durationS: 30, holdEndS: 2, quality: 'high' },
+  square: { size: '1080x1080', fps: 30, durationS: 30, holdEndS: 2, quality: 'high' },
+} as const satisfies Record<'vertical' | 'feed' | 'square', Partial<MovieOutput>>;
 
 /**
  * The settings with this output, repaired the way every change to them is — a GIF held to its
@@ -77,6 +90,17 @@ export async function moviePresetOutput(
 ): Promise<Partial<MovieOutput> | null> {
   if (id === 'chat') {
     return MOVIE_CHAT_OUTPUT;
+  }
+  if (id === 'vertical' || id === 'feed' || id === 'square') {
+    const output = MOVIE_SOCIAL_OUTPUT[id];
+    const size = MOVIE_SIZES.find((entry) => entry.id === output.size);
+    if (size === undefined) return null;
+    try {
+      const answer = await probe({ width: size.width, height: size.height }, output.fps);
+      return answer.some((entry) => entry.format === 'mp4' && entry.supported) ? { ...output, format: 'mp4' } : null;
+    } catch {
+      return null;
+    }
   }
   const format = await movieHdFormat(probe);
   return format === null ? null : { ...MOVIE_HD_OUTPUT, format };

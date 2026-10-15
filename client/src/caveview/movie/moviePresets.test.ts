@@ -54,7 +54,13 @@ describe('withMovieOutput', () => {
     for (const group of ['rotation', 'timeline', 'cavers', 'view', 'captions'] as const) {
       expect(before[group], group).not.toEqual(DEFAULT_MOVIE_SETTINGS[group]);
     }
-    const outputs = [MOVIE_CHAT_OUTPUT, await moviePresetOutput('hd', probeAnswering(true, true))];
+    const outputs = [
+      MOVIE_CHAT_OUTPUT,
+      await moviePresetOutput('hd', probeAnswering(true, true)),
+      await moviePresetOutput('vertical', probeAnswering(true, true)),
+      await moviePresetOutput('feed', probeAnswering(true, true)),
+      await moviePresetOutput('square', probeAnswering(true, true)),
+    ];
     expect(outputs.length).toBe(MOVIE_PRESETS.length);
 
     for (const output of outputs) {
@@ -65,6 +71,17 @@ describe('withMovieOutput', () => {
       expect(after).toMatchObject(output!);
       // What comes out is settings the dialog would have written itself.
       expect(normaliseMovieSettings(after)).toEqual(after);
+    }
+  });
+
+  it('makes social media\'s files as MP4 at the shapes they play, and nothing where MP4 cannot be written', async () => {
+    const shapes = { vertical: [1080, 1920], feed: [1080, 1350], square: [1080, 1080] } as const;
+    for (const [id, [width, height]] of Object.entries(shapes) as [keyof typeof shapes, readonly [number, number]][]) {
+      const probe = probeAnswering(true, true);
+      expect(await moviePresetOutput(id, probe)).toMatchObject({ format: 'mp4', size: `${width}x${height}`, fps: 30 });
+      expect(probe).toHaveBeenCalledWith({ width, height }, 30);
+      // WebM alone is not enough: Instagram takes none.
+      expect(await moviePresetOutput(id, probeAnswering(true, false))).toBeNull();
     }
   });
 

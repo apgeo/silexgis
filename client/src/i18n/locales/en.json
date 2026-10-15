@@ -3221,7 +3221,11 @@
       "size": "Frame size",
       "aspects": {
         "16x9": "Wide (16:9)",
-        "4x3": "Standard (4:3)"
+        "4x3": "Standard (4:3)",
+        "9x16": "Vertical (9:16) — Reels, TikTok, Shorts, Stories",
+        "1x1": "Square (1:1) — Instagram, Facebook posts",
+        "4x5": "Portrait (4:5) — Instagram and Facebook feed",
+        "3x4": "Portrait (3:4)"
       },
       "sizeGifLimit": "A GIF is at most {{width}} pixels wide.",
       "fps": "Frames a second",
@@ -3377,14 +3381,21 @@
       "presetsTitle": "Presets",
       "presets": {
         "chat": "For a chat",
-        "hd": "HD video"
+        "hd": "HD video",
+        "vertical": "Reels / TikTok",
+        "feed": "Instagram feed",
+        "square": "Square post"
       },
       "presetHelp": {
         "chat": "A small GIF: 480 × 270, 10 frames a second, 15 seconds, medium quality.",
-        "hd": "A 1280 × 720 video at 30 frames a second, high quality: MP4 where this browser can write it, WebM where it cannot."
+        "hd": "A 1280 × 720 video at 30 frames a second, high quality: MP4 where this browser can write it, WebM where it cannot.",
+        "vertical": "Full-screen vertical video for Reels, TikTok, YouTube Shorts and Stories: 1080 × 1920 MP4, 30 frames a second, 30 seconds. The captions keep clear of the buttons those apps draw over a video.",
+        "feed": "A portrait post for the Instagram and Facebook feed: 1080 × 1350 MP4 (4:5), 30 frames a second, 30 seconds.",
+        "square": "A square post for Instagram, Facebook or X: 1080 × 1080 MP4, 30 frames a second, 30 seconds."
       },
       "presetsHelp": "A preset changes the file only — never who appears, the view or the captions.",
       "presetHdUnavailable": "This browser cannot write a 1280 × 720 video, so nothing was changed.",
+      "presetMp4Unavailable": "This browser cannot write a {{size}} MP4, which is what social media takes, so nothing was changed.",
       "reset": "Reset to defaults",
       "resetHelp": "Puts every setting back to what a first opening shows — the captions, the labels and the view as well as the file, so the title caption and the file named after it come back. The trips and the people chosen stay as they are.",
       "privacy": "The movie shows the cave's survey and where the party was. Share it only with people who may see both.",

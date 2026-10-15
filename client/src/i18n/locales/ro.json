@@ -3221,7 +3221,11 @@
       "size": "Dimensiunea cadrului",
       "aspects": {
         "16x9": "Lat (16:9)",
-        "4x3": "Standard (4:3)"
+        "4x3": "Standard (4:3)",
+        "9x16": "Vertical (9:16) — Reels, TikTok, Shorts, Stories",
+        "1x1": "Pătrat (1:1) — postări Instagram, Facebook",
+        "4x5": "Portret (4:5) — fluxul Instagram și Facebook",
+        "3x4": "Portret (3:4)"
       },
       "sizeGifLimit": "Un GIF are cel mult {{width}} de pixeli lățime.",
       "fps": "Cadre pe secundă",
@@ -3377,14 +3381,21 @@
       "presetsTitle": "Presetări",
       "presets": {
         "chat": "Pentru chat",
-        "hd": "Video HD"
+        "hd": "Video HD",
+        "vertical": "Reels / TikTok",
+        "feed": "Flux Instagram",
+        "square": "Postare pătrată"
       },
       "presetHelp": {
         "chat": "Un GIF mic: 480 × 270, 10 cadre pe secundă, 15 secunde, calitate medie.",
-        "hd": "Un video de 1280 × 720 la 30 de cadre pe secundă, calitate ridicată: MP4 unde acest browser îl poate scrie, WebM unde nu."
+        "hd": "Un video de 1280 × 720 la 30 de cadre pe secundă, calitate ridicată: MP4 unde acest browser îl poate scrie, WebM unde nu.",
+        "vertical": "Video vertical pe tot ecranul pentru Reels, TikTok, YouTube Shorts și Stories: MP4 1080 × 1920, 30 de cadre pe secundă, 30 de secunde. Textele stau departe de butoanele pe care aceste aplicații le desenează peste video.",
+        "feed": "O postare portret pentru fluxul Instagram și Facebook: MP4 1080 × 1350 (4:5), 30 de cadre pe secundă, 30 de secunde.",
+        "square": "O postare pătrată pentru Instagram, Facebook sau X: MP4 1080 × 1080, 30 de cadre pe secundă, 30 de secunde."
       },
       "presetsHelp": "O presetare schimbă doar fișierul — niciodată cine apare, vederea sau textele.",
       "presetHdUnavailable": "Acest browser nu poate scrie un video de 1280 × 720, așa că nu s-a schimbat nimic.",
+      "presetMp4Unavailable": "Acest browser nu poate scrie un MP4 de {{size}}, formatul cerut de rețelele sociale, așa că nu s-a schimbat nimic.",
       "reset": "Revino la valorile implicite",
       "resetHelp": "Readuce fiecare setare la ce arată o primă deschidere — textele, etichetele și vederea, nu doar fișierul, așa că titlul scris pe imagine și fișierul numit după el revin. Turele și persoanele alese rămân cum sunt.",
       "privacy": "Filmul arată topografia peșterii și unde a fost echipa. Trimite-l doar celor care au voie să le vadă pe amândouă.",

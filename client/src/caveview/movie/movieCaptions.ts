@@ -149,12 +149,59 @@ function plate(ctx: CanvasRenderingContext2D, x: number, y: number, width: numbe
 }
 
 /**
+ * Where on a frame the captions are drawn, and how they are laid out there.
+ *
+ * <b>Sized from the frame's shorter side</b>, so a caption covers the same share of a small GIF as of
+ * a full-size video, and a tall frame for a phone gets text the size a wide one of the same width
+ * would — not text twice as tall because the frame is.
+ *
+ * <b>A frame taller than it is wide stacks the clock under the title</b>: side by side, on a frame
+ * that narrow, each would leave the other a sliver.
+ *
+ * <b>A vertical frame for short-video apps (9:16, or taller) keeps its captions out of what those
+ * apps draw over a video</b> — the bar along the top, the description and buttons along the bottom,
+ * the column of buttons down the right. The bands are the ones the apps themselves ask creators to
+ * keep text out of, rounded to the most cautious of them (Reels, TikTok, Shorts): about an eighth at
+ * the top, a little over a fifth at the bottom, an eighth on the right. A caption drawn there would be
+ * covered the moment the file is posted.
+ */
+export interface MovieCaptionArea {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  /** The clock goes under the title rather than beside it. */
+  stacked: boolean;
+  /** The length every caption size is measured against. */
+  base: number;
+}
+
+/** The frames short-video apps play full screen: 9:16, or taller. */
+const SHORT_VIDEO_TALLNESS = 1.7;
+
+export function movieCaptionArea(width: number, height: number): MovieCaptionArea {
+  const base = Math.min(width, height);
+  const margin = Math.max(4, Math.round(base * 0.025));
+  if (height / width >= SHORT_VIDEO_TALLNESS) {
+    return {
+      top: Math.round(height * 0.12),
+      bottom: Math.round(height * 0.22),
+      left: Math.max(margin, Math.round(width * 0.06)),
+      right: Math.max(margin, Math.round(width * 0.14)),
+      stacked: true,
+      base,
+    };
+  }
+  return { top: margin, bottom: 0, left: margin, right: margin, stacked: height > width, base };
+}
+
+/**
  * Draws the captions over a frame that already holds the model.
  *
- * Laid out against the frame's height, so a caption covers the same share of a small GIF as of a
- * full-size video: the title at the top left with the legend under it, the clock at the top right,
- * the note centred at the bottom, and the progress bar along the bottom edge. Each text sits on a
- * translucent plate so it reads over a bright model and a black background alike.
+ * Laid out in {@link movieCaptionArea}: the title at the top left with the legend under it, the clock
+ * at the top right (under the title on a tall frame), the note centred at the bottom, and the progress
+ * bar along the bottom of the area. Each text sits on a translucent plate so it reads over a bright
+ * model and a black background alike.
  */
 export function drawMovieCaptions(
   ctx: CanvasRenderingContext2D,
@@ -162,43 +209,58 @@ export function drawMovieCaptions(
   height: number,
   captions: MovieCaptions,
 ): void {
+  const area = movieCaptionArea(width, height);
   const size = Number.isFinite(captions.size) && captions.size > 0 ? captions.size : 1;
-  const fontPx = Math.max(8, Math.round(height * 0.042 * size));
+  const fontPx = Math.max(8, Math.round(area.base * 0.042 * size));
   const pad = Math.max(2, Math.round(fontPx * 0.35));
-  const margin = Math.max(4, Math.round(height * 0.025));
+  const margin = Math.max(4, Math.round(area.base * 0.025));
   const lineHeight = Math.round(fontPx * 1.3);
-  const barHeight = captions.progress === null ? 0 : Math.max(2, Math.round(height * 0.008 * size));
+  const barHeight = captions.progress === null ? 0 : Math.max(2, Math.round(area.base * 0.008 * size));
+  const innerWidth = width - area.left - area.right;
+  const floor = height - area.bottom;
 
   ctx.save();
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
 
+  let top = area.top;
   let clockWidth = 0;
+  let clockText: string | null = null;
   if (captions.clock !== null && captions.clock.length > 0) {
     ctx.font = `${fontPx}px ${FONT_FAMILY}`;
-    const room = width / 2 - margin - 2 * pad;
+    const room = (area.stacked ? innerWidth : innerWidth / 2) - 2 * pad;
     const withSpeed = captions.clockSpeed ?? null;
     // The figure is all or nothing: it is written only where the clock and it both fit whole.
-    const text =
+    clockText =
       withSpeed !== null && withSpeed.length > 0 && ctx.measureText(withSpeed).width <= room
         ? withSpeed
         : fitted(ctx, captions.clock, room);
-    clockWidth = ctx.measureText(text).width + 2 * pad;
-    const x = width - margin - clockWidth;
-    plate(ctx, x, margin, clockWidth, lineHeight);
+    clockWidth = ctx.measureText(clockText).width + 2 * pad;
+  }
+  const drawClock = (x: number, y: number) => {
+    if (clockText === null) return;
+    ctx.font = `${fontPx}px ${FONT_FAMILY}`;
+    plate(ctx, x, y, clockWidth, lineHeight);
     ctx.fillStyle = INK;
-    ctx.fillText(text, x + pad, margin + lineHeight / 2);
+    ctx.fillText(clockText, x + pad, y + lineHeight / 2);
+  };
+  if (!area.stacked) {
+    drawClock(width - area.right - clockWidth, area.top);
   }
 
-  let top = margin;
   if (captions.title !== null && captions.title.length > 0) {
     ctx.font = `bold ${fontPx}px ${FONT_FAMILY}`;
-    const room = width - 2 * margin - (clockWidth > 0 ? clockWidth + margin : 0) - 2 * pad;
+    const beside = !area.stacked && clockWidth > 0 ? clockWidth + margin : 0;
+    const room = innerWidth - beside - 2 * pad;
     const text = fitted(ctx, captions.title, Math.max(room, fontPx));
     const plateWidth = ctx.measureText(text).width + 2 * pad;
-    plate(ctx, margin, top, plateWidth, lineHeight);
+    plate(ctx, area.left, top, plateWidth, lineHeight);
     ctx.fillStyle = INK;
-    ctx.fillText(text, margin + pad, top + lineHeight / 2);
+    ctx.fillText(text, area.left + pad, top + lineHeight / 2);
+    top += lineHeight + Math.round(margin / 2);
+  }
+  if (area.stacked && clockText !== null) {
+    drawClock(area.left, top);
     top += lineHeight + Math.round(margin / 2);
   }
 
@@ -207,49 +269,54 @@ export function drawMovieCaptions(
     const legendLine = Math.round(legendPx * 1.35);
     const swatch = Math.round(legendPx * 0.7);
     ctx.font = `${legendPx}px ${FONT_FAMILY}`;
-    const labelRoom = width / 2 - margin - 3 * pad - swatch;
+    const labelRoom = (area.stacked ? innerWidth : innerWidth / 2) - 3 * pad - swatch;
     // As many entries as fit above the note's area; a legend never runs off the frame.
-    const room = Math.max(0, Math.floor((height * 0.6 - top) / legendLine));
+    const limit = area.bottom > 0 ? area.top + (floor - area.top) * 0.6 : height * 0.6;
+    const room = Math.max(0, Math.floor((limit - top) / legendLine));
     const rows = legendRows(captions.legend, room, captions.legendMore);
     const labels = rows.map((row) => fitted(ctx, row.label, labelRoom));
     if (rows.length > 0) {
       const plateWidth =
         Math.max(...labels.map((label) => ctx.measureText(label).width)) + swatch + 3 * pad;
-      plate(ctx, margin, top, plateWidth, rows.length * legendLine + pad);
+      plate(ctx, area.left, top, plateWidth, rows.length * legendLine + pad);
       rows.forEach((row, index) => {
         const middle = top + pad / 2 + index * legendLine + legendLine / 2;
         if (row.color !== null) {
           ctx.fillStyle = row.color;
-          ctx.fillRect(margin + pad, Math.round(middle - swatch / 2), swatch, swatch);
+          ctx.fillRect(area.left + pad, Math.round(middle - swatch / 2), swatch, swatch);
         }
         ctx.fillStyle = INK;
-        ctx.fillText(labels[index], margin + 2 * pad + swatch, middle);
+        ctx.fillText(labels[index], area.left + 2 * pad + swatch, middle);
       });
     }
   }
 
   if (captions.note !== null && captions.note.length > 0) {
     ctx.font = `${fontPx}px ${FONT_FAMILY}`;
-    const lines = wrapped(ctx, captions.note, width * 0.8 - 2 * pad, NOTE_LINES);
+    const lines = wrapped(ctx, captions.note, (area.bottom > 0 ? innerWidth * 0.9 : width * 0.8) - 2 * pad, NOTE_LINES);
     const blockWidth = Math.max(...lines.map((line) => ctx.measureText(line).width)) + 2 * pad;
     const blockHeight = lines.length * lineHeight;
-    const x = (width - blockWidth) / 2;
-    const y = height - margin - barHeight - blockHeight;
+    const centre = area.left + innerWidth / 2;
+    const x = centre - blockWidth / 2;
+    const y = floor - (area.bottom > 0 ? 0 : margin) - barHeight - blockHeight;
     plate(ctx, x, y, blockWidth, blockHeight);
     ctx.fillStyle = INK;
     ctx.textAlign = 'center';
     lines.forEach((line, index) => {
-      ctx.fillText(line, width / 2, y + index * lineHeight + lineHeight / 2);
+      ctx.fillText(line, centre, y + index * lineHeight + lineHeight / 2);
     });
     ctx.textAlign = 'left';
   }
 
   if (captions.progress !== null) {
     const progress = Math.min(1, Math.max(0, Number.isFinite(captions.progress) ? captions.progress : 0));
+    // Along the bottom edge; on a short-video frame, along the bottom of what the app leaves visible.
+    const barLeft = area.bottom > 0 ? area.left : 0;
+    const barWidth = area.bottom > 0 ? innerWidth : width;
     ctx.fillStyle = PROGRESS_TRACK;
-    ctx.fillRect(0, height - barHeight, width, barHeight);
+    ctx.fillRect(barLeft, floor - barHeight, barWidth, barHeight);
     ctx.fillStyle = PROGRESS_FILL;
-    ctx.fillRect(0, height - barHeight, Math.round(width * progress), barHeight);
+    ctx.fillRect(barLeft, floor - barHeight, Math.round(barWidth * progress), barHeight);
   }
 
   ctx.restore();

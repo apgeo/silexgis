@@ -44,7 +44,12 @@ import {
   type MovieParty,
   type MovieTripData,
 } from '../../../caveview/movie/movieParty.ts';
-import { moviePresetOutput, withMovieOutput, type MoviePresetId } from '../../../caveview/movie/moviePresets.ts';
+import {
+  MOVIE_SOCIAL_OUTPUT,
+  moviePresetOutput,
+  withMovieOutput,
+  type MoviePresetId,
+} from '../../../caveview/movie/moviePresets.ts';
 import type { MovieSink } from '../../../caveview/movie/encode/movieSink.ts';
 import { chooseMovieFile, movieGoesToDisk, type MovieFileChoice } from '../../../caveview/movie/movieFileSink.ts';
 import {
@@ -408,7 +413,11 @@ function MovieDialogBody({
           return;
         }
         if (output === null) {
-          message.warning(t('caveview.movie.presetHdUnavailable'));
+          message.warning(
+            preset === 'hd' || preset === 'chat'
+              ? t('caveview.movie.presetHdUnavailable')
+              : t('caveview.movie.presetMp4Unavailable', { size: MOVIE_SOCIAL_OUTPUT[preset].size.replace('x', ' × ') }),
+          );
           return;
         }
         // Only the file's own settings: who is shown, the view and the captions are what the

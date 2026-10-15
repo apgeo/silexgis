@@ -139,6 +139,11 @@ titlul pe care l-ați scris, care nu este stocat niciodată.
 |---|---|
 | **Pentru chat** | Un GIF, 480 × 270, 10 cadre pe secundă, 15 secunde, calitate medie — destul de mic pentru a fi trimis într-un mesaj |
 | **Video HD** | 1280 × 720, 30 de cadre pe secundă, calitate ridicată, ca **MP4** unde browserul îl poate scrie și ca **WebM** unde nu. Unde nu poate scrie niciunul, nu se schimbă nimic și dialogul o spune |
+| **Reels / TikTok** | Video vertical pe tot ecranul pentru Reels pe Instagram și Facebook, TikTok, YouTube Shorts și Stories: un **MP4**, 1080 × 1920 (9:16), 30 de cadre pe secundă, 30 de secunde, calitate ridicată. Titlul, ceasul, legenda și bara de progres stau în afara benzilor pe care aceste aplicații le acoperă cu butoanele și textele lor |
+| **Flux Instagram** | O postare portret pentru fluxul Instagram și Facebook: un **MP4**, 1080 × 1350 (4:5), 30 de cadre pe secundă, 30 de secunde |
+| **Postare pătrată** | O postare pătrată pentru Instagram, Facebook sau X: un **MP4**, 1080 × 1080, 30 de cadre pe secundă, 30 de secunde |
+
+Cele trei presetări pentru rețele sociale scriu **doar MP4**, pentru că Instagram nu primește WebM: unde browserul nu poate scrie un MP4 de dimensiunea aceea, nu se schimbă nimic și dialogul o spune.
 
 O presetare schimbă **doar fișierul** — setările grupului *Fișier*. Cine este etichetat și cum, ce
 se vede din model și ce texte se scriu sunt ale dumneavoastră și nu sunt atinse niciodată de o
@@ -148,7 +153,7 @@ presetare, cât și după o revenire la valorile implicite.
 | Grup | Setare | Ce decide |
 |---|---|---|
 | **Fișier** | **Format** | GIF, WebM sau MP4 — vedeți [Ce format](#ce-format) |
-| | **Dimensiunea cadrului** | Lat (16:9) de la 320 × 180 la 1920 × 1080, sau standard (4:3) de la 320 × 240 la 1024 × 768 |
+| | **Dimensiunea cadrului** | Lat (16:9) de la 320 × 180 la 1920 × 1080; vertical (9:16, Reels, TikTok, Shorts, Stories) de la 360 × 640 la 1080 × 1920; pătrat (1:1) de la 480 × 480 la 1080 × 1080; portret 4:5 (fluxul Instagram și Facebook) de la 640 × 800 la 1080 × 1350 și 3:4 de la 600 × 800 la 1080 × 1440; sau standard (4:3) de la 320 × 240 la 1024 × 768. Un GIF are cel mult 800 de pixeli lățime |
 | | **Cadre pe secundă** | De la 10 la 30 pentru un video; un GIF păstrează exact doar 10, 12,5, 20 și 25 |
 | | **Durată (secunde)** | Cât durează reluarea, între 1 și 300 de secunde, oricât au durat turele în realitate |
 | | **Imagine fixă la sfârșit (secunde)** | Ultimul cadru ținut pe loc, ca ochiul să se oprească pe locul unde a ajuns fiecare |

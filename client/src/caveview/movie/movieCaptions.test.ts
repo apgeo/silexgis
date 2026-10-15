@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
 import {
-  drawMovieCaptions,
+  drawMovieCaptions, movieCaptionArea,
   movieAutoTitle,
   movieCaptionColors,
   movieCaptionsAt,
@@ -128,6 +128,45 @@ describe('drawMovieCaptions', () => {
     };
     expect(fontOf(720, 1)).toBeGreaterThan(fontOf(360, 1));
     expect(fontOf(360, 2)).toBeGreaterThan(fontOf(360, 1));
+  });
+
+  it('keeps a vertical video’s captions out of what short-video apps draw over it, the clock under the title', () => {
+    const { ctx, fillText, fillRect } = recordingContext();
+    const [width, height] = [1080, 1920];
+    drawMovieCaptions(ctx, width, height, captions());
+    const area = movieCaptionArea(width, height);
+    expect(area.top).toBeGreaterThanOrEqual(height * 0.12 - 1);
+    expect(area.bottom).toBeGreaterThanOrEqual(height * 0.2);
+    // Every text and every plate inside the bands the app leaves visible.
+    for (const [, x, y] of fillText.mock.calls as [string, number, number][]) {
+      expect(y).toBeGreaterThan(area.top);
+      expect(y).toBeLessThan(height - area.bottom);
+      expect(x).toBeLessThan(width - area.right);
+    }
+    for (const [x, y, w, h] of fillRect.mock.calls as unknown as [number, number, number, number][]) {
+      expect(y).toBeGreaterThanOrEqual(area.top - 1);
+      expect(y + h).toBeLessThanOrEqual(height - area.bottom + 1);
+      expect(x + w).toBeLessThanOrEqual(width - area.right + 1);
+    }
+    const at = (text: string) => (fillText.mock.calls as [string, number, number][]).find(([written]) => written === text)!;
+    const title = at('Peștera Urșilor · 12 Sep');
+    const clock = at('12 Sep 2026, 10:30');
+    expect(clock[1]).toBe(title[1]);
+    expect(clock[2]).toBeGreaterThan(title[2]);
+  });
+
+  it('sizes a tall frame’s text from its width, as a wide frame of that width would be', () => {
+    const fontOf = (width: number, height: number) => {
+      const { ctx } = recordingContext();
+      drawMovieCaptions(ctx, width, height, captions({ legend: [], title: null, note: null, progress: null }));
+      return Number.parseFloat(/(\d+)px/.exec(ctx.font)![1]);
+    };
+    expect(fontOf(1080, 1920)).toBe(fontOf(1920, 1080));
+    expect(fontOf(1080, 1350)).toBe(fontOf(1080, 1080));
+  });
+
+  it('leaves a landscape frame laid out as it always was', () => {
+    expect(movieCaptionArea(1280, 720)).toMatchObject({ bottom: 0, stacked: false, top: 18, left: 18, right: 18 });
   });
 
   it('cuts a title that does not fit, ending it in an ellipsis', () => {
