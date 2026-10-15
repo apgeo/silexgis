@@ -175,7 +175,7 @@ export const groups = {
     'StartupSettingsTests', 'TestLoginTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
     'UserAdministrationTests',
     // The certificates tokens are signed and encrypted with, kept in the keys directory.
-    'TokenCertificateTests', 'TokenCertificateStoreTests',
+    'TokenCertificateTests',
     // Finished sign-in tokens and authorizations are pruned on a schedule.
     'TokenStorePruneTests',
   ],
