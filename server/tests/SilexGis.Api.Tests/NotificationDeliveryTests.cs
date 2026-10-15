@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -12,6 +13,7 @@ using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 
@@ -220,9 +222,61 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
 
         await DrainAsync();
 
-        (await RowsAsync()).ShouldContain(r => r.Category == NotificationCategory.SecurityAlerts);
+        // Exactly one: the change once queued its warning both before and after the password was
+        // written, and every holder was told twice.
+        (await RowsAsync()).Where(r => r.Category == NotificationCategory.SecurityAlerts).ShouldHaveSingleItem();
         (await DeliveriesAsync()).ShouldContain(d => d.Status == NotificationDeliveryStatus.Sent);
+        MineSent().Count.ShouldBe(1);
         factory.Messages.LastTo(RecipientEmail).Body.ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task A_password_reset_warns_the_holder_once()
+    {
+        var anonymous = factory.CreateClient();
+        (await anonymous.PostAsJsonAsync("/api/v1/auth/password/reset", new
+        {
+            email = RecipientEmail,
+            token = await ResetTokenAsync(recipientId),
+            newPassword = "a-reset-long-password-1",
+        })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await RowsAsync()).Where(r => r.TemplateKey == MessageTemplateCatalog.NotifySecurityPasswordChanged)
+            .ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task Choosing_the_first_password_of_an_invited_account_is_not_a_warning()
+    {
+        // An account with neither a password nor a linked provider is what an administrator's
+        // invitation creates; the reset link is how its holder chooses a password.
+        var email = $"notif-inv-{suffix}@t.local";
+        Guid invitedId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+            var user = new SilexGisUser { UserName = email, Email = email };
+            (await userManager.CreateAsync(user)).Succeeded.ShouldBeTrue();
+            invitedId = user.Id;
+        }
+
+        var anonymous = factory.CreateClient();
+        (await anonymous.PostAsJsonAsync("/api/v1/auth/password/reset", new
+        {
+            email,
+            token = await ResetTokenAsync(invitedId),
+            newPassword = "an-invited-long-password-1",
+        })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await RowsAsync(invitedId)).ShouldNotContain(r => r.TemplateKey == MessageTemplateCatalog.NotifySecurityPasswordChanged);
+    }
+
+    private async Task<string> ResetTokenAsync(Guid userId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        return await userManager.GeneratePasswordResetTokenAsync(user!);
     }
 
     [Fact]

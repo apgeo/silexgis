@@ -156,15 +156,6 @@ public static class MeCredentialEndpoints
         // security stamp, and the exchange that renews one never asks when the password changed.
         await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, user.Id, ct);
 
-        // Warns the account holder that this happened, which is the whole point of a security
-        // alert: if it was not them, someone else knows their password. Saved separately because
-        // the password itself is committed by the Identity store, not by this context.
-        NotificationQueue.Enqueue(
-            db, user.Id, NotificationCategory.SecurityAlerts,
-            MessageTemplateCatalog.NotifySecurityPasswordChanged,
-            new Dictionary<string, string>());
-        await db.SaveChangesAsync(ct);
-
         await signInManager.RefreshSignInAsync(user);
         return TypedResults.NoContent();
     }

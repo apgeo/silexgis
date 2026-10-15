@@ -266,10 +266,19 @@ public static class AuthEndpoints
         // exactly as the signed-in change does — and, like that one, queues the warning before the
         // change so the Identity store's own save commits both or neither. A rejected token never
         // reaches that save, so the tracked row is discarded with the request.
-        NotificationQueue.Enqueue(
-            db, user.Id, NotificationCategory.SecurityAlerts,
-            MessageTemplateCatalog.NotifySecurityPasswordChanged,
-            new Dictionary<string, string>());
+        // An account with no way in at all — no password and no linked provider — is an invitation
+        // being taken up: choosing the first password is the holder's own act and there is nothing
+        // to warn them about. An account that signs in through a provider still gets the warning,
+        // because a password added to it through a stolen mailbox is a second way in.
+        var takingUpInvitation = !await userManager.HasPasswordAsync(user)
+            && (await userManager.GetLoginsAsync(user)).Count == 0;
+        if (!takingUpInvitation)
+        {
+            NotificationQueue.Enqueue(
+                db, user.Id, NotificationCategory.SecurityAlerts,
+                MessageTemplateCatalog.NotifySecurityPasswordChanged,
+                new Dictionary<string, string>());
+        }
 
         var result = await userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
         if (!result.Succeeded)
@@ -281,14 +290,6 @@ public static class AuthEndpoints
         // the path where ending them matters most: whoever completes a reset is not going to be
         // able to sign the lost device out afterwards, and cannot list what it holds.
         await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, user.Id, ct);
-
-        // The reset path is the one an attacker holding a stolen mailbox would use, so it warns
-        // exactly as the signed-in change does.
-        NotificationQueue.Enqueue(
-            db, user.Id, NotificationCategory.SecurityAlerts,
-            MessageTemplateCatalog.NotifySecurityPasswordChanged,
-            new Dictionary<string, string>());
-        await db.SaveChangesAsync(ct);
 
         return TypedResults.NoContent();
     }
