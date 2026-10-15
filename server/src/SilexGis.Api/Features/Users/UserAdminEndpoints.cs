@@ -480,6 +480,13 @@ public static class UserAdminEndpoints
                 "You cannot lock your own account.");
         }
 
+        // Both directions: locking takes a full administrator out of the seat, and lifting the lock
+        // puts back somebody a full administrator may have shut out on purpose.
+        if (await IsAboveTheCallerAsync(db, ctx, user.Id, ct))
+        {
+            return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
+        }
+
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
         user.LockoutEnabled = true;
@@ -543,6 +550,11 @@ public static class UserAdminEndpoints
                 "You cannot delete your own account.");
         }
 
+        if (await IsAboveTheCallerAsync(db, ctx, user.Id, ct))
+        {
+            return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
+        }
+
         // The person and the account are separate rows on purpose: a club's roster outlives the
         // logins attached to it, and somebody who leaves takes their account with them while the
         // trips they were on keep naming them. So the caver is unlinked rather than removed, and
@@ -570,6 +582,21 @@ public static class UserAdminEndpoints
         await transaction.CommitAsync(ct);
         return TypedResults.NoContent();
     }
+
+    /// <summary>
+    /// Whether the account is a full administrator's while the caller is not one. A right over
+    /// accounts handed out below full administration stops at the highest seat: locking, unlocking,
+    /// deleting or taking the second factor off a full administrator would be a way of taking that
+    /// seat down, or of putting back somebody a full administrator shut out.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the account's resolved rights rather than of the register's administrator column,
+    /// which leaves locked administrators out: a locked full administrator is still one the moment
+    /// the lock is lifted.
+    /// </remarks>
+    private static async Task<bool> IsAboveTheCallerAsync(
+        SilexGisDbContext db, AccessContext caller, Guid accountId, CancellationToken ct) =>
+        !caller.IsFullAdmin && (await AccessContextResolver.ResolveAsync(db, accountId, ct)).IsFullAdmin;
 
     /// <summary>
     /// Switches off every second factor an account has, for a member who has lost both their
@@ -628,10 +655,7 @@ public static class UserAdminEndpoints
                 "You manage your own second factor from your security settings.");
         }
 
-        // Asked of the account's resolved rights rather than of the register's administrator
-        // column, which leaves locked administrators out: a locked full administrator is still one
-        // the moment the lock is lifted.
-        if (!ctx.IsFullAdmin && (await AccessContextResolver.ResolveAsync(db, id, ct)).IsFullAdmin)
+        if (await IsAboveTheCallerAsync(db, ctx, user.Id, ct))
         {
             return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
         }

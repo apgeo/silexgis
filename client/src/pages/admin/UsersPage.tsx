@@ -288,9 +288,13 @@ export default function UsersPage() {
             key: 'actions',
             render: (_: unknown, user: AdminUser) => {
               const self = user.id === me?.id;
+              // A right over accounts below full administration stops at a full administrator's
+              // account; the server refuses it as well (a locked one is not flagged here, so for
+              // that case the refusal is what the operator sees).
+              const withinReach = !user.isFullAdministrator || callerIsFullAdministrator;
               return (
                 <Space size={4} wrap>
-                  {canWrite && !self && (
+                  {canWrite && !self && withinReach && (
                     <Button
                       size="small"
                       icon={user.isLockedOut ? <UnlockOutlined /> : <LockOutlined />}
@@ -313,7 +317,7 @@ export default function UsersPage() {
                   {canWrite &&
                     !self &&
                     user.twoFactorEnabled &&
-                    (!user.isFullAdministrator || callerIsFullAdministrator) && (
+                    withinReach && (
                       <Popconfirm
                         title={t('admin.users.resetTwoFactorConfirm', { name: user.label })}
                         description={
@@ -334,7 +338,7 @@ export default function UsersPage() {
                         </Button>
                       </Popconfirm>
                     )}
-                  {canDelete && !self && (
+                  {canDelete && !self && withinReach && (
                     <Popconfirm
                       title={t('admin.users.deleteConfirm', { name: user.label })}
                       description={t('admin.users.deleteConfirmDetail')}

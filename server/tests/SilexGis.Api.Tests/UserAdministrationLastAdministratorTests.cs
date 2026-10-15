@@ -26,11 +26,13 @@ namespace SilexGis.Api.Tests;
 /// it — that a lock or a delete is staged, judged and rolled back, not merely that the rule exists.
 /// </para>
 /// <para>
-/// The caller is deliberately <em>not</em> a full administrator. Both verbs refuse to be aimed at
-/// the caller's own account before the guard is asked, so an administrator acting on themselves
-/// would be stopped by that rule and never reach this one. The caller therefore holds the account
-/// rights through an ordinary ruleset, which is also the arrangement an installation that
-/// delegates account administration to somebody below full administration would have.
+/// Who can reach the guard at all is narrow, and that is what shapes the tests. Both verbs refuse
+/// to be aimed at the caller's own account, and a caller who is not a full administrator is refused
+/// any full administrator's account before the guard is asked. So the only caller who can leave the
+/// installation without a live administrator is a full administrator whose own account is locked
+/// while the access token they already hold is still good (an issued token is validated by its
+/// signature, not looked up again, for its short lifetime). That is the caller used below: signed
+/// in first, then locked directly in the store.
 /// </para>
 /// <para>
 /// The class owns its database, so it can rewrite the escape-hatch group's membership to exactly
@@ -44,6 +46,8 @@ public sealed class UserAdministrationLastAdministratorTests
     private readonly string tag = Guid.NewGuid().ToString("N")[..8];
 
     private HttpClient manager = null!;
+    private HttpClient lockedAdmin = null!;
+    private Guid lockedAdminId;
 
     public UserAdministrationLastAdministratorTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
@@ -51,6 +55,7 @@ public sealed class UserAdministrationLastAdministratorTests
     public async Task InitializeAsync()
     {
         var managerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ula-mgr-{tag}@t.local");
+        lockedAdminId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"ula-adm-{tag}@t.local");
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {
@@ -75,19 +80,49 @@ public sealed class UserAdministrationLastAdministratorTests
         }
 
         manager = await AuthHelper.BearerClientAsync(factory, $"ula-mgr-{tag}@t.local");
+
+        // Signed in while it still can be, then locked: the token outlives the lock.
+        lockedAdmin = await AuthHelper.BearerClientAsync(factory, $"ula-adm-{tag}@t.local");
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.Users.Where(u => u.Id == lockedAdminId)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(x => x.LockoutEnabled, true)
+                    .SetProperty(x => x.LockoutEnd, DateTimeOffset.UtcNow.AddYears(100)));
+        }
+    }
+
+    [Fact]
+    public async Task A_delegated_account_manager_cannot_reach_a_full_administrator_at_all()
+    {
+        var soleId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ula-sole0-{tag}@t.local");
+        await MakeTheAdministratorsExactlyAsync(soleId);
+
+        var locked = await manager.PutAsJsonAsync($"/api/v1/users/{soleId}", new { locked = true });
+        locked.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await locked.Content.ReadAsStringAsync());
+        (await CodeOf(locked)).ShouldBe(AccessEntryRules.ExceedsOwnRightsCode);
+
+        var deleted = await manager.DeleteAsync($"/api/v1/users/{soleId}");
+        deleted.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await CodeOf(deleted)).ShouldBe(AccessEntryRules.ExceedsOwnRightsCode);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await FullAdministrators.LiveMemberIdsAsync(db)).ShouldBe([soleId]);
     }
 
     [Fact]
     public async Task The_last_administrator_can_be_neither_locked_nor_deleted()
     {
         var soleId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ula-sole-{tag}@t.local");
-        await MakeTheAdministratorsExactlyAsync(soleId);
+        await MakeTheAdministratorsExactlyAsync([soleId], alsoLocked: lockedAdminId);
 
-        var locked = await manager.PutAsJsonAsync($"/api/v1/users/{soleId}", new { locked = true });
+        var locked = await lockedAdmin.PutAsJsonAsync($"/api/v1/users/{soleId}", new { locked = true });
         locked.StatusCode.ShouldBe(HttpStatusCode.Conflict, await locked.Content.ReadAsStringAsync());
         (await CodeOf(locked)).ShouldBe(FullAdminGuard.LastFullAdminCode);
 
-        var deleted = await manager.DeleteAsync($"/api/v1/users/{soleId}");
+        var deleted = await lockedAdmin.DeleteAsync($"/api/v1/users/{soleId}");
         deleted.StatusCode.ShouldBe(HttpStatusCode.Conflict, await deleted.Content.ReadAsStringAsync());
         (await CodeOf(deleted)).ShouldBe(FullAdminGuard.LastFullAdminCode);
 
@@ -106,21 +141,21 @@ public sealed class UserAdministrationLastAdministratorTests
     {
         var firstId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ula-one-{tag}@t.local");
         var secondId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ula-two-{tag}@t.local");
-        await MakeTheAdministratorsExactlyAsync(firstId, secondId);
+        await MakeTheAdministratorsExactlyAsync([firstId, secondId], alsoLocked: lockedAdminId);
 
-        var locked = await manager.PutAsJsonAsync($"/api/v1/users/{firstId}", new { locked = true });
+        var locked = await lockedAdmin.PutAsJsonAsync($"/api/v1/users/{firstId}", new { locked = true });
         locked.StatusCode.ShouldBe(HttpStatusCode.OK, await locked.Content.ReadAsStringAsync());
 
         // A locked administrator is not a live one, so the second is now the last — and the guard
         // counts it that way rather than by membership rows.
-        var lockSecond = await manager.PutAsJsonAsync($"/api/v1/users/{secondId}", new { locked = true });
+        var lockSecond = await lockedAdmin.PutAsJsonAsync($"/api/v1/users/{secondId}", new { locked = true });
         lockSecond.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await CodeOf(lockSecond)).ShouldBe(FullAdminGuard.LastFullAdminCode);
 
-        var unlocked = await manager.PutAsJsonAsync($"/api/v1/users/{firstId}", new { locked = false });
+        var unlocked = await lockedAdmin.PutAsJsonAsync($"/api/v1/users/{firstId}", new { locked = false });
         unlocked.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var deleted = await manager.DeleteAsync($"/api/v1/users/{firstId}");
+        var deleted = await lockedAdmin.DeleteAsync($"/api/v1/users/{firstId}");
         deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await deleted.Content.ReadAsStringAsync());
 
         await using var scope = factory.Services.CreateAsyncScope();
@@ -129,7 +164,7 @@ public sealed class UserAdministrationLastAdministratorTests
         (await FullAdministrators.LiveMemberIdsAsync(db)).ShouldBe([secondId]);
 
         // And with one left, the delete that just went through is refused for the survivor.
-        var deleteLast = await manager.DeleteAsync($"/api/v1/users/{secondId}");
+        var deleteLast = await lockedAdmin.DeleteAsync($"/api/v1/users/{secondId}");
         deleteLast.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await CodeOf(deleteLast)).ShouldBe(FullAdminGuard.LastFullAdminCode);
     }
@@ -139,14 +174,19 @@ public sealed class UserAdministrationLastAdministratorTests
     /// proves it took — a test that believed it had reduced the installation to one administrator
     /// while five remained would pass for the wrong reason.
     /// </summary>
-    private async Task MakeTheAdministratorsExactlyAsync(params Guid[] userIds)
+    private Task MakeTheAdministratorsExactlyAsync(params Guid[] userIds) =>
+        MakeTheAdministratorsExactlyAsync(userIds, alsoLocked: null);
+
+    /// <param name="userIds">The live administrators the test wants.</param>
+    /// <param name="alsoLocked">A locked member kept in the group as well, who does not count as live.</param>
+    private async Task MakeTheAdministratorsExactlyAsync(Guid[] userIds, Guid? alsoLocked)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var fullAdminsId = (await FullAdministrators.GroupIdAsync(db))!.Value;
 
         await db.PermissionGroupMembers.Where(m => m.PermissionGroupId == fullAdminsId).ExecuteDeleteAsync();
-        foreach (var userId in userIds)
+        foreach (var userId in alsoLocked is null ? userIds : [.. userIds, alsoLocked.Value])
         {
             db.PermissionGroupMembers.Add(new PermissionGroupMember
             {

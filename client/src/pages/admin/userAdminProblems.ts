@@ -30,7 +30,7 @@ export function userAdminProblem(error: unknown, t: TFunction): string {
     case 'user.two_factor_not_enabled':
       return t('admin.users.problems.twoFactorNotEnabled');
     case 'access_entry.exceeds_own_rights':
-      return t('admin.users.problems.fullAdministratorTwoFactor');
+      return t('admin.users.problems.fullAdministratorAccount');
     case 'user.not_found':
       return t('admin.users.problems.notFound');
     case 'validation.failed':

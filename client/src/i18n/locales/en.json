@@ -3812,7 +3812,7 @@
         "forbidden": "You are not allowed to do this.",
         "cannotResetOwnTwoFactor": "You manage your own second factor from your security settings.",
         "twoFactorNotEnabled": "This account has no second factor switched on, so there is nothing to reset.",
-        "fullAdministratorTwoFactor": "Only a full administrator can reset the second factor of a full administrator."
+        "fullAdministratorAccount": "Only a full administrator can lock, unlock, delete or reset the second factor of a full administrator's account."
       }
     },
     "messaging": {

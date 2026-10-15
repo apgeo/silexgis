@@ -68,7 +68,7 @@ public sealed class UserTwoFactorResetTests : IAsyncLifetime, IDisposable, IClas
 
         // Account rights handed out below full administration, as an installation that delegates
         // the register would: one account may change accounts, the other may only read them.
-        await GrantUsersRightsAsync(managerId, AccessAction.Read | AccessAction.Write, "managers");
+        await GrantUsersRightsAsync(managerId, AccessAction.Read | AccessAction.Write | AccessAction.Delete, "managers");
         await GrantUsersRightsAsync(readerId, AccessAction.Read, "readers");
 
         admin = await AuthHelper.BearerClientAsync(factory, Email("adm"));
@@ -188,6 +188,44 @@ public sealed class UserTwoFactorResetTests : IAsyncLifetime, IDisposable, IClas
         (await TwoFactorOnAsync(otherAdminId)).ShouldBeFalse();
     }
 
+    /// <summary>
+    /// The same seat is out of reach for the other account actions: a delegated right over accounts
+    /// that could lock, unlock or delete a full administrator could take the seat down, or put back
+    /// somebody a full administrator shut out.
+    /// </summary>
+    [Fact]
+    public async Task A_delegated_right_over_accounts_cannot_lock_unlock_or_delete_a_full_administrator()
+    {
+        var memberId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, Email("mem2"));
+        var otherAdminId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, Email("adm3"));
+
+        foreach (var locked in new[] { true, false })
+        {
+            var refused = await manager.PutAsJsonAsync($"/api/v1/users/{otherAdminId}", new { locked });
+            refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+            (await CodeOf(refused)).ShouldBe(AccessEntryRules.ExceedsOwnRightsCode);
+        }
+
+        // Locked by a full administrator, a delegated manager cannot lift it either.
+        (await admin.PutAsJsonAsync($"/api/v1/users/{otherAdminId}", new { locked = true }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await manager.PutAsJsonAsync($"/api/v1/users/{otherAdminId}", new { locked = false }))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await IsLockedAsync(otherAdminId)).ShouldBeTrue();
+
+        var deleteRefused = await manager.DeleteAsync($"/api/v1/users/{otherAdminId}");
+        deleteRefused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await CodeOf(deleteRefused)).ShouldBe(AccessEntryRules.ExceedsOwnRightsCode);
+        (await ExistsAsync(otherAdminId)).ShouldBeTrue();
+
+        // An ordinary member is within reach.
+        (await manager.PutAsJsonAsync($"/api/v1/users/{memberId}", new { locked = true }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await IsLockedAsync(memberId)).ShouldBeTrue();
+        (await manager.DeleteAsync($"/api/v1/users/{memberId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await ExistsAsync(memberId)).ShouldBeFalse();
+    }
+
     [Fact]
     public async Task Reading_the_register_is_not_enough_and_an_anonymous_caller_reaches_nothing()
     {
@@ -256,6 +294,21 @@ public sealed class UserTwoFactorResetTests : IAsyncLifetime, IDisposable, IClas
         (await users.CountRecoveryCodesAsync(user)).ShouldBe(10);
 
         return (await users.GetAuthenticatorKeyAsync(user))!;
+    }
+
+    private async Task<bool> IsLockedAsync(Guid userId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == userId);
+        return user.LockoutEnd > DateTimeOffset.UtcNow;
+    }
+
+    private async Task<bool> ExistsAsync(Guid userId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Users.AnyAsync(u => u.Id == userId);
     }
 
     private async Task<bool> TwoFactorOnAsync(Guid userId)

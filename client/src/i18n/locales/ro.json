@@ -3812,7 +3812,7 @@
         "forbidden": "Nu aveți dreptul să faceți acest lucru.",
         "cannotResetOwnTwoFactor": "Propriul al doilea factor îl gestionați din setările de securitate.",
         "twoFactorNotEnabled": "Acest cont nu are activ niciun al doilea factor, deci nu este nimic de resetat.",
-        "fullAdministratorTwoFactor": "Doar un administrator complet poate reseta al doilea factor al unui administrator complet."
+        "fullAdministratorAccount": "Doar un administrator complet poate bloca, debloca, șterge sau reseta al doilea factor al contului unui administrator complet."
       }
     },
     "messaging": {

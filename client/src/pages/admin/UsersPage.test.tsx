@@ -183,6 +183,10 @@ describe('UsersPage', () => {
     const { unmount } = show();
     expect(within(row('Dana Cheie')).getByRole('button', { name: /Reset second factor/ })).toBeInTheDocument();
     expect(within(row('Alt Administrator')).queryByRole('button', { name: /Reset second factor/ })).toBeNull();
+    // Lock and delete stop at the same seat.
+    expect(within(row('Alt Administrator')).queryByRole('button', { name: /Lock/ })).toBeNull();
+    expect(within(row('Alt Administrator')).queryByRole('button', { name: /Delete/ })).toBeNull();
+    expect(within(row('Ana Pop')).getByRole('button', { name: /Lock/ })).toBeInTheDocument();
     unmount();
 
     rights = 'read';
@@ -210,7 +214,7 @@ describe('UsersPage', () => {
     fireEvent.click((await screen.findAllByRole('button', { name: 'Reset second factor' })).at(-1)!);
 
     expect(
-      await screen.findByText('Only a full administrator can reset the second factor of a full administrator.'),
+      await screen.findByText(/Only a full administrator can lock, unlock, delete or reset the second factor/),
     ).toBeInTheDocument();
   });
 
