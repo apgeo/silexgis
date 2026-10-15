@@ -514,6 +514,15 @@ public static class TerrainBuildEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await TerrainBuildSql.TakeSubmissionLockAsync(db, ct);
 
+        // Asked again under the lock, because the sweep of uploads nobody names takes the same
+        // lock: an upload that was there a moment ago may have aged out and gone in between, and a
+        // build naming it would fail minutes from now instead of being refused here.
+        if (declared.Any(d => d.Kind == TerrainBuildSourceKind.Uploaded && uploads.PathOf(d.Reference) is null))
+        {
+            return ApiProblems.BadRequest(
+                SourceInvalidCode, "That raster is not one this installation is holding.");
+        }
+
         if (baseBuild is not null)
         {
             // The same lock a delete holds across its own read and write, so that a base judged

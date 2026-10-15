@@ -340,6 +340,7 @@ public static class DependencyInjection
         services.AddSingleton<Terrain.TerrainWorkspace>();
         services.AddSingleton<Terrain.TerrainUploads>();
         services.AddScoped<IProcessingJobHandler, TerrainBuildHandler>();
+        services.AddScoped<IProcessingJobHandler, TerrainUploadSweepHandler>();
 
         // Obtaining the rasters: a client for the open elevation dataset, and the step that puts
         // everything a build was given — downloaded, uploaded or read from a directory the operator
@@ -406,6 +407,7 @@ public static class DependencyInjection
         // for its whole duration.
         services.AddHostedService<TerrainProcessingJobWorker>();
         services.AddHostedService<UploadSessionScheduler>();
+        services.AddHostedService<TerrainUploadSweepScheduler>();
 
         services.Configure<DocumentRetentionOptions>(
             configuration.GetSection(DocumentRetentionOptions.SectionName));

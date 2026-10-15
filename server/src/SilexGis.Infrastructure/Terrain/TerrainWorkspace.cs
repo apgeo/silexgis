@@ -93,6 +93,27 @@ public sealed class TerrainBuildOptions
     /// that has stopped making progress rather than to cap a large one.
     /// </remarks>
     public int BakeTimeoutSeconds { get; set; } = 43_200;
+
+    /// <summary>
+    /// How many hours an uploaded raster that no build names is kept before it is deleted.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The build form sends each raster the moment it is chosen, because a build names its uploads
+    /// by the reference the upload answered with. Somebody who picks three rasters and then walks
+    /// away has therefore left three rasters on the server without pressing anything, and nothing
+    /// else would ever remove them.
+    /// </para>
+    /// <para>
+    /// A day, because the only cost of being too short is somebody having to choose a file again,
+    /// and the cost of being too long is disk: a day covers a form left open overnight and coming
+    /// back to it the next morning, while an abandoned upload is gone before anyone notices the
+    /// space. A raster any build names — queued, running, finished or stopped — is never taken,
+    /// however old: a stopped build can be run again and needs what it was made from. Values
+    /// outside one hour to a year are brought back inside that range, so 0 is not "never".
+    /// </para>
+    /// </remarks>
+    public int UploadRetentionHours { get; set; } = 24;
 }
 
 /// <summary>

@@ -171,6 +171,13 @@ public static class ProcessingJobKinds
     public const string TerrainBuild = "terrain-build";
 
     /// <summary>
+    /// Delete rasters sent for a terrain build that no build names and that have waited longer than
+    /// the installation keeps them. Scheduled. On the general lane: it is a directory listing and a
+    /// handful of deletions, and it never touches a raster any build — running or not — names.
+    /// </summary>
+    public const string TerrainUploadSweep = "terrain-upload-sweep";
+
+    /// <summary>
     /// Draw one picture of the ground — shaded relief, steepness, facing — from every elevation
     /// raster of one build, and record what was written beside the row that asked for it.
     /// </summary>

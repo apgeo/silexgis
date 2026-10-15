@@ -251,7 +251,7 @@ export const groups = {
     'TerrainMapConfigTests', 'TerrainOptionsTests', 'TerrainPipelineRegistrationTests',
     'TerrainPreparePhaseTests', 'TerrainProbeTests', 'TerrainPublishPhaseTests',
     'TerrainRasterIndexTests', 'TerrainRasterPreparationTests', 'TerrainSourceTests',
-    'TerrainTileUploadTests', 'TerrainValidatePhaseTests',
+    'TerrainTileUploadTests', 'TerrainUploadSweepTests', 'TerrainValidatePhaseTests',
   ],
 };
 
@@ -342,6 +342,8 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Geodata/': 'geofiles',
   'server/src/SilexGis.Infrastructure/Import/': 'imports',
   'server/src/SilexGis.Infrastructure/Jobs/': 'jobs',
+  // The job that sweeps the rasters sent for a terrain build that no build names.
+  'server/src/SilexGis.Infrastructure/Jobs/TerrainUploadSweepHandler.cs': 'terrain',
   'server/src/SilexGis.Infrastructure/Messaging/': 'messaging',
   'server/src/SilexGis.Infrastructure/Metadata/': 'metadata',
   'server/src/SilexGis.Infrastructure/Notifications/': 'notifications',
