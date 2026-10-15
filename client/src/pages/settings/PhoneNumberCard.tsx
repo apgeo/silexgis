@@ -5,7 +5,7 @@ import { App, Alert, Button, Card, Flex, Input, Popconfirm, Tag, Typography } fr
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
-import { queryKeys, usePhoneStatus } from '../../api/hooks.ts';
+import { queryKeys, useMfaStatus, usePhoneStatus } from '../../api/hooks.ts';
 
 /**
  * The account's phone number, which exists here for one reason: to carry sign-in codes.
@@ -19,6 +19,7 @@ export default function PhoneNumberCard() {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data: status } = usePhoneStatus();
+  const { data: mfa } = useMfaStatus();
   const [number, setNumber] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,6 +30,12 @@ export default function PhoneNumberCard() {
   };
 
   if (!status) return null;
+
+  // The number is the account's last second factor when texted codes are the only method on.
+  // Removing it then switches two-factor sign-in off altogether, which the confirmation has to say
+  // in so many words rather than leave to be discovered at the next sign-in.
+  const enabledMethods = mfa?.methods.filter((m) => m.enabled).map((m) => m.method) ?? [];
+  const lastFactor = enabledMethods.length > 0 && enabledMethods.every((m) => m === 'sms');
 
   /**
    * The stable code the server refused with, when it wrote one.
@@ -110,7 +117,19 @@ export default function PhoneNumberCard() {
         {status.confirmed && status.phoneNumber && (
           <Flex gap={8} align="center" wrap>
             <Typography.Text strong>{status.phoneNumber}</Typography.Text>
-            <Popconfirm title={t('security.phoneRemoveConfirm')} onConfirm={() => void remove()}>
+            <Popconfirm
+              title={lastFactor ? t('security.phoneRemoveLastFactorTitle') : t('security.phoneRemoveConfirm')}
+              description={
+                lastFactor ? (
+                  <Typography.Paragraph style={{ maxWidth: 320, marginBottom: 0 }}>
+                    {t('security.phoneRemoveLastFactor')}
+                  </Typography.Paragraph>
+                ) : undefined
+              }
+              okText={lastFactor ? t('security.phoneRemoveLastFactorOk') : undefined}
+              okButtonProps={{ danger: true }}
+              onConfirm={() => void remove()}
+            >
               <Button size="small" danger>
                 {t('security.phoneRemove')}
               </Button>

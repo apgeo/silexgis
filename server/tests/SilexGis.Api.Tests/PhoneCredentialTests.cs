@@ -4,11 +4,14 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Messaging;
 using SilexGis.Infrastructure.Identity;
+using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
 
@@ -138,6 +141,81 @@ public sealed class PhoneCredentialTests : IAsyncLifetime, IDisposable, IClassFi
     {
         me?.Dispose();
         factory.Dispose();
+    }
+
+    [Fact]
+    public async Task Removing_the_number_that_carried_the_last_second_factor_warns_and_switches_two_factor_off()
+    {
+        await GiveNumberAsync(Number(20), sms: true, authenticator: false);
+
+        (await me.DeleteAsync("/api/v1/me/phone")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var (twoFactor, sms) = await TwoFactorAsync();
+        twoFactor.ShouldBeFalse();
+        sms.ShouldBeFalse();
+        (await TwoFactorOffAlertsAsync()).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Removing_the_number_while_another_second_factor_remains_warns_nobody()
+    {
+        await GiveNumberAsync(Number(21), sms: true, authenticator: true);
+
+        (await me.DeleteAsync("/api/v1/me/phone")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var (twoFactor, sms) = await TwoFactorAsync();
+        twoFactor.ShouldBeTrue();
+        sms.ShouldBeFalse();
+        (await TwoFactorOffAlertsAsync()).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Removing_a_number_that_was_no_second_factor_warns_nobody()
+    {
+        await GiveNumberAsync(Number(22), sms: false, authenticator: false);
+
+        (await me.DeleteAsync("/api/v1/me/phone")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await TwoFactorAsync()).TwoFactor.ShouldBeFalse();
+        (await TwoFactorOffAlertsAsync()).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A confirmed number and the second factors given, set up through Identity as the enrolment
+    /// endpoints leave them — those routes need a working text gateway, which is not the subject.
+    /// </summary>
+    private async Task GiveNumberAsync(string number, bool sms, bool authenticator)
+    {
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+        var user = (await userManager.FindByIdAsync(userId.ToString()))!;
+        if (authenticator)
+        {
+            await userManager.ResetAuthenticatorKeyAsync(user);
+        }
+
+        user.PhoneNumber = number;
+        user.PhoneNumberConfirmed = true;
+        user.TwoFactorSmsEnabled = sms;
+        user.TwoFactorAuthenticatorEnabled = authenticator;
+        user.TwoFactorEnabled = sms || authenticator;
+        (await userManager.UpdateAsync(user)).Succeeded.ShouldBeTrue();
+    }
+
+    private async Task<(bool TwoFactor, bool Sms)> TwoFactorAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+        var user = (await userManager.FindByIdAsync(userId.ToString()))!;
+        return (user.TwoFactorEnabled, user.TwoFactorSmsEnabled);
+    }
+
+    private async Task<int> TwoFactorOffAlertsAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Notifications.CountAsync(n =>
+            n.RecipientUserId == userId && n.TemplateKey == MessageTemplateCatalog.NotifySecurityTwoFactorDisabled);
     }
 
     /// <summary>

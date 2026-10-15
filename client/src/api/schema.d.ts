@@ -4584,7 +4584,7 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        /** Removes the number, switching off SMS as a second factor with it. */
+        /** Removes the number, switching off SMS as a second factor with it (and two-factor sign-in, when it was the last method). */
         delete: {
             parameters: {
                 query?: never;
