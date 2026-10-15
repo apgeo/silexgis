@@ -152,6 +152,7 @@ public static class AuthenticationSetup
 
         services.AddScoped<ExternalAuthService>();
         services.AddSingleton<IConfigureOptions<OpenIddict.Server.OpenIddictServerOptions>, TokenCertificateSetup>();
+        services.AddHostedService<TokenStorePruneWorker>();
 
         // AddIdentity made the cookie the default scheme; the API default is bearer.
         services.Configure<AuthenticationOptions>(options =>

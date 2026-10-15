@@ -176,6 +176,8 @@ export const groups = {
     'UserAdministrationTests',
     // The certificates tokens are signed and encrypted with, kept in the keys directory.
     'TokenCertificateTests', 'TokenCertificateStoreTests',
+    // Finished sign-in tokens and authorizations are pruned on a schedule.
+    'TokenStorePruneTests',
   ],
   resLinks: [
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
