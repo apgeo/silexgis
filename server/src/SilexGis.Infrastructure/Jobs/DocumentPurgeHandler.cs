@@ -8,6 +8,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Files;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Jobs;
@@ -92,6 +93,13 @@ public sealed class DocumentPurgeHandler(
             await db.ResLinkMembers
                 .Where(m => m.EntityType == AttachedEntityType.Document && m.EntityId == documentId)
                 .ExecuteDeleteAsync(ct);
+
+            // The rules naming the document, or a file of it, go too. The statement below
+            // removes the row behind the change tracker's back — and its versions and files by
+            // cascade — so the rule that takes them is asked here and saved first, which puts
+            // each one in the audit trail.
+            await AccessAnchorCleanup.RemoveRowsNamingAsync(db, typeof(Document), [documentId], ct);
+            await db.SaveChangesAsync(ct);
 
             // An album's cover pointing at this picture is set null by its own foreign key; the
             // membership rows go with it. Nothing else has to be unpicked by hand.

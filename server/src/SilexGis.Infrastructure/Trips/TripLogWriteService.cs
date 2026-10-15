@@ -266,21 +266,9 @@ public sealed class TripLogWriteService(
             .Where(m => m.TripLogId == trip.Id)
             .ExecuteDeleteAsync(ct);
 
-        // Every rule anchored on this trip goes with it — the ones authored on its own
-        // permissions tab and the ones a camp's sharing wrote onto it alike. A rule whose
-        // anchor no longer exists is what the integrity check reports as an orphan, and it
-        // reads as a live grant on every surface that lists rules by subject.
-        //
-        // Loaded and removed rather than deleted in one statement, because a rule
-        // disappearing is a change to who may reach what, and every other place rules are
-        // withdrawn records that. A set-based delete never reaches the change tracker, so the
-        // withdrawal would happen with nothing in the trail to say it had.
-        var anchored = await db.AccessEntries
-            .Where(e => e.Domain == AccessDomain.TripLogs
-                && e.ScopeKind == AccessScopeKind.Object
-                && e.ScopeId == trip.Id)
-            .ToListAsync(ct);
-        db.AccessEntries.RemoveRange(anchored);
+        // Every rule anchored on this trip — the ones authored on its own permissions tab and the
+        // ones a camp's sharing wrote onto it alike — goes in the same save as the trip row, taken
+        // and audited by the persistence rule that does so for every row removed for good.
 
         await db.Attachments
             .Where(a => a.EntityType == AttachedEntityType.TripLog && a.EntityId == trip.Id)

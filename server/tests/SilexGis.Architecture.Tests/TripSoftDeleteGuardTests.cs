@@ -212,7 +212,7 @@ public class TripSoftDeleteGuardTests
                     + "— and one since taken off the trip's log as much as one still on it, which the same "
                     + "filter hides: left behind, it could be put back onto the log of an undone import"),
             ["server/src/SilexGis.Infrastructure/Features/FeatureIntegrityVerifier.cs"] =
-                (2, "a deleted trip still anchors the rules, files, tags and links kept on it"),
+                (1, "a deleted trip still anchors the files, tags and links kept on it"),
             ["server/src/SilexGis.Infrastructure/Permissions/PhotoPositionDisclosure.cs"] =
                 (1, "a picture filed under a camp stays guarded by the places a deleted member trip names"),
             ["server/src/SilexGis.Api/Features/TripTracking/TripTrackingEndpoints.cs"] =
@@ -355,7 +355,7 @@ public class TripSoftDeleteGuardTests
     /// migrations are left out: they are the schema's own history, and a statement in one runs
     /// once, against a table as it was.
     /// </summary>
-    private static IEnumerable<(string File, string Source)> Sources()
+    internal static IEnumerable<(string File, string Source)> Sources()
     {
         var root = WorkingTree();
         var sources = Path.Combine(root, "server", "src");

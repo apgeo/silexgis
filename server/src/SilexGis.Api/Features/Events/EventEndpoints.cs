@@ -364,21 +364,9 @@ public static class EventEndpoints
             return stale;
         }
 
-        // A rule anchored on this event means nothing once the event is gone, and a rule whose
-        // anchor cannot be resolved is exactly what the integrity check reports as an orphan.
-        // Deleting them here is what keeps a routine delete from leaving one behind.
+        // The rules anchored on the event go in the same save as the row, by the persistence rule
+        // that takes them with every row removed for good.
         //
-        // Loaded and removed rather than deleted in one statement, because a rule disappearing is
-        // a change to who may reach what, and every other place rules are withdrawn records that.
-        // A set-based delete never reaches the change tracker, so the withdrawal would happen
-        // with nothing in the trail to say it had.
-        var anchored = await db.AccessEntries
-            .Where(e => e.Domain == AccessDomain.Events
-                && e.ScopeKind == AccessScopeKind.Object
-                && e.ScopeId == row.Id)
-            .ToListAsync(ct);
-        db.AccessEntries.RemoveRange(anchored);
-
         // The files attached to the event, the tags on it and its place in any relation have
         // no foreign key to follow, so nothing removes them unless this does — the same sweep a
         // camp's delete makes, under the same rule.
