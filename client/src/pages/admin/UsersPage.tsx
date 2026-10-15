@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DeleteOutlined, LockOutlined, MailOutlined, UnlockOutlined, UserAddOutlined, UserOutlined } from '@ant-design/icons';
+import {
+  DeleteOutlined,
+  KeyOutlined,
+  LockOutlined,
+  MailOutlined,
+  UnlockOutlined,
+  UserAddOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import {
   Alert,
   App,
@@ -26,11 +34,13 @@ import {
   useDeleteAdminUser,
   useMe,
   useReinviteAdminUser,
+  useResetAdminUserTwoFactor,
   useSetAdminUserLocked,
   type AdminUser,
   type AdminUserCreated,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import UserPermissionGroups from './UserPermissionGroups.tsx';
 import { userAdminProblem } from './userAdminProblems.ts';
 
 interface InviteValues {
@@ -74,6 +84,15 @@ function fieldErrors(error: unknown): { name: keyof InviteValues; errors: string
  * in from the other side of either — and offering a button the server is certain to refuse is
  * offering a mistake.
  *
+ * <b>A second factor is reset, never switched on.</b> A member who has lost both their
+ * authenticator and their recovery codes has no way back in alone, so an operator can switch every
+ * method off; the confirmation says what that does to the member, because they are the one who
+ * will be signed out and mailed. A full administrator's second factor is offered only to another
+ * full administrator, which is the rule the server holds to.
+ *
+ * <b>An opened row shows the account's permission groups</b>, read only when it is opened, and
+ * links to where membership is edited rather than editing it here.
+ *
  * <b>A hand-over link is shown once.</b> When the installation cannot mail the invitation, the
  * server returns the link instead, and keeps nothing it could show again. So it appears in a
  * dialog that says so and that a stray click outside cannot close; a lost link is replaced by
@@ -96,6 +115,8 @@ export default function UsersPage() {
   const canCreate = hasAccessAction(rights, 'create');
   const canWrite = hasAccessAction(rights, 'write');
   const canDelete = hasAccessAction(rights, 'delete');
+  const canReadPermissionGroups = hasAccessAction(capabilities?.domains.permissionGroups, 'read');
+  const callerIsFullAdministrator = capabilities?.isFullAdmin === true;
 
   const { data: me } = useMe();
   const users = useAdminUsers({ q: search, page, pageSize });
@@ -103,6 +124,7 @@ export default function UsersPage() {
   const reinvite = useReinviteAdminUser();
   const setLocked = useSetAdminUserLocked();
   const remove = useDeleteAdminUser();
+  const resetTwoFactor = useResetAdminUserTwoFactor();
 
   const day = (value: string) => new Date(value).toLocaleDateString(i18n.resolvedLanguage);
 
@@ -166,6 +188,15 @@ export default function UsersPage() {
     }
   };
 
+  const resetSecondFactor = async (user: AdminUser) => {
+    try {
+      await resetTwoFactor.mutateAsync(user.id);
+      message.success(t('admin.users.twoFactorReset', { name: user.label }));
+    } catch (error) {
+      message.error(userAdminProblem(error, t));
+    }
+  };
+
   if (users.error instanceof ApiError && users.error.status === 403) {
     return <Result status="403" title={t('admin.forbidden')} />;
   }
@@ -204,6 +235,11 @@ export default function UsersPage() {
         scroll={{ x: 'max-content' }}
         loading={users.isFetching && !users.data}
         dataSource={users.data?.items ?? []}
+        expandable={{
+          expandedRowRender: (user: AdminUser) => (
+            <UserPermissionGroups userId={user.id} linkable={canReadPermissionGroups} />
+          ),
+        }}
         onChange={(pagination) => {
           setPage(pagination.current ?? 1);
           setPageSize(pagination.pageSize ?? 25);
@@ -238,6 +274,7 @@ export default function UsersPage() {
                 )}
                 {!user.hasPassword && <Tag color="gold">{t('admin.users.statusNoPassword')}</Tag>}
                 {user.isFullAdministrator && <Tag color="blue">{t('admin.users.statusAdministrator')}</Tag>}
+                {user.twoFactorEnabled && <Tag color="cyan">{t('admin.users.statusTwoFactor')}</Tag>}
               </Space>
             ),
           },
@@ -273,6 +310,30 @@ export default function UsersPage() {
                       {t('admin.users.sendAgain')}
                     </Button>
                   )}
+                  {canWrite &&
+                    !self &&
+                    user.twoFactorEnabled &&
+                    (!user.isFullAdministrator || callerIsFullAdministrator) && (
+                      <Popconfirm
+                        title={t('admin.users.resetTwoFactorConfirm', { name: user.label })}
+                        description={
+                          <Typography.Paragraph style={{ maxWidth: 360, margin: 0 }}>
+                            {t('admin.users.resetTwoFactorConfirmDetail')}
+                          </Typography.Paragraph>
+                        }
+                        okText={t('admin.users.resetTwoFactor')}
+                        okButtonProps={{ danger: true }}
+                        onConfirm={() => resetSecondFactor(user)}
+                      >
+                        <Button
+                          size="small"
+                          icon={<KeyOutlined />}
+                          loading={resetTwoFactor.isPending && resetTwoFactor.variables === user.id}
+                        >
+                          {t('admin.users.resetTwoFactor')}
+                        </Button>
+                      </Popconfirm>
+                    )}
                   {canDelete && !self && (
                     <Popconfirm
                       title={t('admin.users.deleteConfirm', { name: user.label })}

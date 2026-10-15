@@ -3790,6 +3790,17 @@
       "handOverIntro": "Invitația pentru {{name}} ({{email}}) nu a putut fi trimisă prin e-mail, fiindcă această instalare nu are server de e-mail sau trimiterea a eșuat. Dați-i chiar dumneavoastră acest link; cu el își alege parola.",
       "handOverOnce": "Copiați-l acum: este afișat doar de data aceasta. Funcționează o singură dată și timp de {{hours}} ore; după aceea, trimiteți din nou invitația.",
       "handOverDone": "L-am copiat",
+      "statusTwoFactor": "Al doilea factor activ",
+      "resetTwoFactor": "Resetează al doilea factor",
+      "resetTwoFactorConfirm": "Resetați al doilea factor al contului {{name}}?",
+      "resetTwoFactorConfirmDetail": "Toți factorii secundari configurați sunt dezactivați — aplicația de autentificare, codurile prin e-mail sau SMS — iar codurile de recuperare nu mai funcționează. Titularul este deconectat de pe toate dispozitivele și este anunțat prin e-mail. Apoi se poate autentifica doar cu parola și poate configura din nou un al doilea factor din setările de securitate.",
+      "twoFactorReset": "Al doilea factor al contului {{name}} a fost resetat.",
+      "groupsTitle": "Grupuri de permisiuni",
+      "groupsIntro": "Grupurile din care face parte acest cont. Apartenența se schimbă pe pagina grupurilor de permisiuni, nu aici.",
+      "groupsNone": "Doar grupul din care face parte orice cont.",
+      "groupsFailed": "Grupurile de permisiuni nu au putut fi citite.",
+      "groupDirect": "membru",
+      "groupThrough": "prin {{groups}}",
       "problems": {
         "lastAdministrator": "Acesta este ultimul administrator complet care se poate autentifica. Faceți mai întâi pe altcineva administrator complet, altfel instalarea nu ar mai avea cine s-o administreze.",
         "cannotLockSelf": "Nu vă puteți bloca propriul cont.",
@@ -3798,7 +3809,10 @@
         "alreadyEnterable": "Acest cont se poate deja autentifica. Titularul își resetează singur parola.",
         "notFound": "Acest cont nu mai există.",
         "invalid": "Verificați numele și adresa.",
-        "forbidden": "Nu aveți dreptul să faceți acest lucru."
+        "forbidden": "Nu aveți dreptul să faceți acest lucru.",
+        "cannotResetOwnTwoFactor": "Propriul al doilea factor îl gestionați din setările de securitate.",
+        "twoFactorNotEnabled": "Acest cont nu are activ niciun al doilea factor, deci nu este nimic de resetat.",
+        "fullAdministratorTwoFactor": "Doar un administrator complet poate reseta al doilea factor al unui administrator complet."
       }
     },
     "messaging": {

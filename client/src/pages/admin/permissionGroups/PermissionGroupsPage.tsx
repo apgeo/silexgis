@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { DeleteOutlined, LockOutlined, PlusOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { App, Alert, Button, Flex, Form, Input, Modal, Popconfirm, Spin, Table, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 import {
   hasAccessAction,
   useAccessCatalog,
@@ -32,7 +33,10 @@ export default function PermissionGroupsPage() {
   const createGroup = useCreatePermissionGroup();
   const deleteGroup = useDeletePermissionGroup();
   const [creating, setCreating] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // Another page can open one group directly (the accounts page links each group an account is
+  // in); read once, so closing the editor is not undone by the address still naming the group.
+  const [searchParams] = useSearchParams();
+  const [editingId, setEditingId] = useState<string | null>(() => searchParams.get('group'));
   const [form] = Form.useForm<{ name: string; description?: string }>();
 
   if (!capabilities) {

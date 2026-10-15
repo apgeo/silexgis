@@ -5507,6 +5507,8 @@ export function useUserSearch(q: string) {
 // ---- account administration: the register of who can sign in ----
 
 export type AdminUser = components['schemas']['AdminUserDto'];
+export type AdminUserDetail = components['schemas']['AdminUserDetailDto'];
+export type AdminUserPermissionGroup = components['schemas']['AdminUserPermissionGroupDto'];
 export type AdminUserCreated = components['schemas']['AdminUserCreatedDto'];
 
 export interface AdminUserListParams {
@@ -5577,6 +5579,24 @@ export function useDeleteAdminUser() {
   return useMutation({
     mutationFn: (id: string) =>
       unwrapVoid(api.DELETE('/api/v1/users/{id}', { params: { path: { id } } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/** One account with the permission groups it belongs to, read when somebody opens it. */
+export function useAdminUser(id: string) {
+  return useQuery({
+    queryKey: ['admin-users', 'one', id] as const,
+    queryFn: () => unwrap(api.GET('/api/v1/users/{id}', { params: { path: { id } } })),
+  });
+}
+
+/** Switches every second factor of somebody else's account off and signs them out everywhere. */
+export function useResetAdminUserTwoFactor() {
+  const invalidate = useInvalidateAdminUsers();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/api/v1/users/{id}/two-factor/reset', { params: { path: { id } } })),
     onSuccess: () => invalidate(),
   });
 }

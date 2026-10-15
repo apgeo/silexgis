@@ -3790,6 +3790,17 @@
       "handOverIntro": "The invitation for {{name}} ({{email}}) could not be sent by email, because this installation has no mail server or sending failed. Give them this link yourself; it lets them choose their password.",
       "handOverOnce": "Copy it now: it is shown only this once. It works once and for {{hours}} hours; after that, send the invitation again.",
       "handOverDone": "I have copied it",
+      "statusTwoFactor": "Second factor on",
+      "resetTwoFactor": "Reset second factor",
+      "resetTwoFactorConfirm": "Reset the second factor of {{name}}?",
+      "resetTwoFactorConfirmDetail": "Every second factor they set up is switched off — the authenticator app, codes by email or text message — and their recovery codes stop working. They are signed out on every device and are told by email. They can then sign in with their password alone and set up a second factor again from their security settings.",
+      "twoFactorReset": "The second factor of {{name}} was reset.",
+      "groupsTitle": "Permission groups",
+      "groupsIntro": "What this account belongs to. Membership is changed on the permission groups page, not here.",
+      "groupsNone": "Only the group every account belongs to.",
+      "groupsFailed": "The permission groups could not be read.",
+      "groupDirect": "member",
+      "groupThrough": "through {{groups}}",
       "problems": {
         "lastAdministrator": "This is the last full administrator who can sign in. Make somebody else a full administrator first, or the installation would have nobody to administer it.",
         "cannotLockSelf": "You cannot lock your own account.",
@@ -3798,7 +3809,10 @@
         "alreadyEnterable": "This account can already be signed in to. Its owner resets their own password.",
         "notFound": "This account no longer exists.",
         "invalid": "Check the name and the address.",
-        "forbidden": "You are not allowed to do this."
+        "forbidden": "You are not allowed to do this.",
+        "cannotResetOwnTwoFactor": "You manage your own second factor from your security settings.",
+        "twoFactorNotEnabled": "This account has no second factor switched on, so there is nothing to reset.",
+        "fullAdministratorTwoFactor": "Only a full administrator can reset the second factor of a full administrator."
       }
     },
     "messaging": {
