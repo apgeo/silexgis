@@ -96,8 +96,8 @@ services:
       SILEXGIS__Terrain__PublishRoot: /data/terrain/published
     volumes:
       - silexgis-files:/data/files
-      # Data-protection keys must survive container recreation, or every deploy would
-      # invalidate outstanding file-access tokens and cookies.
+      # Data-protection keys and the token certificates must survive container recreation, or
+      # every deploy would invalidate outstanding file-access tokens, cookies and sign-ins.
       - silexgis-keys:/data/keys
       # Terrain. Bind-mount a directory on a large disk here instead of using the named volume
       # if the machine's system disk is small — a national build is tens of gigabytes.

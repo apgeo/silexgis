@@ -364,11 +364,14 @@ It protects against none of the following, and nothing at the storage layer can:
 
 ### Two things stored in the clear that may surprise you
 
-- **The data-protection keys** in `/data/keys` are stored unencrypted. They protect sign-in
-  cookies, file-download links and confirmation e-mails — all short-lived — so losing them logs
-  everyone out and invalidates outstanding download links, and nothing more. They are
-  deliberately excluded from backups for that reason. Anyone who can read them can forge a
-  download link or a session, so the directory deserves the same care as the files themselves.
+- **The data-protection keys** in `/data/keys` are stored unencrypted, and so are the two
+  certificates the sign-in tokens are signed and encrypted with (`token-signing.pfx`,
+  `token-encryption.pfx`, written readable by their owner only), unless you configure your own.
+  They protect sign-in cookies, tokens, file-download links and confirmation e-mails — all
+  short-lived or renewable — so losing them logs everyone out and invalidates outstanding
+  download links, and nothing more. They are deliberately excluded from backups for that reason.
+  Anyone who can read them can forge a download link, a session or a token, so the directory
+  deserves the same care as the files themselves.
 - **Secrets saved through the admin settings pages** — the outgoing-mail password and the SMS
   gateway's authorisation header — are stored as plain text in the database. The interface never
   sends them back to a browser, but they are readable in the database and therefore in any
@@ -1538,6 +1541,10 @@ the reasoning beside each one.
 | `SILEXGIS__Proxy__Hops` | `1` | how many reverse proxies stand between a caller and the application, **exactly**. The three per-address limits above and below find the caller by walking `X-Forwarded-For` back this many hops. The packaged stack has one (its web front); the HTTPS overlay has two and sets `2` itself; your own proxy in front of the web service makes two, and you set it — see "Your own proxy" under [Enabling HTTPS](#enabling-https). Too low, and every caller counts as your proxy and shares one allowance; too high, and a caller can write an address of their own into the header |
 | `SILEXGIS__Proxy__TrustedNetworks__0`, `__1`, … | loopback and the private ranges | the networks those proxies speak from, in CIDR notation, one per index. Only needed for a proxy on a public address (a CDN, a proxy on another machine). **Naming any replaces the built-in list** rather than adding to it, so name the private range your own services speak from too |
 | `SILEXGIS__Auth__SpeleoLocRefreshTokenDays` | `45` | how long the SpeleoLoc mobile app may stay offline before a caver has to sign in on it again. The clock restarts at every successful sync, not at sign-in. Values outside 1 to 365 days are brought back inside that range |
+| `SILEXGIS__Auth__SigningCertificatePath` | *(unset)* | a PKCS#12 (`.pfx`) file, private key included, to sign sign-in tokens with. Unset, the API makes one on first start and keeps it in the keys directory as `token-signing.pfx` (owner-readable only), renewing it by itself thirty days before its five years run out and keeping the outgoing one so nobody is signed out. A file of your own is never renewed: the log warns at every start in its last thirty days, and replacing it signs everybody out once |
+| `SILEXGIS__Auth__SigningCertificatePassword` | *(unset)* | the password of that file, if it has one |
+| `SILEXGIS__Auth__EncryptionCertificatePath` | *(unset)* | the same for the certificate that encrypts the tokens only the server reads (refresh tokens, authorization codes); made and kept as `token-encryption.pfx` when unset |
+| `SILEXGIS__Auth__EncryptionCertificatePassword` | *(unset)* | the password of that file, if it has one |
 | `SILEXGIS__Sync__PageSizeMax` | `500` | the largest page of rows the mobile sync surface hands back in one response. A phone asks for this figure before it starts and sizes its own requests to it. Values outside 1 to 5000 are brought back inside that range |
 | `SILEXGIS__Sync__DefaultPageSize` | `100` | the page a phone gets when it asks the mobile sync surface for one without naming a size. Deliberately well under the ceiling above: a first sync happens on whatever connection a cave's car park has, and a page that has to be retried whole is cheaper to retry small. A value above `SILEXGIS__Sync__PageSizeMax` is served as that maximum rather than refused, because the request it applies to named no size to argue with; values below 1 are brought back to 1 |
 | `SILEXGIS__Sync__AllowAdministratorRead` | `false` | lets a full administrator read a sync set belonging to another account — the named selection of caves a caver's phone carries, the club its uploads are created for, its code-generation settings and when it was last edited. Off unless you turn it on: a sync set is the one thing in the installation that says where a particular person goes, so an installation opts into that support ability deliberately rather than inheriting it. It widens **reading one set whose identifier the administrator already knows**, and nothing else — the listing still answers with the caller's own sets so it cannot be used to count anybody's, replacing and deleting a set stay the owner's alone, and no device can download or upload through a set it does not own however privileged the account it is signed in as. The identifier has to come from the caver, their phone or the database — nothing in the web interface shows another account's set identifier, and this setting deliberately adds no way to find one: it answers "what does this set carry?" for somebody already handed the identifier, never "which sets does that caver have?" |
@@ -1626,7 +1633,7 @@ the reasoning beside each one.
 | `SILEXGIS__Import__MaxScanRows` | `150000` | the most rows one upload's review list reads. A bigger file is still imported whole and still drawn as a layer — only the review is bounded, and it says so. The list is paged to the browser, so this buys reviewable rows rather than rows drawn at once; what it costs is the single scan that ranks and de-duplicates them |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB) |
-| `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys (must persist across restarts) |
+| `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys and the sign-in token certificates (must persist across restarts, and be shared by every API instance of one installation) |
 | `SILEXGIS__Conversion__Enabled` | `false` | use a document-conversion service so office documents can be read page by page. Needs the converter overlay running; without it those documents are still stored, searched and downloaded |
 | `SILEXGIS__Conversion__Url` | — | where that service is, e.g. `http://convert:3000` |
 | `SILEXGIS__Conversion__TimeoutSeconds` | `120` | how long one conversion may take before it is given up on |

@@ -174,6 +174,8 @@ export const groups = {
     'MfaAndRateLimitTests', 'PerMinuteLimitTests', 'ProfileVisibilityTests', 'ProxyHopsCheckTests',
     'StartupSettingsTests', 'TestLoginTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
     'UserAdministrationTests',
+    // The certificates tokens are signed and encrypted with, kept in the keys directory.
+    'TokenCertificateTests', 'TokenCertificateStoreTests',
   ],
   resLinks: [
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',

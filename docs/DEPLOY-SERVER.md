@@ -152,7 +152,7 @@ Persistent state lives in four named Docker volumes and nowhere else:
 |---|---|
 | `silexgis-db` | the database |
 | `silexgis-files` | uploaded documents and photographs |
-| `silexgis-keys` | data-protection keys (sessions, file links) |
+| `silexgis-keys` | data-protection keys and token certificates (sessions, sign-in tokens, file links) |
 | `silexgis-terrain` | terrain builds and published pyramids |
 
 ## Updating
@@ -203,8 +203,9 @@ ls -lh /var/backups/silexgis
 
 Three things are deliberately *not* in a backup, and all three are recoverable without one:
 
-- **Data-protection keys.** Losing them invalidates outstanding file links and signs everyone
-  out. It does not touch stored data.
+- **Data-protection keys and token certificates.** Losing them invalidates outstanding file
+  links and signs everyone out (new certificates are made at the next start). It does not touch
+  stored data.
 - **Baked terrain.** Derived data whose recipe is in the database. Rebuild it. The exception is
   a raster **uploaded through the browser**, which has exactly one copy under the build root and
   none in the file store — an installation fed that way should add `silexgis-terrain` to its

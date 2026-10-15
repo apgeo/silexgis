@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Options;
 using OpenIddict.Validation.AspNetCore;
 using SilexGis.Domain;
 using SilexGis.Infrastructure;
@@ -114,11 +115,10 @@ public static class AuthenticationSetup
                 options.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));
                 options.SetRefreshTokenLifetime(TimeSpan.FromDays(30));
 
-                // Development certificates are auto-created and persisted per machine.
-                // Production installations must mount stable certificates — tracked for the
-                // deployment work; tokens are invalidated on key rotation.
-                options.AddDevelopmentEncryptionCertificate()
-                    .AddDevelopmentSigningCertificate();
+                // The signing and encryption certificates come from TokenCertificateSetup: the
+                // operator's files when configured, otherwise certificates made once and kept in the
+                // keys directory, so that recreating the container signs nobody out and a second
+                // instance validates the first one's tokens.
 
                 // Standard JWT access tokens.
                 options.DisableAccessTokenEncryption();
@@ -151,6 +151,7 @@ public static class AuthenticationSetup
         }
 
         services.AddScoped<ExternalAuthService>();
+        services.AddSingleton<IConfigureOptions<OpenIddict.Server.OpenIddictServerOptions>, TokenCertificateSetup>();
 
         // AddIdentity made the cookie the default scheme; the API default is bearer.
         services.Configure<AuthenticationOptions>(options =>
