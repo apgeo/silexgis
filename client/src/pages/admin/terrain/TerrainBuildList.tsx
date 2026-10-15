@@ -17,26 +17,48 @@ import { useTranslation } from 'react-i18next';
 import i18n from '../../../i18n';
 import {
   terrainBuildUnsettled,
+  useCancelTerrainBuild,
   useChooseTerrainBuild,
   useDeleteTerrainBuild,
+  useRetryTerrainBuild,
   useStopDrawingTerrainBuild,
   useTerrainBuilds,
 } from '../../../api/hooks.ts';
 import type { TerrainBuild, TerrainBuildStatus } from '../../../api/hooks.ts';
 import { formatBbox } from './terrainArea.ts';
 import {
+  TERRAIN_BUILD_STATE_LABELS,
   TERRAIN_PAGE_SIZE,
+  buildState,
   formatBuildDuration,
   formatBuildSize,
   geometryBbox,
   mayActivate,
+  mayCancel,
+  mayRetry,
 } from './terrainBuild.ts';
+import type { TerrainBuildState } from './terrainBuild.ts';
 import { terrainProblemMessage } from './terrainProblems.ts';
 import TerrainBuildProgress from './TerrainBuildProgress.tsx';
 
-/** Which colour a run's state is worth: only a failure is an alarm, only success is a result. */
-function statusColour(status: TerrainBuildStatus): string {
-  return status === 'failed' ? 'error' : status === 'succeeded' ? 'success' : 'processing';
+/**
+ * Which colour a run's state is worth: only a failure is an alarm, only success is a result. A
+ * build somebody called off is neither — it stopped because a person chose that — and one being
+ * called off is a warning that it is still running for a little while yet.
+ */
+function stateColour(state: TerrainBuildState): string {
+  switch (state) {
+    case 'failed':
+      return 'error';
+    case 'succeeded':
+      return 'success';
+    case 'cancelled':
+      return 'default';
+    case 'cancelling':
+      return 'warning';
+    default:
+      return 'processing';
+  }
 }
 
 interface Props {
@@ -67,6 +89,8 @@ export default function TerrainBuildList({ canExecute, canDelete }: Props) {
   const choose = useChooseTerrainBuild();
   const stopDrawing = useStopDrawingTerrainBuild();
   const remove = useDeleteTerrainBuild();
+  const cancel = useCancelTerrainBuild();
+  const retry = useRetryTerrainBuild();
 
   const builds = data?.items ?? [];
   // The newest build is what somebody arriving mid-run came to look at, so the pipeline view is
@@ -128,7 +152,9 @@ export default function TerrainBuildList({ canExecute, canDelete }: Props) {
               dataIndex: 'status',
               render: (status: TerrainBuildStatus, build: TerrainBuild) => (
                 <Space size={4} wrap>
-                  <Tag color={statusColour(status)}>{t(`terrain.statuses.${status}`)}</Tag>
+                  <Tag color={stateColour(buildState(build))} data-testid={`terrain-state-${build.id}`}>
+                    {t(TERRAIN_BUILD_STATE_LABELS[buildState(build)])}
+                  </Tag>
                   {build.isActive && (
                     <Tag color="blue" data-testid={`terrain-active-${build.id}`}>
                       {t('terrain.list.current')}
@@ -220,6 +246,41 @@ export default function TerrainBuildList({ canExecute, canDelete }: Props) {
                       }
                     >
                       {t('terrain.list.stop')}
+                    </Button>
+                  )}
+                  {/*
+                    Calling a build off is under execute, the right that starts one: nothing it
+                    did is destroyed, and running it again carries on from where it stopped.
+                    Confirmed all the same, because a bake called off is hours that have to be
+                    spent again from the start of the bake.
+                  */}
+                  {canExecute && mayCancel(build) && (
+                    <Popconfirm
+                      title={t('terrain.list.cancelConfirm')}
+                      okText={t('terrain.list.cancel')}
+                      okButtonProps={{ danger: true }}
+                      onConfirm={() =>
+                        void run(
+                          cancel.mutateAsync(build.id),
+                          build.status === 'queued'
+                            ? 'terrain.list.cancelled'
+                            : 'terrain.list.cancelAsked',
+                        )
+                      }
+                    >
+                      <Button size="small" data-testid={`terrain-cancel-${build.id}`}>
+                        {t('terrain.list.cancel')}
+                      </Button>
+                    </Popconfirm>
+                  )}
+                  {canExecute && mayRetry(build) && (
+                    <Button
+                      size="small"
+                      data-testid={`terrain-retry-${build.id}`}
+                      loading={retry.isPending}
+                      onClick={() => void run(retry.mutateAsync(build.id), 'terrain.list.retried')}
+                    >
+                      {t('terrain.list.retry')}
                     </Button>
                   )}
                   {canDelete && (

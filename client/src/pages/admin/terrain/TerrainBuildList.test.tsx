@@ -10,6 +10,8 @@ import type { TerrainBuild, TerrainBuildDetail } from '../../../api/hooks.ts';
 const chooseMutate = vi.fn();
 const stopMutate = vi.fn();
 const deleteMutate = vi.fn();
+const cancelMutate = vi.fn();
+const retryMutate = vi.fn();
 
 function build(overrides: Partial<TerrainBuild>): TerrainBuild {
   return {
@@ -31,6 +33,7 @@ function build(overrides: Partial<TerrainBuild>): TerrainBuild {
     startedAt: '2026-08-17T06:00:00Z',
     finishedAt: '2026-08-17T06:00:12Z',
     updatedAt: '2026-08-17T06:00:12Z',
+    cancelRequestedAt: null,
     ...overrides,
   } as TerrainBuild;
 }
@@ -55,10 +58,23 @@ vi.mock('../../../api/hooks.ts', async () => {
     useChooseTerrainBuild: () => ({ mutateAsync: chooseMutate, isPending: false }),
     useStopDrawingTerrainBuild: () => ({ mutateAsync: stopMutate, isPending: false }),
     useDeleteTerrainBuild: () => ({ mutateAsync: deleteMutate, isPending: false }),
+    useCancelTerrainBuild: () => ({ mutateAsync: cancelMutate, isPending: false }),
+    useRetryTerrainBuild: () => ({ mutateAsync: retryMutate, isPending: false }),
   };
 });
 
 const { default: TerrainBuildList } = await import('./TerrainBuildList.tsx');
+
+/**
+ * The confirmation's own button, which carries the same words as the row's: told apart by the
+ * row's test id, which the confirmation's button does not have.
+ */
+async function confirmCallOff(): Promise<HTMLElement> {
+  const buttons = await screen.findAllByRole('button', { name: 'Call off' });
+  const confirm = buttons.find((button) => !button.dataset.testid);
+  expect(confirm).toBeDefined();
+  return confirm!;
+}
 
 function show(props: { canExecute?: boolean; canDelete?: boolean } = {}) {
   return render(
@@ -72,6 +88,8 @@ beforeEach(() => {
   chooseMutate.mockReset().mockResolvedValue({});
   stopMutate.mockReset().mockResolvedValue({});
   deleteMutate.mockReset().mockResolvedValue(undefined);
+  cancelMutate.mockReset().mockResolvedValue({});
+  retryMutate.mockReset().mockResolvedValue({});
   builds = [build({})];
   detail = { build: builds[0], logTail: null, sources: [] };
 });
@@ -178,6 +196,96 @@ describe('TerrainBuildList', () => {
     expect(screen.getByTestId('terrain-delete-b1')).toBeInTheDocument();
   });
 
+  it('tells a build being called off and one that was apart from running and failed ones', () => {
+    builds = [
+      build({ id: 'running', status: 'running', phase: 'fetch' }),
+      build({ id: 'stopping', status: 'running', phase: 'bake', cancelRequestedAt: '2026-10-15T09:00:00Z' }),
+      build({ id: 'failed', status: 'failed', errorCode: 'terrain_build.bake_failed' }),
+      build({ id: 'off', status: 'failed', errorCode: 'terrain_build.cancelled' }),
+    ];
+    show();
+
+    expect(screen.getByTestId('terrain-state-running')).toHaveTextContent('Running');
+    expect(screen.getByTestId('terrain-state-stopping')).toHaveTextContent('Being cancelled');
+    expect(screen.getByTestId('terrain-state-failed')).toHaveTextContent('Failed');
+    expect(screen.getByTestId('terrain-state-off')).toHaveTextContent('Cancelled');
+  });
+
+  it('offers to call off only what has not stopped, and to run again only what has', () => {
+    builds = [
+      build({ id: 'queued', status: 'queued', phase: 'pending', pyramidVersion: null }),
+      build({ id: 'running', status: 'running', phase: 'bake', pyramidVersion: null }),
+      build({ id: 'stopping', status: 'running', phase: 'bake', cancelRequestedAt: '2026-10-15T09:00:00Z' }),
+      build({ id: 'failed', status: 'failed', errorCode: 'terrain_build.bake_unavailable' }),
+      build({ id: 'off', status: 'failed', errorCode: 'terrain_build.cancelled' }),
+      build({ id: 'done' }),
+    ];
+    show();
+
+    expect(screen.getByTestId('terrain-cancel-queued')).toBeInTheDocument();
+    expect(screen.getByTestId('terrain-cancel-running')).toBeInTheDocument();
+    // Already asked: the server would answer a second press as done, so there is nothing to offer.
+    expect(screen.queryByTestId('terrain-cancel-stopping')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('terrain-cancel-done')).not.toBeInTheDocument();
+
+    expect(screen.getByTestId('terrain-retry-failed')).toBeInTheDocument();
+    expect(screen.getByTestId('terrain-retry-off')).toBeInTheDocument();
+    for (const id of ['queued', 'running', 'stopping', 'done']) {
+      expect(screen.queryByTestId(`terrain-retry-${id}`)).not.toBeInTheDocument();
+    }
+  });
+
+  it('offers neither to somebody who may read builds but not start them', () => {
+    builds = [
+      build({ id: 'running', status: 'running', phase: 'bake' }),
+      build({ id: 'failed', status: 'failed', errorCode: 'terrain_build.bake_failed' }),
+    ];
+    show({ canExecute: false, canDelete: true });
+
+    expect(screen.queryByTestId('terrain-cancel-running')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('terrain-retry-failed')).not.toBeInTheDocument();
+  });
+
+  it('confirms before calling a build off, and says whether it stopped or is stopping', async () => {
+    builds = [build({ id: 'running', status: 'running', phase: 'bake' })];
+    const running = show();
+
+    fireEvent.click(screen.getByTestId('terrain-cancel-running'));
+    // Nothing is sent until the confirmation is answered.
+    expect(cancelMutate).not.toHaveBeenCalled();
+    expect(await screen.findByText(/obtained and prepared is kept/)).toBeInTheDocument();
+    fireEvent.click(await confirmCallOff());
+    expect(await screen.findByText(/will stop at the first point it can/)).toBeInTheDocument();
+    expect(cancelMutate).toHaveBeenCalledWith('running');
+    running.unmount();
+
+    builds = [build({ id: 'queued', status: 'queued', phase: 'pending', pyramidVersion: null })];
+    show();
+    fireEvent.click(screen.getByTestId('terrain-cancel-queued'));
+    fireEvent.click(await confirmCallOff());
+    expect(await screen.findByText('The build was called off.')).toBeInTheDocument();
+  });
+
+  it('runs a stopped build again, and words the refusal while its bake is still stopping', async () => {
+    retryMutate.mockImplementation((id: string) =>
+      id === 'stopping'
+        ? Promise.reject(new ApiError(409, 'terrain_build.bake_stopping'))
+        : Promise.resolve({}),
+    );
+
+    builds = [build({ id: 'stopping', status: 'failed', errorCode: 'terrain_build.cancelled' })];
+    const stopping = show();
+    fireEvent.click(screen.getByTestId('terrain-retry-stopping'));
+    expect(await screen.findByText(/has not yet said it stopped/)).toBeInTheDocument();
+    stopping.unmount();
+
+    builds = [build({ id: 'failed', status: 'failed', errorCode: 'terrain_build.bake_unavailable' })];
+    show();
+    fireEvent.click(screen.getByTestId('terrain-retry-failed'));
+    expect(await screen.findByText(/queued again and will carry on/)).toBeInTheDocument();
+    expect(retryMutate).toHaveBeenCalledWith('failed');
+  });
+
   it('stops asking once nothing on the page is still running, and asks while anything is', () => {
     // This is the rule the list itself hands to the query, not a neighbouring one that happens to
     // say the same thing: the interval disables itself rather than being cleared by whoever
@@ -269,9 +377,43 @@ describe('the pipeline view', () => {
     expect(screen.queryByTestId('terrain-worker-missing')).not.toBeInTheDocument();
     expect(notice).not.toHaveTextContent('SILEXGIS__Terrain__BakeEnabled=true');
     // What it says about this build is only what is true of it: the work before the bake stands,
-    // and nothing anywhere can carry that build on from where it stopped.
+    // and running the same build again carries it on from the bake.
     expect(notice).toHaveTextContent('still on disk under it');
+    expect(notice).toHaveTextContent('press Run again on the stopped build');
+    expect(screen.getByTestId('terrain-retry-b1')).toBeInTheDocument();
     expect(screen.queryByTestId('terrain-build-failure')).not.toBeInTheDocument();
+  });
+
+  it('says a build is being called off while it still runs, and shows a called-off one as no alarm', () => {
+    const stopping = build({
+      id: 'b1',
+      status: 'running',
+      phase: 'bake',
+      progress: 45,
+      cancelRequestedAt: '2026-10-15T09:00:00Z',
+      pyramidVersion: null,
+    });
+    builds = [stopping];
+    detail = { build: stopping, logTail: null, sources: [] };
+    const running = show();
+    expect(screen.getByTestId('terrain-build-cancelling')).toHaveTextContent('being cancelled');
+    running.unmount();
+
+    const off = build({
+      id: 'b1',
+      status: 'failed',
+      phase: 'bake',
+      progress: 45,
+      errorCode: 'terrain_build.cancelled',
+      message: 'Called off. What it had obtained and prepared is kept.',
+      pyramidVersion: null,
+    });
+    builds = [off];
+    detail = { build: off, logTail: null, sources: [] };
+    show();
+    expect(screen.getByTestId('terrain-build-cancelled')).toHaveTextContent('Called off.');
+    expect(screen.queryByTestId('terrain-build-failure')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('terrain-build-cancelling')).not.toBeInTheDocument();
   });
 
   it('answers an installation that has built nothing with what to do next', () => {

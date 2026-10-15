@@ -118,6 +118,10 @@
       "succeeded": "Finished",
       "failed": "Failed"
     },
+    "cancelStates": {
+      "cancelling": "Being cancelled",
+      "cancelled": "Cancelled"
+    },
     "phases": {
       "pending": "Waiting its turn — nothing has started yet.",
       "fetch": "Obtain",
@@ -147,13 +151,21 @@
       "stop": "Stop drawing",
       "stopped": "The scene draws bare ground again.",
       "delete": "Delete",
-      "deleteConfirm": "Remove this build and the {{size}} it is keeping on disk for {{area}}?"
+      "deleteConfirm": "Remove this build and the {{size}} it is keeping on disk for {{area}}?",
+      "cancel": "Call off",
+      "cancelConfirm": "Call off this build? What it has already obtained and prepared is kept, so it can be run again later from where it stopped.",
+      "cancelled": "The build was called off.",
+      "cancelAsked": "The build will stop at the first point it can; until then it is shown as being cancelled.",
+      "retry": "Run again",
+      "retried": "The build is queued again and will carry on from where it stopped."
     },
     "detail": {
       "title": "This build",
       "sources": "Made from",
       "noSources": "Nothing has been recorded for this build yet.",
       "failed": "This build stopped before it finished.",
+      "cancelled": "This build was called off.",
+      "cancelling": "This build is being cancelled. It stops at the first point it can — between two files, or, while tiles are being made, once the tile maker has said it stopped.",
       "log": "What the tool said",
       "noLog": "Nothing has been said yet."
     },
@@ -162,7 +174,7 @@
       "body": "Obtaining elevation data and preparing it work as they are. Making tiles out of it needs a service of its own, which a plain installation does not start: its image is well over a gigabyte, and an installation that never builds terrain should not have to hold it.",
       "setting": "In the environment file beside the deployment's compose files:",
       "command": "Then, from that same directory:",
-      "resumes": "Everything before this step still happened, and what the build obtained and prepared is still on disk under it. There is no way to take that build further from here: once the service is running, start a build again over the same rectangle, and remove the stopped one to get back the disk it is holding."
+      "resumes": "Everything before this step still happened, and what the build obtained and prepared is still on disk under it. Once the service is running, press Run again on the stopped build: it carries on from the step it stopped at, without obtaining or preparing anything a second time."
     },
     "problems": {
       "notFound": "That build is no longer here.",
@@ -181,6 +193,9 @@
       "notPublished": "That build has no surface to draw. Its tiles were either never read back and found whole, or they are no longer where terrain is served from.",
       "active": "That build is the terrain the scene is drawing. Choose other terrain, or stop drawing this one, before removing it.",
       "running": "That build has not finished. Its files are being written right now, so it can be removed once it has stopped, whichever way it stops.",
+      "notCancellable": "That build has already stopped, so there is nothing to call off.",
+      "notRetryable": "Only a build that has stopped can be run again. This one is still queued or running, or it finished.",
+      "bakeStopping": "That build was called off while its tiles were being made, and the tile maker has not yet said it stopped. It answers as soon as the terrain worker is running; run the build again after that.",
       "derivativeBuildNotFound": "That build is no longer here, or has nothing to draw the ground from.",
       "derivativeNotFound": "That picture is no longer here.",
       "derivativeNotReady": "That picture is not finished yet, so there is nothing to fetch.",

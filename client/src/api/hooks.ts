@@ -10774,6 +10774,37 @@ export function useDeleteTerrainDerivative() {
 }
 
 /**
+ * Calls a build off.
+ *
+ * Answers with the build as it now stands: a queued one is already stopped, a running one is still
+ * running with the time the request was made, until it reaches a point where it can stop. The list
+ * is re-read either way, and keeps polling while anything on it is unsettled, so the second state
+ * turns into the first on screen without anything further being pressed.
+ */
+export function useCancelTerrainBuild() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/api/v1/terrain/builds/{id}/cancel', { params: { path: { id } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainBuilds });
+    },
+  });
+}
+
+/** Puts a stopped build back on the queue, to carry on from where it stopped. */
+export function useRetryTerrainBuild() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/api/v1/terrain/builds/{id}/retry', { params: { path: { id } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainBuilds });
+    },
+  });
+}
+
+/**
  * Removes a build and the disk it was keeping.
  *
  * The map configuration goes with it even though the build being drawn cannot be deleted: another
