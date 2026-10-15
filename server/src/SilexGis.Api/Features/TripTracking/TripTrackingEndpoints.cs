@@ -1202,14 +1202,24 @@ public static class TripTrackingEndpoints
             surveyModelId, caveFeatureId, resolvedStation, resolvedToStation, depthEntered, placement, null);
     }
 
-    /// <summary>The places a cave has declared names and stations for, ordered by depth.</summary>
+    /// <summary>
+    /// The depths a cave has declared the meaning of — station and name — ordered by depth.
+    /// </summary>
+    /// <remarks>
+    /// Only the places that have a depth. A place the cave names without one says nothing about
+    /// any depth, so it is never a candidate for placing a report, recording one, correcting one,
+    /// importing a sheet of them or previewing where a depth would land — every one of which reads
+    /// through here — and the chooser of places a report can be made at, which reads here too,
+    /// offers only places that a depth stands for.
+    /// </remarks>
     internal static async Task<IReadOnlyList<DeclaredDepthPlaces.Declared>> DeclaredPlacesOfAsync(
         SilexGisDbContext db, Guid caveFeatureId, CancellationToken ct)
     {
         var rows = await db.CaveDepthPlaces.AsNoTracking()
             .Where(p => p.CaveFeatureId == caveFeatureId)
+            .WithDepth()
             .OrderBy(p => p.DepthM)
-            .Select(p => new { p.DepthM, p.ViewerStationName, p.PlaceLabel })
+            .Select(p => new { DepthM = p.DepthM!.Value, p.ViewerStationName, p.PlaceLabel })
             .ToListAsync(ct);
 
         return [.. rows.Select(r =>

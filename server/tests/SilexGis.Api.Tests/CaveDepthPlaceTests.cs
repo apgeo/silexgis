@@ -313,6 +313,205 @@ public sealed class CaveDepthPlaceTests : IAsyncLifetime, IDisposable, IClassFix
         (await ListAsync(owner, cave)).Select(InSurvey).ShouldBe([true, true, false, false]);
     }
 
+    // ---- places named without a depth ---------------------------------------------------------
+
+    [Fact]
+    public async Task A_station_is_named_without_a_depth_and_naming_it_again_corrects_it()
+    {
+        var cave = await CaveAsync();
+
+        // A place a club's list names and nobody reports by a number: a station, a name, a few
+        // words where a single depth would not say enough, and whether it is named on the drawing.
+        var written = await NameAsync(cave, "cave.hall.4", "Sala Mare", note: "601/0 - 619", landmark: true);
+        written.GetProperty("depthM").ValueKind.ShouldBe(JsonValueKind.Null);
+        written.GetProperty("note").GetString().ShouldBe("601/0 - 619");
+        written.GetProperty("landmark").GetBoolean().ShouldBeTrue();
+
+        // Read back, by the writer and by somebody who may only read the cave.
+        foreach (var client in new[] { owner, reader })
+        {
+            var rows = await ListAsync(client, cave);
+            rows.Count.ShouldBe(1);
+            rows[0].GetProperty("id").GetGuid().ShouldBe(written.GetProperty("id").GetGuid());
+            rows[0].GetProperty("depthM").ValueKind.ShouldBe(JsonValueKind.Null);
+            rows[0].GetProperty("stationName").GetString().ShouldBe("cave.hall.4");
+            rows[0].GetProperty("placeLabel").GetString().ShouldBe("Sala Mare");
+            rows[0].GetProperty("note").GetString().ShouldBe("601/0 - 619");
+            rows[0].GetProperty("landmark").GetBoolean().ShouldBeTrue();
+        }
+
+        // Among the places without a depth the station is the key: naming the same station again
+        // is a correction of its name, its note and its flag — a write that says nothing of the
+        // note or the flag takes them away, as a write replaces the declaration whole.
+        var corrected = await NameAsync(cave, "cave.hall.4", "Sala Mare de Sus");
+        corrected.GetProperty("id").GetGuid().ShouldBe(written.GetProperty("id").GetGuid());
+        var after = await ListAsync(owner, cave);
+        after.Count.ShouldBe(1);
+        after[0].GetProperty("placeLabel").GetString().ShouldBe("Sala Mare de Sus");
+        after[0].GetProperty("note").ValueKind.ShouldBe(JsonValueKind.Null);
+        after[0].GetProperty("landmark").GetBoolean().ShouldBeFalse();
+
+        // Another station is another place; and the same station declared at a depth is a
+        // declaration of that depth, which stands beside the name rather than replacing it.
+        await NameAsync(cave, "cave.hall.5", "Sala Mică");
+        await DeclareAsync(cave, 120m, "cave.hall.4", "Puțul");
+        (await ListAsync(owner, cave)).Select(r => (Depth(r), r.GetProperty("stationName").GetString()))
+            .ShouldBe([(120m, "cave.hall.4"), (null, "cave.hall.4"), (null, "cave.hall.5")]);
+    }
+
+    [Fact]
+    public async Task A_station_with_neither_a_depth_nor_a_name_declares_nothing_and_is_refused()
+    {
+        var cave = await CaveAsync();
+
+        foreach (var label in new[] { null, "", "   " })
+        {
+            var refused = await owner.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
+                new { depthM = (decimal?)null, stationName = "cave.hall.4", placeLabel = label });
+            var said = await refused.Content.ReadAsStringAsync();
+            refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, said);
+            var problem = JsonDocument.Parse(said).RootElement;
+            problem.GetProperty("code").GetString().ShouldBe("validation.failed");
+            problem.GetProperty("errors").TryGetProperty("PlaceLabel", out _).ShouldBeTrue(said);
+        }
+
+        // Nor is a depth simply left out of the body.
+        var omitted = await owner.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
+            new { stationName = "cave.hall.4" });
+        omitted.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        (await ListAsync(owner, cave)).ShouldBeEmpty();
+
+        // The positive twins: the same station with a name and no depth, and with a depth and no
+        // name, are both declarations.
+        await NameAsync(cave, "cave.hall.4", "Sala Mare");
+        await DeclareAsync(cave, 45m, "cave.hall.4", null);
+        (await ListAsync(owner, cave)).Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_depth_declaration_carries_a_note_and_a_landmark_and_a_write_without_them_takes_them_away()
+    {
+        var cave = await CaveAsync();
+        var written = await owner.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
+            new { depthM = 96m, stationName = "cave.upper.2", placeLabel = "Meandrul", note = " 96 / 102 ", landmark = true });
+        written.StatusCode.ShouldBe(HttpStatusCode.OK, await written.Content.ReadAsStringAsync());
+
+        var rows = await ListAsync(owner, cave);
+        Depth(rows[0]).ShouldBe(96m);
+        // Kept as it was typed, less the spaces around it.
+        rows[0].GetProperty("note").GetString().ShouldBe("96 / 102");
+        rows[0].GetProperty("landmark").GetBoolean().ShouldBeTrue();
+
+        // A blank note is no note.
+        var blank = await owner.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
+            new { depthM = 96m, stationName = "cave.upper.2", placeLabel = "Meandrul", note = "  ", landmark = true });
+        blank.StatusCode.ShouldBe(HttpStatusCode.OK, await blank.Content.ReadAsStringAsync());
+        (await ListAsync(owner, cave))[0].GetProperty("note").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The depth is the key and the write replaces the declaration whole, flag included.
+        await DeclareAsync(cave, 96m, "cave.upper.2", "Meandrul");
+        var replaced = await ListAsync(owner, cave);
+        replaced.Count.ShouldBe(1);
+        replaced[0].GetProperty("landmark").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_note_is_a_few_words_and_a_longer_one_is_refused()
+    {
+        var cave = await CaveAsync();
+        var refused = await owner.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
+            new { depthM = (decimal?)null, stationName = "cave.hall.4", placeLabel = "Sala", note = new string('x', 201) });
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ListAsync(owner, cave)).ShouldBeEmpty();
+
+        // At the bound it is taken.
+        await NameAsync(cave, "cave.hall.4", "Sala", note: new string('x', 200));
+        (await ListAsync(owner, cave))[0].GetProperty("note").GetString()!.Length.ShouldBe(200);
+    }
+
+    [Fact]
+    public async Task The_list_gives_the_depths_shallowest_first_then_the_places_without_one_as_they_were_declared()
+    {
+        var cave = await CaveAsync();
+
+        // Interleaved on purpose, and the depthless ones in an order that is not the order of
+        // their stations or their names: what comes back can only be the rule's.
+        await NameAsync(cave, "cave.z.9", "Joncțiunea");
+        await DeclareAsync(cave, 210m, "cave.lower.7", "Bivouac");
+        await NameAsync(cave, "cave.a.1", "Sala Mare");
+        await DeclareAsync(cave, 0m, "cave.entrance.0", "Entrance");
+        await NameAsync(cave, "cave.m.5", "Galeria");
+
+        var rows = await ListAsync(owner, cave);
+        rows.Select(r => (Depth(r), r.GetProperty("placeLabel").GetString())).ShouldBe(
+        [
+            (0m, "Entrance"),
+            (210m, "Bivouac"),
+            (null, "Joncțiunea"),
+            (null, "Sala Mare"),
+            (null, "Galeria"),
+        ]);
+
+        // A correction keeps a place where it was declared: naming the first station again moves
+        // nothing.
+        await NameAsync(cave, "cave.z.9", "Joncțiunea Mare");
+        (await ListAsync(owner, cave)).Skip(2).Select(r => r.GetProperty("placeLabel").GetString())
+            .ShouldBe(["Joncțiunea Mare", "Sala Mare", "Galeria"]);
+    }
+
+    [Fact]
+    public async Task The_database_itself_names_a_station_without_a_depth_once_per_cave()
+    {
+        var cave = await CaveAsync();
+        var other = await CaveAsync();
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        CaveDepthPlace Row(Guid caveId, decimal? depth, string label) => new()
+        {
+            CaveFeatureId = caveId,
+            DepthM = depth,
+            ViewerStationName = "cave.hall.4",
+            PlaceLabel = label,
+        };
+
+        // Beside it, what the index allows: the same station at depths, and in another cave.
+        db.CaveDepthPlaces.AddRange(
+            Row(cave, null, "Sala"), Row(cave, 10m, "Zece"), Row(cave, 20m, "Douăzeci"), Row(other, null, "Sala"));
+        await db.SaveChangesAsync();
+
+        // What it refuses: a second depthless row for one station of one cave, written past the
+        // route as a race between two first-time writes would reach it.
+        db.CaveDepthPlaces.Add(Row(cave, null, "Sala a doua"));
+        var refused = await Should.ThrowAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        refused.InnerException.ShouldBeOfType<Npgsql.PostgresException>()
+            .ConstraintName.ShouldBe("ux_cave_depth_places_cave_station_depthless");
+
+        // And the depth index still stands over the rows that have one.
+        db.ChangeTracker.Clear();
+        db.CaveDepthPlaces.Add(Row(cave, 10m, "Zece iar"));
+        var twice = await Should.ThrowAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        twice.InnerException.ShouldBeOfType<Npgsql.PostgresException>()
+            .ConstraintName.ShouldBe("ux_cave_depth_places_cave_depth");
+    }
+
+    [Fact]
+    public async Task A_place_named_without_a_depth_is_withdrawn_like_any_other()
+    {
+        var cave = await CaveAsync();
+        var named = await NameAsync(cave, "cave.hall.4", "Sala Mare");
+        await DeclareAsync(cave, 45m, "cave.upper.12", "Camp one");
+
+        (await owner.DeleteAsync($"/api/v1/caves/{cave}/depth-places/{named.GetProperty("id").GetGuid()}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await ListAsync(owner, cave)).Select(Depth).ShouldBe([45m]);
+
+        // Withdrawn, the station may be named again: the key is free.
+        await NameAsync(cave, "cave.hall.4", "Sala Mare");
+        (await ListAsync(owner, cave)).Count.ShouldBe(2);
+    }
+
     // ---- a station the survey file gives no name ----------------------------------------------
 
     [Fact]
@@ -383,6 +582,19 @@ public sealed class CaveDepthPlaceTests : IAsyncLifetime, IDisposable, IClassFix
     }
 
     // ---- helpers -----------------------------------------------------------------------------
+
+    private static decimal? Depth(JsonElement row) =>
+        row.GetProperty("depthM").ValueKind == JsonValueKind.Null ? null : row.GetProperty("depthM").GetDecimal();
+
+    /// <summary>Names a station of the cave without a depth, and returns the answer.</summary>
+    private async Task<JsonElement> NameAsync(
+        Guid cave, string station, string label, string? note = null, bool? landmark = null)
+    {
+        var response = await owner.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
+            new { depthM = (decimal?)null, stationName = station, placeLabel = label, note, landmark });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
+    }
 
     private static bool? InSurvey(JsonElement row) =>
         row.GetProperty("stationInSurvey").ValueKind switch

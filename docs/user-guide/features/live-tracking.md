@@ -471,13 +471,15 @@ always be corrected and deleted row by row.
 
 A depth on its own is not a place: where several stations sit near each other, arithmetic
 cannot tell which one people mean by "96 metres". The club can. On the **cave's** page, the
-section **What this cave's depths mean** → **Declare a depth**:
+section **This cave's named places** → **Declare a place**:
 
 | Field | |
 |---|---|
-| **Depth** | The depth being declared. Kept to one decimal; the sign is ignored |
-| **Station** | Which station that depth is. As you type, the stations of the cave's current survey whose names begin that way are offered under the box — capitals and accents do not matter — and choosing one fills in the survey's own spelling. Any name is still taken: the list is a help, not a rule |
-| **Place name** | Optional — the name people use for it ("Meander") |
+| **Depth** | The depth being declared. Kept to one decimal; the sign is ignored. Leave it empty to name a place without a depth (below) |
+| **Station** | Which station that depth — or that place — is. As you type, the stations of the cave's current survey whose names begin that way are offered under the box — capitals and accents do not matter — and choosing one fills in the survey's own spelling. Any name is still taken: the list is a help, not a rule |
+| **Place name** | The name people use for it ("Meander"). Optional where there is a depth, required where there is none |
+| **Note** | Optional — a few words shown beside the name where one depth does not say enough, such as a depth range written as text ("601/0 - 619"). At most 200 characters; shown as written, never read as a number |
+| **Named on the drawing** | Tick it for a place the club labels on the survey drawing itself, not only in its list of places. The table marks it **On the drawing** |
 
 The list under **Station** offers nothing where the cave has no survey that has been read yet,
 or where the cave's exact location is withheld from you; the box is then a plain text box. When
@@ -485,6 +487,15 @@ there are more names than it shows, its last line says how many — type more of
 
 - **One declaration per depth.** Declaring a depth again replaces what it said. Editing a
   declaration to a different depth writes the new one and then withdraws the old.
+- **A place can be named without a depth.** A hall, a junction, a place the club's own list of
+  the cave names and nobody reports by a number: leave **Depth** empty and give the station and a
+  name — a name is required then, because a station with neither declares nothing. Such a place
+  is listed after every depth, in the order places were declared, with **No depth** in the depth
+  column. Naming the same station again without a depth replaces its name, note and mark; the
+  same station may also be declared at a depth. **It is never used to place a report**: the report
+  card, the correction dialog and the spreadsheet import offer and match only places that have a
+  depth. Editing such a place to another station, or giving it a depth, writes the new one and then
+  withdraws the old — and the other way round when a depth is taken away.
 - **Every report of that depth lands on the declared station** — typed, corrected or imported —
   as long as the watch's survey still has that station. One that names a station the survey no
   longer has (a survey re-uploaded since) is passed over, the depth is placed by measurement,
@@ -507,6 +518,7 @@ there are more names than it shows, its last line says how many — type more of
   either way: where the current survey has not been read (even if another upload has), or the
   cave's location is withheld from you, nothing is said.
 - **Withdraw** removes a declaration. Reports already recorded keep the station they were given.
+  Withdrawing a place named without a depth only takes it off the cave's list of places.
 - **A station the survey file gives no name cannot be declared.** It is known only by the number
   its file wrote it at, and the next export of the survey gives that number to another station —
   so the declaration would come to mean a different place without anybody changing it. Declare
@@ -757,8 +769,11 @@ The page says what it is showing, for a reader who has never followed a trip:
   installation guide). Where it is on, somebody reported at a named station is shown as the name
   with the station under it — *Sala Mare* over `p.g.7` — on a trip being followed and in a replay
   of a past trip. Only declarations that have a name are published, and only for stations of the
-  survey the page draws. Where it is off, and for every station the cave has not named, the page
-  shows the station alone.
+  survey the page draws — places named without a depth included, each with its note and whether it
+  is named on the drawing, in the cave's own order (the depths first, shallowest first, then the
+  others as they were declared), so a page outside the application can draw the cave's whole list
+  of places beside the survey. Where it is off, and for every station the cave has not named, the
+  page shows the station alone.
 - **Each person's clubs — only where the installation publishes them.** An installation can let a
   published page say which caving groups each named person belongs to; it is **off** unless an
   administrator of the server turns it on (`SILEXGIS__TripTracking__PublishClubs`, see the

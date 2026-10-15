@@ -29,8 +29,34 @@ vi.mock('../../api/hooks.ts', async () => {
 const { default: CaveDepthPlacesSection } = await import('./CaveDepthPlacesSection.tsx');
 
 const DECLARED = [
-  { id: 'p-1', depthM: 96, stationName: 'upper.2', placeLabel: 'Meandru', stationInSurvey: true },
-  { id: 'p-2', depthM: 150, stationName: 'deep.3', placeLabel: null, stationInSurvey: true },
+  {
+    id: 'p-1',
+    depthM: 96,
+    stationName: 'upper.2',
+    placeLabel: 'Meandru',
+    note: null,
+    landmark: false,
+    stationInSurvey: true,
+  },
+  {
+    id: 'p-2',
+    depthM: 150,
+    stationName: 'deep.3',
+    placeLabel: null,
+    note: null,
+    landmark: false,
+    stationInSurvey: true,
+  },
+  // Named without a depth, with a few words beside the name, and named on the drawing.
+  {
+    id: 'p-3',
+    depthM: null,
+    stationName: 'hall.4',
+    placeLabel: 'Sala Mare',
+    note: '601/0 - 619',
+    landmark: true,
+    stationInSurvey: true,
+  },
 ];
 
 /** A cave's surveys: an older line plot, the one marked current, and a current file of walls. */
@@ -41,7 +67,17 @@ const SURVEYS = [
 ];
 
 beforeEach(() => {
-  write.mockReset().mockResolvedValue(DECLARED[0]);
+  // The server answers a write with the row it landed on. A write under a key nothing held lands
+  // on a new row; one under a key a row already holds lands on that row — which is what tells the
+  // section whether a correction left its old row behind.
+  write.mockReset().mockImplementation(async (body: { depthM: number | null; stationName: string }) => {
+    const sameKey = DECLARED.find((place) =>
+      body.depthM === null
+        ? place.depthM === null && place.stationName === body.stationName
+        : place.depthM === Math.abs(body.depthM),
+    );
+    return { id: sameKey?.id ?? 'p-new', ...body, stationInSurvey: null };
+  });
   remove.mockReset().mockResolvedValue(undefined);
   places.mockReset().mockReturnValue(DECLARED);
   models.mockReset().mockReturnValue(SURVEYS);
@@ -123,6 +159,8 @@ describe('CaveDepthPlacesSection', () => {
       depthM: 110,
       stationName: 'deep.4',
       placeLabel: 'Sala Mare',
+      note: null,
+      landmark: false,
     });
   });
 
@@ -186,6 +224,8 @@ describe('CaveDepthPlacesSection', () => {
       depthM: 97,
       stationName: 'upper.2',
       placeLabel: 'Meandru',
+      note: null,
+      landmark: false,
     });
     expect(remove.mock.calls[0][0]).toEqual({ id: 'p-1' });
     // Written first and withdrawn after, so a write that fails leaves the cave still declaring
@@ -212,11 +252,31 @@ describe('CaveDepthPlacesSection', () => {
       depthM: 96,
       stationName: 'upper.2',
       placeLabel: 'Meandrul Mare',
+      note: null,
+      landmark: false,
     });
     expect(remove).not.toHaveBeenCalled();
   });
 
-  it('withdraws nothing for a fresh declaration, even one typed right after an edit was abandoned', async () => {
+  it('withdraws nothing when the depth is typed with the sign field notes use', async () => {
+    // −96 is the same depth to the server, which files the write on the very row it was filled
+    // from. Withdrawing "the old row" then would withdraw the correction itself.
+    render(
+      <App>
+        <CaveDepthPlacesSection caveId="cave-1" canEdit />
+      </App>,
+    );
+    fireEvent.click(screen.getByTestId('cave-depth-place-edit-p-1'));
+    fireEvent.change(screen.getByTestId('cave-depth-place-depth'), { target: { value: '-96' } });
+    fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+
+    await waitFor(() => expect(write).toHaveBeenCalledOnce());
+    expect(write.mock.calls[0][0]).toMatchObject({ depthM: -96 });
+    await waitFor(() => expect(screen.queryByTestId('cave-depth-place-save')).toBeNull());
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+    it('withdraws nothing for a fresh declaration, even one typed right after an edit was abandoned', async () => {
     // What Edit remembered belongs to that edit. Cancelled, it must not make the next declaration
     // withdraw a row it has nothing to do with.
     render(
@@ -279,7 +339,151 @@ describe('CaveDepthPlacesSection', () => {
     expect(await screen.findByText('That could not be saved.')).toBeInTheDocument();
   });
 
-  it('offers no controls at all without write access', () => {
+  /**
+   * A place named without a depth.
+   *
+   * A hall or a junction a club's list names and nobody reports by a number: a station, a name,
+   * perhaps a few words beside it, perhaps named on the drawing. The name is what it is, so it is
+   * the one thing such a place cannot go without.
+   */
+  describe('a place named without a depth', () => {
+    it('shows the place with no depth, its note and its mark for the drawing', () => {
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+      expect(screen.getByText('Sala Mare')).toBeInTheDocument();
+      expect(screen.getByText(/^(No depth|Fără adâncime)$/)).toBeInTheDocument();
+      expect(screen.getByText('601/0 - 619')).toBeInTheDocument();
+      expect(screen.getByTestId('cave-depth-place-landmark-p-3')).toHaveTextContent(
+        /On the drawing|Pe desen/,
+      );
+      // Only the place named on the drawing is marked so.
+      expect(screen.queryByTestId('cave-depth-place-landmark-p-1')).toBeNull();
+    });
+
+    it('declares a place with a station, a name, a note and the drawing mark, and no depth', async () => {
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+      fireEvent.click(screen.getByTestId('cave-depth-place-add'));
+      fireEvent.change(screen.getByTestId('cave-depth-place-station'), { target: { value: 'junction.9' } });
+      fireEvent.change(screen.getByTestId('cave-depth-place-label'), { target: { value: 'Joncțiunea' } });
+      fireEvent.change(screen.getByTestId('cave-depth-place-note'), { target: { value: ' 601/0 - 619 ' } });
+      fireEvent.click(screen.getByTestId('cave-depth-place-landmark'));
+      fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+
+      await waitFor(() => expect(write).toHaveBeenCalledOnce());
+      expect(write.mock.calls[0][0]).toEqual({
+        depthM: null,
+        stationName: 'junction.9',
+        placeLabel: 'Joncțiunea',
+        note: '601/0 - 619',
+        landmark: true,
+      });
+    });
+
+    it('will not declare a place with neither a depth nor a name, and will with either', async () => {
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+      fireEvent.click(screen.getByTestId('cave-depth-place-add'));
+      fireEvent.change(screen.getByTestId('cave-depth-place-station'), { target: { value: 'junction.9' } });
+      fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+
+      expect(await screen.findByText(/needs a name|are nevoie de un nume/)).toBeInTheDocument();
+      expect(write).not.toHaveBeenCalled();
+
+      // A depth is the other half of what makes a declaration: with one, no name is needed.
+      fireEvent.change(screen.getByTestId('cave-depth-place-depth'), { target: { value: '110' } });
+      fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+      await waitFor(() => expect(write).toHaveBeenCalledOnce());
+      expect(write.mock.calls[0][0]).toMatchObject({ depthM: 110, placeLabel: null });
+    });
+
+    it('fills the form from the row, note and mark included, and renames it in place', async () => {
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+      fireEvent.click(screen.getByTestId('cave-depth-place-edit-p-3'));
+      expect((screen.getByTestId('cave-depth-place-depth') as HTMLInputElement).value).toBe('');
+      expect((screen.getByTestId('cave-depth-place-note') as HTMLInputElement).value).toBe('601/0 - 619');
+      expect((screen.getByTestId('cave-depth-place-landmark') as HTMLInputElement).checked).toBe(true);
+
+      // The station is the key of a place without a depth, so a new name is a correction of it.
+      fireEvent.change(screen.getByTestId('cave-depth-place-label'), { target: { value: 'Sala Mare de Sus' } });
+      fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+
+      await waitFor(() => expect(write).toHaveBeenCalledOnce());
+      expect(write.mock.calls[0][0]).toEqual({
+        depthM: null,
+        stationName: 'hall.4',
+        placeLabel: 'Sala Mare de Sus',
+        note: '601/0 - 619',
+        landmark: true,
+      });
+      await waitFor(() => expect(screen.queryByTestId('cave-depth-place-save')).toBeNull());
+      expect(remove).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['moves the place to another station', 'cave-depth-place-station', 'hall.5'],
+      ['gives the place a depth', 'cave-depth-place-depth', '130'],
+    ])('withdraws the old row when a correction %s', async (_, field, value) => {
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+      fireEvent.click(screen.getByTestId('cave-depth-place-edit-p-3'));
+      fireEvent.change(screen.getByTestId(field), { target: { value } });
+      fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+
+      await waitFor(() => expect(remove).toHaveBeenCalledOnce());
+      expect(remove.mock.calls[0][0]).toEqual({ id: 'p-3' });
+      expect(write.mock.invocationCallOrder[0]).toBeLessThan(remove.mock.invocationCallOrder[0]);
+    });
+
+    it('withdraws the old row when a correction takes a depth away', async () => {
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+      fireEvent.click(screen.getByTestId('cave-depth-place-edit-p-1'));
+      fireEvent.change(screen.getByTestId('cave-depth-place-depth'), { target: { value: '' } });
+      fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+
+      await waitFor(() => expect(remove).toHaveBeenCalledOnce());
+      expect(write.mock.calls[0][0]).toMatchObject({ depthM: null, stationName: 'upper.2', placeLabel: 'Meandru' });
+      expect(remove.mock.calls[0][0]).toEqual({ id: 'p-1' });
+    });
+
+    it('says the place is declared twice, and where, when the old row of a moved place stays', async () => {
+      remove.mockRejectedValue(new Error('refused'));
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+      fireEvent.click(screen.getByTestId('cave-depth-place-edit-p-3'));
+      fireEvent.change(screen.getByTestId('cave-depth-place-station'), { target: { value: 'hall.5' } });
+      fireEvent.click(screen.getByTestId('cave-depth-place-save'));
+
+      const said = await screen.findByText(/could not be withdrawn|nu a putut fi retrasă/);
+      expect(said.textContent).toMatch(/hall\.5/);
+      expect(said.textContent).toMatch(/hall\.4/);
+    });
+  });
+
+    it('offers no controls at all without write access', () => {
     render(
       <App>
         <CaveDepthPlacesSection caveId="cave-1" canEdit={false} />

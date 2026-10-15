@@ -6273,7 +6273,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The depths this cave has declared the meaning of, shallowest first. */
+        /** The places this cave has named: those with a depth shallowest first, then those named without one in the order they were declared. */
         get: {
             parameters: {
                 query?: never;
@@ -6296,7 +6296,7 @@ export interface paths {
                 };
             };
         };
-        /** Declares what one depth of this cave means, replacing the declaration for that depth where there is one (Write on the cave). */
+        /** Declares one named place of this cave — what a depth means, or a name for a station without a depth — replacing the declaration for that depth, or for that station among the depthless ones, where there is one (Write on the cave). */
         put: {
             parameters: {
                 query?: never;
@@ -20765,9 +20765,11 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** Format: double */
-            depthM: number;
+            depthM: null | number;
             stationName: string;
             placeLabel: null | string;
+            note: null | string;
+            landmark: boolean;
             stationInSurvey: null | boolean;
         };
         CaveDepthPlaceWriteRequest: {
@@ -20775,6 +20777,8 @@ export interface components {
             depthM: null | number;
             stationName: null | string;
             placeLabel: null | string;
+            note?: null | string;
+            landmark?: null | boolean;
         };
         CaveDto: {
             /** Format: uuid */
@@ -24747,8 +24751,10 @@ export interface components {
         PublicTripPlaceDto: {
             station: string;
             /** Format: double */
-            depthM: number;
+            depthM: null | number;
             label: string;
+            note: null | string;
+            landmark: boolean;
         };
         PublicTripRasterMapDto: {
             title: null | string;
@@ -24764,7 +24770,9 @@ export interface components {
         PublicTripSurveyModelDto: {
             format: components["schemas"]["SurveyModelFormat"];
             modelUrl: string;
+            modelSha256: string;
             meshUrl: null | string;
+            meshSha256: null | string;
             /** Format: double */
             anchorLongitude: null | number;
             /** Format: double */

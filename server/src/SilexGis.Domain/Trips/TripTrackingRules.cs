@@ -61,6 +61,13 @@ public static class TripTrackingRules
 {
     public const int MaxTitleLength = 200;
     public const int MaxNoteLength = 2000;
+
+    /// <summary>
+    /// How long the note beside a cave's named place may be: a few words a list shows next to the
+    /// name, such as a depth range written as text — not an account of the place, which belongs in
+    /// the cave's own description.
+    /// </summary>
+    public const int MaxPlaceNoteLength = 200;
     /// <summary>How long what a party was doing may be: a phrase, as a journal's column holds one.</summary>
     public const int MaxActivityLength = 200;
     public const int MaxStationNameLength = 400;

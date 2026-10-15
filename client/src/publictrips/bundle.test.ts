@@ -256,8 +256,8 @@ describe('the fold, compiled for a page that has no build step', () => {
     const { api } = await buildBundle('iife');
     const labelThere = api.placeLabelFor as typeof placeLabelFor;
     const places = [
-      { station: 'cave.upper.2', depthM: 50, label: 'Sala Mare' },
-      { station: 'cave.deep.3', depthM: 120, label: 'Sifonul' },
+      { station: 'cave.upper.2', depthM: 50, label: 'Sala Mare', note: null, landmark: false },
+      { station: 'cave.deep.3', depthM: 120, label: 'Sifonul', note: null, landmark: false },
     ];
 
     for (const station of ['cave.upper.2', 'cave.deep.3', 'cave.mid.1', '', null]) {

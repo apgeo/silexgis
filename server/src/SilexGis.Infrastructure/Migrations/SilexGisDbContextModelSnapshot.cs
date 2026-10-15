@@ -1328,10 +1328,19 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<decimal>("DepthM")
+                    b.Property<decimal?>("DepthM")
                         .HasPrecision(7, 1)
                         .HasColumnType("numeric(7,1)")
                         .HasColumnName("depth_m");
+
+                    b.Property<bool>("IsLandmark")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_landmark");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("note");
 
                     b.Property<string>("PlaceLabel")
                         .HasMaxLength(200)
@@ -1351,9 +1360,14 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_cave_depth_places");
 
-                    b.HasIndex("CaveFeatureId", "DepthM")
+                    b.HasIndex(new[] { "CaveFeatureId", "DepthM" }, "ux_cave_depth_places_cave_depth")
                         .IsUnique()
                         .HasDatabaseName("ux_cave_depth_places_cave_depth");
+
+                    b.HasIndex(new[] { "CaveFeatureId", "ViewerStationName" }, "ux_cave_depth_places_cave_station_depthless")
+                        .IsUnique()
+                        .HasDatabaseName("ux_cave_depth_places_cave_station_depthless")
+                        .HasFilter("depth_m IS NULL");
 
                     b.ToTable("cave_depth_places", (string)null);
                 });

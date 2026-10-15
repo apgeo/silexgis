@@ -2,11 +2,22 @@
 import { describe, expect, it } from 'vitest';
 import { placeLabelFor, type PublishedPlace } from './publicPlaces.ts';
 
+const place = (station: string, depthM: number | null, label: string): PublishedPlace => ({
+  station,
+  depthM,
+  label,
+  note: null,
+  landmark: false,
+});
+
 const places: PublishedPlace[] = [
-  { station: 'cave.ent.0', depthM: 20, label: 'Balconul' },
-  { station: 'cave.upper.2', depthM: 50, label: 'Sala Mare' },
-  { station: 'cave.upper.2', depthM: 55, label: 'Sala Mare, podea' },
-  { station: 'cave.deep.3', depthM: 120, label: 'Sifonul' },
+  place('cave.ent.0', 20, 'Balconul'),
+  place('cave.upper.2', 50, 'Sala Mare'),
+  place('cave.upper.2', 55, 'Sala Mare, podea'),
+  place('cave.deep.3', 120, 'Sifonul'),
+  // Named without a depth, so after every depth: a station named both ways answers to its depth.
+  place('cave.deep.3', null, 'Sifonul de jos'),
+  place('cave.mid.1', null, 'Joncțiunea'),
 ];
 
 describe('placeLabelFor', () => {
@@ -19,8 +30,16 @@ describe('placeLabelFor', () => {
     expect(placeLabelFor('cave.upper.2', places)).toBe('Sala Mare');
   });
 
+  it('answers the name of a place named without a depth', () => {
+    expect(placeLabelFor('cave.mid.1', places)).toBe('Joncțiunea');
+  });
+
+  it('answers the depth\'s name where one station was named both with a depth and without one', () => {
+    expect(placeLabelFor('cave.deep.3', places)).toBe('Sifonul');
+  });
+
   it('answers nothing for a station the cave has not named', () => {
-    expect(placeLabelFor('cave.mid.1', places)).toBeNull();
+    expect(placeLabelFor('cave.side.8', places)).toBeNull();
   });
 
   it('matches the station as written, and no near spelling of it', () => {
@@ -47,6 +66,6 @@ describe('placeLabelFor', () => {
   });
 
   it('passes over a name that is empty rather than printing nothing as a name', () => {
-    expect(placeLabelFor('cave.deep.3', [{ station: 'cave.deep.3', depthM: 120, label: '' }])).toBeNull();
+    expect(placeLabelFor('cave.deep.3', [place('cave.deep.3', 120, '')])).toBeNull();
   });
 });

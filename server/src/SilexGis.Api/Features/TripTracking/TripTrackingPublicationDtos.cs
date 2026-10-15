@@ -129,6 +129,26 @@ public sealed record PublicTripTrackingEnvelopeDto(
 /// why a protected cave is refused publication rather than published without its drawing.
 /// </para>
 /// </param>
+/// <param name="ModelSha256">
+/// The SHA-256 of the survey file <paramref name="ModelUrl"/> delivers, as lowercase hex — the
+/// digest this application recorded when the file was stored.
+/// <para>
+/// <b>For a reader outside the application that keeps its own copy of the survey.</b> The URL
+/// beside it is signed afresh on every read, so it changes every time and says nothing about
+/// whether the file did; this does, and lets such a reader skip downloading a survey it already
+/// holds and fetch it again the moment the trip's survey changes.
+/// </para>
+/// <para>
+/// <b>It discloses nothing the same answer does not already hand over.</b> It is a digest of
+/// bytes this very answer gives its holder whole, through the URL beside it; anybody holding the
+/// answer can compute it, so stating it adds a convenience and no fact.
+/// </para>
+/// </param>
+/// <param name="MeshSha256">
+/// The SHA-256 of the drawable mesh <paramref name="MeshUrl"/> delivers, as lowercase hex; null
+/// exactly where <paramref name="MeshUrl"/> is null. Said for the same reason, and disclosing
+/// nothing new for the same reason, as <paramref name="ModelSha256"/>.
+/// </param>
 /// <param name="Proj4">
 /// The PROJ.4 definition of <paramref name="SourceEpsg"/>, resolved from the database that ships
 /// with this application and carried here rather than fetched. The route that answers CRS
@@ -169,7 +189,9 @@ public sealed record PublicTripTrackingEnvelopeDto(
 public sealed record PublicTripSurveyModelDto(
     SurveyModelFormat Format,
     string ModelUrl,
+    string ModelSha256,
     string? MeshUrl,
+    string? MeshSha256,
     double? AnchorLongitude,
     double? AnchorLatitude,
     double? AnchorHeightM,
@@ -178,15 +200,20 @@ public sealed record PublicTripSurveyModelDto(
     IReadOnlyList<PublicTripStationPictureDto> Pictures,
     IReadOnlyList<PublicTripRasterMapDto> RasterMaps,
     /// <summary>
-    /// What the cave calls some of its depths, for the stations of this survey: shallowest first.
+    /// What the cave calls some of the stations of this survey: the places with a depth shallowest
+    /// first, then the places named without a depth in the order the cave declared them.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>Null far more often than not, and never an empty list</b> — null on every installation
     /// that does not publish these names, which is how one is installed, and null for every cave
-    /// with no named depth among this survey's stations. Null is "nothing to add": a page shows
+    /// with no named place among this survey's stations. Null is "nothing to add": a page shows
     /// each reported station under the name the survey gives it, exactly as it did before this
     /// member existed.
+    /// </para>
+    /// <para>
+    /// The order is the cave's own list order and is meant to be shown as it comes: a page that
+    /// lists the cave's places beside the drawing lists them in this order.
     /// </para>
     /// <para>
     /// Why "nothing" is null and not a list with no entries: a page outside this application may
@@ -199,7 +226,8 @@ public sealed record PublicTripSurveyModelDto(
 
 /// <summary>
 /// One place a cave has named: a station of the survey being handed over, the depth the cave
-/// declared it at, and what people call it.
+/// declared it at where it declared one, what people call it, a few words beside the name where
+/// the cave wrote some, and whether the cave names it on the drawing itself.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -219,10 +247,24 @@ public sealed record PublicTripSurveyModelDto(
 /// <param name="DepthM">
 /// Metres below the entrance datum as the cave declared them: <b>a magnitude, never negative</b>.
 /// A person's own reported depth elsewhere in this answer keeps the sign it was reported with, so
-/// the two are not compared without taking that into account.
+/// the two are not compared without taking that into account. <b>Null for a place the cave named
+/// without a depth</b> — every such entry comes after every entry that has one.
 /// </param>
 /// <param name="Label">What the cave calls the place, as it was typed. Never empty.</param>
-public sealed record PublicTripPlaceDto(string Station, decimal DepthM, string Label);
+/// <param name="Note">
+/// The short free text the cave wrote beside the name — a depth range as the club writes it, for
+/// instance — or null where it wrote none. Text to show as it is, never a number to read.
+/// </param>
+/// <param name="Landmark">
+/// Whether the cave names this place on the drawing itself, rather than only in a list of its
+/// places: a page labels a landmark on the survey it draws.
+/// </param>
+public sealed record PublicTripPlaceDto(
+    string Station,
+    decimal? DepthM,
+    string Label,
+    string? Note,
+    bool Landmark);
 
 /// <summary>
 /// The view a published map sheet declares itself to be — its seeded relation code read out,

@@ -25,9 +25,11 @@ namespace SilexGis.Api.Tests;
 /// <para>
 /// <b>What these hold down.</b> An installation that has not switched the setting on sends the
 /// list empty with every survey it hands over, whatever the cave has declared, and reads no
-/// declaration to do so. Switched on, the two reads that hand a survey over carry the declarations
-/// that have a name and whose station that survey holds — shallowest first, no more than the
-/// stated bound — and the two that hand over no survey are the same bytes they were.
+/// declaration to do so. Switched on, the two reads that hand a survey over carry the places that
+/// have a name and whose station that survey holds — those with a depth shallowest first, then
+/// those named without one as they were declared, each with its note and landmark flag, no more
+/// than the stated bound — and the two that hand over no survey are the same bytes they were.
+/// Whatever the setting, a survey handed over comes with the digest of its file.
 /// </para>
 /// <para>
 /// <b>Every "nothing is told" here is read beside a "something is told".</b> Two hosts stand over
@@ -395,6 +397,132 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         }
     }
 
+    // ---- places named without a depth -------------------------------------------------------
+
+    // The names and notes of places these tests name without a depth, worded like the others so
+    // that finding one in an answer can only mean it was published.
+    private const string Junction = "Jonctiunea Pelvix";
+    private const string Gallery = "Galeria Thrum";
+    private const string OnTheOlderSurveyOnlyWithoutDepth = "Sala Brindle";
+    private const string JunctionNote = "601/0 - 619";
+    private const string GalleryNote = "Ramura Quillon";
+
+    /// <summary>
+    /// <b>A place named without a depth is told as a depth is</b>, where the installation tells
+    /// names at all: after every place with a depth, in the order the cave declared it, with its
+    /// note and its landmark flag — and as installed, none of its words reach any route.
+    /// </summary>
+    [Fact]
+    public async Task Places_named_without_a_depth_are_told_after_the_depths_with_their_notes_and_landmarks()
+    {
+        var cave = await PublishedCaveAsync();
+        // Depthless first, out of station order, then a depth and another depthless one: the
+        // answer's order can only be the rule's.
+        await NameAsync(cave.Cave, "cave.mid.1", Junction, JunctionNote, landmark: false);
+        await DeclareAsync(cave.Cave, 120m, "cave.deep.3", Sump, landmark: true);
+        await NameAsync(cave.Cave, "cave.old.7", OnTheOlderSurveyOnlyWithoutDepth, null, landmark: true);
+        await NameAsync(cave.Cave, "cave.upper.2", Gallery, GalleryNote, landmark: true);
+        await DeclareAsync(cave.Cave, 20m, "cave.ent.0", Entrance);
+
+        string[] words = [Junction, Gallery, OnTheOlderSurveyOnlyWithoutDepth, JunctionNote, GalleryNote, Sump, Entrance];
+
+        // ---- as installed: nothing, on any route ---------------------------------------------
+        foreach (var route in cave.Routes)
+        {
+            var off = await ReadAsync(visitor, route);
+            off.Status.ShouldBe(HttpStatusCode.OK, route);
+            foreach (var word in words) off.Body.ShouldNotContain(word, Case.Insensitive, route);
+        }
+        ShouldSendNoListOfPlaces(await ReadAsync(visitor, cave.Follow));
+        ShouldSendNoListOfPlaces(await ReadAsync(visitor, cave.PastTrip));
+
+        // ---- publishing ----------------------------------------------------------------------
+        var follow = await ReadAsync(visitorOfPublishing, cave.Follow);
+        DetailedPlacesOf(follow).ShouldBe(
+        [
+            ("cave.ent.0", 20m, Entrance, null, false),
+            ("cave.deep.3", 120m, Sump, null, true),
+            ("cave.mid.1", null, Junction, JunctionNote, false),
+            ("cave.upper.2", null, Gallery, GalleryNote, true),
+        ]);
+        // The depth of a place named without one is written as null on the wire, not left out.
+        follow.Body.ShouldContain($"\"station\":\"cave.mid.1\",\"depthM\":null", Case.Sensitive);
+        // A depthless name for a station only the older survey holds goes only with that survey.
+        follow.Body.ShouldNotContain(OnTheOlderSurveyOnlyWithoutDepth, Case.Insensitive);
+
+        DetailedPlacesOf(await ReadAsync(visitorOfPublishing, cave.PastTrip)).ShouldBe(
+        [
+            ("cave.ent.0", 20m, Entrance, null, false),
+            ("cave.deep.3", 120m, Sump, null, true),
+            ("cave.mid.1", null, Junction, JunctionNote, false),
+            ("cave.old.7", null, OnTheOlderSurveyOnlyWithoutDepth, null, true),
+            ("cave.upper.2", null, Gallery, GalleryNote, true),
+        ]);
+
+        // The two lists hand over no survey and tell none of it.
+        foreach (var route in new[] { cave.Live, cave.Past })
+        {
+            var on = await ReadAsync(visitorOfPublishing, route);
+            foreach (var word in words) on.Body.ShouldNotContain(word, Case.Insensitive, route);
+        }
+
+        // ---- a correction is told, and keeps the place where it was declared ------------------
+        await NameAsync(cave.Cave, "cave.mid.1", Junction, null, landmark: true);
+        var corrected = await ReadAsync(visitorOfPublishing, cave.Follow, follow.Tag);
+        corrected.Status.ShouldBe(HttpStatusCode.OK);
+        DetailedPlacesOf(corrected)[2].ShouldBe(("cave.mid.1", null, Junction, null, true));
+        corrected.Body.ShouldNotContain(JunctionNote, Case.Insensitive);
+    }
+
+    // ---- the digest of the survey handed over -------------------------------------------------
+
+    /// <summary>
+    /// <b>The survey comes with the digest of its own bytes</b>, on both reads that hand one over
+    /// and on every installation — the digest the file was stored under, which is the SHA-256 of
+    /// exactly what the signed address beside it delivers. A reader that keeps its own copy can
+    /// tell from it whether the survey changed without downloading it again, though the address
+    /// is signed afresh on every read.
+    /// </summary>
+    [Fact]
+    public async Task The_survey_comes_with_the_digest_of_the_bytes_its_address_delivers()
+    {
+        var cave = await PublishedCaveAsync();
+        var (nowFile, nowDigest) = await FileOfTripModelAsync(cave.Now.Trip);
+        var (thenFile, thenDigest) = await FileOfTripModelAsync(cave.Then.Trip);
+        nowFile.ShouldNotBe(thenFile, "the two trips are on two surveys, each with its own file");
+        nowDigest.ShouldNotBe(thenDigest, "the two files must differ for this to prove anything");
+
+        foreach (var client in new[] { visitor, visitorOfPublishing })
+        {
+            foreach (var (route, digest) in new[] { (cave.Follow, nowDigest), (cave.PastTrip, thenDigest) })
+            {
+                var model = Json(await ReadAsync(client, route)).GetProperty("model");
+                model.GetProperty("modelSha256").GetString().ShouldBe(digest, route);
+                // Lowercase hex, as stored.
+                model.GetProperty("modelSha256").GetString()!.ShouldMatch("^[0-9a-f]{64}$");
+                // No mesh, so no digest of one: null exactly where its address is.
+                model.GetProperty("meshUrl").ValueKind.ShouldBe(JsonValueKind.Null);
+                model.GetProperty("meshSha256").ValueKind.ShouldBe(JsonValueKind.Null);
+
+                // And it is the digest of what the address beside it really delivers.
+                var delivered = await client.GetByteArrayAsync(model.GetProperty("modelUrl").GetString()!);
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(delivered))
+                    .ShouldBe(digest, route);
+            }
+        }
+    }
+
+    /// <summary>The file a trip's watch draws, and the digest it was stored under.</summary>
+    private async Task<(Guid File, string Sha256)> FileOfTripModelAsync(Guid trip)
+    {
+        using var scope = asInstalled.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var modelId = await db.TripTrackings.Where(t => t.TripLogId == trip).Select(t => t.SurveyModelId).SingleAsync();
+        var fileId = await db.SurveyModels.Where(m => m.Id == modelId).Select(m => m.FileId).SingleAsync();
+        var sha = await db.StoredFiles.Where(f => f.Id == fileId).Select(f => f.Sha256).SingleAsync();
+        return (fileId, sha);
+    }
+
     // ---- what a reader sees ------------------------------------------------------------------
 
     private sealed record Answer(HttpStatusCode Status, string? Tag, string Body);
@@ -449,7 +577,12 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
     /// The named depths that came with the survey of an answer that hands one over: a list, and
     /// one with something in it — an answer with nothing to tell sends no list at all.
     /// </summary>
-    private static List<(string Station, decimal DepthM, string Label)> PlacesOf(Answer answer)
+    private static List<(string Station, decimal? DepthM, string Label)> PlacesOf(Answer answer) =>
+        [.. DetailedPlacesOf(answer).Select(p => (p.Station, p.DepthM, p.Label))];
+
+    /// <summary>The same list with each place's note and landmark flag as well.</summary>
+    private static List<(string Station, decimal? DepthM, string Label, string? Note, bool Landmark)> DetailedPlacesOf(
+        Answer answer)
     {
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.Body);
         var places = Json(answer).GetProperty("model").GetProperty("places");
@@ -457,12 +590,16 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         places.GetArrayLength().ShouldBeGreaterThan(0);
         return [.. places.EnumerateArray().Select(place =>
         {
-            // Exactly these three members: no id of the declaration, nothing about who wrote it.
-            place.EnumerateObject().Select(m => m.Name).ShouldBe(["station", "depthM", "label"]);
+            // Exactly these members: no id of the declaration, nothing about who wrote it or when.
+            place.EnumerateObject().Select(m => m.Name).ShouldBe(["station", "depthM", "label", "note", "landmark"]);
+            var depth = place.GetProperty("depthM");
+            var note = place.GetProperty("note");
             return (
                 place.GetProperty("station").GetString()!,
-                place.GetProperty("depthM").GetDecimal(),
-                place.GetProperty("label").GetString()!);
+                depth.ValueKind == JsonValueKind.Null ? (decimal?)null : depth.GetDecimal(),
+                place.GetProperty("label").GetString()!,
+                note.ValueKind == JsonValueKind.Null ? null : note.GetString(),
+                place.GetProperty("landmark").GetBoolean());
         })];
     }
 
@@ -550,10 +687,18 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
 
     // ---- seeding -----------------------------------------------------------------------------
 
-    private async Task DeclareAsync(Guid cave, decimal depth, string station, string? label)
+    private async Task DeclareAsync(Guid cave, decimal depth, string station, string? label, bool landmark = false)
     {
         var response = await owner.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
-            new { depthM = depth, stationName = station, placeLabel = label });
+            new { depthM = depth, stationName = station, placeLabel = label, landmark });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>Names a station of the cave without a depth.</summary>
+    private async Task NameAsync(Guid cave, string station, string label, string? note, bool landmark)
+    {
+        var response = await owner.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places",
+            new { depthM = (decimal?)null, stationName = station, placeLabel = label, note, landmark });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
@@ -663,7 +808,9 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
     private async Task<Guid> ModelAsync(Guid caveId, params string[] alsoHolding)
     {
         using var form = new MultipartFormDataContent();
-        var bytes = new ByteArrayContent([1, 2, 3, 4]);
+        // Different bytes for every survey, so that the digest of one file can be told from the
+        // digest of another.
+        var bytes = new ByteArrayContent([1, 2, 3, 4, .. Guid.NewGuid().ToByteArray()]);
         bytes.Headers.ContentType = new("application/octet-stream");
         form.Add(bytes, "file", "tripplaces.3d");
         var created = await owner.PostAsync($"/api/v1/caves/{caveId}/survey-models", form);

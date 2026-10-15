@@ -800,13 +800,15 @@ export function useCaveExternalIds(caveId: string | undefined) {
 }
 
 /**
- * The depths this cave has declared the meaning of: each one a station, and a name for the place.
+ * The places this cave has named: the depths it has declared the meaning of — each one a station,
+ * and a name for the place — and then the stations it names without a depth, as they were declared.
  *
  * <b>Why a cave declares this at all.</b> A depth alone has to be turned into a station by looking
  * for the nearest one, and "nearest" cannot tell which of several stations within a metre of each
  * other is the place people actually mean by that number. A club knows. Declaring it once means
  * every report of that depth — typed, corrected or imported — lands where the club says, and gives
- * the place a name somebody can report by instead of a number.
+ * the place a name somebody can report by instead of a number. A place named without a depth
+ * (`depthM` null) is a name for a station and nothing else: no depth is ever placed by it.
  */
 export function useCaveDepthPlaces(caveId: string | undefined) {
   return useQuery({
@@ -821,10 +823,12 @@ export function useCaveDepthPlaces(caveId: string | undefined) {
 }
 
 /**
- * Declares what one depth of this cave means, replacing the declaration for that depth.
+ * Declares one named place of this cave: what a depth means, replacing the declaration for that
+ * depth — or, with no depth, a name for a station, replacing that station's depthless name.
  *
- * The depth is the key, and one declaration per depth is the whole point: two answers to "what is
- * at 96 m" is no answer, and the resolution that consults these has to be able to take one.
+ * The key is the whole point: two answers to "what is at 96 m" is no answer, and the resolution
+ * that consults these has to be able to take one; a station named twice without a depth is one
+ * place with two names.
  */
 export function useWriteCaveDepthPlace(caveId: string) {
   const queryClient = useQueryClient();
@@ -833,15 +837,19 @@ export function useWriteCaveDepthPlace(caveId: string) {
       depthM,
       stationName,
       placeLabel,
+      note,
+      landmark,
     }: {
-      depthM: number;
+      depthM: number | null;
       stationName: string;
       placeLabel: string | null;
+      note: string | null;
+      landmark: boolean;
     }) =>
       unwrap(
         api.PUT('/api/v1/caves/{caveId}/depth-places', {
           params: { path: { caveId } },
-          body: { depthM, stationName, placeLabel },
+          body: { depthM, stationName, placeLabel, note, landmark },
         }),
       ),
     onSuccess: () =>

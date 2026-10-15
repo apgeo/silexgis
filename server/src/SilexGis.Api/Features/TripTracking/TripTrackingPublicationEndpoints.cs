@@ -965,7 +965,7 @@ public static class TripTrackingPublicationEndpoints
     /// all rather than published without its drawing.
     /// </remarks>
     /// <param name="publishDepthPlaces">
-    /// Whether this installation tells visitors the names its caves give their depths. False sends
+    /// Whether this installation tells visitors the names its caves give their places. False sends
     /// the member null and reads no declaration.
     /// </param>
     internal static async Task<PublicTripSurveyModelDto?> ModelAsync(
@@ -974,14 +974,29 @@ public static class TripTrackingPublicationEndpoints
         bool publishDepthPlaces, CancellationToken ct)
     {
         if (surveyModelId is null) return null;
-        var model = await db.SurveyModels.AsNoTracking()
-            .FirstOrDefaultAsync(m => m.Id == surveyModelId && m.CaveFeatureId == configCave, ct);
-        if (model is null) return null;
+
+        // The digests of the two files handed over, read in the same statement as the model so
+        // that saying them costs no second round trip on a route every open page calls once a
+        // minute. Both files are restricted from deletion while the model names them, so a model
+        // found here always has both rows it names.
+        var found = await db.SurveyModels.AsNoTracking()
+            .Where(m => m.Id == surveyModelId && m.CaveFeatureId == configCave)
+            .Select(m => new
+            {
+                Model = m,
+                ModelSha256 = db.StoredFiles.Where(f => f.Id == m.FileId).Select(f => f.Sha256).FirstOrDefault(),
+                MeshSha256 = db.StoredFiles.Where(f => f.Id == m.ConvertedFileId).Select(f => f.Sha256).FirstOrDefault(),
+            })
+            .FirstOrDefaultAsync(ct);
+        if (found is null) return null;
+        var model = found.Model;
 
         return new PublicTripSurveyModelDto(
             model.Format,
             FileUrl(tokens, model.FileId),
+            found.ModelSha256!,
             model.ConvertedFileId is { } converted ? FileUrl(tokens, converted) : null,
+            model.ConvertedFileId is null ? null : found.MeshSha256,
             model.Anchor?.X,
             model.Anchor?.Y,
             model.AnchorHeightM,
@@ -996,9 +1011,9 @@ public static class TripTrackingPublicationEndpoints
             // every read exactly as the envelope itself is.
             await RasterMapsAsync(db, protection, tokens, model.Id, ct),
             // And here for the same reason again: these are names for stations of this model, of
-            // the cave the publication was decided about. A trip whose survey answers to another
-            // cave never reaches this line, so no cave's names travel with a drawing that is not
-            // its own.
+            // the cave the publication was decided about — with a depth or without one. A trip
+            // whose survey answers to another cave never reaches this line, so no cave's names
+            // travel with a drawing that is not its own.
             // Null, never an empty list, when the installation says nothing or there is nothing
             // to say: a reader that takes a list here as replacing names of its own must not be
             // handed one that replaces them with none.
@@ -1013,16 +1028,17 @@ public static class TripTrackingPublicationEndpoints
     /// <para>
     /// <b>Two bounded reads, and one of them only when there is something to ask about.</b> This
     /// runs on a route anybody holding a link may call and every open page calls once a minute,
-    /// so it never loads a survey's stations: it reads the cave's named declarations — the
-    /// shallowest <see cref="TrackingDepthPlacements.MaxPublishedPlaces"/> of them — and then asks
-    /// the station table only for the rows those names could mean. A cave that has named nothing,
-    /// which is most caves, costs the first read and not the second.
+    /// so it never loads a survey's stations: it reads the cave's named places — the first
+    /// <see cref="TrackingDepthPlacements.MaxPublishedPlaces"/> of them in list order, the places
+    /// with a depth shallowest first and then those named without one as they were declared — and
+    /// then asks the station table only for the rows those names could mean. A cave that has named
+    /// nothing, which is most caves, costs the first read and not the second.
     /// </para>
     /// <para>
-    /// <b>The bound is on what is looked at, not only on what is sent.</b> A declaration among
-    /// those looked at that names no station of this survey is left out and is not replaced by a
-    /// deeper one from beyond the bound: doing that would mean reading every declaration a cave
-    /// has, on an anonymous route, to serve a list no real cave is long enough to fill.
+    /// <b>The bound is on what is looked at, not only on what is sent.</b> A place among those
+    /// looked at that names no station of this survey is left out and is not replaced by one from
+    /// beyond the bound: doing that would mean reading every place a cave has named, on an
+    /// anonymous route, to serve a list no real cave is long enough to fill.
     /// </para>
     /// <para>
     /// Which of them are told is not decided here but by the rule that also decides whether a
@@ -1031,7 +1047,7 @@ public static class TripTrackingPublicationEndpoints
     /// viewer can draw it at all.
     /// </para>
     /// <para>
-    /// <b>Null when nothing is left to tell</b> — the cave has named no depth, or none of the
+    /// <b>Null when nothing is left to tell</b> — the cave has named no place, or none of the
     /// names it has is a station of this survey. The answer never carries a list with no entries.
     /// </para>
     /// </remarks>
@@ -1040,22 +1056,19 @@ public static class TripTrackingPublicationEndpoints
     {
         var rows = await db.CaveDepthPlaces.AsNoTracking()
             .Where(p => p.CaveFeatureId == configCave && p.PlaceLabel != null && p.PlaceLabel != "")
-            .OrderBy(p => p.DepthM)
+            .InListOrder()
             .Take(TrackingDepthPlacements.MaxPublishedPlaces)
-            .Select(p => new { p.DepthM, p.ViewerStationName, p.PlaceLabel })
+            .Select(p => new DeclaredDepthPlaces.Place(
+                p.DepthM, p.ViewerStationName, p.PlaceLabel, p.Note, p.IsLandmark, p.CreatedAt, p.Id))
             .ToListAsync(ct);
         if (rows.Count == 0)
         {
             return null;
         }
 
-        var declared = rows
-            .Select(r => new DeclaredDepthPlaces.Declared(r.DepthM, r.ViewerStationName, r.PlaceLabel))
-            .ToList();
-
-        // Both readings of each declared name, because a declaration keeps the spelling the
+        // Both readings of each named station, because a declaration keeps the spelling the
         // drawing shows and a station row may hold it under the file's root survey.
-        var readings = declared
+        var readings = rows
             .SelectMany(d => SurveyStationNames.StoredCandidates(
                 model.Format, model.RootSurveyName, d.ViewerStationName))
             .Distinct(StringComparer.Ordinal)
@@ -1073,8 +1086,13 @@ public static class TripTrackingPublicationEndpoints
             .ToList();
 
         List<PublicTripPlaceDto> places = [.. TrackingDepthPlacements
-            .PublishedPlaces(declared, stations, TrackingDepthPlacements.MaxPublishedPlaces)
-            .Select(p => new PublicTripPlaceDto(p.ViewerStationName, p.DepthM, p.PlaceLabel!.Trim()))];
+            .PublishedPlaces(rows, stations, TrackingDepthPlacements.MaxPublishedPlaces)
+            .Select(p => new PublicTripPlaceDto(
+                p.ViewerStationName,
+                p.DepthM,
+                p.PlaceLabel!.Trim(),
+                string.IsNullOrWhiteSpace(p.Note) ? null : p.Note.Trim(),
+                p.IsLandmark))];
         return places.Count == 0 ? null : places;
     }
 

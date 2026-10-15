@@ -71,7 +71,10 @@ export type { PublicReportedPlace } from '../caveview/publicTrackedCavers.ts';
 // where there is no list: it is null on every installation that does not publish these names and
 // for a cave that has named nothing, and is sent only when it has entries.
 // A place's `depthM` is a magnitude, where a person's own reported depth carries its sign (note 2
-// above); this compares neither.
+// above), and null for a place the cave named without a depth; this compares neither. The list
+// arrives in the cave's own order — depths shallowest first, then the places named without one as
+// they were declared — with each place's `note` and `landmark` (named on the drawing itself), so a
+// page can show the cave's list of places as it comes.
 export { placeLabelFor } from '../caveview/publicPlaces.ts';
 export type { PublishedPlace } from '../caveview/publicPlaces.ts';
 

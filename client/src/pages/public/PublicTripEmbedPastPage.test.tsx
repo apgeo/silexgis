@@ -96,7 +96,9 @@ const { default: PublicTripEmbedPage } = await import('./PublicTripEmbedPage.tsx
 const model = {
   format: 'survex3d' as const,
   modelUrl: '/api/v1/files/abc/content?token=first',
+  modelSha256: 'abababababababababababababababababababababababababababababababab',
   meshUrl: null,
+  meshSha256: null,
   anchorLongitude: null,
   anchorLatitude: null,
   anchorHeightM: null,

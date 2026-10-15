@@ -110,47 +110,72 @@ public static class TrackingDepthPlacements
     /// </remarks>
     public static bool NamesAStationOf(
         IReadOnlyCollection<TrackingDepthResolver.Station> stations,
-        DeclaredDepthPlaces.Declared declaration)
+        DeclaredDepthPlaces.Declared declaration) =>
+        HasDrawableStation(stations, declaration.ViewerStationName);
+
+    /// <summary>
+    /// Whether a station named in the viewer's spelling — the spelling every declared place is
+    /// stored in, with a depth or without — is one the model has and the viewer can draw. The test
+    /// <see cref="NamesAStationOf"/> applies to a declaration, asked of a name alone.
+    /// </summary>
+    public static bool HasDrawableStation(
+        IReadOnlyCollection<TrackingDepthResolver.Station> stations,
+        string viewerStationName)
     {
         ArgumentNullException.ThrowIfNull(stations);
 
         // A station the viewer has no label for is not one a report can land on, whatever the
         // declaration says: honouring it would stamp a name the drawing cannot resolve, which is
         // the very fault this test exists to pass over.
-        return stations.Any(s => !s.NoViewerLabel && s.ViewerName == declaration.ViewerStationName);
+        return stations.Any(s => !s.NoViewerLabel && s.ViewerName == viewerStationName);
     }
 
     /// <summary>
-    /// The most declared places one published survey is handed, and so also the most of a cave's
-    /// labelled declarations a published read looks at.
+    /// The most named places one published survey is handed, and so also the most of a cave's
+    /// labelled places a published read looks at.
     /// </summary>
     /// <remarks>
-    /// A cave declares a handful — its pitches, its bivouac, its sump — and nothing stops it
-    /// declaring thousands. The read that carries these is asked for by anybody holding a link,
-    /// once a minute per open page, so what it costs is bounded by a number written down here
-    /// rather than by how diligent a club has been. Far above anything a real cave names; past
-    /// it, the deepest names are the ones left out.
+    /// A cave names a handful — its pitches, its bivouac, its sump, the halls a club's list of the
+    /// cave walks through — and nothing stops it naming thousands. The read that carries these is
+    /// asked for by anybody holding a link, once a minute per open page, so what it costs is
+    /// bounded by a number written down here rather than by how diligent a club has been. Far
+    /// above anything a real cave names; past it, the places at the end of the list order — the
+    /// last-written of those without a depth, then the deepest — are the ones left out.
     /// </remarks>
     public const int MaxPublishedPlaces = 200;
 
     /// <summary>
-    /// Which of a cave's declared places a visitor without an account may be told, for one survey
-    /// of that cave: those that have a name, whose station that survey holds, shallowest first,
-    /// and no more than <paramref name="max"/> of them.
+    /// Which of a cave's named places a visitor without an account may be told, for one survey of
+    /// that cave: those that have a name, whose station that survey holds, in the order every list
+    /// of a cave's places is shown in, and no more than <paramref name="max"/> of them.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Only a declaration somebody named.</b> A declaration without a label is an instruction
-    /// to the placing above — "this depth means that station" — and says nothing a reader could
-    /// read: the station is already in the drawing and the depth is already beside the person.
+    /// <b>Only a place somebody named.</b> A declaration without a label is an instruction to the
+    /// placing above — "this depth means that station" — and says nothing a reader could read:
+    /// the station is already in the drawing and the depth is already beside the person. A place
+    /// without a depth always has a name, because a name is all it is.
+    /// </para>
+    /// <para>
+    /// <b>With a depth or without one.</b> A place named without a depth takes no part in placing
+    /// a reported depth, and is told all the same: what a visitor is told is what the cave calls
+    /// the stations of the drawing in front of them, and a hall the club names on its own list is
+    /// as much a name for a station as the bottom of a pitch is. Each comes with its note and with
+    /// whether the club names it on the drawing itself.
     /// </para>
     /// <para>
     /// <b>Only one that names a station of the survey being handed over</b>, by the same test a
-    /// report passes before a declaration is honoured (<see cref="NamesAStationOf"/>), and for
-    /// the same reason turned round: a name published for a station the drawing does not have is
-    /// a name that can never appear beside anybody, and a list of them tells a visitor about
-    /// places the page in front of them cannot show. The survey meant is the one the answer
+    /// report passes before a declaration is honoured (<see cref="HasDrawableStation"/>),
+    /// and for the same reason turned round: a name published for a station the drawing does not
+    /// have is a name that can never appear beside anybody, and a list of them tells a visitor
+    /// about places the page in front of them cannot show. The survey meant is the one the answer
     /// serves, which for an old trip is not always the cave's newest.
+    /// </para>
+    /// <para>
+    /// <b>In list order</b> (<see cref="DeclaredDepthPlaces.InListOrder(IEnumerable{DeclaredDepthPlaces.Place})"/>):
+    /// the places with a depth shallowest first, then the others as they were declared. A total
+    /// order, because a published answer is compared with the one a reader already holds by its
+    /// bytes, and two answers about one state must be the same bytes.
     /// </para>
     /// <para>
     /// <b>Whether any of this is told at all is not decided here.</b> That belongs to the
@@ -158,18 +183,18 @@ public static class TrackingDepthPlacements
     /// protection: a protected cave has no published answer for these to travel in.
     /// </para>
     /// </remarks>
-    /// <param name="declarations">The cave's declarations, in any order.</param>
+    /// <param name="places">The cave's places, in any order.</param>
     /// <param name="stations">
-    /// The served survey's stations — all of them, or only those the declarations could mean; the
+    /// The served survey's stations — all of them, or only those the places could mean; the
     /// answer is the same.
     /// </param>
     /// <param name="max">The most to return; <see cref="MaxPublishedPlaces"/> on a published read.</param>
-    public static IReadOnlyList<DeclaredDepthPlaces.Declared> PublishedPlaces(
-        IReadOnlyCollection<DeclaredDepthPlaces.Declared> declarations,
+    public static IReadOnlyList<DeclaredDepthPlaces.Place> PublishedPlaces(
+        IReadOnlyCollection<DeclaredDepthPlaces.Place> places,
         IReadOnlyCollection<TrackingDepthResolver.Station> stations,
         int max)
     {
-        ArgumentNullException.ThrowIfNull(declarations);
+        ArgumentNullException.ThrowIfNull(places);
         ArgumentNullException.ThrowIfNull(stations);
 
         if (max <= 0)
@@ -177,12 +202,10 @@ public static class TrackingDepthPlacements
             return [];
         }
 
-        return [.. declarations
-            .Where(d => !string.IsNullOrWhiteSpace(d.PlaceLabel) && NamesAStationOf(stations, d))
-            // By depth, and by the station under it only so that two answers about one state are
-            // the same bytes — a published answer is compared with the one a reader already holds.
-            .OrderBy(d => d.DepthM)
-            .ThenBy(d => d.ViewerStationName, StringComparer.Ordinal)
+        return [.. places
+            .Where(p => !string.IsNullOrWhiteSpace(p.PlaceLabel)
+                && HasDrawableStation(stations, p.ViewerStationName))
+            .InListOrder()
             .Take(max)];
     }
 }

@@ -2,7 +2,8 @@
 
 /**
  * One place a cave has named, as a published survey is handed it: a station of that survey, the
- * depth the cave declared it at, and what people call it.
+ * depth the cave declared it at where it declared one, what people call it, the few words the cave
+ * wrote beside the name, and whether the cave names it on the drawing itself.
  *
  * Declared here rather than taken from the generated API types, so that this module holds
  * strings and numbers only and a page with no build step can ask the same question of the same
@@ -14,11 +15,16 @@ export interface PublishedPlace {
   /**
    * Metres below the entrance as the cave declared them — a magnitude, never negative. A person's
    * own reported depth keeps the sign it was reported with, so the two are not the same number
-   * for the same place and are not compared here.
+   * for the same place and are not compared here. Null for a place named without a depth; every
+   * such place comes after every place that has one.
    */
-  depthM: number;
+  depthM: number | null;
   /** What the cave calls the place. */
   label: string;
+  /** Free text the cave wrote beside the name, such as a depth range — shown, never read as a number. */
+  note: string | null;
+  /** Whether the cave names the place on the drawing itself, not only in a list of its places. */
+  landmark: boolean;
 }
 
 /**
@@ -42,8 +48,10 @@ export interface PublishedPlace {
  * <b>The name is an addition, never a replacement.</b> What comes back is for showing beside the
  * station, which stays — it is what the drawing labels and what a link to a moment names.
  *
- * Where a cave has given one station two names, at two depths, the shallower is the one answered:
- * the list arrives shallowest first and the first match is taken.
+ * Where a cave has given one station two names, the first in the list is the one answered: the
+ * list arrives with the places that have a depth shallowest first and the places named without
+ * one after them, and the first match is taken — so a station's shallowest declared depth names
+ * it before a name it was given without a depth.
  */
 export function placeLabelFor(
   station: string | null | undefined,

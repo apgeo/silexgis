@@ -974,7 +974,9 @@ describe('the drawing on a followed page', () => {
   const model = {
     format: 'survex3d' as const,
     modelUrl: '/api/v1/files/abc/content?token=first',
+    modelSha256: 'abababababababababababababababababababababababababababababababab',
     meshUrl: null,
+    meshSha256: null,
     anchorLongitude: null,
     anchorLatitude: null,
     anchorHeightM: null,
@@ -1100,8 +1102,8 @@ describe('the drawing on a followed page', () => {
       model: {
         ...model,
         places: [
-          { station: 'p.g.2', depthM: 40, label: 'Balconul' },
-          { station: 'p.g.7', depthM: 120, label: 'Sala Mare' },
+          { station: 'p.g.2', depthM: 40, label: 'Balconul', note: null, landmark: false },
+          { station: 'p.g.7', depthM: 120, label: 'Sala Mare', note: null, landmark: false },
         ],
       },
     });
@@ -1135,7 +1137,7 @@ describe('the drawing on a followed page', () => {
     // The name is for a station the drawing can show. Where the drawing this browser parsed has
     // no such station the row says that and nothing softer.
     ready({
-      model: { ...model, places: [{ station: 'p.g.7', depthM: 120, label: 'Sala Mare' }] },
+      model: { ...model, places: [{ station: 'p.g.7', depthM: 120, label: 'Sala Mare', note: null, landmark: false }] },
     });
     render(<PublicTripPage />);
     act(() => {

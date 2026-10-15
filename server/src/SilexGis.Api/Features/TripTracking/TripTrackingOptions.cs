@@ -70,7 +70,8 @@ public sealed class TripTrackingOptions
     public bool PublishExpectedReturn { get; set; }
 
     /// <summary>
-    /// Whether a published trip's survey comes with the names the cave has given its depths.
+    /// Whether a published trip's survey comes with the names the cave has given its places — the
+    /// depths it has declared and the stations it has named without a depth.
     /// <b>Off unless an installation turns it on.</b>
     /// </summary>
     /// <remarks>
@@ -83,11 +84,14 @@ public sealed class TripTrackingOptions
     /// and the answer is otherwise exactly what it was.
     /// </para>
     /// <para>
-    /// What it widens, exactly: for each declaration that has a name and names a station of the
-    /// survey being handed over, that name, the station and the declared depth — on the two reads
-    /// that hand a survey over, a trip being followed and a finished trip's replay. The station
-    /// and its altitude are already in the survey file those reads serve; the name is what is new.
-    /// Which declarations qualify is decided by
+    /// What it widens, exactly: for each place the cave has named — with a declared depth, or
+    /// named without one — whose station the survey being handed over holds, that name, the
+    /// station, the declared depth where there is one (null where the place was named without a
+    /// depth), the short note the cave wrote beside the name where it wrote one, and whether the
+    /// cave names the place on the drawing itself (the landmark flag) — on the two reads that hand
+    /// a survey over, a trip being followed and a finished trip's replay, in the cave's own list
+    /// order. The station and its altitude are already in the survey file those reads serve; the
+    /// name, the note and the flag are what is new. Which places qualify is decided by
     /// <see cref="SilexGis.Domain.Trips.TrackingDepthPlacements.PublishedPlaces"/>.
     /// </para>
     /// <para>

@@ -5,6 +5,7 @@ import {
   App,
   Button,
   Card,
+  Checkbox,
   Empty,
   Flex,
   Form,
@@ -30,6 +31,22 @@ interface DeclarationForm {
   depthM: number | null;
   stationName: string;
   placeLabel: string;
+  note: string;
+  landmark: boolean;
+}
+
+/** The longest note the server keeps beside a place's name: a few words, not an account. */
+const MAX_NOTE_LENGTH = 200;
+
+/**
+ * The key the server files a declaration under: a depth as the column keeps it — its magnitude, to
+ * one decimal — or, for a place named without a depth, its station. Two writes with the same key
+ * are one declaration and the second corrects the first; two with different keys are two.
+ */
+function keyOf(depthM: number | null | undefined, stationName: string): string {
+  return depthM === null || depthM === undefined
+    ? `station:${stationName.trim()}`
+    : `depth:${Math.round(Math.abs(depthM) * 10) / 10}`;
 }
 
 /**
@@ -46,16 +63,24 @@ interface DeclarationForm {
  * 96 metres" and certainly not "at station 3.14", and a named place is what the report card and
  * the importer can then offer instead of a number.
  *
- * <b>One declaration per depth, and the depth is the key.</b> Two answers to "what is at 96 m" is
- * no answer, and the resolution that consults these has to be able to take one — so writing a
- * depth that is already declared replaces it rather than adding beside it.
+ * <b>A place may also be named without a depth.</b> A club's list of its cave walks through halls
+ * and junctions nobody reports by a number — some with a few words beside the name, such as a
+ * depth range written as text, and some named on the drawing itself. Such a place has a station
+ * and a name and nothing else is required; it takes no part in placing a reported depth, which is
+ * why the report chooser and the importer never offer it.
  *
- * <b>Which is why editing a declaration's depth is two writes and not one.</b> The server knows
+ * <b>One declaration per key: the depth, or the station of a place without one.</b> Two answers to
+ * "what is at 96 m" is no answer, and the resolution that consults these has to be able to take
+ * one — so writing a depth that is already declared replaces it rather than adding beside it; and
+ * naming a station again without a depth renames it.
+ *
+ * <b>Which is why a correction that moves the key is two writes and not one.</b> The server knows
  * nothing about "the row being edited": a write at 97 m is a declaration at 97 m, and the one at
- * 96 m it was meant to correct stays where it was. Left like that, the same place is declared
- * twice under two depths — the report chooser offers two "Meandru", and an imported row naming it
- * is refused because which station is meant cannot be decided. So a correction that moves the
- * depth withdraws the declaration it moved, once the new one has landed.
+ * 96 m it was meant to correct stays where it was — and so does a place named at one station when
+ * the correction names another, or a depth taken away or added. Left like that, the same place is
+ * declared twice — the report chooser offers two "Meandru", and an imported row naming it is
+ * refused because which station is meant cannot be decided. So a correction whose key moved
+ * withdraws the declaration it was filled from, once the new one has landed.
  *
  * <b>A declaration naming a station the cave's current survey does not hold is marked.</b> A
  * declaration is only followed where its station exists, so one that was mistyped, or whose
@@ -104,16 +129,23 @@ export default function CaveDepthPlacesSection({
     setEditing(null);
   };
 
-  const save = async (values: DeclarationForm) => {
-    if (values.depthM === null || values.depthM === undefined) {
-      return;
-    }
+  /** Where a declaration is, said the way a message about it names it. */
+  const where = (depthM: number | null | undefined, stationName: string) =>
+    depthM === null || depthM === undefined
+      ? t('caves.depthPlaces.atStation', { station: stationName.trim() })
+      : t('caves.depthPlaces.atDepth', { depth: depthM });
 
+  const save = async (values: DeclarationForm) => {
+    const depthM = values.depthM ?? null;
+    const stationName = values.stationName.trim();
+    let written: CaveDepthPlace;
     try {
-      await write.mutateAsync({
-        depthM: values.depthM,
-        stationName: values.stationName.trim(),
-        placeLabel: values.placeLabel.trim() || null,
+      written = await write.mutateAsync({
+        depthM,
+        stationName,
+        placeLabel: (values.placeLabel ?? '').trim() || null,
+        note: (values.note ?? '').trim() || null,
+        landmark: values.landmark === true,
       });
     } catch (error) {
       // The one refusal with something to act on: the station named is known to the survey only
@@ -127,19 +159,30 @@ export default function CaveDepthPlacesSection({
       return;
     }
 
-    // A correction that moved the depth has left the row it was filled from behind, under the old
-    // depth, and the depth is the key — so that row is withdrawn now. After the write and not
-    // before it: a write that fails then leaves the old declaration standing, which is a cave
-    // still declaring the place, rather than one declaring nothing there at all.
-    const moved = editing !== null && editing.depthM !== values.depthM ? editing : null;
+    // A correction whose key moved — the depth changed, a depth was added or taken away, or a
+    // place without a depth was moved to another station — has left the row it was filled from
+    // behind under the old key, so that row is withdrawn now. After the write and not before it:
+    // a write that fails then leaves the old declaration standing, which is a cave still declaring
+    // the place, rather than one declaring nothing there at all. And never the row the write has
+    // just landed on: a key typed differently that the server files the same way is a correction
+    // of that very row.
+    const moved =
+      editing !== null &&
+      keyOf(editing.depthM, editing.stationName) !== keyOf(depthM, stationName) &&
+      written?.id !== editing.id
+        ? editing
+        : null;
     if (moved !== null) {
       try {
         await remove.mutateAsync({ id: moved.id });
       } catch {
         // Said as what it is, which is not a failed save: the new declaration is there. What is
-        // also there is the old one, and until it goes the place answers to two depths.
+        // also there is the old one, and until it goes the place is declared twice.
         message.error(
-          t('caves.depthPlaces.oldDepthKept', { depth: values.depthM, old: moved.depthM }),
+          t('caves.depthPlaces.oldKept', {
+            now: where(depthM, stationName),
+            old: where(moved.depthM, moved.stationName),
+          }),
         );
         leaveForm();
         return;
@@ -152,7 +195,14 @@ export default function CaveDepthPlacesSection({
 
   const confirmRemove = (place: CaveDepthPlace) =>
     modal.confirm({
-      title: t('caves.depthPlaces.withdrawConfirm', { depth: place.depthM }),
+      // A place without a depth places no report, so what withdrawing it does is said apart.
+      title:
+        place.depthM === null
+          ? t('caves.depthPlaces.withdrawNamedConfirm', {
+              label: place.placeLabel ?? '',
+              station: place.stationName,
+            })
+          : t('caves.depthPlaces.withdrawConfirm', { depth: place.depthM }),
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
@@ -173,6 +223,8 @@ export default function CaveDepthPlacesSection({
       depthM: place.depthM,
       stationName: place.stationName,
       placeLabel: place.placeLabel ?? '',
+      note: place.note ?? '',
+      landmark: place.landmark,
     });
     setEditing(place);
     setAdding(true);
@@ -212,7 +264,12 @@ export default function CaveDepthPlacesSection({
               title: t('caves.depthPlaces.depth'),
               dataIndex: 'depthM',
               width: 110,
-              render: (depth: number) => t('caves.depthPlaces.metres', { depth }),
+              render: (depth: number | null) =>
+                depth === null ? (
+                  <Typography.Text type="secondary">{t('caves.depthPlaces.noDepth')}</Typography.Text>
+                ) : (
+                  t('caves.depthPlaces.metres', { depth })
+                ),
             },
             {
               title: t('caves.depthPlaces.station'),
@@ -237,12 +294,29 @@ export default function CaveDepthPlacesSection({
             {
               title: t('caves.depthPlaces.place'),
               dataIndex: 'placeLabel',
-              render: (label: string | null) =>
-                label ?? (
-                  <Typography.Text type="secondary">
-                    {t('caves.depthPlaces.unnamed')}
-                  </Typography.Text>
-                ),
+              render: (label: string | null, place: CaveDepthPlace) => (
+                <Flex gap={8} align="center" wrap>
+                  {label ?? (
+                    <Typography.Text type="secondary">
+                      {t('caves.depthPlaces.unnamed')}
+                    </Typography.Text>
+                  )}
+                  {place.landmark && (
+                    <Tag
+                      color="blue"
+                      style={{ marginInlineEnd: 0 }}
+                      data-testid={`cave-depth-place-landmark-${place.id}`}
+                    >
+                      {t('caves.depthPlaces.landmarkTag')}
+                    </Tag>
+                  )}
+                </Flex>
+              ),
+            },
+            {
+              title: t('caves.depthPlaces.note'),
+              dataIndex: 'note',
+              render: (note: string | null) => note ?? null,
             },
             ...(canEdit
               ? [
@@ -301,14 +375,18 @@ export default function CaveDepthPlacesSection({
           form={form}
           layout="inline"
           style={{ marginTop: 12, rowGap: 8 }}
-          initialValues={{ depthM: null, stationName: '', placeLabel: '' }}
+          initialValues={{
+            depthM: null,
+            stationName: '',
+            placeLabel: '',
+            note: '',
+            landmark: false,
+          }}
           onFinish={save}
         >
-          <Form.Item
-            name="depthM"
-            label={t('caves.depthPlaces.depth')}
-            rules={[{ required: true, message: t('caves.depthPlaces.depthRequired') }]}
-          >
+          {/* Optional: a place may be named without a depth. What that costs is a name — see the
+              rule on the name below. */}
+          <Form.Item name="depthM" label={t('caves.depthPlaces.depth')}>
             {/* The unit inside the field rather than hung off it as an addon: the library has
                 deprecated the addon on a number field, and the warning it prints is a console error
                 that the browser sweep files as a defect on every page this card is drawn on. */}
@@ -330,8 +408,36 @@ export default function CaveDepthPlacesSection({
               data-testid="cave-depth-place-station"
             />
           </Form.Item>
-          <Form.Item name="placeLabel" label={t('caves.depthPlaces.place')}>
+          {/* Required only where there is no depth: a station with neither declares nothing. The
+              server holds the same rule; asking here says so before anything is sent. */}
+          <Form.Item
+            name="placeLabel"
+            label={t('caves.depthPlaces.place')}
+            dependencies={['depthM']}
+            rules={[
+              ({ getFieldValue }) => ({
+                validator: (_, value: string | undefined) => {
+                  const depth = getFieldValue('depthM') as number | null | undefined;
+                  return (depth === null || depth === undefined) && !(value ?? '').trim()
+                    ? Promise.reject(new Error(t('caves.depthPlaces.labelRequiredWithoutDepth')))
+                    : Promise.resolve();
+                },
+              }),
+            ]}
+          >
             <Input style={{ width: 200 }} data-testid="cave-depth-place-label" />
+          </Form.Item>
+          <Form.Item name="note" label={t('caves.depthPlaces.note')}>
+            <Input
+              style={{ width: 160 }}
+              maxLength={MAX_NOTE_LENGTH}
+              data-testid="cave-depth-place-note"
+            />
+          </Form.Item>
+          <Form.Item name="landmark" valuePropName="checked">
+            <Checkbox data-testid="cave-depth-place-landmark">
+              {t('caves.depthPlaces.landmark')}
+            </Checkbox>
           </Form.Item>
           <Form.Item>
             <Flex gap={8}>

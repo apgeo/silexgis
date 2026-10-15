@@ -185,27 +185,42 @@ public class TrackingDepthPlacementsTests
         TrackingDepthPlacements.For([], WithNameless, "#5", [], 110m).ViewerStationName.ShouldBe("cave.shaft.9");
     }
 
-    // ---- which declared places a visitor may be told -----------------------------------------
+    // ---- which named places a visitor may be told -------------------------------------------
+
+    private static readonly DateTimeOffset Morning = new(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
+
+    /// <summary>A place with a depth, written at <paramref name="minute"/> past eight.</summary>
+    private static DeclaredDepthPlaces.Place AtDepth(
+        decimal depth, string station, string? label, int minute = 0, string? note = null, bool landmark = false) =>
+        new(depth, station, label, note, landmark, Morning.AddMinutes(minute), Guid.CreateVersion7());
+
+    /// <summary>A place named without a depth, written at <paramref name="minute"/> past eight.</summary>
+    private static DeclaredDepthPlaces.Place Depthless(
+        string station, string label, int minute, string? note = null, bool landmark = false) =>
+        new(null, station, label, note, landmark, Morning.AddMinutes(minute), Guid.CreateVersion7());
+
+    private static List<(decimal?, string, string?)> Shown(IEnumerable<DeclaredDepthPlaces.Place> places) =>
+        [.. places.Select(p => (p.DepthM, p.ViewerStationName, p.PlaceLabel))];
 
     [Fact]
     public void Only_named_declarations_on_a_station_of_the_survey_are_published_shallowest_first()
     {
-        DeclaredDepthPlaces.Declared[] declared =
+        DeclaredDepthPlaces.Place[] declared =
         [
-            new(120m, "cave.shaft.10", "Sifonul"),
+            AtDepth(120m, "cave.shaft.10", "Sifonul"),
             // Named, and on a station this survey does not have: it belonged to an earlier one.
-            new(80m, "cave.old.4", "Tabăra veche"),
+            AtDepth(80m, "cave.old.4", "Tabăra veche"),
             // On a station of the survey, and nobody gave it a name — nor a name that is only spaces.
-            new(60m, "cave.gallery.7", null),
-            new(70m, "cave.shaft.9", "   "),
-            new(50m, "cave.gallery.7", "Galeria"),
-            new(100m, "cave.shaft.9", "Puțul"),
+            AtDepth(60m, "cave.gallery.7", null),
+            AtDepth(70m, "cave.shaft.9", "   "),
+            AtDepth(50m, "cave.gallery.7", "Galeria"),
+            AtDepth(100m, "cave.shaft.9", "Puțul"),
         ];
 
         var published = TrackingDepthPlacements.PublishedPlaces(
             declared, Stations, TrackingDepthPlacements.MaxPublishedPlaces);
 
-        published.Select(p => (p.DepthM, p.ViewerStationName, p.PlaceLabel)).ShouldBe(
+        Shown(published).ShouldBe(
         [
             (50m, "cave.gallery.7", "Galeria"),
             (100m, "cave.shaft.9", "Puțul"),
@@ -214,17 +229,71 @@ public class TrackingDepthPlacementsTests
 
         // The one left out for its station is left out by the test a report passes, and is a
         // declaration that would otherwise have been published: it has a name.
-        TrackingDepthPlacements.NamesAStationOf(Stations, declared[1]).ShouldBeFalse();
+        TrackingDepthPlacements.HasDrawableStation(Stations, declared[1].ViewerStationName).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Places_named_without_a_depth_are_published_after_every_depth_in_the_order_they_were_declared()
+    {
+        // Written in an order that is neither the depth order nor the order of the stations, so
+        // the answer can only be the rule's: depths shallowest first, then the depthless ones as
+        // they were written — the junction at a quarter past, the hall at ten past, the entrance
+        // series at five past.
+        DeclaredDepthPlaces.Place[] declared =
+        [
+            Depthless("cave.shaft.9", "Joncțiunea", minute: 15, note: "601/0 - 619"),
+            AtDepth(120m, "cave.shaft.10", "Sifonul", minute: 20, landmark: true),
+            Depthless("cave.gallery.7", "Sala Mare", minute: 10, landmark: true),
+            AtDepth(0m, "cave.ent.0", "Intrarea", minute: 30, landmark: true),
+            Depthless("cave.ent.0", "Seria de intrare", minute: 5),
+            // A depthless name for a station this survey does not have is left out like any other.
+            Depthless("cave.old.4", "Galeria veche", minute: 1),
+        ];
+
+        var published = TrackingDepthPlacements.PublishedPlaces(declared, Stations, 10);
+
+        Shown(published).ShouldBe(
+        [
+            (0m, "cave.ent.0", "Intrarea"),
+            (120m, "cave.shaft.10", "Sifonul"),
+            (null, "cave.ent.0", "Seria de intrare"),
+            (null, "cave.gallery.7", "Sala Mare"),
+            (null, "cave.shaft.9", "Joncțiunea"),
+        ]);
+
+        // The note and the flag travel with the place they were written for, untouched.
+        published.Single(p => p.PlaceLabel == "Joncțiunea").Note.ShouldBe("601/0 - 619");
+        published.Single(p => p.PlaceLabel == "Joncțiunea").IsLandmark.ShouldBeFalse();
+        published.Single(p => p.PlaceLabel == "Sala Mare").IsLandmark.ShouldBeTrue();
+        published.Single(p => p.PlaceLabel == "Sala Mare").Note.ShouldBeNull();
+
+        // Whatever order they are handed over in, the answer is the same — a published answer is
+        // compared with the one a reader holds by its bytes.
+        Shown(TrackingDepthPlacements.PublishedPlaces([.. declared.Reverse()], Stations, 10))
+            .ShouldBe(Shown(published));
+    }
+
+    [Fact]
+    public void Two_places_declared_in_the_same_instant_keep_the_order_of_their_identities()
+    {
+        // Written by one save, so the clock says nothing between them; the identity is
+        // time-ordered and settles it, the same way the database settles it.
+        var first = new DeclaredDepthPlaces.Place(null, "cave.shaft.9", "Unu", null, false, Morning, Guid.CreateVersion7());
+        Thread.Sleep(2);
+        var second = new DeclaredDepthPlaces.Place(null, "cave.gallery.7", "Doi", null, false, Morning, Guid.CreateVersion7());
+
+        TrackingDepthPlacements.PublishedPlaces([second, first], Stations, 10)
+            .Select(p => p.PlaceLabel).ShouldBe(["Unu", "Doi"]);
     }
 
     [Fact]
     public void The_published_places_are_capped_and_the_deepest_are_the_ones_left_out()
     {
-        DeclaredDepthPlaces.Declared[] declared =
+        DeclaredDepthPlaces.Place[] declared =
         [
-            new(120m, "cave.shaft.10", "Sifonul"),
-            new(50m, "cave.gallery.7", "Galeria"),
-            new(100m, "cave.shaft.9", "Puțul"),
+            AtDepth(120m, "cave.shaft.10", "Sifonul"),
+            AtDepth(50m, "cave.gallery.7", "Galeria"),
+            AtDepth(100m, "cave.shaft.9", "Puțul"),
         ];
 
         TrackingDepthPlacements.PublishedPlaces(declared, Stations, 3).Count.ShouldBe(3);
@@ -233,6 +302,11 @@ public class TrackingDepthPlacementsTests
         TrackingDepthPlacements.PublishedPlaces(declared, Stations, 0).ShouldBeEmpty();
         TrackingDepthPlacements.PublishedPlaces(declared, Stations, -1).ShouldBeEmpty();
 
+        // Past the cap, the last-written of the places without a depth go before any depth does.
+        DeclaredDepthPlaces.Place[] mixed = [.. declared, Depthless("cave.ent.0", "Intrarea", minute: 1)];
+        TrackingDepthPlacements.PublishedPlaces(mixed, Stations, 3)
+            .Select(p => p.PlaceLabel).ShouldBe(["Galeria", "Puțul", "Sifonul"]);
+
         // The cap a published read uses is a real bound and not "everything".
         TrackingDepthPlacements.MaxPublishedPlaces.ShouldBeInRange(1, 1000);
     }
@@ -240,14 +314,68 @@ public class TrackingDepthPlacementsTests
     [Fact]
     public void A_named_place_on_a_station_the_viewer_cannot_draw_is_not_published_and_nothing_is_without_stations()
     {
-        DeclaredDepthPlaces.Declared onNameless = new(100m, "#4", "Sala");
-        DeclaredDepthPlaces.Declared onNamed = new(50m, "cave.gallery.7", "Galeria");
+        var onNameless = AtDepth(100m, "#4", "Sala");
+        var onNamed = AtDepth(50m, "cave.gallery.7", "Galeria");
+        var depthlessOnNameless = Depthless("#4", "Sala fără nume", minute: 3);
 
-        TrackingDepthPlacements.PublishedPlaces([onNameless, onNamed], WithNameless, 10)
+        TrackingDepthPlacements.PublishedPlaces([onNameless, onNamed, depthlessOnNameless], WithNameless, 10)
             .ShouldBe([onNamed]);
 
         // A survey whose stations were never read holds none of them.
         TrackingDepthPlacements.PublishedPlaces([onNameless, onNamed], [], 10).ShouldBeEmpty();
         TrackingDepthPlacements.PublishedPlaces([], Stations, 10).ShouldBeEmpty();
+    }
+
+    // ---- the one list order, as a query and as rows ------------------------------------------
+
+    [Fact]
+    public void The_list_order_is_the_same_asked_of_a_query_and_of_rows_already_read()
+    {
+        var cave = Guid.CreateVersion7();
+        var rows = new List<CaveDepthPlace>();
+        void Add(decimal? depth, string station, int minute)
+        {
+            rows.Add(new CaveDepthPlace
+            {
+                CaveFeatureId = cave,
+                DepthM = depth,
+                ViewerStationName = station,
+                PlaceLabel = station,
+                CreatedAt = Morning.AddMinutes(minute),
+            });
+            // Separate writes are separate milliseconds, and the identity is time-ordered.
+            Thread.Sleep(2);
+        }
+
+        Add(null, "d.3", 9);
+        Add(210m, "a.3", 1);
+        Add(null, "d.1", 2);
+        Add(0m, "a.1", 8);
+        Add(null, "d.2", 2);
+        Add(45m, "a.2", 4);
+
+        var asQuery = rows.AsQueryable().InListOrder().Select(r => r.ViewerStationName).ToList();
+        var asRows = rows
+            .Select(r => new DeclaredDepthPlaces.Place(
+                r.DepthM, r.ViewerStationName, r.PlaceLabel, r.Note, r.IsLandmark, r.CreatedAt, r.Id))
+            .InListOrder()
+            .Select(p => p.ViewerStationName)
+            .ToList();
+
+        asQuery.ShouldBe(["a.1", "a.2", "a.3", "d.1", "d.2", "d.3"]);
+        asRows.ShouldBe(asQuery);
+    }
+
+    [Fact]
+    public void Only_a_place_with_a_depth_answers_for_one()
+    {
+        var cave = Guid.CreateVersion7();
+        CaveDepthPlace[] rows =
+        [
+            new() { CaveFeatureId = cave, DepthM = 100m, ViewerStationName = "cave.shaft.9", PlaceLabel = "Puțul" },
+            new() { CaveFeatureId = cave, DepthM = null, ViewerStationName = "cave.gallery.7", PlaceLabel = "Galeria" },
+        ];
+
+        rows.AsQueryable().WithDepth().Select(r => r.ViewerStationName).ShouldBe(["cave.shaft.9"]);
     }
 }

@@ -495,13 +495,15 @@ fi oricând corectate și șterse rând cu rând.
 
 O adâncime singură nu este un loc: acolo unde mai multe stații stau aproape una de alta, calculul
 nu poate spune pe care o au în minte oamenii prin „96 de metri". Clubul poate. Pe pagina
-**peșterii**, secțiunea **Ce înseamnă adâncimile acestei peșteri** → **Declară o adâncime**:
+**peșterii**, secțiunea **Locurile numite ale acestei peșteri** → **Declară un loc**:
 
 | Câmp | |
 |---|---|
-| **Adâncime** | Adâncimea declarată. Se păstrează cu o zecimală; semnul este ignorat |
-| **Stație** | Ce stație este acea adâncime. Pe măsură ce scrieți, sub casetă sunt oferite stațiile ridicării curente a peșterii ale căror nume încep așa — majusculele și diacriticele nu contează — iar alegerea uneia completează scrierea ridicării. Orice nume este primit în continuare: lista este un ajutor, nu o regulă |
-| **Numele locului** | Opțional — numele folosit de oameni („Meandrul") |
+| **Adâncime** | Adâncimea declarată. Se păstrează cu o zecimală; semnul este ignorat. Lăsați-o goală pentru a numi un loc fără adâncime (mai jos) |
+| **Stație** | Ce stație este acea adâncime — sau acel loc. Pe măsură ce scrieți, sub casetă sunt oferite stațiile ridicării curente a peșterii ale căror nume încep așa — majusculele și diacriticele nu contează — iar alegerea uneia completează scrierea ridicării. Orice nume este primit în continuare: lista este un ajutor, nu o regulă |
+| **Numele locului** | Numele folosit de oameni („Meandrul"). Opțional unde există o adâncime, obligatoriu unde nu există |
+| **Notă** | Opțional — câteva cuvinte arătate lângă nume acolo unde o singură adâncime nu spune destul, de exemplu un interval de adâncimi scris ca text („601/0 - 619"). Cel mult 200 de caractere; arătată cum a fost scrisă, niciodată citită ca număr |
+| **Numit pe desen** | Bifați-o pentru un loc pe care clubul îl numește pe desenul ridicării, nu doar în lista sa de locuri. Tabelul îl marchează **Pe desen** |
 
 Lista de sub **Stație** nu oferă nimic acolo unde peștera nu are încă nicio ridicare citită sau
 unde locația exactă a peșterii vă este ascunsă; caseta este atunci una simplă de text. Când sunt
@@ -509,6 +511,16 @@ mai multe nume decât arată, ultimul rând spune câte — scrieți mai mult di
 
 - **O singură declarație pe adâncime.** O adâncime declarată din nou înlocuiește ce spunea.
   Modificarea unei declarații la altă adâncime o scrie pe cea nouă și apoi o retrage pe cea veche.
+- **Un loc poate fi numit și fără adâncime.** O sală, o joncțiune, un loc pe care îl numește lista
+  clubului și după care nimeni nu raportează un număr: lăsați **Adâncime** goală și dați stația și
+  un nume — numele este atunci obligatoriu, pentru că o stație fără niciuna dintre ele nu declară
+  nimic. Un astfel de loc apare după toate adâncimile, în ordinea în care au fost declarate
+  locurile, cu **Fără adâncime** în coloana adâncimii. Numirea aceleiași stații din nou fără
+  adâncime îi înlocuiește numele, nota și marcajul; aceeași stație poate fi declarată și la o
+  adâncime. **Nu este folosit niciodată pentru a plasa un raport**: cardul de raport, dialogul de
+  corectare și importul foii oferă și potrivesc doar locurile care au o adâncime. Modificarea unui
+  astfel de loc la altă stație, sau darea unei adâncimi, o scrie pe cea nouă și apoi o retrage pe
+  cea veche — și invers când o adâncime este scoasă.
 - **Fiecare raport la acea adâncime ajunge pe stația declarată** — introdus, corectat sau
   importat — cât timp ridicarea urmăririi mai are acea stație. O declarație care numește o stație
   pe care ridicarea nu o mai are (o ridicare reîncărcată între timp) este sărită, adâncimea este
@@ -533,6 +545,7 @@ mai multe nume decât arată, ultimul rând spune câte — scrieți mai mult di
   promisiune, nici într-un sens, nici în celălalt: unde ridicarea curentă nu a fost citită (chiar
   dacă o altă încărcare a fost), sau locația peșterii vă este ascunsă, nu se spune nimic.
 - **Retrage** scoate o declarație. Rapoartele deja înregistrate păstrează stația primită.
+  Retragerea unui loc numit fără adâncime doar îl scoate din lista locurilor peșterii.
 - **O stație căreia fișierul ridicării nu îi dă nume nu poate fi declarată.** Este cunoscută doar
   prin numărul la care a scris-o fișierul, iar următorul export al ridicării dă acel număr altei
   stații — așa că declarația ar ajunge să însemne alt loc fără ca cineva să o fi schimbat.
@@ -794,8 +807,11 @@ Pagina spune ce arată, pentru un cititor care nu a mai urmărit niciodată o tu
   (`SILEXGIS__TripTracking__PublishDepthPlaces`, vezi ghidul de instalare). Unde este pornită,
   cineva raportat la o stație cu nume apare cu numele și cu stația dedesubt — *Sala Mare* peste
   `p.g.7` — la o tură urmărită și la reluarea unei ture trecute. Sunt publicate doar declarațiile
-  care au un nume și doar pentru stațiile ridicării pe care o desenează pagina. Unde este oprită,
-  și pentru orice stație căreia peștera nu i-a dat un nume, pagina arată doar stația.
+  care au un nume și doar pentru stațiile ridicării pe care o desenează pagina — inclusiv locurile
+  numite fără adâncime, fiecare cu nota sa și cu faptul dacă este numit pe desen, în ordinea
+  peșterii (întâi adâncimile, de la cea mai mică, apoi celelalte în ordinea declarării), așa că o
+  pagină din afara aplicației poate desena întreaga listă de locuri a peșterii lângă ridicare. Unde
+  este oprită, și pentru orice stație căreia peștera nu i-a dat un nume, pagina arată doar stația.
 - **Cluburile fiecăruia — doar unde instalarea le publică.** O instalare poate lăsa o pagină
   publicată să spună din ce grupuri speologice face parte fiecare persoană numită; este
   **oprită** dacă un administrator al serverului nu o pornește

@@ -121,7 +121,9 @@ describe('winding a published past trip back to a moment', () => {
     const model = {
       format: 'survex3d' as const,
       modelUrl: '/api/v1/files/abc/content?token=t',
+      modelSha256: 'abababababababababababababababababababababababababababababababab',
       meshUrl: null,
+      meshSha256: null,
       anchorLongitude: null,
       anchorLatitude: null,
       anchorHeightM: null,
@@ -129,7 +131,7 @@ describe('winding a published past trip back to a moment', () => {
       proj4: null,
       pictures: [],
       rasterMaps: [],
-      places: [{ station: 'p.g.7', depthM: 120, label: 'Sala Mare' }],
+      places: [{ station: 'p.g.7', depthM: 120, label: 'Sala Mare', note: null, landmark: false }],
     };
     const source = track({
       model,

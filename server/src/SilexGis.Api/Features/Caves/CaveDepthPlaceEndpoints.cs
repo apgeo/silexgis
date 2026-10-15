@@ -14,8 +14,8 @@ using SilexGis.Infrastructure.Surveys;
 namespace SilexGis.Api.Features.Caves;
 
 /// <summary>
-/// What a cave's depths mean: the station each declared depth stands for, and the word people use
-/// for the place.
+/// A cave's named places: what its depths mean — the station each declared depth stands for and
+/// the word people use for it — and the stations it names without a depth.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -25,6 +25,21 @@ namespace SilexGis.Api.Features.Caves;
 /// share a depth, a meander wanders up and down, and the station nearest a round number may be
 /// somewhere nobody goes. A declaration is the cave's own answer, written once by somebody who
 /// knows it, and read before any measuring is attempted.
+/// </para>
+/// <para>
+/// <b>A place may also be named without a depth.</b> A club's list of a cave's places walks
+/// through halls and junctions nobody reports by a number, some with a few words beside them — a
+/// depth range as the club writes it — and some named on the drawing itself. Such a place is kept
+/// here so the list is the cave's and not a page's; it is never read by anything that places a
+/// reported depth, and it must have a name, because a name is all it is.
+/// </para>
+/// <para>
+/// <b>Problem codes</b>, stable: <c>cave.not_found</c> for a cave that is not there or may not be
+/// acted on in the way asked; <c>validation.failed</c> for a request the rules refuse — among them
+/// a place without a depth and without a name; <see cref="StationNamelessCode"/> for a station the
+/// survey file gives no name; <see cref="ConcurrentWriteCode"/> when somebody else declared the
+/// same depth, or named the same station without a depth, between this write's read and its save;
+/// and <c>cave_depth_place.not_found</c> for a withdrawal of a row that is not there.
 /// </para>
 /// <para>
 /// <b>Read with the cave, written with the cave.</b> Reading takes Read on the cave and writing
@@ -62,13 +77,16 @@ public static class CaveDepthPlaceEndpoints
         var caves = api.MapGroup("/caves").WithTags("CaveDepthPlaces");
 
         caves.MapGet("/{caveId:guid}/depth-places", ListAsync)
-            .WithSummary("The depths this cave has declared the meaning of, shallowest first.");
+            .WithSummary(
+                "The places this cave has named: those with a depth shallowest first, then those "
+                + "named without one in the order they were declared.");
 
         caves.MapPut("/{caveId:guid}/depth-places", WriteAsync)
             .WithValidation<CaveDepthPlaceWriteRequest>()
             .WithSummary(
-                "Declares what one depth of this cave means, replacing the declaration for that "
-                + "depth where there is one (Write on the cave).");
+                "Declares one named place of this cave — what a depth means, or a name for a station "
+                + "without a depth — replacing the declaration for that depth, or for that station "
+                + "among the depthless ones, where there is one (Write on the cave).");
 
         caves.MapDelete("/{caveId:guid}/depth-places/{id:guid}", DeleteAsync)
             .WithSummary("Withdraws one declaration (Write on the cave).");
@@ -88,17 +106,13 @@ public static class CaveDepthPlaceEndpoints
 
         var rows = await db.CaveDepthPlaces.AsNoTracking()
             .Where(x => x.CaveFeatureId == caveId)
-            // Shallowest first: the order the cave is described in, and the order a chooser has to
-            // offer, because somebody picking where a party is thinks downwards from the entrance.
-            .OrderBy(x => x.DepthM)
-            .ThenBy(x => x.Id)
+            // Shallowest first, then the places without a depth as they were declared: the order
+            // the cave is described in, and the order every list of its places is shown in.
+            .InListOrder()
             .ToListAsync(ct);
 
         var inSurvey = await InSurveyAsync(db, ctx, caveId, [.. rows.Select(x => x.ViewerStationName)], ct);
-        return TypedResults.Ok(rows
-            .Select(x => new CaveDepthPlaceDto(
-                x.Id, x.DepthM, x.ViewerStationName, x.PlaceLabel, inSurvey(x.ViewerStationName)))
-            .ToList());
+        return TypedResults.Ok(rows.Select(x => Dto(x, inSurvey)).ToList());
     }
 
     private static async Task<Results<Ok<CaveDepthPlaceDto>, ProblemHttpResult>> WriteAsync(
@@ -125,16 +139,24 @@ public static class CaveDepthPlaceEndpoints
         // the column holds neither. Looking up the raw value would find nothing beside the row at
         // 120 for a write of 120.04 or −120, and the insert that followed would then be refused by
         // the unique index for the very row it failed to find.
-        var depth = DeclaredDepthPlaces.Key(request.DepthM!.Value);
+        decimal? depth = request.DepthM is { } given ? DeclaredDepthPlaces.Key(given) : null;
         var station = request.StationName!.Trim();
         var label = string.IsNullOrWhiteSpace(request.PlaceLabel) ? null : request.PlaceLabel.Trim();
+        var note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
+        var landmark = request.Landmark ?? false;
 
-        // The depth is the key, so a second write at the same depth is a correction rather than a
-        // second answer. Done by reading first rather than by catching the unique index: the index
-        // is there to keep the table honest if this is ever bypassed, and an upsert that relied on
-        // it would report a conflict for the ordinary act of changing one's mind.
-        var existing = await db.CaveDepthPlaces
-            .FirstOrDefaultAsync(x => x.CaveFeatureId == caveId && x.DepthM == depth, ct);
+        // The key is the depth where there is one, so a second write at the same depth is a
+        // correction rather than a second answer; and the station among the places named without
+        // a depth, so naming a station again is a correction of its name. Done by reading first
+        // rather than by catching the unique indexes: they are there to keep the table honest if
+        // this is ever bypassed, and an upsert that relied on them would report a conflict for the
+        // ordinary act of changing one's mind.
+        var existing = depth is { } keyed
+            ? await db.CaveDepthPlaces
+                .FirstOrDefaultAsync(x => x.CaveFeatureId == caveId && x.DepthM == keyed, ct)
+            : await db.CaveDepthPlaces
+                .FirstOrDefaultAsync(x => x.CaveFeatureId == caveId && x.DepthM == null
+                    && x.ViewerStationName == station, ct);
 
         if (existing is null)
         {
@@ -144,6 +166,8 @@ public static class CaveDepthPlaceEndpoints
                 DepthM = depth,
                 ViewerStationName = station,
                 PlaceLabel = label,
+                Note = note,
+                IsLandmark = landmark,
             };
             db.CaveDepthPlaces.Add(existing);
         }
@@ -151,29 +175,35 @@ public static class CaveDepthPlaceEndpoints
         {
             existing.ViewerStationName = station;
             existing.PlaceLabel = label;
+            existing.Note = note;
+            existing.IsLandmark = landmark;
         }
 
         try
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException e) when (IsRaceOnDepth(e))
+        catch (DbUpdateException e) when (IsRaceOnKey(e))
         {
-            // With the key normalised above, the index can only fire when two first-time writes
-            // at one depth cross between the read and this save. That is a conflict worth its
-            // name rather than an unexplained failure: the caller reads the list and writes again.
-            return ApiProblems.Conflict("cave_depth_place.concurrent_write",
-                "That depth was declared by somebody else while this was being written. Read the list and write again.");
+            // With the key normalised above, either index can only fire when two first-time
+            // writes of one key — one depth, or one station named without a depth — cross between
+            // the read and this save. That is a conflict worth its name rather than an unexplained
+            // failure: the caller reads the list and writes again.
+            return ApiProblems.Conflict(ConcurrentWriteCode, depth is null
+                ? "That station was named by somebody else while this was being written. Read the list and write again."
+                : "That depth was declared by somebody else while this was being written. Read the list and write again.");
         }
 
         // Said on the answer to a write as it is on the list, under the same terms: the person
         // who has just typed a station name is the one who can act on being told the survey does
         // not have it, and somebody who may write the cave but not place it is told nothing.
         var inSurvey = await InSurveyAsync(db, ctx, caveId, [existing.ViewerStationName], ct);
-        return TypedResults.Ok(new CaveDepthPlaceDto(
-            existing.Id, existing.DepthM, existing.ViewerStationName, existing.PlaceLabel,
-            inSurvey(existing.ViewerStationName)));
+        return TypedResults.Ok(Dto(existing, inSurvey));
     }
+
+    private static CaveDepthPlaceDto Dto(CaveDepthPlace row, Func<string, bool?> inSurvey) =>
+        new(row.Id, row.DepthM, row.ViewerStationName, row.PlaceLabel, row.Note, row.IsLandmark,
+            inSurvey(row.ViewerStationName));
 
     /// <summary>
     /// For each of these station names, whether the cave's current survey holds it — or null for
@@ -239,6 +269,13 @@ public static class CaveDepthPlaceEndpoints
     public const string StationNamelessCode = "cave_depth_place.station_nameless";
 
     /// <summary>
+    /// Somebody else wrote the same key — the same depth, or the same station named without a
+    /// depth — between this write's read and its save. One code for both keys: what the caller
+    /// does about either is the same, read the list and write again.
+    /// </summary>
+    public const string ConcurrentWriteCode = "cave_depth_place.concurrent_write";
+
+    /// <summary>
     /// Whether <paramref name="given"/> is, in the surveys this cave holds, a station known only by
     /// the number its file wrote it at — in at least one of them, and a named station in none.
     /// </summary>
@@ -295,12 +332,15 @@ public static class CaveDepthPlaceEndpoints
         return nameless;
     }
 
-    /// <summary>The unique index on (cave, depth) refused the write, and nothing else did.</summary>
-    private static bool IsRaceOnDepth(DbUpdateException e) =>
+    /// <summary>
+    /// One of the two unique indexes over this table's keys refused the write — on (cave, depth),
+    /// or on (cave, station) among the rows without a depth — and nothing else did.
+    /// </summary>
+    private static bool IsRaceOnKey(DbUpdateException e) =>
         e.InnerException is PostgresException
         {
             SqlState: PostgresErrorCodes.UniqueViolation,
-            ConstraintName: "ux_cave_depth_places_cave_depth",
+            ConstraintName: "ux_cave_depth_places_cave_depth" or "ux_cave_depth_places_cave_station_depthless",
         };
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(

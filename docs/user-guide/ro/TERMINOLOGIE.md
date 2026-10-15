@@ -163,8 +163,10 @@ odată cu ea — și apoi paginile.
 | Remove this person / Merge a duplicate instead | Eliminați persoana / Unificați un duplicat în loc |
 | First started / Started again (a watch) | Începută prima dată / Începută din nou |
 | Import a sheet | Importă o foaie |
-| What this cave's depths mean | Ce înseamnă adâncimile acestei peșteri |
-| Declare a depth | Declară o adâncime |
+| This cave's named places | Locurile numite ale acestei peșteri |
+| Declare a place | Declară un loc |
+| No depth (a place named without one) | Fără adâncime |
+| Named on the drawing / On the drawing | Numit pe desen / Pe desen |
 | Where the party said it was going | Unde a spus echipa că merge |
 | Outside the declared parts | În afara părților declarate |
 | Show only the declared parts | Arată doar părțile declarate |

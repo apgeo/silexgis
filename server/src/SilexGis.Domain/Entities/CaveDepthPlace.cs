@@ -2,7 +2,8 @@
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
-/// A depth in one cave, the station that depth means, and what people call the place.
+/// A named place in one cave: the station it is, what people call it, and — usually — the depth
+/// that place means.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -16,9 +17,20 @@ namespace SilexGis.Domain.Entities;
 /// each of them means, and the name they say instead of either.
 /// </para>
 /// <para>
-/// <b>The depth is the key, one row per depth per cave</b>, because that is how the declaration is
-/// read: a report of a depth asks this table what it means before falling back to measuring. Two
-/// rows for one depth would be a cave that answers its own question twice.
+/// <b>Most rows are that: the meaning of a declared depth</b>, and those are the only rows that
+/// take part in placing a reported depth. <b>A row may also have no depth at all</b> and be just a
+/// name for a station — a hall, a junction, a pitch head that a list of the cave's places names
+/// and nobody reports by a number. Such a row says nothing about any depth, so nothing that turns
+/// a depth into a station ever reads it; it exists for the surfaces that list a cave's places and
+/// for a drawing that labels them.
+/// </para>
+/// <para>
+/// <b>The key depends on which kind of row it is.</b> A row with a depth is keyed by the depth, one
+/// row per depth per cave, because that is how the declaration is read: a report of a depth asks
+/// this table what it means before falling back to measuring, and two rows for one depth would be
+/// a cave that answers its own question twice. A row without a depth is keyed by its station, one
+/// per station per cave among the depthless rows: a station named twice without a depth is one
+/// place with two names and nothing to choose between them.
 /// </para>
 /// <para>
 /// <b>Kept on the cave and not on a survey model</b>, holding the station as a name. That is the
@@ -29,10 +41,12 @@ namespace SilexGis.Domain.Entities;
 /// would instead make every declaration vanish the day a cave gained a corrected survey.
 /// </para>
 /// <para>
-/// <b>The place label is a third fact, not a decoration.</b> It is what a caver says on the phone,
-/// and it is what a screen can offer instead of asking somebody to pick a depth or type a station:
-/// one list, ordered by depth, in the words the club uses. A row may be declared without one — a
-/// depth that matters with no name people use for it is an ordinary thing.
+/// <b>The place label is a fact, not a decoration.</b> It is what a caver says on the phone, and
+/// it is what a screen can offer instead of asking somebody to pick a depth or type a station: one
+/// list, the depths in order and then the places named without one, in the words the club uses. A
+/// row with a depth may be declared without one — a depth that matters with no name people use for
+/// it is an ordinary thing. A row without a depth may not: a station with neither a depth nor a
+/// name declares nothing.
 /// </para>
 /// </remarks>
 public class CaveDepthPlace : ITimestamped, IAuditable, IAuditChild
@@ -44,12 +58,14 @@ public class CaveDepthPlace : ITimestamped, IAuditable, IAuditChild
 
     /// <summary>
     /// Metres below the cave's entrance datum, positive downwards — the same sense a reported depth
-    /// is given in, so that the two can be compared without anybody remembering a sign.
+    /// is given in, so that the two can be compared without anybody remembering a sign. Null for a
+    /// place named without a depth, which no reported depth ever resolves to.
     /// </summary>
-    public decimal DepthM { get; set; }
+    public decimal? DepthM { get; set; }
 
     /// <summary>
-    /// The station this depth means, in the survey viewer's own spelling.
+    /// The station this place is — the station its depth means, where it has one — in the survey
+    /// viewer's own spelling.
     /// </summary>
     /// <remarks>
     /// The viewer's spelling rather than the survey table's, for the reason a recorded position
@@ -59,9 +75,27 @@ public class CaveDepthPlace : ITimestamped, IAuditable, IAuditChild
     public required string ViewerStationName { get; set; }
 
     /// <summary>
-    /// What people call this place, or null where there is no such word.
+    /// What people call this place, or null where there is no such word. Never null on a row
+    /// without a depth: that row is nothing but a name for its station.
     /// </summary>
     public string? PlaceLabel { get; set; }
+
+    /// <summary>
+    /// A short free text a list shows beside the name where a single depth does not say enough —
+    /// a depth range written as the club writes it, a pair of figures read off an old drawing — or
+    /// null where there is none.
+    /// </summary>
+    /// <remarks>
+    /// Free text, and never read as a number: it is what the club wrote, kept as it wrote it, and
+    /// nothing that places a reported depth looks at it.
+    /// </remarks>
+    public string? Note { get; set; }
+
+    /// <summary>
+    /// Whether the place is named on the drawing itself — labelled on the survey a page draws —
+    /// and not only in lists of the cave's places.
+    /// </summary>
+    public bool IsLandmark { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 
