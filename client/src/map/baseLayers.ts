@@ -31,8 +31,11 @@ const TILE_OVERLAY_Z = 0.5;
  * The lower end is the opposite case and belongs on the layer: an overlay that starts at zoom 10
  * genuinely has nothing to show at zoom 3, and stretching one tile across a continent would be a
  * lie rather than a blur.
+ *
+ * The 3D scene reads the same band from here, so the two views can never disagree about where a
+ * source stops.
  */
-function zoomBand(entry: MapLayerInfo): { min: number; max: number } {
+export function zoomBand(entry: MapLayerInfo): { min: number; max: number } {
   const min = entry.minZoom ?? 0;
   // A catalogue row that predates the zoom columns, or one an operator left at zero, would
   // otherwise be a source that draws at zoom 0 and nowhere else — invisible, with the reason

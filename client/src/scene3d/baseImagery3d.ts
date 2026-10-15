@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { MapLayerInfo } from '../api/hooks.ts';
+import { zoomBand } from '../map/baseLayers.ts';
 import type { Scene3DImagery } from './scene3dEngine.ts';
 
 // Basemaps for the 3D scene come from the same server-side layer catalog the 2D map reads, so an
@@ -49,6 +50,7 @@ export function syncBaseImagery(
       urlTemplate: entry.urlTemplate,
       attribution: entry.attribution ?? undefined,
       visible: false,
+      ...levelsOf(entry),
     });
   }
   setActiveBaseImagery(engine, activeId);
@@ -79,11 +81,23 @@ export function syncTileOverlayImagery(
         urlTemplate: entry.urlTemplate,
         attribution: entry.attribution ?? undefined,
         visible: false,
+        ...levelsOf(entry),
       });
     }
     engine.setImageryLayerVisible(layerId, visibleIds.has(catalogId));
     engine.setImageryLayerOpacity(layerId, opacityById[catalogId] ?? 1);
   }
+}
+
+/**
+ * The zoom band a catalogue entry declares, as the scene takes it — the same band the 2D map
+ * applies. Without the ceiling a close camera asks a source for zoom levels it never published:
+ * two shipped imagery sources stop at 16 and 17 and went blank in 3D past them, and a street map
+ * stopping at 19 answered every closer request with a refusal the console recorded by the hundred.
+ */
+function levelsOf(entry: MapLayerInfo): { minimumLevel: number; maximumLevel: number } {
+  const { min, max } = zoomBand(entry);
+  return { minimumLevel: min, maximumLevel: max };
 }
 
 /** Shows exactly one catalog basemap and hides the rest. */

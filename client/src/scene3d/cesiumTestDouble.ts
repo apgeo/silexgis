@@ -25,6 +25,7 @@ export interface FakeImageryProviderOptions {
    *  a credit object, so the distinction is behavioural rather than cosmetic. */
   credit: Credit | string | undefined;
   enablePickFeatures: boolean;
+  maximumLevel?: number;
 }
 
 export interface FakeWidgetOptions {
@@ -623,14 +624,30 @@ export class SingleTileImageryProvider {
   }
 }
 
-class FakeImageryLayer {
+export interface FakeImageryLayerOptions {
+  show?: boolean;
+  alpha?: number;
+  minimumTerrainLevel?: number;
+}
+
+export class ImageryLayer {
   show = true;
   alpha = 1;
   provider: UrlTemplateImageryProvider | SingleTileImageryProvider;
-  constructor(provider: UrlTemplateImageryProvider | SingleTileImageryProvider) {
+  options: FakeImageryLayerOptions;
+  constructor(
+    provider: UrlTemplateImageryProvider | SingleTileImageryProvider,
+    options: FakeImageryLayerOptions = {},
+  ) {
     this.provider = provider;
+    this.options = options;
+    this.show = options.show ?? true;
+    this.alpha = options.alpha ?? 1;
   }
 }
+
+const FakeImageryLayer = ImageryLayer;
+type FakeImageryLayer = ImageryLayer;
 
 class FakeImageryLayerCollection {
   readonly layers: FakeImageryLayer[] = [];
@@ -638,6 +655,9 @@ class FakeImageryLayerCollection {
     const layer = new FakeImageryLayer(provider);
     this.layers.push(layer);
     return layer;
+  }
+  add(layer: FakeImageryLayer) {
+    this.layers.push(layer);
   }
   remove(layer: FakeImageryLayer) {
     const index = this.layers.indexOf(layer);

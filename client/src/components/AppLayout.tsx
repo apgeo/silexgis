@@ -17,6 +17,7 @@ import {
   type AccessDomainName,
 } from '../api/hooks.ts';
 import { useAuth } from '../auth/auth.tsx';
+import ErrorBoundary from './ErrorBoundary.tsx';
 import NotificationBell from './NotificationBell.tsx';
 import HeldReportsSentinel from './trips/HeldReportsSentinel.tsx';
 import { useIsFullAdmin } from './reslinks/permissions.ts';
@@ -266,7 +267,11 @@ export default function AppLayout() {
           />
         </Layout.Sider>
         <Layout.Content style={{ overflow: 'auto' }}>
-          <Outlet />
+          {/* A screen that fails takes only itself down, not the navigation around it; keyed
+              by the address so that going somewhere else is also the way out of the failure. */}
+          <ErrorBoundary key={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </Layout.Content>
       </Layout>
     </Layout>

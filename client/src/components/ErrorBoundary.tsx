@@ -17,7 +17,7 @@ import { reportError } from '../diagnostics/reporter.ts';
  * that is only true while the development server is running, and telling somebody their problem has
  * been filed when it has not is worse than saying nothing.
  */
-function ErrorFallback({ detail }: { detail: string }) {
+export function ErrorFallback({ detail }: { detail: string }) {
   const { t } = useTranslation();
   return (
     <Result

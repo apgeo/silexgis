@@ -123,6 +123,33 @@ describe('syncBaseImagery', () => {
   });
 });
 
+describe('the zoom band a catalogue entry declares', () => {
+  it('reaches the scene for basemaps and overlays alike', () => {
+    const engine = new FakeImagery();
+    const catalog = [
+      layer({ id: 1, maxZoom: 17 }),
+      layer({ id: 2, isBase: false, minZoom: 10, maxZoom: 16 }),
+    ];
+    syncBaseImagery(engine, catalog, 1);
+    syncTileOverlayImagery(engine, catalog, new Set([2]), {});
+
+    // A close camera must not ask a source for zoom levels it never published: past 17 the first
+    // went blank, and every refused tile was an error in the console.
+    expect(engine.layers.get(baseImageryLayerId(1))).toMatchObject({ minimumLevel: 0, maximumLevel: 17 });
+    expect(engine.layers.get(tileOverlayImageryLayerId(2))).toMatchObject({
+      minimumLevel: 10,
+      maximumLevel: 16,
+    });
+  });
+
+  it('falls back as the 2D map does when an entry declares no usable ceiling', () => {
+    const engine = new FakeImagery();
+    syncBaseImagery(engine, [layer({ id: 3, maxZoom: 0 })], 3);
+
+    expect(engine.layers.get(baseImageryLayerId(3))!.maximumLevel).toBe(19);
+  });
+});
+
 describe('setActiveBaseImagery', () => {
   it('leaves layers that did not come from the catalog alone', () => {
     const engine = new FakeImagery();

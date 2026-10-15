@@ -169,7 +169,7 @@ public sealed class GdalVectorIO : IVectorIO
 
     private static void ReadLayer(Layer layer, WKBReader wkbReader, List<VectorFeature> features)
     {
-        var transform = BuildTransformTo4326(layer.GetSpatialRef());
+        using var transform = BuildTransformTo4326(layer.GetSpatialRef());
         var definition = layer.GetLayerDefn();
         var fieldCount = definition.GetFieldCount();
 
@@ -256,7 +256,7 @@ public sealed class GdalVectorIO : IVectorIO
     /// </summary>
     private static void ReadFixes(Layer layer, List<TrackFix> fixes)
     {
-        var transform = BuildTransformTo4326(layer.GetSpatialRef());
+        using var transform = BuildTransformTo4326(layer.GetSpatialRef());
         var timeField = layer.GetLayerDefn().GetFieldIndex("time");
         if (timeField < 0)
         {
@@ -380,7 +380,9 @@ public sealed class GdalVectorIO : IVectorIO
             return null;
         }
 
-        var target = new SpatialReference("");
+        // The transformation keeps its own copy of both references, so this one can go when it
+        // has been built; the source belongs to the layer it was read from.
+        using var target = new SpatialReference("");
         target.ImportFromEPSG(4326);
         // Force lon/lat axis order regardless of authority definitions.
         source.SetAxisMappingStrategy(AxisMappingStrategy.OAMS_TRADITIONAL_GIS_ORDER);
@@ -488,7 +490,7 @@ public sealed class GdalVectorIO : IVectorIO
 
         using (var dataSource = driver.CreateDataSource(path, datasetOptions))
         {
-            var srs = Epsg4326();
+            using var srs = Epsg4326();
             var layer = dataSource.CreateLayer(layerName, srs, layerType, layerOptions);
             WriteFeatures(layer, features);
             dataSource.FlushCache();
@@ -524,7 +526,7 @@ public sealed class GdalVectorIO : IVectorIO
 
         using (var dataSource = driver.CreateDataSource(path, ["GPX_USE_EXTENSIONS=YES"]))
         {
-            var srs = Epsg4326();
+            using var srs = Epsg4326();
             if (waypoints.Count > 0)
             {
                 WriteFeatures(dataSource.CreateLayer("waypoints", srs, wkbGeometryType.wkbPoint, []), waypoints);
@@ -560,7 +562,7 @@ public sealed class GdalVectorIO : IVectorIO
 
         using (var dataSource = driver.CreateDataSource(shpDir, []))
         {
-            var srs = Epsg4326();
+            using var srs = Epsg4326();
             foreach (var group in groups)
             {
                 var (suffix, geometryType) = group.Key;
