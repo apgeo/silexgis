@@ -61,6 +61,7 @@ const MessageTemplatesPage = lazy(() => import('./pages/admin/MessageTemplatesPa
 const NotificationHealthPage = lazy(() => import('./pages/admin/NotificationHealthPage.tsx'));
 const PublishedTripsPage = lazy(() => import('./pages/admin/PublishedTripsPage.tsx'));
 const PermissionGroupsPage = lazy(() => import('./pages/admin/permissionGroups/PermissionGroupsPage.tsx'));
+const UsersPage = lazy(() => import('./pages/admin/UsersPage.tsx'));
 const FeatureSetsPage = lazy(() => import('./pages/admin/FeatureSetsPage.tsx'));
 const DocumentTypesPage = lazy(() => import('./pages/admin/DocumentTypesPage.tsx'));
 const TripTypesPage = lazy(() => import('./pages/admin/TripTypesPage.tsx'));
@@ -196,6 +197,7 @@ export const routes: RouteObject[] = [
           { path: '/admin/published-trips', element: <Loadable><PublishedTripsPage /></Loadable> },
           { path: '/admin/message-templates', element: <Loadable><MessageTemplatesPage /></Loadable> },
           { path: '/admin/permission-groups', element: <Loadable><PermissionGroupsPage /></Loadable> },
+          { path: '/admin/users', element: <Loadable><UsersPage /></Loadable> },
           { path: '/admin/feature-sets', element: <Loadable><FeatureSetsPage /></Loadable> },
           { path: '/admin/document-types', element: <Loadable><DocumentTypesPage /></Loadable> },
           { path: '/admin/trip-types', element: <Loadable><TripTypesPage /></Loadable> },

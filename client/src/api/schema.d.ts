@@ -19028,10 +19028,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Accounts of this installation (Read on the Users domain). */
+        /** Accounts of this installation, searched and paged (Read on the Users domain). */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    q?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -19044,13 +19048,37 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["AdminUserDto"][];
+                        "application/json": components["schemas"]["PagedResultOfAdminUserDto"];
                     };
                 };
             };
         };
         put?: never;
-        post?: never;
+        /** Opens an account and invites its owner to choose a password (Create on the Users domain). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AdminUserCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminUserCreatedDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -19136,6 +19164,44 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}/invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends a fresh invitation to an account whose owner has not chosen a password yet (Write on the Users domain). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminUserCreatedDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -20097,6 +20163,17 @@ export interface components {
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
+        AdminUserCreatedDto: {
+            user: components["schemas"]["AdminUserDto"];
+            invitationSent: boolean;
+            setPasswordUrl: null | string;
+            /** Format: int32 */
+            expiresHours: number;
+        };
+        AdminUserCreateRequest: {
+            email: string;
+            displayName: string;
+        };
         AdminUserDto: {
             /** Format: uuid */
             id: string;
@@ -20107,6 +20184,7 @@ export interface components {
             /** Format: date-time */
             lockoutEnd: null | string;
             isFullAdministrator: boolean;
+            hasPassword: boolean;
             /** Format: uuid */
             caverId: null | string;
             /** Format: date-time */
@@ -23485,6 +23563,15 @@ export interface components {
         };
         /** @enum {unknown} */
         PageDivision: "whole" | "page" | "sheet" | "slide";
+        PagedResultOfAdminUserDto: {
+            items: components["schemas"]["AdminUserDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfAlbumDto: {
             items: components["schemas"]["AlbumDto"][];
             /** Format: int32 */

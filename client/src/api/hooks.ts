@@ -5504,6 +5504,83 @@ export function useUserSearch(q: string) {
   });
 }
 
+// ---- account administration: the register of who can sign in ----
+
+export type AdminUser = components['schemas']['AdminUserDto'];
+export type AdminUserCreated = components['schemas']['AdminUserCreatedDto'];
+
+export interface AdminUserListParams {
+  q?: string;
+  page: number;
+  pageSize: number;
+}
+
+/** The register of accounts, searched and read a page at a time. */
+export function useAdminUsers(params: AdminUserListParams) {
+  return useQuery({
+    queryKey: ['admin-users', 'list', params] as const,
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/users', {
+          params: { query: { q: params.q || undefined, page: params.page, pageSize: params.pageSize } },
+        }),
+      ),
+    // The page before stays on screen while the next is read, so typing into the search box does
+    // not blank the list between keystrokes.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * What changing an account changes in this browser: the register, and — because an account is
+ * also somebody on the roster — the people pickers that read it.
+ */
+function useInvalidateAdminUsers() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    void queryClient.invalidateQueries({ queryKey: ['user-search'] });
+  };
+}
+
+/** Opens an account for somebody and invites them to choose a password. */
+export function useCreateAdminUser() {
+  const invalidate = useInvalidateAdminUsers();
+  return useMutation({
+    mutationFn: (body: { email: string; displayName: string }) =>
+      unwrap(api.POST('/api/v1/users', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/** Sends a fresh invitation to an account nobody has entered yet. */
+export function useReinviteAdminUser() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/api/v1/users/{id}/invitation', { params: { path: { id } } })),
+  });
+}
+
+/** Shuts an account out, or lets it back in. */
+export function useSetAdminUserLocked() {
+  const invalidate = useInvalidateAdminUsers();
+  return useMutation({
+    mutationFn: ({ id, locked }: { id: string; locked: boolean }) =>
+      unwrap(api.PUT('/api/v1/users/{id}', { params: { path: { id } }, body: { locked } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/** Removes an account. The person it belonged to stays on the roster. */
+export function useDeleteAdminUser() {
+  const invalidate = useInvalidateAdminUsers();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/users/{id}', { params: { path: { id } } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
 export type DashboardSummary = components['schemas']['DashboardSummaryDto'];
 export type DashboardActivityItem = components['schemas']['DashboardActivityItemDto'];
 export type DashboardActivityKind = components['schemas']['DashboardActivityKind'];

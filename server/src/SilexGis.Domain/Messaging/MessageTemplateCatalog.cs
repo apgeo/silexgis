@@ -42,6 +42,9 @@ public static class MessageTemplateCatalog
 
     public const string EmailPasswordReset = "email.password-reset";
 
+    /// <summary>Invites somebody an administrator opened an account for to choose a password.</summary>
+    public const string EmailAccountInvitation = "email.account-invitation";
+
     /// <summary>Second-factor code delivered by mail.</summary>
     public const string EmailTwoFactorCode = "email.two-factor-code";
 
@@ -321,6 +324,45 @@ public static class MessageTemplateCatalog
 
                     Linkul este valabil {expiresHours} ore și poate fi folosit o singură dată. Dacă nu
                     dumneavoastră ați cerut resetarea, ignorați mesajul — parola rămâne neschimbată.
+                    """),
+            }),
+
+        new(
+            EmailAccountInvitation,
+            MessageChannel.Email,
+            "Sent when an administrator opens an account for somebody, so they can choose a password.",
+            [AppName, DisplayName, "email", "url", "expiresHours"],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "Your {appName} account is ready",
+                    """
+                    Hello {displayName},
+
+                    An account has been opened for you on {appName}. You sign in with this address:
+                    {email}
+
+                    Open this link to choose your password:
+
+                    {url}
+
+                    The link is valid for {expiresHours} hours and can be used once. If it runs out,
+                    ask whoever runs {appName} to send you a new one.
+                    """),
+                ["ro"] = new(
+                    "Contul dumneavoastră {appName} este pregătit",
+                    """
+                    Bună ziua {displayName},
+
+                    V-a fost deschis un cont în {appName}. Vă autentificați cu această adresă:
+                    {email}
+
+                    Deschideți acest link pentru a vă alege parola:
+
+                    {url}
+
+                    Linkul este valabil {expiresHours} ore și poate fi folosit o singură dată. Dacă expiră,
+                    cereți celor care administrează {appName} să vă trimită unul nou.
                     """),
             }),
 

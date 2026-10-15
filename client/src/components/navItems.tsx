@@ -136,6 +136,10 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
     ...(gates.can('audit')
       ? [{ key: 'admin/audit', icon: <HistoryOutlined />, label: t('nav.audit') }]
       : []),
+    // The register of accounts: who can sign in, and letting somebody in or shutting them out.
+    ...(gates.can('users')
+      ? [{ key: 'admin/users', icon: <UserOutlined />, label: t('nav.users') }]
+      : []),
     ...(gates.can('permissionGroups')
       ? [{
           key: 'admin/permission-groups',

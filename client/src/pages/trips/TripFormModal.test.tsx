@@ -30,6 +30,8 @@ vi.mock('../../api/client.ts', async (original) => ({
 
 vi.mock('../../api/hooks.ts', () => ({
   useCavingGroups: () => ({ data: [] }),
+  useCan: () => false,
+  useCreateCavingGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useTripTypes: () => ({ data: [{ id: 1, code: 'survey', name: 'Survey / mapping', isSeeded: true }] }),
   useTripParticipantRoles: () => ({
     data: [

@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client.ts';
 import { queryKeys, useMfaStatus } from '../../api/hooks.ts';
+import PasswordChangeCard from './PasswordChangeCard.tsx';
 import PhoneNumberCard from './PhoneNumberCard.tsx';
 import TwoFactorMethods from './TwoFactorMethods.tsx';
 
@@ -134,6 +135,8 @@ export default function SecuritySettingsPage() {
           )}
         </Flex>
       </Card>
+
+      {hasPassword && <PasswordChangeCard />}
 
       <PhoneNumberCard />
 

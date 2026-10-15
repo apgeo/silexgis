@@ -9,7 +9,13 @@ interface ResetFormValues {
   confirmPassword: string;
 }
 
-/** Where a password-reset link lands: the token is in the URL, the new password is typed here. */
+/**
+ * Where a password-reset link lands: the token is in the URL, the new password is typed here.
+ *
+ * An invitation to an account an administrator opened lands here too, marked `invite=1`: it is the
+ * same link and the same request, and only the wording changes — somebody choosing their first
+ * password has nothing to reset.
+ */
 export default function ResetPasswordPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -20,6 +26,7 @@ export default function ResetPasswordPage() {
 
   const email = params.get('email');
   const token = params.get('token');
+  const invite = params.get('invite') === '1';
 
   const onFinish = async (values: ResetFormValues) => {
     if (!email || !token) {
@@ -59,14 +66,17 @@ export default function ResetPasswordPage() {
     <Flex align="center" justify="center" style={{ minHeight: '100%' }}>
       <Card style={{ width: 400 }}>
         <Typography.Title level={3} style={{ textAlign: 'center' }}>
-          {t('auth.resetPasswordTitle')}
+          {invite ? t('auth.invitePasswordTitle') : t('auth.resetPasswordTitle')}
         </Typography.Title>
+        {invite && !done && (
+          <Typography.Paragraph type="secondary">{t('auth.invitePasswordIntro')}</Typography.Paragraph>
+        )}
 
         {error && <Alert type="error" title={error} style={{ marginBottom: 16 }} />}
 
         {done ? (
           <>
-            <Alert type="success" showIcon title={t('auth.resetPasswordDone')} style={{ marginBottom: 16 }} />
+            <Alert type="success" showIcon title={invite ? t('auth.invitePasswordDone') : t('auth.resetPasswordDone')} style={{ marginBottom: 16 }} />
             <Link to="/login">
               <Button type="primary" block>
                 {t('auth.signIn')}

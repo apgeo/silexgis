@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -24,11 +25,9 @@ namespace SilexGis.Api.Tests;
 /// than by refusing.
 /// </para>
 /// <para>
-/// What is <em>not</em> here is the last-administrator guard firing, and that is stated beside the
-/// tests rather than left to be discovered: both destructive verbs run inside its protocol, but
-/// making it fire needs an installation with one administrator and this suite shares a database
-/// with five. Writing it down is the point — a rule believed to be covered because a class about
-/// the right subject exists is worse than one nobody claimed.
+/// The last-administrator guard firing is driven by a class of its own, which can shrink its own
+/// installation to a single administrator without taking away the accounts these tests sign in
+/// through.
 /// </para>
 /// </remarks>
 public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
@@ -64,8 +63,9 @@ public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClas
     [Fact]
     public async Task The_register_lists_accounts_and_whether_each_can_sign_in()
     {
-        var listed = await admin.GetFromJsonAsync<JsonElement>("/api/v1/users/");
-        var subject = listed.EnumerateArray().Single(u => u.GetProperty("id").GetGuid() == subjectId);
+        var listed = await admin.GetFromJsonAsync<JsonElement>("/api/v1/users/?pageSize=500");
+        var subject = listed.GetProperty("items").EnumerateArray()
+            .Single(u => u.GetProperty("id").GetGuid() == subjectId);
 
         subject.GetProperty("email").GetString().ShouldBe(subjectEmail);
         subject.GetProperty("isLockedOut").GetBoolean().ShouldBeFalse();
@@ -78,6 +78,143 @@ public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClas
 
         (await admin.GetAsync($"/api/v1/users/{Guid.NewGuid()}")).StatusCode
             .ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// The register is searched by any name an account is known by, accent-blind, and read a page
+    /// at a time with the total beside it.
+    /// </summary>
+    [Fact]
+    public async Task The_register_is_searched_and_paged()
+    {
+        var invited = await admin.PostAsJsonAsync("/api/v1/users/", new
+        {
+            email = $"ua-search-{tag}@t.local",
+            displayName = $"Ştefan Ciobanu {tag}",
+        });
+        invited.StatusCode.ShouldBe(HttpStatusCode.Created, await invited.Content.ReadAsStringAsync());
+
+        // Typed without the diacritic, as somebody on a keyboard without it would.
+        var byName = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/users/?q=stefan ciobanu {tag}");
+        byName.GetProperty("totalItems").GetInt32().ShouldBe(1);
+        byName.GetProperty("items")[0].GetProperty("email").GetString().ShouldBe($"ua-search-{tag}@t.local");
+
+        var byAddress = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/users/?q=ua-sub-{tag}");
+        byAddress.GetProperty("items").EnumerateArray().Select(u => u.GetProperty("id").GetGuid())
+            .ShouldBe([subjectId]);
+
+        // Every account of this class carries the tag; one per page leaves the rest for later
+        // pages and says how many there are in all.
+        var paged = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/users/?q={tag}&page=2&pageSize=1");
+        paged.GetProperty("items").GetArrayLength().ShouldBe(1);
+        paged.GetProperty("page").GetInt32().ShouldBe(2);
+        paged.GetProperty("totalItems").GetInt32().ShouldBeGreaterThanOrEqualTo(4);
+    }
+
+    /// <summary>
+    /// An administrator opens an account on an installation that does not let people register,
+    /// the invitation is mailed, and its link is what lets the person in.
+    /// </summary>
+    [Fact]
+    public async Task An_invited_account_is_entered_through_the_mailed_link()
+    {
+        var email = $"ua-invite-{tag}@t.local";
+        var created = await admin.PostAsJsonAsync("/api/v1/users/", new { email, displayName = "Ana Invitata" });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+
+        var body = await JsonOf(created);
+        body.GetProperty("invitationSent").GetBoolean().ShouldBeTrue();
+        // Mailed, so not also handed back: the link exists in exactly one place.
+        body.GetProperty("setPasswordUrl").ValueKind.ShouldBe(JsonValueKind.Null);
+        var user = body.GetProperty("user");
+        user.GetProperty("email").GetString().ShouldBe(email);
+        user.GetProperty("hasPassword").GetBoolean().ShouldBeFalse();
+        var id = user.GetProperty("id").GetGuid();
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var row = await db.Users.AsNoTracking().SingleAsync(u => u.Id == id);
+            row.PasswordHash.ShouldBeNull("nobody but the person ever knows their password");
+            row.DisplayName.ShouldBe("Ana Invitata");
+
+            // Made as registration makes an account: the person is on the roster from the start.
+            (await db.Cavers.AsNoTracking().AnyAsync(c => c.UserId == id)).ShouldBeTrue();
+        }
+
+        var message = factory.Messages.Last;
+        message.Recipient.ShouldBe(email);
+        message.Body.ShouldContain(email);
+        message.Link.AbsolutePath.ShouldBe("/reset-password");
+
+        await ChooseFirstPasswordAsync(message.Link, "a-first-password-1");
+        using var invitee = await AuthHelper.BearerClientAsync(factory, email, "a-first-password-1");
+        (await invitee.GetAsync("/api/v1/me")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // In, so a second invitation would now be a way into somebody else's account.
+        var again = await admin.PostAsync($"/api/v1/users/{id}/invitation", null);
+        again.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await CodeOf(again)).ShouldBe("user.already_enterable");
+    }
+
+    /// <summary>
+    /// Without a mail server the link comes back to the administrator, once, to hand over — and it
+    /// works exactly as the mailed one does.
+    /// </summary>
+    [Fact]
+    public async Task Without_mail_the_link_is_handed_to_the_administrator()
+    {
+        factory.Messages.MailConfigured = false;
+        var email = $"ua-handover-{tag}@t.local";
+
+        var created = await admin.PostAsJsonAsync("/api/v1/users/", new { email, displayName = "Ion Predat" });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var body = await JsonOf(created);
+        body.GetProperty("invitationSent").GetBoolean().ShouldBeFalse();
+        body.GetProperty("expiresHours").GetInt32().ShouldBeGreaterThan(0);
+        var link = new Uri(body.GetProperty("setPasswordUrl").GetString()!);
+        QueryHelpers.ParseQuery(link.Query)["invite"].ToString().ShouldBe("1");
+
+        // The first link was lost; a second one replaces it, and the account still has no password.
+        var id = body.GetProperty("user").GetProperty("id").GetGuid();
+        var again = await admin.PostAsync($"/api/v1/users/{id}/invitation", null);
+        again.StatusCode.ShouldBe(HttpStatusCode.OK, await again.Content.ReadAsStringAsync());
+        var second = new Uri((await JsonOf(again)).GetProperty("setPasswordUrl").GetString()!);
+
+        await ChooseFirstPasswordAsync(second, "handed-over-pass-1");
+        using var invitee = await AuthHelper.BearerClientAsync(factory, email, "handed-over-pass-1");
+        (await invitee.GetAsync("/api/v1/me")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // And the register now says the account has been entered.
+        var one = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/users/{id}");
+        one.GetProperty("hasPassword").GetBoolean().ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// The address rules are registration's: one account per address whatever its case, a
+    /// malformed address refused before anything is written, and the refusal named.
+    /// </summary>
+    [Fact]
+    public async Task An_invitation_follows_the_address_rules_of_registration()
+    {
+        var taken = await admin.PostAsJsonAsync(
+            "/api/v1/users/", new { email = subjectEmail.ToUpperInvariant(), displayName = "Dublura" });
+        taken.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await CodeOf(taken)).ShouldBe("user.email_taken");
+
+        var malformed = await admin.PostAsJsonAsync("/api/v1/users/", new { email = "not-an-address", displayName = "X" });
+        malformed.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await CodeOf(malformed)).ShouldBe("validation.failed");
+        (await JsonOf(malformed)).GetProperty("errors").TryGetProperty("Email", out _).ShouldBeTrue();
+
+        var nameless = await admin.PostAsJsonAsync("/api/v1/users/", new { email = $"ua-nameless-{tag}@t.local", displayName = "  " });
+        nameless.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await JsonOf(nameless)).GetProperty("errors").TryGetProperty("DisplayName", out _).ShouldBeTrue();
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.Users.CountAsync(u => u.NormalizedEmail == subjectEmail.ToUpperInvariant())).ShouldBe(1);
+        (await db.Users.AnyAsync(u => u.Email == $"ua-nameless-{tag}@t.local")).ShouldBeFalse();
     }
 
     /// <summary>
@@ -178,19 +315,6 @@ public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClas
         row.LockoutEnd.ShouldBeNull();
     }
 
-    // The last-administrator guard is deliberately not driven from here, and the reason is a
-    // property of the fixture rather than of the rule. Both destructive verbs run inside that
-    // guard's protocol — stage, ask whether any full administrator can still sign in, roll back —
-    // but firing it needs an installation with exactly one such account, and the suite shares one
-    // database with five. Reducing it to one would mean locking the others, which is the seeded
-    // administration every other class in the suite signs in through.
-    //
-    // Measured rather than assumed, because "it could not be tested" is the sentence a missing
-    // test hides behind: a first draft of this class asserted its way down to one administrator
-    // and its own fixture-proof caught the installation standing at five. The rule itself is
-    // covered where it is defined, against the query that defines live membership. What is left
-    // uncovered here is only that these two endpoints are wired into it, and that is the gap.
-
     /// <summary>
     /// The domain is enforced: an account without it is refused rather than answered.
     /// </summary>
@@ -207,6 +331,13 @@ public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClas
         (await editor.PutAsJsonAsync($"/api/v1/users/{subjectId}", new { locked = true }))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await editor.DeleteAsync($"/api/v1/users/{subjectId}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await editor.PostAsync($"/api/v1/users/{subjectId}/invitation", null)).StatusCode
+            .ShouldBe(HttpStatusCode.Forbidden);
+
+        var created = await editor.PostAsJsonAsync(
+            "/api/v1/users/", new { email = $"ua-ed-made-{tag}@t.local", displayName = "Nu" });
+        created.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await CodeOf(created)).ShouldBe("access.create_forbidden");
 
         // And nothing happened on the way past: a refusal that had already written would be the
         // worst of both.
@@ -214,6 +345,7 @@ public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClas
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var row = await db.Users.AsNoTracking().SingleAsync(u => u.Id == subjectId);
         row.LockoutEnd.ShouldBeNull();
+        (await db.Users.AnyAsync(u => u.Email == $"ua-ed-made-{tag}@t.local")).ShouldBeFalse();
     }
 
     /// <summary>An unauthenticated caller reaches none of it.</summary>
@@ -224,6 +356,24 @@ public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClas
         (await anonymous.GetAsync("/api/v1/users/")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await anonymous.DeleteAsync($"/api/v1/users/{subjectId}")).StatusCode
             .ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.PostAsJsonAsync("/api/v1/users/", new { email = $"ua-anon-{tag}@t.local", displayName = "A" }))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.PostAsync($"/api/v1/users/{subjectId}/invitation", null)).StatusCode
+            .ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    /// <summary>Completes the set-password page's request with the token a link carries.</summary>
+    private async Task ChooseFirstPasswordAsync(Uri link, string password)
+    {
+        var query = QueryHelpers.ParseQuery(link.Query);
+        using var anonymous = factory.CreateClient();
+        var reset = await anonymous.PostAsJsonAsync("/api/v1/auth/password/reset", new
+        {
+            email = query["email"].ToString(),
+            token = query["token"].ToString(),
+            newPassword = password,
+        });
+        reset.StatusCode.ShouldBe(HttpStatusCode.NoContent, await reset.Content.ReadAsStringAsync());
     }
 
     private static async Task<JsonElement> JsonOf(HttpResponseMessage response) =>
