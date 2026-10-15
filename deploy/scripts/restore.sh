@@ -20,7 +20,21 @@ echo "==> Restoring database from $SRC_ABS/db.sql.gz"
 # Drop and recreate the public schema, then load the dump.
 docker compose exec -T db psql -U silexgis -d silexgis \
 	-c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-gunzip -c "$SRC_ABS/db.sql.gz" | docker compose exec -T db psql -U silexgis -d silexgis
+# psql goes on past an error and still exits 0, so a restore that half failed used to end in
+# "Done". Its errors are collected and judged here instead. Three are expected and harmless:
+# the database image creates the geocoder's and topology's schemas itself, only `public` is
+# dropped above, and the dump's CREATE SCHEMA for each of them then finds it already there.
+ERRORS=$(mktemp)
+gunzip -c "$SRC_ABS/db.sql.gz" | docker compose exec -T db psql -U silexgis -d silexgis 2> "$ERRORS" || true
+cat "$ERRORS" >&2
+UNEXPECTED=$(grep 'ERROR:' "$ERRORS" \
+	| grep -Ev 'ERROR: +schema "(tiger|tiger_data|topology)" already exists' | wc -l | tr -d ' ')
+rm -f "$ERRORS"
+if [ "$UNEXPECTED" -gt 0 ]; then
+	echo "!! The database restore reported $UNEXPECTED error(s) -- see above. The database is in" >&2
+	echo "!! whatever state the load left it in; the files volume has NOT been touched." >&2
+	exit 1
+fi
 
 echo "==> Restoring files volume from $SRC_ABS/files.tar.gz"
 # The volume name is <project>_<volume>, and the project is asked of the resolved compose
