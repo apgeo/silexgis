@@ -46,6 +46,11 @@ for f in update.sh set-domain.sh install-app.sh reset.sh; do
 done
 ls -1 "$OPS_DIR" | sed 's/^/    /'
 
+# Each wrapper below re-runs itself as $DEPLOY_USER when started by anyone else. --reset-env is
+# load-bearing: without it the switched process keeps the caller's environment, and a root caller's
+# HOME=/root is unreadable to $DEPLOY_USER -- docker then cannot load its configuration, does not
+# know the compose command, and every check that asks compose which services run reports "the db
+# service is not running" while the database is up and healthy.
 say "Installing /usr/local/sbin/silexgis-update"
 cat > /usr/local/sbin/silexgis-update <<EOF
 #!/usr/bin/env bash
@@ -54,7 +59,7 @@ cat > /usr/local/sbin/silexgis-update <<EOF
 # Refresh it from the checkout with: sudo bash $APP_DIR/deploy/server/install-ops.sh
 set -euo pipefail
 if [ "\$(id -un)" != "$DEPLOY_USER" ]; then
-	exec setpriv --reuid="$DEPLOY_USER" --regid="$DEPLOY_USER" --init-groups \\
+	exec setpriv --reuid="$DEPLOY_USER" --regid="$DEPLOY_USER" --init-groups --reset-env \\
 		env SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR" \\
 		bash "$OPS_DIR/update.sh" "\$@"
 fi
@@ -76,7 +81,7 @@ cat > /usr/local/sbin/silexgis-baseline <<EOF
 # Captures this installation's CURRENT data as the baseline that silexgis-reset restores.
 set -euo pipefail
 if [ "\$(id -un)" != "$DEPLOY_USER" ]; then
-	exec setpriv --reuid="$DEPLOY_USER" --regid="$DEPLOY_USER" --init-groups \\
+	exec setpriv --reuid="$DEPLOY_USER" --regid="$DEPLOY_USER" --init-groups --reset-env \\
 		env SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR" SILEXGIS_BASELINE_DIR="$BASELINE_DIR" \\
 		bash "$OPS_DIR/reset.sh" baseline
 fi
@@ -92,7 +97,7 @@ cat > /usr/local/sbin/silexgis-reset <<EOF
 set -euo pipefail
 MODE="\${1:-reset}"
 if [ "\$(id -un)" != "$DEPLOY_USER" ]; then
-	exec setpriv --reuid="$DEPLOY_USER" --regid="$DEPLOY_USER" --init-groups \\
+	exec setpriv --reuid="$DEPLOY_USER" --regid="$DEPLOY_USER" --init-groups --reset-env \\
 		env SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR" SILEXGIS_BASELINE_DIR="$BASELINE_DIR" \\
 		bash "$OPS_DIR/reset.sh" "\$MODE"
 fi

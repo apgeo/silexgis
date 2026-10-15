@@ -115,7 +115,12 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 if [ "$SKIP_BACKUP" != 1 ]; then
 	say "Backup -> $BACKUP_DIR/$STAMP"
 	mkdir -p "$BACKUP_DIR/$STAMP"
-	if docker compose ps --status running --services 2>/dev/null | grep -qx db; then
+	# A compose that cannot run at all is not "no database yet": read as that, it skipped the
+	# backup and updated anyway. Only a compose that answers, without a running db, means there
+	# is nothing to back up.
+	running="$(docker compose ps --status running --services)" || \
+		fail "docker compose could not list the services (its error is above) -- refusing to update without a backup"
+	if printf '%s\n' "$running" | grep -qx db; then
 		sh scripts/backup.sh "$BACKUP_DIR/$STAMP" || fail "backup failed -- refusing to update"
 		echo "$CURRENT" > "$BACKUP_DIR/$STAMP/commit.txt"
 	else

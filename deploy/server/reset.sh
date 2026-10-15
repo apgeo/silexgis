@@ -56,8 +56,11 @@ fi
 exec 9>"/tmp/silexgis-update.lock"
 flock -w 600 9 || fail "could not take the update lock -- is an update or reset running?"
 
-docker compose ps --status running --services 2>/dev/null | grep -qx db || \
-	fail "the db service is not running"
+# Compose's own error is left on screen: a compose that cannot run at all must not be reported
+# as a stopped database, which sends whoever reads it looking at the wrong thing.
+running="$(docker compose ps --status running --services)" || \
+	fail "docker compose could not list the services (its error is above)"
+printf '%s\n' "$running" | grep -qx db || fail "the db service is not running"
 
 if [ "$MODE" = baseline ]; then
 	STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
