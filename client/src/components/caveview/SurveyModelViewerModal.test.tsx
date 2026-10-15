@@ -196,7 +196,7 @@ function show(model: SurveyModelInfo | null = MODEL) {
 }
 
 describe('SurveyModelViewerModal', () => {
-  it('shows the strip with only the 3D tab and the add-map doorway while no maps are declared', () => {
+  it('shows the strip with only the viewer tabs and the add-map doorway while no maps are declared', () => {
     linksAnswer = [];
     show();
 
@@ -206,7 +206,8 @@ describe('SurveyModelViewerModal', () => {
     // signed-in reader of the model), which is the same floor the server's link create
     // asks for.
     expect(screen.getByRole('tab', { name: '3D' })).toBeInTheDocument();
-    expect(screen.getAllByRole('tab')).toHaveLength(1);
+    expect(screen.getByRole('tab', { name: 'LochViewer (trial)' })).toBeInTheDocument();
+    expect(screen.getAllByRole('tab')).toHaveLength(2);
     expect(screen.getByTestId('rastermap-add-map')).toBeInTheDocument();
     expect(screen.queryByTestId('fake-declare-map')).not.toBeInTheDocument();
 
@@ -230,6 +231,27 @@ describe('SurveyModelViewerModal', () => {
     expect(screen.getByRole('tab', { name: /Plan sheet/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Profile sheet/ })).toBeInTheDocument();
     // …and the viewer neither unmounted nor mounted again: same element, same scene.
+    expect(panelLifecycle.mounts).toBe(1);
+    expect(panelLifecycle.unmounts).toBe(0);
+  });
+
+  it('loads the trial viewer only while its tab is shown, without remounting the embedded one', () => {
+    linksAnswer = [];
+    show();
+    // Nothing of the second viewer is fetched until somebody asks for it.
+    expect(screen.queryByTestId('lochviewer-frame')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'LochViewer (trial)' }));
+    const frame = screen.getByTestId('lochviewer-frame');
+    // The signed file address travels in the fragment, never in what the server sees.
+    const [page, hash] = frame.getAttribute('src')!.split('#');
+    expect(page).not.toContain('files.local');
+    expect(new URLSearchParams(hash).get('model')).toBe('http://files.local/model?name=P8_Master.3d');
+
+    fireEvent.click(screen.getByRole('tab', { name: '3D' }));
+    // Its drawing context is given back the moment it is off screen…
+    expect(screen.queryByTestId('lochviewer-frame')).not.toBeInTheDocument();
+    // …and the embedded viewer was never taken down to make room for it.
     expect(panelLifecycle.mounts).toBe(1);
     expect(panelLifecycle.unmounts).toBe(0);
   });

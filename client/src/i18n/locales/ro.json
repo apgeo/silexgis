@@ -3088,6 +3088,11 @@
     "saveImageFailed": "Această vedere nu a putut fi salvată ca imagine."
   },
   "caveview": {
+    "lochViewer": {
+      "tab": "LochViewer (de probă)",
+      "trialNotice": "Un al doilea vizualizator, de probă, care arată același fișier. Este o aplicație separată: setările, măsurătorile și partajarea lui sunt ale lui și nu se salvează aici.",
+      "openWindow": "Deschide într-o fereastră nouă"
+    },
     "loadError": "Modelul 3D nu a putut fi încărcat",
     "linkThisPart": "Leagă asta…",
     "notInThisModel": "Acel punct nu se află în acest model",

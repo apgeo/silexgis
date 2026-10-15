@@ -17,6 +17,7 @@ import { useRasterMapLinks } from '../../rastermap/useRasterMapLinks.ts';
 import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import AddMemberModal from '../reslinks/AddMemberModal.tsx';
 import CaveViewPanel from './CaveViewPanel.tsx';
+import LochViewerPane from './LochViewerPane.tsx';
 
 interface SurveyModelViewerModalProps {
   /** The model to show, or null for a closed modal. */
@@ -24,8 +25,10 @@ interface SurveyModelViewerModalProps {
   onClose(): void;
 }
 
-/** The key of the one tab that is not a map. */
+/** The key of the embedded viewer's tab. */
 const TAB_3D = '3d';
+/** The key of the tab trying the same file in LochViewer, a second viewer on trial. */
+const TAB_LOCHVIEWER = 'lochviewer';
 
 /**
  * A survey model over the whole window, mounted by whichever page the viewer asked from.
@@ -107,7 +110,11 @@ export default function SurveyModelViewerModal({ model, onClose }: SurveyModelVi
   // A tab that stops existing — its map undeclared — cannot stay active, and neither can
   // a define mode pointed at it.
   useEffect(() => {
-    if (activeTab !== TAB_3D && !maps.some((map) => map.linkId === activeTab)) {
+    if (
+      activeTab !== TAB_3D &&
+      activeTab !== TAB_LOCHVIEWER &&
+      !maps.some((map) => map.linkId === activeTab)
+    ) {
       setActiveTab(TAB_3D);
     }
     if (defining !== null && !maps.some((map) => map.linkId === defining)) {
@@ -246,7 +253,7 @@ export default function SurveyModelViewerModal({ model, onClose }: SurveyModelVi
             />
           )}
           <Tabs
-            activeKey={maps.length === 0 ? TAB_3D : activeTab}
+            activeKey={activeTab}
             onChange={setActiveTab}
             // The strip now always shows: even with no maps it carries the one action
             // that gets a model its first map. The Tabs element stays in the tree either
@@ -282,6 +289,14 @@ export default function SurveyModelViewerModal({ model, onClose }: SurveyModelVi
                     compare={compare}
                   />
                 ),
+              },
+              {
+                key: TAB_LOCHVIEWER,
+                label: t('caveview.lochViewer.tab'),
+                // Mounted only while shown, unlike every other pane here: it is a whole second
+                // viewer with a drawing context of its own, and loading it is the reader's choice.
+                children:
+                  activeTab === TAB_LOCHVIEWER ? <LochViewerPane model={model} height="70vh" /> : null,
               },
               ...maps.map((declaration) => ({
                 key: declaration.linkId,
