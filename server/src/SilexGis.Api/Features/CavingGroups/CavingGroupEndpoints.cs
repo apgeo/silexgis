@@ -252,7 +252,8 @@ public static class CavingGroupEndpoints
         // A DENY anchored on this group would be silently cancelled by deleting it —
         // that must stay an explicit act on the entry itself, never a delete side
         // effect. Allow entries anchored here only ever narrow when removed, so they
-        // (and trustee rows naming the group) go with it, tracked and audited.
+        // (and the rules and trustee rows naming the group as a subject) go with it in
+        // the same save, taken and audited by the persistence rule for rows removed for good.
         var anchoredDenies = await db.AccessEntries.AnyAsync(e =>
             e.Effect == AccessEffect.Deny
             && ((e.ScopeKind == AccessScopeKind.CavingGroup && e.ScopeId == id)
@@ -264,23 +265,11 @@ public static class CavingGroupEndpoints
                 "Deny entries are anchored on this caving group; remove them first.");
         }
 
-        var anchoredEntries = await db.AccessEntries.Where(e =>
-                (e.ScopeKind == AccessScopeKind.CavingGroup && e.ScopeId == id)
-                || (e.Domain == AccessDomain.CavingGroups
-                    && e.ScopeKind == AccessScopeKind.Object && e.ScopeId == id)
-                || (e.SubjectKind == AccessSubjectKind.CavingGroup && e.SubjectId == id))
-            .ToListAsync(ct);
-        var trusteeRows = await db.PermissionGroupMembers
-            .Where(m => m.MemberKind == AccessSubjectKind.CavingGroup && m.MemberId == id)
-            .ToListAsync(ct);
-
         // Objects bound to the caving group fall back to owner/visibility access (caving_group_id set null
         // by the FKs configured on protected tables); memberships cascade. The whole removal commits
         // only if a live Full Administrator remains reachable — this group could have been the last
         // path into that protected permission group.
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        db.AccessEntries.RemoveRange(anchoredEntries);
-        db.PermissionGroupMembers.RemoveRange(trusteeRows);
         // Resource-link members naming the group have no FK; they go with it.
         await db.ResLinkMembers
             .Where(m => m.EntityType == AttachedEntityType.CavingGroup && m.EntityId == id)

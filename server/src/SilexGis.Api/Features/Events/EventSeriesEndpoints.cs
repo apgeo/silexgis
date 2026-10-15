@@ -351,13 +351,6 @@ public static class EventSeriesEndpoints
             .CountAsync(x => x.SeriesId == seriesId && x.StartDate < from, ct);
 
         var doomedIds = doomed.Select(x => x.Id).ToHashSet();
-        var anchored = await db.AccessEntries
-            .Where(e => e.Domain == AccessDomain.Events
-                && e.ScopeKind == AccessScopeKind.Object
-                && e.ScopeId != null
-                && doomedIds.Contains(e.ScopeId.Value))
-            .ToListAsync(ct);
-        db.AccessEntries.RemoveRange(anchored);
 
         // Each occurrence is an ordinary event to everything that was already there, so each
         // one may carry files, tags and a place in a relation of its own; they go with it, per

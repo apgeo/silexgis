@@ -271,28 +271,11 @@ public static class ExpeditionEndpoints
             return stale;
         }
 
-        // A rule anchored on this camp means nothing once the camp is gone, and a rule whose
-        // anchor cannot be resolved is exactly what the integrity check reports as an orphan.
-        // Deleting them here is what keeps a routine delete from leaving one behind.
-        //
-        // The rules the camp's sharing wrote onto the trips it gathered go with it too. They
-        // are anchored on those trips, not on the camp, so nothing above finds them — the
-        // marker is what does, and it is the only thing that can: a rule matching one of them
-        // action for action may equally have been authored by hand on that trip's own tab, and
-        // that one stays. Without this sweep the camp's grants would outlive the camp with no
-        // surface left that could name, review or withdraw them.
-        //
-        // Loaded and removed rather than deleted in one statement, because a rule disappearing
-        // is a change to who may reach what, and every other place rules are withdrawn records
-        // that. A set-based delete never reaches the change tracker, so the withdrawal would
-        // happen with nothing in the trail to say it had.
-        var anchored = await db.AccessEntries
-            .Where(e => (e.Domain == AccessDomain.Expeditions
-                    && e.ScopeKind == AccessScopeKind.Object
-                    && e.ScopeId == expedition.Id)
-                || e.GrantedViaExpeditionId == expedition.Id)
-            .ToListAsync(ct);
-        db.AccessEntries.RemoveRange(anchored);
+        // The rules anchored on this camp go in the same save as the camp, and so do the rules
+        // its sharing wrote onto the trips it gathered — found by the marker those rows carry,
+        // never by matching, so an identical rule somebody authored by hand on one of those trips
+        // stays. Both are taken by the persistence rule that removes, through the audit trail,
+        // every rule naming a row removed for good.
 
         // The write-up this application generated for the camp and filed on it goes with the
         // camp, by the rule a trip's follows: it is a derivative of the camp — built from it,

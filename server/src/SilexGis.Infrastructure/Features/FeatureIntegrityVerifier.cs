@@ -2,10 +2,10 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
-using SilexGis.Domain.Access;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Features;
@@ -214,9 +214,10 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
         // owning slice cleans up transactionally — this is the promised safety net).
         problems.AddRange(await PairOrphansAsync(ct));
 
-        // FK-less access-model anchors: a dangling scope or member id means a delete
-        // flow skipped its "entries first" guard — security-bearing, because a deny
-        // whose anchor silently vanished no longer denies anything.
+        // FK-less access-model references: a dangling scope, subject or member id means a
+        // delete went round the rule that takes the rows naming a row with it. The scheduled
+        // pass removes these before verifying (AccessOrphanSweep), so seeing one here outside
+        // that pass means it arrived since.
         problems.AddRange(await AccessAnchorOrphansAsync(ct));
 
         // Document version sequences: the same derived state the document write service
@@ -263,79 +264,26 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
         return problems;
     }
 
+    /// <summary>
+    /// Access rows naming a row that is gone, found by the same statement the sweep removes them
+    /// with — so what is reported here and what the sweep would take are one set by construction.
+    /// The rows are read against the tables themselves: a soft-deleted object is still there and
+    /// so are the rules on it, and a binned document or trip is no orphan.
+    /// </summary>
     private async Task<List<IntegrityProblem>> AccessAnchorOrphansAsync(CancellationToken ct)
     {
         var problems = new List<IntegrityProblem>();
-
-        var cavingGroupIds = await db.CavingGroups.Select(g => g.Id).ToHashSetAsync(ct);
-        var featureSetIds = await db.FeatureSets.Select(s => s.Id).ToHashSetAsync(ct);
-        var userIds = await db.Users.Select(u => u.Id).ToHashSetAsync(ct);
-
-        bool ScopeIdExists(AccessScopeKind scope, AccessDomain domain, Guid id) =>
-            scope switch
-            {
-                AccessScopeKind.CavingGroup => cavingGroupIds.Contains(id),
-                AccessScopeKind.FeatureSet => featureSetIds.Contains(id),
-                // Object scope outside the feature domain: the id lives in the domain's
-                // own table; only the domains with object scopes need resolving here.
-                AccessScopeKind.Object => domain switch
-                {
-                    AccessDomain.TripLogs => db.TripLogs.IgnoreQueryFilters().Any(x => x.Id == id),
-                    AccessDomain.Geofiles => db.Geofiles.Any(x => x.Id == id),
-                    AccessDomain.GeoreferencedMaps => db.GeoreferencedMaps.Any(x => x.Id == id),
-                    AccessDomain.MapViews => db.MapViews.Any(x => x.Id == id),
-                    AccessDomain.Files => db.StoredFiles.Any(x => x.Id == id),
-                    AccessDomain.Documents => db.Documents.Any(x => x.Id == id),
-                    AccessDomain.Expeditions => db.Expeditions.Any(x => x.Id == id),
-                    AccessDomain.Checklists => db.Checklists.Any(x => x.Id == id),
-                    AccessDomain.Events => db.Events.Any(x => x.Id == id),
-                    AccessDomain.CavingGroups => cavingGroupIds.Contains(id),
-                    AccessDomain.PermissionGroups => db.PermissionGroups.Any(x => x.Id == id),
-                    AccessDomain.FeatureSets => featureSetIds.Contains(id),
-                    _ => true,
-                },
-                _ => true,
-            };
-
-        foreach (var entry in await db.AccessEntries
-                     .Where(e => e.ScopeId != null)
-                     .Select(e => new { e.Id, e.ScopeKind, e.Domain, e.ScopeId })
-                     .ToListAsync(ct))
+        foreach (var orphan in await AccessOrphanSql.FindAsync(db, ct))
         {
-            if (!ScopeIdExists(entry.ScopeKind, entry.Domain, entry.ScopeId!.Value))
+            problems.Add(orphan.Arm.Column switch
             {
-                problems.Add(new IntegrityProblem("access_scope_orphan", default,
-                    $"{entry.ScopeKind} anchor {entry.ScopeId} missing (entry {entry.Id})"));
-            }
-        }
-
-        foreach (var subject in await db.AccessEntries
-                     .Where(e => e.SubjectId != null)
-                     .Select(e => new { e.Id, e.SubjectKind, e.SubjectId })
-                     .ToListAsync(ct))
-        {
-            var exists = subject.SubjectKind == AccessSubjectKind.CavingGroup
-                ? cavingGroupIds.Contains(subject.SubjectId!.Value)
-                : userIds.Contains(subject.SubjectId!.Value);
-            if (!exists)
-            {
-                problems.Add(new IntegrityProblem("access_subject_orphan", default,
-                    $"{subject.SubjectKind} subject {subject.SubjectId} missing (entry {subject.Id})"));
-            }
-        }
-
-        foreach (var member in await db.PermissionGroupMembers
-                     .Select(m => new { m.Id, m.MemberKind, m.MemberId })
-                     .ToListAsync(ct))
-        {
-            var exists = member.MemberKind == AccessSubjectKind.CavingGroup
-                ? cavingGroupIds.Contains(member.MemberId)
-                : userIds.Contains(member.MemberId);
-            if (!exists)
-            {
-                problems.Add(new IntegrityProblem("permission_member_orphan", default,
-                    $"{member.MemberKind} member {member.MemberId} missing (row {member.Id})"));
-            }
+                AccessReferenceColumn.Subject => new IntegrityProblem("access_subject_orphan", default,
+                    $"{orphan.Arm.SubjectKind} subject {orphan.AnchorId} missing (entry {orphan.RowId})"),
+                AccessReferenceColumn.PermissionMember => new IntegrityProblem("permission_member_orphan", default,
+                    $"{orphan.Arm.SubjectKind} member {orphan.AnchorId} missing (row {orphan.RowId})"),
+                _ => new IntegrityProblem("access_scope_orphan", default,
+                    $"{orphan.Arm.Name} anchor {orphan.AnchorId} missing (entry {orphan.RowId})"),
+            });
         }
 
         return problems;

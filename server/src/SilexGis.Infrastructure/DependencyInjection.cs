@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddSingleton<AuditInterceptor>();
         services.AddSingleton<FeatureAggregateInterceptor>();
         services.AddSingleton<UserIdTransactionInterceptor>();
+        services.AddSingleton<AccessAnchorCleanupInterceptor>();
 
         services.AddDbContext<SilexGisDbContext>((sp, options) => options
             .UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite())
@@ -46,6 +47,9 @@ public static class DependencyInjection
                 // The aggregate touch must run before the audit diff so the bumped
                 // feature row is part of the same audit merge.
                 sp.GetRequiredService<FeatureAggregateInterceptor>(),
+                // The rules naming a row deleted in this save join it before the audit diff
+                // is taken, so each one removed is in the trail beside the row that took it.
+                sp.GetRequiredService<AccessAnchorCleanupInterceptor>(),
                 sp.GetRequiredService<AuditInterceptor>(),
                 sp.GetRequiredService<UserIdTransactionInterceptor>()));
 
@@ -60,6 +64,7 @@ public static class DependencyInjection
         services.AddSingleton<Surveys.SurveyCompilationLogReader>();
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
+        services.AddScoped<Permissions.AccessOrphanSweep>();
         services.AddScoped<Import.TermRuleSetStore>();
         services.AddScoped<Import.VisibleProximitySearch>();
         services.Configure<Import.ImportLimitOptions>(

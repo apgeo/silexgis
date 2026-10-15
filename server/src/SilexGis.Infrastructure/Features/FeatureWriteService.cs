@@ -4,6 +4,7 @@ using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
 using SilexGis.Infrastructure.Trips;
@@ -468,11 +469,19 @@ public sealed class FeatureWriteService(
     /// <summary>
     /// Hard-deletes a subtree. An explicit, audited operation (the admin purge job path)
     /// — never a side effect: FK cascades clean subtype rows, edges, closure, links,
-    /// shares, feature attachments/taggings/grants and cave satellites.
+    /// shares, feature attachments/taggings and cave satellites. Saves once, for the access
+    /// rules, before the delete statement, so the caller holds the transaction.
     /// </summary>
     public async Task PurgeAsync(Guid featureId, CancellationToken ct = default)
     {
         var subtree = await SubtreeIdsAsync(featureId, ct);
+
+        // The rules anchored on these features restrict their delete by foreign key, and the
+        // statement below never passes through the change tracker, so the rule that takes them
+        // with a row removed for good is asked here and saved first — through the audit trail.
+        await AccessAnchorCleanup.RemoveRowsNamingAsync(db, typeof(Feature), subtree, ct);
+        await db.SaveChangesAsync(ct);
+
         var purged = await db.Features.IgnoreQueryFilters()
             .Where(f => subtree.Contains(f.Id))
             .Select(f => new { f.Id, f.Kind, f.Name })
