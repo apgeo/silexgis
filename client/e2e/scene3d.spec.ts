@@ -9,8 +9,10 @@ import {
   openScene3dAt,
   scene3dSurface,
   waitForScene3dQuiet,
+  waitForScene3dReady,
   watchScene3dDrawing,
 } from './helpers.ts';
+import { tintedPng } from './png.ts';
 
 // The engine's own hosted services are the one thing a unit test cannot rule out: it runs against
 // a stand-in for the library, so it can only show that this application configures the real one
@@ -231,4 +233,36 @@ test('a browser without WebGL 2 is told why, rather than shown a dead canvas', a
   await expect(page.getByTestId('scene3d-container')).toHaveCount(0);
 
   await context.close();
+});
+
+// A source publishes tiles up to a zoom and no further, and its catalogue entry says which. Close to
+// the ground the scene used to ask anyway — OpenStreetMap, which stops at 19, was asked for 20 to 22,
+// refused every one, and each refusal was an error in the console. Served offline here, so the test
+// counts what the scene asks for and depends on nobody's tile server.
+test('close to the ground the scene asks a source for no zoom past the one it publishes', async ({ page }) => {
+  const zooms: number[] = [];
+  const tile = tintedPng(256, [118, 168, 208]);
+  await page.route('**://tile.openstreetmap.org/**', (route) => {
+    const zoom = /\/(\d+)\/\d+\/\d+\.png/.exec(route.request().url());
+    if (zoom) zooms.push(Number(zoom[1]));
+    return route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      headers: { 'access-control-allow-origin': '*' },
+      body: tile,
+    });
+  });
+
+  await login(page);
+  await watchScene3dDrawing(page);
+  // Ten metres above the ground, looking straight down: deep enough that, unbounded, the scene asks
+  // for zoom 22 here.
+  await page.goto('/map3d#3d/45.53000/25.30000/10/0.0/-90.0');
+  await waitForScene3dReady(page);
+
+  // It does reach the deepest level the source has, so a ceiling of 19 below is not just a scene
+  // that never asked for much.
+  await expect.poll(() => Math.max(0, ...zooms), { timeout: 45_000 }).toBeGreaterThanOrEqual(19);
+  await waitForScene3dQuiet(page);
+  expect(Math.max(...zooms)).toBe(19);
 });
