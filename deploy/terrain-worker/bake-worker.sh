@@ -15,6 +15,7 @@
 #   <spool>/<name>/request     written by the application, then renamed into place
 #   <spool>/<name>/started     written here, the moment this loop takes the request
 #   <spool>/<name>/bake.log    everything the pre-baker said, as it says it
+#   <spool>/<name>/cancel      written by the application when the build is called off
 #   <spool>/<name>/result      written here, last, and renamed into place
 #
 # `request` is a list of `key=value` lines:
@@ -37,7 +38,7 @@
 #
 # `result` is the same shape:
 #
-#   status=succeeded|failed|refused|interrupted
+#   status=succeeded|failed|refused|interrupted|cancelled
 #   exit=<the pre-baker's exit code, when it got as far as running>
 #   reason=<one line, whenever the status is not succeeded>
 #   finished=<UTC timestamp>
@@ -58,12 +59,23 @@
 #     interrupted rather than run again: the half-written output of an interrupted bake is not a
 #     thing to start a second one on top of, and only the side that owns the build directory can
 #     decide whether to clear it.
+#
+# A request can be withdrawn. The application writes `cancel` beside it when somebody calls the
+# build off; a request found withdrawn before it starts is answered `cancelled` without running,
+# and a running pre-baker is looked at every second and stopped — asked first, then killed if it
+# has not gone within the grace below — and answered `cancelled` once it has exited. The answer
+# is what the application waits for before it clears the output: until the pre-baker has exited,
+# it may still be writing there. This loop still deletes nothing.
 set -eu
 
 ROOT="${SILEXGIS_TERRAIN_ROOT:-/data/terrain}"
 SPOOL="${SILEXGIS_TERRAIN_SPOOL:-$ROOT/spool}"
 POLL="${SILEXGIS_TERRAIN_POLL_SECONDS:-2}"
-JAR=/app/terrainer.jar
+# The pre-baker. Overridable only so that the supervisor can be exercised against a stand-in
+# without the image; the image itself never sets it.
+JAR="${SILEXGIS_TERRAIN_JAR:-/app/terrainer.jar}"
+# How long a pre-baker asked to stop is given before it is killed outright.
+STOP_GRACE=10
 
 now() {
     date -u '+%Y-%m-%dT%H:%M:%SZ'
@@ -197,6 +209,9 @@ bake() {
     # percentage of the container's memory limit, so that limit is the only knob there is, and
     # dropping this flag would quietly halve the heap. Short of heap it does not fail — it stops
     # refining and writes coarser tiles.
+    #
+    # Run in the background and watched, rather than waited on, so that a withdrawn request can
+    # stop it: the only thing this loop can do while a command runs in the foreground is wait.
     code=0
     java \
         -Djava.awt.headless=true \
@@ -206,9 +221,31 @@ bake() {
         -XX:+UseStringDeduplication \
         -XX:InitialRAMPercentage=50.0 \
         -XX:MaxRAMPercentage=50.0 \
-        -jar "$JAR" "$@" >"$log" 2>&1 || code=$?
+        -jar "$JAR" "$@" >"$log" 2>&1 &
+    pid=$!
 
-    if [ "$code" -eq 0 ]; then
+    withdrawn=0
+    while kill -0 "$pid" 2>/dev/null; do
+        if [ -e "$directory/cancel" ]; then
+            withdrawn=1
+            say "stopping the bake of $output: the build was called off"
+            kill -TERM "$pid" 2>/dev/null || true
+            waited=0
+            while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$STOP_GRACE" ]; do
+                sleep 1
+                waited=$((waited + 1))
+            done
+            kill -KILL "$pid" 2>/dev/null || true
+            break
+        fi
+        sleep 1
+    done
+    wait "$pid" || code=$?
+
+    if [ "$withdrawn" -eq 1 ]; then
+        say "stopped the bake of $output"
+        write_result "$directory" cancelled "$code" "the build was called off and the pre-baker was stopped"
+    elif [ "$code" -eq 0 ]; then
         # The pre-baker leaves its own scratch directory inside the output, and it is as large as
         # the pyramid beside it. Removed here, while the run that made it is still the thing
         # happening: a machine with room for one pyramid does not also have room for the copy
@@ -254,6 +291,14 @@ while [ "$running" -eq 1 ]; do
         fi
         directory="$(dirname "$request")"
         if [ -e "$directory/result" ]; then
+            continue
+        fi
+        if [ -e "$directory/cancel" ]; then
+            # Withdrawn before it started, or while an earlier run of this worker had it. Either
+            # way it is answered rather than run: the application is waiting for exactly this
+            # answer before it lets the build be run again.
+            say "$directory was withdrawn"
+            write_result "$directory" cancelled "" "the build was called off before this bake ran"
             continue
         fi
         if [ -e "$directory/started" ]; then
