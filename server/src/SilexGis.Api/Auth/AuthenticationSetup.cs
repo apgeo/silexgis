@@ -166,6 +166,9 @@ public static class AuthenticationSetup
         services.AddHttpContextAccessor();
         // Replaces the AnonymousCurrentUser registered by AddSilexGisPersistence (last wins).
         services.AddSingleton<ICurrentUser, Common.HttpContextCurrentUser>();
+        // Likewise replaces NoRequestOrigin, so audit rows written while serving a request carry
+        // the caller's address.
+        services.AddSingleton<IRequestOrigin, Common.HttpContextRequestOrigin>();
         // Mail and SMS delivery, the message templates, and the settings behind all three.
         services.AddSilexGisMessaging();
 
