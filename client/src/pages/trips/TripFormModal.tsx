@@ -19,7 +19,6 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { ApiError, lastReadETag } from '../../api/client.ts';
 import {
-  useCavingGroups,
   useCreateDoor,
   useCreateTripLog,
   useCreateTripPlan,
@@ -31,6 +30,7 @@ import {
   type TripLogWrite,
   type TripParticipantRole,
 } from '../../api/hooks.ts';
+import CavingGroupPicker from '../../components/cavingGroups/CavingGroupPicker.tsx';
 import { participantRoleLabel } from '../../components/trips/participantRoles.ts';
 import { caverReference } from '../../components/trips/roster.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
@@ -296,7 +296,6 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
   // The map inside the form can only be built once the dialog's open transition has put the
   // content in the document — a map built against a container with no size renders nothing.
   const [shown, setShown] = useState(false);
-  const { data: cavingGroups } = useCavingGroups();
   const { data: tripTypes } = useTripTypes();
   const { data: participantRoles } = useTripParticipantRoles();
   // Proposing is a column of its own here, and the server reads a proposer row out of that
@@ -609,12 +608,7 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
             label={t('trips.organizingCavingGroup')}
             style={{ flex: 1 }}
           >
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              options={(cavingGroups ?? []).map((group) => ({ value: group.id, label: group.name }))}
-            />
+            <CavingGroupPicker />
           </Form.Item>
         </Flex>
         {/* Where the trip went is recorded on the trip's page, role by role, so that what it

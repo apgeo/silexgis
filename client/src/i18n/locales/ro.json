@@ -2824,6 +2824,16 @@
     "inUse": "Există reguli care se referă la acest set; eliminați-le mai întâi.",
     "nameTaken": "Există deja un set de elemente cu această denumire."
   },
+  "cavingGroupPicker": {
+    "create": "Creează «{{name}}»",
+    "created": "{{name}} a fost adăugat la grupurile de speologie.",
+    "noMatch": "Niciun grup de speologie cu acest nume.",
+    "nameTaken": "Există deja un grup de speologie cu acest nume. Alegeți-l din listă.",
+    "nameInvalid": "Numele unui grup de speologie trebuie să conțină litere sau cifre.",
+    "nameTooLong": "Numele este prea lung pentru un grup de speologie.",
+    "forbidden": "Nu aveți dreptul să adăugați grupuri de speologie.",
+    "createFailed": "Grupul de speologie nu a putut fi adăugat."
+  },
   "security": {
     "title": "Securitatea contului",
     "password": {

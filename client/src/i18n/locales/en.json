@@ -2824,6 +2824,16 @@
     "inUse": "Rules still point at this feature set; remove them first.",
     "nameTaken": "A feature set with this name already exists."
   },
+  "cavingGroupPicker": {
+    "create": "Create «{{name}}»",
+    "created": "{{name}} was added to the caving groups.",
+    "noMatch": "No caving group by that name.",
+    "nameTaken": "A caving group with this name already exists. Choose it from the list.",
+    "nameInvalid": "A caving group's name needs letters or digits.",
+    "nameTooLong": "That name is too long for a caving group.",
+    "forbidden": "You are not allowed to add caving groups.",
+    "createFailed": "The caving group could not be added."
+  },
   "security": {
     "title": "Account security",
     "password": {

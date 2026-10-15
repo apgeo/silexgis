@@ -146,6 +146,8 @@ export const clientAreas = {
   'client/src/workareas/': 'workAreas',
   'client/src/components/attachments/': 'files',
   'client/src/components/catalogue/': 'catalogue',
+  // The caving-group picker sits on the profile and on the trip form.
+  'client/src/components/cavingGroups/': ['cavingGroups', 'settings', 'trips'],
   'client/src/components/cavers/': 'cavers',
   'client/src/components/caves/': 'caves',
   'client/src/components/caveview/': ['surveys', 'trips'],

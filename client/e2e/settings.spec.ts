@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { registerAccount } from './arrange.ts';
+import { asPerson, registerAccount, signedInElsewhere } from './arrange.ts';
 import { gotoRoute, login } from './helpers.ts';
 
 test.describe('settings', () => {
@@ -322,5 +322,47 @@ test.describe('settings, on an account of its own', () => {
 
     // ...and the new one lets the reader back in.
     await login(page, account.email, newPassword);
+  });
+
+  test('a club missing from the directory is created from the profile and becomes the profile\'s club', async ({
+    page,
+    browser,
+  }) => {
+    const account = await registerAccount(page.request, 'club');
+    const club = `E2E Club ${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    await login(page, account.email, account.password);
+    await gotoRoute(page, '/settings/profile');
+
+    // A name the directory does not hold: the picker offers to create it, spelled as typed.
+    await page.getByLabel('Caving club').click();
+    await page.keyboard.type(club);
+    await page.locator('.ant-select-dropdown:visible').getByText(`Create «${club}»`).click();
+    await expect(page.getByText(`${club} was added to the caving groups.`)).toBeVisible({ timeout: 15_000 });
+
+    const saved = page.waitForResponse((r) => r.url().endsWith('/api/v1/me') && r.request().method() === 'PUT');
+    await page.getByRole('button', { name: 'Save' }).last().click();
+    expect((await saved).ok()).toBeTruthy();
+
+    const me = await asPerson<{ cavingClubId: string | null }>(page, 'GET', '/api/v1/me');
+    expect(me.cavingClubId).not.toBeNull();
+    await page.reload();
+    // The closed control carries the chosen club's name as its title.
+    await expect(page.getByTitle(club, { exact: true })).toBeVisible({ timeout: 30_000 });
+
+    // Typing the same name again, in another case, offers the club that exists and no second one.
+    await page.getByLabel('Caving club').click();
+    await page.keyboard.type(club.toUpperCase());
+    const list = page.locator('.ant-select-dropdown:visible');
+    await expect(list.getByText(club, { exact: true })).toBeVisible();
+    await expect(list.getByText(/^Create «/)).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    // Taken down by the administrator, since the directory is shared with every other spec.
+    const admin = await signedInElsewhere(browser);
+    try {
+      await asPerson(admin.page, 'DELETE', `/api/v1/caving-groups/${me.cavingClubId}`);
+    } finally {
+      await admin.context.close();
+    }
   });
 });

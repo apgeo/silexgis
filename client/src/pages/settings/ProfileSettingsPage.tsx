@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
-import { App, Alert, Button, Card, Flex, Form, Input, Select, Spin, Typography } from 'antd';
+import { App, Alert, Button, Card, Flex, Form, Input, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
-  useCavingGroups,
   useMe,
   useUpdateProfile,
   type FieldVisibility,
   type MeUpdate,
 } from '../../api/hooks.ts';
+import CavingGroupPicker from '../../components/cavingGroups/CavingGroupPicker.tsx';
 import AddressList from '../../components/settings/AddressList.tsx';
 import AvatarPicker from '../../components/settings/AvatarPicker.tsx';
 import FieldVisibilityToggle from '../../components/settings/FieldVisibilityToggle.tsx';
@@ -36,7 +36,6 @@ export default function ProfileSettingsPage() {
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
   const { data: me, isPending, isError, refetch } = useMe();
-  const { data: cavingGroups } = useCavingGroups();
   const update = useUpdateProfile();
 
   // Filled once per account, not on every refetch. Adding an address invalidates the profile
@@ -171,12 +170,7 @@ export default function ProfileSettingsPage() {
             >
               {/* The club you say you are with, which is your own statement — separate from the
                   rosters clubs keep, and governed by the visibility setting beside the label. */}
-              <Select
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                options={(cavingGroups ?? []).map((group) => ({ value: group.id, label: group.name }))}
-              />
+              <CavingGroupPicker />
             </Form.Item>
           </Flex>
         </Card>
