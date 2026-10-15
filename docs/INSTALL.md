@@ -26,6 +26,13 @@ are a database password, an admin account, and the public URL.
 No system GDAL is required on any path — vector import/export and raster conversion run
 in-process.
 
+**A host name of its own.** An installation is served at the root of its address —
+`https://gis.example.org/`, not `https://example.org/gis/`. Serving it under a path is not
+supported: the web application, the sign-in flow's discovery and callback addresses, the web
+server's configuration and the application's own links all assume the root, and no setting moves
+them. A second installation on the same machine gets a second name (`grind.example.org`), which
+any DNS provider or a wildcard name service gives for free.
+
 ## Quick start (Docker)
 
 ```bash
@@ -1089,6 +1096,24 @@ docker compose stop api
 sh scripts/restore.sh ./backups/<timestamp>
 docker compose up -d
 ```
+
+### Rehearsing a restore
+
+A backup that has never been restored is a hope. `restore-drill.sh` loads one into a throwaway
+database container of the same image — no network, no volume, removed afterwards — reads the
+uploads archive end to end, and compares both with the running installation, which it only reads:
+
+```bash
+cd deploy
+sh scripts/restore-drill.sh                       # back up now, then rehearse that backup
+sh scripts/restore-drill.sh ./backups/<timestamp> # rehearse an existing one
+```
+
+It prints counts only — rows per table on each side, files and bytes — never a row's contents,
+and ends `PASS` when the dump loads without an error, every table's count agrees and the archive
+holds the files the installation does. Against an older backup, tables written since then differ;
+the script says so. Run it after the first backup of a new installation, after an upgrade that
+changed the schema, and from time to time.
 
 A cron example that keeps nightly backups:
 
