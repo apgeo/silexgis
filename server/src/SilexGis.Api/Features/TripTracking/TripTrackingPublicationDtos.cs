@@ -485,4 +485,14 @@ public sealed record PublicTripParticipantDto(
     /// report of a place, both leave it standing — only a recorded entry puts somebody back
     /// underground, so this page never moves a person between the counts unexplained.
     /// </summary>
-    bool Out);
+    bool Out,
+    /// <summary>
+    /// The caving groups this person is a member of, by name, where the installation publishes
+    /// them and the person is named by their own name; null otherwise, and never an empty list.
+    /// </summary>
+    /// <remarks>
+    /// Null beside a caption whichever way the installation is set: a caption is how somebody is
+    /// kept off a public page, and their club beside it would point at them. See
+    /// <see cref="TripTrackingOptions.PublishClubs"/>.
+    /// </remarks>
+    IReadOnlyList<string>? Clubs = null);

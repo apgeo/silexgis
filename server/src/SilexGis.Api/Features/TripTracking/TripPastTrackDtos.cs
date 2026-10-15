@@ -189,10 +189,16 @@ public sealed record PublicPastTrackPictureDto(
 /// the live page calls, with the same inputs — so somebody kept off a live page by a caption is
 /// kept off this one, and a caption added after the trip takes effect here immediately.
 /// </param>
+/// <param name="Clubs">
+/// The caving groups this person is a member of, by name, where the installation publishes them
+/// and the person is named by their own name; null otherwise, and never an empty list. Decided by
+/// the same function the live page's party uses.
+/// </param>
 public sealed record PublicPastTrackParticipantDto(
     int Ordinal,
     string? Label,
-    IReadOnlyList<PublicPastTrackFixDto> Track);
+    IReadOnlyList<PublicPastTrackFixDto> Track,
+    IReadOnlyList<string>? Clubs = null);
 
 /// <summary>
 /// One moment of one person's track.

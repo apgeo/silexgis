@@ -877,6 +877,8 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         [
             "ordinal", "label", "teamId", "stationName", "depthM", "lastRecordedAt", "positionRecordedAt",
             "positionOnOtherModel", "in", "out",
+            // Null here: this installation publishes nobody's clubs (see the archive's tests for one that does).
+            "clubs",
         ];
 
         var trip = await TrackedTripAsync("Roster only", locationProtected: false, guests: 2);

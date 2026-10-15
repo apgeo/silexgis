@@ -281,6 +281,9 @@ public sealed class PublishedNamesNowhereTests : IAsyncLifetime, IDisposable, IC
                 [
                     "ordinal", "label", "teamId", "stationName", "depthM", "lastRecordedAt",
                     "positionRecordedAt", "positionOnOtherModel", "in", "out",
+                    // Present and null as installed: the names of a person's caving groups, sent only
+                    // where the installation publishes them and beside the person's own name.
+                    "clubs",
                 ],
                 ignoreOrder: true);
         }

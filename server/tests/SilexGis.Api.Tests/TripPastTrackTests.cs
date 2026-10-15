@@ -462,6 +462,102 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
     }
 
     /// <summary>
+    /// Where an installation publishes clubs, each person named by their own name carries the names
+    /// of the caving groups they belong to — on the followed page and on the replay alike — and
+    /// nobody else carries any: not a person in no group, not a person kept off the page by a
+    /// caption, and nobody at all where names are not published or the setting is off.
+    /// </summary>
+    /// <remarks>
+    /// One link, three hosts over the same rows: what differs between the answers is the setting,
+    /// so the assertion is that the setting is read rather than that the rows differ. The two group
+    /// names are made so that their order by name is the opposite of the order they were joined in.
+    /// </remarks>
+    [Fact]
+    public async Task A_named_person_carries_their_clubs_only_where_the_installation_publishes_them()
+    {
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var trip = await CreateTripAsync("Clubs", guests: 3);
+        await ArmAsync(trip.Trip, model);
+        await ReportAsync(trip.Trip, trip.Cavers[0], "cave.upper.2");
+        var (_, token) = await PublishAsync(trip.Trip);
+        (await owner.PutAsJsonAsync(
+            $"/api/v1/trip-logs/{trip.Trip}/tracking/participants/{trip.Cavers[2]}",
+            new { label = "Kept" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var stamp = Guid.NewGuid().ToString("N")[..8];
+        var later = $"Zeta club {stamp}";
+        var earlier = $"Alpha club {stamp}";
+        Guid zetaId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var zeta = new CavingGroup { Name = later, Slug = $"zeta-{stamp}" };
+            var alpha = new CavingGroup { Name = earlier, Slug = $"alpha-{stamp}" };
+            db.CavingGroups.AddRange(zeta, alpha);
+            db.CavingGroupMemberships.AddRange(
+                // The named person, in both — joined to the later name first.
+                new CavingGroupMembership { CaverId = trip.Cavers[0], CavingGroupId = zeta.Id },
+                new CavingGroupMembership { CaverId = trip.Cavers[0], CavingGroupId = alpha.Id },
+                // The captioned person, in one: a caption keeps their club off the page too.
+                new CavingGroupMembership { CaverId = trip.Cavers[2], CavingGroupId = alpha.Id });
+            await db.SaveChangesAsync();
+            zetaId = zeta.Id;
+        }
+        var named = await RosterNameAsync(trip.Cavers[0]);
+        var alone = await RosterNameAsync(trip.Cavers[1]);
+
+        using var clubbed = HostWith(("TripTracking:PublishClubs", "true"));
+        using var clubbedClient = clubbed.CreateClient();
+        using var nameless = HostWith(("TripTracking:PublishClubs", "true"), ("TripTracking:PublishRealNames", "false"));
+        using var namelessClient = nameless.CreateClient();
+
+        // While it is being followed.
+        var followed = ClubsByLabel(await Json(clubbedClient.GetAsync(Live(token))));
+        followed[named].ShouldBe([earlier, later]);
+        followed[alone].ShouldBeNull();
+        followed["Kept"].ShouldBeNull();
+        ClubsByLabel(await Json(anonymous.GetAsync(Live(token)))).Values.ShouldAllBe(c => c == null);
+
+        // And played back once it is over.
+        await CloseAsync(trip.Trip, DateTimeOffset.UtcNow.AddDays(-5));
+        var replay = ClubsByLabel(await Json(clubbedClient.GetAsync(PastTrack(token, trip.Trip))));
+        replay[named].ShouldBe([earlier, later]);
+        replay[alone].ShouldBeNull();
+        replay["Kept"].ShouldBeNull();
+
+        // As shipped, nobody carries any.
+        ClubsByLabel(await TrackAsync(token, trip.Trip)).Values.ShouldAllBe(c => c == null);
+        // Where names are not published, nobody does either, whatever this setting says: only the
+        // caption is left on the page, and a caption never carries a club.
+        var unnamed = await Json(namelessClient.GetAsync(PastTrack(token, trip.Trip)));
+        unnamed.GetProperty("participants").EnumerateArray()
+            .Select(p => p.TryGetProperty("clubs", out var c) ? c.ValueKind : JsonValueKind.Undefined)
+            .ShouldAllBe(kind => kind == JsonValueKind.Null || kind == JsonValueKind.Undefined);
+
+        // Taking the person out of a group is on the next read of the same link.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.CavingGroupMemberships
+                .Where(m => m.CaverId == trip.Cavers[0] && m.CavingGroupId == zetaId)
+                .ExecuteDeleteAsync();
+        }
+        ClubsByLabel(await Json(clubbedClient.GetAsync(PastTrack(token, trip.Trip))))[named]
+            .ShouldBe([earlier]);
+    }
+
+    /// <summary>Each participant's clubs by the name the page calls them; null where none is sent.</summary>
+    private static Dictionary<string, string[]?> ClubsByLabel(JsonElement envelope) =>
+        envelope.GetProperty("participants").EnumerateArray()
+            .Where(p => p.TryGetProperty("label", out var l) && l.ValueKind == JsonValueKind.String)
+            .ToDictionary(
+                p => p.GetProperty("label").GetString()!,
+                p => p.TryGetProperty("clubs", out var c) && c.ValueKind == JsonValueKind.Array
+                    ? c.EnumerateArray().Select(x => x.GetString()!).ToArray()
+                    : null);
+
+    /// <summary>
     /// The party is numbered on the past page exactly as it was numbered on the live one.
     /// </summary>
     /// <remarks>

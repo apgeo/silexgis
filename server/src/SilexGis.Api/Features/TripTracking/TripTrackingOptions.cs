@@ -98,6 +98,35 @@ public sealed class TripTrackingOptions
     public bool PublishDepthPlaces { get; set; }
 
     /// <summary>
+    /// Whether a published trip says which caving groups each person named on it belongs to.
+    /// <b>Off unless an installation turns it on.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off, because it tells people without an account a fact about each person — whom they cave
+    /// with — that no published page has said before, and whether a club wants that said in public
+    /// is its own to decide. A club that publishes an expedition's journal wants exactly this beside
+    /// each name: its figures are counted per club, and without it the article's page has to keep
+    /// its own list of who belongs where and be edited every time somebody joins.
+    /// </para>
+    /// <para>
+    /// What it widens, exactly: each person of a published party who is named by their own name
+    /// carries the names of the caving groups they are a member of, in the order of those names, on
+    /// the followed page, the list of trips being followed and a finished trip's replay. <b>Never
+    /// beside a caption</b>: a caption is how an administrator keeps somebody off a public page, and
+    /// a club printed beside "a third of the party" would point at who that is. Never where the
+    /// installation publishes no names, for the same reason. Nobody's role in a group, and nothing
+    /// else about the group, is said. A person in no group carries nothing rather than an empty
+    /// list, so that a page keeping a list of its own is never told to replace it with nothing.
+    /// </para>
+    /// <para>
+    /// Read as each answer is made, so a person who joins or leaves a group is shown so on the next
+    /// read of every link already handed out.
+    /// </para>
+    /// </remarks>
+    public bool PublishClubs { get; set; }
+
+    /// <summary>
     /// How long a follow link goes on working after the trip it is about. <b>Two weeks unless an
     /// installation says otherwise.</b>
     /// </summary>

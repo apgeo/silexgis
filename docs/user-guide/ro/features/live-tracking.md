@@ -796,6 +796,14 @@ Pagina spune ce arată, pentru un cititor care nu a mai urmărit niciodată o tu
   `p.g.7` — la o tură urmărită și la reluarea unei ture trecute. Sunt publicate doar declarațiile
   care au un nume și doar pentru stațiile ridicării pe care o desenează pagina. Unde este oprită,
   și pentru orice stație căreia peștera nu i-a dat un nume, pagina arată doar stația.
+- **Cluburile fiecăruia — doar unde instalarea le publică.** O instalare poate lăsa o pagină
+  publicată să spună din ce grupuri speologice face parte fiecare persoană numită; este
+  **oprită** dacă un administrator al serverului nu o pornește
+  (`SILEXGIS__TripTracking__PublishClubs`, vezi ghidul de instalare). Unde este pornită, o pagină
+  construită pe aceste linkuri — jurnalul unei expediții al unui club, de pildă — își poate număra
+  cifrele pe cluburi direct din instalare, așa că cineva adăugat aici într-un club este numărat la
+  el de la următoarea citire. Nu apare niciodată lângă o etichetă pusă în locul numelui, nici unde
+  instalarea nu publică nume, și nu spune nimic despre rolul cuiva într-un grup.
 - **Cât de veche este pagina.** *Pagină împrospătată acum 40 de secunde*, iar când o citire
   eșuează *„Pagina nu se mai împrospătează"* spune de când — este despre pagină și conexiune,
   niciodată despre tură. O pagină încadrată spune același lucru într-un singur rând. Aceeași

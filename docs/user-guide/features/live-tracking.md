@@ -759,6 +759,13 @@ The page says what it is showing, for a reader who has never followed a trip:
   of a past trip. Only declarations that have a name are published, and only for stations of the
   survey the page draws. Where it is off, and for every station the cave has not named, the page
   shows the station alone.
+- **Each person's clubs — only where the installation publishes them.** An installation can let a
+  published page say which caving groups each named person belongs to; it is **off** unless an
+  administrator of the server turns it on (`SILEXGIS__TripTracking__PublishClubs`, see the
+  installation guide). Where it is on, a page built on these links — a club's expedition journal,
+  say — can count its figures per club straight from the installation, so somebody added to a
+  club here is counted under it on the next read. It is never said beside a caption, nor where
+  the installation publishes no names, and it says nothing about anybody's role in a group.
 - **How old the page is.** *Page updated 40 seconds ago*, and when a read fails *"This page has
   stopped refreshing"* says since when — that is about the page and the connection, never about
   the trip. A framed page says the same in one line. The same notice stands while the phone

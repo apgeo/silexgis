@@ -24664,6 +24664,7 @@ export interface components {
             ordinal: number;
             label: null | string;
             track: components["schemas"]["PublicPastTrackFixDto"][];
+            clubs?: null | string[];
         };
         PublicPastTrackPictureDto: {
             /** Format: date-time */
@@ -24741,6 +24742,7 @@ export interface components {
             positionOnOtherModel: boolean;
             in: boolean;
             out: boolean;
+            clubs?: null | string[];
         };
         PublicTripPlaceDto: {
             station: string;

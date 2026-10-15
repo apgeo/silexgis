@@ -401,6 +401,8 @@ public static class TripPastTrackEndpoints
                 // decided in one place so that every published surface names a person the same way.
                 .ToDictionaryAsync(c => c.Id, c => TripPartyNames.Shown(c.FullName, c.ShortName), ct)
             : [];
+        // The clubs beside each name, by the rule and the setting the live page uses.
+        var clubs = await TripTrackingPublicationEndpoints.ClubsOfAsync(db, live.Value, rosterIds, ct);
 
         // Oldest first, because that is the order a playback runs in, and bounded from that end so
         // that what a very long log loses is its tail rather than its beginning.
@@ -513,7 +515,8 @@ public static class TripPastTrackEndpoints
             participants.Add(new PublicPastTrackParticipantDto(
                 ordinal,
                 TripTrackingPublicationEndpoints.NameFor(caverId, labels, names),
-                track));
+                track,
+                TripTrackingPublicationEndpoints.ClubsFor(caverId, labels, names, clubs)));
         }
 
         var trackCamps = await TripTrackingPublicationEndpoints.ExpeditionsOfAsync(db, [trip.Id], ct);

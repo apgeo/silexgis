@@ -619,6 +619,7 @@ public static class TripTrackingPublicationEndpoints
                 // decided in one place so that every published surface names a person the same way.
                 .ToDictionaryAsync(c => c.Id, c => TripPartyNames.Shown(c.FullName, c.ShortName), ct)
             : [];
+        var clubs = await ClubsOfAsync(db, options, everybody, ct);
 
         // A tracked trip's whole event log is small (reports arrive by relayed word, minutes
         // apart) — fold the latest-per-caver in memory, exactly as the signed-in read does. Within
@@ -651,6 +652,7 @@ public static class TripTrackingPublicationEndpoints
                 labels[id].ToDictionary(p => p.CaverId, p => p.DisplayLabel),
                 rosters.GetValueOrDefault(id)?.Roster ?? [],
                 names,
+                clubs,
                 [.. events[id]],
                 openCaves,
                 drawnOnSurveyModelId);
@@ -665,7 +667,8 @@ public static class TripTrackingPublicationEndpoints
     private static PublicParty FoldParty(
         IReadOnlyList<PublicTripTeamDto> teams, Dictionary<Guid, string> labels,
         IReadOnlyList<TripPartyPlace> roster,
-        Dictionary<Guid, string> names, List<TripPositionEvent> events, HashSet<Guid> openCaves,
+        Dictionary<Guid, string> names, Dictionary<Guid, IReadOnlyList<string>> clubs,
+        List<TripPositionEvent> events, HashSet<Guid> openCaves,
         Guid? drawnOnSurveyModelId)
     {
         var byCaver = events.GroupBy(e => e.Person()).ToDictionary(g => g.Key, g => g.ToList());
@@ -725,7 +728,8 @@ public static class TripTrackingPublicationEndpoints
                 shown?.RecordedAt,
                 PositionOnOtherModel: elsewhere,
                 In: standing == TripStanding.Underground,
-                Out: standing == TripStanding.Out));
+                Out: standing == TripStanding.Out,
+                Clubs: ClubsFor(caverId, labels, names, clubs)));
         }
 
         return new PublicParty(teams, participants, withheldAny);
@@ -885,6 +889,68 @@ public static class TripTrackingPublicationEndpoints
         }
         var name = rosterNames.GetValueOrDefault(caverId);
         return string.IsNullOrWhiteSpace(name) ? null : name;
+    }
+
+    /// <summary>
+    /// The names of the caving groups each of these people belongs to, where the installation
+    /// publishes them; an empty dictionary, read from nothing, where it does not.
+    /// </summary>
+    /// <remarks>
+    /// One read for every person asked about, whatever the number of trips they are on. Ordered
+    /// by name so that the same memberships always come out the same way: a published answer's
+    /// validator is worked out from what is sent, and an order that moved between reads would make
+    /// an unchanged party look changed to every reader.
+    /// </remarks>
+    internal static async Task<Dictionary<Guid, IReadOnlyList<string>>> ClubsOfAsync(
+        SilexGisDbContext db, TripTrackingOptions options, IReadOnlyCollection<Guid> caverIds, CancellationToken ct)
+    {
+        if (!options.PublishClubs || !options.PublishRealNames || caverIds.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await (
+                from m in db.CavingGroupMemberships.AsNoTracking()
+                join g in db.CavingGroups.AsNoTracking() on m.CavingGroupId equals g.Id
+                where caverIds.Contains(m.CaverId)
+                select new { m.CaverId, g.Name })
+            .ToListAsync(ct);
+        return rows
+            .GroupBy(r => r.CaverId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<string>)[.. g.Select(r => r.Name).Distinct().Order(StringComparer.Ordinal)]);
+    }
+
+    /// <summary>
+    /// The clubs a published page shows beside one person: only beside their own name, never
+    /// beside a caption and never where nobody is named, and nothing rather than an empty list.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The one rule, for every published surface.</b> The followed page, the list of trips being
+    /// followed and a finished trip's replay all ask it, with the captions and names they already
+    /// hold, so that no surface can show a club another one keeps back.
+    /// </para>
+    /// <para>
+    /// A caption is how an administrator keeps somebody off a public page without turning names off
+    /// for everybody; a club printed beside it would undo that for any club small enough to be
+    /// guessed from. So a caption wins over the club as it wins over the name.
+    /// </para>
+    /// </remarks>
+    internal static IReadOnlyList<string>? ClubsFor(
+        Guid caverId, Dictionary<Guid, string> labels, Dictionary<Guid, string> rosterNames,
+        Dictionary<Guid, IReadOnlyList<string>> clubs)
+    {
+        if (labels.TryGetValue(caverId, out var label) && !string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+        if (string.IsNullOrWhiteSpace(rosterNames.GetValueOrDefault(caverId)))
+        {
+            return null;
+        }
+        return clubs.TryGetValue(caverId, out var named) && named.Count > 0 ? named : null;
     }
 
     /// <summary>
