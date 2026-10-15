@@ -43,6 +43,11 @@ public sealed record TerrainBuildSourceDto(
 /// The finished build this one added rasters to, when it is an extension of one; null for a build
 /// meshed from nothing, and null again once that base has been deleted.
 /// </param>
+/// <param name="CancelRequestedAt">
+/// When somebody asked for the build to be called off. On a build that is still running it means
+/// the build is being cancelled and will stop at the first point it can; on a stopped one it says
+/// when the request was made. Null when nobody has asked, and again once the build is run again.
+/// </param>
 public sealed record TerrainBuildDto(
     Guid Id,
     GeoJsonGeometry Extent,
@@ -62,7 +67,8 @@ public sealed record TerrainBuildDto(
     DateTimeOffset? StartedAt,
     DateTimeOffset? FinishedAt,
     DateTimeOffset UpdatedAt,
-    Guid? BaseBuildId);
+    Guid? BaseBuildId,
+    DateTimeOffset? CancelRequestedAt);
 
 /// <summary>
 /// One build in full: everything the list carries, plus the rasters it was made from and the tail
@@ -276,6 +282,21 @@ public static class TerrainBuildEndpoints
     /// <summary>The build is waiting to run or running, so its files are not anybody's to remove.</summary>
     public const string RunningCode = "terrain_build.running";
 
+    /// <summary>The build has already stopped some other way, so there is nothing to call off.</summary>
+    public const string NotCancellableCode = "terrain_build.not_cancellable";
+
+    /// <summary>
+    /// The build has not stopped — it is queued, running, or finished — so there is nothing to run
+    /// again.
+    /// </summary>
+    public const string NotRetryableCode = "terrain_build.not_retryable";
+
+    /// <summary>
+    /// The build was called off during its bake and the tile-maker has not yet said it stopped, so
+    /// running it again now could put a second bake into a directory the first is still writing.
+    /// </summary>
+    public const string BakeStoppingCode = "terrain_build.bake_stopping";
+
     /// <summary>The build named as the one to extend does not exist.</summary>
     public const string BaseNotFoundCode = "terrain_build.base_not_found";
 
@@ -357,6 +378,12 @@ public static class TerrainBuildEndpoints
         api.MapDelete("/terrain/builds/{id:guid}/active", DeactivateAsync)
             .WithTags("Terrain")
             .WithSummary("Stops drawing this build's terrain, leaving the scene on bare ground; requires Execute on the Terrain domain.");
+        api.MapPost("/terrain/builds/{id:guid}/cancel", CancelAsync)
+            .WithTags("Terrain")
+            .WithSummary("Calls off a queued or running build; requires Execute on the Terrain domain.");
+        api.MapPost("/terrain/builds/{id:guid}/retry", RetryAsync)
+            .WithTags("Terrain")
+            .WithSummary("Runs a stopped build again from the first step whose work is not already done; requires Execute on the Terrain domain.");
         api.MapDelete("/terrain/builds/{id:guid}", DeleteAsync)
             .WithTags("Terrain")
             .WithSummary("Removes a build and everything it left on disk; requires Delete on the Terrain domain.");
@@ -921,6 +948,227 @@ public static class TerrainBuildEndpoints
     }
 
     /// <summary>
+    /// Calls a build off.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Under the same right that starts one. Calling a build off destroys nothing that cannot be
+    /// had again: what it obtained and prepared is kept, the build stays in the list, and running it
+    /// again carries on from where it stopped. Deleting is the act that gives disk back, and that
+    /// keeps its own right.
+    /// </para>
+    /// <para>
+    /// A queued build stops at once and its queue row is closed, so no worker ever starts it. A
+    /// running build is asked to stop: the request is written on its row, the run notices within a
+    /// couple of seconds, and it stops at the first point it can — between two files or two steps,
+    /// or, during the bake, once the tile-maker has been told and has said it stopped. Until then
+    /// the build is still running and the answer says it is being cancelled. One that has reached
+    /// publishing finishes; a build that is called off is never published.
+    /// </para>
+    /// <para>
+    /// A read followed by a write, against a worker that may be claiming the same build at that
+    /// moment, so the row is held for the length of the decision. A tracked save rather than a
+    /// direct update: calling a build off is a person's act and belongs in the trail.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<TerrainBuildDto>, UnauthorizedHttpResult, ProblemHttpResult>> CancelAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Terrain, AccessAction.Execute, null).Allowed)
+        {
+            return ApiProblems.Forbidden(ForbiddenCode);
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TerrainBuildSql.LockBuildAsync(db, id, ct);
+
+        var build = await db.TerrainBuilds.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (build is null)
+        {
+            return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        switch (TerrainBuildStopRules.Cancel(build.Status, build.ErrorCode, build.CancelRequestedAt))
+        {
+            case TerrainCancelOutcome.StopNow:
+                build.Status = TerrainBuildStatus.Failed;
+                build.ErrorCode = TerrainBuildFailures.Cancelled;
+                build.Message = "Called off before it started.";
+                build.CancelRequestedAt = now;
+                build.FinishedAt = now;
+                await TerrainBuildSql.CloseQueuedJobsAsync(
+                    db, id, ProcessingJobKinds.TerrainBuild, $"Terrain build {id} was called off.", ct);
+                break;
+
+            case TerrainCancelOutcome.AskToStop:
+                build.CancelRequestedAt = now;
+                break;
+
+            case TerrainCancelOutcome.AlreadyAsked:
+                // What was asked for is already true or on its way.
+                return TypedResults.Ok(ToDto(build));
+
+            default:
+                return ApiProblems.Conflict(
+                    NotCancellableCode,
+                    "This build has already stopped, so there is nothing to call off.");
+        }
+
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return TypedResults.Ok(ToDto(build));
+    }
+
+    /// <summary>
+    /// Puts a stopped build back on the queue, to carry on from the first step whose work is not
+    /// already on disk.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same build, not a copy of it: its rasters were obtained and prepared into its own
+    /// folder, and every step already asks the disk whether its work is there before doing it.
+    /// So a build stopped at the bake for want of a tile-maker bakes and nothing else, and one
+    /// called off while fetching fetches only what it had not yet got. A bake that ended badly
+    /// cleared its tiles when it did, so a build stopped there bakes again; a pyramid the check
+    /// refused is cleared here, so it is baked again rather than refused a second time.
+    /// </para>
+    /// <para>
+    /// A new queue row, so the count of hand-overs that stops a build looping across restarts
+    /// starts again from nothing, and the old reason is cleared, because a build handed over
+    /// while still carrying one is taken to have failed twice and is stopped at once.
+    /// </para>
+    /// <para>
+    /// Refused while another build of the same rectangle is unfinished, for the reason starting a
+    /// second one is; refused for an extension whose base has gone, because without the base's
+    /// tiles to add to it would publish the new rasters alone as the whole area; and refused while
+    /// a bake that was called off has not been confirmed stopped, because the new run would write
+    /// into the directory the old bake may still be writing. Taken under the submission lock and
+    /// then the one a delete takes, in the order a submission takes them.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<TerrainBuildDto>, UnauthorizedHttpResult, ProblemHttpResult>> RetryAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        TerrainWorkspace workspace,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Terrain, AccessAction.Execute, null).Allowed)
+        {
+            return ApiProblems.Forbidden(ForbiddenCode);
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TerrainBuildSql.TakeSubmissionLockAsync(db, ct);
+        await TerrainBuildSql.TakeActivationLockAsync(db, ct);
+        await TerrainBuildSql.LockBuildAsync(db, id, ct);
+
+        var build = await db.TerrainBuilds.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (build is null)
+        {
+            return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        if (!TerrainBuildStopRules.MayRetry(build.Status))
+        {
+            return ApiProblems.Conflict(
+                NotRetryableCode,
+                build.Status == TerrainBuildStatus.Succeeded
+                    ? "This build finished; there is nothing left for it to do."
+                    : "This build has not stopped. It can be run again once it has, whichever way it stops.");
+        }
+
+        var extent = build.Extent;
+        var alreadyBuilding = await db.TerrainBuilds.AnyAsync(
+            b => b.Id != id
+                && (b.Status == TerrainBuildStatus.Queued || b.Status == TerrainBuildStatus.Running)
+                && b.Extent.EqualsTopologically(extent),
+            ct);
+        if (alreadyBuilding)
+        {
+            return ApiProblems.Conflict(
+                AlreadyBuildingCode,
+                "Another build of the same area has not finished. Wait for it, or remove one of the two.");
+        }
+
+        // An extension carries its base's sources as inherited ones and meshes only its own, so it
+        // needs the base's pyramid to add to. Its link to the base is cleared when the base is
+        // deleted, which is why the inherited sources are what is asked about.
+        var extends = await db.TerrainBuildSources.AnyAsync(s => s.TerrainBuildId == id && s.Inherited, ct);
+        if (extends)
+        {
+            var baseBuild = build.BaseBuildId is { } baseId
+                ? await db.TerrainBuilds.AsNoTracking().FirstOrDefaultAsync(b => b.Id == baseId, ct)
+                : null;
+            if (baseBuild is null)
+            {
+                return ApiProblems.Conflict(
+                    BaseNotFoundCode,
+                    "This build adds rasters to another build, and that build has been deleted, so "
+                    + "there is nothing to add them to. Start a fresh build over the whole area instead.");
+            }
+
+            if (string.IsNullOrWhiteSpace(baseBuild.PyramidVersion) || !workspace.HasPublishedPyramid(baseBuild.Id))
+            {
+                return ApiProblems.Conflict(
+                    BaseNotPublishedCode,
+                    "This build adds rasters to another build whose pyramid is no longer where "
+                    + "terrain is served from, so there is nothing to add them to. Start a fresh "
+                    + "build over the whole area instead.");
+            }
+        }
+
+        if (workspace.HasUnansweredWithdrawal(id))
+        {
+            return ApiProblems.Conflict(
+                BakeStoppingCode,
+                "This build was called off while its tiles were being made, and the tile maker has "
+                + "not yet said it stopped. It answers as soon as the terrain worker is running; run "
+                + "the build again after that.");
+        }
+
+        workspace.PrepareForRetry(id, build.Phase);
+
+        build.Status = TerrainBuildStatus.Queued;
+        build.ErrorCode = null;
+        build.Message = null;
+        build.FinishedAt = null;
+        build.CancelRequestedAt = null;
+        build.Progress = 0;
+
+        // Stamped again by the check when the run gets there. Kept across the wait it would be a
+        // version for tiles that may just have been discarded, offered to the screen as drawable.
+        build.PyramidVersion = null;
+
+        db.ProcessingJobs.Add(new ProcessingJob
+        {
+            Kind = ProcessingJobKinds.TerrainBuild,
+            Payload = JsonSerializer.Serialize(new TerrainBuildPayload(build.Id), JsonSerializerOptions.Web),
+            RequestedBy = ctx.UserId,
+        });
+
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return TypedResults.Ok(ToDto(build));
+    }
+
+    /// <summary>
     /// Removes a build and everything it left on disk.
     /// </summary>
     /// <remarks>
@@ -1127,5 +1375,6 @@ public static class TerrainBuildEndpoints
         build.StartedAt,
         build.FinishedAt,
         build.UpdatedAt,
-        build.BaseBuildId);
+        build.BaseBuildId,
+        build.CancelRequestedAt);
 }

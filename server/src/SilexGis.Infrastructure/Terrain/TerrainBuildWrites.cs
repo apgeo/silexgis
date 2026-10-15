@@ -44,19 +44,28 @@ public static class TerrainBuildWrites
     /// The start time is only stamped once. A build resumed after a restart started when it first
     /// started, not when the machine came back — otherwise "how long has this been going" answers
     /// with the time since the last crash, which is the one thing it must not hide.
+    /// <para>
+    /// A build that was called off is not marked, and the answer says whether this one was. A
+    /// build called off while it waited has already been written down as stopped, and a worker
+    /// that claimed its queue row in the same moment must not write it back to running — the
+    /// condition is evaluated by the database against the row as it stands after any write that
+    /// held it, so the two cannot both win. Only that one reason is refused here: what a build
+    /// handed over after failing for any other reason deserves is the handler's decision.
+    /// </para>
     /// </remarks>
-    public static Task StartAsync(
+    public static async Task<bool> StartAsync(
         SilexGisDbContext db, Guid buildId, TerrainBuildPhase phase, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        return db.TerrainBuilds
-            .Where(b => b.Id == buildId)
+        return await db.TerrainBuilds
+            .Where(b => b.Id == buildId
+                && !(b.Status == TerrainBuildStatus.Failed && b.ErrorCode == TerrainBuildFailures.Cancelled))
             .ExecuteUpdateAsync(s => s
                 .SetProperty(b => b.Status, TerrainBuildStatus.Running)
                 .SetProperty(b => b.Phase, phase)
                 .SetProperty(b => b.StartedAt, b => b.StartedAt ?? now)
                 .SetProperty(b => b.FinishedAt, (DateTimeOffset?)null)
-                .SetProperty(b => b.UpdatedAt, now), ct);
+                .SetProperty(b => b.UpdatedAt, now), ct) > 0;
     }
 
     /// <summary>Where the build has got to, and what it is doing.</summary>

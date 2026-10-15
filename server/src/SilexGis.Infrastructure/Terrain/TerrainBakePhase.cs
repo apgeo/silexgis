@@ -566,6 +566,7 @@ public sealed class TerrainBakePhase(
     {
         TerrainBakeOutcome.Failed => TerrainBuildFailures.BakeFailed,
         TerrainBakeOutcome.Interrupted => TerrainBuildFailures.BakeInterrupted,
+        TerrainBakeOutcome.Cancelled => TerrainBuildFailures.Cancelled,
         _ => TerrainBuildFailures.BakeRefused,
     };
 
@@ -580,6 +581,8 @@ public sealed class TerrainBakePhase(
                 $"The tile maker ended badly (code {code}).{said}",
             TerrainBakeOutcome.Interrupted => "The bake was stopped while it was running, so what it "
                 + $"had written was discarded. Nothing is wrong with this build's data.{said}",
+            TerrainBakeOutcome.Cancelled => "The bake was withdrawn because the build was called "
+                + $"off, so what it had written was discarded.{said}",
             TerrainBakeOutcome.Refused => "The tile maker would not accept the request this "
                 + $"application wrote, which is a fault in the application rather than in the data.{said}",
             _ => "The tile maker's answer could not be read, so what it did is unknown and what it "
@@ -604,30 +607,7 @@ public sealed class TerrainBakePhase(
     /// believed, and published. The tool's own account of what went wrong is not in here; it stays
     /// where the two sides met, which is exactly when it is wanted most.
     /// </remarks>
-    private static void Clear(string tiles)
-    {
-        if (!Directory.Exists(tiles))
-        {
-            return;
-        }
-
-        try
-        {
-            foreach (var file in Directory.EnumerateFiles(tiles))
-            {
-                File.Delete(file);
-            }
-
-            foreach (var directory in Directory.EnumerateDirectories(tiles))
-            {
-                Directory.Delete(directory, recursive: true);
-            }
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // Whatever could not be swept is reported by the failure that is already on its way.
-        }
-    }
+    private static void Clear(string tiles) => TerrainWorkspace.Empty(tiles);
 
     /// <summary>The first line of the tool's log that means it gave up on detail, if any.</summary>
     private static string? FirstDegradedLine(string logPath)

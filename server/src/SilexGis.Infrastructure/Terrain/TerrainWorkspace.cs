@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Terrain;
 
 namespace SilexGis.Infrastructure.Terrain;
@@ -161,6 +163,9 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
 
     /// <summary>What a build's own pyramid directory is called inside its folder.</summary>
     private const string TilesDirectoryName = "tiles";
+
+    /// <summary>How often a withdrawn bake's answer is looked for.</summary>
+    private static readonly TimeSpan WithdrawalPoll = TimeSpan.FromMilliseconds(500);
 
     /// <summary>What a build's prepared rasters are kept in, inside its folder.</summary>
     private const string PreparedDirectoryName = "prepared";
@@ -411,6 +416,176 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning(e, "Could not remove the terrain directory {Directory}", directory);
+        }
+    }
+
+    /// <summary>
+    /// Asks the tile-maker to stop a bake this build issued and that has not been answered, and
+    /// waits a bounded time for it to say it has.
+    /// </summary>
+    /// <returns>
+    /// True when there is nothing still writing into this build's tiles as far as can be known —
+    /// no request was outstanding, or the other side answered it — and false when it was asked and
+    /// did not answer in time.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// The answer is what matters, not the asking. The tile-maker writes into this build's own tiles
+    /// directory, and whatever it writes after this application has emptied that directory is a
+    /// pyramid nobody judged, found by the next attempt and believed. So a called-off bake is only
+    /// known to have stopped when the other side says so in the same answer file it uses for
+    /// everything else.
+    /// </para>
+    /// <para>
+    /// Bounded, because a tile-maker that is not running cannot answer at all. Not answering is
+    /// reported rather than hidden: a later attempt is refused until the answer has arrived, so the
+    /// worst case is a build that has to wait, never one that publishes half a bake.
+    /// </para>
+    /// </remarks>
+    public async Task<bool> WithdrawBakeAsync(Guid buildId, TimeSpan wait, CancellationToken ct)
+    {
+        var spool = SpoolFor(buildId);
+        var result = Path.Combine(spool, TerrainBakeHandover.ResultFileName);
+        if (!File.Exists(Path.Combine(spool, TerrainBakeHandover.RequestFileName)) || File.Exists(result))
+        {
+            return true;
+        }
+
+        var marker = Path.Combine(spool, TerrainBakeHandover.CancelFileName);
+        if (!File.Exists(marker))
+        {
+            // Plain text, written in one go: the other side only ever asks whether the file exists,
+            // so a half-written one says exactly what a whole one does.
+            var asked = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+            await File.WriteAllTextAsync(marker, asked + "\n", ct);
+        }
+
+        var giveUpAt = DateTimeOffset.UtcNow + wait;
+        while (DateTimeOffset.UtcNow < giveUpAt)
+        {
+            if (File.Exists(result))
+            {
+                return true;
+            }
+
+            await Task.Delay(WithdrawalPoll, ct);
+        }
+
+        return File.Exists(result);
+    }
+
+    /// <summary>
+    /// Whether this build withdrew a bake and the tile-maker has not yet said it stopped.
+    /// </summary>
+    /// <remarks>
+    /// While this holds, the tile-maker may still be writing into the build's tiles. Running the
+    /// build again would either wait on an answer that will say "cancelled", or start a second bake
+    /// into the directory the first is still writing — so it is refused until the answer is in.
+    /// </remarks>
+    public bool HasUnansweredWithdrawal(Guid buildId)
+    {
+        var spool = SpoolFor(buildId);
+        return File.Exists(Path.Combine(spool, TerrainBakeHandover.CancelFileName))
+            && File.Exists(Path.Combine(spool, TerrainBakeHandover.RequestFileName))
+            && !File.Exists(Path.Combine(spool, TerrainBakeHandover.ResultFileName));
+    }
+
+    /// <summary>
+    /// Empties this build's tiles when no run of the meshing step has stood behind them.
+    /// </summary>
+    /// <remarks>
+    /// The handover directory is the marker, as it is everywhere else: only a bake whose answer was
+    /// read and found good removes it, so tiles beside a handover directory are tiles nothing has
+    /// judged — half a bake that was called off, or a base's pyramid copied in for an extension
+    /// that never got as far as asking. Tiles with no handover directory beside them were judged
+    /// good and are kept, so a build called off while its tiles were being checked carries on from
+    /// the check when it is run again.
+    /// </remarks>
+    public void DiscardUnjudgedTiles(Guid buildId)
+    {
+        if (Directory.Exists(SpoolFor(buildId)))
+        {
+            Empty(TilesFor(buildId));
+        }
+    }
+
+    /// <summary>
+    /// Puts a stopped build's disk into the state a fresh run of it can carry on from.
+    /// </summary>
+    /// <param name="stoppedAt">The step the build was attempting when it stopped.</param>
+    /// <remarks>
+    /// <para>
+    /// Most of what a stopped build left is exactly what makes running it again cheap, and is kept:
+    /// rasters it obtained, the prepared copies of them, and a pyramid whose bake was judged good.
+    /// Two things are not, because each is the shape a run would find and wrongly believe.
+    /// </para>
+    /// <para>
+    /// A handover the other side has already answered is discarded with the tiles beside it. The
+    /// answer was either read and recorded as this build's failure — and its tiles cleared then —
+    /// or it arrived after the run had stopped waiting for it, and nothing judged it at all. Read
+    /// again, the first would fail the new run on the old verdict at once; the second could be half
+    /// a bake. A request still unanswered is left exactly as it is: the bake behind it may still be
+    /// running, and the new run waits for it rather than starting a second into the same directory.
+    /// </para>
+    /// <para>
+    /// A pyramid the check refused is discarded too, so that the new run bakes it again rather than
+    /// refusing the same tiles a second time — a damaged pyramid is what a disk that filled leaves,
+    /// and running the build again is how it is put right.
+    /// </para>
+    /// </remarks>
+    public void PrepareForRetry(Guid buildId, TerrainBuildPhase stoppedAt)
+    {
+        var spool = SpoolFor(buildId);
+        if (Directory.Exists(spool))
+        {
+            var requested = File.Exists(Path.Combine(spool, TerrainBakeHandover.RequestFileName));
+            var answered = File.Exists(Path.Combine(spool, TerrainBakeHandover.ResultFileName));
+            if (!requested || answered)
+            {
+                Empty(TilesFor(buildId));
+                Discard(spool);
+            }
+
+            return;
+        }
+
+        if (stoppedAt == TerrainBuildPhase.Validate)
+        {
+            Empty(TilesFor(buildId));
+        }
+    }
+
+    /// <summary>
+    /// Empties a directory that must not be trusted, keeping the directory itself.
+    /// </summary>
+    /// <remarks>
+    /// Keeping the directory matters: it was created by this application so that it belongs to
+    /// this application on a fresh volume, and the tile-maker writes into it as the same user. Best
+    /// effort, because it is called on paths that are already failing and whatever could not be
+    /// removed is reported by the failure that is on its way.
+    /// </remarks>
+    public static void Empty(string directory)
+    {
+        if (!Directory.Exists(directory))
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(directory))
+            {
+                File.Delete(file);
+            }
+
+            foreach (var child in Directory.EnumerateDirectories(directory))
+            {
+                Directory.Delete(child, recursive: true);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Reported by whatever failure brought this here.
         }
     }
 

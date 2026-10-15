@@ -65,6 +65,41 @@ public static class TerrainBuildSql
             "SELECT pg_advisory_xact_lock({0})", [ActivationLockKey], ct);
 
     /// <summary>
+    /// Holds this build's row until the transaction ends, so that a decision about its status and
+    /// the write that follows it are one act.
+    /// </summary>
+    /// <remarks>
+    /// Calling a build off and running a stopped one again both read the status and then write a
+    /// new one, while a worker may be marking the same row as started. The worker's write is a
+    /// conditional update, and an update that meets a row held here waits, then re-reads the row as
+    /// this transaction left it and re-tests its condition — so a build called off while it was
+    /// being claimed stays called off instead of being written back to running.
+    /// </remarks>
+    public static Task LockBuildAsync(SilexGisDbContext db, Guid buildId, CancellationToken ct) =>
+        db.Database.ExecuteSqlRawAsync(
+            "SELECT 1 FROM terrain_builds WHERE id = {0} FOR UPDATE", [buildId], ct);
+
+    /// <summary>
+    /// Closes the queue rows still waiting to run this build, so that no worker ever claims them.
+    /// </summary>
+    /// <remarks>
+    /// Marked failed rather than deleted: the queue is a record as well as a queue, and a row that
+    /// vanished would leave whoever looks at it later unable to tell a build that was called off
+    /// from one whose work was lost. Matched on the build's key inside the payload, which is the
+    /// only place a queue row names its build. A row already claimed is left alone — the worker
+    /// holding it finds the build stopped and ends there.
+    /// </remarks>
+    public static Task<int> CloseQueuedJobsAsync(
+        SilexGisDbContext db, Guid buildId, string kind, string reason, CancellationToken ct) =>
+        db.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE processing_jobs SET status = 3, error = {0}, completed_at = now()
+            WHERE kind = {1} AND status = 0 AND payload ->> 'terrainBuildId' = {2}
+            """,
+            [reason, kind, buildId.ToString()],
+            ct);
+
+    /// <summary>
     /// The family every lock over one build's stored raster description belongs to.
     /// </summary>
     /// <remarks>

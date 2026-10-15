@@ -63,6 +63,11 @@ public class TerrainBakeHandoverTests
 
         TerrainBakeResult.Parse("status=interrupted\nexit=\nreason=the worker stopped\n").Outcome
             .ShouldBe(TerrainBakeOutcome.Interrupted);
+
+        // The answer to a withdrawn request: the other side stopped the tile-maker, or never
+        // started it. Read as an unreadable answer it would be reported as a fault in the handover.
+        TerrainBakeResult.Parse("status=cancelled\nexit=143\nreason=withdrawn\n")
+            .ShouldBe(new TerrainBakeResult(TerrainBakeOutcome.Cancelled, 143, "withdrawn"));
     }
 
     /// <summary>
