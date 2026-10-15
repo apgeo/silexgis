@@ -3090,7 +3090,7 @@
   "caveview": {
     "dankezCaveView": {
       "tab": "LochViewer (de probă)",
-      "trialNotice": "Un al doilea vizualizator, de probă, care arată același fișier. Este o aplicație separată: setările, măsurătorile și partajarea lui sunt ale lui și nu se salvează aici.",
+      "trialNotice": "Un al doilea vizualizator, de probă, care arată același fișier. Este o aplicație separată: setările, măsurătorile și partajarea lui sunt ale lui și nu se salvează aici. Dacă rama de mai jos rămâne goală, această instalare nu permite încadrarea lui: deschide-l într-o fereastră nouă.",
       "openWindow": "Deschide într-o fereastră nouă",
       "sending": "Se predă ridicarea topografică vizualizatorului…",
       "loaded": "Stații încărcate: {{count}}",

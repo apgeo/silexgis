@@ -3090,7 +3090,7 @@
   "caveview": {
     "dankezCaveView": {
       "tab": "LochViewer (trial)",
-      "trialNotice": "A second viewer on trial, showing the same file. It is a separate application: its settings, measurements and sharing are its own and are not saved here.",
+      "trialNotice": "A second viewer on trial, showing the same file. It is a separate application: its settings, measurements and sharing are its own and are not saved here. Where the frame below stays empty, this installation does not allow it to be framed: open it in a new window.",
       "openWindow": "Open in a new window",
       "sending": "Handing the survey to the viewer…",
       "loaded": "Stations loaded: {{count}}",
