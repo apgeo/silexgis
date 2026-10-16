@@ -44,6 +44,11 @@ export function ErrorFallback({ detail }: { detail: string }) {
 
 interface Props {
   children: ReactNode;
+  /**
+   * What to show instead of the screen-wide fallback — for a part of a screen, such as a dialog,
+   * whose failure should not take the screen around it down.
+   */
+  fallback?: (detail: string) => ReactNode;
 }
 
 interface State {
@@ -74,6 +79,9 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   render(): ReactNode {
-    return this.state.failed ? <ErrorFallback detail={this.state.detail} /> : this.props.children;
+    if (!this.state.failed) {
+      return this.props.children;
+    }
+    return this.props.fallback?.(this.state.detail) ?? <ErrorFallback detail={this.state.detail} />;
   }
 }
