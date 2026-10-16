@@ -253,6 +253,52 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
+    public async Task Every_export_refuses_a_filter_it_cannot_read_or_find_rather_than_writing_the_whole_registry()
+    {
+        await SeedAsync();
+        var cutShort = "eyJ2ZXJzaW9uIjox";
+        var holed = Token(new FilterDocument { Scope = [new WorldScope("feature", new AllOfNode(null!))] });
+        var unknown = Guid.NewGuid();
+
+        foreach (var token in new[] { cutShort, holed })
+        {
+            await ShouldRefuseAsync(
+                await reader.GetAsync($"/api/v1/export/caves?format=geojson&filter={token}"),
+                HttpStatusCode.BadRequest, "filter.malformed");
+            await ShouldRefuseAsync(
+                await reader.PostAsJsonAsync("/api/v1/export/caves/karstlink/preview", new { filter = token }),
+                HttpStatusCode.BadRequest, "filter.malformed");
+            await ShouldRefuseAsync(
+                await reader.PostAsJsonAsync(
+                    "/api/v1/export/caves/karstlink", new { filter = token, treatmentForAll = "grid_position" }),
+                HttpStatusCode.BadRequest, "filter.malformed");
+        }
+
+        await ShouldRefuseAsync(
+            await reader.GetAsync($"/api/v1/export/caves?format=geojson&savedFilterId={unknown}"),
+            HttpStatusCode.NotFound, "saved_filter.not_found");
+        await ShouldRefuseAsync(
+            await reader.PostAsJsonAsync("/api/v1/export/caves/karstlink/preview", new { savedFilterId = unknown }),
+            HttpStatusCode.NotFound, "saved_filter.not_found");
+        await ShouldRefuseAsync(
+            await reader.PostAsJsonAsync(
+                "/api/v1/export/caves/karstlink", new { savedFilterId = unknown, treatmentForAll = "grid_position" }),
+            HttpStatusCode.NotFound, "saved_filter.not_found");
+    }
+
+    /// <summary>
+    /// A refusal, and nothing of the registry in it: a file of everything answered for a filter that
+    /// could not be read is the failure these refusals exist to prevent.
+    /// </summary>
+    private async Task ShouldRefuseAsync(HttpResponseMessage response, HttpStatusCode status, string code)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(status, body);
+        JsonDocument.Parse(body).RootElement.GetProperty("code").GetString().ShouldBe(code);
+        body.ShouldNotContain(Name("match"));
+    }
+
+    [Fact]
     public async Task A_protected_cave_the_filter_finds_is_exported_on_the_grid_never_at_its_position()
     {
         await SeedAsync();
