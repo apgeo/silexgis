@@ -4853,7 +4853,8 @@
     "creating": "Se creează {{count}} obiecte. Procesul rulează pe server și continuă dacă părăsești această pagină.",
     "creatingHint": "Lotul apare la Loturi de import când s-a terminat și se anulează ca un întreg.",
     "progress": "{{done}} din {{total}} rânduri parcurse",
-    "retrying": "Ultima încercare nu s-a încheiat; se reia în scurt timp."
+    "retrying": "Ultima încercare nu s-a încheiat; se reia în scurt timp.",
+    "saving": "Toate cele {{total}} rânduri au fost parcurse; se salvează"
   },
   "photoImport": {
     "title": "Obiecte din fotografii",

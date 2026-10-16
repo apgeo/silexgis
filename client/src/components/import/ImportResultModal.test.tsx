@@ -38,6 +38,13 @@ describe('ImportResultModal while the work goes on', () => {
     expect(screen.getByText('30%')).toBeInTheDocument();
   });
 
+  it('never draws the bar full while the rows reached are still being saved', () => {
+    show({ progress: { done: 400, total: 400 } });
+
+    expect(screen.getByText('99%')).toBeInTheDocument();
+    expect(screen.getByText('All 400 rows reached; saving them')).toBeInTheDocument();
+  });
+
   it('says a passing failure is being tried again, with what went wrong', () => {
     show({
       status: 'queued',

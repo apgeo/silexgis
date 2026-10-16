@@ -297,8 +297,9 @@ export default function ImportWorkspacePage() {
         queued={queuedCommit?.queued ?? 0}
         status={job.data?.status}
         error={job.data?.error ?? null}
+        // Only while it runs: a job waiting for its next turn has done nothing of that turn yet.
         progress={
-          job.data?.progressTotal != null && job.data.progressDone != null
+          job.data?.status === 'running' && job.data.progressTotal != null && job.data.progressDone != null
             ? { done: job.data.progressDone, total: job.data.progressTotal }
             : null
         }

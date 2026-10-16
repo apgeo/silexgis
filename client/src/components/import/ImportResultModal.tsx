@@ -69,12 +69,18 @@ export default function ImportResultModal(
               wrong thing to show somebody wondering whether their import is stuck. */}
           {progress && progress.total > 0 ? (
             <>
+              {/* Never drawn full while the work goes on: every row reached is not the work done —
+                  the rows are saved and their derived state computed after the last one — and a
+                  full bar turns green and reads as finished. */}
               <Progress
-                percent={Math.floor((progress.done * 100) / progress.total)}
+                percent={Math.min(99, Math.floor((progress.done * 100) / progress.total))}
+                status="active"
                 data-testid="import-progress"
               />
               <Typography.Text>
-                {t('vectorImport.progress', { done: progress.done, total: progress.total })}
+                {progress.done >= progress.total
+                  ? t('vectorImport.saving', { total: progress.total })
+                  : t('vectorImport.progress', { done: progress.done, total: progress.total })}
               </Typography.Text>
             </>
           ) : (

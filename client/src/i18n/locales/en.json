@@ -4853,7 +4853,8 @@
     "creating": "Creating {{count}} objects. This runs on the server and keeps going if you leave this page.",
     "creatingHint": "The batch appears under Import batches when it is done, and reverts as one thing.",
     "progress": "{{done}} of {{total}} rows reached",
-    "retrying": "The last attempt did not finish and will be tried again shortly."
+    "retrying": "The last attempt did not finish and will be tried again shortly.",
+    "saving": "All {{total}} rows reached; saving them"
   },
   "photoImport": {
     "title": "Features from photographs",
