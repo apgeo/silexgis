@@ -71,30 +71,33 @@ public static class MapSql
         // widened by one protection cell so a row whose snapped point lands inside the
         // window is still fetched; a snap moves a coordinate by at most half a cell on each
         // axis, in the same degrees on both, so one cell is a safe margin anywhere.
+        //
+        // The exact-view walk is asked once per row, in a materialised step: the shown point is
+        // read by the window test, the averages and the grouping, and an inlined expression would
+        // run the walk's subplans at every one of those references.
         var sql = $"""
+            WITH candidates AS MATERIALIZED (
+                SELECT ST_X(f.geom) AS x, ST_Y(f.geom) AS y, {exactSql} AS exact
+                FROM features f
+                WHERE f.kind = {(short)FeatureKind.CaveEntrance}
+                  AND f.deleted_at IS NULL
+                  AND f.geom && ST_Expand(
+                        ST_MakeEnvelope(@west, @south, @east, @north, 4326), @protection_cell)
+                  AND {visibilitySql}{tagSql}
+            ),
+            placed AS (
+                SELECT
+                    CASE WHEN c.exact THEN c.x ELSE {SpatialSql.SnapToGrid("c.x", "protection_cell")} END AS gx,
+                    CASE WHEN c.exact THEN c.y ELSE {SpatialSql.SnapToGrid("c.y", "protection_cell")} END AS gy
+                FROM candidates c
+            )
             SELECT avg(g.gx) AS lon, avg(g.gy) AS lat, COUNT(*)::int AS count,
                    g.cx AS cellX, g.cy AS cellY
             FROM (
                 SELECT p.gx, p.gy,
                        round(p.gx / @cluster_cell) AS cx,
                        round(p.gy / @cluster_cell) AS cy
-                FROM (
-                    SELECT
-                        CASE WHEN {exactSql}
-                            THEN ST_X(f.geom)
-                            ELSE {SpatialSql.SnapToGrid("ST_X(f.geom)", "protection_cell")}
-                        END AS gx,
-                        CASE WHEN {exactSql}
-                            THEN ST_Y(f.geom)
-                            ELSE {SpatialSql.SnapToGrid("ST_Y(f.geom)", "protection_cell")}
-                        END AS gy
-                    FROM features f
-                    WHERE f.kind = {(short)FeatureKind.CaveEntrance}
-                      AND f.deleted_at IS NULL
-                      AND f.geom && ST_Expand(
-                            ST_MakeEnvelope(@west, @south, @east, @north, 4326), @protection_cell)
-                      AND {visibilitySql}{tagSql}
-                ) p
+                FROM placed p
                 WHERE p.gx BETWEEN @west AND @east
                   AND p.gy BETWEEN @south AND @north
             ) g
