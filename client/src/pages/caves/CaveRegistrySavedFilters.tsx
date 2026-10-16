@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { CloseOutlined, SaveOutlined, SettingOutlined } from '@ant-design/icons';
-import { Alert, App, Flex, Form, Input, Modal, Select, Tag, Tooltip } from 'antd';
+import { Alert, App, Flex, Form, Input, Modal, Select, Space, Tag, Tooltip } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -27,6 +27,8 @@ interface Props {
   onSaved: (savedFilterId: string) => void;
   /** Drops the conditions the controls cannot show. */
   onClearExtra: () => void;
+  /** Opens the conditions the controls cannot show where they can be read and changed; the button pressed gets the focus back. */
+  onEditExtra?: (opener: HTMLElement) => void;
   /** Stops naming a saved filter, keeping the conditions as they are. */
   onForget: () => void;
 }
@@ -45,6 +47,7 @@ export default function CaveRegistrySavedFilters({
   onApply,
   onSaved,
   onClearExtra,
+  onEditExtra,
   onForget,
 }: Props) {
   const { t } = useTranslation();
@@ -170,9 +173,16 @@ export default function CaveRegistrySavedFilters({
           data-testid="cave-registry-extra"
           title={t('caveRegistry.extra', { count: reading.extra.length })}
           action={
-            <Button size="small" onClick={onClearExtra}>
-              {t('caveRegistry.clearExtra')}
-            </Button>
+            <Space size={4}>
+              {onEditExtra && (
+                <Button size="small" onClick={(e) => onEditExtra(e.currentTarget)} data-testid="cave-registry-edit-extra">
+                  {t('caveRegistry.editExtra')}
+                </Button>
+              )}
+              <Button size="small" onClick={onClearExtra}>
+                {t('caveRegistry.clearExtra')}
+              </Button>
+            </Space>
           }
         />
       )}

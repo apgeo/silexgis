@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import {
+  CAVE_REGISTRY_SCOPE,
   caveRegistryDocument,
+  caveRegistryEditorDocument,
   caveRegistryToken,
   readCaveRegistry,
+  readCaveRegistryEditor,
   readCaveRegistryAddress,
   sameQuestion,
   writeCaveRegistryAddress,
   type CaveRegistryControls,
 } from './caveRegistry.ts';
 import { describeCaveRegistry } from './describe.ts';
+import { emptyDocument, whereOf, withWhere } from './document.ts';
 import { encodeFilter } from './url.ts';
 import type { FilterDocument, FilterNode } from './types.ts';
 
@@ -186,5 +190,43 @@ describe('a saved cave filter put into words', () => {
       { kind: 'tag', slug: 'bats' },
       { kind: 'more', count: 1 },
     ]);
+  });
+});
+
+describe('the registry as the advanced filter sees it', () => {
+  it('opens on the controls and the extra conditions in one all-of, without the fixed caves condition', () => {
+    const odd: FilterNode = { node: 'condition', field: 'depth', op: 'lessOrEqual', values: [{ type: 'number', value: 5 }] };
+    const document = caveRegistryEditorDocument({ controls: { search: 'urs' }, extra: [odd] });
+
+    const where = whereOf(document, 'feature');
+    expect(where?.node).toBe('allOf');
+    expect(where?.node === 'allOf' && where.of.length).toBe(2);
+    expect(JSON.stringify(where)).not.toContain('"kind"');
+  });
+
+  it('reads an edited document back into the same controls and extra conditions', () => {
+    const odd: FilterNode = { node: 'condition', field: 'depth', op: 'lessOrEqual', values: [{ type: 'number', value: 5 }] };
+    const reading = { controls: { region: 'Bihor', minLength: 100, tag: 'bats' }, extra: [odd] };
+
+    expect(readCaveRegistryEditor(caveRegistryEditorDocument(reading))).toEqual(reading);
+  });
+
+  it('keeps an any-of written at the top as one extra condition, still about caves once composed', () => {
+    const either: FilterNode = {
+      node: 'anyOf',
+      of: [
+        { node: 'condition', field: 'surveyedLength', op: 'greaterOrEqual', values: [{ type: 'number', value: 1000 }] },
+        { node: 'condition', field: 'depth', op: 'greaterOrEqual', values: [{ type: 'number', value: 100 }] },
+      ],
+    };
+    const reading = readCaveRegistryEditor(withWhere(emptyDocument(['feature']), 'feature', either));
+
+    expect(reading).toEqual({ controls: {}, extra: [either] });
+    const composed = whereOf(caveRegistryDocument(reading.controls, reading.extra)!, 'feature');
+    expect(composed).toEqual({ node: 'allOf', of: [CAVE_REGISTRY_SCOPE, either] });
+  });
+
+  it('narrows nothing when the edited document is about another world', () => {
+    expect(readCaveRegistryEditor(emptyDocument(['tripLog']))).toEqual({ controls: {}, extra: [] });
   });
 });

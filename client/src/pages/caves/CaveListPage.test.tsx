@@ -5,10 +5,18 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import i18n from '../../i18n';
-import { caveRegistryDocument, readCaveRegistryAddress } from '../../filters/caveRegistry.ts';
+import {
+  CAVE_REGISTRY_SCOPE,
+  caveRegistryDocument,
+  caveRegistryToken,
+  readCaveRegistryAddress,
+} from '../../filters/caveRegistry.ts';
+import { whereOf, withWhere } from '../../filters/document.ts';
+import type { FilterDocument, FilterNode } from '../../filters/types.ts';
 import { encodeFilter } from '../../filters/url.ts';
 
-const { canSpy, doorSpy, cavesSpy, downloadSpy, savedFilters } = vi.hoisted(() => ({
+const { canSpy, doorSpy, cavesSpy, downloadSpy, savedFilters, editorSpy } = vi.hoisted(() => ({
+  editorSpy: vi.fn(),
   canSpy: vi.fn(),
   doorSpy: vi.fn(),
   cavesSpy: vi.fn(),
@@ -53,6 +61,39 @@ vi.mock('../../api/download.ts', async () => {
 vi.mock('../../components/statistics/CaveDistributionPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/caves/KarstLinkExportModal.tsx', () => ({ default: () => null }));
 
+// The editor is proved on its own; here it stands for "somebody wrote this and pressed Apply", so
+// what is proved is the road between the page's address and the editor, both ways.
+const EDITED_DEPTH: FilterNode = {
+  node: 'condition',
+  field: 'depth',
+  op: 'lessOrEqual',
+  values: [{ type: 'number', value: 50 }],
+};
+vi.mock('../../components/filters/FilterEditor.tsx', () => ({
+  default: (props: {
+    world: string;
+    document: FilterDocument;
+    fixed?: FilterNode;
+    onApply: (document: FilterDocument) => void;
+    onCancel?: () => void;
+  }) => {
+    editorSpy(props);
+    const edited = withWhere(props.document, props.world, {
+      node: 'allOf',
+      of: [
+        { node: 'condition', field: 'region', op: 'contains', values: [{ type: 'text', value: 'Alba' }] },
+        EDITED_DEPTH,
+      ],
+    });
+    return (
+      <div>
+        <button type="button" data-testid="stub-apply" onClick={() => props.onApply(edited)}>apply</button>
+        <button type="button" data-testid="stub-cancel" onClick={() => props.onCancel?.()}>cancel</button>
+      </div>
+    );
+  },
+}));
+
 const { default: CaveListPage } = await import('./CaveListPage.tsx');
 
 function Address() {
@@ -86,6 +127,7 @@ beforeEach(async () => {
   cavesSpy.mockReset();
   downloadSpy.mockReset();
   savedFilters.current = [];
+  editorSpy.mockReset();
 });
 
 /**
@@ -217,5 +259,78 @@ describe('the registry read from its address', () => {
     fireEvent.blur(region);
 
     expect(screen.getByTestId('cave-registry-active-changed')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The advanced filter edits the question the controls compose — the same document, read from the
+ * address and written back to it — so what it writes reaches the list, the link, the exports and a
+ * saved filter by the road a control's change takes.
+ */
+describe('the advanced filter on the cave registry', () => {
+  const ODD_DEPTH: FilterNode = {
+    node: 'condition',
+    field: 'depth',
+    op: 'greaterThan',
+    values: [{ type: 'number', value: 10 }],
+  };
+
+  it('opens on the controls’ conditions and the extra ones, with the fixed “caves” kept out of the rows', async () => {
+    const document = caveRegistryDocument({ region: 'Bihor', minLength: 300 }, [ODD_DEPTH])!;
+    show(`/caves?filter=${encodeFilter(document)}`);
+
+    fireEvent.click(screen.getByTestId('cave-registry-advanced'));
+    await screen.findByTestId('stub-apply');
+
+    const props = editorSpy.mock.lastCall![0] as { world: string; document: FilterDocument; fixed?: FilterNode };
+    expect(props.world).toBe('feature');
+    expect(props.fixed).toEqual(CAVE_REGISTRY_SCOPE);
+    expect(whereOf(props.document, 'feature')).toEqual({
+      node: 'allOf',
+      of: [
+        { node: 'condition', field: 'region', op: 'contains', values: [{ type: 'text', value: 'Bihor' }] },
+        { node: 'condition', field: 'surveyedLength', op: 'greaterOrEqual', values: [{ type: 'number', value: 300 }] },
+        ODD_DEPTH,
+      ],
+    });
+  });
+
+  it('writes what was applied back to the controls and the address, the rest kept as extra conditions', async () => {
+    show('/caves?page=4');
+
+    fireEvent.click(screen.getByTestId('cave-registry-advanced'));
+    fireEvent.click(await screen.findByTestId('stub-apply'));
+
+    const state = readCaveRegistryAddress(new URLSearchParams(screen.getByTestId('search').textContent!));
+    expect(state.controls).toEqual({ region: 'Alba' });
+    expect(state.extra).toEqual([EDITED_DEPTH]);
+    expect(state.page).toBe(1);
+    expect(screen.getByTestId('cave-registry-region')).toHaveValue('Alba');
+    expect(screen.getByTestId('cave-registry-extra')).toBeInTheDocument();
+    expect(cavesSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ filter: caveRegistryToken({ controls: { region: 'Alba' }, extra: [EDITED_DEPTH] }) }),
+    );
+  });
+
+  it('is reached from the notice about conditions the controls cannot show', async () => {
+    const document = caveRegistryDocument({}, [ODD_DEPTH])!;
+    show(`/caves?filter=${encodeFilter(document)}`);
+
+    fireEvent.click(screen.getByTestId('cave-registry-edit-extra'));
+    await screen.findByTestId('stub-apply');
+
+    const props = editorSpy.mock.lastCall![0] as { document: FilterDocument };
+    expect(whereOf(props.document, 'feature')).toEqual({ node: 'allOf', of: [ODD_DEPTH] });
+  });
+
+  it('changes nothing when it is closed without applying', async () => {
+    const token = encodeFilter(caveRegistryDocument({ region: 'Bihor' })!);
+    show(`/caves?filter=${token}`);
+    const before = screen.getByTestId('search').textContent;
+
+    fireEvent.click(screen.getByTestId('cave-registry-advanced'));
+    fireEvent.click(await screen.findByTestId('stub-cancel'));
+
+    expect(screen.getByTestId('search').textContent).toBe(before);
   });
 });

@@ -128,6 +128,34 @@ export function caveRegistryDocument(
   return withWhere(emptyDocument([CAVE_WORLD]), CAVE_WORLD, { node: 'allOf', of: [kindIsCave, ...nodes] });
 }
 
+/**
+ * The condition every registry document holds and the registry's own pages never show: it is what
+ * makes the list a list of caves. An editor over the registry's conditions keeps it in force — in
+ * what it counts — without offering it as a row, since removing it would change nothing (the
+ * registry writes it again) and would only make the count disagree with the list.
+ */
+export const CAVE_REGISTRY_SCOPE: FilterNode = kindIsCave;
+
+/**
+ * The registry's question as an editor sees it: every control's condition and every extra one as
+ * the conditions of one all-of, without the fixed "caves" condition. A single control is kept in
+ * that all-of too, so a search — which is itself an any-of of two names — is shown as one row
+ * group inside the registry's "all of" and a row added beside it narrows rather than widens.
+ */
+export function caveRegistryEditorDocument(reading: CaveRegistryReading): FilterDocument {
+  const nodes = [...controlNodes(reading.controls), ...reading.extra];
+  return withWhere(emptyDocument([CAVE_WORLD]), CAVE_WORLD, nodes.length === 0 ? null : { node: 'allOf', of: nodes });
+}
+
+/**
+ * What an edited document means for the registry: the conditions its controls can show go back to
+ * the controls, the rest are kept as extra conditions. A document about something other than this
+ * world narrows nothing here.
+ */
+export function readCaveRegistryEditor(document: FilterDocument): CaveRegistryReading {
+  return readCaveRegistry(document) ?? { controls: {}, extra: [] };
+}
+
 function isCondition(
   node: FilterNode,
   field: string,

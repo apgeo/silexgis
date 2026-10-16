@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DeleteOutlined, DownloadOutlined, PlusOutlined } from '@ant-design/icons';
-import { Alert, App, Dropdown, Flex, Input, InputNumber, Select, Table, Tag, Typography } from 'antd';
+import { DeleteOutlined, DownloadOutlined, FilterOutlined, PlusOutlined } from '@ant-design/icons';
+import { Alert, App, Drawer, Dropdown, Flex, Input, InputNumber, Select, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { labelledPaginationItems } from '../../components/paginationLabels.ts';
 import type { TablePaginationConfig } from 'antd';
@@ -23,9 +23,14 @@ import CaveDistributionPanel from '../../components/statistics/CaveDistributionP
 import KarstLinkExportModal from '../../components/caves/KarstLinkExportModal.tsx';
 import { exportKarstLinkWithStoredAnswer } from '../../components/caves/karstLinkExport.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+import FilterEditor from '../../components/filters/FilterEditor.tsx';
 import {
+  CAVE_REGISTRY_SCOPE,
+  CAVE_WORLD,
+  caveRegistryEditorDocument,
   caveRegistryToken,
   readCaveRegistryAddress,
+  readCaveRegistryEditor,
   writeCaveRegistryAddress,
   type CaveRegistryAddress,
   type CaveRegistryControls,
@@ -79,6 +84,34 @@ export default function CaveListPage() {
   const token = caveRegistryToken(address);
 
   const [karstLinkOpen, setKarstLinkOpen] = useState(false);
+
+  // The advanced filter edits the same question the controls do, read from the address when it
+  // opens and written back to it when applied, so a link, a reload and a saved filter carry what
+  // was written there exactly as they carry a control. Whatever opened it gets the focus back.
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const advancedOpener = useRef<HTMLElement | null>(null);
+  const advancedButton = useRef<HTMLButtonElement | null>(null);
+  const openAdvanced = (opener: HTMLElement | null) => {
+    advancedOpener.current = opener;
+    setAdvancedOpen(true);
+  };
+  // Focus is given back a frame after the close is asked for, and again a frame after the drawer has
+  // finished closing, so that the drawer's own handling of focus on close — which may put it back on
+  // whatever it found focused — does not have the last word. The first is not optional: the drawer
+  // does not always play its closing transition (it was seen skipping it when reopened after a
+  // reload), and then it never reports that it has closed while its focused button is simply removed,
+  // leaving the focus on the page itself.
+  const editorDocument = caveRegistryEditorDocument({ controls, extra });
+  const returnFocus = () => {
+    requestAnimationFrame(() => {
+      const opener = advancedOpener.current;
+      (opener?.isConnected ? opener : advancedButton.current)?.focus();
+    });
+  };
+  const closeAdvanced = () => {
+    setAdvancedOpen(false);
+    returnFocus();
+  };
   const karstLinkTreatment = useUiPrefsStore((s) => s.karstLinkTreatment);
   const { data: caveTypes } = useCaveTypes();
   const { data: tags } = useTags('');
@@ -369,7 +402,42 @@ export default function CaveListPage() {
           options={tags?.map((x) => ({ value: x.slug, label: x.name }))}
           onChange={(value?: string) => setControl({ tag: value })}
         />
+        <Button
+          ref={advancedButton}
+          icon={<FilterOutlined />}
+          onClick={(e) => openAdvanced(e.currentTarget)}
+          aria-haspopup="dialog"
+          data-testid="cave-registry-advanced"
+        >
+          {t('caveRegistry.advanced')}
+        </Button>
       </Flex>
+      <Drawer
+        open={advancedOpen}
+        title={t('caveRegistry.advancedTitle')}
+        size="large"
+        destroyOnHidden
+        onClose={closeAdvanced}
+        afterOpenChange={(open) => {
+          if (!open) returnFocus();
+        }}
+      >
+        {/* Keyed by the question it opens on, so an address that moves while it is open (back,
+            forward, a write that arrived late) re-seeds it rather than leaving a draft of an older
+            question to be applied over the newer one. */}
+        <FilterEditor
+          key={JSON.stringify(editorDocument)}
+          world={CAVE_WORLD}
+          document={editorDocument}
+          fixed={CAVE_REGISTRY_SCOPE}
+          onCancel={closeAdvanced}
+          onApply={(edited) => {
+            const reading = readCaveRegistryEditor(edited);
+            go(() => ({ controls: reading.controls, extra: reading.extra, page: 1 }));
+            closeAdvanced();
+          }}
+        />
+      </Drawer>
       <CaveRegistrySavedFilters
         reading={{ controls, extra }}
         savedFilterId={address.savedFilterId}
@@ -377,6 +445,7 @@ export default function CaveListPage() {
           go(() => ({ controls: reading.controls, extra: reading.extra, savedFilterId, page: 1 }))}
         onSaved={(savedFilterId) => go(() => ({ savedFilterId }))}
         onClearExtra={() => go(() => ({ extra: [], page: 1 }))}
+        onEditExtra={(opener) => openAdvanced(opener)}
         onForget={() => go(() => ({ savedFilterId: undefined }))}
       />
       {error && token !== undefined && (
