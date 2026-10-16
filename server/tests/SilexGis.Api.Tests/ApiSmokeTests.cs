@@ -222,6 +222,32 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
     }
 
     /// <summary>
+    /// The two layers every map draws, and a shared view's link with the data it draws, declare
+    /// each refusal their handlers send — pinned so that one quietly dropped is noticed. The link's
+    /// routes need no token, so they carry no 401, and sit behind a rate limit, so they carry 429.
+    /// </summary>
+    [Fact]
+    public async Task OpenApi_document_declares_the_map_layers_and_shared_links_own_refusals()
+    {
+        var operations = (await OperationsAsync()).ToDictionary(o => o.Id!);
+        var expected = new Dictionary<string, string[]>
+        {
+            ["mapCaveEntrances"] = ["400", "401"],
+            ["mapFeatures"] = ["400", "401"],
+            ["mapViewShared"] = ["404", "429"],
+            ["sharedViewMapEntrances"] = ["400", "404", "429"],
+            ["sharedViewMapFeatures"] = ["400", "404", "429"],
+        };
+
+        foreach (var (id, statuses) in expected)
+        {
+            operations.ShouldContainKey(id);
+            Responses(operations[id].Value).Where(code => code[0] is '4' or '5')
+                .ShouldBe(statuses, ignoreOrder: true, customMessage: id);
+        }
+    }
+
+    /// <summary>
     /// An enumeration's own values never include null; a property that may be null says so itself.
     /// </summary>
     [Fact]

@@ -223,11 +223,16 @@ public static class MapEndpoints
 
     public static RouteGroupBuilder MapMapDataEndpoints(this RouteGroupBuilder api)
     {
+        // The two layers every map draws declare the refusal their handlers send: a window that
+        // is malformed, the wrong way round or off the globe (and, for features, an unknown kind
+        // or category) is a 400. The 401 is declared for the whole API at once.
         api.MapGet("/map/cave-entrances", CaveEntrancesAsync)
             .WithTags("Map")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithSummary("Cave entrances as GeoJSON for the given bbox; clustered at low zoom.");
         api.MapGet("/map/features", FeaturesAsync)
             .WithTags("Map")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithSummary("Features as GeoJSON for the given bbox, filtered by kinds/type/category/tag; protected points snapped, other protected geometry omitted.");
         api.MapGet("/map/geofiles/{id:guid}/features", GeofileFeaturesAsync)
             .WithTags("Map")

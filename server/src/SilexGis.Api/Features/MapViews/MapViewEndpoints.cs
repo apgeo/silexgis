@@ -126,6 +126,7 @@ public static class MapViewEndpoints
             .WithTags("MapViews")
             .AllowAnonymous()
             .RequireRateLimiting(SharedViewRateLimits.PolicyName)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Read-only shared view by token (anonymous): its document, a keyless background and which data overlays it draws.");
 
         return api;

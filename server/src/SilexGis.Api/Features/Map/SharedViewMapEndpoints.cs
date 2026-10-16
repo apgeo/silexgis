@@ -57,15 +57,21 @@ public static class SharedViewMapEndpoints
 {
     public static RouteGroupBuilder MapSharedViewDataEndpoints(this RouteGroupBuilder api)
     {
+        // A refused link, overlay or installation switch is the 404 an invented token gets; a
+        // bad window is a 400. The 429 of the rate limit is declared for the whole API at once.
         api.MapGet("/shared/views/{token:guid}/cave-entrances", EntrancesAsync)
             .WithTags("MapViews")
             .AllowAnonymous()
             .RequireRateLimiting(SharedViewRateLimits.PolicyName)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Public cave entrances for a shared view's link (anonymous): clusters below the cluster zoom, protected positions snapped.");
         api.MapGet("/shared/views/{token:guid}/features", FeaturesAsync)
             .WithTags("MapViews")
             .AllowAnonymous()
             .RequireRateLimiting(SharedViewRateLimits.PolicyName)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Public surface features for a shared view's link (anonymous): protected points snapped, protected outlines left out.");
         return api;
     }
