@@ -210,6 +210,27 @@ public sealed class MapWindowMembershipTests : IAsyncLifetime, IDisposable, ICla
         (await ListedAsync(owner, route, Window(west + 0.025, 53.0, west + 0.4, 53.5))).ShouldBe(0);
     }
 
+    /// <summary>
+    /// A window the wrong way round, or off the globe, is refused by both layers that decide
+    /// membership per row, on both branches of the entrance layer. Read instead, it answered
+    /// unprotected rows and no protected ones on the points branch and nothing at all on the
+    /// cluster branch — two answers to one question.
+    /// </summary>
+    [Theory]
+    [InlineData("/api/v1/map/cave-entrances?zoom=6&bbox=26,45,25,46")]
+    [InlineData("/api/v1/map/cave-entrances?zoom=14&bbox=26,45,25,46")]
+    [InlineData("/api/v1/map/cave-entrances?zoom=14&bbox=25,46,26,45")]
+    [InlineData("/api/v1/map/cave-entrances?zoom=6&bbox=-200,-10,10,10")]
+    [InlineData("/api/v1/map/features?bbox=26,45,25,46")]
+    [InlineData("/api/v1/map/features?bbox=0,-95,10,10")]
+    public async Task A_window_the_wrong_way_round_or_off_the_globe_is_refused(string url)
+    {
+        var response = await viewer.GetAsync(url);
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, payload);
+        JsonNode.Parse(payload)!["code"]!.GetValue<string>().ShouldBe("map.invalid_bbox");
+    }
+
     private async Task<int> ListedAsync(HttpClient client, string route, string bbox)
     {
         var url = route switch

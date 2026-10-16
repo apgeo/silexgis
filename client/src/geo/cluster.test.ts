@@ -22,4 +22,8 @@ describe('cluster cells (named by the server)', () => {
       '25.3125,45.703125,25.400390625,45.791015625',
     );
   });
+
+  it('cuts a cell reaching past the antimeridian to the globe the server accepts', () => {
+    expect(clusterCellBbox([179.6484375, 10, 180.3515625, 10.5])).toBe('179.6484375,10,180,10.5');
+  });
 });

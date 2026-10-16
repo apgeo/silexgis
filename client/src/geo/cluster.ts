@@ -28,6 +28,11 @@ export function clusterCellOf(value: unknown): ClusterCell | undefined {
  * for protected entrances, and none would be correct.
  */
 export function clusterCellBbox(cell: ClusterCell): string {
-  // Written at full precision: rounding an edge inward could drop a member sitting on it.
-  return cell.map((n) => String(n)).join(',');
+  // Written at full precision: rounding an edge inward could drop a member sitting on it. A cell
+  // on the antimeridian or at a pole reaches past the globe, which the server refuses as a window;
+  // nothing is stored out there, so the edge is cut to the globe's.
+  const [west, south, east, north] = cell;
+  return [Math.max(-180, west), Math.max(-90, south), Math.min(180, east), Math.min(90, north)]
+    .map((n) => String(n))
+    .join(',');
 }

@@ -7,6 +7,7 @@ import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Icon, Stroke, Style } from 'ol/style';
 import { fetchMapFeatures, type FeatureType } from '../api/hooks.ts';
+import { worldBbox } from '../geo/coords.ts';
 import { onSurfaceFeaturesChanged } from '../workspace/surfaceFeatureRefresh.ts';
 import {
   getFeatureTypeSymbol,
@@ -73,7 +74,7 @@ export function attachSurfaceFeatureLoader(map: Map): () => void {
       return;
     }
     const extent = transformExtent(view.calculateExtent(size), 'EPSG:3857', 'EPSG:4326');
-    const bbox = extent.map((n) => n.toFixed(5)).join(',');
+    const bbox = worldBbox(extent);
     const seq = ++requestSeq;
     try {
       const collection = await fetchMapFeatures(bbox, { tag: getMapTagFilter() ?? undefined });

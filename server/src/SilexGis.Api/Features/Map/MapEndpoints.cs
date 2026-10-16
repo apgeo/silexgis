@@ -1107,9 +1107,9 @@ public static class MapEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!Bbox.TryParse(bbox, out var box))
+        if (WindowProblem(bbox, out var box) is { } windowProblem)
         {
-            return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
+            return windowProblem;
         }
 
         if (!TryParseKinds(kinds, out var kindFilter))
@@ -1239,9 +1239,9 @@ public static class MapEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!Bbox.TryParse(bbox, out var box))
+        if (WindowProblem(bbox, out var box) is { } windowProblem)
         {
-            return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
+            return windowProblem;
         }
 
         var effectiveZoom = Math.Clamp(zoom ?? 14, 0, MapOptions.HighestZoom);
@@ -1334,6 +1334,29 @@ public static class MapEndpoints
         }).ToList();
 
         return FeatureCollection.Of(features);
+    }
+
+    /// <summary>
+    /// The refusal for a window the two layers that decide membership per row cannot honour, or
+    /// null with the parsed box.
+    /// </summary>
+    /// <remarks>
+    /// A box the wrong way round, or off the globe, is refused rather than read. Read, it answered
+    /// differently by branch: an envelope built the wrong way round still intersects stored
+    /// geometry, while the shown-position test is a pair of ranges that nothing satisfies — so
+    /// unprotected rows came back and protected ones did not, and the cluster branch answered
+    /// nothing at all. One answer for every caller and both branches is a refusal.
+    /// </remarks>
+    internal static ProblemHttpResult? WindowProblem(string? bbox, out Bbox box)
+    {
+        if (Bbox.TryParse(bbox, out box) && box.IsWithinWorld)
+        {
+            return null;
+        }
+
+        return ApiProblems.BadRequest(
+            "map.invalid_bbox",
+            "bbox must be 'west,south,east,north' inside -180..180 and -90..90, with west < east and south < north.");
     }
 
     /// <summary>

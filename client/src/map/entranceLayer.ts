@@ -7,6 +7,7 @@ import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
 import { fetchEntranceFeatures } from '../api/hooks.ts';
+import { worldBbox } from '../geo/coords.ts';
 import { getMapTagFilter } from './mapFilters.ts';
 import { entrancePalette as palette } from './markerPalette.ts';
 import { declutterOption } from './declutter.ts';
@@ -50,7 +51,7 @@ export function attachEntranceLoader(map: Map): () => void {
       return;
     }
     const extent = transformExtent(view.calculateExtent(size), 'EPSG:3857', 'EPSG:4326');
-    const bbox = extent.map((n) => n.toFixed(5)).join(',');
+    const bbox = worldBbox(extent);
     const zoom = Math.round(view.getZoom() ?? 8);
     const seq = ++requestSeq;
     try {
