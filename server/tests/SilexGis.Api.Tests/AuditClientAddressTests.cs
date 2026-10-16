@@ -5,11 +5,15 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using SilexGis.Api.Auth;
+using SilexGis.Api.Common;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -79,6 +83,44 @@ public sealed class AuditClientAddressTests : IAsyncLifetime, IDisposable, IClas
         await db.SaveChangesAsync();
 
         (await AddressOfCreationAsync(club.Id)).ShouldBeNull();
+    }
+
+    /// <summary>
+    /// The web host's caller and address replace the persistence layer's no-request defaults
+    /// whichever of the two registration calls runs first. Before, the right one won only by being
+    /// registered later; had that order changed, every audit row would have recorded no user and
+    /// no address with every other test still green.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_request_answers_who_and_from_where_whatever_the_registration_order(bool persistenceFirst)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Db:ConnectionString"] = "Host=localhost;Database=unused",
+            })
+            .Build();
+        var services = new ServiceCollection();
+
+        if (persistenceFirst)
+        {
+            services.AddSilexGisPersistence(configuration);
+            services.AddSilexGisAuth(configuration);
+        }
+        else
+        {
+            services.AddSilexGisAuth(configuration);
+            services.AddSilexGisPersistence(configuration);
+        }
+
+        services.Where(d => d.ServiceType == typeof(ICurrentUser))
+            .Select(d => d.ImplementationType)
+            .ShouldBe([typeof(HttpContextCurrentUser)]);
+        services.Where(d => d.ServiceType == typeof(IRequestOrigin))
+            .Select(d => d.ImplementationType)
+            .ShouldBe([typeof(HttpContextRequestOrigin)]);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

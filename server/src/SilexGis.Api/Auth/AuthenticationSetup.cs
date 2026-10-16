@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using OpenIddict.Validation.AspNetCore;
 using SilexGis.Domain;
@@ -164,11 +165,13 @@ public static class AuthenticationSetup
 
         services.AddAuthorization();
         services.AddHttpContextAccessor();
-        // Replaces the AnonymousCurrentUser registered by AddSilexGisPersistence (last wins).
-        services.AddSingleton<ICurrentUser, Common.HttpContextCurrentUser>();
-        // Likewise replaces NoRequestOrigin, so audit rows written while serving a request carry
-        // the caller's address.
-        services.AddSingleton<IRequestOrigin, Common.HttpContextRequestOrigin>();
+        // Who the caller is, and where the request came from, for every audit row written while a
+        // request is served. Replace rather than add: an added second registration would win only
+        // by being registered later, and if that order ever changed every audit row would record
+        // no user while every test still passed. Replace removes the persistence layer's
+        // no-request defaults whichever call ran first (they are TryAdd for the same reason).
+        services.Replace(ServiceDescriptor.Singleton<ICurrentUser, Common.HttpContextCurrentUser>());
+        services.Replace(ServiceDescriptor.Singleton<IRequestOrigin, Common.HttpContextRequestOrigin>());
         // Mail and SMS delivery, the message templates, and the settings behind all three.
         services.AddSilexGisMessaging();
 

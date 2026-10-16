@@ -179,7 +179,10 @@ public sealed class AuditInterceptor(ICurrentUser currentUser, IRequestOrigin or
     };
 }
 
-/// <summary>Placeholder until authentication provides an HttpContext-backed implementation.</summary>
+/// <summary>
+/// No signed-in caller: the default for work with no request behind it, such as seeding. The web
+/// host replaces it with the request's caller.
+/// </summary>
 public sealed class AnonymousCurrentUser : ICurrentUser
 {
     public Guid? UserId => null;

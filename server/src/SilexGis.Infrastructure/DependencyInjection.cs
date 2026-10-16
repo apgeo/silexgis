@@ -31,8 +31,11 @@ public static class DependencyInjection
                 "Set Db:ConnectionString (environment: SILEXGIS__Db__ConnectionString).");
         }
 
-        services.AddSingleton<ICurrentUser, AnonymousCurrentUser>();
-        services.AddSingleton<IRequestOrigin, NoRequestOrigin>();
+        // Defaults for a process with no request behind its work (the seeder, a command-line tool).
+        // TryAdd, so a host that has already said who the caller is keeps its answer whichever of
+        // the two registration calls runs first; the web host replaces both explicitly as well.
+        services.TryAddSingleton<ICurrentUser, AnonymousCurrentUser>();
+        services.TryAddSingleton<IRequestOrigin, NoRequestOrigin>();
         services.AddSingleton<TimestampInterceptor>();
         services.AddSingleton<AuditInterceptor>();
         services.AddSingleton<FeatureAggregateInterceptor>();
