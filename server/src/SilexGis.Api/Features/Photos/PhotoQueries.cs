@@ -10,6 +10,12 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Features.Photos;
 
 /// <summary>
+/// The photographs inside a map extent a caller may be told the position of, and whether reading
+/// stopped at its ceiling with candidates still unread.
+/// </summary>
+public sealed record PhotoExtent(IReadOnlyCollection<Guid> DocumentIds, bool CutShort);
+
+/// <summary>
 /// The reads the gallery is built from: which photographs a caller may see, narrowed by what
 /// they asked about, and the rows a response is drawn from.
 ///
@@ -37,6 +43,13 @@ public static class PhotoQueries
     /// </para>
     /// </summary>
     public const int MaxExtentCandidates = 3000;
+
+    /// <summary>
+    /// How many batches of <see cref="MaxExtentCandidates"/> an extent reads at most before it
+    /// answers with what it has, cut short. Without it, an extent crowded with photographs whose
+    /// position the caller may not be told is read to its end for one request.
+    /// </summary>
+    public const int MaxExtentBatches = 10;
 
     /// <summary>
     /// Narrows a photograph query by what the caller asked about.
@@ -180,23 +193,24 @@ public static class PhotoQueries
     /// rule about a capture point, asked here exactly as the map layer asks it — a gallery whose
     /// map mode showed a pin the map itself withholds would be a way round the map.
     /// </remarks>
-    public static Task<IReadOnlyCollection<Guid>> InExtentAsync(
+    public static Task<PhotoExtent> InExtentAsync(
         SilexGisDbContext db,
         AccessContext ctx,
         PhotoPositionDisclosure disclosure,
         IQueryable<Document> photographs,
         Geometry extent,
         CancellationToken ct) =>
-        InExtentAsync(db, ctx, disclosure, photographs, extent, MaxExtentCandidates, ct);
+        InExtentAsync(db, ctx, disclosure, photographs, extent, MaxExtentCandidates, MaxExtentBatches, ct);
 
-    /// <summary>The same, with the bound named — so a test can reach it with a handful of rows.</summary>
-    public static async Task<IReadOnlyCollection<Guid>> InExtentAsync(
+    /// <summary>The same, with both bounds named — so a test can reach them with a handful of rows.</summary>
+    public static async Task<PhotoExtent> InExtentAsync(
         SilexGisDbContext db,
         AccessContext ctx,
         PhotoPositionDisclosure disclosure,
         IQueryable<Document> photographs,
         Geometry extent,
         int limit,
+        int maxBatches,
         CancellationToken ct)
     {
         var inExtent = from file in db.StoredFiles.AsNoTracking()
@@ -215,11 +229,19 @@ public static class PhotoQueries
         // as an edge moved past the hidden one's capture point — which located it. So candidates
         // are read newest first a bound's worth at a time, each batch is decided in full, and
         // reading stops once the bound is filled: the answer is the newest placeable photographs
-        // in the extent, whatever else it holds.
+        // in the extent, whatever else it holds — up to the batch ceiling, past which the answer
+        // says it was cut short rather than reading on.
         var shown = new List<Guid>();
-        for (var offset = 0; ; offset += limit)
+        var cutShort = false;
+        for (var batch = 0; ; batch++)
         {
-            var candidates = await inExtent.Skip(offset).Take(limit).ToListAsync(ct);
+            if (batch == maxBatches)
+            {
+                cutShort = await inExtent.Skip(batch * limit).AnyAsync(ct);
+                break;
+            }
+
+            var candidates = await inExtent.Skip(batch * limit).Take(limit).ToListAsync(ct);
             var disclosable = await disclosure.DisclosableIdsAsync(
                 ctx, [.. candidates.Select(c => c.Id)], ct);
             shown.AddRange(candidates.Where(c => disclosable.Contains(c.Id)).Select(c => c.DocumentId));
@@ -229,7 +251,7 @@ public static class PhotoQueries
             }
         }
 
-        return [.. shown.Take(limit)];
+        return new PhotoExtent([.. shown.Take(limit)], cutShort);
     }
 
 }

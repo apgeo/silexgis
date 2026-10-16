@@ -66,7 +66,7 @@ public static class PhotoEndpoints
     }
 
     /// <summary>The gallery.</summary>
-    private static async Task<Results<Ok<PagedResult<PhotoDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
+    private static async Task<Results<Ok<PhotoPage>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         [AsParameters] PhotoQuery query,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
@@ -83,6 +83,7 @@ public static class PhotoEndpoints
         }
 
         var photographs = (await PhotographReads.VisiblePhotographsAsync(db, ctx, ct)).Narrow(db, ctx, query);
+        var extentCutShort = false;
 
         if (!string.IsNullOrWhiteSpace(query.Bbox))
         {
@@ -93,7 +94,9 @@ public static class PhotoEndpoints
 
             var inExtent = await PhotoQueries.InExtentAsync(
                 db, ctx, disclosure, photographs, box.ToPolygon(), ct);
-            photographs = photographs.Where(d => inExtent.Contains(d.Id));
+            var documentIds = inExtent.DocumentIds;
+            photographs = photographs.Where(d => documentIds.Contains(d.Id));
+            extentCutShort = inExtent.CutShort;
         }
 
         var (p, size) = Paging.Normalize(page, pageSize);
@@ -112,8 +115,8 @@ public static class PhotoEndpoints
         // projection, so the page is rebuilt around it rather than edited.
         var documents = await ordered.ToPagedAsync(p, size, d => d, ct);
         var items = await ProjectAsync(db, ctx, tokens, disclosure, documents.Items, ct);
-        return TypedResults.Ok(new PagedResult<PhotoDto>(
-            items, documents.Page, documents.PageSize, documents.TotalItems));
+        return TypedResults.Ok(new PhotoPage(
+            items, documents.Page, documents.PageSize, documents.TotalItems, extentCutShort));
     }
 
     /// <summary>One photograph, with everything its panel shows.</summary>

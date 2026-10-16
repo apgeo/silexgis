@@ -190,6 +190,13 @@ export const groups = {
     'GeofileTests', 'MapClusterConfigurationTests', 'MapWindowMembershipTests', 'PerformanceTests',
     'SharedViewDataTests',
   ],
+  // The proximity pool's one statement: every importer that compares against it, the cap test
+  // that pins who may be in it, and the plan pin on it.
+  proximity: [
+    'ArchiveUpgradeMigrationTests', 'BulkImportTests', 'HiddenRowCapTests', 'PerformanceTests',
+    'PhotoImportTests', 'ServerDirectoryContainmentTests', 'SpeleolocTripImportTests',
+    'StagedImportTests', 'TripTrackImportTests',
+  ],
   // How long a centreline is, measured once over its passage: the upload path and the survey
   // compiler both ask it.
   centerlines: ['CenterlineTests', 'SurveyGraphTests'],
@@ -376,6 +383,7 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Geodata/WindowMembershipSql.cs': 'windowMembership',
   'server/src/SilexGis.Infrastructure/Geodata/FeatureAudienceSql.cs': 'windowMembership',
   'server/src/SilexGis.Infrastructure/Import/': 'imports',
+  'server/src/SilexGis.Infrastructure/Import/ProximitySql.cs': 'proximity',
   'server/src/SilexGis.Infrastructure/Jobs/': 'jobs',
   // The two jobs that belong to terrain: running a build, and sweeping the rasters no build names.
   'server/src/SilexGis.Infrastructure/Jobs/TerrainBuildHandler.cs': 'terrain',

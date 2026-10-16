@@ -132,6 +132,8 @@ export const specs = {
     'trip-tracking-held-reports-mobile.spec.ts', 'trip-removal-and-roster-times.spec.ts',
     'tracking-movie-webkit.spec.ts', 'tracking-movie-pictures.spec.ts',
   ],
+  // The proximity pool every importer compares against: the import specs that meet it.
+  proximity: ['vector-import.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts'],
   uploads: ['uploads.spec.ts'],
   users: ['settings.spec.ts', 'permission-groups.spec.ts', 'users-admin.spec.ts'],
   // Which protected rows a window holds, decided on the position each reader is shown — the

@@ -43,7 +43,7 @@ public sealed record ProximityHit(
 /// the nearest single object, or the few nearest — but none of them re-derives who may be in it.
 /// </para>
 /// </summary>
-public sealed class VisibleProximitySearch(SilexGisDbContext db, FeatureProtection protection)
+public sealed class VisibleProximitySearch(SilexGisDbContext db)
 {
     /// <summary>Kinds a candidate is ever compared against: the things that are places.</summary>
     private static readonly FeatureKind[] ComparableKinds = [FeatureKind.CaveEntrance, FeatureKind.Generic];
@@ -100,24 +100,19 @@ public sealed class VisibleProximitySearch(SilexGisDbContext db, FeatureProtecti
         // cut instead, a protected entrance the caller may read but not place still took one of
         // its places whenever the reach held more than the ceiling — and since the order is by
         // true distance, which placeable hit survived at the far end changed exactly as the
-        // hidden one moved nearer the centre or further from it, which is a position. So the
-        // protected rows the caller may place are worked out first (the walk runs over protected
-        // rows only), and the cut is taken over what remains.
-        var readable = db.Features.AsNoTracking()
-            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-            .Where(f => f.Geom != null && ComparableKinds.Contains(f.Kind) && f.Geom.Intersects(search));
-        var protectedInReach = await readable
-            .Where(f => f.IsProtectedEffective)
-            .Select(f => f.Id)
-            .ToListAsync(ct);
-        var placeable = (await protection.ExactViewIdsAsync(ctx, protectedInReach, ct)).ToArray();
-
-        var nearby = await readable
-            .Where(f => !f.IsProtectedEffective || placeable.Contains(f.Id))
-            .OrderBy(f => f.Geom!.Distance(centre))
-            .Select(f => new { f.Id, f.Name, f.Kind, f.Geom })
-            .Take(MaxNearbyFeatures)
-            .ToListAsync(ct);
+        // hidden one moved nearer the centre or further from it, which is a position. So readable
+        // and placeable are both decided inside the one statement that orders and cuts, with the
+        // caller's own access fragments: no list of protected ids is fetched and sent back, so the
+        // read costs the same however many protected rows the reach holds.
+        var nearestIds = await ProximitySql.NearestPlaceableIdsAsync(
+            db, ctx, search.EnvelopeInternal, centre.Coordinate, ComparableKinds, MaxNearbyFeatures, ct);
+        var rank = nearestIds.Select((id, index) => (id, index)).ToDictionary(x => x.id, x => x.index);
+        var nearby = (await db.Features.AsNoTracking()
+                .Where(f => nearestIds.Contains(f.Id))
+                .Select(f => new { f.Id, f.Name, f.Kind, f.Geom })
+                .ToListAsync(ct))
+            .OrderBy(f => rank[f.Id])
+            .ToList();
         var comparable = nearby.Where(f => f.Geom is Point).ToList();
         if (comparable.Count == 0)
         {

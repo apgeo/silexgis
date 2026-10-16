@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 using Shouldly;
+using SilexGis.Api.Features.Map;
 using SilexGis.Api.Features.Photos;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
@@ -121,8 +122,75 @@ public sealed class HiddenRowCapTests : IAsyncLifetime, IDisposable, IClassFixtu
         var visibleDocument = await DocumentOfAsync(visible);
         var hiddenDocument = await DocumentOfAsync(hidden);
 
-        (await InExtentAsync(viewerId, extent)).ShouldBe([visibleDocument]);
-        (await InExtentAsync(ownerId, extent)).ShouldBe([hiddenDocument]);
+        (await InExtentAsync(viewerId, extent)).DocumentIds.ShouldBe([visibleDocument]);
+        (await InExtentAsync(ownerId, extent)).DocumentIds.ShouldBe([hiddenDocument]);
+    }
+
+    /// <summary>
+    /// A window crowded with photos the viewer may not be told about is read only as far as the
+    /// photo map's ceiling — that many batches of the cap — and the answer says it was cut short
+    /// rather than reading the window to its end. Here the cap is one and the visible photo comes
+    /// after a ceiling's worth of hidden ones.
+    /// </summary>
+    [Fact]
+    public async Task The_photo_map_reads_no_further_than_its_ceiling_and_says_it_stopped()
+    {
+        using var capped = new SilexGisApiFactory(
+            postgres.ConnectionString, Settings(new() { ["Map:MaxPoints"] = "1" }));
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        _ = await AuthHelper.CreateUserAsync(capped, GlobalRoles.Editor, $"capc-own-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(capped, GlobalRoles.Viewer, $"capc-view-{suffix}@t.local");
+        using var cappedOwner = await AuthHelper.BearerClientAsync(capped, $"capc-own-{suffix}@t.local");
+        using var cappedViewer = await AuthHelper.BearerClientAsync(capped, $"capc-view-{suffix}@t.local");
+
+        var guarded = await CreateCaveAsync(cappedOwner, "Ceiling Guarded", locationProtected: true);
+        var hidden = new List<Guid>();
+        for (var i = 0; i < MapEndpoints.MaxPhotoBatches; i++)
+        {
+            var photo = await UploadPhotoAsync(cappedOwner, 64.201 + (i * 0.0001), 17.301);
+            await AttachAsync(cappedOwner, photo, guarded);
+            hidden.Add(photo);
+        }
+
+        var visible = await UploadPhotoAsync(cappedOwner, 64.202, 17.302);
+        await AttachAsync(cappedOwner, visible, await CreateCaveAsync(cappedOwner, "Ceiling Open", locationProtected: false));
+
+        const string window = "17.2,64.1,17.4,64.3";
+        var forViewer = await MapPhotosAsync(cappedViewer, window);
+        forViewer.Ids.ShouldBeEmpty();
+        forViewer.CutShort.ShouldBeTrue("the window was read past its ceiling instead of being cut short");
+
+        // The control: the owner places the first photo, which fills the cap at once.
+        var forOwner = await MapPhotosAsync(cappedOwner, window);
+        forOwner.Ids.ShouldBe([hidden[0]]);
+        forOwner.CutShort.ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// The extent read stops at its ceiling the same way: with room for one photo and two batches,
+    /// two newer hidden photos use the whole ceiling, and the answer is cut short; with a third
+    /// batch the older visible photo is reached and the answer is whole.
+    /// </summary>
+    [Fact]
+    public async Task An_extent_reads_no_further_than_its_ceiling_and_says_it_stopped()
+    {
+        var visible = await UploadPhotoAsync(owner, 65.201, 18.301);
+        var guarded = await CreateCaveAsync(owner, "Extent Ceiling Guarded", locationProtected: true);
+        foreach (var lat in new[] { 65.202, 65.203 })
+        {
+            await AttachAsync(owner, await UploadPhotoAsync(owner, lat, 18.302), guarded);
+        }
+
+        await AttachAsync(owner, visible, await CreateCaveAsync(owner, "Extent Ceiling Open", locationProtected: false));
+        var extent = new GeometryFactory(new PrecisionModel(), 4326).ToGeometry(new Envelope(18.2, 18.4, 65.1, 65.3));
+
+        var cut = await InExtentAsync(viewerId, extent, maxBatches: 2);
+        cut.DocumentIds.ShouldBeEmpty();
+        cut.CutShort.ShouldBeTrue("the extent was read past its ceiling instead of being cut short");
+
+        var whole = await InExtentAsync(viewerId, extent, maxBatches: 3);
+        whole.DocumentIds.ShouldBe([await DocumentOfAsync(visible)]);
+        whole.CutShort.ShouldBeFalse();
     }
 
     /// <summary>
@@ -186,14 +254,16 @@ public sealed class HiddenRowCapTests : IAsyncLifetime, IDisposable, IClassFixtu
         return await search.NearAsync([centre], 1000, ctx);
     }
 
-    private async Task<IReadOnlyCollection<Guid>> InExtentAsync(Guid userId, Geometry extent)
+    private async Task<PhotoExtent> InExtentAsync(
+        Guid userId, Geometry extent, int maxBatches = PhotoQueries.MaxExtentBatches)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var disclosure = scope.ServiceProvider.GetRequiredService<PhotoPositionDisclosure>();
         var ctx = await AccessContextResolver.ResolveAsync(db, userId);
         var photographs = await PhotographReads.VisiblePhotographsAsync(db, ctx, CancellationToken.None);
-        return await PhotoQueries.InExtentAsync(db, ctx, disclosure, photographs, extent, 1, CancellationToken.None);
+        return await PhotoQueries.InExtentAsync(
+            db, ctx, disclosure, photographs, extent, 1, maxBatches, CancellationToken.None);
     }
 
     private async Task<Guid> DocumentOfAsync(Guid fileId)
@@ -206,13 +276,19 @@ public sealed class HiddenRowCapTests : IAsyncLifetime, IDisposable, IClassFixtu
                       select version.DocumentId).SingleAsync();
     }
 
-    private static async Task<Guid[]> MapPhotoIdsAsync(HttpClient client, string bbox)
+    private static async Task<Guid[]> MapPhotoIdsAsync(HttpClient client, string bbox) =>
+        (await MapPhotosAsync(client, bbox)).Ids;
+
+    private static async Task<(Guid[] Ids, bool CutShort)> MapPhotosAsync(HttpClient client, string bbox)
     {
         var response = await client.GetAsync($"/api/v1/map/photos?bbox={bbox}");
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
-        return [.. JsonDocument.Parse(payload).RootElement.GetProperty("features").EnumerateArray()
-            .Select(f => f.GetProperty("properties").GetProperty("id").GetGuid())];
+        var root = JsonDocument.Parse(payload).RootElement;
+        var ids = root.GetProperty("features").EnumerateArray()
+            .Select(f => f.GetProperty("properties").GetProperty("id").GetGuid())
+            .ToArray();
+        return (ids, root.TryGetProperty("cutShort", out var cut) && cut.GetBoolean());
     }
 
     private static async Task<Guid> UploadPhotoAsync(HttpClient client, double lat, double lon)

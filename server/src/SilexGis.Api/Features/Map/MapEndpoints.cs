@@ -59,6 +59,17 @@ public sealed record TripLogFeatureCollection(
     int UnlocatedCount);
 
 /// <summary>
+/// A GeoJSON FeatureCollection of geotagged photos, plus whether the answer was cut short before
+/// the window had been read through — a GeoJSON foreign member, so a plain reader still parses it.
+/// </summary>
+/// <param name="CutShort">
+/// Reading stopped at its ceiling (<see cref="MapEndpoints.MaxPhotoBatches"/> batches of the cap)
+/// with photos in the window still unread, so the answer may hold fewer than the window does and
+/// fewer than the cap. Zooming in is the remedy.
+/// </param>
+public sealed record PhotoFeatureCollection(string Type, IReadOnlyList<GeoFeature> Features, bool CutShort);
+
+/// <summary>
 /// The elevation model the 3D scene should draw its ground from, when this installation has one.
 /// Absent — not an empty object — when it does not, which is the shipped state.
 /// </summary>
@@ -188,6 +199,21 @@ public sealed record EntrancePointRow(
 /// </summary>
 public static class MapEndpoints
 {
+    /// <summary>
+    /// How many batches of the point cap the photo map reads at most before it answers with what it
+    /// has, cut short.
+    /// </summary>
+    /// <remarks>
+    /// The cap counts photos a caller is shown, never photos looked at, so a window crowded with
+    /// photos the caller may not be told about is read past them — and without a ceiling, read to
+    /// its end, a batch of queries at a time, for one request. The ceiling bounds that cost. It is
+    /// said in the answer when it is reached, because an answer that stopped early and an answer
+    /// that is the whole window look the same on a map; what is left out is the photos furthest
+    /// along the reading order, which says nothing about any one withheld photo's position that
+    /// the window's own crowding does not.
+    /// </remarks>
+    public const int MaxPhotoBatches = 10;
+
     // The safety cap for individual point features per request now lives in MapOptions, so that
     // an installation importing a survey of tens of thousands of waypoints can raise it without a
     // rebuild. Every query that applies it orders by id first: without an order the database is
@@ -279,7 +305,7 @@ public static class MapEndpoints
     /// whether the stored bytes, which carry that point too, may be handed over. The point
     /// itself is the location, so snapping it is not enough; it is shown or it is not.
     /// </summary>
-    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> PhotosAsync(
+    private static async Task<Results<Ok<PhotoFeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> PhotosAsync(
         string bbox,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
@@ -327,12 +353,20 @@ public static class MapEndpoints
         // the hidden one's capture point — which located it. So the candidates are read in id
         // order a cap's worth at a time, each batch is decided in full, and reading stops once
         // the cap is filled by shown photos: the answer is the first photos in id order this
-        // caller may see, whatever else the window holds.
+        // caller may see, whatever else the window holds — up to the batch ceiling, past which
+        // the answer says it was cut short.
         var cap = mapOptions.Value.MaxPoints;
         var features = new List<GeoFeature>();
-        for (var offset = 0; ; offset += cap)
+        var cutShort = false;
+        for (var batch = 0; ; batch++)
         {
-            var candidates = await inWindow.Skip(offset).Take(cap).ToListAsync(ct);
+            if (batch == MaxPhotoBatches)
+            {
+                cutShort = await inWindow.Skip(batch * cap).AnyAsync(ct);
+                break;
+            }
+
+            var candidates = await inWindow.Skip(batch * cap).Take(cap).ToListAsync(ct);
             features.AddRange(await ShownPhotosAsync(db, tokens, ctx, photos, candidates, ct));
             if (features.Count >= cap || candidates.Count < cap)
             {
@@ -345,7 +379,7 @@ public static class MapEndpoints
             features.RemoveRange(cap, features.Count - cap);
         }
 
-        return TypedResults.Ok(FeatureCollection.Of(features));
+        return TypedResults.Ok(new PhotoFeatureCollection("FeatureCollection", features, cutShort));
     }
 
     /// <summary>One geotagged image in a photo window, with the document it belongs to.</summary>

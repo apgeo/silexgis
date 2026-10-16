@@ -7,6 +7,18 @@ using SilexGis.Domain.Documents;
 namespace SilexGis.Api.Features.Photos;
 
 /// <summary>
+/// A page of the gallery, and — when it was narrowed to a map extent — whether that extent was
+/// read only as far as its ceiling.
+/// </summary>
+/// <param name="ExtentCutShort">
+/// The extent held more photographs than its reading ceiling allows to be looked at in one
+/// request, so the page is drawn from the newest of them only. Always false without an extent.
+/// Zooming in is the remedy.
+/// </param>
+public sealed record PhotoPage(
+    IReadOnlyList<PhotoDto> Items, int Page, int PageSize, int TotalItems, bool ExtentCutShort);
+
+/// <summary>
 /// One photograph as the gallery draws it.
 /// </summary>
 /// <param name="ThumbnailUrl">A small rendering for the grid; never the upload.</param>

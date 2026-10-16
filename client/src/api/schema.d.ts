@@ -658,6 +658,28 @@ export interface paths {
         };
         /** Geotagged photos as GeoJSON points for the given bbox; photos touching protected features withheld. */
         get: operations["mapPhotos"];
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoFeatureCollection"];
+                    };
+                };
+            };
+        };
         put?: never;
         post?: never;
         delete?: never;
@@ -4519,6 +4541,43 @@ export interface paths {
         };
         /** Photographs the caller may see, newest first, narrowed by cave, feature, trip, camp, caver, tag, album, camera, date or map extent. */
         get: operations["photoList"];
+        get: {
+            parameters: {
+                query?: {
+                    CaveId?: string;
+                    FeatureId?: string;
+                    TripLogId?: string;
+                    CaverId?: string;
+                    TagId?: number;
+                    AlbumId?: string;
+                    UploadBatchId?: string;
+                    Camera?: string;
+                    Bbox?: string;
+                    Unplaced?: boolean;
+                    From?: string;
+                    To?: string;
+                    Search?: string;
+                    ExpeditionId?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoPage"];
+                    };
+                };
+            };
+        };
         put?: never;
         post?: never;
         delete?: never;
@@ -11496,15 +11555,6 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
-        PagedResultOfPhotoDto: {
-            items: components["schemas"]["PhotoDto"][];
-            /** Format: int32 */
-            page: number;
-            /** Format: int32 */
-            pageSize: number;
-            /** Format: int32 */
-            totalItems: number;
-        };
         PagedResultOfPublicPhotoDto: {
             items: components["schemas"]["PublicPhotoDto"][];
             /** Format: int32 */
@@ -11922,6 +11972,11 @@ export interface components {
             /** Format: int32 */
             heightPixels?: null | number;
         };
+        PhotoFeatureCollection: {
+            type: string;
+            features: components["schemas"]["GeoFeature"][];
+            cutShort: boolean;
+        };
         PhotoImportOptions: {
             /** Format: uuid */
             tripLogId?: null | string;
@@ -12008,6 +12063,16 @@ export interface components {
             /** Format: uuid */
             caveFeatureId: null | string;
             caveName: null | string;
+        };
+        PhotoPage: {
+            items: components["schemas"]["PhotoDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+            extentCutShort: boolean;
         };
         PhotoPositionDto: {
             /** Format: uuid */
