@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login, registryRow } from './helpers.ts';
+import { login, registryRow, paletteEntry } from './helpers.ts';
 
 /**
  * A doline drawn as an outline, and the outline measured.
@@ -24,7 +24,7 @@ test('a doline is drawn as an outline and its measured shape is shown', async ({
   await expect(toolbar).toBeVisible();
 
   await toolbar.getByRole('button', { name: /Feature type/ }).click();
-  await page.getByRole('button', { name: 'Sinkhole / Doline' }).click();
+  await paletteEntry(page, 'Sinkhole / Doline').click();
 
   // The kind accepts a marker and an outline, so the toolbar offers both. A kind accepting one
   // shape shows no chooser at all, which is why its presence here is worth asserting.

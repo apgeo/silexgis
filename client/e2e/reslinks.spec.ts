@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Locator, type Page } from '@playwright/test';
 import { ownContext, test } from './consoleGuard.ts';
-import { deleteFeature, login } from './helpers.ts';
+import { deleteFeature, login, paletteEntry } from './helpers.ts';
 
 /**
  * Links between things, driven the way a caver drives them: from the page of whatever they
@@ -73,7 +73,7 @@ async function createPointFeature(page: Page, name: string) {
   const toolbar = page.locator('.map-edit-overlay');
   await expect(toolbar).toBeVisible({ timeout: 15_000 });
   await toolbar.getByRole('button', { name: /Feature type/ }).click();
-  await page.getByRole('button', { name: 'Sinkhole / Doline' }).click();
+  await paletteEntry(page, 'Sinkhole / Doline').click();
 
   await toolbar.getByRole('button', { name: 'Draw', exact: true }).click();
   await page.locator('.map-canvas').click({ position: { x: 180, y: 380 } });
@@ -479,7 +479,10 @@ test('the map dock links the entrance that was clicked, not the cave it belongs 
   await row.getByRole('button', { name: 'Link actions' }).click();
   await page.getByRole('menuitem', { name: 'Open link page' }).click();
   await page.waitForURL(/\/links\/[0-9A-Za-z]{8}$/);
-  await expect(page.getByText('Upper entrance')).toBeVisible({ timeout: 15_000 });
+  // Visible ones only: the map's dock stays in the page out of sight, and with its history
+  // section open — an arrangement another spec can have left on the account — it names the
+  // entrance too.
+  await expect(page.getByText('Upper entrance').filter({ visible: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(pointName)).toBeVisible();
 
   // Clean up from the point's own page — it is a member of the same link, so the row is

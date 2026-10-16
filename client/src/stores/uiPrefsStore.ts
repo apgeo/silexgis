@@ -163,6 +163,13 @@ interface UiPrefsState {
    */
   accountId?: string;
   /**
+   * Whether an account preference was changed here and has not reached the account yet. Kept
+   * with the cache, so a page reloaded before the write went out keeps the change rather than
+   * taking the account's older value over it.
+   */
+  accountPrefsUnsaved: boolean;
+  setAccountPrefsUnsaved: (unsaved: boolean) => void;
+  /**
    * Makes the account preferences this account's: when they were another account's, they go back
    * to their defaults first, so a second member signing in on this browser starts from nothing of
    * the first one's. Says which of the three it was: already this account's, claimed from nobody,
@@ -297,6 +304,8 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       overviewMap: false,
       setOverviewMap: (open) => set({ overviewMap: open }),
       accountId: undefined,
+      accountPrefsUnsaved: false,
+      setAccountPrefsUnsaved: (unsaved) => set({ accountPrefsUnsaved: unsaved }),
       adoptAccount: (accountId) => {
         let claim: AccountClaim = 'same';
         set((state) => {
@@ -307,11 +316,13 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           // travelled with the account, or the defaults a sign-out left; it is kept for the first
           // account to sign in. One another account claimed is never handed on.
           claim = state.accountId === undefined ? 'claimed' : 'reset';
-          return claim === 'reset' ? { ...accountPrefDefaults(), accountId } : { accountId };
+          return claim === 'reset'
+            ? { ...accountPrefDefaults(), accountId, accountPrefsUnsaved: false }
+            : { accountId };
         });
         return claim;
       },
-      releaseAccount: () => set({ ...accountPrefDefaults(), accountId: undefined }),
+      releaseAccount: () => set({ ...accountPrefDefaults(), accountId: undefined, accountPrefsUnsaved: false }),
       applyAccountPrefs: (prefs) => set(prefs),
     }),
     {
@@ -336,6 +347,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           coordinateFormat: from < 8 ? DEFAULT_COORDINATE_FORMAT : (state.coordinateFormat ?? DEFAULT_COORDINATE_FORMAT),
           overviewMap: from < 8 ? false : (state.overviewMap ?? false),
           accountId: from < 8 ? undefined : state.accountId,
+          accountPrefsUnsaved: from < 8 ? false : (state.accountPrefsUnsaved ?? false),
         };
       },
     },

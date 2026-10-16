@@ -83,11 +83,11 @@ export const specs = {
   map: [
     'map-editing.spec.ts', 'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
     'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
-    'accessibility.spec.ts',
+    'accessibility.spec.ts', 'workspace-state.spec.ts',
   ],
   // A shared view opened with no account: its background and the public data its link draws.
   mapViews: ['shared-view.spec.ts'],
-  me: ['settings.spec.ts', 'my-trips.spec.ts'],
+  me: ['settings.spec.ts', 'my-trips.spec.ts', 'workspace-state.spec.ts'],
   messaging: ['announcements.spec.ts', 'notifications.spec.ts', 'notification-health.spec.ts'],
   metadata: ['documents.spec.ts', 'gallery.spec.ts'],
   notifications: ['notifications.spec.ts', 'notification-health.spec.ts', 'announcements.spec.ts'],

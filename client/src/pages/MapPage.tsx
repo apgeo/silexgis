@@ -181,8 +181,47 @@ export default function MapPage() {
   const mapTarget = useRef<HTMLDivElement>(null);
   const leftPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
+  // The docks' collapsed state is the person's, remembered with their account: somebody who works
+  // with the layer panel folded away finds it folded away the next time, on any browser.
+  const docks = useUiPrefsStore((s) => s.docks);
+  const setDocks = useUiPrefsStore((s) => s.setDocks);
+  const leftCollapsed = docks.leftHidden;
+  const rightCollapsed = docks.rightHidden;
+  const setLeftCollapsed = (hidden: boolean) => setDocks({ leftHidden: hidden });
+  const setRightCollapsed = (hidden: boolean) => setDocks({ rightHidden: hidden });
+  // The size a dock starts at: folded when it was left folded. Read once, at mount — afterwards
+  // the panel itself is what folds and unfolds, and reports back.
+  const [initialDocks] = useState(docks);
+  // The stored state can also change under a mounted dock: the account's own arrangement arrives
+  // a moment after sign-in, over what this browser had. The panel is folded or unfolded to match,
+  // so the toggle's label and the dock never disagree. A fold the panel made itself has already
+  // reached the store by then, and asks for nothing here.
+  useEffect(() => {
+    const panel = leftPanelRef.current;
+    if (isMobile || !panel) {
+      return;
+    }
+    if (docks.leftHidden !== panel.isCollapsed()) {
+      if (docks.leftHidden) {
+        panel.collapse();
+      } else {
+        panel.expand();
+      }
+    }
+  }, [docks.leftHidden, isMobile, leftPanelRef]);
+  useEffect(() => {
+    const panel = rightPanelRef.current;
+    if (isMobile || !panel) {
+      return;
+    }
+    if (docks.rightHidden !== panel.isCollapsed()) {
+      if (docks.rightHidden) {
+        panel.collapse();
+      } else {
+        panel.expand();
+      }
+    }
+  }, [docks.rightHidden, isMobile, rightPanelRef]);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   // Below md the docks are drawers over the map instead of resizable panes; the same
   // dock-toggle buttons drive whichever one is mounted.
@@ -1220,7 +1259,7 @@ export default function MapPage() {
           panelRef={leftPanelRef}
           collapsible
           collapsedSize="0%"
-          defaultSize="16%"
+          defaultSize={initialDocks.leftHidden ? '0%' : '16%'}
           minSize="10%"
           className="map-workspace-panel"
           onResize={() => setLeftCollapsed(leftPanelRef.current?.isCollapsed() ?? false)}
@@ -1536,7 +1575,7 @@ export default function MapPage() {
           panelRef={rightPanelRef}
           collapsible
           collapsedSize="0%"
-          defaultSize={`${rightWidth}%`}
+          defaultSize={initialDocks.rightHidden ? '0%' : `${rightWidth}%`}
           minSize="12%"
           className="map-workspace-panel"
           onResize={(size) => {

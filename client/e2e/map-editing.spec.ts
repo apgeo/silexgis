@@ -8,6 +8,7 @@ import {
   login,
   openCaveFromRegistry,
   registryRow,
+  paletteEntry,
 } from './helpers.ts';
 
 // Working on the map by hand: picking a cluster, placing a cave, drawing, describing and
@@ -113,7 +114,7 @@ test('surface feature draw, attributes, selection and table round-trip', async (
   // Pick the feature type from the symbol palette (carries a typed-properties schema).
   // Picking a symbol arms drawing; the explicit draw click below just re-affirms it.
   await toolbar.getByRole('button', { name: /Feature type/ }).click();
-  await page.getByRole('button', { name: 'Sinkhole / Doline' }).click();
+  await paletteEntry(page, 'Sinkhole / Doline').click();
 
   // Draw a point by clicking the map canvas.
   await toolbar.getByRole('button', { name: 'Draw', exact: true }).click();
@@ -162,6 +163,13 @@ test('pinned feature-type shortcuts and the map chrome toggle', async ({ page })
   await paletteTrigger.click();
   const paletteItem = page.locator('.feature-palette-item-wrap').filter({ hasText: 'Sinkhole / Doline' });
   await paletteItem.hover();
+  // Pinned types are kept with the account, so a run that stopped before its own clean-up below
+  // left this one pinned for the next: start from it unpinned.
+  const leftPinned = paletteItem.getByRole('button', { name: 'Unpin from toolbar' });
+  if (await leftPinned.isVisible()) {
+    await leftPinned.click();
+    await paletteItem.hover();
+  }
   await paletteItem.getByRole('button', { name: 'Pin to toolbar' }).click();
   await paletteTrigger.click(); // close the palette
 
@@ -304,7 +312,7 @@ test('surface feature history records edits and restores in the map panel', asyn
   const toolbar = page.locator('.map-edit-overlay');
   await expect(toolbar).toBeVisible({ timeout: 15_000 });
   await toolbar.getByRole('button', { name: /Feature type/ }).click();
-  await page.getByRole('button', { name: 'Sinkhole / Doline' }).click();
+  await paletteEntry(page, 'Sinkhole / Doline').click();
 
   // Draw and save a point feature.
   await toolbar.getByRole('button', { name: 'Draw', exact: true }).click();
@@ -340,6 +348,10 @@ test('surface feature history records edits and restores in the map panel', asyn
   await latest.getByLabel('Restore this value').click();
   await expect(page.getByText('Value restored.')).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('.ant-descriptions').first().getByText('Desc One')).toBeVisible({ timeout: 15_000 });
+
+  // The panel's arrangement is kept with the account, and this flow opened its history section:
+  // put it back, or every later spec signing in as the administrator finds history open.
+  await page.getByRole('button', { name: 'Restore the default arrangement' }).click();
 
   // Cleanup from the features table.
   await deleteFeatureRows(page, new RegExp(featureName));

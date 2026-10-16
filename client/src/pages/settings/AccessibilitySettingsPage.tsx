@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef } from 'react';
 import { App, Card, Flex, Select, Switch, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { useUiPreferences, useUpdateUiPreferences } from '../../api/hooks.ts';
+import { useSaveAccountPreferences } from '../../api/hooks/accountPrefs.ts';
 import { useLanguageChoice } from '../../i18n/languageChoice.ts';
 import { COORDINATE_FORMATS, formatCoordinate, type CoordinateFormat } from '../../geo/coordinateFormat.ts';
 import {
@@ -20,11 +19,6 @@ import {
  * the summit of Moldoveanu, a public trig point, rather than anything from the registry.
  */
 const COORDINATE_EXAMPLE: [number, number] = [24.73617, 45.59944];
-
-/** The shape this page stores server-side; the server keeps it opaque. */
-interface StoredPreferences {
-  appearance?: Partial<Appearance>;
-}
 
 /**
  * Appearance and accessibility.
@@ -52,27 +46,15 @@ export default function AccessibilitySettingsPage() {
   const overviewMap = useUiPrefsStore((s) => s.overviewMap);
   const setOverviewMap = useUiPrefsStore((s) => s.setOverviewMap);
 
-  const { data: stored } = useUiPreferences();
-  const save = useUpdateUiPreferences();
-  const hydrated = useRef(false);
-
-  // Adopt the stored choice once, when this browser has none of its own to go on — otherwise a
-  // fresh machine would ignore what the account already asked for.
-  useEffect(() => {
-    if (hydrated.current || !stored) {
-      return;
-    }
-    hydrated.current = true;
-    const remote = (stored.preferences as StoredPreferences | undefined)?.appearance;
-    if (remote) {
-      setAppearance(remote);
-    }
-  }, [stored, setAppearance]);
+  // What the account has stored was taken at sign-in; a change here is written through the one
+  // writer of the account's preferences — at once, so a failure can be said here — which merges it
+  // into the stored document rather than replacing the document with this page's part of it.
+  const save = useSaveAccountPreferences();
+  const saveNow = () => save.mutate(undefined, { onError: () => message.error(t('common.saveFailed')) });
 
   const update = (patch: Partial<Appearance>) => {
-    const next = { ...appearance, ...patch };
     setAppearance(patch);
-    save.mutate({ appearance: next }, { onError: () => message.error(t('common.saveFailed')) });
+    saveNow();
   };
 
   return (
@@ -126,7 +108,10 @@ export default function AccessibilitySettingsPage() {
             <Select
               style={{ width: 280 }}
               value={coordinateFormat}
-              onChange={(format: CoordinateFormat) => setCoordinateFormat(format)}
+              onChange={(format: CoordinateFormat) => {
+                setCoordinateFormat(format);
+                saveNow();
+              }}
               aria-label={t('settings.accessibility.coordinateFormat')}
               data-testid="coordinate-format"
               options={COORDINATE_FORMATS.map((value) => ({
@@ -144,7 +129,10 @@ export default function AccessibilitySettingsPage() {
             <Typography.Text style={{ minWidth: 160 }}>{t('settings.accessibility.overviewMap')}</Typography.Text>
             <Switch
               checked={overviewMap}
-              onChange={setOverviewMap}
+              onChange={(open) => {
+                setOverviewMap(open);
+                saveNow();
+              }}
               aria-label={t('settings.accessibility.overviewMap')}
             />
           </Flex>

@@ -22,6 +22,8 @@ import { useAuth } from '../auth/auth.tsx';
 import ErrorBoundary from './ErrorBoundary.tsx';
 import NotificationBell from './NotificationBell.tsx';
 import HeldReportsSentinel from './trips/HeldReportsSentinel.tsx';
+import AccountPrefsSync from './AccountPrefsSync.tsx';
+import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useIsFullAdmin } from './reslinks/permissions.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import { buildNavItems, isNavGroup } from './navItems.tsx';
@@ -192,6 +194,7 @@ export default function AppLayout() {
               whose session it is from the sign-in already in memory, which asks the server
               nothing — the account's own id, never its name. */}
           <HeldReportsSentinel accountId={user?.profile.sub ?? null} />
+          <AccountPrefsSync accountId={user?.profile.sub ?? null} />
           <NotificationBell />
           <Select
             size="small"
@@ -232,7 +235,12 @@ export default function AppLayout() {
                   key: 'signout',
                   icon: <LogoutOutlined />,
                   label: t('auth.signOut'),
-                  onClick: () => void signOut(),
+                  onClick: () => {
+                    // The arrangement this browser holds is the member's, not the browser's: it
+                    // goes with them, and the next person to sign in here starts from the defaults.
+                    useUiPrefsStore.getState().releaseAccount();
+                    void signOut();
+                  },
                 },
               ],
             }}

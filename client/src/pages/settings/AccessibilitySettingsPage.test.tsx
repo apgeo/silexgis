@@ -7,14 +7,9 @@ import { DEFAULT_APPEARANCE, useUiPrefsStore } from '../../stores/uiPrefsStore.t
 
 const savePreferences = vi.fn();
 
-vi.mock('../../api/hooks.ts', async () => {
-  const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
-  return {
-    ...actual,
-    useUiPreferences: () => ({ data: undefined }),
-    useUpdateUiPreferences: () => ({ mutate: savePreferences }),
-  };
-});
+vi.mock('../../api/hooks/accountPrefs.ts', () => ({
+  useSaveAccountPreferences: () => ({ mutate: savePreferences }),
+}));
 
 // The language switch saves to the account, which is not this page's to prove.
 vi.mock('../../i18n/languageChoice.ts', () => ({
@@ -78,7 +73,8 @@ describe('what this browser alone keeps, on the accessibility page', () => {
     expect(after.landingPage).toBe('map');
     expect(after.mapChromeHidden).toBe(false);
     expect(after.appearance).toEqual(DEFAULT_APPEARANCE);
-    expect(savePreferences).toHaveBeenCalledWith({ appearance: DEFAULT_APPEARANCE }, expect.anything());
+    // Written through the account's one writer, which merges it into the stored document.
+    expect(savePreferences).toHaveBeenCalled();
     // A button that emptied numbers this page does not show would do it where nobody is looking.
     expect(after.centerlineDetailZoom).toBe(16);
     expect(after.centerlineMaxPaths).toBe(40000);

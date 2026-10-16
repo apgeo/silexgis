@@ -50,6 +50,15 @@ export async function gotoRoute(page: Page, path: string) {
   await page.waitForURL((url) => url.pathname === pathname, { timeout: 60_000 });
 }
 
+/**
+ * A feature type's entry in the edit toolbar's palette — not a toolbar shortcut pinned for the same
+ * type, which carries the same name. Pinned types are kept with the account, so a shortcut another
+ * spec pinned for the administrator can be on screen while this one runs.
+ */
+export function paletteEntry(page: Page, typeName: string) {
+  return page.getByRole('button', { name: typeName }).and(page.locator('.feature-palette-item'));
+}
+
 /** A named overlay row in the layer composer tree (left dock). */
 export function overlayTreeNode(page: Page, name: string) {
   return page.locator('.layer-composer .ant-tree-treenode').filter({ hasText: name });
