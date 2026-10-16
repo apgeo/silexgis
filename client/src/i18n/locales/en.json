@@ -3027,7 +3027,10 @@
     "sharedNoBackground": "No background map is available for shared views on this installation.",
     "sharedUnnamed": "Unnamed",
     "sharedClose": "Close",
-    "exportUnreadable": "This background cannot be put into an image: its provider does not allow it. Switch to one of the backgrounds allowed in documents (OpenStreetMap is one) and export again.",
+    "exportUnreadable": "The map cannot be put into an image: a layer on it comes from a provider that does not allow that.",
+    "exportUnreadableLayers": "The map cannot be put into an image while it shows {{layers}}: the provider does not allow that.",
+    "exportUnreadableTry": "Switch the background to one allowed in documents, such as {{name}}, turn off any other layer named here, and export again.",
+    "exportUnreadableNone": "None of this installation’s backgrounds may be put into an image.",
     "shareTitle": "Share the view {{name}}",
     "shareExplain": "Anyone with this link can open the view without an account. It shows where the view looks, over a public background — none of the club’s data.",
     "shareQr": "The link to the view {{name}} as a QR code"

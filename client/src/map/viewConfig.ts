@@ -2,6 +2,7 @@
 import { fromLonLat, toLonLat } from 'ol/proj';
 import { normalizeCamera3DState, type Camera3DState } from '../scene3d/camera3d.ts';
 import { viewCamera3dState } from '../workspace/viewCamera.ts';
+import { unreadableTileLayers } from './baseLayers.ts';
 import { getOverlayOrder, getWorkspaceMap } from './mapContext.ts';
 
 /**
@@ -165,13 +166,20 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
 /**
  * What exporting the map came to: the picture, or why there is none. `unreadable` is a canvas the
  * browser will not let be read back — a tile on it was drawn from a source that gave no
- * cross-origin leave — which is a fact about the background chosen, not a failure to retry.
+ * cross-origin leave — which is a fact about the layers shown, not a failure to retry; `layers`
+ * names the ones known to cause it (none, when the browser refused for a reason not known here).
  */
-export type MapImageExport = { image: Blob } | { refused: 'unreadable' | 'failed' };
+export type MapImageExport = { image: Blob } | { refused: 'unreadable'; layers: string[] } | { refused: 'failed' };
 
 /** Renders the current map canvas composite to a PNG blob (attribution included). */
 export function exportMapImage(): Promise<MapImageExport> {
   const map = getWorkspaceMap();
+  // Known before drawing anything: a layer whose tiles cannot be read back makes the whole
+  // picture unreadable.
+  const unreadable = unreadableTileLayers(map);
+  if (unreadable.length > 0) {
+    return Promise.resolve({ refused: 'unreadable', layers: unreadable });
+  }
   return new Promise((resolve) => {
     map.once('rendercomplete', () => {
       const size = map.getSize()!;
@@ -204,7 +212,11 @@ export function exportMapImage(): Promise<MapImageExport> {
         // Thrown, not reported through the callback, when the canvas holds a tile the browser
         // treats as another site's: left uncaught, the export never answered and the error landed
         // in the console instead of in front of the person who pressed the button.
-        resolve({ refused: error instanceof DOMException && error.name === 'SecurityError' ? 'unreadable' : 'failed' });
+        resolve(
+          error instanceof DOMException && error.name === 'SecurityError'
+            ? { refused: 'unreadable', layers: unreadableTileLayers(map) }
+            : { refused: 'failed' },
+        );
       }
     });
     map.renderSync();

@@ -1,10 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
+import Map from 'ol/Map';
+import View from 'ol/View';
+import type TileLayer from 'ol/layer/Tile';
 import TileWMS from 'ol/source/TileWMS';
 import WMTS from 'ol/source/WMTS';
 import XYZ from 'ol/source/XYZ';
 import type { MapLayerInfo } from '../api/hooks.ts';
-import { isDrawable, tileCrossOrigin, tileSourceFor, wmtsMatrixIds, type DrawableLayer } from './baseLayers.ts';
+import {
+  documentBackgroundName,
+  isDrawable,
+  setActiveBaseLayer,
+  syncBaseLayers,
+  syncTileOverlays,
+  tileCrossOrigin,
+  tileSourceFor,
+  unreadableTileLayers,
+  wmtsMatrixIds,
+  type DrawableLayer,
+} from './baseLayers.ts';
 
 function entry(overrides: Partial<MapLayerInfo>): DrawableLayer {
   return {
@@ -134,12 +148,92 @@ describe('tileCrossOrigin', () => {
     expect(tileCrossOrigin({})).toBeUndefined();
   });
 
-  it('applies the same rule to every kind of source, so a map service allowed into documents exports too', () => {
+  it('lets the flag alone decide, whatever kind of source it is', () => {
     // The attribute is protected on the source; read it the way the tile loader does.
     const crossOriginOf = (source: unknown) => (source as { crossOrigin: string | null }).crossOrigin;
     for (const drawable of [entry({}), entry({ layerKind: 'wms', wms }), entry({ layerKind: 'wmts', wmts })]) {
       expect(crossOriginOf(tileSourceFor({ ...drawable, inDocuments: true }))).toBe('anonymous');
       expect(crossOriginOf(tileSourceFor({ ...drawable, inDocuments: false }))).toBeNull();
     }
+  });
+});
+
+describe('a picture of the map and the layers that cannot go into one', () => {
+  const catalogEntry = (id: number, over: Partial<MapLayerInfo>): MapLayerInfo => ({
+    id,
+    name: `Layer ${id}`,
+    layerKind: 'xyz',
+    urlTemplate: `https://tiles.example.org/${id}/{z}/{x}/{y}.png`,
+    wms: null,
+    wmts: null,
+    attribution: null,
+    groupName: null,
+    minZoom: 0,
+    maxZoom: 19,
+    isBase: true,
+    isDefault: false,
+    sortOrder: id,
+    inDocuments: true,
+    ...over,
+  });
+
+  const mapWith = (catalog: MapLayerInfo[], activeId: number) => {
+    const map = new Map({ view: new View({ center: [0, 0], zoom: 3 }) });
+    syncBaseLayers(map, catalog, activeId);
+    syncTileOverlays(map, catalog, new Set(catalog.filter((e) => !e.isBase).map((e) => Number(e.id))), {});
+    return map;
+  };
+
+  const layerNamed = (map: Map, name: string) =>
+    map.getLayers().getArray().find((layer) => layer.get('name') === name) as TileLayer<XYZ>;
+
+  it('names the layers on screen a picture cannot read — the background or an overlay', () => {
+    const map = mapWith(
+      [
+        catalogEntry(1, { name: 'Topographic', inDocuments: false }),
+        catalogEntry(2, { name: 'Street map' }),
+        catalogEntry(3, { name: 'Hiking routes', isBase: false, inDocuments: false }),
+      ],
+      1,
+    );
+    expect(unreadableTileLayers(map)).toEqual(['Topographic', 'Hiking routes']);
+
+    setActiveBaseLayer(map, 2);
+    expect(unreadableTileLayers(map)).toEqual(['Hiking routes']);
+  });
+
+  it('draws a background on screen whose server turns out not to allow cross-origin reads', () => {
+    const map = mapWith([catalogEntry(1, { name: 'Street map' })], 1);
+    const layer = layerNamed(map, 'Street map');
+    const asked = layer.getSource()!;
+
+    asked.dispatchEvent('tileloaderror');
+
+    // Asked plainly from then on, so it draws; and named if an export is attempted over it.
+    expect(layer.getSource()).not.toBe(asked);
+    expect(unreadableTileLayers(map)).toEqual(['Street map']);
+  });
+
+  it('takes a failed tile after one has loaded as a missing tile, not a refusal', () => {
+    const map = mapWith([catalogEntry(1, { name: 'Street map' })], 1);
+    const layer = layerNamed(map, 'Street map');
+    const asked = layer.getSource()!;
+
+    asked.dispatchEvent('tileloadend');
+    asked.dispatchEvent('tileloaderror');
+
+    expect(layer.getSource()).toBe(asked);
+    expect(unreadableTileLayers(map)).toEqual([]);
+  });
+
+  it('points to the installation’s own first background allowed in documents, or to none', () => {
+    expect(
+      documentBackgroundName([
+        catalogEntry(1, { name: 'Topographic', inDocuments: false }),
+        catalogEntry(2, { name: 'Orthophoto' }),
+        catalogEntry(3, { name: 'Street map' }),
+      ]),
+    ).toBe('Orthophoto');
+    expect(documentBackgroundName([catalogEntry(1, { inDocuments: false }), catalogEntry(2, { isBase: false })])).toBeUndefined();
   });
 });

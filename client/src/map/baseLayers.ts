@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type Map from 'ol/Map';
+import { unByKey } from 'ol/Observable';
+import type { EventsKey } from 'ol/events';
 import { getTopLeft, getWidth, type Extent } from 'ol/extent';
 import TileLayer from 'ol/layer/Tile';
 import { get as getProjection } from 'ol/proj';
@@ -68,10 +70,11 @@ function wmtsTileGrid(crs: string, maxZoom: number, matrixIdPrefix: string): WMT
  * application makes is asked for with leave to be read back out of the browser (CORS) — which is
  * what lets "export map image" put it into a picture at all: a tile drawn without that leave makes
  * the whole map's canvas unreadable. Those are the sources documents already ask for the same way,
- * so they are known to answer it. Any other source is asked the ordinary way, so that a server that
- * does not answer cross-origin requests still draws on screen; an export over it is refused with a
- * reason instead. A map service is asked by the same rule as a tile template, so a WMS or WMTS
- * background allowed into documents exports as well.
+ * so they are expected to answer it. Any other source is asked the ordinary way, so that a server
+ * that does not answer cross-origin requests still draws on screen; an export over it is refused,
+ * naming it, instead. (A source allowed into documents that turns out not to answer them is asked
+ * the ordinary way from then on — see `tileLayerFor`.) The flag alone decides, whatever the kind of
+ * source; the catalogue only ever allows a tile template into documents.
  */
 export function tileCrossOrigin(entry: Pick<DrawableLayer, 'inDocuments'>): 'anonymous' | undefined {
   return entry.inDocuments ? 'anonymous' : undefined;
@@ -85,10 +88,12 @@ export function tileCrossOrigin(entry: Pick<DrawableLayer, 'inDocuments'>): 'ano
  * grid is built from the coordinate system the catalogue names, up to the entry's last zoom, past
  * which the last level is stretched — the same blur-rather-than-blank an XYZ source gets.
  */
-export function tileSourceFor(entry: DrawableLayer): TileSource {
+export function tileSourceFor(
+  entry: DrawableLayer,
+  crossOrigin: 'anonymous' | undefined = tileCrossOrigin(entry),
+): TileSource {
   const { max } = zoomBand(entry);
   const attributions = entry.attribution ?? undefined;
-  const crossOrigin = tileCrossOrigin(entry);
   if (entry.layerKind === 'wms' && entry.wms) {
     const wms = entry.wms;
     return new TileWMS({
@@ -128,6 +133,8 @@ export function tileSourceFor(entry: DrawableLayer): TileSource {
 
 const BASE_ID_PROP = 'silexgis:baseLayerId';
 const TILE_OVERLAY_ID_PROP = 'silexgis:tileOverlayId';
+/** Whether a tile layer's tiles can be read back out of the map's canvas, into a picture of it. */
+const READABLE_PROP = 'silexgis:readable';
 
 /**
  * Where tile overlays sit in the stack: above the basemap (0), below every data layer (1 upwards,
@@ -167,13 +174,68 @@ export function zoomBand(entry: Pick<DrawableLayer, 'minZoom' | 'maxZoom'>): { m
 }
 
 export function tileLayerFor(entry: DrawableLayer, zIndex: number): TileLayer {
-  const { min } = zoomBand(entry);
-  return new TileLayer({
-    source: tileSourceFor(entry),
-    minZoom: min,
+  const crossOrigin = tileCrossOrigin(entry);
+  const layer = new TileLayer({
+    source: tileSourceFor(entry, crossOrigin),
+    minZoom: zoomBand(entry).min,
     visible: false,
     zIndex,
   });
+  layer.set(READABLE_PROP, crossOrigin !== undefined);
+  if (crossOrigin !== undefined) {
+    askPlainlyIfRefused(layer, entry);
+  }
+  return layer;
+}
+
+/**
+ * Switches a layer asked for with cross-origin leave to ordinary requests when its server turns
+ * out not to give that leave: its first tile failing before any has loaded. Asked with leave, such
+ * a server's every tile fails, and the background would go blank on screen because of an export
+ * nobody may ever make; asked plainly it draws, and an export over it is refused by name.
+ *
+ * Only before any tile has loaded: once one has, the server does answer cross-origin requests, and
+ * a later failure is a missing tile, not a refusal.
+ */
+export function askPlainlyIfRefused(layer: TileLayer, entry: DrawableLayer): void {
+  const source = layer.getSource();
+  if (!source) {
+    return;
+  }
+  const keys: EventsKey[] = [];
+  keys.push(
+    source.once('tileloadend', () => unByKey(keys)),
+    source.once('tileloaderror', () => {
+      unByKey(keys);
+      layer.set(READABLE_PROP, false);
+      layer.setSource(tileSourceFor(entry, undefined));
+    }),
+  );
+}
+
+/**
+ * The names of the tile layers on screen — the background, and any tile overlay shown — whose
+ * tiles a picture of the map cannot read back, so that refusing an export can say which.
+ */
+export function unreadableTileLayers(map: Map): string[] {
+  return map
+    .getLayers()
+    .getArray()
+    .filter(
+      (layer) =>
+        (layer.get(BASE_ID_PROP) !== undefined || layer.get(TILE_OVERLAY_ID_PROP) !== undefined) &&
+        layer.getVisible() &&
+        layer.get(READABLE_PROP) === false,
+    )
+    .map((layer) => String(layer.get('name') ?? ''));
+}
+
+/**
+ * The background a refused export can point to instead: the first of this installation's
+ * backgrounds allowed into documents, or none when it has none.
+ */
+export function documentBackgroundName(catalog: readonly MapLayerInfo[]): string | undefined {
+  return catalog.find((entry) => entry.layerKind === 'xyz' && entry.isBase && entry.inDocuments)?.name;
 }
 
 /** Creates/refreshes base tile layers from the server catalog: every kind this client can draw. */

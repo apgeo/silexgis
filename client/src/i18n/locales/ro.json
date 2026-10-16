@@ -3027,7 +3027,10 @@
     "sharedNoBackground": "Nicio hartă de fundal nu este disponibilă pentru vederile partajate în această instalare.",
     "sharedUnnamed": "Fără nume",
     "sharedClose": "Închide",
-    "exportUnreadable": "Acest fundal nu poate fi pus într-o imagine: furnizorul lui nu permite. Alegeți unul dintre fundalurile permise în documente (OpenStreetMap este unul) și exportați din nou.",
+    "exportUnreadable": "Harta nu poate fi pusă într-o imagine: unul dintre straturile ei vine de la un furnizor care nu permite asta.",
+    "exportUnreadableLayers": "Harta nu poate fi pusă într-o imagine cât timp arată {{layers}}: furnizorul nu permite asta.",
+    "exportUnreadableTry": "Alegeți un fundal permis în documente, de exemplu {{name}}, opriți celelalte straturi numite aici și exportați din nou.",
+    "exportUnreadableNone": "Niciunul dintre fundalurile acestei instalări nu poate fi pus într-o imagine.",
     "shareTitle": "Partajează vederea {{name}}",
     "shareExplain": "Oricine are acest link poate deschide vederea fără cont. Arată unde privește vederea, peste un fundal public — niciuna dintre datele clubului.",
     "shareQr": "Linkul către vederea {{name}} ca cod QR"

@@ -8,10 +8,12 @@ import { useTranslation } from 'react-i18next';
 import {
   useCreateMapView,
   useDeleteMapView,
+  useMapLayers,
   useMapViews,
   useShareMapView,
   type MapViewInfo,
 } from '../../api/hooks.ts';
+import { documentBackgroundName } from '../../map/baseLayers.ts';
 import { exportMapImage } from '../../map/viewConfig.ts';
 import { saveBlob } from '../../api/download.ts';
 import ViewShareDialog from './ViewShareDialog.tsx';
@@ -26,6 +28,7 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { data: views } = useMapViews();
+  const { data: mapLayers } = useMapLayers();
   const createView = useCreateMapView();
   const deleteView = useDeleteMapView();
   const shareView = useShareMapView();
@@ -67,7 +70,18 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
   const exportImage = async () => {
     const result = await exportMapImage();
     if ('refused' in result) {
-      message.error(result.refused === 'unreadable' ? t('views.exportUnreadable') : t('common.saveFailed'));
+      if (result.refused === 'failed') {
+        message.error(t('common.saveFailed'));
+        return;
+      }
+      const instead = documentBackgroundName(mapLayers ?? []);
+      message.error(
+        `${
+          result.layers.length > 0
+            ? t('views.exportUnreadableLayers', { layers: result.layers.join(', ') })
+            : t('views.exportUnreadable')
+        } ${instead ? t('views.exportUnreadableTry', { name: instead }) : t('views.exportUnreadableNone')}`,
+      );
       return;
     }
     saveBlob(result.image, `silexgis-map-${new Date().toISOString().slice(0, 10)}.png`);
