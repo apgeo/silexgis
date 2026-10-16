@@ -440,6 +440,8 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
     [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"region","op":"contains"}}],"sort":"updated","descending":true}""")]
     [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"region","op":"contains","values":[{"type":"text","value":null}]}}],"sort":"updated","descending":true}""")]
     [InlineData("""{"version":1,"scope":null,"sort":"updated","descending":true}""")]
+    // A position written into the row by hand: no route stores one, and none may hand one back.
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"region","op":"contains","values":[{"type":"text","value":"Bihor"}]}}],"sort":"updated","descending":true,"anchor":{"anchor":"point","longitude":22.61873,"latitude":46.58219}}""")]
     public async Task A_stored_question_its_reader_cannot_run_reads_as_unreadable_in_the_same_words(string stored)
     {
         Guid id;
@@ -459,15 +461,27 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
             id = row.Id;
         }
 
-        (await clubmate.GetFromJsonAsync<JsonElement>($"{Url}/{id}")).GetProperty("state").GetString()
-            .ShouldBe("unreadable");
+        foreach (var reader in new[] { clubmate, author })
+        {
+            var single = await reader.GetAsync($"{Url}/{id}");
+            var raw = await single.Content.ReadAsStringAsync();
+            single.StatusCode.ShouldBe(HttpStatusCode.OK, raw);
+            var seen = JsonDocument.Parse(raw).RootElement;
+            seen.GetProperty("state").GetString().ShouldBe("unreadable");
+
+            // Nothing of a question the reader cannot run is shown, and never a position.
+            seen.GetProperty("document").ValueKind.ShouldBe(JsonValueKind.Null);
+            raw.ShouldNotContain("22.61873");
+            raw.ShouldNotContain("anchor", Case.Insensitive);
+        }
 
         // And one broken row never takes the list down for the people it is shared with.
         var listed = await clubmate.GetAsync(Url);
         listed.StatusCode.ShouldBe(HttpStatusCode.OK, await listed.Content.ReadAsStringAsync());
-        (await listed.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray()
-            .Single(f => f.GetProperty("id").GetGuid() == id)
-            .GetProperty("state").GetString().ShouldBe("unreadable");
+        var onTheList = (await listed.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray()
+            .Single(f => f.GetProperty("id").GetGuid() == id);
+        onTheList.GetProperty("state").GetString().ShouldBe("unreadable");
+        onTheList.GetProperty("document").ValueKind.ShouldBe(JsonValueKind.Null);
 
         var run = await clubmate.GetAsync($"/api/v1/caves?savedFilterId={id}");
         run.StatusCode.ShouldBe(HttpStatusCode.BadRequest);

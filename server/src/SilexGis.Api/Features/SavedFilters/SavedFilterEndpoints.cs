@@ -14,11 +14,11 @@ namespace SilexGis.Api.Features.SavedFilters;
 
 /// <summary>A saved filter as one reader sees it.</summary>
 /// <param name="Document">
-/// The stored question, or null when it could not be parsed at all. Present even when
-/// <paramref name="State"/> says the reader cannot run it: they may read the saved filter, so what
-/// it says is already theirs. A value it names is shown by name only through lists the reader may
-/// already read, so an identity they cannot resolve reads as "not available to you", never as a
-/// name.
+/// The stored question, or null when <paramref name="State"/> says this reader cannot run it — a
+/// question they cannot run has nothing to show them, and whatever made it unreadable stays in the
+/// row. Never carries an anchor. A value it names is shown by name only through lists the reader
+/// may already read, so an identity they cannot resolve reads as "not available to you", never as
+/// a name.
 /// </param>
 /// <param name="State">What it reads as to this reader — runnable, unreadable for them, or stale.</param>
 /// <param name="Mine">Whether the reader wrote it.</param>
@@ -309,7 +309,10 @@ public static class SavedFilterEndpoints
         reading.Row.Id,
         reading.Row.Name,
         reading.Row.Description,
-        reading.Document,
+        // An unreadable document is not shown at all, and a readable one has no anchor to show;
+        // the anchor is cleared here as well so a position written into a row by any other road
+        // than this route still never reaches whoever opens the filter.
+        reading.State == SavedFilterState.Unreadable ? null : reading.Document! with { Anchor = null },
         reading.State,
         reading.Row.CavingGroupId,
         reading.Row.Visibility,
