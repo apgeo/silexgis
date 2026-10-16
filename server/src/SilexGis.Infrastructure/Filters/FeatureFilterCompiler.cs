@@ -151,9 +151,12 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
     private Expression<Func<Feature, bool>> PropertyLeaf(string key, ConditionNode condition)
     {
         // Containment against the stored document. Proved against the database rather than
-        // assumed: this reaches PostgreSQL as `@>` and is served by the index over the column,
-        // and it distinguishes the number 4.5 from the string "4.5" — which is why the values
-        // carried a type all the way from the browser.
+        // assumed: this reaches PostgreSQL as `@>`, and it distinguishes the number 4.5 from the
+        // string "4.5" — which is why the values carried a type all the way from the browser. No
+        // index serves it: the only indexes over the column are the two expression indexes on
+        // lower-cased printed-code keys, which answer an equality and never a containment. The
+        // rows reaching it are already narrowed by kind and by what the caller may read, and a GIN
+        // index over the column is the step to take if that stops being enough.
         if (condition.Op is FilterOp.IsEmpty or FilterOp.IsNotEmpty)
         {
             return condition.Op == FilterOp.IsEmpty
