@@ -72,12 +72,13 @@ public static class FeatureAudienceSql
             """,
             // Exact only where nothing above the row is a protection root at all — the one case in
             // which every reader places a row exactly. No grant, owner arm or administrator arm
-            // reaches a link, and a soft-deleted root still counts, as it does for every reader.
-            $"""
-            (NOT EXISTS (SELECT 1 FROM features root
-                         WHERE root.id = ANY({alias}.ancestor_ids)
-                           AND root.location_protected))
-            """,
+            // reaches a link, so there is no walk to make: the row's own effective-protection flag
+            // is that fact — some row of its ancestry, itself included and soft-deleted ones still
+            // counting, is a protection root — kept with the row by every write and checked by
+            // the integrity verifier. It is also what the link's point branch snaps by, so the two
+            // branches cannot place a row differently. Walking the roots instead cost an index
+            // probe per candidate, which over a whole view's reach was a third of the statement.
+            $"(NOT {alias}.is_protected_effective)",
             parameters);
     }
 

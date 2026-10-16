@@ -15,6 +15,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Map;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
@@ -151,8 +152,9 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
 
     /// <summary>
     /// A shared view's link, which anybody holding it can ask anything: the worst request it can
-    /// be sent — the whole world, from the furthest zoom — timed against the same budget, and the
-    /// three statements its data routes send pinned like the workspace map's.
+    /// be sent — the whole world, from the furthest zoom — timed against the same budget, that
+    /// request's own statement pinned to compile nothing, and the three statements its data routes
+    /// send pinned like the workspace map's.
     /// </summary>
     /// <remarks>
     /// The world window is clipped to the view's own reach before anything is read, so its cost is
@@ -219,6 +221,18 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         var anyAccount = await AccessContextResolver.ResolveForAnyAccountAsync(db, CancellationToken.None);
         var viewport = new Bbox(West, South, East, North);
 
+        // The request just timed, as the route builds it: the world clipped to the view's reach,
+        // at the reach's lowest zoom.
+        var reach = SharedViewReach.Around((SeedWest + SeedEast) / 2, (SeedSouth + SeedNorth) / 2, 6);
+        var reached = reach.Clip(-180, -90, 180, 90).ShouldNotBeNull();
+        var (worldSql, worldParameters, _) = MapSql.BuildClusters(
+            FeatureAudienceSql.SharedLink(anyAccount, "f"),
+            new Bbox(reached.West, reached.South, reached.East, reached.North),
+            reach.LowestZoom,
+            protectionGridMeters: 5000d,
+            tag: null);
+        await AssertClustersCompileNothingAsync(connection, worldParameters, "shared link, world window", worldSql);
+
         var (clusterSql, clusterParameters, _) = MapSql.BuildClusters(
             FeatureAudienceSql.SharedLink(anyAccount, "f"), viewport, zoom: 9, protectionGridMeters: 5000d, tag: null);
         var clusters = await ExplainAsync(connection, clusterParameters, "shared link clusters", clusterSql);
@@ -242,6 +256,40 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             "shared link points");
         AssertRidesEntranceIndex(points, "shared link points");
         AssertCaveProbeIsIndexed(points, "shared link points");
+    }
+
+    /// <summary>
+    /// A wide cluster statement, explained as the cluster route sends it — in one batch behind
+    /// <see cref="MapSql.WithoutJitSql"/> — must carry no JIT compilation: compiling it cost more
+    /// than running it, on every request. The bare statement is explained too, as the control: it
+    /// is what proves that the planner would compile this statement, so that the absence above is
+    /// the setting's doing and not a plan too cheap to compile anyway.
+    /// </summary>
+    /// <remarks>
+    /// Should the control ever fail, the planner no longer prices this statement past its JIT
+    /// thresholds (or the server cannot compile at all); the first half then proves nothing, and
+    /// whether the setting is still needed is worth asking.
+    /// </remarks>
+    private async Task AssertClustersCompileNothingAsync(
+        DbConnection connection, DynamicParameters parameters, string label, string sql)
+    {
+        string sent;
+        using (var results = await connection.QueryMultipleAsync(
+            $"{MapSql.WithoutJitSql};\nEXPLAIN (ANALYZE, BUFFERS)\n{sql}", parameters))
+        {
+            await results.ReadSingleAsync<string>();
+            sent = string.Join("\n", await results.ReadAsync<string>());
+        }
+
+        output.WriteLine($"--- {label}, as sent ---");
+        output.WriteLine(sent);
+        sent.ShouldNotContain("JIT:", Case.Sensitive,
+            $"{label}: the cluster statement must be planned without JIT compilation as it is sent");
+
+        var bare = string.Join("\n", await connection.QueryAsync<string>($"EXPLAIN\n{sql}", parameters));
+        bare.ShouldContain("JIT:", Case.Sensitive,
+            $"{label}: the control — without the setting the planner must compile this statement, or "
+            + "the check above passes for a reason that is not the setting");
     }
 
     /// <summary>
@@ -395,6 +443,13 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         var clusters = await ExplainAsync(connection, clusterParameters, "clusters (guarded)", clusterSql);
         AssertRidesEntranceIndex(clusters, "clusters (guarded)");
         AssertAncestorProbeIsIndexed(clusters, "clusters (guarded)");
+
+        // The owner's own country-wide clusters, the widest request the workspace map times: the
+        // same statement, sent the same way, so it must compile nothing either.
+        var ownerCtx = await AccessContextResolver.ResolveAsync(db, ownerId);
+        var (countrySql, countryParameters, _) = MapSql.BuildClusters(
+            ownerCtx, new Bbox(19.9, 43.5, 29.1, 48.1), zoom: 7, protectionGridMeters: 5000d, tag: null);
+        await AssertClustersCompileNothingAsync(connection, countryParameters, "clusters z7 (country)", countrySql);
 
         // The point layer above the cluster zoom, as EF sends it: ST_Intersects for unprotected
         // rows, OR-ed with the ids of the protected rows whose shown position is in the window,

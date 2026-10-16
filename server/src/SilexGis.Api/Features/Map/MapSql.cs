@@ -20,6 +20,29 @@ namespace SilexGis.Api.Features.Map;
 /// </summary>
 public static class MapSql
 {
+    /// <summary>
+    /// Switches PostgreSQL's JIT compiler off for the rest of the transaction it runs in; the
+    /// cluster statement is always sent behind it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The planner decides whether to compile a statement from its own cost estimate, and it
+    /// prices the per-row access checks of the cluster statement — the visibility cascade's
+    /// probe of a row's ancestors, the exact-view walk — as if every ancestor array held ten
+    /// ids it had to fetch from disk. Over a wide window that puts the estimate in the millions,
+    /// far past the thresholds at which it compiles with inlining and optimisation, while the
+    /// statement itself runs in a few hundred milliseconds from cache. Measured over a hundred
+    /// thousand entrances, compiling took 600–700 ms of every request on top of 230–420 ms of
+    /// execution, and it is CPU work, so on a busy machine it grew further. PostgreSQL keeps no
+    /// compiled code from one execution to the next, so every request paid it again.
+    /// </para>
+    /// <para>
+    /// Transaction-scoped (<c>set_config(…, true)</c>), so it never outlives the statement on a
+    /// pooled connection and leaves every other statement to the server's own setting.
+    /// </para>
+    /// </remarks>
+    public const string WithoutJitSql = "SELECT set_config('jit', 'off', true)";
+
     public static Task<FeatureCollection> ClustersAsync(
         SilexGisDbContext db,
         AccessContext ctx,
@@ -42,8 +65,13 @@ public static class MapSql
     {
         var (sql, parameters, clusterCellDegrees) = BuildClusters(audience, box, zoom, protectionGridMeters, tag);
         var connection = db.Database.GetDbConnection();
-        var rows = await connection.QueryAsync<(double Lon, double Lat, int Count, double CellX, double CellY)>(
-            new CommandDefinition(sql, parameters, cancellationToken: ct));
+
+        // Sent behind WithoutJitSql in one batch, which PostgreSQL runs as one implicit
+        // transaction: the setting holds for this statement and ends with it.
+        await using var results = await connection.QueryMultipleAsync(
+            new CommandDefinition($"{WithoutJitSql};\n{sql}", parameters, cancellationToken: ct));
+        await results.ReadSingleAsync<string>();
+        var rows = await results.ReadAsync<(double Lon, double Lat, int Count, double CellX, double CellY)>();
 
         // Each cluster names the lattice cell it summed over. The lattice is global and the
         // same for every caller, so its bounds say nothing about any entrance; a client that
