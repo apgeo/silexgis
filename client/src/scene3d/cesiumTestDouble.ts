@@ -635,6 +635,10 @@ export interface FakeWmsProviderOptions {
   url: string;
   layers: string;
   parameters: Record<string, unknown>;
+  /** The coordinate system a 1.3.0 request names; the engine's own default is CRS:84 on a geographic tiling. */
+  crs?: string;
+  /** The same for 1.1.1, under that version's name for it. */
+  srs?: string;
   tilingScheme: WebMercatorTilingScheme | GeographicTilingScheme;
   credit: Credit | string | undefined;
   enablePickFeatures: boolean;

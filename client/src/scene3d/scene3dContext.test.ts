@@ -326,9 +326,33 @@ describe('imagery layers', () => {
     expect(mercator.tilingScheme).toBeInstanceOf(engine.WebMercatorTilingScheme);
     expect(mercator.credit).toEqual(new engine.Credit('© Agency', true));
     expect(geographic.tilingScheme).toBeInstanceOf(engine.GeographicTilingScheme);
+    // Each version is told the coordinate system under its own name, never left to the engine.
+    expect(mercator).toMatchObject({ crs: 'EPSG:3857' });
+    expect(mercator).not.toHaveProperty('srs');
+    expect(geographic).toMatchObject({ srs: 'EPSG:4326' });
+    expect(geographic).not.toHaveProperty('crs');
     // A z/x/y provider was built for neither.
     expect(engine.engineState.providers).toHaveLength(0);
     expect(engine.engineState.widgets[0].scene.imageryLayers.layers).toHaveLength(2);
+    session.release();
+  });
+
+  it('asks a 1.3.0 service on the geographic tiling for EPSG:4326, as the flat map does, not CRS:84', async () => {
+    const session = acquire();
+    session.engine.addImageryLayer('base:4', {
+      kind: 'wms',
+      url: 'https://maps.example/wms',
+      layers: 'topo',
+      styles: '',
+      format: 'image/png',
+      version: '1.3.0',
+      transparent: false,
+      crs: 'EPSG:4326',
+    });
+
+    const [geographic] = engine.engineState.serviceProviders;
+    expect(geographic.tilingScheme).toBeInstanceOf(engine.GeographicTilingScheme);
+    expect(geographic).toMatchObject({ crs: 'EPSG:4326', parameters: { version: '1.3.0' } });
     session.release();
   });
 

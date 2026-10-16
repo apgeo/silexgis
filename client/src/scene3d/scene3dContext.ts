@@ -303,6 +303,11 @@ function imageryProviderFor(
           transparent: options.transparent,
           version: options.version,
         },
+        // Named rather than left to the engine, which asks a 1.3.0 service on the geographic
+        // tiling for CRS:84 while the flat map asks the same service for EPSG:4326 — a service
+        // offering only one of the two then draws in one view and not the other. 1.3.0 names it
+        // `crs`, 1.1.1 `srs`; the engine turns the box round for a 1.3.0 EPSG:4326 request itself.
+        ...(options.version === '1.1.1' ? { srs: options.crs } : { crs: options.crs }),
         tilingScheme: tilingSchemeFor(options.crs),
         credit,
         // Nothing in this application picks features out of a raster basemap, and leaving it on
