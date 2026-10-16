@@ -29,6 +29,46 @@ public static class MapSql
         string? tag,
         CancellationToken ct)
     {
+        var (sql, parameters, clusterCellDegrees) = BuildClusters(ctx, box, zoom, protectionGridMeters, tag);
+        var connection = db.Database.GetDbConnection();
+        var rows = await connection.QueryAsync<(double Lon, double Lat, int Count, double CellX, double CellY)>(
+            new CommandDefinition(sql, parameters, cancellationToken: ct));
+
+        // Each cluster names the lattice cell it summed over. The lattice is global and the
+        // same for every caller, so its bounds say nothing about any entrance; a client that
+        // lists a cluster's members asks for exactly this cell instead of re-deriving the
+        // lattice arithmetic and drifting from it.
+        var features = rows
+            .Select(r => GeoFeature.Of(
+                new Point(r.Lon, r.Lat) { SRID = 4326 },
+                new Dictionary<string, object?>
+                {
+                    ["cluster"] = true,
+                    ["count"] = r.Count,
+                    ["cell"] = new[]
+                    {
+                        (r.CellX - 0.5) * clusterCellDegrees,
+                        (r.CellY - 0.5) * clusterCellDegrees,
+                        (r.CellX + 0.5) * clusterCellDegrees,
+                        (r.CellY + 0.5) * clusterCellDegrees,
+                    },
+                }))
+            .ToList();
+
+        return FeatureCollection.Of(features);
+    }
+
+    /// <summary>
+    /// The cluster statement, its parameters and the lattice cell size it sums over — exposed so
+    /// the plan pins explain the statement this route sends rather than a copy of it.
+    /// </summary>
+    public static (string Sql, DynamicParameters Parameters, double ClusterCellDegrees) BuildClusters(
+        AccessContext ctx,
+        Bbox box,
+        int zoom,
+        double protectionGridMeters,
+        string? tag)
+    {
         // ~64 px cluster cells on a 256 px tile pyramid.
         var clusterCellDegrees = 360d / Math.Pow(2, zoom) / 4d;
         var protectionCellDegrees = LocationProtection.CellDegrees(protectionGridMeters);
@@ -104,31 +144,6 @@ public static class MapSql
             GROUP BY g.cx, g.cy
             """;
 
-        var connection = db.Database.GetDbConnection();
-        var rows = await connection.QueryAsync<(double Lon, double Lat, int Count, double CellX, double CellY)>(
-            new CommandDefinition(sql, parameters, cancellationToken: ct));
-
-        // Each cluster names the lattice cell it summed over. The lattice is global and the
-        // same for every caller, so its bounds say nothing about any entrance; a client that
-        // lists a cluster's members asks for exactly this cell instead of re-deriving the
-        // lattice arithmetic and drifting from it.
-        var features = rows
-            .Select(r => GeoFeature.Of(
-                new Point(r.Lon, r.Lat) { SRID = 4326 },
-                new Dictionary<string, object?>
-                {
-                    ["cluster"] = true,
-                    ["count"] = r.Count,
-                    ["cell"] = new[]
-                    {
-                        (r.CellX - 0.5) * clusterCellDegrees,
-                        (r.CellY - 0.5) * clusterCellDegrees,
-                        (r.CellX + 0.5) * clusterCellDegrees,
-                        (r.CellY + 0.5) * clusterCellDegrees,
-                    },
-                }))
-            .ToList();
-
-        return FeatureCollection.Of(features);
+        return (sql, parameters, clusterCellDegrees);
     }
 }

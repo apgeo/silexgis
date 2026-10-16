@@ -176,6 +176,10 @@ public sealed record MapConfigDto(
     int MeshesInViewMaxCavesLimit,
     long MeshesInViewMaxBytesLimit);
 
+/// <summary>One entrance the point branch of the entrance layer considers, before it is shaped.</summary>
+public sealed record EntrancePointRow(
+    Guid Id, string? Name, Geometry Geom, bool IsProtectedEffective, Guid CaveId, bool IsMain);
+
 /// <summary>
 /// GeoJSON layer endpoints for the map workspace. Always visibility-filtered; protected
 /// feature locations obfuscated server-side (points snapped to the protection grid,
@@ -1251,6 +1255,48 @@ public static class MapEndpoints
                 db, protection, ctx, box, accessOptions.Value.LocationGridMeters, tag, mapOptions.Value.MaxPoints, ct));
     }
 
+    /// <summary>
+    /// The entrance layer's point branch as a query: the rows of <paramref name="readable"/> in
+    /// the window by the membership rule, in id order, cut at the cap.
+    /// </summary>
+    /// <remarks>
+    /// Public so the plan pins can explain the statement this branch really sends rather than a
+    /// copy of it. Unprotected rows are in by their stored point; protected ones only by
+    /// <paramref name="protectedMembers"/>, which was decided on the position the reader is shown.
+    /// </remarks>
+    public static IQueryable<EntrancePointRow> EntrancePointsQuery(
+        SilexGisDbContext db,
+        IQueryable<Feature> readable,
+        Bbox box,
+        IReadOnlyCollection<Guid> protectedMembers,
+        string? tag,
+        int maxPoints)
+    {
+        var polygon = box.ToPolygon();
+        var members = protectedMembers as Guid[] ?? [.. protectedMembers];
+        var query = readable
+            .Where(f => f.Kind == FeatureKind.CaveEntrance
+                && ((!f.IsProtectedEffective && f.Geom!.Intersects(polygon))
+                    || members.Contains(f.Id)));
+
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            query = query.Where(f => db.Taggings.Any(tg =>
+                tg.FeatureId == f.Id && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
+        }
+
+        return query
+            .OrderBy(f => f.Id)
+            .Take(maxPoints)
+            .Select(f => new EntrancePointRow(
+                f.Id,
+                f.Name,
+                f.Geom!,
+                f.IsProtectedEffective,
+                f.Entrance!.CaveFeatureId,
+                f.Entrance!.IsMain));
+    }
+
     private static async Task<FeatureCollection> PointsAsync(
         SilexGisDbContext db,
         FeatureProtection protection,
@@ -1261,8 +1307,6 @@ public static class MapEndpoints
         int maxPoints,
         CancellationToken ct)
     {
-        var polygon = box.ToPolygon();
-
         // Protected entrances are in the window by the point this caller is shown, not by the
         // stored one — tested on the stored point, presence in the answer would bisect a hidden
         // position below the grid. Deciding it before the cap also keeps the cap from being a
@@ -1273,30 +1317,9 @@ public static class MapEndpoints
         // The entrance's own row decides nothing alone anymore: visibility cascades at
         // read time over the ancestor chain, so a private entrance row under a readable
         // cave is served — the filter's inheritance arm does that work.
-        var query = db.Features.AsNoTracking()
-            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-            .Where(f => f.Kind == FeatureKind.CaveEntrance
-                && ((!f.IsProtectedEffective && f.Geom!.Intersects(polygon))
-                    || protectedMembers.Contains(f.Id)));
-
-        if (!string.IsNullOrWhiteSpace(tag))
-        {
-            query = query.Where(f => db.Taggings.Any(tg =>
-                tg.FeatureId == f.Id && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
-        }
-
-        var rows = await query
-            .Select(f => new
-            {
-                f.Id,
-                f.Name,
-                f.Geom,
-                f.IsProtectedEffective,
-                CaveId = f.Entrance!.CaveFeatureId,
-                f.Entrance!.IsMain,
-            })
-            .OrderBy(f => f.Id)
-            .Take(maxPoints)
+        var rows = await EntrancePointsQuery(
+                db, db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers),
+                box, protectedMembers, tag, maxPoints)
             .ToListAsync(ct);
         if (rows.Count == 0)
         {

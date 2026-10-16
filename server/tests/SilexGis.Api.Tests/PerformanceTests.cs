@@ -7,6 +7,8 @@ using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using SilexGis.Api.Common;
+using SilexGis.Api.Features.Map;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
@@ -220,11 +222,9 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         // turns the ANY test into a per-row construct (measured 50x slower at this size).
         // Built as a pair, over one parameter set: this is the shape the entrance layer
         // itself uses, and the only one that can be spliced into a single statement.
-        var (visibilitySql, exactSql, visibilityParameters) = AccessSql.FeatureLayerFragments(ctx, "f");
+        var (visibilitySql, _, _) = AccessSql.FeatureLayerFragments(ctx, "f");
         visibilitySql.ShouldContain("= ANY(@acc_caving_group_ids)", Case.Sensitive,
             "the visibility fragment must pass caving group ids as ONE uuid[] parameter");
-
-        AddViewport(visibilityParameters);
 
         // Baseline: the bbox filter alone. Whatever plan this gets is the plan the guarded
         // query must keep — the security filter is allowed to cost rows, not access paths.
@@ -239,37 +239,30 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             """);
         AssertRidesEntranceIndex(baseline, "bbox only");
 
-        // The clustered entrance layer's shape: bbox by the && operator, the visibility
+        // The clustered entrance layer, as the route sends it: the statement is built by the same
+        // method the route calls, so a change to it is a change to what is explained here. The
+        // candidate step carries the bbox (widened by one protection cell), the visibility
         // fragment, and the exact-view fragment deciding per row whether the coordinate is
-        // emitted as stored or snapped to the protection grid.
-        var clusters = await ExplainAsync(connection, visibilityParameters, "clusters (guarded)", $"""
-            SELECT count(*) AS total, count(*) FILTER (WHERE {exactSql}) AS exact_visible
-            FROM features f
-            WHERE f.kind = 2
-              AND f.deleted_at IS NULL
-              AND f.geom && ST_MakeEnvelope(@west, @south, @east, @north, 4326)
-              AND {visibilitySql}
-            """);
+        // counted as stored or snapped to the protection grid.
+        var (clusterSql, clusterParameters, _) = MapSql.BuildClusters(
+            ctx, new Bbox(West, South, East, North), zoom: 9, protectionGridMeters: 5000d, tag: null);
+        var clusters = await ExplainAsync(connection, clusterParameters, "clusters (guarded)", clusterSql);
         AssertRidesEntranceIndex(clusters, "clusters (guarded)");
         AssertAncestorProbeIsIndexed(clusters, "clusters (guarded)");
 
-        // The point layer above the cluster zoom asks the same question through
-        // ST_Intersects (the operator the EF query produces) for unprotected rows, OR-ed with the
-        // ids of the protected rows whose shown position is in the window; both arms must be
-        // index-served, the bbox arm by the same partial index.
-        var (pointsVisibilitySql, pointsVisibilityParameters) = AccessSql.FeatureVisibleToFragment(ctx, "f");
-        AddViewport(pointsVisibilityParameters);
-        pointsVisibilityParameters.Add("protected_members", AccessSql.UuidArray([Guid.NewGuid()]));
-        var points = await ExplainAsync(connection, pointsVisibilityParameters, "points (guarded)", $"""
-            SELECT count(*)
-            FROM features f
-            WHERE f.kind = 2
-              AND f.deleted_at IS NULL
-              AND ((NOT f.is_protected_effective
-                    AND ST_Intersects(f.geom, ST_MakeEnvelope(@west, @south, @east, @north, 4326)))
-                   OR f.id = ANY(@protected_members))
-              AND {pointsVisibilitySql}
-            """);
+        // The point layer above the cluster zoom, as EF sends it: ST_Intersects for unprotected
+        // rows, OR-ed with the ids of the protected rows whose shown position is in the window,
+        // ordered and capped. Captured from the query the route builds (the same method), with
+        // its own parameters, rather than written out again here.
+        var pointsQuery = MapEndpoints.EntrancePointsQuery(
+            db,
+            db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers),
+            new Bbox(West, South, East, North),
+            [Guid.NewGuid()],
+            tag: null,
+            maxPoints: 10000);
+        output.WriteLine(pointsQuery.ToQueryString());
+        var points = await ExplainEfAsync(pointsQuery, "points (guarded)");
         AssertRidesEntranceIndex(points, "points (guarded)");
         AssertAncestorProbeIsIndexed(points, "points (guarded)");
 
@@ -365,6 +358,34 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         parameters.Add("south", South);
         parameters.Add("east", East);
         parameters.Add("north", North);
+    }
+
+    /// <summary>
+    /// Explains an EF query exactly as EF would send it: its own command, its own parameters,
+    /// with only the EXPLAIN prefix added.
+    /// </summary>
+    private async Task<string> ExplainEfAsync<T>(IQueryable<T> query, string label)
+    {
+        await using var command = query.CreateDbCommand();
+        command.CommandText = $"EXPLAIN (ANALYZE, BUFFERS)\n{command.CommandText}";
+        if (command.Connection!.State != System.Data.ConnectionState.Open)
+        {
+            await command.Connection.OpenAsync();
+        }
+
+        var lines = new List<string>();
+        await using (var reader = await command.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                lines.Add(reader.GetString(0));
+            }
+        }
+
+        var plan = string.Join("\n", lines);
+        output.WriteLine($"--- {label} ---");
+        output.WriteLine(plan);
+        return plan;
     }
 
     private async Task<string> ExplainAsync(
