@@ -84,20 +84,26 @@ public static class JobsSql
 
     /// <summary>
     /// Puts a job that failed in passing back in the queue, to be taken again no sooner than
-    /// <paramref name="notBefore"/>, with the failure kept as its error meanwhile so a screen
+    /// <paramref name="delay"/> from now, with the failure kept as its error meanwhile so a screen
     /// waiting on it can say why it is not done yet. Only a job still running is put back.
     /// </summary>
+    /// <remarks>
+    /// The delay is added to the database's own clock, the clock the claim compares it with, so the
+    /// two cannot disagree about when it has passed. The attempt's progress goes with it: a job
+    /// waiting for its next turn has done nothing of that turn yet.
+    /// </remarks>
     public static async Task PutBackAsync(
-        SilexGisDbContext db, long jobId, DateTimeOffset notBefore, string error, CancellationToken ct)
+        SilexGisDbContext db, long jobId, TimeSpan delay, string error, CancellationToken ct)
     {
         await using var command = await CommandAsync(db, ct);
         command.CommandText = """
             UPDATE processing_jobs
-            SET status = 0, started_at = NULL, not_before = @not_before, error = @error
+            SET status = 0, started_at = NULL, not_before = now() + @delay, error = @error,
+                progress_done = NULL, progress_total = NULL
             WHERE id = @id AND status = 1
             """;
         command.Parameters.Add(new NpgsqlParameter("id", jobId));
-        command.Parameters.Add(new NpgsqlParameter("not_before", notBefore));
+        command.Parameters.Add(new NpgsqlParameter("delay", NpgsqlDbType.Interval) { Value = delay });
         command.Parameters.Add(new NpgsqlParameter("error", error));
         await command.ExecuteNonQueryAsync(ct);
     }

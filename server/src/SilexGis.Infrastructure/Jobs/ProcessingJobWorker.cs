@@ -129,34 +129,40 @@ public abstract class ProcessingJobWorkerBase(
             // Put back through a context of its own: this one may hold the attempt's half-done
             // changes, and they must not be saved on the way out. Nothing is told to the requester
             // yet — the job has not finished, it is waiting for its next turn.
-            var notBefore = clock.GetUtcNow() + JobRetry.DelayAfter(job.Attempts);
+            var delay = JobRetry.DelayAfter(job.Attempts);
             logger.LogWarning(
-                e, "Job {JobId} ({Kind}) failed in passing on attempt {Attempt}; taken again from {NotBefore}",
-                job.Id, job.Kind, job.Attempts, notBefore);
+                e, "Job {JobId} ({Kind}) failed in passing on attempt {Attempt}; taken again in {Delay}",
+                job.Id, job.Kind, job.Attempts, delay);
             using var putBack = scopeFactory.CreateScope();
             await JobsSql.PutBackAsync(
-                putBack.ServiceProvider.GetRequiredService<SilexGisDbContext>(),
-                job.Id,
-                notBefore,
-                Truncated(e.Message),
-                ct);
+                putBack.ServiceProvider.GetRequiredService<SilexGisDbContext>(), job.Id, delay, Truncated(e.Message), ct);
             return true;
         }
         catch (Exception e)
         {
-            // Rows the failed attempt added and never committed are not saved by the failure's
-            // own record. Left in this context they would be inserted below, outside the
-            // transaction that should have held them and past whatever it would have computed
-            // over them — an import's features without the protection they inherit, for one.
-            // What a handler changed on rows that exist is kept: some record their failure so.
-            foreach (var added in db.ChangeTracker.Entries().Where(x => x.State == EntityState.Added).ToList())
+            logger.LogError(e, "Job {JobId} ({Kind}) failed", job.Id, job.Kind);
+
+            // An attempt that left rows added and never committed is discarded whole, and its
+            // failure is recorded through a context of its own. Saved here, those rows would be
+            // inserted outside the transaction that should have held them and past whatever it
+            // would have computed over them — an import's features without the protection they
+            // inherit, for one. An attempt that added nothing is recorded here as before, keeping
+            // what a handler changed on existing rows to mark its own failure.
+            if (db.ChangeTracker.Entries().Any(x => x.State == EntityState.Added))
             {
-                added.State = EntityState.Detached;
+                using var apart = scopeFactory.CreateScope();
+                var fresh = apart.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+                var failed = await fresh.ProcessingJobs.FirstAsync(j => j.Id == job.Id, ct);
+                failed.Status = ProcessingJobStatus.Failed;
+                failed.Error = Truncated(e.Message);
+                failed.CompletedAt = clock.GetUtcNow();
+                NotifyRequester(fresh, failed);
+                await fresh.SaveChangesAsync(ct);
+                return true;
             }
 
             job.Status = ProcessingJobStatus.Failed;
             job.Error = e.Message;
-            logger.LogError(e, "Job {JobId} ({Kind}) failed", job.Id, job.Kind);
         }
 
         job.CompletedAt = clock.GetUtcNow();

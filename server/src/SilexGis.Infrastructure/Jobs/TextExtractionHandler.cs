@@ -44,8 +44,9 @@ public sealed class TextExtractionHandler(
 {
     public string Kind => ProcessingJobKinds.TextExtraction;
 
-    /// <summary>Safe to run again from the start: a file already read is skipped and pages are written by number.</summary>
-    public bool RetriesPassingFailures => true;
+    // Not retried by the queue although a second run would do nothing twice: a failure is recorded
+    // on what this reads before it is rethrown, so the screens watching it would stop at a failure
+    // the next attempt might undo. Recording it only on the last attempt is the step before opting in.
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {

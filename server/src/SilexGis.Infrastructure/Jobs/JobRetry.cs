@@ -32,28 +32,41 @@ public static class JobRetry
         attempts < MaxAttempts && IsPassing(failure);
 
     /// <summary>
-    /// Whether a failure is of the surroundings rather than of the work: transient database
-    /// errors, timeouts, network and transport errors, and an I/O error other than a missing file.
-    /// Looked for through the exceptions it wraps, since the database and HTTP layers rarely throw
-    /// the cause itself.
+    /// Whether a failure is of the surroundings rather than of the work: a transient database
+    /// error, a timeout, a connection that could not be made or was dropped, a service answering
+    /// that it is unavailable, and an I/O error that is not about the input.
     /// </summary>
+    /// <remarks>
+    /// Looked for through the wrappers the database and HTTP layers put around a cause — and only
+    /// those. A handler that wraps an I/O error in its own exception has said what it means (a KMZ
+    /// that is not a readable archive), and a truncated stream is an answer about the input, not
+    /// about the machine; retrying either is three failures and the same answer.
+    /// </remarks>
     public static bool IsPassing(Exception failure)
     {
-        for (Exception? e = failure; e is not null; e = e.InnerException)
+        ArgumentNullException.ThrowIfNull(failure);
+        switch (failure)
         {
-            switch (e)
-            {
-                case NpgsqlException { IsTransient: true }:
-                case TimeoutException:
-                case HttpRequestException:
-                case SocketException:
-                case IOException and not FileNotFoundException and not DirectoryNotFoundException:
-                    return true;
-                case DbUpdateConcurrencyException:
-                    return false;
-            }
+            case NpgsqlException { IsTransient: true }:
+            case TimeoutException:
+            case SocketException:
+                return true;
+            case HttpRequestException http:
+                // No answer at all, or an answer saying "not now"; a 4xx is about what was sent.
+                return http.StatusCode is null
+                    or System.Net.HttpStatusCode.RequestTimeout
+                    or System.Net.HttpStatusCode.TooManyRequests
+                    or >= System.Net.HttpStatusCode.InternalServerError;
+            case EndOfStreamException or FileNotFoundException or DirectoryNotFoundException or PathTooLongException:
+                return false;
+            case IOException:
+                return failure.GetType() == typeof(IOException) || failure.InnerException is SocketException;
+            case DbUpdateConcurrencyException:
+                return false;
+            case DbUpdateException or AggregateException or TaskCanceledException when failure.InnerException is { } inner:
+                return IsPassing(inner);
+            default:
+                return false;
         }
-
-        return false;
     }
 }

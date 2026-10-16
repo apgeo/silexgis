@@ -148,6 +148,29 @@ public sealed class JobRetryAndProgressTests : IAsyncLifetime, IDisposable, ICla
         midway.Done.ShouldBeInRange(0, 4);
     }
 
+    [Fact]
+    public void A_failure_counts_as_passing_only_when_it_says_nothing_about_the_input()
+    {
+        // Of the surroundings: tried again.
+        JobRetry.IsPassing(new TimeoutException()).ShouldBeTrue();
+        JobRetry.IsPassing(new HttpRequestException("no answer")).ShouldBeTrue();
+        JobRetry.IsPassing(new HttpRequestException("busy", null, System.Net.HttpStatusCode.ServiceUnavailable)).ShouldBeTrue();
+        JobRetry.IsPassing(new IOException("the device is not ready")).ShouldBeTrue();
+        JobRetry.IsPassing(new DbUpdateException("save", new TimeoutException())).ShouldBeTrue();
+        JobRetry.IsPassing(new TaskCanceledException("timed out", new TimeoutException())).ShouldBeTrue();
+
+        // About the input, or said so by the handler: not tried again.
+        JobRetry.IsPassing(new HttpRequestException("refused", null, System.Net.HttpStatusCode.BadRequest)).ShouldBeFalse();
+        JobRetry.IsPassing(new EndOfStreamException()).ShouldBeFalse();
+        JobRetry.IsPassing(new FileNotFoundException()).ShouldBeFalse();
+        JobRetry.IsPassing(new InvalidOperationException("not a readable archive", new IOException())).ShouldBeFalse();
+        JobRetry.IsPassing(new InvalidDataException()).ShouldBeFalse();
+
+        // And never more than three attempts in all.
+        JobRetry.MayRetry(2, new TimeoutException()).ShouldBeTrue();
+        JobRetry.MayRetry(JobRetry.MaxAttempts, new TimeoutException()).ShouldBeFalse();
+    }
+
     public Task DisposeAsync() => Task.CompletedTask;
 
     public void Dispose() => factory.Dispose();
