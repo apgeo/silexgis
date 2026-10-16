@@ -116,7 +116,8 @@ export const groups = {
   caves: [
     'AssociationDisclosureTests', 'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests',
     'CaveListingSortStabilityTests', 'CaveOverburdenTests', 'CaveSubtypeMissingTests',
-    'CenterlineTests', 'EntrancePlacementGuardTests', 'HypsometryTests', 'PerformanceTests',
+    'CenterlineTests', 'EntrancePlacementGuardTests', 'HypsometryTests',
+    'MapWindowMembershipTests', 'PerformanceTests',
     'PersistenceTests', 'ProtectionDepthTests', 'StructureComparisonTests', 'SurveyMeshTests',
     'SurveyModelTests',
     // A deleted cave, entrance or surface feature can be put back: what one deletion took,
@@ -133,7 +134,7 @@ export const groups = {
   geoFeatures: [
     'ClosestApproachTests', 'FeatureFilterCompilerTests', 'FeatureHierarchyTests',
     'FeatureIntegrityTests', 'FeatureLinkTests', 'FeatureTests', 'GeoJsonGeometryTests',
-    'PolygonMorphometryTests', 'StructureComparisonTests',
+    'MapWindowMembershipTests', 'PolygonMorphometryTests', 'StructureComparisonTests',
     // The restore routes and the rule they keep live in the feature slice itself.
     'FeatureRestoreTests',
   ],
@@ -170,6 +171,8 @@ export const groups = {
   map: [
     'CaveMeshesInViewTests', 'ExpeditionMapTests', 'GeoJsonGeometryTests', 'PerformanceTests',
     'PersistenceTests', 'TerrainOptionsTests',
+    // Which protected rows a caller's window holds, decided on the position they are shown.
+    'MapWindowMembershipTests',
   ],
   mapViews: ['MapViewTests'],
   me: [
@@ -463,9 +466,9 @@ export const crossCutting = {
     'FileAccessBatchParityTests', 'FileAttachmentTests', 'FilterParityTests',
     'FilterWorldConformanceTests', 'GeofileTests', 'GeoreferencedMapTests', 'HistoryTests',
     'HypsometryTests', 'KarstLinkExportTests', 'MapDensityTests', 'MapPointPatternTests',
-    'PhotoBytesProtectionTests', 'PhotoImportTests', 'PolygonMorphometryTests',
-    'ProtectionDepthTests', 'PublicTripCachingTests', 'PublicTripDepthPlacesTests',
-    'PublicTripDiagnosticsTests', 'PublicTripMomentPicturesTests',
+    'MapWindowMembershipTests', 'PhotoBytesProtectionTests', 'PhotoImportTests',
+    'PolygonMorphometryTests', 'ProtectionDepthTests', 'PublicTripCachingTests',
+    'PublicTripDepthPlacesTests', 'PublicTripDiagnosticsTests', 'PublicTripMomentPicturesTests',
     'PublicTripPlannedReturnTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
     'PublishedNamesNowhereTests', 'PublishedSurveyBoundsTests', 'RegistryStatisticsTests',
     'ResLinkApiTests', 'ResLinkProtectionFloorTests', 'ResLinkTargetPictureTests',

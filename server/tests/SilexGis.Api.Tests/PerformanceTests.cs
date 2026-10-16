@@ -10,6 +10,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Access;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
@@ -252,19 +253,32 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         AssertAncestorProbeIsIndexed(clusters, "clusters (guarded)");
 
         // The point layer above the cluster zoom asks the same question through
-        // ST_Intersects (the operator the EF query produces); it must reach the same index.
+        // ST_Intersects (the operator the EF query produces) for unprotected rows, OR-ed with the
+        // ids of the protected rows whose shown position is in the window; both arms must be
+        // index-served, the bbox arm by the same partial index.
         var (pointsVisibilitySql, pointsVisibilityParameters) = AccessSql.FeatureVisibleToFragment(ctx, "f");
         AddViewport(pointsVisibilityParameters);
+        pointsVisibilityParameters.Add("protected_members", AccessSql.UuidArray([Guid.NewGuid()]));
         var points = await ExplainAsync(connection, pointsVisibilityParameters, "points (guarded)", $"""
             SELECT count(*)
             FROM features f
             WHERE f.kind = 2
               AND f.deleted_at IS NULL
-              AND ST_Intersects(f.geom, ST_MakeEnvelope(@west, @south, @east, @north, 4326))
+              AND ((NOT f.is_protected_effective
+                    AND ST_Intersects(f.geom, ST_MakeEnvelope(@west, @south, @east, @north, 4326)))
+                   OR f.id = ANY(@protected_members))
               AND {pointsVisibilitySql}
             """);
         AssertRidesEntranceIndex(points, "points (guarded)");
         AssertAncestorProbeIsIndexed(points, "points (guarded)");
+
+        // The protected members of a window, decided on the position each caller is shown: the
+        // widened prefilter must still be answered by the entrance index.
+        var (membersSql, membersParameters) = WindowMembershipSql.Build(
+            ctx, West, South, East, North, 5000d, [FeatureKind.CaveEntrance]);
+        var members = await ExplainAsync(connection, membersParameters, "window membership (guarded)", membersSql);
+        AssertRidesEntranceIndex(members, "window membership (guarded)");
+        AssertAncestorProbeIsIndexed(members, "window membership (guarded)");
 
         // Batched id lookup: the shape protection and DTO enrichment use after a layer query
         // has produced its rows. The id set is one uuid[] parameter, and 50 ids out of 100k

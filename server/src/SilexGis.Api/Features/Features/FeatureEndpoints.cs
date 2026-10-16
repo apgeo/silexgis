@@ -11,6 +11,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -100,6 +101,7 @@ public static class FeatureEndpoints
 
         // Enum query parameters arrive as the camelCase strings the JSON contract uses;
         // parse case-insensitively (route binding's Enum.TryParse would not).
+        FeatureKind? kindFilter = null;
         if (!string.IsNullOrWhiteSpace(kind))
         {
             if (!RouteEnums.TryParse<FeatureKind>(kind, out var kindValue))
@@ -108,6 +110,7 @@ public static class FeatureEndpoints
             }
 
             query = query.Where(f => f.Kind == kindValue);
+            kindFilter = kindValue;
         }
 
         if (!string.IsNullOrWhiteSpace(category))
@@ -138,10 +141,19 @@ public static class FeatureEndpoints
                 f.Name != null && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern)));
         }
 
+        // A protected row is in the box by the position this caller is shown — the snapped
+        // point, or nowhere for a line or polygon whose geometry is withheld from them — never by
+        // its stored one: tested on the stored geometry, the page and its total would bisect a
+        // hidden position below the protection grid.
         if (Bbox.TryParse(bbox, out var box))
         {
             var polygon = box.ToPolygon();
-            query = query.Where(f => f.Geom != null && f.Geom.Intersects(polygon));
+            var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(
+                db, ctx, box.West, box.South, box.East, box.North,
+                accessOptions.Value.LocationGridMeters, kindFilter is { } only ? new[] { only } : null, ct);
+            query = query.Where(f => f.Geom != null
+                && ((!f.IsProtectedEffective && f.Geom.Intersects(polygon))
+                    || protectedMembers.Contains(f.Id)));
         }
 
         // Protected centerlines are withheld entirely for callers without exact view

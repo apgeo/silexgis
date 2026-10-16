@@ -12,6 +12,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Import;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Trips;
@@ -1132,10 +1133,19 @@ public static class MapEndpoints
             categoryFilter = parsedCategory;
         }
 
+        // Protected rows are in the window by the position this caller is shown — the snapped
+        // point, or nowhere for a protected line or polygon whose geometry is withheld — so the
+        // presence of a row never bisects a position the caller may not see. Decided before the
+        // cap, so a hidden row cannot take a slot either.
         var polygon = box.ToPolygon();
+        var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(
+            db, ctx, box.West, box.South, box.East, box.North,
+            accessOptions.Value.LocationGridMeters, kindFilter, ct);
         var query = db.Features.AsNoTracking()
             .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-            .Where(f => kindFilter.Contains(f.Kind) && f.Geom != null && f.Geom!.Intersects(polygon));
+            .Where(f => kindFilter.Contains(f.Kind) && f.Geom != null
+                && ((!f.IsProtectedEffective && f.Geom!.Intersects(polygon))
+                    || protectedMembers.Contains(f.Id)));
 
         if (featureTypeId is not null)
         {
@@ -1256,12 +1266,21 @@ public static class MapEndpoints
     {
         var polygon = box.ToPolygon();
 
+        // Protected entrances are in the window by the point this caller is shown, not by the
+        // stored one — tested on the stored point, presence in the answer would bisect a hidden
+        // position below the grid. Deciding it before the cap also keeps the cap from being a
+        // probe of its own: a hidden row that could take a slot would push a visible one out.
+        var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(
+            db, ctx, box.West, box.South, box.East, box.North, gridMeters, [FeatureKind.CaveEntrance], ct);
+
         // The entrance's own row decides nothing alone anymore: visibility cascades at
         // read time over the ancestor chain, so a private entrance row under a readable
         // cave is served — the filter's inheritance arm does that work.
         var query = db.Features.AsNoTracking()
             .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-            .Where(f => f.Kind == FeatureKind.CaveEntrance && f.Geom!.Intersects(polygon));
+            .Where(f => f.Kind == FeatureKind.CaveEntrance
+                && ((!f.IsProtectedEffective && f.Geom!.Intersects(polygon))
+                    || protectedMembers.Contains(f.Id)));
 
         if (!string.IsNullOrWhiteSpace(tag))
         {

@@ -12,6 +12,7 @@ using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Filters;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -148,13 +149,18 @@ public static class CaveEndpoints
             query = wantUnplaced ? query.Where(f => f.Geom == null) : query.Where(f => f.Geom != null);
         }
 
+        // A protected cave is in the box by the point this caller is shown — snapped when they
+        // may not place it — never by its stored one: tested on the stored point, the listing and
+        // its total would bisect a hidden position below the protection grid.
         if (Bbox.TryParse(bbox, out var box))
         {
-            // Membership follows the position the list prints for each cave, never the stored one:
-            // tested against a protected cave's true point, the total would move as a chosen edge
-            // crossed it, and the count alone would locate the cave.
-            query = await PublishedPositionBox.NarrowAsync(
-                query, ctx, protection, box.ToPolygon(), accessOptions.Value.LocationGridMeters, ct);
+            var polygon = box.ToPolygon();
+            var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(
+                db, ctx, box.West, box.South, box.East, box.North,
+                accessOptions.Value.LocationGridMeters, [FeatureKind.Cave], ct);
+            query = query.Where(f => f.Geom != null
+                && ((!f.IsProtectedEffective && f.Geom.Intersects(polygon))
+                    || protectedMembers.Contains(f.Id)));
         }
 
         // Taken before the ordering, because this is a set to report and not a page: sorting it

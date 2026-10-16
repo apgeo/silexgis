@@ -62,25 +62,42 @@ public static class MapSql
         // is what makes SQL round half away from zero as LocationProtection.Snap does —
         // round(double precision) rounds half to EVEN, and this statement carried that
         // wrong form for a while, disagreeing with every other snap at halfway values.
+        //
+        // Which rows are in the window is decided on the point that is counted (p.gx/p.gy),
+        // never on the stored one. Tested on the stored point, the count is a probe: moving
+        // one bbox edge in small steps changes it exactly when the edge crosses a protected
+        // entrance's true position, which recovers that position far below the protection
+        // grid without a coordinate ever being returned. The index prefilter on f.geom is
+        // widened by one protection cell so a row whose snapped point lands inside the
+        // window is still fetched; a snap moves a coordinate by at most half a cell on each
+        // axis, in the same degrees on both, so one cell is a safe margin anywhere.
         var sql = $"""
             SELECT avg(g.gx) AS lon, avg(g.gy) AS lat, COUNT(*)::int AS count
             FROM (
-                SELECT
-                    CASE WHEN {exactSql}
-                        THEN ST_X(f.geom)
-                        ELSE {SpatialSql.SnapToGrid("ST_X(f.geom)", "protection_cell")}
-                    END AS gx,
-                    CASE WHEN {exactSql}
-                        THEN ST_Y(f.geom)
-                        ELSE {SpatialSql.SnapToGrid("ST_Y(f.geom)", "protection_cell")}
-                    END AS gy
-                FROM features f
-                WHERE f.kind = {(short)FeatureKind.CaveEntrance}
-                  AND f.deleted_at IS NULL
-                  AND f.geom && ST_MakeEnvelope(@west, @south, @east, @north, 4326)
-                  AND {visibilitySql}{tagSql}
+                SELECT p.gx, p.gy,
+                       round(p.gx / @cluster_cell) AS cx,
+                       round(p.gy / @cluster_cell) AS cy
+                FROM (
+                    SELECT
+                        CASE WHEN {exactSql}
+                            THEN ST_X(f.geom)
+                            ELSE {SpatialSql.SnapToGrid("ST_X(f.geom)", "protection_cell")}
+                        END AS gx,
+                        CASE WHEN {exactSql}
+                            THEN ST_Y(f.geom)
+                            ELSE {SpatialSql.SnapToGrid("ST_Y(f.geom)", "protection_cell")}
+                        END AS gy
+                    FROM features f
+                    WHERE f.kind = {(short)FeatureKind.CaveEntrance}
+                      AND f.deleted_at IS NULL
+                      AND f.geom && ST_Expand(
+                            ST_MakeEnvelope(@west, @south, @east, @north, 4326), @protection_cell)
+                      AND {visibilitySql}{tagSql}
+                ) p
+                WHERE p.gx BETWEEN @west AND @east
+                  AND p.gy BETWEEN @south AND @north
             ) g
-            GROUP BY round(g.gx / @cluster_cell), round(g.gy / @cluster_cell)
+            GROUP BY g.cx, g.cy
             """;
 
         var connection = db.Database.GetDbConnection();
