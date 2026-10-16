@@ -1,41 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { DEFAULT_COORDINATE_FORMAT, isCoordinateFormat } from '../geo/coordinateFormat.ts';
-import { DEFAULT_APPEARANCE, DEFAULT_DOCKS, type AccountPrefsState } from './uiPrefsStore.ts';
+import { isCoordinateFormat } from '../geo/coordinateFormat.ts';
+import { accountPrefDefaults, type AccountPrefsState } from './uiPrefsStore.ts';
 
 /**
  * The preferences that belong to the ACCOUNT rather than to the browser: they are saved in the
  * account's stored preferences, follow a member to another browser, and are not inherited by the
- * next member who signs in on this one.
+ * next member who signs in on this one. Taken, with their defaults, from the one list of them.
  *
  * Everything else the preference store holds stays per browser — a centreline budget or a mesh
  * limit is a fact about the machine, not about the person.
  */
-export const ACCOUNT_PREF_KEYS = [
-  'appearance',
-  'panels',
-  'layouts',
-  'selectors',
-  'docks',
-  'pinnedTypeIds',
-  'coordinateFormat',
-  'overviewMap',
-] as const;
-
-export type AccountPrefKey = (typeof ACCOUNT_PREF_KEYS)[number];
-
-export type AccountPrefs = Partial<Record<AccountPrefKey, unknown>>;
+export type AccountPrefKey = keyof AccountPrefsState;
 
 /** What each account preference is when nobody has chosen anything. */
-export const ACCOUNT_PREF_DEFAULTS: Record<AccountPrefKey, unknown> = {
-  appearance: DEFAULT_APPEARANCE,
-  panels: {},
-  layouts: [],
-  selectors: {},
-  docks: DEFAULT_DOCKS,
-  pinnedTypeIds: [],
-  coordinateFormat: DEFAULT_COORDINATE_FORMAT,
-  overviewMap: false,
-};
+export const ACCOUNT_PREF_DEFAULTS: Readonly<Record<AccountPrefKey, unknown>> = accountPrefDefaults();
+
+export const ACCOUNT_PREF_KEYS = Object.keys(ACCOUNT_PREF_DEFAULTS) as readonly AccountPrefKey[];
+
+export type AccountPrefs = Partial<Record<AccountPrefKey, unknown>>;
 
 /** The server's limit on the stored document, in characters of its JSON. */
 export const PREFERENCES_MAX_LENGTH = 8000;
@@ -171,7 +153,8 @@ export function readAccountPrefs(stored: unknown): AccountPrefs {
  */
 export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsState> {
   const out: Partial<AccountPrefsState> = {};
-  const { appearance, panels, layouts, selectors, docks, pinnedTypeIds, coordinateFormat, overviewMap } = read;
+  const { appearance, panels, layouts, selectors, docks, pinnedTypeIds, coordinateFormat, overviewMap, karstLinkTreatment } =
+    read;
   if (
     isPlainObject(appearance) &&
     ['system', 'light', 'dark'].includes(appearance.theme as string) &&
@@ -200,6 +183,9 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
   }
   if (typeof overviewMap === 'boolean') {
     out.overviewMap = overviewMap;
+  }
+  if (karstLinkTreatment === 'no_position' || karstLinkTreatment === 'omit' || karstLinkTreatment === 'grid_position') {
+    out.karstLinkTreatment = karstLinkTreatment;
   }
   return out;
 }

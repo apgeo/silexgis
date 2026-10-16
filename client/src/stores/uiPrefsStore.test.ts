@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_APPEARANCE, DEFAULT_DOCKS, useUiPrefsStore } from './uiPrefsStore.ts';
+import { DEFAULT_APPEARANCE, DEFAULT_DOCKS, accountPrefDefaults, useUiPrefsStore } from './uiPrefsStore.ts';
 
 afterEach(() => {
   useUiPrefsStore.setState({
@@ -173,9 +173,9 @@ describe('uiPrefsStore appearance', () => {
     expect(useUiPrefsStore.getState().karstLinkTreatment).toBeUndefined();
   });
 
-  it('keeps a remembered export answer when the movie settings arrive beside it', () => {
-    // One version on again. Somebody who settled the interchange question must keep that answer,
-    // and must come back with no movie settings rather than with somebody else's idea of them —
+  it('drops a remembered export answer from before it belonged to an account, and has no movie settings', () => {
+    // The answer about what to disclose is the account's now: whoever gave it in this browser, the
+    // next person is asked again. And no movie settings rather than somebody else's idea of them —
     // the dialog starts from its own private defaults when nothing is stored.
     localStorage.setItem(
       'silexgis.uiPrefs',
@@ -188,7 +188,7 @@ describe('uiPrefsStore appearance', () => {
     useUiPrefsStore.persist.rehydrate();
 
     expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([]);
-    expect(useUiPrefsStore.getState().karstLinkTreatment).toBe('omit');
+    expect(useUiPrefsStore.getState().karstLinkTreatment).toBeUndefined();
     expect(useUiPrefsStore.getState().movieSettings).toBeUndefined();
   });
 
@@ -381,6 +381,32 @@ describe('uiPrefsStore account preferences', () => {
     useUiPrefsStore.getState().setCoordinateFormat('utm');
     expect(useUiPrefsStore.getState().adoptAccount('account-a')).toBe('same');
     expect(useUiPrefsStore.getState().coordinateFormat).toBe('utm');
+  });
+
+  it('asks the next member signing in again what to do with protected positions', () => {
+    const store = useUiPrefsStore.getState();
+    store.adoptAccount('account-a');
+    store.setKarstLinkTreatment('grid_position');
+
+    useUiPrefsStore.getState().adoptAccount('account-b');
+
+    expect(useUiPrefsStore.getState().karstLinkTreatment).toBeUndefined();
+  });
+
+  it('puts back every account preference the one list names, and starts the store from it', () => {
+    const fresh = accountPrefDefaults();
+    const store = useUiPrefsStore.getState();
+    store.adoptAccount('account-a');
+    store.setCoordinateFormat('utm');
+    store.togglePinnedType(4);
+    store.setKarstLinkTreatment('omit');
+
+    useUiPrefsStore.getState().releaseAccount();
+
+    const after = useUiPrefsStore.getState();
+    for (const key of Object.keys(fresh) as (keyof typeof fresh)[]) {
+      expect(after[key], key).toEqual(fresh[key]);
+    }
   });
 
   it('gives them up on sign-out, and leaves the browser’s own settings alone', () => {

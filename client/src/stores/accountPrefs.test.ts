@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
+import { accountPrefDefaults } from './uiPrefsStore.ts';
 import {
   ACCOUNT_PREF_DEFAULTS,
+  ACCOUNT_PREF_KEYS,
   PREFERENCES_MAX_LENGTH,
   accountPrefsIn,
   accountPrefsPatchSince,
@@ -241,6 +243,20 @@ describe('planAccountWrite held to the limit', () => {
     });
 
     expect(JSON.stringify(full).length).toBeLessThan(PREFERENCES_MAX_LENGTH);
+  });
+});
+
+describe('the account preference list', () => {
+  it('is the list the store resets, with its defaults', () => {
+    expect([...ACCOUNT_PREF_KEYS].sort()).toEqual(Object.keys(accountPrefDefaults()).sort());
+    expect(ACCOUNT_PREF_KEYS).toContain('karstLinkTreatment');
+  });
+
+  it('writes a remembered answer about protected positions to the account, and reads it back', () => {
+    expect(pickAccountPrefs({ ...ACCOUNT_PREF_DEFAULTS, karstLinkTreatment: 'omit' })).toEqual({ karstLinkTreatment: 'omit' });
+    expect(accountPrefsIn({ karstLinkTreatment: 'grid_position' })).toEqual({ karstLinkTreatment: 'grid_position' });
+    // Only one of the three words: anything else is an answer this client cannot honour.
+    expect(accountPrefsIn({ karstLinkTreatment: 'surveyed' })).toEqual({});
   });
 });
 

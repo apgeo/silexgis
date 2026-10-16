@@ -93,6 +93,10 @@ interface UiPrefsState {
    * so somebody who has already decided is not asked the same question every time. Undefined
    * means they have not decided and are asked. It is a remembered preference and never an
    * authority: the server refuses an export that names nothing valid, whatever is stored here.
+   *
+   * The person's, not the browser's: it is an answer about what to disclose, and on a shared
+   * laptop the next member must be asked again rather than handed the last one's answer — so it
+   * travels with the account like the workspace arrangement.
    */
   karstLinkTreatment?: ProtectedPositionTreatment;
   setKarstLinkTreatment: (treatment: ProtectedPositionTreatment | undefined) => void;
@@ -157,9 +161,9 @@ interface UiPrefsState {
   overviewMap: boolean;
   setOverviewMap: (open: boolean) => void;
   /**
-   * Which account the account preferences held here belong to — the selection panels, layouts,
-   * selectors, docks, pinned types, coordinate format, overview and appearance. They are a cache
-   * of what that account has stored; undefined when no account has claimed them.
+   * Which account the account preferences held here belong to — those `accountPrefDefaults`
+   * lists. They are a cache of what that account has stored; undefined when no account has
+   * claimed them.
    */
   accountId?: string;
   /**
@@ -197,9 +201,19 @@ export interface AccountPrefsState {
   pinnedTypeIds: number[];
   coordinateFormat: CoordinateFormat;
   overviewMap: boolean;
+  karstLinkTreatment: ProtectedPositionTreatment | undefined;
 }
 
-function accountPrefDefaults(): AccountPrefsState {
+/**
+ * THE list of account preferences, with what each one is when nobody has chosen anything.
+ *
+ * Everything that treats the account's preferences as a set — which keys are written to the
+ * account and read back from it, what a sign-out or another member's sign-in puts back, what the
+ * store starts with — takes its keys and defaults from here, so a preference added to the account
+ * is added once. The empty objects and lists are fresh each call; the two default records are
+ * shared constants, which nothing changes in place.
+ */
+export function accountPrefDefaults(): AccountPrefsState {
   return {
     appearance: DEFAULT_APPEARANCE,
     panels: {},
@@ -209,6 +223,7 @@ function accountPrefDefaults(): AccountPrefsState {
     pinnedTypeIds: [],
     coordinateFormat: DEFAULT_COORDINATE_FORMAT,
     overviewMap: false,
+    karstLinkTreatment: undefined,
   };
 }
 
@@ -221,7 +236,7 @@ function accountPrefDefaults(): AccountPrefsState {
 export const useUiPrefsStore = create<UiPrefsState>()(
   persist(
     (set) => ({
-      pinnedTypeIds: [],
+      ...accountPrefDefaults(),
       togglePinnedType: (id) =>
         set((state) => ({
           pinnedTypeIds: state.pinnedTypeIds.includes(id)
@@ -248,9 +263,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           meshesInViewMaxCaves: maxCaves,
           meshesInViewMaxBytes: maxBytes,
         }),
-      appearance: DEFAULT_APPEARANCE,
       setAppearance: (patch) => set((state) => ({ appearance: { ...state.appearance, ...patch } })),
-      karstLinkTreatment: undefined,
       setKarstLinkTreatment: (treatment) => set({ karstLinkTreatment: treatment }),
       movieSettings: undefined,
       setMovieSettings: (settings) => set({ movieSettings: settings }),
@@ -258,17 +271,14 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       setMovieGifCalibration: (calibration) => set({ movieGifCalibration: calibration }),
       modelLabelScale: undefined,
       setModelLabelScale: (scale) => set({ modelLabelScale: scale }),
-      selectors: {},
       setSelectorPrefs: (key, patch) =>
         set((state) => ({
           selectors: { ...state.selectors, [key]: { ...state.selectors[key], ...patch } },
         })),
-      panels: {},
       setPanelPrefs: (scope, patch) =>
         set((state) => ({
           panels: { ...state.panels, [scope]: { ...state.panels[scope], ...patch } },
         })),
-      layouts: [],
       saveLayout: (name, mapChromeHidden) =>
         set((state) => {
           // Saving under a name that already exists replaces it, which is what "save" means to
@@ -300,11 +310,8 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           };
         }),
       deleteLayout: (id) => set((state) => ({ layouts: state.layouts.filter((l) => l.id !== id) })),
-      docks: DEFAULT_DOCKS,
       setDocks: (patch) => set((state) => ({ docks: { ...state.docks, ...patch } })),
-      coordinateFormat: DEFAULT_COORDINATE_FORMAT,
       setCoordinateFormat: (format) => set({ coordinateFormat: format }),
-      overviewMap: false,
       setOverviewMap: (open) => set({ overviewMap: open }),
       accountId: undefined,
       accountPrefsBaseline: undefined,
@@ -334,7 +341,6 @@ export const useUiPrefsStore = create<UiPrefsState>()(
         const state = persisted as UiPrefsState;
         // The browser's own settings, kept across every version.
         const browser = {
-          karstLinkTreatment: from < 5 ? undefined : state.karstLinkTreatment,
           movieSettings: from < 6 ? undefined : state.movieSettings,
           meshesInViewMinZoom: from < 7 ? undefined : state.meshesInViewMinZoom,
           meshesInViewMaxCaves: from < 7 ? undefined : state.meshesInViewMaxCaves,
