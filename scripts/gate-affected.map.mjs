@@ -88,6 +88,8 @@ export const groups = {
   photos: [
     'AlbumAndPublicGalleryTests', 'ExpeditionPhotographTests', 'PhotoBytesProtectionTests',
     'PhotoGalleryTests', 'PhotoImportTests',
+    // A capped photo window counts only photos its caller may be told the position of.
+    'HiddenRowCapTests',
   ],
   photoLibraries: [
     'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryAlbumTests',
@@ -163,6 +165,8 @@ export const groups = {
     'ArchiveUpgradeMigrationTests', 'BulkImportTests', 'PhotoImportTests',
     'ServerDirectoryContainmentTests',
     'SpeleolocTripImportTests', 'StagedImportTests', 'TripTrackImportTests',
+    // The proximity pool every importer compares against is cut after it is filtered.
+    'HiddenRowCapTests',
   ],
   jobs: [
     'BulkImportTests', 'DocumentConversionTests', 'EventReminderSweepTests',
@@ -173,7 +177,7 @@ export const groups = {
     'CaveMeshesInViewTests', 'ExpeditionMapTests', 'GeoJsonGeometryTests', 'PerformanceTests',
     'PersistenceTests', 'TerrainOptionsTests',
     // Which protected rows a caller's window holds, decided on the position they are shown.
-    'MapWindowMembershipTests', 'MapClusterConfigurationTests',
+    'MapWindowMembershipTests', 'MapClusterConfigurationTests', 'HiddenRowCapTests',
   ],
   mapViews: ['MapViewTests'],
   // The one statement deciding which protected rows a caller's window holds, on the position
@@ -476,8 +480,8 @@ export const crossCutting = {
     'ExpeditionSurfaceLogTests', 'FeatureFilterCompilerTests', 'FeatureHierarchyTests',
     'FeatureLinkTests', 'FeatureRestoreTests', 'FeatureShareTests', 'FeatureTests',
     'FileAccessBatchParityTests', 'FileAttachmentTests', 'FilterParityTests',
-    'FilterWorldConformanceTests', 'GeofileTests', 'GeoreferencedMapTests', 'HistoryTests',
-    'HypsometryTests', 'KarstLinkExportTests', 'MapClusterConfigurationTests',
+    'FilterWorldConformanceTests', 'GeofileTests', 'GeoreferencedMapTests', 'HiddenRowCapTests',
+    'HistoryTests', 'HypsometryTests', 'KarstLinkExportTests', 'MapClusterConfigurationTests',
     'MapDensityTests', 'MapPointPatternTests', 'MapWindowMembershipTests',
     'PhotoBytesProtectionTests', 'PhotoImportTests', 'PolygonMorphometryTests',
     'ProtectionDepthTests', 'PublicTripCachingTests', 'PublicTripDepthPlacesTests',

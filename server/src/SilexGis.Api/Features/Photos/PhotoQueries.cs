@@ -21,17 +21,19 @@ namespace SilexGis.Api.Features.Photos;
 /// only ever narrow.
 /// </para>
 /// </summary>
-internal static class PhotoQueries
+public static class PhotoQueries
 {
     /// <summary>
-    /// How many photographs a map-extent query looks at before it gives up narrowing.
+    /// How many photographs a map-extent query answers with at most: the newest this many whose
+    /// position the caller may be told.
     ///
     /// <para>
     /// A bbox needs the positions resolved before the page can be counted, because whether a
     /// photograph's fix may be shown is a per-caller answer and not a condition SQL can carry.
     /// Resolving it after paging would leave the total announcing how many were withheld, which
-    /// is exactly the number that must not be published — so the candidates are bounded instead
-    /// and the bound is stated rather than silent.
+    /// is exactly the number that must not be published — so the answer is bounded instead and
+    /// the bound is stated rather than silent. The bound counts photographs the caller may place
+    /// and never photographs looked at: see <see cref="InExtentAsync"/>.
     /// </para>
     /// </summary>
     public const int MaxExtentCandidates = 3000;
@@ -178,30 +180,56 @@ internal static class PhotoQueries
     /// rule about a capture point, asked here exactly as the map layer asks it — a gallery whose
     /// map mode showed a pin the map itself withholds would be a way round the map.
     /// </remarks>
+    public static Task<IReadOnlyCollection<Guid>> InExtentAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        PhotoPositionDisclosure disclosure,
+        IQueryable<Document> photographs,
+        Geometry extent,
+        CancellationToken ct) =>
+        InExtentAsync(db, ctx, disclosure, photographs, extent, MaxExtentCandidates, ct);
+
+    /// <summary>The same, with the bound named — so a test can reach it with a handful of rows.</summary>
     public static async Task<IReadOnlyCollection<Guid>> InExtentAsync(
         SilexGisDbContext db,
         AccessContext ctx,
         PhotoPositionDisclosure disclosure,
         IQueryable<Document> photographs,
         Geometry extent,
+        int limit,
         CancellationToken ct)
     {
-        var candidates = await (from file in db.StoredFiles.AsNoTracking()
-                                join version in db.DocumentVersions.AsNoTracking()
-                                    on file.DocumentVersionId equals version.Id
-                                where version.IsCurrent
-                                    && file.Geom != null
-                                    && file.Geom!.Intersects(extent)
-                                    && photographs.Any(d => d.Id == version.DocumentId)
-                                orderby file.CreatedAt descending, file.Id
-                                select new { file.Id, version.DocumentId })
-            .Take(MaxExtentCandidates)
-            .ToListAsync(ct);
+        var inExtent = from file in db.StoredFiles.AsNoTracking()
+                       join version in db.DocumentVersions.AsNoTracking()
+                           on file.DocumentVersionId equals version.Id
+                       where version.IsCurrent
+                           && file.Geom != null
+                           && file.Geom!.Intersects(extent)
+                           && photographs.Any(d => d.Id == version.DocumentId)
+                       orderby file.CreatedAt descending, file.Id
+                       select new { file.Id, version.DocumentId };
 
-        var disclosable = await disclosure.DisclosableIdsAsync(
-            ctx, [.. candidates.Select(c => c.Id)], ct);
+        // The bound is applied to photographs the caller may place, never to photographs looked
+        // at. Cut first and filtered after, an extent holding more than the bound let a picture
+        // whose position is withheld take a place, and the picture it displaced came back as soon
+        // as an edge moved past the hidden one's capture point — which located it. So candidates
+        // are read newest first a bound's worth at a time, each batch is decided in full, and
+        // reading stops once the bound is filled: the answer is the newest placeable photographs
+        // in the extent, whatever else it holds.
+        var shown = new List<Guid>();
+        for (var offset = 0; ; offset += limit)
+        {
+            var candidates = await inExtent.Skip(offset).Take(limit).ToListAsync(ct);
+            var disclosable = await disclosure.DisclosableIdsAsync(
+                ctx, [.. candidates.Select(c => c.Id)], ct);
+            shown.AddRange(candidates.Where(c => disclosable.Contains(c.Id)).Select(c => c.DocumentId));
+            if (shown.Count >= limit || candidates.Count < limit)
+            {
+                break;
+            }
+        }
 
-        return [.. candidates.Where(c => disclosable.Contains(c.Id)).Select(c => c.DocumentId)];
+        return [.. shown.Take(limit)];
     }
 
 }

@@ -303,29 +303,77 @@ public static class MapEndpoints
         // The document each photo belongs to comes along, because a rule written against a
         // document decides this surface too — it publishes an id, a rendering and a delivery
         // token, which is the whole of what such a rule is written to hold back.
-        var candidates = await (from file in db.StoredFiles.AsNoTracking()
-                                join version in db.DocumentVersions.AsNoTracking()
-                                    on file.DocumentVersionId equals version.Id
-                                join document in db.Documents.AsNoTracking()
-                                    on version.DocumentId equals document.Id
-                                where file.Geom != null && file.Kind == FileKind.Image
-                                    && file.Geom!.Intersects(polygon)
-                                orderby file.Id
-                                select new
-                                {
-                                    file.Id,
-                                    file.Geom,
-                                    file.OriginalName,
-                                    file.DirectionDegrees,
-                                    file.DirectionIsMagnetic,
-                                    file.PositionSource,
-                                    Document = document,
-                                })
-            .Take(mapOptions.Value.MaxPoints)
-            .ToListAsync(ct);
+        var inWindow = from file in db.StoredFiles.AsNoTracking()
+                       join version in db.DocumentVersions.AsNoTracking()
+                           on file.DocumentVersionId equals version.Id
+                       join document in db.Documents.AsNoTracking()
+                           on version.DocumentId equals document.Id
+                       where file.Geom != null && file.Kind == FileKind.Image
+                           && file.Geom!.Intersects(polygon)
+                       orderby file.Id
+                       select new PhotoCandidate(
+                           file.Id,
+                           file.Geom!,
+                           file.OriginalName,
+                           file.DirectionDegrees,
+                           file.DirectionIsMagnetic,
+                           file.PositionSource,
+                           document);
+
+        // The cap counts photos this caller is shown, never photos looked at. Cut before the
+        // rules below, a window holding more than the cap let a photo the caller may not be told
+        // about take a slot, and the photo it pushed out came back the moment an edge moved past
+        // the hidden one's capture point — which located it. So the candidates are read in id
+        // order a cap's worth at a time, each batch is decided in full, and reading stops once
+        // the cap is filled by shown photos: the answer is the first photos in id order this
+        // caller may see, whatever else the window holds.
+        var cap = mapOptions.Value.MaxPoints;
+        var features = new List<GeoFeature>();
+        for (var offset = 0; ; offset += cap)
+        {
+            var candidates = await inWindow.Skip(offset).Take(cap).ToListAsync(ct);
+            features.AddRange(await ShownPhotosAsync(db, tokens, ctx, photos, candidates, ct));
+            if (features.Count >= cap || candidates.Count < cap)
+            {
+                break;
+            }
+        }
+
+        if (features.Count > cap)
+        {
+            features.RemoveRange(cap, features.Count - cap);
+        }
+
+        return TypedResults.Ok(FeatureCollection.Of(features));
+    }
+
+    /// <summary>One geotagged image in a photo window, with the document it belongs to.</summary>
+    private sealed record PhotoCandidate(
+        Guid Id,
+        Geometry Geom,
+        string OriginalName,
+        double? DirectionDegrees,
+        bool DirectionIsMagnetic,
+        PhotoPositionSource PositionSource,
+        Document Document);
+
+    /// <summary>
+    /// Of a batch of photo candidates, in their order, the ones this caller is shown, shaped as
+    /// map points. Two separate conditions, and a photo needs both: it hangs on something the
+    /// caller can read, and everything it hangs on is something the caller may place.
+    /// </summary>
+    private static async Task<List<GeoFeature>> ShownPhotosAsync(
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        AccessContext ctx,
+        PhotoPositionDisclosure photos,
+        List<PhotoCandidate> candidates,
+        CancellationToken ct)
+    {
+        var features = new List<GeoFeature>();
         if (candidates.Count == 0)
         {
-            return TypedResults.Ok(FeatureCollection.Of([]));
+            return features;
         }
 
         var fileIds = candidates.Select(c => c.Id).ToList();
@@ -362,7 +410,6 @@ public static class MapEndpoints
         var linksByFile = links.GroupBy(l => l.FileId).ToDictionary(g => g.Key, g => g.ToList());
         var cabinetReach = await DocumentAccessRules.CabinetReachAsync(
             db, ctx, AccessAction.Read, [.. candidates.Select(c => c.Document.Id)], ct);
-        var features = new List<GeoFeature>();
         foreach (var candidate in candidates)
         {
             if (!linksByFile.TryGetValue(candidate.Id, out var fileLinks))
@@ -406,7 +453,7 @@ public static class MapEndpoints
             // the response body — so the bytes that carry the same point are no further
             // disclosure.
             var token = tokens.CreateToken(candidate.Id, FileDelivery.Full);
-            features.Add(GeoFeature.Of(candidate.Geom!, new Dictionary<string, object?>
+            features.Add(GeoFeature.Of(candidate.Geom, new Dictionary<string, object?>
             {
                 ["id"] = candidate.Id,
                 ["name"] = candidate.OriginalName,
@@ -422,7 +469,7 @@ public static class MapEndpoints
             }));
         }
 
-        return TypedResults.Ok(FeatureCollection.Of(features));
+        return features;
     }
 
     /// <summary>Intersects a set of candidate ids with a visibility-filtered id query (empty → empty, no round trip).</summary>

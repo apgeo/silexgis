@@ -96,22 +96,29 @@ public sealed class VisibleProximitySearch(SilexGisDbContext db, FeatureProtecti
         // away.
         var centre = factory.CreatePoint(envelope.Centre);
 
-        var nearby = await db.Features.AsNoTracking()
+        // Who may be in the pool is decided before the pool is ordered and cut. Dropped after the
+        // cut instead, a protected entrance the caller may read but not place still took one of
+        // its places whenever the reach held more than the ceiling — and since the order is by
+        // true distance, which placeable hit survived at the far end changed exactly as the
+        // hidden one moved nearer the centre or further from it, which is a position. So the
+        // protected rows the caller may place are worked out first (the walk runs over protected
+        // rows only), and the cut is taken over what remains.
+        var readable = db.Features.AsNoTracking()
             .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-            .Where(f => f.Geom != null && ComparableKinds.Contains(f.Kind) && f.Geom.Intersects(search))
+            .Where(f => f.Geom != null && ComparableKinds.Contains(f.Kind) && f.Geom.Intersects(search));
+        var protectedInReach = await readable
+            .Where(f => f.IsProtectedEffective)
+            .Select(f => f.Id)
+            .ToListAsync(ct);
+        var placeable = (await protection.ExactViewIdsAsync(ctx, protectedInReach, ct)).ToArray();
+
+        var nearby = await readable
+            .Where(f => !f.IsProtectedEffective || placeable.Contains(f.Id))
             .OrderBy(f => f.Geom!.Distance(centre))
             .Select(f => new { f.Id, f.Name, f.Kind, f.Geom })
             .Take(MaxNearbyFeatures)
             .ToListAsync(ct);
-        if (nearby.Count == 0)
-        {
-            return [];
-        }
-
-        var exact = await protection.ExactViewIdsAsync(ctx, [.. nearby.Select(f => f.Id)], ct);
-        var comparable = nearby
-            .Where(f => exact.Contains(f.Id) && f.Geom is Point)
-            .ToList();
+        var comparable = nearby.Where(f => f.Geom is Point).ToList();
         if (comparable.Count == 0)
         {
             return [];
