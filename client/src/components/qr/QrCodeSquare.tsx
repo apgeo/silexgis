@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { CopyOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Flex, Input, QRCode, Typography } from 'antd';
+import { Alert, Flex, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { isPrintableCode } from './printedCode.ts';
+import QrLink from './QrLink.tsx';
 
 interface QrCodeSquareProps {
   /** The code printed on the label — a place code, or the value derived from one. */
@@ -28,20 +28,10 @@ function qrLandingUrl(code: string): string {
  */
 export default function QrCodeSquare({ code }: QrCodeSquareProps) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
   const url = qrLandingUrl(code);
   // Said on screen rather than left to a label already on a wall: a browser opens the escaped
   // address happily, and the scanner this square exists for does not.
   const printable = isPrintableCode(code);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      message.success(t('qr.urlCopied'));
-    } catch {
-      message.error(t('common.saveFailed'));
-    }
-  };
 
   return (
     <Flex vertical align="center" gap={8} data-testid="qr-code-square">
@@ -55,16 +45,16 @@ export default function QrCodeSquare({ code }: QrCodeSquareProps) {
           description={t('qr.codeNotScannableBody')}
         />
       )}
-      <QRCode value={url} size={160} bordered={false} />
-      <Typography.Text code copyable={{ text: code }}>
-        {code}
-      </Typography.Text>
-      <Flex gap={8} style={{ width: '100%' }}>
-        <Input readOnly value={url} onFocus={(e) => e.target.select()} />
-        <Button icon={<CopyOutlined />} onClick={() => void copy()}>
-          {t('qr.copyUrl')}
-        </Button>
-      </Flex>
+      <QrLink
+        url={url}
+        copiedMessage={t('qr.urlCopied')}
+        label={t('qr.squareFor', { code })}
+        caption={
+          <Typography.Text code copyable={{ text: code }}>
+            {code}
+          </Typography.Text>
+        }
+      />
     </Flex>
   );
 }

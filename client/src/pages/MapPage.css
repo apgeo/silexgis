@@ -501,6 +501,17 @@
   color: #333;
 }
 
+/* Why a typed scale was refused, under the scale box. */
+.map-scale-error {
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--ant-color-bg-elevated);
+  color: var(--ant-color-error-text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
 /* Jump-to-scale combo, stacked above the OL scale line (bottom-left). */
 .map-scale-overlay {
   position: absolute;
@@ -618,14 +629,22 @@
   margin: 2px 0 6px;
 }
 
-/* On-canvas background-layer chooser (react-geo). Our base layers are XYZ
-   sources, which the chooser's collapsed overview mini-map cannot clone —
-   collapse the empty 140px preview box into a compact title chip. */
 /* The host only names the chooser's button; it takes no part in placing the chooser. */
 .base-layer-chooser-host {
   display: contents;
 }
 
+/* The overview inset: bottom right, above the base-layer chooser — the bottom left already holds
+   the scale line and the scale box. */
+.map-canvas-wrap .ol-overviewmap.map-overview {
+  left: auto;
+  right: 8px;
+  bottom: 136px;
+}
+
+/* On-canvas background-layer chooser (react-geo). Our base layers are XYZ
+   sources, which the chooser's collapsed overview mini-map cannot clone —
+   collapse the empty 140px preview box into a compact title chip. */
 .map-canvas-wrap .bg-layer-chooser {
   bottom: 88px;
   right: 8px;

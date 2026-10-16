@@ -254,12 +254,21 @@ test('saved views: save, share anonymously, delete', async ({ page, browser, con
   const viewLink = dock.getByRole('button', { name: viewName, exact: true });
   await expect(viewLink).toBeVisible();
 
-  // Share: the link lands on the clipboard; an anonymous browser can open it.
+  // Share: a dialog shows the link and its QR square; copying puts it on the clipboard, and an
+  // anonymous browser can open it.
   await page.getByRole('listitem').filter({ hasText: viewName })
-    .getByRole('button', { name: `Copy a share link to ${viewName}`, exact: true }).click();
+    .getByRole('button', { name: `Share the view ${viewName}`, exact: true }).click();
+  const shareDialog = page.getByRole('dialog', { name: `Share the view ${viewName}` });
+  await expect(shareDialog.getByRole('img', { name: `The link to the view ${viewName} as a QR code` })).toBeVisible({
+    timeout: 15_000,
+  });
+  await shareDialog.getByRole('button', { name: 'Copy address' }).click();
   await expect(page.getByText('Share link copied.')).toBeVisible({ timeout: 15_000 });
   const sharedUrl = await page.evaluate(() => navigator.clipboard.readText());
   expect(sharedUrl).toContain('/shared/view/');
+  await expect(shareDialog.getByRole('textbox', { name: 'Address' })).toHaveValue(sharedUrl);
+  await page.keyboard.press('Escape');
+  await expect(shareDialog).toBeHidden();
 
   const anonymous = await ownContext(browser);
   const anonymousPage = await anonymous.newPage();

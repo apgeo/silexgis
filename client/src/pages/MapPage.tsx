@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import GeoLocationButton from '@terrestris/react-geo/dist/Button/GeoLocationButton/GeoLocationButton';
-import ScaleCombo from '@terrestris/react-geo/dist/Field/ScaleCombo/ScaleCombo';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
 import { App, Drawer, Flex, Spin, Tabs, Tooltip, Typography } from 'antd';
 import Button from '../components/Button.tsx';
 import BaseLayerChooser from '../components/map/BaseLayerChooser.tsx';
+import ScaleBox from '../components/map/ScaleBox.tsx';
+import { useSelectionInUrl } from '../components/map/useSelectionInUrl.ts';
+import { attachOverviewMap } from '../map/overviewMap.ts';
 import { useFeatureRights } from '../api/hooks/objectRights.ts';
 import {
   AimOutlined,
@@ -763,6 +765,23 @@ export default function MapPage() {
     [baseLayersVersion],
   );
 
+  // The overview inset, drawn from whichever base layer the map shows. Not on a phone, whose
+  // screen it would cover a good part of; open or shut as it was last left.
+  const setOverviewMap = useUiPrefsStore((s) => s.setOverviewMap);
+  useEffect(() => {
+    if (isMobile || baseOlLayers.length === 0) {
+      return undefined;
+    }
+    return attachOverviewMap(getWorkspaceMap(), baseOlLayers, {
+      open: useUiPrefsStore.getState().overviewMap,
+      label: t('map.overviewMap'),
+      onToggle: setOverviewMap,
+    });
+  }, [baseOlLayers, isMobile, t, setOverviewMap]);
+
+  // What is selected travels in the address, and an address can say what to select.
+  useSelectionInUrl();
+
   // Base tile layers carry per-catalog-id opacity. Only the active base is visible,
   // but each keeps its own value so switching restores it; re-applied when the base
   // layers are (re)created (version bump) or a saved view changes the opacities.
@@ -1289,7 +1308,7 @@ export default function MapPage() {
           {/* Jump-to-scale is niche clutter at phone size; OL's own scale line stays. */}
           {!isMobile && (
             <div className="map-scale-overlay map-chrome">
-              <ScaleCombo syncWithMap size="small" style={{ width: 128 }} aria-label={t('a11y.mapScale')} />
+              <ScaleBox map={getWorkspaceMap()} />
             </div>
           )}
           {swipeActive && (

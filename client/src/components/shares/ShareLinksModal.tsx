@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { CopyOutlined, LinkOutlined } from '@ant-design/icons';
-import { Alert, App, Checkbox, Flex, Input, Modal, Popconfirm, Select, Table, Tag, Typography } from 'antd';
+import { LinkOutlined } from '@ant-design/icons';
+import { Alert, App, Checkbox, Flex, Modal, Popconfirm, Select, Table, Tag, Typography } from 'antd';
 import Button from '../Button.tsx';
+import QrLink from '../qr/QrLink.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCreateFeatureShare,
@@ -53,18 +54,6 @@ export default function ShareLinksModal({ featureId, open, onClose }: ShareLinks
     }
   };
 
-  const copyMinted = async () => {
-    if (!minted) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(shareUrl(minted.token));
-      message.success(t('shares.linkCopied'));
-    } catch {
-      message.error(t('common.saveFailed'));
-    }
-  };
-
   const onRevoke = async (share: FeatureShare) => {
     try {
       await revokeShare.mutateAsync({ id: featureId, shareId: share.id });
@@ -100,6 +89,7 @@ export default function ShareLinksModal({ featureId, open, onClose }: ShareLinks
             <Select
               value={mode}
               style={{ width: 200 }}
+              aria-label={t('shares.mode')}
               onChange={setMode}
               options={[
                 { value: 'public', label: t('shares.modes.public') },
@@ -126,15 +116,16 @@ export default function ShareLinksModal({ featureId, open, onClose }: ShareLinks
               style={{ marginBottom: 12 }}
               title={t('shares.linkReady')}
               description={
-                <>
-                  <Flex gap={8} style={{ marginTop: 4 }}>
-                    <Input readOnly value={shareUrl(minted.token)} onFocus={(e) => e.target.select()} />
-                    <Button icon={<CopyOutlined />} onClick={() => void copyMinted()}>
-                      {t('shares.copy')}
-                    </Button>
-                  </Flex>
+                // The link as text to copy and as a square for a phone held up to the screen —
+                // both only while the dialog is open, since the token is never shown again.
+                <Flex vertical gap={8} style={{ marginTop: 4 }} data-testid="share-link-ready">
+                  <QrLink
+                    url={shareUrl(minted.token)}
+                    copiedMessage={t('shares.linkCopied')}
+                    label={t('shares.qrLabel')}
+                  />
                   <Typography.Text type="secondary">{t('shares.tokenOnce')}</Typography.Text>
-                </>
+                </Flex>
               }
             />
           )}

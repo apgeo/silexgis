@@ -536,7 +536,9 @@
       "geofilePointNamed": "Point from an imported file: {{name}}",
       "libraryPhoto": "Photograph from {{library}}",
       "libraryPhotoUnnamed": "Photograph from a photo library"
-    }
+    },
+    "scaleInvalid": "Type a scale such as 1:25000 or 25000.",
+    "overviewMap": "Overview map"
   },
   "dialog": {
     "dockToSide": "Dock to the side of the map",
@@ -3016,7 +3018,7 @@
     "title": "Saved views",
     "namePlaceholder": "View name…",
     "save": "Save current view",
-    "share": "Copy share link",
+    "share": "Share link",
     "linkCopied": "Share link copied.",
     "exportImage": "Export map image",
     "sharedNotFound": "This shared view does not exist or was revoked.",
@@ -3025,7 +3027,10 @@
     "sharedNoBackground": "No background map is available for shared views on this installation.",
     "sharedUnnamed": "Unnamed",
     "sharedClose": "Close",
-    "exportUnreadable": "This background cannot be put into an image: its provider does not allow it. Switch to one of the backgrounds allowed in documents (OpenStreetMap is one) and export again."
+    "exportUnreadable": "This background cannot be put into an image: its provider does not allow it. Switch to one of the backgrounds allowed in documents (OpenStreetMap is one) and export again.",
+    "shareTitle": "Share the view {{name}}",
+    "shareExplain": "Anyone with this link can open the view without an account. It shows where the view looks, over a public background — none of the club’s data.",
+    "shareQr": "The link to the view {{name}} as a QR code"
   },
   "panel": {
     "unknown": "Unknown panel.",
@@ -4318,7 +4323,8 @@
     "childrenTitle": "Included records",
     "sharedNotFound": "This shared link does not exist or was revoked.",
     "loginRequired": "Sign in to view this shared record.",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "qrLabel": "The share link as a QR code"
   },
   "publicTrip": {
     "notFoundTitle": "Nothing to show for this link",
@@ -4502,7 +4508,9 @@
     "landingFoundTitle": "This code is registered",
     "landingFoundBody": "The code you scanned is registered with {{instance}}, and that is all this page says: no cave, no place and no position. An account changes nothing here — the answer is the same for everyone.",
     "landingUnknownTitle": "Nothing to show for this code",
-    "landingUnknownBody": "This code is not registered here, or the cave it belongs to is not published. Check the characters on the label, or ask whoever put it there."
+    "landingUnknownBody": "This code is not registered here, or the cave it belongs to is not published. Check the characters on the label, or ask whoever put it there.",
+    "address": "Address",
+    "squareFor": "QR code for {{code}}"
   },
   "resLinks": {
     "titleCount": "Linked items ({{count}})",
@@ -6859,7 +6867,7 @@
     "mainNav": "Main navigation",
     "mapScale": "Map scale",
     "viewName": "Name of the view to save",
-    "shareView": "Copy a share link to {{name}}",
+    "shareView": "Share the view {{name}}",
     "deleteView": "Delete the view {{name}}",
     "map": "Map. Arrow keys move it, plus and minus zoom; press ? for all shortcuts.",
     "editEntrance": "Edit the entrance {{name}}",

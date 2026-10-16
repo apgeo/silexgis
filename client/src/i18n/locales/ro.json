@@ -536,7 +536,9 @@
       "geofilePointNamed": "Punct dintr-un fișier importat: {{name}}",
       "libraryPhoto": "Fotografie din {{library}}",
       "libraryPhotoUnnamed": "Fotografie dintr-o bibliotecă foto"
-    }
+    },
+    "scaleInvalid": "Scrieți o scară, de exemplu 1:25000 sau 25000.",
+    "overviewMap": "Hartă de ansamblu"
   },
   "dialog": {
     "dockToSide": "Andochează lângă hartă",
@@ -3016,7 +3018,7 @@
     "title": "Vederi salvate",
     "namePlaceholder": "Nume vedere…",
     "save": "Salvează vederea curentă",
-    "share": "Copiază linkul de partajare",
+    "share": "Link de partajare",
     "linkCopied": "Linkul de partajare a fost copiat.",
     "exportImage": "Exportă imaginea hărții",
     "sharedNotFound": "Această vedere partajată nu există sau a fost revocată.",
@@ -3025,7 +3027,10 @@
     "sharedNoBackground": "Nicio hartă de fundal nu este disponibilă pentru vederile partajate în această instalare.",
     "sharedUnnamed": "Fără nume",
     "sharedClose": "Închide",
-    "exportUnreadable": "Acest fundal nu poate fi pus într-o imagine: furnizorul lui nu permite. Alegeți unul dintre fundalurile permise în documente (OpenStreetMap este unul) și exportați din nou."
+    "exportUnreadable": "Acest fundal nu poate fi pus într-o imagine: furnizorul lui nu permite. Alegeți unul dintre fundalurile permise în documente (OpenStreetMap este unul) și exportați din nou.",
+    "shareTitle": "Partajează vederea {{name}}",
+    "shareExplain": "Oricine are acest link poate deschide vederea fără cont. Arată unde privește vederea, peste un fundal public — niciuna dintre datele clubului.",
+    "shareQr": "Linkul către vederea {{name}} ca cod QR"
   },
   "panel": {
     "unknown": "Panou necunoscut.",
@@ -4318,7 +4323,8 @@
     "childrenTitle": "Înregistrări incluse",
     "sharedNotFound": "Acest link partajat nu există sau a fost revocat.",
     "loginRequired": "Autentifică-te pentru a vedea această înregistrare partajată.",
-    "signIn": "Autentificare"
+    "signIn": "Autentificare",
+    "qrLabel": "Linkul de partajare ca cod QR"
   },
   "publicTrip": {
     "notFoundTitle": "Nimic de arătat pentru acest link",
@@ -4502,7 +4508,9 @@
     "landingFoundTitle": "Acest cod este înregistrat",
     "landingFoundBody": "Codul scanat este înregistrat la {{instance}} și atât spune această pagină: nicio peșteră, niciun loc și nicio poziție. Un cont nu schimbă nimic aici — răspunsul este același pentru toată lumea.",
     "landingUnknownTitle": "Nimic de arătat pentru acest cod",
-    "landingUnknownBody": "Acest cod nu este înregistrat aici sau peștera căreia îi aparține nu este publicată. Verificați caracterele de pe etichetă sau întrebați cine a pus-o acolo."
+    "landingUnknownBody": "Acest cod nu este înregistrat aici sau peștera căreia îi aparține nu este publicată. Verificați caracterele de pe etichetă sau întrebați cine a pus-o acolo.",
+    "address": "Adresă",
+    "squareFor": "Cod QR pentru {{code}}"
   },
   "resLinks": {
     "titleCount": "Elemente legate ({{count}})",
@@ -6859,7 +6867,7 @@
     "mainNav": "Navigația principală",
     "mapScale": "Scara hărții",
     "viewName": "Numele vederii de salvat",
-    "shareView": "Copiază un link de partajare către {{name}}",
+    "shareView": "Partajează vederea {{name}}",
     "deleteView": "Șterge vederea {{name}}",
     "map": "Hartă. Săgețile o mută, plus și minus schimbă scara; apăsați ? pentru toate scurtăturile.",
     "editEntrance": "Editează intrarea {{name}}",

@@ -14,6 +14,7 @@ import {
 } from '../../api/hooks.ts';
 import { exportMapImage } from '../../map/viewConfig.ts';
 import { saveBlob } from '../../api/download.ts';
+import ViewShareDialog from './ViewShareDialog.tsx';
 
 interface ViewsPanelProps {
   onCapture: () => object;
@@ -29,6 +30,7 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
   const deleteView = useDeleteMapView();
   const shareView = useShareMapView();
   const [name, setName] = useState('');
+  const [shared, setShared] = useState<{ name: string; url: string } | null>(null);
 
   const save = async (isHome: boolean) => {
     const trimmed = name.trim();
@@ -51,12 +53,12 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
     }
   };
 
+  // Makes the view shareable and shows its link — to copy, or as a square to scan — rather than
+  // dropping it on the clipboard unseen.
   const share = async (view: MapViewInfo) => {
     try {
       const updated = await shareView.mutateAsync(view.id);
-      const url = `${window.location.origin}/shared/view/${updated.shareToken}`;
-      await navigator.clipboard.writeText(url);
-      message.success(t('views.linkCopied'));
+      setShared({ name: view.name, url: `${window.location.origin}/shared/view/${updated.shareToken}` });
     } catch {
       message.error(t('common.saveFailed'));
     }
@@ -142,6 +144,7 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
           </List.Item>
         )}
       />
+      <ViewShareDialog shared={shared} onClose={() => setShared(null)} />
     </>
   );
 }
