@@ -6,6 +6,7 @@ import {
 } from '@ant-design/icons';
 import { Button, Descriptions, Drawer, Flex, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { LIGHTBOX_SHORTCUTS, matchesAny } from '../../hooks/shortcutRegistry.ts';
 
 /** What the viewer needs of a picture. The public gallery supplies a subset. */
 export interface LightboxPhoto {
@@ -115,29 +116,22 @@ export default function Lightbox({
     }
 
     const onKey = (event: KeyboardEvent) => {
-      switch (event.key) {
-        case 'Escape':
-          onClose();
-          break;
-        case 'ArrowLeft':
-          move(-1);
-          break;
-        case 'ArrowRight':
-          move(1);
-          break;
-        case '+':
-        case '=':
-          setZoom((z) => Math.min(MaxZoom, z + ZoomStep));
-          break;
-        case '-':
-          setZoom((z) => Math.max(MinZoom, z - ZoomStep));
-          break;
-        case '0':
-          setZoom(1);
-          setPan({ x: 0, y: 0 });
-          break;
-        default:
-          return;
+      const keys = LIGHTBOX_SHORTCUTS;
+      if (matchesAny(keys.close, event)) {
+        onClose();
+      } else if (matchesAny(keys.previous, event)) {
+        move(-1);
+      } else if (matchesAny(keys.next, event)) {
+        move(1);
+      } else if (matchesAny(keys.zoomIn, event)) {
+        setZoom((z) => Math.min(MaxZoom, z + ZoomStep));
+      } else if (matchesAny(keys.zoomOut, event)) {
+        setZoom((z) => Math.max(MinZoom, z - ZoomStep));
+      } else if (matchesAny(keys.reset, event)) {
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+      } else {
+        return;
       }
 
       // Only for keys actually handled: swallowing everything would eat typing in the facts

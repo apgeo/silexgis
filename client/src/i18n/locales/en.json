@@ -6813,7 +6813,9 @@
       "screen": "On this screen",
       "map": "With the map focused",
       "panelHandle": "With a panel section's handle focused",
-      "scene3dCallout": "In the 3D scene's selection card"
+      "scene3dCallout": "In the 3D scene's selection card",
+      "lightbox": "In the photo viewer",
+      "passage": "On a marked passage of a text"
     },
     "action": {
       "help": "Show this list of shortcuts",
@@ -6827,7 +6829,24 @@
       "zoomOut": "Zoom out",
       "moveSectionUp": "Move the section up",
       "moveSectionDown": "Move the section down",
-      "dismissCallout": "Close the card"
+      "dismissCallout": "Close the card",
+      "closeViewer": "Close the viewer",
+      "previousPhoto": "Previous photo",
+      "nextPhoto": "Next photo",
+      "zoomInPhoto": "Zoom in on the photo",
+      "zoomOutPhoto": "Zoom out of the photo",
+      "resetPhoto": "Back to the whole photo",
+      "followPassage": "Follow the link"
+    },
+    "keyCap": {
+      "ctrl": "Ctrl",
+      "command": "⌘ Cmd",
+      "alt": "Alt",
+      "option": "⌥ Option",
+      "shift": "Shift",
+      "escape": "Esc",
+      "enter": "Enter",
+      "space": "Space"
     }
   },
   "a11y": {

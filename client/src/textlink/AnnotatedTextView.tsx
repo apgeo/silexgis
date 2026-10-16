@@ -8,6 +8,7 @@ import {
   type AnnotatedBlock,
   type AnnotatedMarkKind,
 } from './blocks.ts';
+import { matchesAny, PASSAGE_SHORTCUTS } from '../hooks/shortcutRegistry.ts';
 import type { Highlight } from './highlights.ts';
 import { linkColors, stackedColors, type LinkColors } from './linkPalette.ts';
 import { sliceBlock, type GlobalRange, type TextPiece } from './ranges.ts';
@@ -185,7 +186,7 @@ export default function AnnotatedTextView({
           data-member-id={group.covering[0].memberId}
           onClick={() => onActivate?.(group.covering[0])}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
+            if (matchesAny(PASSAGE_SHORTCUTS.follow, event)) {
               event.preventDefault();
               onActivate?.(group.covering[0]);
             }

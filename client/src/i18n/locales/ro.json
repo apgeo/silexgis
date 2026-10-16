@@ -6813,7 +6813,9 @@
       "screen": "Pe acest ecran",
       "map": "Când harta are focusul",
       "panelHandle": "Când mânerul unei secțiuni de panou are focusul",
-      "scene3dCallout": "În fișa selecției din scena 3D"
+      "scene3dCallout": "În fișa selecției din scena 3D",
+      "lightbox": "În vizualizatorul de fotografii",
+      "passage": "Pe un pasaj marcat dintr-un text"
     },
     "action": {
       "help": "Afișează lista scurtăturilor",
@@ -6827,7 +6829,24 @@
       "zoomOut": "Micșorează",
       "moveSectionUp": "Mută secțiunea mai sus",
       "moveSectionDown": "Mută secțiunea mai jos",
-      "dismissCallout": "Închide fișa"
+      "dismissCallout": "Închide fișa",
+      "closeViewer": "Închide vizualizatorul",
+      "previousPhoto": "Fotografia anterioară",
+      "nextPhoto": "Fotografia următoare",
+      "zoomInPhoto": "Mărește fotografia",
+      "zoomOutPhoto": "Micșorează fotografia",
+      "resetPhoto": "Înapoi la fotografia întreagă",
+      "followPassage": "Urmează legătura"
+    },
+    "keyCap": {
+      "ctrl": "Ctrl",
+      "command": "⌘ Cmd",
+      "alt": "Alt",
+      "option": "⌥ Option",
+      "shift": "Shift",
+      "escape": "Esc",
+      "enter": "Enter",
+      "space": "Spațiu"
     }
   },
   "a11y": {

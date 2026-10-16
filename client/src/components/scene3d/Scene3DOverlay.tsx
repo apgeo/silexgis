@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { CloseOutlined } from '@ant-design/icons';
 import { Button, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { matchesAny, SCENE3D_CALLOUT_SHORTCUTS } from '../../hooks/shortcutRegistry.ts';
 import { placeOverlay, type OverlayRect } from '../../scene3d/overlayPlacement.ts';
 import type { Scene3DPickPayload } from '../../scene3d/selection3d.ts';
 import type { Scene3DAnchor, Scene3DScreenPosition } from '../../scene3d/scene3dEngine.ts';
@@ -130,7 +131,7 @@ export default function Scene3DOverlay({
   // swallow the key from a dialog opened over the scene.
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (matchesAny(SCENE3D_CALLOUT_SHORTCUTS.dismiss, event)) {
         event.stopPropagation();
         onDismissSelection();
       }

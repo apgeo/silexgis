@@ -20,37 +20,66 @@ export interface DescribedShortcut extends KeyCombination {
 
 /**
  * Keys this application handles where they are pressed — on the focused map, on a focused panel
- * handle — rather than through the document-level hook. They are listed here, beside the hook's
- * own registrations, because the help dialog is only worth having if it is complete: a key that
- * works but is written down nowhere is a key nobody uses, and the two kinds would otherwise be
- * documented in two places of which one is always forgotten.
+ * handle, inside the photo viewer — rather than through the document-level hook. Each handler
+ * matches its keys against the declaration here (`matchesAny`), so the key the help lists and the
+ * key that works are one value: changing either changes both.
  *
  * The map's keys are OpenLayers' own keyboard interactions, which listen on the map's element
- * and so act only while it has focus.
+ * and so act only while it has focus; they are the one group declared here without a handler of
+ * ours, because the library binds them.
  */
+export const MAP_FOCUSED_SHORTCUTS = {
+  pan: [
+    { key: 'ArrowUp', labelKey: 'shortcuts.action.pan' },
+    { key: 'ArrowDown', labelKey: 'shortcuts.action.pan' },
+    { key: 'ArrowLeft', labelKey: 'shortcuts.action.pan' },
+    { key: 'ArrowRight', labelKey: 'shortcuts.action.pan' },
+  ],
+  zoomIn: [{ key: '+', labelKey: 'shortcuts.action.zoomIn' }],
+  zoomOut: [{ key: '-', labelKey: 'shortcuts.action.zoomOut' }],
+} satisfies Record<string, DescribedShortcut[]>;
+
+/** A panel section's drag handle: the keyboard's way of doing what dragging it does. */
+export const PANEL_HANDLE_SHORTCUTS = {
+  moveUp: [{ key: 'ArrowUp', alt: true, labelKey: 'shortcuts.action.moveSectionUp' }],
+  moveDown: [{ key: 'ArrowDown', alt: true, labelKey: 'shortcuts.action.moveSectionDown' }],
+} satisfies Record<string, DescribedShortcut[]>;
+
+/** The 3D scene's selection card. */
+export const SCENE3D_CALLOUT_SHORTCUTS = {
+  dismiss: [{ key: 'Escape', labelKey: 'shortcuts.action.dismissCallout' }],
+} satisfies Record<string, DescribedShortcut[]>;
+
+/** The full-screen photo viewer, which listens while it is open. */
+export const LIGHTBOX_SHORTCUTS = {
+  close: [{ key: 'Escape', labelKey: 'shortcuts.action.closeViewer' }],
+  previous: [{ key: 'ArrowLeft', labelKey: 'shortcuts.action.previousPhoto' }],
+  next: [{ key: 'ArrowRight', labelKey: 'shortcuts.action.nextPhoto' }],
+  // `=` as well as `+`: on many keyboards `+` is Shift+=, and the unshifted key is the one a
+  // finger finds while the other hand is on the mouse.
+  zoomIn: [
+    { key: '+', labelKey: 'shortcuts.action.zoomInPhoto' },
+    { key: '=', labelKey: 'shortcuts.action.zoomInPhoto' },
+  ],
+  zoomOut: [{ key: '-', labelKey: 'shortcuts.action.zoomOutPhoto' }],
+  reset: [{ key: '0', labelKey: 'shortcuts.action.resetPhoto' }],
+} satisfies Record<string, DescribedShortcut[]>;
+
+/** A marked passage of an annotated text, which is a link and is followed the way one is. */
+export const PASSAGE_SHORTCUTS = {
+  follow: [
+    { key: 'Enter', labelKey: 'shortcuts.action.followPassage' },
+    { key: ' ', labelKey: 'shortcuts.action.followPassage' },
+  ],
+} satisfies Record<string, DescribedShortcut[]>;
+
+/** Every focused-element group, as the help lists them: what has focus, then its keys. */
 export const FOCUSED_SHORTCUTS: { contextKey: string; shortcuts: DescribedShortcut[] }[] = [
-  {
-    contextKey: 'shortcuts.context.map',
-    shortcuts: [
-      { key: 'ArrowUp', labelKey: 'shortcuts.action.pan' },
-      { key: 'ArrowDown', labelKey: 'shortcuts.action.pan' },
-      { key: 'ArrowLeft', labelKey: 'shortcuts.action.pan' },
-      { key: 'ArrowRight', labelKey: 'shortcuts.action.pan' },
-      { key: '+', labelKey: 'shortcuts.action.zoomIn' },
-      { key: '-', labelKey: 'shortcuts.action.zoomOut' },
-    ],
-  },
-  {
-    contextKey: 'shortcuts.context.panelHandle',
-    shortcuts: [
-      { key: 'ArrowUp', alt: true, labelKey: 'shortcuts.action.moveSectionUp' },
-      { key: 'ArrowDown', alt: true, labelKey: 'shortcuts.action.moveSectionDown' },
-    ],
-  },
-  {
-    contextKey: 'shortcuts.context.scene3dCallout',
-    shortcuts: [{ key: 'Escape', labelKey: 'shortcuts.action.dismissCallout' }],
-  },
+  { contextKey: 'shortcuts.context.map', shortcuts: Object.values(MAP_FOCUSED_SHORTCUTS).flat() },
+  { contextKey: 'shortcuts.context.panelHandle', shortcuts: Object.values(PANEL_HANDLE_SHORTCUTS).flat() },
+  { contextKey: 'shortcuts.context.scene3dCallout', shortcuts: Object.values(SCENE3D_CALLOUT_SHORTCUTS).flat() },
+  { contextKey: 'shortcuts.context.lightbox', shortcuts: Object.values(LIGHTBOX_SHORTCUTS).flat() },
+  { contextKey: 'shortcuts.context.passage', shortcuts: Object.values(PASSAGE_SHORTCUTS).flat() },
 ];
 
 /**
@@ -89,6 +118,9 @@ export const useShortcutRegistry = create<ShortcutRegistryState>((set) => ({
     }),
 }));
 
+/** What a key event says about the key pressed — the DOM's and React's events both carry it. */
+export type PressedKey = Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>;
+
 /**
  * Whether a key event is this combination.
  *
@@ -96,7 +128,7 @@ export const useShortcutRegistry = create<ShortcutRegistryState>((set) => ({
  * was needed to type it — `?` is Shift+/ on one layout and a key of its own on another — so
  * demanding a particular Shift state for one would make the shortcut work on some keyboards only.
  */
-export function matchesCombination(combination: KeyCombination, event: KeyboardEvent): boolean {
+export function matchesCombination(combination: KeyCombination, event: PressedKey): boolean {
   const symbol = combination.key.length === 1 && combination.key.toLowerCase() === combination.key.toUpperCase();
   return (
     combination.key.toLowerCase() === event.key.toLowerCase() &&
@@ -106,22 +138,53 @@ export function matchesCombination(combination: KeyCombination, event: KeyboardE
   );
 }
 
-const KEY_NAMES: Record<string, string> = {
+/** Whether a key event is any of an action's combinations. */
+export function matchesAny(combinations: readonly KeyCombination[], event: PressedKey): boolean {
+  return combinations.some((combination) => matchesCombination(combination, event));
+}
+
+/**
+ * Whether this is an Apple keyboard, on which a Ctrl shortcut is pressed with ⌘ and Alt is the key
+ * printed Option — `matchesCombination` already takes Cmd for Ctrl, so the help has to say so.
+ */
+export function isApplePlatform(): boolean {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
+  const hinted = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform;
+  return /mac|iphone|ipad|ipod/i.test(hinted ?? navigator.platform ?? '');
+}
+
+/** Keys printed as a symbol, the same in every language. */
+const KEY_SYMBOLS: Record<string, string> = {
   ArrowUp: '↑',
   ArrowDown: '↓',
   ArrowLeft: '←',
   ArrowRight: '→',
-  Escape: 'Esc',
-  ' ': 'Space',
+};
+
+/** Keys printed as a word, which is the reader's language's word for it. */
+const KEY_WORDS: Record<string, string> = {
+  Escape: 'shortcuts.keyCap.escape',
+  Enter: 'shortcuts.keyCap.enter',
+  ' ': 'shortcuts.keyCap.space',
 };
 
 /** The key caps a combination is pressed with, in the order they are held down. */
-export function keyCaps(combination: KeyCombination): string[] {
+export function keyCaps(
+  combination: KeyCombination,
+  t: (key: string) => string,
+  apple: boolean = isApplePlatform(),
+): string[] {
+  const word = KEY_WORDS[combination.key];
   return [
-    ...(combination.ctrl ? ['Ctrl'] : []),
-    ...(combination.alt ? ['Alt'] : []),
-    ...(combination.shift ? ['Shift'] : []),
-    KEY_NAMES[combination.key] ?? (combination.key.length === 1 ? combination.key.toUpperCase() : combination.key),
+    ...(combination.ctrl ? [t(apple ? 'shortcuts.keyCap.command' : 'shortcuts.keyCap.ctrl')] : []),
+    ...(combination.alt ? [t(apple ? 'shortcuts.keyCap.option' : 'shortcuts.keyCap.alt')] : []),
+    ...(combination.shift ? [t('shortcuts.keyCap.shift')] : []),
+    word
+      ? t(word)
+      : KEY_SYMBOLS[combination.key] ??
+        (combination.key.length === 1 ? combination.key.toUpperCase() : combination.key),
   ];
 }
 
@@ -135,10 +198,13 @@ export interface ShortcutRow {
  * Folds a list of shortcuts into help lines, one per action, in the order the actions first
  * appear — so the four arrows that pan the map are one line, not four.
  */
-export function shortcutRows(shortcuts: DescribedShortcut[]): ShortcutRow[] {
+export function shortcutRows(
+  shortcuts: DescribedShortcut[],
+  capsOf: (combination: KeyCombination) => string[],
+): ShortcutRow[] {
   const rows: ShortcutRow[] = [];
   for (const shortcut of shortcuts) {
-    const caps = keyCaps(shortcut);
+    const caps = capsOf(shortcut);
     const row = rows.find((candidate) => candidate.labelKey === shortcut.labelKey);
     if (row) {
       if (!row.combinations.some((existing) => existing.join('+') === caps.join('+'))) {

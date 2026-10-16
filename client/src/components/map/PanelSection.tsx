@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { DownOutlined, EyeInvisibleOutlined, HolderOutlined, RightOutlined } from '@ant-design/icons';
 import { Button, Flex, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { matchesAny, PANEL_HANDLE_SHORTCUTS } from '../../hooks/shortcutRegistry.ts';
 import type { PanelSectionId } from './panelSections.ts';
 
 interface Props {
@@ -74,9 +75,14 @@ export default function PanelSection({
             // Alt+arrows move a section without a pointer. The same two keys the reorder tooltip
             // names, so the hint is true for both ways of doing it.
             onKeyDown={(event) => {
-              if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+              const by = matchesAny(PANEL_HANDLE_SHORTCUTS.moveUp, event)
+                ? -1
+                : matchesAny(PANEL_HANDLE_SHORTCUTS.moveDown, event)
+                  ? 1
+                  : 0;
+              if (by !== 0) {
                 event.preventDefault();
-                onMove(event.key === 'ArrowUp' ? -1 : 1);
+                onMove(by);
               }
             }}
             style={{ cursor: 'grab', color: 'var(--silexgis-muted, #8c8c8c)', padding: '0 2px' }}

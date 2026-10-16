@@ -2,12 +2,17 @@
 import { describe, expect, it } from 'vitest';
 import en from '../i18n/locales/en.json';
 import ro from '../i18n/locales/ro.json';
+import i18n from '../i18n';
 import {
   FOCUSED_SHORTCUTS,
+  LIGHTBOX_SHORTCUTS,
   MAP_WORKSPACE_SHORTCUTS,
+  PANEL_HANDLE_SHORTCUTS,
   keyCaps,
+  matchesAny,
   matchesCombination,
   shortcutRows,
+  type KeyCombination,
 } from './shortcutRegistry.ts';
 
 function press(key: string, modifiers: Partial<Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>> = {}) {
@@ -45,23 +50,55 @@ describe('matchesCombination', () => {
 });
 
 describe('keyCaps and shortcutRows', () => {
+  const en = i18n.getFixedT('en');
+  const ro = i18n.getFixedT('ro');
+  const pc = (combination: KeyCombination) => keyCaps(combination, en, false);
+
   it('names keys the way a keyboard prints them, modifiers first', () => {
-    expect(keyCaps({ key: 'ArrowLeft', alt: true })).toEqual(['Alt', '←']);
-    expect(keyCaps({ key: 'Escape' })).toEqual(['Esc']);
-    expect(keyCaps({ key: '?' })).toEqual(['?']);
+    expect(pc({ key: 'ArrowLeft', alt: true })).toEqual(['Alt', '←']);
+    expect(pc({ key: 'Escape' })).toEqual(['Esc']);
+    expect(pc({ key: '?' })).toEqual(['?']);
+    expect(pc({ key: 's', ctrl: true })).toEqual(['Ctrl', 'S']);
+  });
+
+  it("names the keys that are words in the reader's language", () => {
+    expect(keyCaps({ key: ' ' }, en, false)).toEqual(['Space']);
+    expect(keyCaps({ key: ' ' }, ro, false)).toEqual(['Spațiu']);
+  });
+
+  it('shows Cmd and Option on an Apple keyboard, where Cmd is what a Ctrl shortcut answers to', () => {
+    expect(keyCaps({ key: 's', ctrl: true }, en, true)).toEqual(['⌘ Cmd', 'S']);
+    expect(keyCaps({ key: 'ArrowUp', alt: true }, en, true)).toEqual(['⌥ Option', '↑']);
   });
 
   it('folds the combinations of one action into one line, in first-seen order', () => {
-    const rows = shortcutRows([
-      { key: 'ArrowUp', labelKey: 'pan' },
-      { key: '+', labelKey: 'zoom' },
-      { key: 'ArrowDown', labelKey: 'pan' },
-      { key: 'ArrowDown', labelKey: 'pan' },
-    ]);
+    const rows = shortcutRows(
+      [
+        { key: 'ArrowUp', labelKey: 'pan' },
+        { key: '+', labelKey: 'zoom' },
+        { key: 'ArrowDown', labelKey: 'pan' },
+        { key: 'ArrowDown', labelKey: 'pan' },
+      ],
+      pc,
+    );
     expect(rows).toEqual([
       { labelKey: 'pan', combinations: [['↑'], ['↓']] },
       { labelKey: 'zoom', combinations: [['+']] },
     ]);
+  });
+});
+
+describe('focused-element keys are matched against their declaration', () => {
+  it("a panel handle moves on Alt+arrow and on nothing else the help doesn't list", () => {
+    expect(matchesAny(PANEL_HANDLE_SHORTCUTS.moveUp, press('ArrowUp', { altKey: true }))).toBe(true);
+    expect(matchesAny(PANEL_HANDLE_SHORTCUTS.moveUp, press('ArrowUp'))).toBe(false);
+    expect(matchesAny(PANEL_HANDLE_SHORTCUTS.moveDown, press('ArrowDown', { altKey: true, ctrlKey: true }))).toBe(false);
+  });
+
+  it('the photo viewer zooms in on either of the keys it lists', () => {
+    expect(matchesAny(LIGHTBOX_SHORTCUTS.zoomIn, press('+', { shiftKey: true }))).toBe(true);
+    expect(matchesAny(LIGHTBOX_SHORTCUTS.zoomIn, press('='))).toBe(true);
+    expect(matchesAny(LIGHTBOX_SHORTCUTS.next, press('ArrowRight', { altKey: true }))).toBe(false);
   });
 });
 
@@ -74,6 +111,7 @@ describe('the declared shortcuts', () => {
       ]),
       ...Object.values(MAP_WORKSPACE_SHORTCUTS).map((shortcut) => shortcut.labelKey),
       'shortcuts.context.screen',
+      ...['ctrl', 'command', 'alt', 'option', 'shift', 'escape', 'enter', 'space'].map((cap) => `shortcuts.keyCap.${cap}`),
     ];
     for (const key of keys) {
       expect(typeof lookup(en, key), `en ${key}`).toBe('string');

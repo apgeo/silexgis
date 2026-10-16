@@ -4,8 +4,10 @@ import { Button, Flex, Modal, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   FOCUSED_SHORTCUTS,
+  keyCaps,
   shortcutRows,
   useShortcutRegistry,
+  type KeyCombination,
   type ShortcutRow,
 } from '../hooks/shortcutRegistry.ts';
 import './ShortcutHelpDialog.css';
@@ -25,7 +27,8 @@ interface ShortcutHelpDialogProps {
 export default function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
   const { t } = useTranslation();
   const bound = useShortcutRegistry((state) => state.bound);
-  const screenRows = shortcutRows(Object.values(bound).flat());
+  const capsOf = (combination: KeyCombination) => keyCaps(combination, t);
+  const screenRows = shortcutRows(Object.values(bound).flat(), capsOf);
 
   const table = (caption: string, rows: ShortcutRow[], testId: string) => (
     <table className="shortcut-help-table" data-testid={testId}>
@@ -74,7 +77,11 @@ export default function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialog
         {screenRows.length > 0 && table(t('shortcuts.context.screen'), screenRows, 'shortcut-help-screen')}
         {FOCUSED_SHORTCUTS.map((group) => (
           <Fragment key={group.contextKey}>
-            {table(t(group.contextKey), shortcutRows(group.shortcuts), `shortcut-help-${group.contextKey.split('.').pop()}`)}
+            {table(
+              t(group.contextKey),
+              shortcutRows(group.shortcuts, capsOf),
+              `shortcut-help-${group.contextKey.split('.').pop()}`,
+            )}
           </Fragment>
         ))}
       </Flex>
