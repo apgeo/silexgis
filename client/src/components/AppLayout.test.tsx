@@ -30,7 +30,14 @@ vi.mock('../api/hooks.ts', () => ({
   useUpdateLocale: () => ({ mutate: saveLocale }),
   useMyPermissionGroups: () => ({ data: permissionGroups }),
   useCapabilities: () => ({
-    data: capabilities ? { domains: capabilities, createInCavingGroups } : undefined,
+    data: capabilities
+      ? {
+          domains: capabilities,
+          createInCavingGroups,
+          // The server states the rank from exactly this membership.
+          isFullAdmin: permissionGroups.some((group) => group.slug === 'full-administrators'),
+        }
+      : undefined,
   }),
   // The header's bell reads this; the mock replaces the module wholesale, so a hook left out
   // here is undefined at the call site and every test in this file dies on the render.

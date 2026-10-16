@@ -39,6 +39,10 @@ const relationTypes: ResLinkRelationType[] = [
 vi.mock('../../api/hooks.ts', () => ({
   useMe: () => ({ data: { id: 'me' } }),
   useMyPermissionGroups: () => ({ data: groups }),
+  // The server states the rank from exactly this membership.
+  useCapabilities: () => ({
+    data: { domains: {}, isFullAdmin: groups.some((group) => group.slug === 'full-administrators') },
+  }),
   useResLinkRelationTypes: () => ({ data: relationTypes, isLoading: false }),
   useCreateResLinkRelationType: () => ({ mutateAsync: createMutate, isPending: false }),
   useUpdateResLinkRelationType: () => ({ mutateAsync: updateMutate, isPending: false }),

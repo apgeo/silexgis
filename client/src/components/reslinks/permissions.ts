@@ -1,29 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMyPermissionGroups, type ResLink } from '../../api/hooks.ts';
-
-/**
- * The protected permission group whose members the server treats as full administrators.
- * The rank itself is published nowhere, but membership of this group is exactly what the
- * server resolves it from, and the group is protected — it cannot be renamed or deleted
- * out from under this check.
- */
-const FULL_ADMINISTRATORS = 'full-administrators';
+import { useCapabilities, type ResLink } from '../../api/hooks.ts';
 
 /**
  * Whether this caller holds the rank the server calls a full administrator.
  *
- * The per-domain capability answer cannot express this: it reports what actions a caller
- * holds in each resource domain, and the relation vocabulary is not a resource domain —
- * it is installation-wide wording that every domain's links read from. Membership of the
- * protected group is the same fact the server resolves the rank from, so this asks the
- * question the server will answer rather than approximating it with a nearby right.
+ * Read from the flag the capabilities answer states for exactly this question — the one home
+ * every screen asks. It used to be inferred here from membership of the protected
+ * full-administrators group while other screens read the flag, two answers to one permission
+ * question that were free to drift apart; the flag is the server's own resolution of that same
+ * membership, stated rather than guessed.
  *
  * Loading reads as "no": the controls this gates all earn a refusal without the rank, and
  * an offer that disappears once the answer arrives is worse than one that arrives late.
  */
 export function useIsFullAdmin(): boolean {
-  const { data: groups } = useMyPermissionGroups();
-  return (groups ?? []).some((group) => group.slug === FULL_ADMINISTRATORS);
+  const { data: capabilities } = useCapabilities();
+  return capabilities?.isFullAdmin === true;
 }
 
 /**
