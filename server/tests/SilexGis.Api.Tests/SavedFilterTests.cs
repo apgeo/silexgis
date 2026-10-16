@@ -118,6 +118,35 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
     }
 
     [Fact]
+    public async Task A_private_filter_names_no_caving_group_on_save_or_on_update()
+    {
+        // Bound to a group, a row is reached by the rules scoped to that group whatever its
+        // visibility column says — so "private" with a group would not be private at all.
+        var before = await CountMineAsync();
+        var created = await author.PostAsJsonAsync(Url, new
+        {
+            name = $"Not private {tag}",
+            document = Region("Bihor"),
+            visibility = "private",
+            cavingGroupId = cavingGroupId,
+        }, Wire);
+        created.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await created.Content.ReadAsStringAsync());
+        (await CodeAsync(created)).ShouldBe("validation.failed");
+        (await CountMineAsync()).ShouldBe(before);
+
+        var id = (await CreateAsync(author, Body($"Private {tag}"))).GetProperty("id").GetGuid();
+        var updated = await author.PutAsJsonAsync($"{Url}/{id}", new
+        {
+            name = $"Private {tag}",
+            visibility = "private",
+            cavingGroupId = cavingGroupId,
+        }, Wire);
+        updated.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await updated.Content.ReadAsStringAsync());
+        (await CodeAsync(updated)).ShouldBe("validation.failed");
+        (await clubmate.GetAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task A_filter_with_no_question_or_a_question_nobody_may_ask_is_refused()
     {
         var empty = await author.PostAsJsonAsync(Url, new { name = "x", visibility = "private" }, Wire);

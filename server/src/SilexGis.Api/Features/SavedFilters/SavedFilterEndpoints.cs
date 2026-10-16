@@ -60,6 +60,12 @@ public sealed class SavedFilterWriteRequestValidator : AbstractValidator<SavedFi
             .NotNull()
             .When(x => x.Visibility == Visibility.CavingGroup)
             .WithMessage("Sharing with a caving group needs the group.");
+        // A row bound to a group is reached by rules scoped to that group whatever its visibility
+        // says, so "private" with a group would be read by the group's members after all.
+        RuleFor(x => x.CavingGroupId)
+            .Null()
+            .When(x => x.Visibility == Visibility.Private)
+            .WithMessage("A private filter is shared with nobody, so it names no caving group.");
     }
 }
 
