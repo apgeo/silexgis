@@ -404,26 +404,65 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
     [Fact]
     public async Task Interface_preferences_round_trip_and_reject_anything_but_an_object()
     {
-        var saved = await me.PutAsJsonAsync("/api/v1/me/preferences/", new
-        {
-            preferences = new { theme = "dark", density = "compact", reduceMotion = true },
-        });
+        var saved = await PatchPreferencesAsync(new { theme = "dark", density = "compact", reduceMotion = true });
         saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
 
-        var read = JsonDocument.Parse(await (await me.GetAsync("/api/v1/me/preferences/")).Content.ReadAsStringAsync())
-            .RootElement.GetProperty("preferences");
+        var read = await ReadPreferencesAsync();
         read.GetProperty("theme").GetString().ShouldBe("dark");
         read.GetProperty("reduceMotion").GetBoolean().ShouldBeTrue();
 
-        var array = await me.PutAsJsonAsync("/api/v1/me/preferences/", new { preferences = new[] { 1, 2 } });
+        var array = await PatchPreferencesAsync(new[] { 1, 2 });
         array.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
-        var huge = await me.PutAsJsonAsync("/api/v1/me/preferences/", new
-        {
-            preferences = new { blob = new string('x', 9000) },
-        });
+        var huge = await PatchPreferencesAsync(new { blob = new string('x', 9000) });
         huge.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task Two_writers_of_the_interface_preferences_keep_each_others_settings()
+    {
+        // Each page writes only the members it owns. A whole-document write would let the
+        // second of these erase the first.
+        (await PatchPreferencesAsync(new { appearance = new { theme = "dark", density = "compact" } }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PatchPreferencesAsync(new { map = new { units = "metric" } }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var both = await ReadPreferencesAsync();
+        both.GetProperty("appearance").GetProperty("theme").GetString().ShouldBe("dark");
+        both.GetProperty("map").GetProperty("units").GetString().ShouldBe("metric");
+
+        // An object member merges member by member, and a null removes a member.
+        (await PatchPreferencesAsync(new { appearance = new { density = (string?)null, motion = "reduced" } }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var merged = await ReadPreferencesAsync();
+        merged.GetProperty("appearance").GetProperty("theme").GetString().ShouldBe("dark");
+        merged.GetProperty("appearance").GetProperty("motion").GetString().ShouldBe("reduced");
+        merged.GetProperty("appearance").TryGetProperty("density", out _).ShouldBeFalse();
+        merged.GetProperty("map").GetProperty("units").GetString().ShouldBe("metric");
+    }
+
+    [Fact]
+    public async Task Merged_interface_preferences_may_not_outgrow_the_limit_a_single_write_has()
+    {
+        // Each write is under the limit on its own; together they are not. The merged document
+        // is what is stored, so it is what the limit applies to.
+        (await PatchPreferencesAsync(new { first = new string('x', 5000) })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var second = await PatchPreferencesAsync(new { second = new string('y', 5000) });
+
+        second.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonDocument.Parse(await second.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("code").GetString().ShouldBe("preferences.too_large");
+        (await ReadPreferencesAsync()).TryGetProperty("second", out _).ShouldBeFalse();
+    }
+
+    private Task<HttpResponseMessage> PatchPreferencesAsync(object preferences) =>
+        me.PatchAsJsonAsync("/api/v1/me/preferences/", new { preferences });
+
+    private async Task<JsonElement> ReadPreferencesAsync() =>
+        JsonDocument.Parse(await (await me.GetAsync("/api/v1/me/preferences/")).Content.ReadAsStringAsync())
+            .RootElement.GetProperty("preferences");
 
     [Fact]
     public async Task Notification_settings_are_a_matrix_of_every_category_against_every_channel()
