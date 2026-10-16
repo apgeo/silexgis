@@ -115,3 +115,22 @@ html[data-reduce-motion='true'] *::after {
   white-space: nowrap;
   border: 0;
 }
+
+/* Keyboard focus on the library parts that draw none, or only a tint of a border: a sortable
+   column header, a select, and a tree before any of its rows is active (once one is, the library
+   rings that row itself). The theme's focus-ring colour, which is held at 3:1 in both themes. */
+.ant-table-thead > tr > th:focus-visible {
+  outline: 2px solid var(--ant-color-primary-border);
+  outline-offset: -2px;
+}
+
+.ant-select-focused:has(:focus-visible) {
+  outline: 2px solid var(--ant-color-primary-border);
+  outline-offset: 1px;
+  border-radius: var(--ant-border-radius);
+}
+
+.ant-tree-list:focus-visible:not(:has(.ant-tree-treenode-active)) {
+  outline: 2px solid var(--ant-color-primary-border);
+  outline-offset: 2px;
+}
