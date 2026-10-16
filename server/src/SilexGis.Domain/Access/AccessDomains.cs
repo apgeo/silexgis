@@ -13,6 +13,9 @@ public static class AccessDomains
         Geofile => AccessDomain.Geofiles,
         GeoreferencedMap => AccessDomain.GeoreferencedMaps,
         MapView => AccessDomain.MapViews,
+        // A saved filter is saved workspace state like a view, and a club's rules over its saved
+        // views should reach its saved filters without a second set of rules to keep in step.
+        SavedFilter => AccessDomain.MapViews,
         Document => AccessDomain.Documents,
         // An album is an arrangement of documents and is governed with them: one right over
         // "the club's photographs" should reach the albums made of them, and a second domain

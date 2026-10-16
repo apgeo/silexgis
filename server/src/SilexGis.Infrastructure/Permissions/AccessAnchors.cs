@@ -88,7 +88,7 @@ public static class AccessAnchors
         ObjectArm(AccessDomain.TripLogs, typeof(TripLog)),
         ObjectArm(AccessDomain.Geofiles, typeof(Geofile)),
         ObjectArm(AccessDomain.GeoreferencedMaps, typeof(GeoreferencedMap)),
-        ObjectArm(AccessDomain.MapViews, typeof(MapView)),
+        ObjectArm(AccessDomain.MapViews, typeof(MapView), typeof(SavedFilter)),
         ObjectArm(AccessDomain.Files, typeof(StoredFile)),
         ObjectArm(AccessDomain.Documents, typeof(Document), typeof(Album)),
         ObjectArm(AccessDomain.Expeditions, typeof(Expedition)),
@@ -120,6 +120,8 @@ public static class AccessAnchors
     [
         new(typeof(SilexGisUser), typeof(MapView), nameof(MapView.OwnerUserId),
             (db, ids) => db.MapViews.Where(v => ids.Contains(v.OwnerUserId)).Select(v => v.Id)),
+        new(typeof(SilexGisUser), typeof(SavedFilter), nameof(SavedFilter.OwnerUserId),
+            (db, ids) => db.SavedFilters.Where(v => ids.Contains(v.OwnerUserId)).Select(v => v.Id)),
         new(typeof(Document), typeof(DocumentVersion), nameof(DocumentVersion.DocumentId),
             (db, ids) => db.DocumentVersions.Where(v => ids.Contains(v.DocumentId)).Select(v => v.Id)),
         new(typeof(DocumentVersion), typeof(StoredFile), nameof(StoredFile.DocumentVersionId),

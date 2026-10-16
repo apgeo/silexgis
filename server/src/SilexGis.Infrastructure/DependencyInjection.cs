@@ -192,6 +192,8 @@ public static class DependencyInjection
         services.AddScoped<Filters.IFilterWorld, Filters.DocumentFilterWorld>();
         services.AddScoped<Filters.IFilterWorld, Filters.MapViewFilterWorld>();
         services.AddScoped<Filters.FilterWorldRegistry>();
+        services.AddScoped<Filters.SavedFilterReader>();
+        services.AddScoped<Filters.SurfaceFilters>();
 
         return services;
     }

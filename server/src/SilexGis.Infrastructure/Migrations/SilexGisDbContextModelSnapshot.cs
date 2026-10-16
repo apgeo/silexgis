@@ -4900,6 +4900,62 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("rock_types", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.SavedFilter", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Document")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("document")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<short>("Visibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("visibility");
+
+                    b.HasKey("Id")
+                        .HasName("pk_saved_filters");
+
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_saved_filters_caving_group_id");
+
+                    b.HasIndex("OwnerUserId")
+                        .HasDatabaseName("ix_saved_filters_owner_user_id");
+
+                    b.ToTable("saved_filters", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.SpeleolocImportSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9043,6 +9099,22 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_res_link_members_res_links_res_link_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SavedFilter", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_saved_filters_caving_groups_caving_group_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_saved_filters_users_owner_user_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SpeleolocImportSession", b =>

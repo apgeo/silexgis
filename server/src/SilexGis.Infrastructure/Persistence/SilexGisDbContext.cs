@@ -180,6 +180,9 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<MapView> MapViews => Set<MapView>();
 
+    /// <summary>Filters somebody named and kept; each describes a question and grants nothing.</summary>
+    public DbSet<SavedFilter> SavedFilters => Set<SavedFilter>();
+
     public DbSet<Checklist> Checklists => Set<Checklist>();
 
     /// <summary>Dated things a club runs that are not trips and not camps.</summary>

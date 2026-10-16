@@ -142,4 +142,66 @@ public abstract class FilterWorld<TEntity> : IFilterWorld
 
         return new WorldPage(await ProjectAsync(page, query.Caller, ct), total);
     }
+
+    /// <summary>
+    /// The caller's conditions as a narrowing a surface applies to rows it has already made
+    /// visible — the seam a table, an export or a map layer reads a filter document through.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="QueryAsync"/> answers with thin hits, which is right for a picker and too little
+    /// for a surface with a projection of its own: the cave registry shows lengths and depths, an
+    /// export writes a snapped point and an altitude only beside an exact one. So a surface keeps
+    /// its own query — its own visibility walk and whatever it withholds beyond the walk — and asks
+    /// this world only what the conditions mean. The order is the same order: the surface's visible
+    /// set, then this predicate, then the surface's sort and page, with any count taken over the
+    /// composed set.
+    /// </para>
+    /// <para>
+    /// The predicate is the one <see cref="CompileAsync"/> builds for a query, so a condition means
+    /// the same thing on a list as in the selector. It is handed back wrapped rather than bare
+    /// because the only thing a surface may do with it is intersect: a bare expression could be
+    /// OR-ed with something, and a filter that can be OR-ed can widen.
+    /// </para>
+    /// <para>
+    /// Not virtual, for the reason the query is not: a world supplies what its conditions mean and
+    /// has no say in how they are composed with what the caller may see.
+    /// </para>
+    /// </remarks>
+    public async ValueTask<FilterNarrowing<TEntity>> NarrowingAsync(
+        AccessContext caller, FilterNode? where, CancellationToken ct)
+    {
+        if (where is null)
+        {
+            return FilterNarrowing<TEntity>.Nothing;
+        }
+
+        var predicate = await CompileAsync(
+            new WorldQuery(caller, where, SortKey.Updated, Descending: true, Anchor: null, 0, 0, false),
+            ct);
+        return new FilterNarrowing<TEntity>(predicate);
+    }
+}
+
+/// <summary>
+/// A filter's conditions, ready to narrow rows a surface may already show.
+/// </summary>
+/// <remarks>
+/// Its one operation intersects. There is no way to read the predicate back out, which is the
+/// point: what a surface receives from a filter document can make its answer smaller and can do
+/// nothing else to it.
+/// </remarks>
+public sealed class FilterNarrowing<TEntity>
+    where TEntity : class
+{
+    private readonly Expression<Func<TEntity, bool>>? predicate;
+
+    internal FilterNarrowing(Expression<Func<TEntity, bool>>? predicate) => this.predicate = predicate;
+
+    /// <summary>The narrowing that narrows nothing — what a request without a filter carries.</summary>
+    public static FilterNarrowing<TEntity> Nothing { get; } = new(null);
+
+    /// <summary>These visible rows, less the ones the conditions do not match.</summary>
+    public IQueryable<TEntity> Apply(IQueryable<TEntity> visible) =>
+        predicate is null ? visible : visible.Where(predicate);
 }
