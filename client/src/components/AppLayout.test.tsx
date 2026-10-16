@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import type { ReactNode } from 'react';
 import { matchRoutes, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -57,7 +58,7 @@ vi.mock('../api/hooks.ts', () => ({
 // The user-name claim carries the protected label the server publishes to third parties: for an
 // account that never set a display name it is a generated pseudonym, not a name or an address.
 // Keeps the account's preferences in step with the server; not what these tests are about.
-vi.mock('./AccountPrefsSync.tsx', () => ({ default: () => null }));
+vi.mock('./AccountPrefsGate.tsx', () => ({ default: ({ children }: { children: ReactNode }) => children }));
 vi.mock('../auth/auth.tsx', () => ({
   useAuth: () => ({
     user: { profile: { preferred_username: 'user-4f2b8c1d', email: 'caver@example.org' } },

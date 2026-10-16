@@ -22,15 +22,27 @@ import { useAuth } from '../auth/auth.tsx';
 import ErrorBoundary from './ErrorBoundary.tsx';
 import NotificationBell from './NotificationBell.tsx';
 import HeldReportsSentinel from './trips/HeldReportsSentinel.tsx';
-import AccountPrefsSync from './AccountPrefsSync.tsx';
+import AccountPrefsGate from './AccountPrefsGate.tsx';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useIsFullAdmin } from './reslinks/permissions.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import { buildNavItems, isNavGroup } from './navItems.tsx';
 import { sectionFor } from './navSections.ts';
 
-/** Application shell: slim header + collapsible icon sidebar (off-canvas on phones). */
+/**
+ * Application shell: slim header + collapsible icon sidebar (off-canvas on phones) — drawn once
+ * this browser's account preferences are the signed-in account's.
+ */
 export default function AppLayout() {
+  const { user } = useAuth();
+  return (
+    <AccountPrefsGate accountId={user?.profile.sub ?? null}>
+      <AppShell />
+    </AccountPrefsGate>
+  );
+}
+
+function AppShell() {
   const { t } = useTranslation();
   const { language, choose } = useLanguageChoice();
   const { user, signOut } = useAuth();
@@ -194,7 +206,6 @@ export default function AppLayout() {
               whose session it is from the sign-in already in memory, which asks the server
               nothing — the account's own id, never its name. */}
           <HeldReportsSentinel accountId={user?.profile.sub ?? null} />
-          <AccountPrefsSync accountId={user?.profile.sub ?? null} />
           <NotificationBell />
           <Select
             size="small"
