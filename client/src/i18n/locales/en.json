@@ -3822,7 +3822,14 @@
       },
       "mapChrome": "Hide the on-map controls",
       "reset": "Reset these",
-      "resetDone": "Reset."
+      "resetDone": "Reset.",
+      "coordinateFormat": "Coordinates shown as",
+      "coordinateFormatValues": {
+        "dd": "Decimal degrees",
+        "dms": "Degrees, minutes, seconds",
+        "utm": "UTM, with zone"
+      },
+      "overviewMap": "Overview map on the map"
     },
     "advanced": {
       "wallsHeading": "Cave walls in the 3D view",

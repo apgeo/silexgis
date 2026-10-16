@@ -3,6 +3,7 @@ import { CameraOutlined } from '@ant-design/icons';
 import { Button, Descriptions, Empty, Popover, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { useCoordinateCopyFormatter, useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import type { FileInfo } from '../../api/hooks.ts';
 import PositionSourceTag from '../import/PositionSourceTag.tsx';
 
@@ -18,6 +19,8 @@ import PositionSourceTag from '../import/PositionSourceTag.tsx';
  */
 export default function PhotoFactsPanel({ file }: { file: FileInfo }) {
   const { t } = useTranslation();
+  const formatPosition = useCoordinateFormatter();
+  const copyText = useCoordinateCopyFormatter();
   const exif = file.photo;
   const position = file.position;
 
@@ -83,9 +86,7 @@ export default function PhotoFactsPanel({ file }: { file: FileInfo }) {
       label: t('photoFacts.position'),
       children: (
         <span>
-          <Typography.Text copyable={{ text: `${lat.toFixed(6)}, ${lon.toFixed(6)}` }}>
-            {lat.toFixed(6)}, {lon.toFixed(6)}
-          </Typography.Text>
+          <Typography.Text copyable={{ text: copyText(lon, lat) }}>{formatPosition(lon, lat, 6)}</Typography.Text>
           <br />
           <PositionSourceTag source={position.positionSource} confidence={position.confidence} />
         </span>

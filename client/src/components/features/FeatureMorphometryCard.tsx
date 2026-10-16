@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Alert, Card, Col, Row, Statistic, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 
 import { useFeatureMorphometry } from '../../api/hooks.ts';
 
@@ -30,6 +31,7 @@ const measurable = new Set(['Polygon', 'MultiPolygon']);
  */
 export default function FeatureMorphometryCard({ featureId, geometryType }: FeatureMorphometryCardProps) {
   const { t } = useTranslation();
+  const formatPosition = useCoordinateFormatter();
   const enabled = geometryType !== null && measurable.has(geometryType);
   const { data, isLoading, isError } = useFeatureMorphometry(featureId, enabled);
 
@@ -110,7 +112,7 @@ export default function FeatureMorphometryCard({ featureId, geometryType }: Feat
             title={t('morphometry.centroid')}
             value={
               data?.centroidLatitude != null && data.centroidLongitude != null
-                ? `${data.centroidLatitude.toFixed(5)}, ${data.centroidLongitude.toFixed(5)}`
+                ? formatPosition(data.centroidLongitude, data.centroidLatitude)
                 : '—'
             }
             loading={isLoading}

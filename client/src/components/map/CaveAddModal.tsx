@@ -10,7 +10,7 @@ import {
   useSearch,
   type CaveWrite,
 } from '../../api/hooks.ts';
-import { formatLonLat } from '../../geo/coords.ts';
+import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { reloadEntrances } from '../../map/entranceLayer.ts';
 import type { PlacementMode } from '../../map/mapEdit.ts';
@@ -43,6 +43,7 @@ interface NewCaveFormValues {
  */
 export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProps) {
   const { t } = useTranslation();
+  const formatPosition = useCoordinateFormatter();
   const { message } = App.useApp();
   const [form] = Form.useForm<NewCaveFormValues>();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
@@ -151,7 +152,7 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
         okLoading={saving}
       >
         <Typography.Paragraph type="secondary">
-          {t('entrances.coordinates')}: {lonLat ? formatLonLat(lonLat[0], lonLat[1]) : ''}
+          {t('entrances.coordinates')}: {lonLat ? formatPosition(lonLat[0], lonLat[1]) : ''}
         </Typography.Paragraph>
         <Form<NewCaveFormValues>
           form={form}

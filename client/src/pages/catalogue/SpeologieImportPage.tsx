@@ -18,6 +18,7 @@ import {
   Typography,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useCaveTypes,
@@ -60,6 +61,7 @@ const VISIBILITIES: Visibility[] = ['private', 'cavingGroup', 'authenticated', '
  */
 export default function SpeologieImportPage() {
   const { t } = useTranslation();
+  const formatPosition = useCoordinateFormatter();
   const navigate = useNavigate();
   const { message } = App.useApp();
   const [params] = useSearchParams();
@@ -216,9 +218,7 @@ export default function SpeologieImportPage() {
         return (
           <Space size={4} wrap>
             {isPlaced ? (
-              <Tag color="purple">
-                {d.latitude!.toFixed(5)}, {d.longitude!.toFixed(5)}
-              </Tag>
+              <Tag color="purple">{formatPosition(d.longitude!, d.latitude!)}</Tag>
             ) : (
               <Tag>{t('speologie.wizard.unplaced')}</Tag>
             )}

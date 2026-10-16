@@ -85,3 +85,25 @@ describe('what this browser alone keeps, on the accessibility page', () => {
     expect(after.meshesInViewMaxCaves).toBe(30);
   });
 });
+
+describe('what travels with the account, on the accessibility page', () => {
+  afterEach(() => useUiPrefsStore.getState().setCoordinateFormat('dd'));
+
+  it('offers each coordinate format by what a position looks like in it, and takes the one picked', async () => {
+    show();
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Coordinates shown as' }));
+    fireEvent.click(await screen.findByText(/^UTM, with zone — 35T /));
+
+    expect(useUiPrefsStore.getState().coordinateFormat).toBe('utm');
+  });
+
+  it('switches the overview map', () => {
+    show();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Overview map on the map' }));
+
+    expect(useUiPrefsStore.getState().overviewMap).toBe(true);
+    useUiPrefsStore.getState().setOverviewMap(false);
+  });
+});

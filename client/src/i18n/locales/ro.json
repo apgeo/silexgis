@@ -3822,7 +3822,14 @@
       },
       "mapChrome": "Ascunde controalele de pe hartă",
       "reset": "Resetează",
-      "resetDone": "Resetat."
+      "resetDone": "Resetat.",
+      "coordinateFormat": "Coordonate afișate ca",
+      "coordinateFormatValues": {
+        "dd": "Grade zecimale",
+        "dms": "Grade, minute, secunde",
+        "utm": "UTM, cu zonă"
+      },
+      "overviewMap": "Hartă de ansamblu pe hartă"
     },
     "advanced": {
       "wallsHeading": "Pereții peșterilor în vizualizarea 3D",

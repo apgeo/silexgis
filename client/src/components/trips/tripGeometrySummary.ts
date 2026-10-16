@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { TripLogInfo } from '../../api/hooks.ts';
+import { formatCoordinate, type CoordinateFormat } from '../../geo/coordinateFormat.ts';
 
 /** A trip's sketch, said in words and numbers rather than drawn. */
 export interface GeometrySummary {
@@ -93,9 +94,17 @@ export interface Cardinals {
 
 /**
  * A position as a printed report writes it: five decimal places, which is about a metre and is
- * as much as a sketch drawn with a mouse ever claims.
+ * as much as a sketch drawn with a mouse ever claims — in decimal degrees with the report's own
+ * words for the four directions, or in the format the person printing it reads positions in.
  */
-export function formatPosition([lon, lat]: [number, number], cardinals: Cardinals): string {
+export function formatPosition(
+  [lon, lat]: [number, number],
+  cardinals: Cardinals,
+  format: CoordinateFormat = 'dd',
+): string {
+  if (format !== 'dd') {
+    return formatCoordinate(lon, lat, format, 5);
+  }
   const ns = lat >= 0 ? cardinals.north : cardinals.south;
   const ew = lon >= 0 ? cardinals.east : cardinals.west;
   return `${Math.abs(lat).toFixed(5)}° ${ns}, ${Math.abs(lon).toFixed(5)}° ${ew}`;

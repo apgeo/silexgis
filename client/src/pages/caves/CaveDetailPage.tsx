@@ -44,7 +44,7 @@ import {
   type Entrance,
   type EntranceWrite,
 } from '../../api/hooks.ts';
-import { formatLonLat } from '../../geo/coords.ts';
+import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import { APPROXIMATE_MAX_ZOOM, fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { requestReveal3d } from '../../scene3d/pendingReveal3d.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
@@ -78,6 +78,7 @@ import SurveyQualityPanel from './SurveyQualityPanel.tsx';
 
 export default function CaveDetailPage() {
   const { t } = useTranslation();
+  const formatPosition = useCoordinateFormatter();
   const navigate = useNavigate();
   const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
@@ -364,7 +365,7 @@ export default function CaveDetailPage() {
               render: (_, e) => (
                 <Flex align="center" gap={4}>
                   <EnvironmentOutlined />
-                  <span>{formatLonLat(e.geom.coordinates[0], e.geom.coordinates[1])}</span>
+                  <span>{formatPosition(e.geom.coordinates[0], e.geom.coordinates[1])}</span>
                   {/* This table printed five decimals for every row, including the ones the server
                       had snapped to a 5 km grid before sending. Five decimals reads as one metre
                       whatever the provenance, so the row has to say otherwise itself — the

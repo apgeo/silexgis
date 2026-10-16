@@ -22,7 +22,7 @@ import {
   type FeatureUpdate,
 } from '../../api/hooks.ts';
 import { useFeatureRights } from '../../api/hooks/objectRights.ts';
-import { formatLonLat } from '../../geo/coords.ts';
+import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import { getMapTagFilter } from '../../map/mapFilters.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { viewFitGeometry, viewFlyTo } from '../../workspace/viewCamera.ts';
@@ -235,6 +235,7 @@ function CaveCard({
   scope: PanelScope;
 }) {
   const { t } = useTranslation();
+  const formatPosition = useCoordinateFormatter();
   const navigate = useNavigate();
   const { data: cave, isPending } = useCave(selection.caveId);
   const { data: entrances } = useEntrances(selection.caveId);
@@ -286,7 +287,7 @@ function CaveCard({
         <Descriptions.Item label={t('caves.entrances')}>{cave.entranceCount}</Descriptions.Item>
         {entrance && (
           <Descriptions.Item label={t('entrances.coordinates')}>
-            {formatLonLat(entrance.geom.coordinates[0], entrance.geom.coordinates[1])}
+            {formatPosition(entrance.geom.coordinates[0], entrance.geom.coordinates[1])}
           </Descriptions.Item>
         )}
         <Descriptions.Item label={t('caves.visibility')}>

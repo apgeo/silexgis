@@ -22,6 +22,7 @@ import {
 } from 'antd';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
+import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import { Link, useParams } from 'react-router-dom';
 import {
   hasAccessAction,
@@ -151,6 +152,7 @@ function personLine(
  */
 export default function TripReportPage() {
   const { t, i18n } = useTranslation();
+  const coordinateFormat = useUiPrefsStore((s) => s.coordinateFormat);
   const { id } = useParams<{ id: string }>();
   const { data: trip, isPending } = useTripLog(id);
   const { data: tripTypes } = useTripTypes();
@@ -439,7 +441,7 @@ export default function TripReportPage() {
                         south: t('trips.report.south'),
                         east: t('trips.report.east'),
                         west: t('trips.report.west'),
-                      }),
+                      }, coordinateFormat),
                       count: sketch.positions,
                     },
                   )}
@@ -486,7 +488,7 @@ export default function TripReportPage() {
                         south: t('trips.report.south'),
                         east: t('trips.report.east'),
                         west: t('trips.report.west'),
-                      }),
+                      }, coordinateFormat),
                       count: meeting.positions,
                     },
                   )}

@@ -10,7 +10,7 @@ import {
   type UserAddress,
   type UserAddressWrite,
 } from '../../api/hooks.ts';
-import { formatLonLat } from '../../geo/coords.ts';
+import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import PointField from './PointField.tsx';
 
 /** Mirrors the server's cap; the list is a few places a person lives, not storage. */
@@ -34,6 +34,7 @@ interface Props {
  */
 export default function AddressList({ addresses }: Props) {
   const { t } = useTranslation();
+  const formatPosition = useCoordinateFormatter();
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
   const [editing, setEditing] = useState<UserAddress | null>(null);
@@ -128,7 +129,7 @@ export default function AddressList({ addresses }: Props) {
             )}
             {address.geom && (
               <Typography.Text type="secondary">
-                {formatLonLat(address.geom.coordinates[0], address.geom.coordinates[1])}
+                {formatPosition(address.geom.coordinates[0], address.geom.coordinates[1])}
               </Typography.Text>
             )}
           </Flex>

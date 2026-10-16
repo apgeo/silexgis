@@ -198,6 +198,16 @@ function metres(value: number, decimals: number): string {
 // ---- the one formatter ---------------------------------------------------------------------------
 
 /**
+ * A position as it is put on the clipboard. In decimal degrees that is `lat, lon` to six places —
+ * the form a GPS app, a search box or a spreadsheet takes as it is — rather than the display form
+ * with its hemisphere letters; in the other formats it is the display form, which is what those
+ * formats are typed as elsewhere.
+ */
+export function formatCoordinateForCopy(lon: number, lat: number, format: CoordinateFormat): string {
+  return format === 'dd' ? `${lat.toFixed(6)}, ${lon.toFixed(6)}` : formatCoordinate(lon, lat, format, 6);
+}
+
+/**
  * A position as text in the chosen format. `decimals` is the precision the caller would print in
  * decimal degrees — five places, about a metre, unless it says otherwise — and the other formats
  * keep to roughly the same ground precision rather than inventing a finer one: seconds get

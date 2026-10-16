@@ -22,6 +22,7 @@ import {
 } from 'antd';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
+import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import { Link, useParams } from 'react-router-dom';
 import {
   downloadFile,
@@ -97,6 +98,7 @@ function Part({ title, children }: { title: string; children: React.ReactNode })
  */
 export default function ExpeditionReportPage() {
   const { t, i18n } = useTranslation();
+  const coordinateFormat = useUiPrefsStore((s) => s.coordinateFormat);
   const { id } = useParams<{ id: string }>();
   const { data: camp, isPending } = useExpedition(id);
   const { data: cavingGroups } = useCavingGroups();
@@ -300,7 +302,7 @@ export default function ExpeditionReportPage() {
                         south: t('trips.report.south'),
                         east: t('trips.report.east'),
                         west: t('trips.report.west'),
-                      }),
+                      }, coordinateFormat),
                       count: area.positions,
                     },
                   )}

@@ -3,7 +3,7 @@ import { DeleteOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { Button, Flex, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { formatLonLat } from '../../geo/coords.ts';
+import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import PointPickerModal from './PointPickerModal.tsx';
 
 interface Props {
@@ -18,12 +18,13 @@ interface Props {
  */
 export default function PointField({ value = null, onChange }: Props) {
   const { t } = useTranslation();
+  const formatPosition = useCoordinateFormatter();
   const [picking, setPicking] = useState(false);
 
   return (
     <Flex gap={8} align="center" wrap>
       <Typography.Text type={value ? undefined : 'secondary'}>
-        {value ? formatLonLat(value[0], value[1]) : t('settings.profile.noLocation')}
+        {value ? formatPosition(value[0], value[1]) : t('settings.profile.noLocation')}
       </Typography.Text>
       <Button size="small" icon={<EnvironmentOutlined />} onClick={() => setPicking(true)}>
         {value ? t('settings.profile.changeLocation') : t('settings.profile.pickLocation')}

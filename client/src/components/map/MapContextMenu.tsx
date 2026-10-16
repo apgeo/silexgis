@@ -8,6 +8,7 @@ import type { MapContextMenuTarget } from '../../map/contextMenu.ts';
 import type { PlacementMode } from '../../map/mapEdit.ts';
 import { FeatureSymbol } from './FeaturePalette.tsx';
 import { groupFeatureTypes } from './featureTypeGroups.ts';
+import { useCoordinateCopyFormatter } from '../../hooks/useCoordinateFormat.ts';
 
 interface MapContextMenuProps {
   /** Where the menu is anchored/aimed; null keeps it closed. */
@@ -37,6 +38,7 @@ export default function MapContextMenu({
 }: MapContextMenuProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const copyText = useCoordinateCopyFormatter();
 
   const items = useMemo<MenuProps['items']>(() => {
     const list: NonNullable<MenuProps['items']> = [];
@@ -74,7 +76,7 @@ export default function MapContextMenu({
     } else if (key === 'copy-coords') {
       const [lon, lat] = target.lonLat;
       void navigator.clipboard
-        ?.writeText(`${lat.toFixed(6)}, ${lon.toFixed(6)}`)
+        ?.writeText(copyText(lon, lat))
         .then(() => message.success(t('map.coordsCopied')));
     }
     onClose();

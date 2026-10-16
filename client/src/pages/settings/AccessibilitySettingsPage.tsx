@@ -5,6 +5,7 @@ import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useUiPreferences, useUpdateUiPreferences } from '../../api/hooks.ts';
 import { useLanguageChoice } from '../../i18n/languageChoice.ts';
+import { COORDINATE_FORMATS, formatCoordinate, type CoordinateFormat } from '../../geo/coordinateFormat.ts';
 import {
   DEFAULT_APPEARANCE,
   useUiPrefsStore,
@@ -13,6 +14,12 @@ import {
   type LandingPage,
   type ThemePref,
 } from '../../stores/uiPrefsStore.ts';
+
+/**
+ * The position each format is shown with in the list, so the choice is made by what it looks like:
+ * the summit of Moldoveanu, a public trig point, rather than anything from the registry.
+ */
+const COORDINATE_EXAMPLE: [number, number] = [24.73617, 45.59944];
 
 /** The shape this page stores server-side; the server keeps it opaque. */
 interface StoredPreferences {
@@ -40,6 +47,10 @@ export default function AccessibilitySettingsPage() {
   const setLandingPage = useUiPrefsStore((s) => s.setLandingPage);
   const mapChromeHidden = useUiPrefsStore((s) => s.mapChromeHidden);
   const setMapChromeHidden = useUiPrefsStore((s) => s.setMapChromeHidden);
+  const coordinateFormat = useUiPrefsStore((s) => s.coordinateFormat);
+  const setCoordinateFormat = useUiPrefsStore((s) => s.setCoordinateFormat);
+  const overviewMap = useUiPrefsStore((s) => s.overviewMap);
+  const setOverviewMap = useUiPrefsStore((s) => s.setOverviewMap);
 
   const { data: stored } = useUiPreferences();
   const save = useUpdateUiPreferences();
@@ -108,6 +119,34 @@ export default function AccessibilitySettingsPage() {
               aria-label={t('settings.accessibility.reduceMotion')}
             />
             <Typography.Text type="secondary">{t('settings.accessibility.reduceMotionHint')}</Typography.Text>
+          </Flex>
+
+          <Flex gap={12} align="center" wrap>
+            <Typography.Text style={{ minWidth: 160 }}>{t('settings.accessibility.coordinateFormat')}</Typography.Text>
+            <Select
+              style={{ width: 280 }}
+              value={coordinateFormat}
+              onChange={(format: CoordinateFormat) => setCoordinateFormat(format)}
+              aria-label={t('settings.accessibility.coordinateFormat')}
+              data-testid="coordinate-format"
+              options={COORDINATE_FORMATS.map((value) => ({
+                value,
+                label: `${t(`settings.accessibility.coordinateFormatValues.${value}`)} — ${formatCoordinate(
+                  COORDINATE_EXAMPLE[0],
+                  COORDINATE_EXAMPLE[1],
+                  value,
+                )}`,
+              }))}
+            />
+          </Flex>
+
+          <Flex gap={12} align="center" wrap>
+            <Typography.Text style={{ minWidth: 160 }}>{t('settings.accessibility.overviewMap')}</Typography.Text>
+            <Switch
+              checked={overviewMap}
+              onChange={setOverviewMap}
+              aria-label={t('settings.accessibility.overviewMap')}
+            />
           </Flex>
 
           <Flex gap={12} align="center" wrap>

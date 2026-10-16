@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Button, Checkbox, Flex, Select, Table, Tag, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import {
   useCaveTypes,
   useEntranceTypes,
@@ -58,6 +59,7 @@ export default function CandidateTable({
   onPageChange,
 }: Props) {
   const { t } = useTranslation();
+  const formatPosition = useCoordinateFormatter();
   const caveTypes = useCaveTypes();
   const entranceTypes = useEntranceTypes();
   const featureTypes = useFeatureTypes();
@@ -239,8 +241,7 @@ export default function CandidateTable({
             return (
               <Flex vertical gap={2} align="start">
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {(row.geom.coordinates as number[])[1].toFixed(5)},{' '}
-                  {(row.geom.coordinates as number[])[0].toFixed(5)}
+                  {formatPosition((row.geom.coordinates as number[])[0], (row.geom.coordinates as number[])[1])}
                 </Typography.Text>
                 {/* The altitude the file carries, and whether this row keeps it. The file is
                     the only source: nothing is derived from an elevation model, because a
