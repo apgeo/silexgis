@@ -3977,6 +3977,8 @@
       "schemaVersion": "Schema version",
       "schemaInvalid": "That is not a usable JSON Schema.",
       "codeTaken": "Another kind already uses that code.",
+      "seeded": "Ships with the product",
+      "seededImmutable": "A kind that ships with the product keeps its code.",
       "preview": "Fields the document form will offer",
       "noFields": "None — nothing in this schema can be rendered as a field.",
       "kinds": {

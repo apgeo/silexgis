@@ -85,12 +85,15 @@ export default function DocumentTypesPage() {
       message.success(t('common.saved'));
       close();
     } catch (error) {
-      // The two refusals worth naming: the schema text is not usable JSON Schema, and the
-      // code already belongs to another kind. Anything else is a generic failure.
+      // The refusals worth naming: the schema text is not usable JSON Schema, the code already
+      // belongs to another kind, and a shipped kind keeps its code. Anything else is a generic
+      // failure.
       if (error instanceof ApiError && error.code === 'document_type.schema_invalid') {
         message.error(t('admin.documentTypes.schemaInvalid'));
       } else if (error instanceof ApiError && error.code === 'document_type.code_taken') {
         message.error(t('admin.documentTypes.codeTaken'));
+      } else if (error instanceof ApiError && error.code === 'document_type.seeded_immutable') {
+        message.error(t('admin.documentTypes.seededImmutable'));
       } else {
         message.error(t('common.saveFailed'));
       }
@@ -133,7 +136,12 @@ export default function DocumentTypesPage() {
           {
             title: t('admin.documentTypes.code'),
             dataIndex: 'code',
-            render: (code: string) => <Tag>{code}</Tag>,
+            render: (code: string, type: DocumentType) => (
+              <>
+                <Tag>{code}</Tag>
+                {type.isSeeded && <Tag color="blue">{t('admin.documentTypes.seeded')}</Tag>}
+              </>
+            ),
           },
           {
             title: t('admin.documentTypes.fields'),
@@ -196,10 +204,10 @@ export default function DocumentTypesPage() {
               { pattern: /^[a-z0-9_]+$/, message: t('admin.documentTypes.codeHint') },
             ]}
           >
-            {/* A code is the natural key installations exchange rows by; changing one on a
-                kind that is already in use re-points nothing, so it is left editable but
-                the hint says what it is for. */}
-            <Input />
+            {/* A code is the natural key installations exchange rows by. A shipped kind keeps
+                its own — the server refuses a new one — so the box is not offered for it; a
+                kind the club added stays editable, with the hint saying what the code is for. */}
+            <Input disabled={editing?.isSeeded === true} />
           </Form.Item>
           <Form.Item name="description" label={t('admin.documentTypes.description')} rules={[{ max: 1000 }]}>
             <Input.TextArea rows={2} />

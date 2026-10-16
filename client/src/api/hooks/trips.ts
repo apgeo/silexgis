@@ -6,7 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { api, ApiError, lastReadETag } from '../client.ts';
+import { api, lastReadETag } from '../client.ts';
 import type { components } from '../schema';
 import {
   invalidateAfterDelete,
@@ -863,14 +863,10 @@ export function useUpdateChecklist() {
 export function useDeleteChecklist() {
   const invalidate = useInvalidateChecklists();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error, response } = await api.DELETE('/api/v1/checklists/{id}', {
-        params: { path: { id } },
-      });
-      if (error) {
-        throw new ApiError(response.status, error);
-      }
-    },
+    // The refusal travels whole — its code, its sentence and its members — as every other
+    // write's does.
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/checklists/{id}', { params: { path: { id } } })),
     onSuccess: () => invalidate(),
   });
 }
@@ -930,13 +926,9 @@ export function useSetTripChecklistItem() {
     }) => {
       const params = { path: { tripLogId, itemId } };
       if (!ticked) {
-        const { error, response } = await api.DELETE(
-          '/api/v1/trip-logs/{tripLogId}/checklist/items/{itemId}',
-          { params },
+        await unwrapVoid(
+          api.DELETE('/api/v1/trip-logs/{tripLogId}/checklist/items/{itemId}', { params }),
         );
-        if (error) {
-          throw new ApiError(response.status, error);
-        }
         return;
       }
 

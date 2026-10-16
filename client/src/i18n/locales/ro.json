@@ -3977,6 +3977,8 @@
       "schemaVersion": "Versiune schemă",
       "schemaInvalid": "Textul nu este o schemă JSON Schema utilizabilă.",
       "codeTaken": "Acest cod este deja folosit de alt tip.",
+      "seeded": "Vine cu produsul",
+      "seededImmutable": "Un tip de document care vine cu produsul își păstrează codul.",
       "preview": "Câmpurile pe care le va oferi formularul documentului",
       "noFields": "Niciunul — nimic din această schemă nu poate fi afișat ca un câmp.",
       "kinds": {

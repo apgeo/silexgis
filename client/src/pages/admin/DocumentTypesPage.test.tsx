@@ -18,15 +18,17 @@ const documentTypes = [
       // A nested object: JSON Schema allows it, the flat form does not render it. The
       // preview has to leave it out or an author would expect a field that never appears.
       '"survey":{"type":"object","title":"Survey block"}}}',
+    isSeeded: true,
   },
   {
     id: 2,
-    code: 'permit',
-    name: 'Permit',
+    code: 'field_note',
+    name: 'Field note',
     description: null,
     sortOrder: 20,
     metadataSchemaVersion: 1,
     metadataSchema: null,
+    isSeeded: false,
   },
 ];
 
@@ -76,8 +78,11 @@ describe('DocumentTypesPage', () => {
     expect(screen.queryByText('Survey block')).not.toBeInTheDocument();
 
     // A kind carrying no schema says so rather than showing an empty cell.
-    expect(screen.getByText('Permit')).toBeInTheDocument();
+    expect(screen.getByText('Field note')).toBeInTheDocument();
     expect(screen.getByText('No details')).toBeInTheDocument();
+
+    // Only the shipped kind is marked as shipping with the product.
+    expect(screen.getAllByText('Ships with the product')).toHaveLength(1);
 
     // The published schema version is visible: it is what stored documents stamp.
     expect(screen.getByText('v2')).toBeInTheDocument();
@@ -102,5 +107,21 @@ describe('DocumentTypesPage', () => {
     // Whitespace is not a schema. Sending "" or "{}" would mean something different —
     // an empty object accepts anything and would publish a new version for no reason.
     expect(sent.metadataSchema).toBeNull();
+  });
+
+  it('does not offer a new code for a shipped kind, and does for a kind the club added', async () => {
+    render(
+      <App>
+        <DocumentTypesPage />
+      </App>,
+    );
+
+    fireEvent.click(screen.getAllByText('Edit')[0]);
+    expect(await screen.findByLabelText('Code')).toBeDisabled();
+    fireEvent.click(screen.getByText('Cancel'));
+
+    fireEvent.click(screen.getAllByText('Edit')[1]);
+    await waitFor(() => expect(screen.getByLabelText('Code')).toHaveValue('field_note'));
+    expect(screen.getByLabelText('Code')).toBeEnabled();
   });
 });

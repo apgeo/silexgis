@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, lastReadETag } from '../client.ts';
+import { api, lastReadETag } from '../client.ts';
 import type { components } from '../schema';
 import { invalidateAfterDelete, unwrap, unwrapVoid, useInvalidateHistory } from './shared.ts';
 import type { ActivityState, EventListParams } from './types.ts';
@@ -242,14 +242,10 @@ export function useUpdateEvent() {
 export function useDeleteEvent() {
   const invalidate = useInvalidateEvents();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error, response } = await api.DELETE('/api/v1/events/{id}', {
-        params: { path: { id } },
-      });
-      if (error) {
-        throw new ApiError(response.status, error);
-      }
-    },
+    // The refusal travels whole — its code, its sentence and its members — as every other
+    // write's does.
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/events/{id}', { params: { path: { id } } })),
     onSuccess: (_, id) => invalidate(undefined, id),
   });
 }
@@ -297,15 +293,8 @@ export function useEditEventSeriesFollowing() {
 export function useDeleteEventSeriesFollowing() {
   const invalidate = useInvalidateEvents();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error, response } = await api.DELETE('/api/v1/events/{id}/series/following', {
-        params: { path: { id } },
-      });
-      if (error) {
-        throw new ApiError(response.status, error);
-      }
-      return data as EventSeriesDeleteResult;
-    },
+    mutationFn: (id: string) =>
+      unwrap(api.DELETE('/api/v1/events/{id}/series/following', { params: { path: { id } } })),
     // The occurrence it was asked from is the first of the ones that went.
     onSuccess: (_, id) => invalidate(undefined, id),
   });

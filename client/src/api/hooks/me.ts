@@ -172,11 +172,16 @@ export function useUiPreferences() {
   });
 }
 
+/**
+ * Writes the members a page owns into the stored preferences. The server merges them over what is
+ * stored (a null removes a member), so a page sends only its own members and leaves every other
+ * page's settings alone.
+ */
 export function useUpdateUiPreferences() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (preferences: Record<string, unknown>) =>
-      unwrap(api.PUT('/api/v1/me/preferences', { body: { preferences } })),
+      unwrap(api.PATCH('/api/v1/me/preferences', { body: { preferences } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['me'] }),
   });
 }
