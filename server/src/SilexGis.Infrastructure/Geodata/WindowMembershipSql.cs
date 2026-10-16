@@ -52,7 +52,7 @@ public static class WindowMembershipSql
     /// window by the rule above.
     /// </summary>
     /// <param name="kinds">Feature kinds to consider, or null for every kind.</param>
-    public static async Task<List<Guid>> ProtectedMembersAsync(
+    public static Task<List<Guid>> ProtectedMembersAsync(
         SilexGisDbContext db,
         AccessContext ctx,
         double west,
@@ -61,9 +61,23 @@ public static class WindowMembershipSql
         double north,
         double protectionGridMeters,
         IReadOnlyCollection<FeatureKind>? kinds,
+        CancellationToken ct) =>
+        ProtectedMembersAsync(
+            db, FeatureAudienceSql.Caller(ctx, "f"), west, south, east, north, protectionGridMeters, kinds, ct);
+
+    /// <summary>The same, for an audience other than a signed-in caller — a shared view's link.</summary>
+    public static async Task<List<Guid>> ProtectedMembersAsync(
+        SilexGisDbContext db,
+        FeatureAudience audience,
+        double west,
+        double south,
+        double east,
+        double north,
+        double protectionGridMeters,
+        IReadOnlyCollection<FeatureKind>? kinds,
         CancellationToken ct)
     {
-        var (sql, parameters) = Build(ctx, west, south, east, north, protectionGridMeters, kinds);
+        var (sql, parameters) = Build(audience, west, south, east, north, protectionGridMeters, kinds);
         var ids = await db.Database.GetDbConnection().QueryAsync<Guid>(
             new CommandDefinition(sql, parameters, cancellationToken: ct));
         return [.. ids];
@@ -77,9 +91,20 @@ public static class WindowMembershipSql
         double east,
         double north,
         double protectionGridMeters,
+        IReadOnlyCollection<FeatureKind>? kinds) =>
+        Build(FeatureAudienceSql.Caller(ctx, "f"), west, south, east, north, protectionGridMeters, kinds);
+
+    /// <summary>The statement for an audience over the alias <c>f</c>.</summary>
+    public static (string Sql, DynamicParameters Parameters) Build(
+        FeatureAudience audience,
+        double west,
+        double south,
+        double east,
+        double north,
+        double protectionGridMeters,
         IReadOnlyCollection<FeatureKind>? kinds)
     {
-        var (visibleSql, exactSql, parameters) = AccessSql.FeatureLayerFragments(ctx, "f");
+        var (visibleSql, exactSql, parameters) = (audience.VisibleSql, audience.ExactSql, audience.Parameters);
         parameters.Add("wm_west", west);
         parameters.Add("wm_south", south);
         parameters.Add("wm_east", east);

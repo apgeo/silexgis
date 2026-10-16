@@ -81,7 +81,7 @@ export function attachEntranceLoader(map: Map): () => void {
   };
 }
 
-function entranceStyle(feature: FeatureLike): Style {
+export function entranceStyle(feature: FeatureLike): Style {
   const props = feature.getProperties();
 
   if (props.cluster === true) {

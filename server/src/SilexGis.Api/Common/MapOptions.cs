@@ -49,6 +49,18 @@ public sealed class MapOptions
     public const int HighestZoom = 24;
 
     /// <summary>
+    /// Whether a shared map view's link draws data: the cave entrances and surface features at the
+    /// widest visibility level, with every protected position obfuscated. Off, a link shows its
+    /// background and camera only.
+    /// </summary>
+    /// <remarks>
+    /// On by default: an owner who shares a view is sharing a map, and a map with nothing on it is
+    /// not what they meant to share. Off is for an installation that wants no anonymous data route
+    /// at all; switching it off stops every link's data at once, without revoking the links.
+    /// </remarks>
+    public bool SharedViewData { get; set; } = true;
+
+    /// <summary>
     /// From this zoom up the map serves bbox-clipped full detail (splays included) instead of
     /// the skeleton — provided the clipped result fits <see cref="CenterlineMaxPaths"/>.
     /// The default is where the splays start to be visible at all.

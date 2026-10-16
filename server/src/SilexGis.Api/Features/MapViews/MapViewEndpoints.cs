@@ -3,10 +3,13 @@ using System.Text.Json;
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Map;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.MapViews;
@@ -24,8 +27,36 @@ public sealed record MapViewDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
-/// <summary>The anonymous shared-view payload: name + config only, nothing else leaks.</summary>
-public sealed record SharedViewDto(string Name, JsonElement Config);
+/// <summary>
+/// The anonymous shared-view payload: the view's name and document, the background to draw it
+/// over, and which data overlays the link draws. Nothing about who saved it.
+/// </summary>
+/// <param name="Background">
+/// The background the view was saved with, resolved into what a page with no account needs to draw
+/// it — or the installation's default when that one needs an access key, is switched off, or is
+/// not a background any more; null when the installation has no background a link may use.
+/// </param>
+/// <param name="Overlays">Which data overlays this link draws.</param>
+public sealed record SharedViewDto(
+    string Name, JsonElement Config, SharedViewBackgroundDto? Background, SharedViewOverlaysDto Overlays);
+
+/// <summary>
+/// A background a shared view's page draws. Only a source that needs no access key is ever one:
+/// a key would be handed to whoever holds the link.
+/// </summary>
+public sealed record SharedViewBackgroundDto(
+    string Name,
+    MapLayerKind LayerKind,
+    string UrlTemplate,
+    MapLayerWmsOptions? Wms,
+    MapLayerWmtsOptions? Wmts,
+    string? Attribution,
+    int MinZoom,
+    int MaxZoom);
+
+/// <param name="Entrances">The cave entrances overlay is drawn: the view had it on, and the installation allows it.</param>
+/// <param name="Features">The surface features overlay is drawn, on the same two conditions.</param>
+public sealed record SharedViewOverlaysDto(bool Entrances, bool Features);
 
 public sealed record MapViewWriteRequest(
     string Name,
@@ -65,12 +96,13 @@ public static class MapViewEndpoints
         views.MapDelete("/{id:guid}/share", UnshareAsync)
             .WithSummary("Revokes the share token.");
 
-        // The share token IS the credential — this endpoint is on the anonymous
-        // allow-list and returns only the view name and config document.
+        // The share token IS the credential — this endpoint is on the anonymous allow-list and
+        // returns the view's name and document, its background, and which overlays it draws.
         api.MapGet("/shared/views/{token:guid}", SharedAsync)
             .WithTags("MapViews")
             .AllowAnonymous()
-            .WithSummary("Read-only shared view by token (anonymous).");
+            .RequireRateLimiting(SharedViewRateLimits.PolicyName)
+            .WithSummary("Read-only shared view by token (anonymous): its document, a keyless background and which data overlays it draws.");
 
         return api;
     }
@@ -251,6 +283,7 @@ public static class MapViewEndpoints
     private static async Task<Results<Ok<SharedViewDto>, ProblemHttpResult>> SharedAsync(
         Guid token,
         SilexGisDbContext db,
+        IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
         var view = await db.MapViews.AsNoTracking().FirstOrDefaultAsync(x => x.ShareToken == token, ct);
@@ -259,10 +292,61 @@ public static class MapViewEndpoints
             return ApiProblems.NotFound("map_view.not_found");
         }
 
-        // Name + config only. The config references layers by id; the map endpoints the
-        // shared page calls still enforce visibility and location protection themselves —
-        // a share token never widens data access beyond this document.
-        return TypedResults.Ok(new SharedViewDto(view.Name, JsonSerializer.Deserialize<JsonElement>(view.Config)));
+        // The data the link draws comes from its own token-scoped routes, which answer for the
+        // least-privileged reader there is; this answer only says which of them to ask.
+        var config = SharedViewConfig.Read(view.Config);
+        var dataOn = mapOptions.Value.SharedViewData;
+        var anyAccount = await AccessContextResolver.ResolveForAnyAccountAsync(db, ct);
+        return TypedResults.Ok(new SharedViewDto(
+            view.Name,
+            JsonSerializer.Deserialize<JsonElement>(view.Config),
+            await SharedBackgroundAsync(db, anyAccount, config.BaseLayerId, ct),
+            new SharedViewOverlaysDto(dataOn && config.EntrancesVisible, dataOn && config.SurfaceFeaturesVisible)));
+    }
+
+    /// <summary>
+    /// The background a link draws: the view's own when a page with no account may use it, the
+    /// installation's default otherwise, and the first one that may be used after that.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A source that needs an access key is never one, because the key is in its address and the
+    /// address goes to whoever holds the link. The view's own choice falls back rather than failing:
+    /// a view saved over a keyed basemap still opens, over a background anybody may be sent.
+    /// </para>
+    /// <para>
+    /// Read as the least-privileged reader: an installation that takes the catalogue away from its
+    /// accounts has taken it from the link as well.
+    /// </para>
+    /// </remarks>
+    private static async Task<SharedViewBackgroundDto?> SharedBackgroundAsync(
+        SilexGisDbContext db, AccessContext anyAccount, long? chosenId, CancellationToken ct)
+    {
+        if (!AccessEvaluator.Decide(anyAccount, AccessDomain.MapLayers, AccessAction.Read, null).Allowed)
+        {
+            return null;
+        }
+
+        var usable = (await db.MapLayers.AsNoTracking()
+                .Where(l => l.Enabled && l.IsBase && l.ApiKeyName == null)
+                .OrderBy(l => l.SortOrder)
+                .ToListAsync(ct))
+            .Where(l => MapLayerOptionsJson.IsDrawable(l.LayerKind, l.Options))
+            .ToList();
+        var layer = usable.FirstOrDefault(l => l.Id == chosenId)
+            ?? usable.FirstOrDefault(l => l.IsDefault)
+            ?? usable.FirstOrDefault();
+        return layer is null
+            ? null
+            : new SharedViewBackgroundDto(
+                layer.Name,
+                layer.LayerKind,
+                layer.UrlTemplate,
+                MapLayerOptionsJson.Wms(layer.LayerKind, layer.Options),
+                MapLayerOptionsJson.Wmts(layer.LayerKind, layer.Options),
+                layer.Attribution,
+                layer.MinZoom,
+                layer.MaxZoom);
     }
 
     private static void Apply(MapView view, MapViewWriteRequest request)

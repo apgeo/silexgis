@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Flex, Spin, Typography } from 'antd';
+import { Alert, Button, Card, Flex, Spin, Typography } from 'antd';
 import Map from 'ol/Map';
 import View from 'ol/View';
-import TileLayer from 'ol/layer/Tile';
+import type { FeatureLike } from 'ol/Feature';
+import type Point from 'ol/geom/Point';
 import { fromLonLat } from 'ol/proj';
-import XYZ from 'ol/source/XYZ';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { fetchSharedView } from '../api/hooks.ts';
+import { tileLayerFor } from '../map/baseLayers.ts';
+import { createSharedViewLayers } from '../map/sharedViewLayers.ts';
 
 interface SharedConfig {
   configVersion?: number;
@@ -16,10 +18,20 @@ interface SharedConfig {
   zoom?: number;
 }
 
+/** What a click on the shared map shows: a public name, and whether the position is approximate. */
+interface Picked {
+  name: string | null;
+  approximate: boolean;
+}
+
 /**
- * Anonymous read-only page for a shared map view. It renders the shared camera over a
- * public base map; protected data never appears here — the share token only carries the
- * view document, and every data endpoint keeps enforcing its own access rules.
+ * Anonymous read-only page for a shared map view: the view's camera over the background it was
+ * saved with, and the public cave entrances and surface features it had switched on.
+ *
+ * Everything drawn here comes from the link's own routes, which answer for nobody in particular:
+ * rows at the widest visibility level only, every protected position snapped or left out, and no
+ * identifiers. The page adds nothing to that and has nothing to withhold — a click shows the name
+ * the server sent, and whether the point is approximate.
  */
 export default function SharedViewPage() {
   const { t } = useTranslation();
@@ -27,10 +39,14 @@ export default function SharedViewPage() {
   const mapTarget = useRef<HTMLDivElement>(null);
   const [name, setName] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [noBackground, setNoBackground] = useState(false);
+  const [picked, setPicked] = useState<Picked | null>(null);
+  const [cluster, setCluster] = useState<number | null>(null);
 
   useEffect(() => {
     let disposed = false;
     let map: Map | null = null;
+    let detach: (() => void) | undefined;
 
     const boot = async () => {
       try {
@@ -40,20 +56,45 @@ export default function SharedViewPage() {
         }
         setName(shared.name);
         const config = shared.config as SharedConfig;
-        map = new Map({
+        const data = createSharedViewLayers(token!, shared.overlays);
+        const base = shared.background ? tileLayerFor(shared.background, 0) : null;
+        base?.setVisible(true);
+        setNoBackground(!base);
+        const created = new Map({
           target: mapTarget.current ?? undefined,
-          layers: [
-            new TileLayer({
-              source: new XYZ({
-                url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                attributions: '© OpenStreetMap contributors',
-              }),
-            }),
-          ],
+          layers: [...(base ? [base] : []), ...data.layers],
           view: new View({
             center: fromLonLat(config.center ?? [25.3, 45.7]),
             zoom: config.zoom ?? 8,
           }),
+        });
+        map = created;
+        detach = data.attach(created);
+        created.on('singleclick', (event) => {
+          const hit = created.forEachFeatureAtPixel(event.pixel, (feature: FeatureLike) => feature);
+          if (!hit) {
+            setPicked(null);
+            setCluster(null);
+            return;
+          }
+          if (hit.get('cluster') === true) {
+            // A count over a grid cell names nothing to show; it is opened by going closer.
+            setPicked(null);
+            setCluster(Number(hit.get('count') ?? 0));
+            const view = created.getView();
+            const geometry = hit.getGeometry() as Point | undefined;
+            view.animate({
+              center: geometry?.getCoordinates(),
+              zoom: Math.min((view.getZoom() ?? 8) + 2, 18),
+              duration: 300,
+            });
+            return;
+          }
+          setCluster(null);
+          setPicked({
+            name: (hit.get('name') as string | null | undefined) ?? null,
+            approximate: hit.get('approximate') === true,
+          });
         });
       } catch {
         if (!disposed) {
@@ -65,6 +106,7 @@ export default function SharedViewPage() {
     void boot();
     return () => {
       disposed = true;
+      detach?.();
       map?.setTarget(undefined);
     };
   }, [token]);
@@ -85,7 +127,43 @@ export default function SharedViewPage() {
         </Typography.Title>
         <Typography.Text type="secondary">{t('app.name')}</Typography.Text>
       </Flex>
-      <div ref={mapTarget} style={{ flex: 1 }} />
+      {noBackground && <Alert type="info" showIcon banner title={t('views.sharedNoBackground')} />}
+      <div style={{ flex: 1, position: 'relative' }}>
+        <div ref={mapTarget} style={{ position: 'absolute', inset: 0 }} data-testid="shared-view-map" />
+        {(picked || cluster !== null) && (
+          <Card
+            size="small"
+            style={{ position: 'absolute', left: 16, bottom: 16, maxWidth: 'calc(100% - 32px)' }}
+            data-testid="shared-view-picked"
+          >
+            <Flex align="center" gap={8}>
+              <Flex vertical style={{ flex: 1 }}>
+                {picked && (
+                  <>
+                    <Typography.Text strong>{picked.name ?? t('views.sharedUnnamed')}</Typography.Text>
+                    {picked.approximate && (
+                      <Typography.Text type="secondary">{t('views.sharedApproximate')}</Typography.Text>
+                    )}
+                  </>
+                )}
+                {cluster !== null && (
+                  <Typography.Text>{t('views.sharedClusterHint', { count: cluster })}</Typography.Text>
+                )}
+              </Flex>
+              <Button
+                size="small"
+                type="text"
+                onClick={() => {
+                  setPicked(null);
+                  setCluster(null);
+                }}
+              >
+                {t('views.sharedClose')}
+              </Button>
+            </Flex>
+          </Card>
+        )}
+      </div>
     </Flex>
   );
 }

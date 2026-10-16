@@ -221,6 +221,7 @@ public static class MapEndpoints
         api.MapGet("/map/photos", PhotosAsync)
             .WithTags("Map")
             .WithSummary("Geotagged photos as GeoJSON points for the given bbox; photos touching protected features withheld.");
+        api.MapSharedViewDataEndpoints();
         return api;
     }
 

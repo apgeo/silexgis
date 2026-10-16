@@ -20,16 +20,27 @@ namespace SilexGis.Api.Features.Map;
 /// </summary>
 public static class MapSql
 {
-    public static async Task<FeatureCollection> ClustersAsync(
+    public static Task<FeatureCollection> ClustersAsync(
         SilexGisDbContext db,
         AccessContext ctx,
         Bbox box,
         int zoom,
         double protectionGridMeters,
         string? tag,
+        CancellationToken ct) =>
+        ClustersAsync(db, FeatureAudienceSql.Caller(ctx, "f"), box, zoom, protectionGridMeters, tag, ct);
+
+    /// <summary>The clusters an audience is shown — a signed-in caller, or a shared view's link.</summary>
+    public static async Task<FeatureCollection> ClustersAsync(
+        SilexGisDbContext db,
+        FeatureAudience audience,
+        Bbox box,
+        int zoom,
+        double protectionGridMeters,
+        string? tag,
         CancellationToken ct)
     {
-        var (sql, parameters, clusterCellDegrees) = BuildClusters(ctx, box, zoom, protectionGridMeters, tag);
+        var (sql, parameters, clusterCellDegrees) = BuildClusters(audience, box, zoom, protectionGridMeters, tag);
         var connection = db.Database.GetDbConnection();
         var rows = await connection.QueryAsync<(double Lon, double Lat, int Count, double CellX, double CellY)>(
             new CommandDefinition(sql, parameters, cancellationToken: ct));
@@ -67,13 +78,22 @@ public static class MapSql
         Bbox box,
         int zoom,
         double protectionGridMeters,
+        string? tag) =>
+        BuildClusters(FeatureAudienceSql.Caller(ctx, "f"), box, zoom, protectionGridMeters, tag);
+
+    /// <summary>The cluster statement for an audience over the alias <c>f</c>.</summary>
+    public static (string Sql, DynamicParameters Parameters, double ClusterCellDegrees) BuildClusters(
+        FeatureAudience audience,
+        Bbox box,
+        int zoom,
+        double protectionGridMeters,
         string? tag)
     {
         // ~64 px cluster cells on a 256 px tile pyramid.
         var clusterCellDegrees = 360d / Math.Pow(2, zoom) / 4d;
         var protectionCellDegrees = LocationProtection.CellDegrees(protectionGridMeters);
 
-        var (visibilitySql, exactSql, parameters) = AccessSql.FeatureLayerFragments(ctx, "f");
+        var (visibilitySql, exactSql, parameters) = (audience.VisibleSql, audience.ExactSql, audience.Parameters);
         parameters.Add("west", box.West);
         parameters.Add("south", box.South);
         parameters.Add("east", box.East);

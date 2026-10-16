@@ -666,6 +666,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/shared/views/{token}/cave-entrances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Public cave entrances for a shared view's link (anonymous): clusters below the cluster zoom, protected positions snapped. */
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
+                    zoom?: number;
+                };
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shared/views/{token}/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Public surface features for a shared view's link (anonymous): protected points snapped, protected outlines left out. */
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
+                };
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/map/density": {
         parameters: {
             query?: never;
@@ -1256,6 +1337,29 @@ export interface paths {
         };
         /** Read-only shared view by token (anonymous). */
         get: operations["mapViewShared"];
+        /** Read-only shared view by token (anonymous): its document, a keyless background and which data overlays it draws. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SharedViewDto"];
+                    };
+                };
+            };
+        };
         put?: never;
         post?: never;
         delete?: never;
@@ -12905,9 +13009,27 @@ export interface components {
             centerline: null | components["schemas"]["SharedCenterlineDto"];
             children: null | components["schemas"]["SharedFeatureChildDto"][];
         };
+        SharedViewBackgroundDto: {
+            name: string;
+            layerKind: components["schemas"]["MapLayerKind"];
+            urlTemplate: string;
+            wms: null | components["schemas"]["MapLayerWmsOptions"];
+            wmts: null | components["schemas"]["MapLayerWmtsOptions"];
+            attribution: null | string;
+            /** Format: int32 */
+            minZoom: number;
+            /** Format: int32 */
+            maxZoom: number;
+        };
         SharedViewDto: {
             name: string;
             config: components["schemas"]["JsonElement"];
+            background: null | components["schemas"]["SharedViewBackgroundDto"];
+            overlays: components["schemas"]["SharedViewOverlaysDto"];
+        };
+        SharedViewOverlaysDto: {
+            entrances: boolean;
+            features: boolean;
         };
         SmsSettingsDto: {
             enabled: boolean;

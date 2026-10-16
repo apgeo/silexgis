@@ -84,7 +84,8 @@ export const specs = {
     'map-editing.spec.ts', 'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
     'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
   ],
-  mapViews: [],
+  // A shared view opened with no account: its background and the public data its link draws.
+  mapViews: ['shared-view.spec.ts'],
   me: ['settings.spec.ts', 'my-trips.spec.ts'],
   messaging: ['announcements.spec.ts', 'notifications.spec.ts', 'notification-health.spec.ts'],
   metadata: ['documents.spec.ts', 'gallery.spec.ts'],
@@ -134,8 +135,8 @@ export const specs = {
   uploads: ['uploads.spec.ts'],
   users: ['settings.spec.ts', 'permission-groups.spec.ts', 'users-admin.spec.ts'],
   // Which protected rows a window holds, decided on the position each reader is shown — the
-  // workspace map's entrance and feature layers.
-  windowMembership: ['cave-clustering.spec.ts', 'map-editing.spec.ts'],
+  // workspace map's entrance and feature layers, and a shared view's link.
+  windowMembership: ['cave-clustering.spec.ts', 'map-editing.spec.ts', 'shared-view.spec.ts'],
   workAreas: ['karst-density.spec.ts'],
 };
 
@@ -209,6 +210,7 @@ export const clientAreas = {
   'client/src/pages/Scene3DPage': ['scene', 'terrain'],
   'client/src/pages/QrLandingPage': 'qr',
   'client/src/pages/MapPage': 'map',
+  'client/src/pages/SharedViewPage': 'mapViews',
 };
 
 /**

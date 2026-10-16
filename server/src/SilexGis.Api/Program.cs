@@ -281,7 +281,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // Credential-guessing protection: per-IP fixed window on the auth surface.
     // Limit is configurable for installations behind shared NATs.
     //
-    // Each of the four limits below is read through PerMinuteLimit, which refuses the start on a
+    // Each of the per-minute limits below is read through PerMinuteLimit, which refuses the start on a
     // value that is not positive: the limiter would otherwise accept it here and throw on the
     // first request to the surface, which is a server error on every sign-in or every published
     // page with nothing to connect it to a setting.
@@ -303,6 +303,10 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // cannot share the address-keyed shape above.
     var calendarFeedPermitLimit = PerMinuteLimit.Read(
         builder.Configuration, CalendarFeedRateLimits.ConfigurationKey, CalendarFeedRateLimits.DefaultPerMinute);
+    // Cost control on a shared map view and the data it draws: anonymous, a spatial query per
+    // request, and asked again on every pan — see SharedViewRateLimits.
+    var sharedViewPermitLimit = PerMinuteLimit.Read(
+        builder.Configuration, SharedViewRateLimits.ConfigurationKey, SharedViewRateLimits.DefaultPerMinute);
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -338,6 +342,15 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
                 {
                     Window = TimeSpan.FromMinutes(1),
                     PermitLimit = publicTripPermitLimit,
+                    QueueLimit = 0,
+                }));
+        options.AddPolicy(SharedViewRateLimits.PolicyName, context =>
+            System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = sharedViewPermitLimit,
                     QueueLimit = 0,
                 }));
         options.AddPolicy(CalendarFeedRateLimits.PolicyName, context =>

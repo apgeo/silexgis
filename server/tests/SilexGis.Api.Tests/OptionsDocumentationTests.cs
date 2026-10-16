@@ -65,6 +65,7 @@ public class OptionsDocumentationTests
         "Qr:RateLimitPerMinute",
         "TripTracking:PublicRateLimitPerMinute",
         "CalendarFeed:RateLimitPerMinute",
+        "Map:SharedViewRateLimitPerMinute",
         TrustedProxies.HopsKey,
         TrustedProxies.NetworksKey + ":0",
     ];

@@ -3007,7 +3007,12 @@
     "share": "Copiază linkul de partajare",
     "linkCopied": "Linkul de partajare a fost copiat.",
     "exportImage": "Exportă imaginea hărții",
-    "sharedNotFound": "Această vedere partajată nu există sau a fost revocată."
+    "sharedNotFound": "Această vedere partajată nu există sau a fost revocată.",
+    "sharedApproximate": "Poziție aproximativă",
+    "sharedClusterHint": "{{count}} intrări aici — apropie harta pentru a le vedea pe rând.",
+    "sharedNoBackground": "Nicio hartă de fundal nu este disponibilă pentru vederile partajate în această instalare.",
+    "sharedUnnamed": "Fără nume",
+    "sharedClose": "Închide"
   },
   "panel": {
     "unknown": "Panou necunoscut.",

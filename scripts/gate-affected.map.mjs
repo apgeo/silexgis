@@ -178,14 +178,17 @@ export const groups = {
     'PersistenceTests', 'TerrainOptionsTests',
     // Which protected rows a caller's window holds, decided on the position they are shown.
     'MapWindowMembershipTests', 'MapClusterConfigurationTests', 'HiddenRowCapTests',
+    'SharedViewDataTests',
     // The catalogue's kinds as the seeder stores them and the layer list publishes them.
     'MapLayerKindTests',
   ],
-  mapViews: ['MapViewTests'],
+  // A shared view's page and the data its link draws for nobody in particular.
+  mapViews: ['MapViewTests', 'SharedViewDataTests'],
   // The one statement deciding which protected rows a caller's window holds, on the position
   // each caller is shown: every route that reads a window through it, and the plan pins on it.
   windowMembership: [
     'GeofileTests', 'MapClusterConfigurationTests', 'MapWindowMembershipTests', 'PerformanceTests',
+    'SharedViewDataTests',
   ],
   // How long a centreline is, measured once over its passage: the upload path and the survey
   // compiler both ask it.
@@ -371,6 +374,7 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Filters/': 'filters',
   'server/src/SilexGis.Infrastructure/Geodata/': 'geofiles',
   'server/src/SilexGis.Infrastructure/Geodata/WindowMembershipSql.cs': 'windowMembership',
+  'server/src/SilexGis.Infrastructure/Geodata/FeatureAudienceSql.cs': 'windowMembership',
   'server/src/SilexGis.Infrastructure/Import/': 'imports',
   'server/src/SilexGis.Infrastructure/Jobs/': 'jobs',
   // The two jobs that belong to terrain: running a build, and sweeping the rasters no build names.
@@ -491,9 +495,9 @@ export const crossCutting = {
     'PublicTripPlannedReturnTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
     'PublishedNamesNowhereTests', 'PublishedSurveyBoundsTests', 'RegistryStatisticsTests',
     'ResLinkApiTests', 'ResLinkProtectionFloorTests', 'ResLinkTargetPictureTests',
-    'SpeleoLocDevSeedTests', 'SpeleolocTripImportTests', 'SpeologieCatalogueTests',
-    'StagedImportTests', 'StructureComparisonTests', 'SurveyCompilationTests',
-    'SurveyGraphTests', 'SurveyModelReadingTests', 'SurveyModelTests',
+    'SharedViewDataTests', 'SpeleoLocDevSeedTests', 'SpeleolocTripImportTests',
+    'SpeologieCatalogueTests', 'StagedImportTests', 'StructureComparisonTests',
+    'SurveyCompilationTests', 'SurveyGraphTests', 'SurveyModelReadingTests', 'SurveyModelTests',
     'SurveyModelTrackedTripCountsTests', 'SurveyModelTrackedTripReplayTests',
     'SurveyModelTrackedTripsTests', 'SurveySegmentSubstrateTests', 'SurveySourceTests',
     'SurveyWallsTests', 'SyncPageSizeTests', 'SyncProtocolTests', 'SyncUploadTests',
