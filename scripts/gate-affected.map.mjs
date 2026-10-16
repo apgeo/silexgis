@@ -148,7 +148,7 @@ export const groups = {
     'FilterParityTests', 'FilterSpikeTests', 'FilterWorldConformanceTests',
     'FilterWorldListParityTests',
     // Saved filters, and the surfaces that read a filter document through the narrowing seam.
-    'SavedFilterTests', 'CaveRegistryFilterTests',
+    'SavedFilterTests', 'CaveRegistryFilterTests', 'MapFilterTests',
   ],
   files: [
     'ErrorHandlerScopeTests',
@@ -180,6 +180,8 @@ export const groups = {
     // Which protected rows a caller's window holds, decided on the position they are shown.
     'MapWindowMembershipTests', 'MapClusterConfigurationTests', 'HiddenRowCapTests',
     'SharedViewDataTests',
+    // The map's layers narrowed by a filter document, the window still deciding membership.
+    'MapFilterTests',
     // The catalogue's kinds as the seeder stores them and the layer list publishes them.
     'MapLayerKindTests',
   ],
@@ -501,7 +503,7 @@ export const crossCutting = {
     'FileAccessBatchParityTests', 'FileAttachmentTests', 'FilterParityTests',
     'FilterWorldConformanceTests', 'FilterWorldListParityTests', 'GeofileTests',
     'GeoreferencedMapTests', 'HiddenRowCapTests', 'HistoryTests', 'HypsometryTests',
-    'KarstLinkExportTests', 'MapClusterConfigurationTests', 'MapDensityTests',
+    'KarstLinkExportTests', 'MapClusterConfigurationTests', 'MapDensityTests', 'MapFilterTests',
     'MapKarstIndexTests', 'MapPointPatternTests', 'MapWindowMembershipTests',
     'PhotoBytesProtectionTests', 'PhotoImportTests', 'PolygonMorphometryTests',
     'ProtectionDepthTests', 'PublicTripCachingTests', 'PublicTripDepthPlacesTests',

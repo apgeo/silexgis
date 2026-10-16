@@ -16,7 +16,9 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Filters;
 using SilexGis.Domain.Map;
+using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
@@ -513,6 +515,51 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         batch.ShouldContain("pk_features", Case.Insensitive,
             "a batched id lookup must ride the primary key, not scan the feature table");
         batch.ShouldNotContain("Seq Scan on features", Case.Insensitive);
+
+        // The clustered layer with a filter on: the filter arrives as the ids of the entrances it
+        // selects and narrows the candidate step. Whether the planner then starts from the window
+        // (the entrance index) or from the ids (the primary key), it must not scan the table, and
+        // the exact-view walk must stay an index probe.
+        var (filteredClusterSql, filteredClusterParameters, _) = MapSql.BuildClusters(
+            ctx, new Bbox(West, South, East, North), zoom: 9, protectionGridMeters: 5000d, tag: null,
+            onlyIds: sampleIds);
+        var filteredClusters = await ExplainAsync(
+            connection, filteredClusterParameters, "clusters (guarded, filtered)", filteredClusterSql);
+        filteredClusters.ShouldNotContain("Seq Scan on features", Case.Insensitive,
+            "clusters (guarded, filtered): a filter must narrow the window's entrances, not scan for them");
+        AssertAncestorProbeIsIndexed(filteredClusters, "clusters (guarded, filtered)");
+
+        // The point layer with a filter on, as EF sends it: a cave filter compiled by the feature
+        // world (the registry's kind-and-region spelling), its cave arm reaching the entrances of
+        // the caves it keeps — the shape every saved filter from the registry takes on the map.
+        var surfaceFilters = scope.ServiceProvider.GetRequiredService<SurfaceFilters>();
+        var caveFilter = new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope(FeatureFilterWorld.Key, new AllOfNode(
+                [
+                    new ConditionNode(FeatureFilterFields.Kind, FilterOp.Equals, [new IdValue("cave")]),
+                    new ConditionNode(FeatureFilterFields.Region, FilterOp.Contains, [new TextValue("bihor")]),
+                ])),
+            ],
+        };
+        var narrowing = await surfaceFilters.ForAsync<Feature>(
+            ctx, FeatureFilterWorld.Key, FilterToken.Encode(caveFilter), null, CancellationToken.None);
+        narrowing.Refusal.ShouldBeNull();
+        var filteredPointsQuery = MapEndpoints.EntrancePointsQuery(
+            db,
+            MapEndpoints.FilteredReadable(
+                db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers),
+                narrowing.Narrowing!),
+            new Bbox(West, South, East, North),
+            [Guid.NewGuid()],
+            tag: null,
+            maxPoints: 10000);
+        output.WriteLine(filteredPointsQuery.ToQueryString());
+        var filteredPoints = await ExplainEfAsync(filteredPointsQuery, "points (guarded, filtered)");
+        AssertRidesEntranceIndex(filteredPoints, "points (guarded, filtered)");
+        AssertAncestorProbeIsIndexed(filteredPoints, "points (guarded, filtered)");
 
         // An entry-holding caller gets the full level-walk CASE instead of the lean
         // built-ins-only shape; its arms may cost rows, never access paths — the bbox

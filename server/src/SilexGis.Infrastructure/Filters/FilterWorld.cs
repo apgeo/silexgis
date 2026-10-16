@@ -201,6 +201,13 @@ public sealed class FilterNarrowing<TEntity>
     /// <summary>The narrowing that narrows nothing — what a request without a filter carries.</summary>
     public static FilterNarrowing<TEntity> Nothing { get; } = new(null);
 
+    /// <summary>
+    /// Whether this narrows nothing. A surface that has to carry a filter into a statement the
+    /// predicate cannot reach (raw SQL) asks this to skip resolving an id set it would not need;
+    /// it says nothing about what the conditions are.
+    /// </summary>
+    public bool NarrowsNothing => predicate is null;
+
     /// <summary>These visible rows, less the ones the conditions do not match.</summary>
     public IQueryable<TEntity> Apply(IQueryable<TEntity> visible) =>
         predicate is null ? visible : visible.Where(predicate);

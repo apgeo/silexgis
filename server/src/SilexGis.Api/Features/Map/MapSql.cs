@@ -50,10 +50,15 @@ public static class MapSql
         int zoom,
         double protectionGridMeters,
         string? tag,
+        IReadOnlyCollection<Guid>? onlyIds,
         CancellationToken ct) =>
-        ClustersAsync(db, FeatureAudienceSql.Caller(ctx, "f"), box, zoom, protectionGridMeters, tag, ct);
+        ClustersAsync(db, FeatureAudienceSql.Caller(ctx, "f"), box, zoom, protectionGridMeters, tag, onlyIds, ct);
 
-    /// <summary>The clusters an audience is shown — a signed-in caller, or a shared view's link.</summary>
+    /// <summary>
+    /// The clusters an audience is shown — a signed-in caller, or a shared view's link. A non-null
+    /// <paramref name="onlyIds"/> keeps only those entrances (a filter, resolved to the entrances it
+    /// selects); null keeps every entrance the audience may see.
+    /// </summary>
     public static async Task<FeatureCollection> ClustersAsync(
         SilexGisDbContext db,
         FeatureAudience audience,
@@ -61,9 +66,15 @@ public static class MapSql
         int zoom,
         double protectionGridMeters,
         string? tag,
+        IReadOnlyCollection<Guid>? onlyIds,
         CancellationToken ct)
     {
-        var (sql, parameters, clusterCellDegrees) = BuildClusters(audience, box, zoom, protectionGridMeters, tag);
+        if (onlyIds is { Count: 0 })
+        {
+            return FeatureCollection.Of([]);
+        }
+
+        var (sql, parameters, clusterCellDegrees) = BuildClusters(audience, box, zoom, protectionGridMeters, tag, onlyIds);
         var connection = db.Database.GetDbConnection();
 
         // Sent behind WithoutJitSql in one batch, which PostgreSQL runs as one implicit
@@ -106,8 +117,9 @@ public static class MapSql
         Bbox box,
         int zoom,
         double protectionGridMeters,
-        string? tag) =>
-        BuildClusters(FeatureAudienceSql.Caller(ctx, "f"), box, zoom, protectionGridMeters, tag);
+        string? tag,
+        IReadOnlyCollection<Guid>? onlyIds = null) =>
+        BuildClusters(FeatureAudienceSql.Caller(ctx, "f"), box, zoom, protectionGridMeters, tag, onlyIds);
 
     /// <summary>The cluster statement for an audience over the alias <c>f</c>.</summary>
     public static (string Sql, DynamicParameters Parameters, double ClusterCellDegrees) BuildClusters(
@@ -115,7 +127,8 @@ public static class MapSql
         Bbox box,
         int zoom,
         double protectionGridMeters,
-        string? tag)
+        string? tag,
+        IReadOnlyCollection<Guid>? onlyIds = null)
     {
         // ~64 px cluster cells on a 256 px tile pyramid.
         var clusterCellDegrees = 360d / Math.Pow(2, zoom) / 4d;
@@ -140,6 +153,21 @@ public static class MapSql
                               WHERE tg.feature_id = f.id AND t.slug = @tag)
                 """;
             parameters.Add("tag", tag);
+        }
+
+        // A filter arrives as the ids of the entrances it selects: its conditions are an EF
+        // predicate this statement cannot embed. The ids narrow the candidates, before the snap
+        // and the window test, so a cluster counts the filtered set exactly as the window decides
+        // it for everyone else — a protected entrance is in or out by its shown point whether a
+        // filter is on or not.
+        var onlySql = string.Empty;
+        if (onlyIds is not null)
+        {
+            onlySql = """
+
+                  AND f.id = ANY(@only_ids)
+                """;
+            parameters.Add("only_ids", AccessSql.UuidArray(onlyIds as Guid[] ?? [.. onlyIds]));
         }
 
         // Entrance features carry their access trio row-locally, so visibility needs no
@@ -184,7 +212,7 @@ public static class MapSql
                   AND f.deleted_at IS NULL
                   AND f.geom && ST_Expand(
                         ST_MakeEnvelope(@west, @south, @east, @north, 4326), @protection_cell)
-                  AND {visibilitySql}{tagSql}
+                  AND {visibilitySql}{tagSql}{onlySql}
             ),
             placed AS (
                 SELECT

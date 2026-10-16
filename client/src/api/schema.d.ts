@@ -555,7 +555,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Cave entrances as GeoJSON for the given bbox; clustered at low zoom. */
+        /** Cave entrances as GeoJSON for the given bbox; clustered at low zoom. A filter (`filter` token or `savedFilterId`) keeps the entrances it selects and the entrances of the caves it selects. */
         get: operations["mapCaveEntrances"];
         put?: never;
         post?: never;
@@ -572,7 +572,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Features as GeoJSON for the given bbox, filtered by kinds/type/category/tag; protected points snapped, other protected geometry omitted. */
+        /** Features as GeoJSON for the given bbox, filtered by kinds/type/category/tag and a filter (`filter` token or `savedFilterId`); protected points snapped, other protected geometry omitted. */
         get: operations["mapFeatures"];
         put?: never;
         post?: never;
@@ -16794,6 +16794,8 @@ export interface operations {
                 bbox: string;
                 zoom?: number;
                 tag?: string;
+                filter?: string;
+                savedFilterId?: string;
             };
             header?: never;
             path?: never;
@@ -16821,6 +16823,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16838,6 +16849,8 @@ export interface operations {
                 featureTypeId?: number;
                 category?: string;
                 tag?: string;
+                filter?: string;
+                savedFilterId?: string;
             };
             header?: never;
             path?: never;
@@ -16865,6 +16878,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

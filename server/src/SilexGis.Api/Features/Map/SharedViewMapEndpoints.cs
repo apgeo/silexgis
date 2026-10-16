@@ -109,7 +109,7 @@ public static class SharedViewMapEndpoints
         if (effectiveZoom < mapOptions.Value.ClusterMaxZoom)
         {
             return TypedResults.Ok(await MapSql.ClustersAsync(
-                db, FeatureAudienceSql.SharedLink(anyAccount, "f"), box, effectiveZoom, gridMeters, config.TagFilter, ct));
+                db, FeatureAudienceSql.SharedLink(anyAccount, "f"), box, effectiveZoom, gridMeters, config.TagFilter, onlyIds: null, ct));
         }
 
         var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(

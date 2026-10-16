@@ -232,8 +232,8 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
         var operations = (await OperationsAsync()).ToDictionary(o => o.Id!);
         var expected = new Dictionary<string, string[]>
         {
-            ["mapCaveEntrances"] = ["400", "401"],
-            ["mapFeatures"] = ["400", "401"],
+            ["mapCaveEntrances"] = ["400", "401", "404"],
+            ["mapFeatures"] = ["400", "401", "404"],
             ["mapViewShared"] = ["404", "429"],
             ["sharedViewMapEntrances"] = ["400", "404", "429"],
             ["sharedViewMapFeatures"] = ["400", "404", "429"],

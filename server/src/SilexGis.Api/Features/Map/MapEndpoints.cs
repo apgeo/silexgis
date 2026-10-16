@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Filters;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
@@ -223,17 +224,20 @@ public static class MapEndpoints
 
     public static RouteGroupBuilder MapMapDataEndpoints(this RouteGroupBuilder api)
     {
-        // The two layers every map draws declare the refusal their handlers send: a window that
+        // The two layers every map draws declare the refusals their handlers send: a window that
         // is malformed, the wrong way round or off the globe (and, for features, an unknown kind
-        // or category) is a 400. The 401 is declared for the whole API at once.
+        // or category), or a filter that cannot be read, is a 400; a saved filter the caller
+        // cannot read is a 404. The 401 is declared for the whole API at once.
         api.MapGet("/map/cave-entrances", CaveEntrancesAsync)
             .WithTags("Map")
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .WithSummary("Cave entrances as GeoJSON for the given bbox; clustered at low zoom.");
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("Cave entrances as GeoJSON for the given bbox; clustered at low zoom. A filter (`filter` token or `savedFilterId`) keeps the entrances it selects and the entrances of the caves it selects.");
         api.MapGet("/map/features", FeaturesAsync)
             .WithTags("Map")
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .WithSummary("Features as GeoJSON for the given bbox, filtered by kinds/type/category/tag; protected points snapped, other protected geometry omitted.");
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("Features as GeoJSON for the given bbox, filtered by kinds/type/category/tag and a filter (`filter` token or `savedFilterId`); protected points snapped, other protected geometry omitted.");
         api.MapGet("/map/geofiles/{id:guid}/features", GeofileFeaturesAsync)
             .WithTags("Map")
             .WithSummary("Imported geofile rows as GeoJSON for the given bbox.");
@@ -1185,9 +1189,12 @@ public static class MapEndpoints
         long? featureTypeId,
         string? category,
         string? tag,
+        string? filter,
+        Guid? savedFilterId,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
+        SurfaceFilters surfaceFilters,
         IOptions<AccessOptions> accessOptions,
         IOptions<MapOptions> mapOptions,
         CancellationToken ct)
@@ -1221,6 +1228,13 @@ public static class MapEndpoints
             categoryFilter = parsedCategory;
         }
 
+        var narrowing = await surfaceFilters.ForAsync<Feature>(
+            ctx, FeatureFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return refusal.ToProblem();
+        }
+
         // Protected rows are in the window by the position this caller is shown — the snapped
         // point, or nowhere for a protected line or polygon whose geometry is withheld — so the
         // presence of a row never bisects a position the caller may not see. Decided before the
@@ -1229,8 +1243,9 @@ public static class MapEndpoints
         var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(
             db, ctx, box.West, box.South, box.East, box.North,
             accessOptions.Value.LocationGridMeters, kindFilter, ct);
-        var query = db.Features.AsNoTracking()
-            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+        var query = FilteredReadable(
+                db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers),
+                narrowing.Narrowing!)
             .Where(f => kindFilter.Contains(f.Kind) && f.Geom != null
                 && ((!f.IsProtectedEffective && f.Geom!.Intersects(polygon))
                     || protectedMembers.Contains(f.Id)));
@@ -1317,9 +1332,12 @@ public static class MapEndpoints
         string bbox,
         int? zoom,
         string? tag,
+        string? filter,
+        Guid? savedFilterId,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
+        SurfaceFilters surfaceFilters,
         IOptions<AccessOptions> accessOptions,
         IOptions<MapOptions> mapOptions,
         CancellationToken ct)
@@ -1335,11 +1353,82 @@ public static class MapEndpoints
             return windowProblem;
         }
 
+        var narrowing = await surfaceFilters.ForAsync<Feature>(
+            ctx, FeatureFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return refusal.ToProblem();
+        }
+
+        var gridMeters = accessOptions.Value.LocationGridMeters;
+        var readable = FilteredReadable(
+            db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers),
+            narrowing.Narrowing!);
         var effectiveZoom = Math.Clamp(zoom ?? 14, 0, MapOptions.HighestZoom);
-        return effectiveZoom < mapOptions.Value.ClusterMaxZoom
-            ? TypedResults.Ok(await MapSql.ClustersAsync(db, ctx, box, effectiveZoom, accessOptions.Value.LocationGridMeters, tag, ct))
-            : TypedResults.Ok(await PointsAsync(
-                db, protection, ctx, box, accessOptions.Value.LocationGridMeters, tag, mapOptions.Value.MaxPoints, ct));
+        if (effectiveZoom >= mapOptions.Value.ClusterMaxZoom)
+        {
+            return TypedResults.Ok(await PointsAsync(
+                db, protection, ctx, readable, box, gridMeters, tag, mapOptions.Value.MaxPoints, ct));
+        }
+
+        var onlyIds = narrowing.Narrowing!.NarrowsNothing
+            ? null
+            : await FilteredEntranceIdsAsync(readable, box, gridMeters, ct);
+        return TypedResults.Ok(await MapSql.ClustersAsync(db, ctx, box, effectiveZoom, gridMeters, tag, onlyIds, ct));
+    }
+
+    /// <summary>
+    /// The rows of <paramref name="readable"/> a filter keeps: those its conditions match, and
+    /// the entrances of the caves they match.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The second arm is what makes one filter mean one thing on every page. A filter saved from
+    /// the cave registry says "caves" (and things only a cave has — a region, a surveyed length),
+    /// and an entrance row is not a cave, so the conditions alone would match no entrance and the
+    /// entrance layer would draw nothing for every filter a member had saved. A cave is drawn on
+    /// the map by its entrances, so a cave the filter keeps keeps them.
+    /// </para>
+    /// <para>
+    /// Both arms are taken over <paramref name="readable"/> — rows the caller may already see —
+    /// so a cave the caller cannot read never lifts an entrance in, and the answer is always a
+    /// subset of what the layer would show unfiltered. Membership of the window is decided
+    /// afterwards, on the same rule as without a filter.
+    /// </para>
+    /// </remarks>
+    public static IQueryable<Feature> FilteredReadable(IQueryable<Feature> readable, FilterNarrowing<Feature> narrowing)
+    {
+        if (narrowing.NarrowsNothing)
+        {
+            return readable;
+        }
+
+        var matching = narrowing.Apply(readable).Select(m => m.Id);
+        return readable.Where(f => matching.Contains(f.Id)
+            || (f.Entrance != null && matching.Contains(f.Entrance.CaveFeatureId)));
+    }
+
+    /// <summary>
+    /// The ids of the filtered entrances the cluster statement may consider, for a statement that
+    /// cannot take the filter's predicate itself.
+    /// </summary>
+    /// <remarks>
+    /// Bounded by the cluster statement's own index prefilter (the window widened by one
+    /// protection cell), so the set stays the size of the window rather than of the whole
+    /// installation. The set is only ever intersected with that statement's candidates, which
+    /// apply the same prefilter and then decide window membership on the shown point; nothing
+    /// about the ids reaches the answer except through that decision.
+    /// </remarks>
+    private static async Task<Guid[]> FilteredEntranceIdsAsync(
+        IQueryable<Feature> filteredReadable, Bbox box, double gridMeters, CancellationToken ct)
+    {
+        var cell = LocationProtection.CellDegrees(gridMeters);
+        var prefilter = new GeometryFactory(new PrecisionModel(), 4326).ToGeometry(
+            new Envelope(box.West - cell, box.East + cell, box.South - cell, box.North + cell));
+        return await filteredReadable
+            .Where(f => f.Kind == FeatureKind.CaveEntrance && f.Geom != null && f.Geom.Intersects(prefilter))
+            .Select(f => f.Id)
+            .ToArrayAsync(ct);
     }
 
     /// <summary>
@@ -1388,6 +1477,7 @@ public static class MapEndpoints
         SilexGisDbContext db,
         FeatureProtection protection,
         AccessContext ctx,
+        IQueryable<Feature> readable,
         Bbox box,
         double gridMeters,
         string? tag,
@@ -1404,9 +1494,7 @@ public static class MapEndpoints
         // The entrance's own row decides nothing alone anymore: visibility cascades at
         // read time over the ancestor chain, so a private entrance row under a readable
         // cave is served — the filter's inheritance arm does that work.
-        var rows = await EntrancePointsQuery(
-                db, db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers),
-                box, protectedMembers, tag, maxPoints)
+        var rows = await EntrancePointsQuery(db, readable, box, protectedMembers, tag, maxPoints)
             .ToListAsync(ct);
         if (rows.Count == 0)
         {
