@@ -65,6 +65,15 @@ public static class RegistryStatisticsEndpoints
             .WithSummary(
                 "Which caves the caller may read resemble each other over the measures they named.");
 
+        // No export sibling yet: the page draws the boxes, and a spreadsheet of five numbers per
+        // group is a later want rather than a missing piece of this one.
+        registry.MapGet("/categories", CategoriesAsync)
+            .WithValidation<RegistryCategoriesRequest>()
+            .WithSummary(
+                "How one measured column compares across the cave types or rock types of the caves the "
+                + "caller may read: each group's size and its box (10th, 25th, 50th, 75th and 90th "
+                + "percentiles), the box withheld for a group measured on too few caves.");
+
         registry.MapGet("/regions", RegionsAsync)
             .WithValidation<RegistryRegionsRequest>()
             .WithSummary("How many caves stand under each region, over those the caller may place.");
@@ -135,6 +144,33 @@ public static class RegistryStatisticsEndpoints
     {
         var answer = await AnswerClusteringAsync(request, db, accessAccessor, protection, ct);
         return Seen(answer);
+    }
+
+    private static async Task<Results<Ok<RegistryCategoryComparison>, UnauthorizedHttpResult, ProblemHttpResult>>
+        CategoriesAsync(
+            [AsParameters] RegistryCategoriesRequest request,
+            SilexGisDbContext db,
+            IAccessContextAccessor accessAccessor,
+            FeatureProtection protection,
+            CancellationToken ct)
+    {
+        var scope = request.ToScope();
+        var (ctx, refusal) = await GuardAsync(scope, db, accessAccessor, protection, ct);
+        if (ctx is null)
+        {
+            return Seen(refusal.As<RegistryCategoryComparison>());
+        }
+
+        // Read by the same code the validator judged them with, for the reason the distribution
+        // gives: a second reading would be a second opinion about what the request said.
+        if (!RegistryMeasures.TryParse(request.Measure, out var measure)
+            || !RouteEnums.TryParse<RegistryCategory>(request.Category, out var category))
+        {
+            return Seen(new Answer<RegistryCategoryComparison>(false, Malformed(), null));
+        }
+
+        var comparison = await RegistryStatisticsQuery.CategoryGroupsAsync(db, ctx, scope, measure, category, ct);
+        return Seen(new Answer<RegistryCategoryComparison>(false, null, comparison));
     }
 
     private static async Task<Results<Ok<RegistryRegionBreakdownDto>, UnauthorizedHttpResult, ProblemHttpResult>>

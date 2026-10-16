@@ -103,6 +103,16 @@ public sealed record RegistryRegionsRequest(
     [property: FromQuery(Name = "rockTypeId")] long? RockTypeId,
     [property: FromQuery(Name = "region")] string? Region) : IRegistryScopeRequest;
 
+/// <param name="Measure">Which measured column is compared, by the name the answers use for it.</param>
+/// <param name="Category">What the caves are grouped by: <c>caveType</c> or <c>rockType</c>.</param>
+public sealed record RegistryCategoriesRequest(
+    [property: FromQuery(Name = "measure")] string? Measure,
+    [property: FromQuery(Name = "category")] string? Category,
+    [property: FromQuery(Name = "areaId")] Guid? AreaId,
+    [property: FromQuery(Name = "caveTypeId")] long? CaveTypeId,
+    [property: FromQuery(Name = "rockTypeId")] long? RockTypeId,
+    [property: FromQuery(Name = "region")] string? Region) : IRegistryScopeRequest;
+
 /// <summary>
 /// Reading a measure's name off a request.
 /// </summary>
@@ -260,6 +270,21 @@ public sealed class RegistryCorrelationRequestValidator : AbstractValidator<Regi
                 || !RegistryMeasures.TryParse(request.Y, out var y)
                 || x != y)
             .WithMessage("x and y must be different measures.");
+    }
+}
+
+public sealed class RegistryCategoriesRequestValidator : AbstractValidator<RegistryCategoriesRequest>
+{
+    public RegistryCategoriesRequestValidator()
+    {
+        RuleFor(x => x.Measure)
+            .Must(m => RegistryMeasures.TryParse(m, out _))
+            .WithMessage($"Must name a measure: {RegistryMeasures.Accepted}.");
+        RuleFor(x => x.Category)
+            .Must(c => SilexGis.Api.Common.RouteEnums.TryParse<RegistryCategory>(c, out _))
+            .WithMessage(
+                $"Must name a category: {string.Join(", ", SilexGis.Api.Common.RouteEnums.WireNames<RegistryCategory>())}.");
+        RuleFor(x => x.Region).MaximumLength(200).When(x => x.Region is not null);
     }
 }
 

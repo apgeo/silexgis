@@ -176,6 +176,51 @@ public static class RegistryStatisticsQuery
     }
 
     /// <summary>
+    /// A measure compared across the groups of one category, each group's five numbers published
+    /// only where it holds at least <see cref="RegistryStatisticsLimits.MinimumBoxCaveCount"/>
+    /// measured caves and its counts always.
+    /// </summary>
+    public static async Task<RegistryCategoryComparison> CategoryGroupsAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        RegistryStatisticsScope scope,
+        RegistryMeasure measure,
+        RegistryCategory category,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(scope);
+
+        var (sql, parameters) = RegistryStatisticsSql.BuildCategoryGroups(ctx, scope, measure, category);
+        var rows = await db.Database.GetDbConnection().QueryAsync<RegistryCategoryGroupRow>(
+            new CommandDefinition(sql, parameters, cancellationToken: ct));
+
+        var floor = RegistryStatisticsLimits.MinimumBoxCaveCount;
+        var groups = rows
+            .Select(r => r.MeasuredCount >= floor
+                ? new RegistryCategoryGroup(
+                    r.CategoryId, r.CaveCount, r.MeasuredCount,
+                    r.LowerDecile, r.LowerQuartile, r.Median, r.UpperQuartile, r.UpperDecile)
+                : new RegistryCategoryGroup(
+                    r.CategoryId, r.CaveCount, r.MeasuredCount, null, null, null, null, null))
+            .ToList();
+
+        return new RegistryCategoryComparison(
+            measure, category, floor, groups, scope.IsSpatiallyScoped ? AreaBasis : ReadableBasis);
+    }
+
+    /// <summary>One group as the statement returns it, before the floor is applied.</summary>
+    private sealed record RegistryCategoryGroupRow(
+        long? CategoryId,
+        int CaveCount,
+        int MeasuredCount,
+        double? LowerDecile,
+        double? LowerQuartile,
+        double? Median,
+        double? UpperQuartile,
+        double? UpperDecile);
+
+    /// <summary>
     /// How many caves stand under each region in scope, over the caves the caller may place exactly.
     /// </summary>
     public static async Task<IReadOnlyList<RegistryRegionRow>> RegionsAsync(

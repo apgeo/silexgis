@@ -46,6 +46,14 @@ public static class RegistryStatisticsLimits
     public const int MaximumBinCaveCount = 50;
 
     /// <summary>
+    /// Fewest measured caves a group of a comparison by category may hold and still have its five
+    /// numbers published. Five percentiles taken over five or fewer values are those values, near
+    /// enough to read each one off — so below this a group is published as its counts alone; it is
+    /// kept rather than dropped, so the counts still add up to the caves in scope.
+    /// </summary>
+    public const int MinimumBoxCaveCount = 6;
+
+    /// <summary>
     /// Most quantiles one request may ask for. Quantiles are order statistics: enough of them over
     /// a small registry reconstructs the sorted values, and the sorted values are the registry.
     /// </summary>

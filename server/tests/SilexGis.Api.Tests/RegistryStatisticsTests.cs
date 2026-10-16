@@ -40,6 +40,7 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
     private HttpClient anonymous = null!;
     private Guid viewerId;
     private long caveTypeId;
+    private long otherCaveTypeId;
     private long karstAreaTypeId;
     private string suffix = null!;
 
@@ -57,7 +58,8 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-            caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
+            caveTypeId = await db.CaveTypes.OrderBy(t => t.Id).Select(t => t.Id).FirstAsync();
+            otherCaveTypeId = await db.CaveTypes.OrderBy(t => t.Id).Select(t => t.Id).Skip(1).FirstAsync();
             karstAreaTypeId = await db.FeatureTypes
                 .Where(t => t.Code == "karst_area").Select(t => t.Id).SingleAsync();
         }
@@ -314,6 +316,80 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
+    public async Task A_measure_is_compared_across_cave_types_and_a_thin_group_keeps_only_its_counts()
+    {
+        var region = await SeedAsync("CT", [100m, 200m, 300m, 400m, 500m, 600m]);
+        await CreateCaveAsync(region, 1000m, type: otherCaveTypeId);
+        await CreateCaveAsync(region, 2000m, type: otherCaveTypeId);
+
+        var answer = await ReadJsonAsync(
+            owner, $"categories?measure=surveyedLength&category=caveType&region={region}");
+
+        answer.GetProperty("minimumGroupCaveCount").GetInt32().ShouldBe(6);
+        var groups = answer.GetProperty("groups").EnumerateArray().ToList();
+        groups.Count.ShouldBe(2);
+
+        var wide = groups.Single(g => g.GetProperty("categoryId").GetInt64() == caveTypeId);
+        wide.GetProperty("caveCount").GetInt32().ShouldBe(6);
+        wide.GetProperty("measuredCount").GetInt32().ShouldBe(6);
+        // Continuous percentiles over 100…600: the box and whiskers, never the least and greatest.
+        wide.GetProperty("lowerDecile").GetDouble().ShouldBe(150, 1e-6);
+        wide.GetProperty("lowerQuartile").GetDouble().ShouldBe(225, 1e-6);
+        wide.GetProperty("median").GetDouble().ShouldBe(350, 1e-6);
+        wide.GetProperty("upperQuartile").GetDouble().ShouldBe(475, 1e-6);
+        wide.GetProperty("upperDecile").GetDouble().ShouldBe(550, 1e-6);
+
+        // Two caves: their figures would be the two caves' own lengths, so only the counts stand.
+        var thin = groups.Single(g => g.GetProperty("categoryId").GetInt64() == otherCaveTypeId);
+        thin.GetProperty("caveCount").GetInt32().ShouldBe(2);
+        thin.GetProperty("measuredCount").GetInt32().ShouldBe(2);
+        foreach (var figure in new[] { "lowerDecile", "lowerQuartile", "median", "upperQuartile", "upperDecile" })
+        {
+            thin.GetProperty(figure).ValueKind.ShouldBe(JsonValueKind.Null, figure);
+        }
+    }
+
+    [Fact]
+    public async Task A_cave_the_caller_may_not_read_is_in_no_group_of_a_comparison()
+    {
+        var region = await SeedAsync("CH", [100m, 200m, 300m, 400m, 500m, 600m]);
+        await CreateCaveAsync(region, 5000m, visibility: "private");
+
+        var seenByOwner = await ReadJsonAsync(
+            owner, $"categories?measure=surveyedLength&category=caveType&region={region}");
+        var seenByViewer = await ReadJsonAsync(
+            viewer, $"categories?measure=surveyedLength&category=caveType&region={region}");
+
+        // The fixture first: the owner's group really holds the seventh cave, and its long length
+        // pulls the box up — so the viewer's figures are a withholding, not a smaller seed.
+        var ownerGroup = seenByOwner.GetProperty("groups").EnumerateArray().Single();
+        ownerGroup.GetProperty("caveCount").GetInt32().ShouldBe(7);
+        var viewerGroup = seenByViewer.GetProperty("groups").EnumerateArray().Single();
+        viewerGroup.GetProperty("caveCount").GetInt32().ShouldBe(6);
+        viewerGroup.GetProperty("upperDecile").GetDouble().ShouldBe(550, 1e-6);
+        ownerGroup.GetProperty("upperDecile").GetDouble().ShouldBeGreaterThan(550);
+    }
+
+    [Fact]
+    public async Task A_comparison_names_a_measure_and_a_category_it_knows()
+    {
+        foreach (var query in new[]
+                 {
+                     "categories?measure=surveyedLength",
+                     "categories?measure=surveyedLength&category=region",
+                     "categories?measure=colour&category=caveType",
+                 })
+        {
+            var response = await owner.GetAsync($"/api/v1/stats/registry/{query}");
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, query);
+        }
+
+        // The positive twin: a well-formed request over the same routes is answered.
+        (await owner.GetAsync("/api/v1/stats/registry/categories?measure=surveyedLength&category=rockType"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task Nothing_here_is_answered_to_a_caller_who_is_not_signed_in()
     {
         foreach (var route in new[]
@@ -324,6 +400,7 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
                      "correlation/export?x=surveyedLength&y=depth",
                      "regions",
                      "regions/export",
+                     "categories?measure=surveyedLength&category=caveType",
                  })
         {
             (await anonymous.GetAsync($"/api/v1/stats/registry/{route}"))
@@ -764,12 +841,13 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
         decimal surveyedLength,
         decimal? depth = null,
         string visibility = "authenticated",
-        bool locationProtected = false)
+        bool locationProtected = false,
+        long? type = null)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/caves", new
         {
             name = $"Reg {Guid.NewGuid():N}"[..30],
-            caveTypeId,
+            caveTypeId = type ?? caveTypeId,
             region,
             surveyedLength,
             depth,

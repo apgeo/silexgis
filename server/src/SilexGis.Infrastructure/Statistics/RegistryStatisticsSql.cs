@@ -373,6 +373,50 @@ public static class RegistryStatisticsSql
     }
 
     /// <summary>
+    /// A measure's five numbers per group of one category — the tenth, twenty-fifth, fiftieth,
+    /// seventy-fifth and ninetieth percentiles — with each group's size, over the caves in scope
+    /// the caller may read. Not the least and greatest: those two are the values that name one cave
+    /// outright, which is why the registry publishes them only as the bounds of a whole scope.
+    /// </summary>
+    /// <remarks>
+    /// The category is one of two fixed columns chosen by the enumeration, never text from the
+    /// request. Caves recording no category form a group of their own (a null id), so the groups'
+    /// counts add up to the caves in scope. Whether a group's numbers may be published is decided
+    /// afterwards, off its measured count; this statement returns them all and nothing leaves it
+    /// that names a cave.
+    /// </remarks>
+    public static (string Sql, DynamicParameters Parameters) BuildCategoryGroups(
+        AccessContext ctx, RegistryStatisticsScope scope, RegistryMeasure measure, RegistryCategory category)
+    {
+        var column = ColumnOf(measure);
+        var categoryColumn = category switch
+        {
+            RegistryCategory.CaveType => "cave_type_id",
+            RegistryCategory.RockType => "rock_type_id",
+            _ => throw new ArgumentOutOfRangeException(nameof(category), category, "not a category"),
+        };
+        var (where, parameters) = BuildScope(ctx, scope, scope.IsSpatiallyScoped);
+
+        var sql = $"""
+            SELECT c.{categoryColumn} AS "CategoryId",
+                   COUNT(*)::int AS "CaveCount",
+                   COUNT(c.{column})::int AS "MeasuredCount",
+                   percentile_cont(0.1) WITHIN GROUP (ORDER BY c.{column}::double precision) AS "LowerDecile",
+                   percentile_cont(0.25) WITHIN GROUP (ORDER BY c.{column}::double precision) AS "LowerQuartile",
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY c.{column}::double precision) AS "Median",
+                   percentile_cont(0.75) WITHIN GROUP (ORDER BY c.{column}::double precision) AS "UpperQuartile",
+                   percentile_cont(0.9) WITHIN GROUP (ORDER BY c.{column}::double precision) AS "UpperDecile"
+            FROM features f
+            JOIN caves c ON c.id = f.id
+            WHERE {where}
+            GROUP BY c.{categoryColumn}
+            ORDER BY c.{categoryColumn} NULLS LAST
+            """;
+
+        return (sql, parameters);
+    }
+
+    /// <summary>
     /// The recorded values themselves, in ascending order.
     /// </summary>
     /// <remarks>

@@ -152,6 +152,44 @@ public sealed record RegistryCorrelationRow(
 /// than dropped: how much of a registry is unrecorded is part of what a breakdown says.</param>
 public sealed record RegistryRegionRow(string? Region, int CaveCount);
 
+/// <summary>What a grouping of caves is by: a vocabulary every cave record carries.</summary>
+public enum RegistryCategory
+{
+    CaveType = 0,
+
+    RockType = 1,
+}
+
+/// <summary>
+/// One group of a comparison by category: its size, and the five numbers a box is drawn from.
+/// </summary>
+/// <param name="CategoryId">The cave type or rock type; null for the caves that record none.</param>
+/// <param name="CaveCount">Caves in the group.</param>
+/// <param name="MeasuredCount">Of those, how many record the measure.</param>
+/// <param name="LowerDecile">The tenth percentile, where the box's lower whisker ends. It and the
+/// other four numbers are null for a group measured on fewer caves than the floor the answer names,
+/// and only its counts are published.</param>
+/// <param name="UpperDecile">The ninetieth percentile, where the upper whisker ends.</param>
+public sealed record RegistryCategoryGroup(
+    long? CategoryId,
+    int CaveCount,
+    int MeasuredCount,
+    double? LowerDecile,
+    double? LowerQuartile,
+    double? Median,
+    double? UpperQuartile,
+    double? UpperDecile);
+
+/// <summary>A measure compared across the groups of one category, over a scope.</summary>
+/// <param name="MinimumGroupCaveCount">The floor a group's figures need, published so a reader
+/// meeting a group with no box knows why.</param>
+public sealed record RegistryCategoryComparison(
+    RegistryMeasure Measure,
+    RegistryCategory Category,
+    int MinimumGroupCaveCount,
+    IReadOnlyList<RegistryCategoryGroup> Groups,
+    string Basis);
+
 /// <summary>
 /// A measure summarised over a scope: its extent, its histogram after the publication rule, its
 /// quantiles, and the two distribution fits.
