@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { App as AntApp } from 'antd';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -134,6 +134,27 @@ describe('the registry read from its address', () => {
 
     expect(screen.getByTestId('cave-registry-unreadable-link')).toBeInTheDocument();
     expect(cavesSpy).toHaveBeenLastCalledWith(expect.objectContaining({ filter: undefined }));
+  });
+
+  it('keeps a space typed at the end of the search while the next word is on its way', () => {
+    vi.useFakeTimers();
+    try {
+      show('/caves');
+
+      // The test id sits on the search control's wrapper; the box is the input inside it.
+      const box = screen.getByTestId('cave-registry-search').querySelector('input')!;
+      fireEvent.change(box, { target: { value: 'pestera ' } });
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      // The address holds the trimmed words, and the box still holds what was typed.
+      const state = readCaveRegistryAddress(new URLSearchParams(screen.getByTestId('search').textContent!));
+      expect(state.controls).toEqual({ search: 'pestera' });
+      expect(box).toHaveValue('pestera ');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('writes a changed control into the address, back on the first page', () => {

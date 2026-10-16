@@ -87,11 +87,14 @@ export default function CaveListPage() {
   // second would quietly undo the first. A write starts from the newest of these instead, until the
   // address arrives at something this page did not write (back, forward, a pasted link).
   const written = useRef<string[]>([]);
+  /** Whether the address last arrived at was one this page wrote itself. */
+  const arrivedByOwnWrite = useRef(false);
   useEffect(() => {
     // Arriving at one of these settles it and everything older; arriving anywhere else — which is
     // also where going back from a settled write leads — forgets them all.
     const arrived = written.current.indexOf(searchParams.toString());
     written.current = arrived === -1 ? [] : written.current.slice(arrived);
+    arrivedByOwnWrite.current = arrived !== -1;
   }, [searchParams]);
 
   /** A new state written to the address. Typing replaces the entry; anything chosen adds one. */
@@ -125,7 +128,12 @@ export default function CaveListPage() {
     latest.current = { controls, setControl };
   });
   useEffect(() => {
-    setSearchInput(controls.search ?? '');
+    const arrived = controls.search ?? '';
+    // The box's own text comes back from the address trimmed; putting that over the box would take
+    // away the space somebody has just typed before their next word. So the address wins only when
+    // it says something else, or when it arrived by a road this page did not take itself.
+    const ownWrite = arrivedByOwnWrite.current;
+    setSearchInput((typed) => (ownWrite && typed.trim() === arrived.trim() ? typed : arrived));
   }, [controls.search]);
   useEffect(() => {
     const { controls: now, setControl: write } = latest.current;
