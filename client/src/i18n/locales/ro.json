@@ -804,6 +804,8 @@
     "parents": "Părinți",
     "noParents": "Fără părinți",
     "editParents": "Editează părinții",
+    "parentFixed": "O intrare sau o poligonație stă doar sub propria peșteră. Pentru a o proteja, protejează peștera sau pune peștera sub zona protejată.",
+    "parentFixedNote": "O intrare sau o poligonație stă doar sub propria peșteră, așa că părintele ei nu poate fi schimbat aici. Pentru a o proteja, protejează peștera sau pune peștera sub zona protejată.",
     "addParent": "Adaugă părinte…",
     "parentSearchPlaceholder": "Caută elemente…",
     "primary": "Principal",

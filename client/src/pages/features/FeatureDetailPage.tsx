@@ -356,7 +356,7 @@ export default function FeatureDetailPage() {
         </Card>
       )}
 
-      <HierarchyCard featureId={id} canEdit={canEdit} />
+      <HierarchyCard featureId={id} kind={envelope.kind} canEdit={canEdit} />
       <LinksCard featureId={id} canEdit={canEdit} />
       <LinksSection entityType="feature" entityId={id} canAdd entityTitle={displayName} />
 

@@ -193,8 +193,9 @@ public sealed class FeatureWriteService(
                 .Select(f => f.FeatureTypeId)
                 .FirstOrDefaultAsync(ct);
 
-            // Caves, entrances and centerlines name no feature type and may be re-rooted
-            // freely; a missing type is therefore not a refusal.
+            // Caves name no feature type, so a missing type is not a refusal here. That is no
+            // licence to re-root anything freely: an entrance or a centreline never reaches this
+            // line — an empty list is not its one edge to its own cave, and is refused above.
             if (featureTypeId is not null)
             {
                 var requiredKind = await db.FeatureTypes

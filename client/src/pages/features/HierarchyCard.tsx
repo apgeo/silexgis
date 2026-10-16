@@ -4,6 +4,7 @@ import { DeleteOutlined, EditOutlined, StarFilled } from '@ant-design/icons';
 import { App, Button, Card, Flex, Modal, Radio, Select, Table, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { ApiError } from '../../api/client.ts';
 import {
   useFeatureChildren,
   useFeatureParents,
@@ -16,8 +17,18 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 
 interface HierarchyCardProps {
   featureId: string;
+  /** The feature's kind: an entrance and a centreline have a parent nobody may change. */
+  kind: FeatureKind;
   canEdit: boolean;
 }
+
+/**
+ * Kinds that sit under their own cave and nowhere else. The cave releases their position on its
+ * own exact-view decision — its point is its main entrance's, its survey figures its centreline's
+ * — so filing one under a second container would protect it while the cave went on publishing the
+ * same coordinate. The server refuses any other parent set; this page does not offer one.
+ */
+const FIXED_PARENT_KINDS: ReadonlySet<FeatureKind> = new Set<FeatureKind>(['caveEntrance', 'centerline']);
 
 interface ParentRow {
   parentId: string;
@@ -29,13 +40,14 @@ interface ParentRow {
  * The feature's place in the containment DAG: its parent edges (with the one
  * primary edge highlighted) and a paged table of the features it contains.
  */
-export default function HierarchyCard({ featureId, canEdit }: HierarchyCardProps) {
+export default function HierarchyCard({ featureId, kind, canEdit }: HierarchyCardProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { data: parents } = useFeatureParents(featureId);
   const [childrenPage, setChildrenPage] = useState(1);
   const { data: children } = useFeatureChildren(featureId, { page: childrenPage, pageSize: 10 });
   const setParents = useSetFeatureParents();
+  const parentFixed = FIXED_PARENT_KINDS.has(kind);
 
   const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState<ParentRow[]>([]);
@@ -90,8 +102,14 @@ export default function HierarchyCard({ featureId, canEdit }: HierarchyCardProps
       });
       setEditing(false);
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // The one refusal that is not worth retrying says why, in words; anything else is the
+      // general failure it always was.
+      message.error(
+        error instanceof ApiError && error.code === 'feature.parent_fixed'
+          ? t('features.parentFixed')
+          : t('common.saveFailed'),
+      );
     }
   };
 
@@ -100,13 +118,19 @@ export default function HierarchyCard({ featureId, canEdit }: HierarchyCardProps
       title={t('features.hierarchy')}
       style={{ marginTop: 16 }}
       extra={
-        canEdit && (
+        canEdit &&
+        !parentFixed && (
           <Button size="small" icon={<EditOutlined />} onClick={openEditor}>
             {t('features.editParents')}
           </Button>
         )
       }
     >
+      {parentFixed && (
+        <Typography.Paragraph type="secondary" data-testid="hierarchy-parent-fixed">
+          {t('features.parentFixedNote')}
+        </Typography.Paragraph>
+      )}
       <Typography.Text type="secondary">{t('features.parents')}</Typography.Text>
       <Flex gap={8} wrap style={{ marginTop: 4, marginBottom: 16 }}>
         {(parents ?? []).length === 0 && (

@@ -804,6 +804,8 @@
     "parents": "Parents",
     "noParents": "No parents",
     "editParents": "Edit parents",
+    "parentFixed": "An entrance or a centreline sits under its own cave and nowhere else. To protect it, protect its cave, or put the cave under the protected area.",
+    "parentFixedNote": "An entrance or a centreline sits under its own cave and nowhere else, so its parent cannot be changed here. To protect it, protect its cave, or put the cave under the protected area.",
     "addParent": "Add parent…",
     "parentSearchPlaceholder": "Search features…",
     "primary": "Primary",
