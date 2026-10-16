@@ -60,6 +60,11 @@ const TEXT_FIELD: Record<string, string> = {
   tripLog: 'title',
   document: 'title',
   mapView: 'name',
+  georeferencedMap: 'name',
+  cabinet: 'name',
+  surveyModel: 'name',
+  photograph: 'title',
+  geofile: 'name',
 };
 
 export function textFieldOf(world: string): string | null {

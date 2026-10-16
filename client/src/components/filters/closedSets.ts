@@ -6,4 +6,7 @@ export const CLOSED_SETS: Record<string, readonly string[]> = {
   featureCategories: ['surface', 'underground', 'area', 'structure'],
   visibilities: ['private', 'cavingGroup', 'authenticated', 'public'],
   activityStates: ['draft', 'proposed', 'planned', 'confirmed', 'done', 'published', 'cancelled', 'delayed'],
+  mapKinds: ['geological', 'topographic', 'tourist', 'caveMap', 'other'],
+  surveyModelFormats: ['lox', 'survex3d', 'stl'],
+  geofileFormats: ['gpx', 'kml', 'geoJson', 'shapefile', 'wkt', 'wkb', 'kmz', 'csv'],
 };
