@@ -890,7 +890,7 @@ public static class TripTrackingEndpoints
     private static async Task<Results<Ok<IReadOnlyList<TrackingEventDto>>, ProblemHttpResult>> CreateEventsAsync(
         Guid tripLogId, TrackingEventRequest request, SilexGisDbContext db, IAccessService access,
         FeatureProtection protection, IAccessContextAccessor accessAccessor, IUserContextAccessor userAccessor,
-        CancellationToken ct)
+        TimeProvider clock, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var user = await userAccessor.GetAsync(ct);
@@ -921,7 +921,7 @@ public static class TripTrackingEndpoints
             return TypedResults.Ok(repeated);
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = clock.GetUtcNow();
         // Brought to UTC on the way in rather than stored as sent: the column is an instant, and
         // the database refuses a value carrying any other offset outright, so a report written by
         // a client that says "+03:00" instead of "Z" would otherwise fail with nothing telling the
@@ -1272,7 +1272,7 @@ public static class TripTrackingEndpoints
     private static async Task<Results<Ok<TrackingEventDto>, ProblemHttpResult>> UpdateEventAsync(
         Guid tripLogId, Guid eventId, TrackingEventEditRequest request, SilexGisDbContext db,
         IAccessService access, FeatureProtection protection, IAccessContextAccessor accessAccessor,
-        CancellationToken ct)
+        TimeProvider clock, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
@@ -1301,7 +1301,7 @@ public static class TripTrackingEndpoints
                 + "Take this one off the log and record the other.");
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = clock.GetUtcNow();
         // To UTC for the same reason the record route does it: the column accepts no other offset.
         var recordedAt = (request.RecordedAt ?? row.RecordedAt).ToUniversalTime();
         if (TripTrackingRules.MomentIsInFuture(recordedAt, now))

@@ -92,6 +92,7 @@ public abstract class ProcessingJobWorkerBase(
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
 
+        var clock = scope.ServiceProvider.GetRequiredService<TimeProvider>();
         var jobId = await JobsSql.ClaimNextAsync(db, lane, ct);
         if (jobId is null)
         {
@@ -109,7 +110,7 @@ public abstract class ProcessingJobWorkerBase(
         {
             job.Status = ProcessingJobStatus.Failed;
             job.Error = $"No handler registered for job kind '{job.Kind}'.";
-            job.CompletedAt = DateTimeOffset.UtcNow;
+            job.CompletedAt = clock.GetUtcNow();
             await db.SaveChangesAsync(ct);
             logger.LogError("No handler for job {JobId} of kind {Kind}", job.Id, job.Kind);
             return true;
@@ -128,8 +129,7 @@ public abstract class ProcessingJobWorkerBase(
             // Put back through a context of its own: this one may hold the attempt's half-done
             // changes, and they must not be saved on the way out. Nothing is told to the requester
             // yet — the job has not finished, it is waiting for its next turn.
-            var notBefore = scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow()
-                + JobRetry.DelayAfter(job.Attempts);
+            var notBefore = clock.GetUtcNow() + JobRetry.DelayAfter(job.Attempts);
             logger.LogWarning(
                 e, "Job {JobId} ({Kind}) failed in passing on attempt {Attempt}; taken again from {NotBefore}",
                 job.Id, job.Kind, job.Attempts, notBefore);
@@ -159,7 +159,7 @@ public abstract class ProcessingJobWorkerBase(
             logger.LogError(e, "Job {JobId} ({Kind}) failed", job.Id, job.Kind);
         }
 
-        job.CompletedAt = DateTimeOffset.UtcNow;
+        job.CompletedAt = clock.GetUtcNow();
         NotifyRequester(db, job);
         await db.SaveChangesAsync(ct);
         return true;

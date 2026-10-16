@@ -218,14 +218,16 @@ public static class TokenCertificates
     /// <summary>Waits, briefly, for any other instance starting over the same directory to finish.</summary>
     private static FileStream TakeTurn(string lockPath)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(30);
+        // Measured on a stopwatch, not the wall clock: a wait has a length, not a date, and the
+        // wall clock can be moved under it.
+        var waited = System.Diagnostics.Stopwatch.StartNew();
         while (true)
         {
             try
             {
                 return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
             }
-            catch (IOException) when (DateTime.UtcNow < deadline)
+            catch (IOException) when (waited.Elapsed < TimeSpan.FromSeconds(30))
             {
                 Thread.Sleep(100);
             }

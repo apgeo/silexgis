@@ -32,4 +32,27 @@ public class SingleHomeRuleTests
             .Single(s => s.File.EndsWith("/Common/CaverDirectory.cs", StringComparison.Ordinal))
             .Source.ShouldMatch(asked.ToString());
     }
+
+    [Fact]
+    public void A_file_that_takes_the_injected_clock_reads_no_other()
+    {
+        // The clock is injected where a test reads a stamp back — a delivery's next attempt, a
+        // job's retry delay, the moment a tracking report is judged to be in the future. A file
+        // that takes it and also reads the wall clock directly has two clocks, and a test moving
+        // one sees the other stay put: an assertion that passes or fails for a reason unrelated to
+        // what it checks. The rest of the solution reads the wall clock and is left alone until a
+        // test needs otherwise.
+        var wall = new Regex(@"\bDateTime(Offset)?\.(UtcNow|Now)\b");
+        var injected = new Regex(@"\bTimeProvider\b");
+
+        var mixed = TripSoftDeleteGuardTests.Sources()
+            .Where(s => injected.IsMatch(s.Source) && wall.IsMatch(s.Source))
+            .Select(s => s.File)
+            .ToList();
+
+        mixed.ShouldBeEmpty("read the injected TimeProvider throughout a file that takes it");
+
+        // The scan is looking at real text: files taking the clock exist.
+        TripSoftDeleteGuardTests.Sources().Count(s => injected.IsMatch(s.Source)).ShouldBeGreaterThan(10);
+    }
 }
