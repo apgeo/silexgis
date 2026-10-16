@@ -73,6 +73,29 @@ public class SharedViewConfigTests
         Assert.False(config.SurfaceFeaturesVisible);
     }
 
+    /// <summary>
+    /// A view narrowed by a saved filter or a filter document draws no data through its link: a
+    /// link runs no filter, so reading either as "no filter" would widen the view its owner shared.
+    /// The same view with those keys null draws, which is what shows the keys switched it off.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"center":[25,45],"zoom":9,"entrancesVisible":true,"surfaceFeaturesVisible":true,"tagFilter":null,"savedFilterId":"0e6f2c4a-5b1d-4c39-9b7e-2f8a1d3c4e5f"}""")]
+    [InlineData("""{"center":[25,45],"zoom":9,"entrancesVisible":true,"surfaceFeaturesVisible":true,"tagFilter":null,"filterDocument":{"version":1,"scope":[],"sort":"updated","descending":true}}""")]
+    [InlineData("""{"center":[25,45],"zoom":9,"entrancesVisible":true,"surfaceFeaturesVisible":true,"savedFilterId":7}""")]
+    [InlineData("""{"center":[25,45],"zoom":9,"entrancesVisible":true,"surfaceFeaturesVisible":true,"tagFilter":"leads","filterDocument":"x"}""")]
+    public void A_view_filtered_beyond_a_tag_draws_no_data_rather_than_all_of_it(string document)
+    {
+        var config = SharedViewConfig.Read(document);
+
+        Assert.False(config.EntrancesVisible);
+        Assert.False(config.SurfaceFeaturesVisible);
+
+        var unfiltered = SharedViewConfig.Read(
+            """{"center":[25,45],"zoom":9,"entrancesVisible":true,"surfaceFeaturesVisible":true,"tagFilter":null,"savedFilterId":null,"filterDocument":null}""");
+        Assert.True(unfiltered.EntrancesVisible);
+        Assert.True(unfiltered.SurfaceFeaturesVisible);
+    }
+
     [Theory]
     [InlineData("""{"center":[25,45],"zoom":9,"entrancesVisible":true,"tagFilter":null}""")]
     [InlineData("""{"center":[25,45],"zoom":9,"entrancesVisible":true,"tagFilter":"  "}""")]

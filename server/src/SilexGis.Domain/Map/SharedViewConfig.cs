@@ -13,7 +13,7 @@ public sealed record SharedViewCamera(double Longitude, double Latitude, double 
 /// <summary>
 /// What a saved view's own document says about what a shared link to it may draw: where its
 /// camera stood, which background was chosen, which of the two data overlays a link can show were
-/// switched on, and the tag the view was narrowed to.
+/// switched on, and the tag the view was narrowed to — or that it was narrowed by more than a tag.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -67,8 +67,11 @@ public sealed record SharedViewConfig(
             var camera = ReadCamera(root);
             var (tagReadable, tag) = ReadTag(root);
 
-            // Data is drawn only where the view says where it is and what it was narrowed to.
-            var dataReadable = camera is not null && tagReadable;
+            // Data is drawn only where the view says where it is and what it was narrowed to. A
+            // view narrowed by a saved filter or a filter document says so in keys a link does not
+            // honour — a link runs no filter, since nobody behind it has an account to run one as —
+            // and reading those keys as "no filter" would draw more than the view showed.
+            var dataReadable = camera is not null && tagReadable && !NarrowedBeyondATag(root);
             return new SharedViewConfig(
                 baseLayerId,
                 dataReadable && IsOn(root, "entrancesVisible"),
@@ -120,6 +123,13 @@ public sealed record SharedViewConfig(
         var slug = tag.GetString()?.Trim();
         return (true, string.IsNullOrEmpty(slug) ? null : slug);
     }
+
+    /// <summary>Whether the view carries a filter other than a plain tag, in either of its forms.</summary>
+    private static bool NarrowedBeyondATag(JsonElement root) =>
+        Present(root, "savedFilterId") || Present(root, "filterDocument");
+
+    private static bool Present(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null;
 
     private static bool TryFinite(JsonElement element, out double value)
     {
