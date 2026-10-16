@@ -9,6 +9,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
+using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -26,7 +27,10 @@ public static class ExportEndpoints
     {
         api.MapGet("/export/caves", ExportCavesAsync)
             .WithTags("Export")
-            .WithSummary("Caves (main entrance points) as GeoJSON/GPX/KML/CSV/zipped shapefile.");
+            .WithSummary(
+                "Caves (main entrance points) as GeoJSON/GPX/KML/CSV/zipped shapefile. Takes the "
+                + "cave list's `filter` or `savedFilterId`, so the file holds the rows the list shows "
+                + "(those with a position).");
         api.MapGet("/export/features", ExportFeaturesAsync)
             .WithTags("Export")
             .WithSummary("Features of any kind as GeoJSON/GPX/KML/CSV/zipped shapefile.");
@@ -76,9 +80,12 @@ public static class ExportEndpoints
         string? region,
         string? search,
         string? bbox,
+        string? filter,
+        Guid? savedFilterId,
         SilexGisDbContext db,
         IVectorIO vectorIO,
         FeatureProtection protection,
+        SurfaceFilters surfaceFilters,
         IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
@@ -94,11 +101,20 @@ public static class ExportEndpoints
             return UnsupportedFormat(format);
         }
 
-        // Same filter surface as the caves list; only caves with a main-entrance geometry
-        // can be exported as vector rows.
-        var query = db.Features.AsNoTracking()
-            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-            .Where(f => f.Kind == FeatureKind.Cave && f.Geom != null && f.Cave != null);
+        var narrowing = await surfaceFilters.ForAsync<Feature>(
+            ctx, FeatureFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return refusal.ToProblem();
+        }
+
+        // The same narrowing the cave list applies, through the same seam and after the same
+        // visibility walk, so a file asked for from the list holds exactly the caves the list
+        // shows — less those with no position at all, which a vector row cannot carry.
+        var query = narrowing.Narrowing!.Apply(
+            db.Features.AsNoTracking()
+                .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+                .Where(f => f.Kind == FeatureKind.Cave && f.Geom != null && f.Cave != null));
 
         if (caveTypeId is not null)
         {
@@ -119,7 +135,8 @@ public static class ExportEndpoints
 
         if (Bbox.TryParse(bbox, out var box))
         {
-            query = await NarrowedToBoxAsync(
+            // Membership follows the point the file will publish, never the stored one.
+            query = await PublishedPositionBox.NarrowAsync(
                 query, ctx, protection, box.ToPolygon(), access.Value.LocationGridMeters, ct);
         }
 
@@ -185,49 +202,6 @@ public static class ExportEndpoints
         return WriteFile(vectorIO, target, "caves", features);
     }
 
-    /// <summary>
-    /// Applies a bounding box so that membership follows the point the file will publish.
-    ///
-    /// <para>
-    /// These exports place a feature the caller may not see exactly on the protection grid, so
-    /// the honest box test is against that same snapped point: the row is in the file exactly
-    /// when the point printed in the file is inside the box. Tested against the stored
-    /// coordinate instead, the box becomes a probe — membership flips when a caller-chosen edge
-    /// crosses the true position, which bisects a protected cave onto the map to any precision,
-    /// while the snapped point moves only in whole grid steps and gives nothing finer away.
-    /// Exactly-placeable rows are narrowed by their true geometry, as ever: for them position is
-    /// not a secret.
-    /// </para>
-    /// </summary>
-    private static async Task<IQueryable<Feature>> NarrowedToBoxAsync(
-        IQueryable<Feature> query,
-        AccessContext ctx,
-        FeatureProtection protection,
-        Polygon polygon,
-        double gridMeters,
-        CancellationToken ct)
-    {
-        var candidates = await query
-            .Where(f => f.IsProtectedEffective)
-            .Select(f => new { f.Id, f.Geom })
-            .ToListAsync(ct);
-        var placeable = candidates.Count == 0
-            ? new HashSet<Guid>()
-            : await protection.ExactViewIdsAsync(ctx, [.. candidates.Select(c => c.Id)], ct);
-
-        // Only a plain point has a published position at all; anything else is dropped later
-        // rather than degraded, so it has no point the box could honestly be tested against.
-        var publishedInside = candidates
-            .Where(c => !placeable.Contains(c.Id) && c.Geom is Point)
-            .Where(c => polygon.Intersects(LocationProtection.Snap((Point)c.Geom!, gridMeters)))
-            .Select(c => c.Id)
-            .ToArray();
-
-        return query.Where(f =>
-            ((!f.IsProtectedEffective || placeable.Contains(f.Id)) && f.Geom!.Intersects(polygon))
-            || publishedInside.Contains(f.Id));
-    }
-
     private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> ExportFeaturesAsync(
         string format,
         string? kind,
@@ -287,7 +261,8 @@ public static class ExportEndpoints
 
         if (Bbox.TryParse(bbox, out var box))
         {
-            query = await NarrowedToBoxAsync(
+            // Membership follows the point the file will publish, never the stored one.
+            query = await PublishedPositionBox.NarrowAsync(
                 query, ctx, protection, box.ToPolygon(), access.Value.LocationGridMeters, ct);
         }
 

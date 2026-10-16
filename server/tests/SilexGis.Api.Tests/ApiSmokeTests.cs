@@ -195,7 +195,7 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
         var operations = (await OperationsAsync()).ToDictionary(o => o.Id!);
         var expected = new Dictionary<string, string[]>
         {
-            ["caveList"] = ["401"],
+            ["caveList"] = ["400", "401", "404"],
             ["caveGet"] = ["401", "404"],
             ["caveGetSummary"] = ["401", "404"],
             ["caveCreate"] = ["400", "401", "403"],

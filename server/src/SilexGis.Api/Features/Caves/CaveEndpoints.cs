@@ -11,6 +11,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -28,12 +29,16 @@ public static class CaveEndpoints
     {
         var caves = api.MapGroup("/caves").WithTags("Caves");
 
-        caves.MapGet("/", ListAsync)
-            .WithSummary(
-                "Paged cave list with filters, including `unplaced` for caves that have no position "
-                + "at all; visibility-filtered, protected locations obfuscated.");
         // Each route declares the refusals its handler sends; the 401 every guarded route can
         // answer, and the 400 of a validated body, are declared for the whole API at once.
+        caves.MapGet("/", ListAsync)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary(
+                "Paged cave list with filters, including `unplaced` for caves that have no position "
+                + "at all; visibility-filtered, protected locations obfuscated. `filter` (a filter "
+                + "document as a link token) or `savedFilterId` narrows it by the feature world's "
+                + "conditions, applied after visibility and counted over the narrowed set.");
         caves.MapGet("/{id:guid}", GetAsync)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Single cave; protected location fields require ViewExactLocation.");
@@ -58,12 +63,15 @@ public static class CaveEndpoints
         return api;
     }
 
-    private static async Task<Results<Ok<PagedResult<CaveListItemDto>>, UnauthorizedHttpResult>> ListAsync(
+    private static async Task<Results<Ok<PagedResult<CaveListItemDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         SilexGisDbContext db,
         FeatureProtection protection,
+        SurfaceFilters surfaceFilters,
         IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> accessOptions,
         ILoggerFactory loggers,
+        string? filter,
+        Guid? savedFilterId,
         int? page,
         int? pageSize,
         string? sort,
@@ -82,10 +90,22 @@ public static class CaveEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var query = db.Features.AsNoTracking()
-            .Include(f => f.Cave)
-            .Where(f => f.Kind == FeatureKind.Cave)
-            .VisibleTo(ctx, db.Features, db.FeatureSetMembers);
+        var narrowing = await surfaceFilters.ForAsync<Feature>(
+            ctx, FeatureFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return refusal.ToProblem();
+        }
+
+        // The filter's conditions narrow the rows this caller may already see, and nothing else:
+        // the count, the page window and the broken-row report below are all taken over the
+        // composed set, so a filter changes which caves are listed and never what a total says
+        // about caves that are not.
+        var query = narrowing.Narrowing!.Apply(
+            db.Features.AsNoTracking()
+                .Include(f => f.Cave)
+                .Where(f => f.Kind == FeatureKind.Cave)
+                .VisibleTo(ctx, db.Features, db.FeatureSetMembers));
 
         if (!string.IsNullOrWhiteSpace(tag))
         {
@@ -130,8 +150,11 @@ public static class CaveEndpoints
 
         if (Bbox.TryParse(bbox, out var box))
         {
-            var polygon = box.ToPolygon();
-            query = query.Where(f => f.Geom != null && f.Geom.Intersects(polygon));
+            // Membership follows the position the list prints for each cave, never the stored one:
+            // tested against a protected cave's true point, the total would move as a chosen edge
+            // crossed it, and the count alone would locate the cave.
+            query = await PublishedPositionBox.NarrowAsync(
+                query, ctx, protection, box.ToPolygon(), accessOptions.Value.LocationGridMeters, ct);
         }
 
         // Taken before the ordering, because this is a set to report and not a page: sorting it

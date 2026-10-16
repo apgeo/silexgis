@@ -10,6 +10,8 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Export;
+using SilexGis.Domain.Filters;
+using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Grottocenter;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -39,6 +41,11 @@ namespace SilexGis.Api.Features.Export;
 /// nobody on that screen was looking at, and the count shown before the choice would be about
 /// a different set from the file.
 /// </param>
+/// <param name="Filter">
+/// The cave list's filter document, as the link token the list itself carries. Applied after the
+/// read gate exactly as the list applies it, so the file holds the caves the list shows.
+/// </param>
+/// <param name="SavedFilterId">A saved filter, run under this caller's access, in place of a token.</param>
 /// <param name="Treatments">
 /// What to do about one named cave's protected position, keyed by cave id. Wins over the
 /// other two.
@@ -58,6 +65,8 @@ public sealed record KarstLinkExportRequest(
     long? CaveTypeId = null,
     string? Bbox = null,
     string? Tag = null,
+    string? Filter = null,
+    Guid? SavedFilterId = null,
     IReadOnlyDictionary<Guid, string>? Treatments = null,
     string? TreatmentForAll = null,
     string? DefaultTreatment = null);
@@ -83,6 +92,7 @@ public sealed class KarstLinkExportRequestValidator : AbstractValidator<KarstLin
         RuleFor(r => r.Region).MaximumLength(200);
         RuleFor(r => r.Bbox).MaximumLength(200);
         RuleFor(r => r.Tag).MaximumLength(200);
+        RuleFor(r => r.Filter).MaximumLength(FilterToken.MaxLength);
     }
 }
 
@@ -182,20 +192,30 @@ public static class KarstLinkExportEndpoints
     /// the wrong size, and the exporter would be answering about caves that are not the ones
     /// going into the file.
     /// </remarks>
-    private static async Task<IQueryable<Feature>> SelectedAsync(
+    private static async Task<(IQueryable<Feature>? Query, SurfaceFilterRefusal? Refusal)> SelectedAsync(
         SilexGisDbContext db,
         AccessContext ctx,
         FeatureProtection protection,
+        SurfaceFilters surfaceFilters,
         KarstLinkExportRequest request,
         CancellationToken ct)
     {
+        var narrowing = await surfaceFilters.ForAsync<Feature>(
+            ctx, FeatureFilterWorld.Key, request.Filter, request.SavedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return (null, refusal);
+        }
+
         // Read gate first and on its own. Which caves the caller may read is a different
         // question from which positions they may place, and it is settled before the second
         // one is asked: a cave that fails here is not in the file under any treatment, is not
-        // counted among the omitted, and is not named by any refusal.
-        var query = db.Features.AsNoTracking()
-            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-            .Where(f => f.Kind == FeatureKind.Cave && f.Cave != null);
+        // counted among the omitted, and is not named by any refusal. The filter's conditions
+        // then narrow what passed it, as they narrow the cave list.
+        var query = narrowing.Narrowing!.Apply(
+            db.Features.AsNoTracking()
+                .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+                .Where(f => f.Kind == FeatureKind.Cave && f.Cave != null));
 
         // Deliberately no "has a geometry" clause, unlike the vector exports: a cave included
         // with no position at all is a record this format can carry, and filtering on geometry
@@ -265,7 +285,7 @@ public static class KarstLinkExportEndpoints
                 || f.Geom!.Intersects(polygon));
         }
 
-        return query;
+        return (query, null);
     }
 
     /// <summary>
@@ -278,11 +298,12 @@ public static class KarstLinkExportEndpoints
     /// caves rather than about the caller, so the question is asked of an owner and of an
     /// administrator exactly as it is asked of anyone else.
     /// </remarks>
-    private static async Task<Results<Ok<KarstLinkExportPreview>, UnauthorizedHttpResult>> PreviewAsync(
+    private static async Task<Results<Ok<KarstLinkExportPreview>, UnauthorizedHttpResult, ProblemHttpResult>> PreviewAsync(
         KarstLinkExportRequest request,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
+        SurfaceFilters surfaceFilters,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -291,8 +312,12 @@ public static class KarstLinkExportEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var query = await SelectedAsync(db, ctx, protection, request, ct);
-        var flags = await query
+        var (query, refusal) = await SelectedAsync(db, ctx, protection, surfaceFilters, request, ct);
+        if (refusal is not null)
+        {
+            return refusal.ToProblem();
+        }
+        var flags = await query!
             .Select(f => f.IsProtectedEffective)
             .Take(MaxExportedCaves + 1)
             .ToListAsync(ct);
@@ -301,7 +326,7 @@ public static class KarstLinkExportEndpoints
         {
             // The full count is worth one more cheap query — "more than you may export" is a
             // less useful thing to be told than by how much.
-            var total = await query.CountAsync(ct);
+            var total = await query!.CountAsync(ct);
             return TypedResults.Ok(new KarstLinkExportPreview(total, null, true, MaxExportedCaves));
         }
 
@@ -318,6 +343,7 @@ public static class KarstLinkExportEndpoints
         IOptions<AccessOptions> access,
         GrottocenterClient grottocenter,
         FeatureProtection protection,
+        SurfaceFilters surfaceFilters,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -331,9 +357,13 @@ public static class KarstLinkExportEndpoints
         // question from which positions they may place, and it is settled before the second
         // one is asked: a cave that fails here is not in the file under any treatment, is not
         // counted among the omitted, and is not named by any refusal.
-        var query = await SelectedAsync(db, ctx, protection, request, ct);
+        var (query, filterRefusal) = await SelectedAsync(db, ctx, protection, surfaceFilters, request, ct);
+        if (filterRefusal is not null)
+        {
+            return filterRefusal.ToProblem();
+        }
 
-        var rows = await query
+        var rows = await query!
             .OrderBy(f => f.Name)
             .Select(f => new Row(
                 f.Id,

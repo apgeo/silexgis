@@ -122,6 +122,8 @@ export const groups = {
     // A deleted cave, entrance or surface feature can be put back: what one deletion took,
     // who may undo it, and what the answer says about where a protected cave is.
     'FeatureRestoreTests',
+    // The registry's list narrowed by a filter document, and its exports narrowed the same way.
+    'CaveRegistryFilterTests',
   ],
   cavers: ['CaverRosterTests', 'ProfileVisibilityTests'],
   cavingGroups: [
@@ -140,6 +142,8 @@ export const groups = {
   filters: [
     'DocumentFilterWorldTests', 'FeatureFilterCompilerTests', 'FilterEndpointTests',
     'FilterParityTests', 'FilterSpikeTests', 'FilterWorldConformanceTests',
+    // Saved filters, and the surfaces that read a filter document through the narrowing seam.
+    'SavedFilterTests', 'CaveRegistryFilterTests',
   ],
   files: [
     'ErrorHandlerScopeTests',
@@ -203,7 +207,7 @@ export const groups = {
   cabinets: ['CabinetApiTests', 'CabinetTreeTests'],
   crs: ['CrsTests', 'SpatialOptionsTests', 'WorkingSridBehaviourTests'],
   exports: [
-    'KarstLinkExportTests', 'SpreadsheetWriterTests',
+    'KarstLinkExportTests', 'SpreadsheetWriterTests', 'CaveRegistryFilterTests',
   ],
   // With the smoke test because it asks the same kind of question one step earlier: not whether
   // the application answers, but whether each test was given the application its mode promises.
@@ -298,6 +302,7 @@ export const areas = {
   'server/src/SilexGis.Api/Features/Map/': 'map',
   'server/src/SilexGis.Api/Features/MapLayers/': [],
   'server/src/SilexGis.Api/Features/MapViews/': 'mapViews',
+  'server/src/SilexGis.Api/Features/SavedFilters/': 'filters',
   'server/src/SilexGis.Api/Features/Me/': 'me',
   'server/src/SilexGis.Api/Features/Notifications/': 'notifications',
   'server/src/SilexGis.Api/Features/Permissions/': 'access',
@@ -425,7 +430,7 @@ export const crossCutting = {
     'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
     'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',
     'PublicTripMomentPicturesTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
-    'ReportTemplateTests', 'ResLinkApiTests', 'SeededGroupUpgradeTests',
+    'ReportTemplateTests', 'ResLinkApiTests', 'SavedFilterTests', 'SeededGroupUpgradeTests',
     'SpeleolocTripImportTests', 'SpeologieCatalogueTests', 'StagedImportTests',
     'SurveyCompilationTests', 'SurveyModelReadingTests', 'SurveyModelTests',
     'SurveySourceTests', 'SyncSetTests', 'TermRuleSetTests', 'TerrainActivationTests',
@@ -447,14 +452,15 @@ export const crossCutting = {
     'AreaKarstStatisticsTests', 'AssociationDisclosureTests', 'AttachmentReachListingTests',
     'CalendarTests', 'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests',
     'CaveMeshesInViewTests', 'CaveOverburdenTests', 'CavePassageShapeTests',
-    'CaveSurveyStatisticsTests', 'CenterlineTests', 'ClosestApproachTests', 'ConcurrencyTests',
-    'DashboardTests', 'DocumentAccessApiTests', 'DocumentCommentNotificationTests',
-    'DocumentContentSearchTests', 'DocumentSurfaceProtectionSweepTests',
-    'DocumentViewerBytesTests', 'EntrancePlacementGuardTests', 'EnumBindingTests',
-    'ExpeditionDeleteCleanupTests', 'ExpeditionLeadsTests', 'ExpeditionMapTests',
-    'ExpeditionReportTests', 'ExpeditionSurfaceLogTests', 'FeatureFilterCompilerTests',
-    'FeatureHierarchyTests', 'FeatureLinkTests', 'FeatureRestoreTests', 'FeatureShareTests',
-    'FeatureTests', 'FileAccessBatchParityTests', 'FileAttachmentTests', 'FilterParityTests',
+    'CaveRegistryFilterTests', 'CaveSurveyStatisticsTests', 'CenterlineTests',
+    'ClosestApproachTests', 'ConcurrencyTests', 'DashboardTests', 'DocumentAccessApiTests',
+    'DocumentCommentNotificationTests', 'DocumentContentSearchTests',
+    'DocumentSurfaceProtectionSweepTests', 'DocumentViewerBytesTests',
+    'EntrancePlacementGuardTests', 'EnumBindingTests', 'ExpeditionDeleteCleanupTests',
+    'ExpeditionLeadsTests', 'ExpeditionMapTests', 'ExpeditionReportTests',
+    'ExpeditionSurfaceLogTests', 'FeatureFilterCompilerTests', 'FeatureHierarchyTests',
+    'FeatureLinkTests', 'FeatureRestoreTests', 'FeatureShareTests', 'FeatureTests',
+    'FileAccessBatchParityTests', 'FileAttachmentTests', 'FilterParityTests',
     'FilterWorldConformanceTests', 'GeofileTests', 'GeoreferencedMapTests', 'HistoryTests',
     'HypsometryTests', 'KarstLinkExportTests', 'MapDensityTests', 'MapPointPatternTests',
     'PhotoBytesProtectionTests', 'PhotoImportTests', 'PolygonMorphometryTests',
