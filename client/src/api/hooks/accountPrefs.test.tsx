@@ -3,7 +3,14 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { changedSince, pickAccountPrefs, type AccountPrefs } from '../../stores/accountPrefs.ts';
 import { DEFAULT_DOCKS, useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+
+/** Whether this browser holds a change the account has not been sent yet. */
+function unsaved(): boolean {
+  const state = useUiPrefsStore.getState();
+  return changedSince((state.accountPrefsBaseline ?? {}) as AccountPrefs, pickAccountPrefs(state));
+}
 
 /** The account's stored document, as the server holds it; reassigned per test. */
 let stored: Record<string, unknown> = {};
@@ -65,7 +72,7 @@ describe('account preferences between this browser and the account', () => {
     await waitFor(() => expect(useUiPrefsStore.getState().appearance.theme).toBe('dark'));
 
     act(() => useUiPrefsStore.getState().setCoordinateFormat('dms'));
-    expect(useUiPrefsStore.getState().accountPrefsUnsaved).toBe(true);
+    expect(unsaved()).toBe(true);
 
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1), { timeout: 4000 });
     // Only what changed is sent; the server keeps the rest.
@@ -75,7 +82,7 @@ describe('account preferences between this browser and the account', () => {
       other: { kept: true },
       coordinateFormat: 'dms',
     });
-    await waitFor(() => expect(useUiPrefsStore.getState().accountPrefsUnsaved).toBe(false));
+    await waitFor(() => expect(unsaved()).toBe(false));
   });
 
   it('writes nothing when a screen writes back the arrangement it read', async () => {
@@ -90,7 +97,7 @@ describe('account preferences between this browser and the account', () => {
     });
 
     expect(put).not.toHaveBeenCalled();
-    expect(useUiPrefsStore.getState().accountPrefsUnsaved).toBe(false);
+    expect(unsaved()).toBe(false);
   });
 
   it('does not hand one member’s arrangement to the next member signing in on the same browser', async () => {
@@ -123,6 +130,22 @@ describe('account preferences between this browser and the account', () => {
 
     expect(put).not.toHaveBeenCalled();
     // Nor is the reset the sign-out made counted as a change still to be written.
-    expect(useUiPrefsStore.getState().accountPrefsUnsaved).toBe(false);
+    expect(unsaved()).toBe(false);
+  });
+
+  it('keeps a change made here before a reload, and takes the account’s word for the rest', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    stored = { coordinateFormat: 'utm' };
+    // As the last page left the cache: the account read as DD, overview opened here and not sent.
+    useUiPrefsStore.setState({ accountId: 'account-a', accountPrefsBaseline: {}, overviewMap: true });
+
+    sync('account-a');
+
+    await waitFor(() => expect(useUiPrefsStore.getState().coordinateFormat).toBe('utm'));
+    expect(useUiPrefsStore.getState().overviewMap).toBe(true);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(put).toHaveBeenCalledWith({ overviewMap: true });
   });
 });

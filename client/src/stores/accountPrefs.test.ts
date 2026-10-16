@@ -3,13 +3,19 @@ import { describe, expect, it } from 'vitest';
 import {
   ACCOUNT_PREF_DEFAULTS,
   PREFERENCES_MAX_LENGTH,
-  accountPrefsPatch,
+  accountPrefsIn,
+  accountPrefsPatchSince,
   applyMergePatch,
+  changedSince,
   fitToBudget,
+  mergeAccountPrefs,
+  mergeLayouts,
   pickAccountPrefs,
-  prefsToApply,
+  planAccountWrite,
   readAccountPrefs,
   sanitizeAccountPrefs,
+  withoutLayouts,
+  type AccountPrefs,
 } from './accountPrefs.ts';
 
 describe('applyMergePatch', () => {
@@ -52,15 +58,16 @@ describe('pickAccountPrefs', () => {
   });
 });
 
-describe('accountPrefsPatch', () => {
+describe('accountPrefsPatchSince', () => {
   const stored = {
     appearance: { theme: 'dark', density: 'comfortable', reduceMotion: false },
     panels: { main: { width: 30 }, scene3d: { width: 25 } },
     somethingElse: { written: 'by another client' },
   };
 
-  it('removes what went back to its default and leaves what it does not own alone', () => {
-    const patch = accountPrefsPatch(stored, { panels: { main: { width: 30 } } });
+  it('removes what went back to its default here and leaves what it does not own alone', () => {
+    const base = accountPrefsIn(stored);
+    const patch = accountPrefsPatchSince(stored, base, { panels: { main: { width: 30 } } });
 
     expect(patch).toEqual({ appearance: null, panels: { scene3d: null } });
     expect(applyMergePatch(stored, patch)).toEqual({
@@ -70,12 +77,85 @@ describe('accountPrefsPatch', () => {
   });
 
   it('replaces a list whole rather than merging it', () => {
-    const patch = accountPrefsPatch({ pinnedTypeIds: [3, 4] }, { pinnedTypeIds: [4] });
+    const patch = accountPrefsPatchSince({ pinnedTypeIds: [3, 4] }, { pinnedTypeIds: [3, 4] }, { pinnedTypeIds: [4] });
     expect(patch).toEqual({ pinnedTypeIds: [4] });
   });
 
-  it('is empty when the stored document already says it', () => {
-    expect(accountPrefsPatch({ coordinateFormat: 'dms' }, { coordinateFormat: 'dms' })).toEqual({});
+  it('is empty when nothing was changed here', () => {
+    expect(accountPrefsPatchSince({ coordinateFormat: 'dms' }, { coordinateFormat: 'dms' }, { coordinateFormat: 'dms' })).toEqual({});
+  });
+});
+
+/**
+ * Two tabs — or a desktop and a laptop — signed in to the same account, each holding the account's
+ * preferences as it last read them. What one changes must not be undone by the other's next save.
+ */
+describe('two browsers writing to one account', () => {
+  /** One browser: what it last knew the account to hold, and what it holds now. */
+  interface Tab {
+    base: AccountPrefs;
+    local: AccountPrefs;
+  }
+
+  /** The server's merging write, applied as it applies it. */
+  let server: Record<string, unknown>;
+
+  function open(): Tab {
+    const read = accountPrefsIn(server);
+    return { base: read, local: read };
+  }
+
+  /** A save: this tab's changes only, merged on the server; the answer becomes its baseline. */
+  function save(tab: Tab) {
+    const write = planAccountWrite(server, tab.base, tab.local)!;
+    server = applyMergePatch(server, write.patch) as Record<string, unknown>;
+    const answer = accountPrefsIn(server);
+    tab.local = mergeAccountPrefs(withoutLayouts(tab.local, write.leftOut), tab.local, answer);
+    tab.base = answer;
+  }
+
+  const layout = (id: string) => ({ id, name: `Layout ${id}`, panels: { main: { width: 30 } } });
+
+  it('keeps a format chosen on the desktop when the laptop then drags a panel', () => {
+    server = {};
+    const desktop = open();
+    const laptop = open();
+
+    desktop.local = { ...desktop.local, coordinateFormat: 'utm' };
+    save(desktop);
+    laptop.local = { ...laptop.local, panels: { main: { width: 30 } } };
+    save(laptop);
+
+    expect(server).toEqual({ coordinateFormat: 'utm', panels: { main: { width: 30 } } });
+    // And the laptop has caught up with the desktop's choice by its own save.
+    expect(laptop.local.coordinateFormat).toBe('utm');
+  });
+
+  it('keeps a layout saved in one browser when another saves one of its own', () => {
+    server = { layouts: [layout('a')] };
+    const desktop = open();
+    const laptop = open();
+
+    desktop.local = { ...desktop.local, layouts: [layout('a'), layout('b')] };
+    save(desktop);
+    laptop.local = { ...laptop.local, layouts: [layout('a'), layout('c')] };
+    save(laptop);
+
+    expect((server.layouts as { id: string }[]).map((l) => l.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('removes a layout removed in one browser, and does not bring it back from the other', () => {
+    server = { layouts: [layout('a'), layout('b')] };
+    const desktop = open();
+    const laptop = open();
+
+    desktop.local = { ...desktop.local, layouts: [layout('b')] };
+    save(desktop);
+    laptop.local = { ...laptop.local, coordinateFormat: 'dms' };
+    save(laptop);
+
+    expect((server.layouts as { id: string }[]).map((l) => l.id)).toEqual(['b']);
+    expect((laptop.local.layouts as { id: string }[]).map((l) => l.id)).toEqual(['b']);
   });
 });
 
@@ -155,19 +235,35 @@ describe('sanitizeAccountPrefs', () => {
   });
 });
 
-describe('prefsToApply', () => {
-  it('takes a preference the account does not store as its default', () => {
-    const applied = prefsToApply({ coordinateFormat: 'utm' }, 'same');
-    expect(applied.coordinateFormat).toBe('utm');
-    expect(applied.pinnedTypeIds).toEqual([]);
-    expect(applied.overviewMap).toBe(false);
+describe('mergeAccountPrefs', () => {
+  it('takes the account’s value of whatever was not changed here, defaults included', () => {
+    const base = { coordinateFormat: 'dms', pinnedTypeIds: [1] };
+    expect(mergeAccountPrefs(base, base, { coordinateFormat: 'utm' })).toEqual({ coordinateFormat: 'utm' });
   });
 
-  it('keeps a change made here that had not reached the account when the page was reloaded', () => {
-    expect(prefsToApply({ coordinateFormat: 'utm' }, 'same', true)).toEqual({});
+  it('keeps a change made here that has not reached the account — a reload moments after it', () => {
+    // Put back to the default here (the compared form leaves defaults out): the default stays.
+    expect(mergeAccountPrefs({ coordinateFormat: 'dms' }, {}, { coordinateFormat: 'dms' })).toEqual({});
+    expect(mergeAccountPrefs({}, { overviewMap: true }, { coordinateFormat: 'utm' })).toEqual({
+      overviewMap: true,
+      coordinateFormat: 'utm',
+    });
+  });
+});
+
+describe('mergeLayouts', () => {
+  const a = { id: 'a', name: 'A' };
+  const b = { id: 'b', name: 'B' };
+  const c = { id: 'c', name: 'C' };
+
+  it('takes what was added and removed elsewhere, keeps what was added and changed here', () => {
+    const renamed = { id: 'a', name: 'A, renamed here' };
+    expect(mergeLayouts([a, b], [renamed, b, c], [a])).toEqual([renamed, c]);
   });
 
-  it('on the first claim of an unclaimed cache, leaves alone what the account has not stored', () => {
-    expect(prefsToApply({ coordinateFormat: 'utm' }, 'claimed')).toEqual({ coordinateFormat: 'utm' });
+  it('keeps a layout this browser has that the account never had, through any number of merges', () => {
+    // Left out of the account's document to fit its limit: not in the baseline, so not removed.
+    expect(mergeLayouts([a], [a, b], [a])).toEqual([a, b]);
+    expect(changedSince({ layouts: [a] }, { layouts: [a, b] })).toBe(true);
   });
 });

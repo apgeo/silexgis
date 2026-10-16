@@ -128,32 +128,11 @@ function diffPatch(from: unknown, to: unknown): unknown {
 }
 
 /**
- * The patch that brings the stored document's account preferences to what this browser holds:
- * a preference back at its default is removed (null), a changed one is patched, and every member
- * of the document this client does not own is left alone.
- */
-export function accountPrefsPatch(stored: Record<string, unknown>, desired: AccountPrefs): Record<string, unknown> {
-  const patch: Record<string, unknown> = {};
-  for (const key of ACCOUNT_PREF_KEYS) {
-    if (desired[key] === undefined) {
-      if (key in stored) {
-        patch[key] = null;
-      }
-      continue;
-    }
-    const member = diffPatch(stored[key], desired[key]);
-    if (member !== undefined) {
-      patch[key] = member;
-    }
-  }
-  return patch;
-}
-
-/**
  * The document trimmed to the server's limit, or null when even that cannot be done.
  *
  * Named layouts are the one preference that grows without bound, so they are what gives way —
- * the oldest first, since a list is appended to — and they stay in this browser all the same.
+ * the oldest first, since a list is appended to. The ones left out stay in this browser: it does
+ * not take the account's word for a layout the account never had.
  */
 export function fitToBudget(
   document: Record<string, unknown>,
@@ -236,26 +215,211 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
 }
 
 /**
- * What the browser takes from the account's stored document at sign-in.
- *
- * The document is the account's word, and a preference absent from it is one at its default —
- * the document never spells defaults out — so the default is what is taken. Two exceptions. A
- * change made here that had not been written yet (the page was reloaded within moments of it) is
- * newer than the document, so nothing is taken and the change is written instead. And the first
- * sign-in that claims a cache nobody had claimed: that cache is this person's history from before
- * preferences travelled, so what the account has not stored yet is kept, to be written up.
+ * The account preferences a stored document holds, in the form this browser compares them in:
+ * only what this client can draw, and only what differs from the defaults. A value of a shape this
+ * client cannot read counts as not there — and so is never written back over by it unless the
+ * person changes that preference here.
  */
-export function prefsToApply(
-  stored: unknown,
-  claim: 'same' | 'claimed' | 'reset',
-  unsavedHere = false,
-): Partial<AccountPrefsState> {
-  if (claim === 'same' && unsavedHere) {
-    return {};
+export function accountPrefsIn(document: unknown): AccountPrefs {
+  return pickAccountPrefs(sanitizeAccountPrefs(readAccountPrefs(document)) as AccountPrefs);
+}
+
+interface Layout {
+  id: string;
+}
+
+function layoutsOf(prefs: AccountPrefs): Layout[] {
+  return Array.isArray(prefs.layouts) ? (prefs.layouts as Layout[]) : [];
+}
+
+/**
+ * Three sets of named layouts brought to one, layout by layout: what this browser last knew the
+ * account to hold (`base`), what it holds now (`local`) and what the account holds now.
+ *
+ * A layout added, changed or removed here since `base` is kept as it is here; every other layout
+ * is taken as the account has it — so a layout saved in another browser arrives, one removed there
+ * goes, and neither undoes anything done here. The account's order is kept, with what was added
+ * here after it.
+ */
+export function mergeLayouts<T extends Layout>(base: readonly T[], local: readonly T[], account: readonly T[]): T[] {
+  const baseById = new Map(base.map((layout) => [layout.id, layout]));
+  const localById = new Map(local.map((layout) => [layout.id, layout]));
+  const accountIds = new Set(account.map((layout) => layout.id));
+  const merged: T[] = [];
+  for (const theirs of account) {
+    const before = baseById.get(theirs.id);
+    const here = localById.get(theirs.id);
+    if (!here) {
+      // Removed here since it was last seen, or never seen here: gone, or taken, respectively.
+      if (!before) {
+        merged.push(theirs);
+      }
+      continue;
+    }
+    merged.push(before && sameValue(before, here) ? theirs : here);
   }
-  const fromAccount = sanitizeAccountPrefs(readAccountPrefs(stored));
-  if (claim === 'claimed') {
-    return fromAccount;
+  for (const here of local) {
+    if (accountIds.has(here.id)) {
+      continue;
+    }
+    const before = baseById.get(here.id);
+    // Unchanged here and no longer in the account: removed elsewhere. Anything else — added here,
+    // or changed here while removed elsewhere — stays.
+    if (!before || !sameValue(before, here)) {
+      merged.push(here);
+    }
   }
-  return { ...(ACCOUNT_PREF_DEFAULTS as unknown as AccountPrefsState), ...fromAccount };
+  return merged;
+}
+
+function layoutsChanged(base: AccountPrefs, local: AccountPrefs): boolean {
+  const before = layoutsOf(base);
+  const now = layoutsOf(local);
+  if (before.length !== now.length) {
+    return true;
+  }
+  const beforeById = new Map(before.map((layout) => [layout.id, layout]));
+  return now.some((layout) => {
+    const previous = beforeById.get(layout.id);
+    return !previous || !sameValue(previous, layout);
+  });
+}
+
+/** Whether anything this browser holds for the account was changed here since `base`. */
+export function changedSince(base: AccountPrefs, local: AccountPrefs): boolean {
+  return ACCOUNT_PREF_KEYS.some((key) =>
+    key === 'layouts' ? layoutsChanged(base, local) : !sameValue(base[key], local[key]),
+  );
+}
+
+/**
+ * Three sets of account preferences brought to what this browser should hold: what it last knew
+ * the account to hold (`base`), what it holds now (`local`) and what the account holds now. A
+ * preference changed here since `base` stays as it is here — it is newer than the account and is
+ * still to be written; any other preference is the account's. Layouts are taken layout by layout.
+ */
+export function mergeAccountPrefs(base: AccountPrefs, local: AccountPrefs, account: AccountPrefs): AccountPrefs {
+  const merged: AccountPrefs = {};
+  for (const key of ACCOUNT_PREF_KEYS) {
+    if (key === 'layouts') {
+      const layouts = mergeLayouts(layoutsOf(base), layoutsOf(local), layoutsOf(account));
+      if (layouts.length > 0) {
+        merged.layouts = layouts;
+      }
+      continue;
+    }
+    const value = sameValue(base[key], local[key]) ? account[key] : local[key];
+    if (value !== undefined) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+/**
+ * The merge patch that carries what was changed HERE — between `base`, what this browser last knew
+ * the account to hold, and `local`, what it holds now — into the stored document, and nothing else.
+ *
+ * Built from this browser's own changes rather than from the difference between the stored
+ * document and this browser's whole state: another browser's change, read here before it was
+ * made, is not this browser's to send back. An object preference is patched member by member; the
+ * named layouts, a list, are merged layout by layout into the list the account holds now and sent
+ * whole. A preference back at its default is removed.
+ */
+export function accountPrefsPatchSince(
+  stored: Record<string, unknown>,
+  base: AccountPrefs,
+  local: AccountPrefs,
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  for (const key of ACCOUNT_PREF_KEYS) {
+    if (key === 'layouts') {
+      if (layoutsChanged(base, local)) {
+        const layouts = mergeLayouts(layoutsOf(base), layoutsOf(local), layoutsOf(accountPrefsIn(stored)));
+        if (layouts.length > 0) {
+          patch.layouts = layouts;
+        } else if ('layouts' in stored) {
+          patch.layouts = null;
+        }
+      }
+      continue;
+    }
+    if (sameValue(base[key], local[key])) {
+      continue;
+    }
+    if (local[key] === undefined) {
+      if (key in stored) {
+        patch[key] = null;
+      }
+      continue;
+    }
+    const member = diffPatch(base[key], local[key]);
+    if (member !== undefined) {
+      patch[key] = member;
+    }
+  }
+  return patch;
+}
+
+/** A write to the account's document: the patch to send, and the layouts left out of it to fit. */
+export interface AccountWrite {
+  patch: Record<string, unknown>;
+  /** The ids of named layouts the document could not hold; this browser keeps them. */
+  leftOut: string[];
+}
+
+/**
+ * What to send to bring this browser's changes into the stored document, held to the server's
+ * limit — or null when even leaving layouts out does not make it fit.
+ */
+export function planAccountWrite(
+  stored: Record<string, unknown>,
+  base: AccountPrefs,
+  local: AccountPrefs,
+  maxLength: number = PREFERENCES_MAX_LENGTH,
+): AccountWrite | null {
+  const patch = accountPrefsPatchSince(stored, base, local);
+  if (Object.keys(patch).length === 0) {
+    return { patch, leftOut: [] };
+  }
+  const document = applyMergePatch(stored, patch) as Record<string, unknown>;
+  const fitted = fitToBudget(document, maxLength);
+  if (!fitted) {
+    return null;
+  }
+  if (fitted.leftOutLayouts === 0) {
+    return { patch, leftOut: [] };
+  }
+  const kept = Array.isArray(fitted.document.layouts) ? (fitted.document.layouts as Layout[]) : [];
+  const keptIds = new Set(kept.map((layout) => layout.id));
+  const leftOut = (document.layouts as Layout[]).filter((layout) => !keptIds.has(layout.id)).map((layout) => layout.id);
+  return { patch: { ...patch, layouts: kept.length > 0 ? kept : null }, leftOut };
+}
+
+/** `prefs` without the named layouts whose ids are given. */
+export function withoutLayouts(prefs: AccountPrefs, ids: readonly string[]): AccountPrefs {
+  if (ids.length === 0) {
+    return prefs;
+  }
+  const left = new Set(ids);
+  const layouts = layoutsOf(prefs).filter((layout) => !left.has(layout.id));
+  const rest: AccountPrefs = { ...prefs };
+  delete rest.layouts;
+  return layouts.length > 0 ? { ...rest, layouts } : rest;
+}
+
+/**
+ * Account preferences in the compared form, spelled out as the store holds them — a default for
+ * each one they leave out — and only where that differs from what `current` holds, so that taking
+ * a value already held redraws nothing.
+ */
+export function storeValuesFor(prefs: AccountPrefs, current: AccountPrefs): Partial<AccountPrefsState> {
+  const values: Record<string, unknown> = {};
+  for (const key of ACCOUNT_PREF_KEYS) {
+    const value = prefs[key] ?? ACCOUNT_PREF_DEFAULTS[key];
+    if (!sameValue(value, current[key])) {
+      values[key] = value;
+    }
+  }
+  return values as Partial<AccountPrefsState>;
 }

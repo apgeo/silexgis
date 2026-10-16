@@ -163,12 +163,13 @@ interface UiPrefsState {
    */
   accountId?: string;
   /**
-   * Whether an account preference was changed here and has not reached the account yet. Kept
-   * with the cache, so a page reloaded before the write went out keeps the change rather than
-   * taking the account's older value over it.
+   * The account's preferences as this browser last read or wrote them — what "changed here" is
+   * measured from. A save sends only what differs between this and the preferences held here, so
+   * a value another browser or tab wrote since is never sent back over it; and a page reloaded
+   * before a change went out still knows which preferences are its own to write. Kept with the
+   * cache; undefined when nothing has been read for the account yet.
    */
-  accountPrefsUnsaved: boolean;
-  setAccountPrefsUnsaved: (unsaved: boolean) => void;
+  accountPrefsBaseline?: Record<string, unknown>;
   /**
    * Makes the account preferences this account's: when they were another account's, they go back
    * to their defaults first, so a second member signing in on this browser starts from nothing of
@@ -178,8 +179,11 @@ interface UiPrefsState {
   adoptAccount: (accountId: string) => AccountClaim;
   /** Puts the account preferences back to their defaults and leaves them unclaimed — on sign-out. */
   releaseAccount: () => void;
-  /** Takes the account preferences an account has stored, over whatever is held here. */
-  applyAccountPrefs: (prefs: Partial<AccountPrefsState>) => void;
+  /**
+   * Takes account preferences from the account — the values to hold, and the account's document
+   * as now known, which becomes what later changes here are measured from.
+   */
+  applyAccountPrefs: (prefs: Partial<AccountPrefsState>, baseline: Record<string, unknown>) => void;
 }
 
 export type AccountClaim = 'same' | 'claimed' | 'reset';
@@ -304,8 +308,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       overviewMap: false,
       setOverviewMap: (open) => set({ overviewMap: open }),
       accountId: undefined,
-      accountPrefsUnsaved: false,
-      setAccountPrefsUnsaved: (unsaved) => set({ accountPrefsUnsaved: unsaved }),
+      accountPrefsBaseline: undefined,
       adoptAccount: (accountId) => {
         let claim: AccountClaim = 'same';
         set((state) => {
@@ -317,13 +320,13 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           // account to sign in. One another account claimed is never handed on.
           claim = state.accountId === undefined ? 'claimed' : 'reset';
           return claim === 'reset'
-            ? { ...accountPrefDefaults(), accountId, accountPrefsUnsaved: false }
+            ? { ...accountPrefDefaults(), accountId, accountPrefsBaseline: undefined }
             : { accountId };
         });
         return claim;
       },
-      releaseAccount: () => set({ ...accountPrefDefaults(), accountId: undefined, accountPrefsUnsaved: false }),
-      applyAccountPrefs: (prefs) => set(prefs),
+      releaseAccount: () => set({ ...accountPrefDefaults(), accountId: undefined, accountPrefsBaseline: undefined }),
+      applyAccountPrefs: (prefs, baseline) => set({ ...prefs, accountPrefsBaseline: baseline }),
     }),
     {
       name: 'silexgis.uiPrefs',
@@ -347,7 +350,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           coordinateFormat: from < 8 ? DEFAULT_COORDINATE_FORMAT : (state.coordinateFormat ?? DEFAULT_COORDINATE_FORMAT),
           overviewMap: from < 8 ? false : (state.overviewMap ?? false),
           accountId: from < 8 ? undefined : state.accountId,
-          accountPrefsUnsaved: from < 8 ? false : (state.accountPrefsUnsaved ?? false),
+          accountPrefsBaseline: from < 8 ? undefined : state.accountPrefsBaseline,
         };
       },
     },
