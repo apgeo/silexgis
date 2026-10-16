@@ -178,6 +178,9 @@ async function focusedElement(page: Page): Promise<string> {
  * page's first element, having to find their place again.
  */
 async function expectFocusKeptAndReturned(page: Page, opener: ReturnType<Page['getByRole']>, dialogName: string) {
+  // A control can be drawn before it may be used — the panel's Edit waits for the feature's own
+  // rights — and a disabled button takes no focus.
+  await expect(opener).toBeEnabled({ timeout: 15_000 });
   await opener.focus();
   await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: dialogName });
@@ -215,19 +218,40 @@ test('the feature editor and the share-links dialog keep focus inside, and give 
 const WCAG_AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 /**
- * Findings the scan knows about and accepts for now, each by rule AND by the element it was found
- * on — never a rule turned off for a page, so the same mistake made anywhere else still fails.
- * Each says why it stands and where it is registered to be fixed.
+ * Findings the scan knows about and accepts for now, each by screen, by rule AND by the one element
+ * it was found on — never a rule turned off for a page, so the same mistake made anywhere else
+ * still fails. Each says why it stands and where it is registered to be fixed, and an entry the
+ * scan no longer finds fails the scan too: an exception outliving its finding would accept the
+ * next one made on that element unseen.
  */
 interface AcceptedFinding {
+  /** The screen it was found on, as the scan below names it. */
+  screen: string;
   rule: string;
-  /** Matched against the element's selector path as the scanner reports it. */
-  target: RegExp;
+  /**
+   * The element's selector path exactly as the scanner reports it, or a pattern anchored at both
+   * ends — a loose pattern would accept the same finding on elements nobody looked at.
+   */
+  target: string | RegExp;
   why: string;
   register: string;
 }
 
 const ACCEPTED: AcceptedFinding[] = [];
+
+for (const accepted of ACCEPTED) {
+  if (accepted.target instanceof RegExp && !/^\^.*\$$/.test(accepted.target.source)) {
+    throw new Error(`ACCEPTED: the pattern for ${accepted.rule} on ${accepted.screen} must be anchored with ^ and $`);
+  }
+}
+
+function accepts(accepted: AcceptedFinding, screen: string, rule: string, target: string): boolean {
+  return (
+    accepted.screen === screen &&
+    accepted.rule === rule &&
+    (typeof accepted.target === 'string' ? accepted.target === target : accepted.target.test(target))
+  );
+}
 
 /**
  * What kind of element a finding is on, and for a contrast finding the two colours and their
@@ -246,17 +270,32 @@ function shapeOf(node: { html: string; any: { id: string; data?: unknown }[] }):
   ].join('');
 }
 
+type Scheme = 'light' | 'dark';
+
 /**
- * Scans what is on the page now and fails on any finding not accepted above. Only rule ids and
- * selectors are reported — never the markup the scanner quotes, which carries whatever the page
- * was showing.
+ * Scans what is on the page now, in the theme the page is in, and fails on any finding not
+ * accepted above — and on any entry above for this screen that it no longer finds. Only rule ids
+ * and selectors are reported — never the markup the scanner quotes, which carries whatever the
+ * page was showing.
  */
-async function expectNoUnacceptedFindings(page: Page, screen: string) {
+async function expectNoUnacceptedFindings(page: Page, screenName: string, scheme: Scheme = 'light') {
+  // The theme the scan is about, checked rather than assumed: the theme follows the account's
+  // stored appearance, and a scan meant for the dark theme that ran in the light one would pass
+  // for the wrong reason.
+  await expect(page.locator('html')).toHaveAttribute('data-theme', scheme);
+  const screen = scheme === 'light' ? screenName : `${screenName}, dark theme`;
   const results = await new AxeBuilder({ page }).withTags(WCAG_AA_TAGS).analyze();
+  const used = new Set<AcceptedFinding>();
   const found = results.violations.flatMap((violation) =>
     violation.nodes
       .map((node) => ({ violation, node, target: node.target.map(String).join(' ') }))
-      .filter(({ target }) => !ACCEPTED.some((accepted) => accepted.rule === violation.id && accepted.target.test(target))),
+      .filter(({ target }) => {
+        const accepted = ACCEPTED.find((entry) => accepts(entry, screen, violation.id, target));
+        if (accepted) {
+          used.add(accepted);
+        }
+        return !accepted;
+      }),
   );
   const unaccepted: string[] = [];
   for (const { violation, node, target } of found) {
@@ -269,52 +308,74 @@ async function expectNoUnacceptedFindings(page: Page, screen: string) {
     );
   }
   expect(unaccepted, `accessibility findings on ${screen}`).toEqual([]);
+  const stale = ACCEPTED.filter((entry) => entry.screen === screen && !used.has(entry)).map(
+    (entry) => `${entry.rule} at ${String(entry.target)} (${entry.register})`,
+  );
+  expect(stale, `accepted findings the scan no longer finds on ${screen} — remove them from ACCEPTED`).toEqual([]);
 }
 
-test.describe('scanned against WCAG 2.2 A and AA', () => {
-  test('the sign-in page', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForURL(/\/login\?returnUrl=/, { timeout: 60_000 });
-    await expect(page.getByLabel('Email')).toBeVisible();
-    await expectNoUnacceptedFindings(page, 'the sign-in page');
+for (const scheme of ['light', 'dark'] as const) {
+  test.describe(`scanned against WCAG 2.2 A and AA, ${scheme} theme`, () => {
+    // The theme the system asks for, which the account's default appearance follows.
+    test.use({ colorScheme: scheme });
+    const scan = (page: Page, screen: string) => expectNoUnacceptedFindings(page, screen, scheme);
+
+    test('the sign-in page', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForURL(/\/login\?returnUrl=/, { timeout: 60_000 });
+      await expect(page.getByLabel('Email')).toBeVisible();
+      await scan(page, 'the sign-in page');
+    });
+
+    test('the map workspace, its shortcut help and a filled selection panel', async ({ page }) => {
+      await login(page);
+      await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 45_000 });
+      await scan(page, 'the map workspace');
+
+      await page.getByRole('button', { name: 'Keyboard shortcuts' }).click();
+      const help = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+      await expect(help).toBeVisible();
+      await scan(page, 'the shortcut help');
+      await page.keyboard.press('Escape');
+      await expect(help).toBeHidden();
+
+      // The panel with a cave in it: its details, sections and actions, not only its empty state.
+      await centreOnDemoCave(page);
+      await expect(page.getByRole('heading', { name: 'Peștera Demo Mare' })).toBeVisible({ timeout: 15_000 });
+      await scan(page, 'the selection panel with a cave');
+    });
+
+    test('the cave registry, a cave page and its share links', async ({ page }) => {
+      await login(page);
+      await gotoRoute(page, '/caves');
+      await expect(page.getByRole('row').nth(1)).toBeVisible({ timeout: 30_000 });
+      await scan(page, 'the cave registry');
+
+      await openCaveFromRegistry(page, 'Peștera Demo Mare');
+      await expect(page.getByRole('heading', { name: 'Peștera Demo Mare' }).first()).toBeVisible({ timeout: 30_000 });
+      await scan(page, 'a cave page');
+
+      await page.getByRole('button', { name: 'Share', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Share links' })).toBeVisible({ timeout: 15_000 });
+      await scan(page, 'the share-links dialog');
+    });
+
+    test('the trip list', async ({ page }) => {
+      await login(page);
+      await gotoRoute(page, '/trip-logs');
+      await expect(page.getByRole('table').first()).toBeVisible({ timeout: 30_000 });
+      await scan(page, 'the trip list');
+    });
+
+    test('the profile and accessibility settings', async ({ page }) => {
+      await login(page);
+      await gotoRoute(page, '/settings/profile');
+      await expect(page.getByLabel('Surname')).toBeVisible({ timeout: 30_000 });
+      await scan(page, 'the profile settings');
+
+      await gotoRoute(page, '/settings/accessibility');
+      await expect(page.getByRole('main')).toBeVisible();
+      await scan(page, 'the accessibility settings');
+    });
   });
-
-  test('the map workspace and its shortcut help', async ({ page }) => {
-    await login(page);
-    await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 45_000 });
-    await expectNoUnacceptedFindings(page, 'the map workspace');
-
-    await page.getByRole('button', { name: 'Keyboard shortcuts' }).click();
-    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
-    await expectNoUnacceptedFindings(page, 'the shortcut help');
-  });
-
-  test('the cave registry and a cave page', async ({ page }) => {
-    await login(page);
-    await gotoRoute(page, '/caves');
-    await expect(page.getByRole('row').nth(1)).toBeVisible({ timeout: 30_000 });
-    await expectNoUnacceptedFindings(page, 'the cave registry');
-
-    await openCaveFromRegistry(page, 'Peștera Demo Mare');
-    await expect(page.getByRole('heading', { name: 'Peștera Demo Mare' }).first()).toBeVisible({ timeout: 30_000 });
-    await expectNoUnacceptedFindings(page, 'a cave page');
-  });
-
-  test('the trip list', async ({ page }) => {
-    await login(page);
-    await gotoRoute(page, '/trip-logs');
-    await expect(page.getByRole('table').first()).toBeVisible({ timeout: 30_000 });
-    await expectNoUnacceptedFindings(page, 'the trip list');
-  });
-
-  test('the profile and accessibility settings', async ({ page }) => {
-    await login(page);
-    await gotoRoute(page, '/settings/profile');
-    await expect(page.getByLabel('Surname')).toBeVisible({ timeout: 30_000 });
-    await expectNoUnacceptedFindings(page, 'the profile settings');
-
-    await gotoRoute(page, '/settings/accessibility');
-    await expect(page.getByRole('main')).toBeVisible();
-    await expectNoUnacceptedFindings(page, 'the accessibility settings');
-  });
-});
+}
