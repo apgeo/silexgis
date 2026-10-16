@@ -25,15 +25,30 @@ A **saved view** is a named map configuration: its extent, its layers, its filte
 Your saved views appear on the **dashboard** under *My saved views*.
 
 A shared view opens for an anonymous visitor over the **background it was saved with** — or,
-when that one needs an access key, over the installation's default background — and, if the
-view had them switched on, with the **cave entrances and surface features whose visibility is
-Public**. Nothing narrower is shown, whoever shared the view, and the **protections hold harder
-than for any account**: a protected cave is shown only approximately (*"Approximate position"*),
-a protected outline is not shown at all, and nothing on the page identifies a record or opens
-it. Clicking a marker shows its name; clicking a cluster zooms in. Survey lines, photographs,
-trips and imported files are never shown on a shared view. Revoking the link stops all of it at
-once; an administrator can also switch data on shared views off for the whole installation. If
-a link has been revoked or never existed: *"This shared view does not exist or was revoked."*
+when that one needs an access key or is a source the installation keeps off links (the Google
+layers, the non-commercial Sentinel-2 imagery), over the installation's default background.
+If the view had them switched on, it also shows **cave entrances and surface features, on four
+conditions**:
+
+- **only records that are themselves Public.** A cave counts by its own visibility, and its
+  entrances follow it; a feature counts by its own. A Private cave filed inside a Public karst
+  area is *not* shown, even though every account can read it through the area;
+- **only inside the view's own area**: what the saved view shows on a large screen, plus about
+  one screen's width of margin on each side, and at most two zoom levels further out than it was
+  saved at. The map on the shared page stops at that area;
+- **narrowed as the view was**: a view saved with a tag filter shows only what the filter let
+  through;
+- **the protections hold harder than for any account**: a protected cave is shown only
+  approximately (*"Approximate position"*), a protected outline is not shown at all, and nothing
+  on the page identifies a record or opens it.
+
+Clicking a marker shows its name; clicking a cluster zooms in. Survey lines, photographs, trips
+and imported files are never shown on a shared view, and nothing about the saved view beyond
+its name, where it was looking and which of the two overlays it had on is sent to the visitor.
+Revoking the link stops all of it at once; an administrator can also switch data on shared
+views off for the whole installation (`SILEXGIS__Map__SharedViewData=false`), which leaves every
+link showing its background only. If a link has been revoked or never existed: *"This shared
+view does not exist or was revoked."*
 
 Saved views can also be [linked](links.md) to other records like anything else.
 

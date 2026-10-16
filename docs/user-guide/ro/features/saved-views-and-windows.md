@@ -25,16 +25,30 @@ O **vedere salvată** este o configurație de hartă denumită: extinderea, stra
 Vederile dumneavoastră salvate apar pe **panoul de bord**, la *Vederile mele salvate*.
 
 O vedere partajată se deschide pentru un vizitator anonim peste **fundalul cu care a fost
-salvată** — sau, dacă acela cere o cheie de acces, peste fundalul implicit al instalării — și,
-dacă vederea le avea pornite, cu **intrările de peșteri și elementele de suprafață a căror
-vizibilitate este Public**. Nimic mai restrâns nu apare, oricine ar fi partajat vederea, iar
-**protecțiile țin mai strâns decât pentru orice cont**: o peșteră protejată apare doar
-aproximativ (*„Poziție aproximativă"*), un contur protejat nu apare deloc, iar nimic de pe
-pagină nu identifică sau nu deschide o înregistrare. Un clic pe un marcaj arată numele lui; un
-clic pe un grup apropie harta. Liniile topografice, fotografiile, ieșirile și fișierele importate
-nu apar niciodată pe o vedere partajată. Revocarea linkului oprește totul imediat; un
-administrator poate opri și datele pe vederile partajate pentru toată instalarea. Dacă un link a
-fost revocat sau nu a existat: *„Această vedere partajată nu există sau a fost revocată."*
+salvată** — sau, dacă acela cere o cheie de acces ori este o sursă pe care instalarea o ține
+departe de linkuri (straturile Google, imaginile Sentinel-2 cu licență necomercială), peste
+fundalul implicit al instalării. Dacă vederea le avea pornite, arată și **intrări de peșteri și
+elemente de suprafață, în patru condiții**:
+
+- **doar înregistrări care sunt ele însele Public.** O peșteră contează după propria
+  vizibilitate, iar intrările ei o urmează; un element contează după a sa. O peșteră Private
+  pusă într-o zonă carstică Public *nu* apare, deși orice cont o poate citi prin zonă;
+- **doar în zona vederii**: ce arată vederea salvată pe un ecran mare, plus cam o lățime de
+  ecran de margine pe fiecare parte, și cel mult două niveluri de zoom mai departe decât a fost
+  salvată. Harta din pagina partajată se oprește la această zonă;
+- **restrânse cum era vederea**: o vedere salvată cu un filtru de etichetă arată doar ce lăsa
+  filtrul să treacă;
+- **protecțiile țin mai strâns decât pentru orice cont**: o peșteră protejată apare doar
+  aproximativ (*„Poziție aproximativă"*), un contur protejat nu apare deloc, iar nimic de pe
+  pagină nu identifică sau nu deschide o înregistrare.
+
+Un clic pe un marcaj arată numele lui; un clic pe un grup apropie harta. Liniile topografice,
+fotografiile, ieșirile și fișierele importate nu apar niciodată pe o vedere partajată, iar din
+vederea salvată vizitatorul nu primește nimic în afară de nume, locul în care privea și care
+dintre cele două straturi erau pornite. Revocarea linkului oprește totul imediat; un
+administrator poate opri și datele pe vederile partajate pentru toată instalarea
+(`SILEXGIS__Map__SharedViewData=false`), iar atunci fiecare link arată doar fundalul. Dacă un
+link a fost revocat sau nu a existat: *„Această vedere partajată nu există sau a fost revocată."*
 
 Vederile salvate pot fi și [legate](links.md) de alte înregistrări, ca orice altceva.
 

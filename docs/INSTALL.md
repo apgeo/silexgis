@@ -611,6 +611,20 @@ To switch them off, set `enabled="false"` on the four `Google *` entries and res
 a source this file stops naming is left alone rather than withdrawn, so a deleted entry would stay enabled
 in your database for good.
 
+**Backgrounds on shared links.** Switched on or not, those four — and the Sentinel-2 imagery, whose licence
+allows non-commercial use only — are never drawn on a shared map view's link: they carry
+`sharedLinks="false"`, and an entry in the *Restricted terms of use* group defaults to it. Showing a source
+to the accounts your installation created and showing it to anybody who is sent a link are different uses.
+A link saved over such a background opens over your default basemap instead (or the first one a link may
+draw). Mark any source of your own the same way if its terms bind only your users. A source that needs an
+access key is never drawn on a link at all, whatever the mark says, because the key would travel with the
+link.
+
+**An entry the file now refuses stops drawing.** If you edit an entry into a shape this version cannot
+draw — a kind it does not support, a placeholder neither map fills — the start-up report says it was
+skipped, and the source it had stored on an earlier start is switched off rather than left drawing as it
+was. Put the entry right and restart, and it is switched back on.
+
 ## Terrain (optional)
 
 By default the 3D view draws the globe as a smooth mathematical sphere. That needs nothing
@@ -1717,7 +1731,7 @@ the reasoning beside each one.
 | `SILEXGIS__Reports__MaxMapPixels` | `8000000` | the most pixels that picture may hold, width times height. Separate from the size in bytes because a picture is held decoded while it is redrawn, and a file of a few kilobytes can declare a size that would take gigabytes; the declared size is read first and anything over this is refused undecoded |
 | `SILEXGIS__Reports__PdfTimeoutSeconds` | `60` | how long somebody who asked for a write-up as a PDF is kept waiting for the document converter (see *Showing Word and Excel files*). Only meaningful where the converter is deployed; without one no PDF is offered. Shorter than `SILEXGIS__Conversion__TimeoutSeconds` on purpose — that one is for background work on long uploads, this one is for a person watching a button. Values outside 1 to 300 seconds are brought back inside that range |
 | `SILEXGIS__Map__ClusterMaxZoom` | `11` | below this zoom the map shows cave entrances as counts over a fixed grid (clusters) instead of one by one. Raise it for a dense register whose district views are crowded, lower it for a small one; `0` never clusters. Values outside 0 to 24 are refused at start |
-| `SILEXGIS__Map__SharedViewData` | `true` | whether a shared map view's link draws data: the cave entrances and surface features whose visibility is **public** (the widest level), as nobody in particular — a protected entrance or point drawn snapped to the location grid, a protected outline not at all, no identifiers. Only overlays the view was saved with switched on are drawn; everything else a view can show stays behind sign-in. `false` makes every link show its background and camera only, at once, without revoking the links |
+| `SILEXGIS__Map__SharedViewData` | `true` | whether a shared map view's link draws data: the cave entrances and surface features that are **themselves public** (the widest level — a cave by its own visibility, its entrances with it; a private cave filed inside a public area is not drawn), **only inside the view's own area** (the saved view on a large screen plus about one screen of margin on each side, at most two zoom levels further out), narrowed by the view's tag filter, as nobody in particular — a protected entrance or point drawn snapped to the location grid, a protected outline not at all, no identifiers. Only overlays the view was saved with switched on are drawn; everything else a view can show stays behind sign-in. `false` makes every link show its background and camera only, at once, without revoking the links — **set it on an installation that holds real data until you have opened one of its links yourself** |
 | `SILEXGIS__Map__SharedViewRateLimitPerMinute` | `240` | requests one address may make per minute to a shared view and the data it draws, together. A shared map asks again on every pan, so this is **cost control, not a secret** — the link cannot be guessed. Raise it if many people browse a shared map from behind one connection. **Checked at start** like the other per-minute limits: zero or less stops the application with a message naming the setting |
 | `SILEXGIS__Map__MaxPoints` | `10000` | the most points one map layer request answers with. Raise it if you import GPS recordings of tens of thousands of points and want to see all of them at once; the cost is the browser's memory and drawing time, not the server's |
 | `SILEXGIS__ExpeditionMap__MaxPoints` | `2000` | the most cave entrances one camp's map answers with. Past it the map says it was cut short — a yes or no, never how many, because the number would say how many caves the camp reached |
