@@ -30,6 +30,46 @@ public class FilterWireContractTests
         {"version":1,"scope":[{"world":"feature","where":{"node":"allOf","of":[{"node":"condition","field":"name","op":"contains","values":[{"type":"text","value":"urs"}]},{"node":"condition","field":"createdAt","op":"greaterThan","values":[{"type":"instant","value":"2026-01-01T00:00:00+00:00"}]}]}}],"sort":"title","descending":false}
         """;
 
+    /// <summary>
+    /// The two inclusive comparisons, as the client writes them. Pinned apart from the first
+    /// literal because an operator's spelling is its own contract: a saved filter holds it, and a
+    /// client that wrote "gte" would have its "at least 300 m" refused as malformed.
+    /// </summary>
+    private const string InclusiveComparisons =
+        """
+        {"version":1,"scope":[{"world":"feature","where":{"node":"allOf","of":[{"node":"condition","field":"surveyedLength","op":"greaterOrEqual","values":[{"type":"number","value":300}]},{"node":"condition","field":"updatedAt","op":"lessOrEqual","values":[{"type":"instant","value":"2026-01-01T00:00:00+00:00"}]}]}}],"sort":"updated","descending":true}
+        """;
+
+    [Fact]
+    public void The_inclusive_comparisons_read_and_write_back_as_the_client_spells_them()
+    {
+        var document = FilterDocument.Deserialize(InclusiveComparisons);
+
+        document.ShouldNotBeNull("The client's spelling of 'at least' or 'at most' is not one this can read.");
+        var group = document.Scope.ShouldHaveSingleItem().Where.ShouldBeOfType<AllOfNode>();
+
+        var atLeast = group.Of[0].ShouldBeOfType<ConditionNode>();
+        atLeast.Op.ShouldBe(FilterOp.GreaterOrEqual);
+        atLeast.Values.ShouldHaveSingleItem().ShouldBeOfType<NumberValue>().Value.ShouldBe(300);
+
+        var atMost = group.Of[1].ShouldBeOfType<ConditionNode>();
+        atMost.Op.ShouldBe(FilterOp.LessOrEqual);
+        atMost.Values.ShouldHaveSingleItem().ShouldBeOfType<InstantValue>()
+            .Value.ShouldBe(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+
+        FilterDocument.Serialize(document).ShouldBe(InclusiveComparisons);
+    }
+
+    [Theory]
+    [InlineData(FilterOp.GreaterOrEqual, 11)]
+    [InlineData(FilterOp.LessOrEqual, 12)]
+    public void The_inclusive_comparisons_keep_their_stored_numbers(FilterOp op, int stored)
+    {
+        // Appended, never renumbered: the numbers are what an enum column or a cached plan would
+        // hold, and a member slipped in before them would quietly change every later one.
+        ((int)op).ShouldBe(stored);
+    }
+
     [Fact]
     public void The_document_the_client_writes_is_the_document_this_reads()
     {

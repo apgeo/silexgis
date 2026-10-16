@@ -160,10 +160,13 @@ internal static class FilterLeaves
         {
             FilterOp.LessThan => Expression.LessThan(selector.Body, Expression.Constant(days[0])),
             FilterOp.GreaterThan => Expression.GreaterThan(selector.Body, Expression.Constant(days[0])),
+            FilterOp.LessOrEqual => Expression.LessThanOrEqual(selector.Body, Expression.Constant(days[0])),
+            FilterOp.GreaterOrEqual => Expression.GreaterThanOrEqual(selector.Body, Expression.Constant(days[0])),
             FilterOp.Between => Expression.AndAlso(
                 Expression.GreaterThanOrEqual(selector.Body, Expression.Constant(days[0])),
                 Expression.LessThanOrEqual(selector.Body, Expression.Constant(days[1]))),
-            _ => Expression.Equal(selector.Body, Expression.Constant(days[0])),
+            FilterOp.Equals => Expression.Equal(selector.Body, Expression.Constant(days[0])),
+            _ => throw Unsupported(condition),
         };
 
         return Expression.Lambda<Func<T, bool>>(body, selector.Parameters);
@@ -232,11 +235,14 @@ internal static class FilterLeaves
         {
             FilterOp.LessThan => Expression.LessThan(selector.Body, Expression.Constant(values[0])),
             FilterOp.GreaterThan => Expression.GreaterThan(selector.Body, Expression.Constant(values[0])),
+            FilterOp.LessOrEqual => Expression.LessThanOrEqual(selector.Body, Expression.Constant(values[0])),
+            FilterOp.GreaterOrEqual => Expression.GreaterThanOrEqual(selector.Body, Expression.Constant(values[0])),
             // Both ends included, which is what somebody picking two dates means by "between".
             FilterOp.Between => Expression.AndAlso(
                 Expression.GreaterThanOrEqual(selector.Body, Expression.Constant(values[0])),
                 Expression.LessThanOrEqual(selector.Body, Expression.Constant(values[1]))),
-            _ => Expression.Equal(selector.Body, Expression.Constant(values[0])),
+            FilterOp.Equals => Expression.Equal(selector.Body, Expression.Constant(values[0])),
+            _ => throw Unsupported(condition),
         };
 
         return Expression.Lambda<Func<T, bool>>(body, selector.Parameters);
@@ -260,10 +266,13 @@ internal static class FilterLeaves
         {
             FilterOp.LessThan => Expression.LessThan(column, Expression.Constant(values[0])),
             FilterOp.GreaterThan => Expression.GreaterThan(column, Expression.Constant(values[0])),
+            FilterOp.LessOrEqual => Expression.LessThanOrEqual(column, Expression.Constant(values[0])),
+            FilterOp.GreaterOrEqual => Expression.GreaterThanOrEqual(column, Expression.Constant(values[0])),
             FilterOp.Between => Expression.AndAlso(
                 Expression.GreaterThanOrEqual(column, Expression.Constant(values[0])),
                 Expression.LessThanOrEqual(column, Expression.Constant(values[1]))),
-            _ => Expression.Equal(column, Expression.Constant(values[0])),
+            FilterOp.Equals => Expression.Equal(column, Expression.Constant(values[0])),
+            _ => throw Unsupported(condition),
         };
 
         return Expression.Lambda<Func<T, bool>>(
@@ -313,15 +322,32 @@ internal static class FilterLeaves
         {
             FilterOp.LessThan => Expression.LessThan(column, Expression.Constant(values[0])),
             FilterOp.GreaterThan => Expression.GreaterThan(column, Expression.Constant(values[0])),
+            FilterOp.LessOrEqual => Expression.LessThanOrEqual(column, Expression.Constant(values[0])),
+            FilterOp.GreaterOrEqual => Expression.GreaterThanOrEqual(column, Expression.Constant(values[0])),
             FilterOp.Between => Expression.AndAlso(
                 Expression.GreaterThanOrEqual(column, Expression.Constant(values[0])),
                 Expression.LessThanOrEqual(column, Expression.Constant(values[1]))),
-            _ => Expression.Equal(column, Expression.Constant(values[0])),
+            FilterOp.Equals => Expression.Equal(column, Expression.Constant(values[0])),
+            _ => throw Unsupported(condition),
         };
 
         return Expression.Lambda<Func<T, bool>>(
             Expression.AndAlso(present, body), selector.Parameters);
     }
+
+    /// <summary>
+    /// What an ordered leaf answers for an operator it has no arm for.
+    /// </summary>
+    /// <remarks>
+    /// These leaves once ended in "otherwise compare for equality", which read as a harmless
+    /// default and was not: an operator added to the table later compiled silently as "exactly",
+    /// so "at least 300" would have answered as "exactly 300" and nothing would have failed. Throwing
+    /// instead turns that into a failure the conformance suite sees, because it runs every operator
+    /// the table admits against every field a world declares.
+    /// </remarks>
+    private static InvalidOperationException Unsupported(ConditionNode condition) =>
+        new($"No arm for operator '{condition.Op}' on '{condition.Field}'. An operator the table "
+            + "admits for a field's kind must have one here.");
 
     public static Expression<Func<T, bool>> NullCheck<T, TValue>(
         Expression<Func<T, TValue>> selector, bool wantPresent)

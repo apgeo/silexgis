@@ -202,6 +202,8 @@ describe('a half-written condition', () => {
   it('knows the operators that need nothing and the one that needs two', () => {
     expect(isComplete(condition('name', 'isEmpty'))).toBe(true);
     expect(isComplete(condition('createdAt', 'between', [{ type: 'instant', value: 'a' }]))).toBe(false);
+    expect(isComplete(condition('surveyedLength', 'greaterOrEqual', [{ type: 'number', value: 300 }]))).toBe(true);
+    expect(isComplete(condition('surveyedLength', 'lessOrEqual', []))).toBe(false);
   });
 });
 
@@ -232,6 +234,27 @@ describe('the wire shape', () => {
       + '{"node":"condition","field":"createdAt","op":"greaterThan","values":'
       + '[{"type":"instant","value":"2026-01-01T00:00:00+00:00"}]}]}}],'
       + '"sort":"title","descending":false}',
+    );
+  });
+
+  it('spells the two inclusive comparisons exactly the way the server reads them', () => {
+    // The second literal in the server's FilterWireContractTests. A saved filter holds the
+    // operator's spelling, so "at least" and "at most" are pinned on both sides like the rest.
+    const document = withWhere(
+      emptyDocument(['feature']),
+      'feature',
+      fromGroups([[
+        condition('surveyedLength', 'greaterOrEqual', [{ type: 'number', value: 300 }]),
+        condition('updatedAt', 'lessOrEqual', [{ type: 'instant', value: '2026-01-01T00:00:00+00:00' }]),
+      ]]),
+    );
+
+    expect(JSON.stringify(document)).toBe(
+      '{"version":1,"scope":[{"world":"feature","where":{"node":"allOf","of":['
+      + '{"node":"condition","field":"surveyedLength","op":"greaterOrEqual","values":[{"type":"number","value":300}]},'
+      + '{"node":"condition","field":"updatedAt","op":"lessOrEqual","values":'
+      + '[{"type":"instant","value":"2026-01-01T00:00:00+00:00"}]}]}}],'
+      + '"sort":"updated","descending":true}',
     );
   });
 });

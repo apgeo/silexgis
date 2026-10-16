@@ -98,6 +98,8 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
             { FeatureFilterFields.CreatedAt, FilterOp.GreaterThan, [new InstantValue(now.AddYears(-1))] },
             { FeatureFilterFields.UpdatedAt, FilterOp.Between, [new InstantValue(now.AddYears(-1)), new InstantValue(now)] },
             { FeatureFilterFields.UpdatedAt, FilterOp.LessThan, [new InstantValue(now)] },
+            { FeatureFilterFields.CreatedAt, FilterOp.GreaterOrEqual, [new InstantValue(now.AddYears(-1))] },
+            { FeatureFilterFields.UpdatedAt, FilterOp.LessOrEqual, [new InstantValue(now)] },
             // The typed-property arms, which nothing in this repository exercised before. The
             // presence pair matters most: it is the only place a function other than containment
             // reaches the stored document, and containment being translatable said nothing about it.
@@ -120,6 +122,10 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
             { FeatureFilterFields.SurveyedLength, FilterOp.Equals, [new NumberValue(100)] },
             { FeatureFilterFields.SurveyedLength, FilterOp.LessThan, [new NumberValue(500)] },
             { FeatureFilterFields.SurveyedLength, FilterOp.GreaterThan, [new NumberValue(10)] },
+            { FeatureFilterFields.SurveyedLength, FilterOp.GreaterOrEqual, [new NumberValue(10)] },
+            { FeatureFilterFields.SurveyedLength, FilterOp.LessOrEqual, [new NumberValue(500)] },
+            { FeatureFilterFields.Depth, FilterOp.GreaterOrEqual, [new NumberValue(-5.5)] },
+            { FeatureFilterFields.Depth, FilterOp.LessOrEqual, [new NumberValue(120.25)] },
             { FeatureFilterFields.SurveyedLength, FilterOp.Between, [new NumberValue(10), new NumberValue(500)] },
             { FeatureFilterFields.SurveyedLength, FilterOp.IsEmpty, [] },
             { FeatureFilterFields.SurveyedLength, FilterOp.IsNotEmpty, [] },
@@ -342,6 +348,14 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
             .ShouldBe([$"Longer {tag}"]);
         (await Matching(FilterOp.Equals, [new NumberValue(2_500.50)]))
             .ShouldBe([$"Long {tag}"]);
+        // "At least" and "at most" include the cave recorded at exactly the value, which is the
+        // whole difference from "more than" and "less than" — and, like them, leave the
+        // unmeasured cave out rather than reading it as zero.
+        (await Matching(FilterOp.GreaterOrEqual, [new NumberValue(2_500.50)]))
+            .ShouldBe([$"Long {tag}", $"Longer {tag}"]);
+        (await Matching(FilterOp.LessOrEqual, [new NumberValue(100)]))
+            .ShouldBe([$"Short {tag}"]);
+        (await Matching(FilterOp.LessOrEqual, [new NumberValue(99.99)])).ShouldBeEmpty();
         (await Matching(FilterOp.IsEmpty, [])).ShouldBe([$"Unmeasured {tag}"]);
         (await Matching(FilterOp.IsNotEmpty, []))
             .ShouldBe([$"Long {tag}", $"Longer {tag}", $"Short {tag}"]);

@@ -10170,7 +10170,7 @@ export interface components {
             of: components["schemas"]["FilterNode"];
         };
         /** @enum {unknown} */
-        FilterOp: "equals" | "in" | "contains" | "startsWith" | "lessThan" | "greaterThan" | "between" | "isEmpty" | "isNotEmpty" | "within" | "inside";
+        FilterOp: "equals" | "in" | "contains" | "startsWith" | "lessThan" | "greaterThan" | "between" | "isEmpty" | "isNotEmpty" | "within" | "inside" | "greaterOrEqual" | "lessOrEqual";
         FilterQueryRequest: {
             document: components["schemas"]["FilterDocument"];
             /**

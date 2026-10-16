@@ -55,6 +55,16 @@ public enum FilterOp
 
     /// <summary>Inside a shape. Resolved the same way, and safe for the same reason.</summary>
     Inside = 10,
+
+    /// <summary>
+    /// This value or more. Without it "at least 300 m" had to be spelled as "more than 300 or
+    /// exactly 300", and "not less than 300" is no substitute: a negation also admits every row
+    /// that holds no value at all.
+    /// </summary>
+    GreaterOrEqual = 11,
+
+    /// <summary>This value or less — "at most", for the same reason.</summary>
+    LessOrEqual = 12,
 }
 
 /// <summary>What kind of value a field takes, and therefore which operators can apply to it.</summary>
@@ -85,11 +95,12 @@ public static class FilterOps
         FieldKind.Text =>
             [FilterOp.Equals, FilterOp.Contains, FilterOp.StartsWith, FilterOp.IsEmpty, FilterOp.IsNotEmpty],
         FieldKind.Number =>
-            [FilterOp.Equals, FilterOp.LessThan, FilterOp.GreaterThan, FilterOp.Between,
-             FilterOp.IsEmpty, FilterOp.IsNotEmpty],
+            [FilterOp.Equals, FilterOp.LessThan, FilterOp.LessOrEqual, FilterOp.GreaterThan,
+             FilterOp.GreaterOrEqual, FilterOp.Between, FilterOp.IsEmpty, FilterOp.IsNotEmpty],
         FieldKind.Boolean => [FilterOp.Equals],
         FieldKind.Instant =>
-            [FilterOp.LessThan, FilterOp.GreaterThan, FilterOp.Between, FilterOp.IsEmpty, FilterOp.IsNotEmpty],
+            [FilterOp.LessThan, FilterOp.LessOrEqual, FilterOp.GreaterThan, FilterOp.GreaterOrEqual,
+             FilterOp.Between, FilterOp.IsEmpty, FilterOp.IsNotEmpty],
         FieldKind.Id => [FilterOp.Equals, FilterOp.In, FilterOp.IsEmpty, FilterOp.IsNotEmpty],
         FieldKind.Spatial => [FilterOp.Within, FilterOp.Inside],
         _ => [],

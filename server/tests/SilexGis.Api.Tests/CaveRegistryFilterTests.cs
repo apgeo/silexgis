@@ -74,6 +74,22 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
+    public async Task At_least_a_length_takes_the_cave_recorded_at_exactly_that_length_and_more_than_does_not()
+    {
+        await SeedAsync();
+
+        // The same question with the strict comparison, so the cave at exactly 300 m is shown to be
+        // let in by "at least" itself and not by some other condition of the fixture.
+        var atLeast = await ListAsync(reader, Token(RegionTagAndLength(FilterOp.GreaterOrEqual)));
+        var moreThan = await ListAsync(reader, Token(RegionTagAndLength(FilterOp.GreaterThan)));
+
+        Names(atLeast).ShouldBe([Name("match"), Name("at-the-minimum")], ignoreOrder: true);
+        atLeast.GetProperty("totalItems").GetInt32().ShouldBe(2);
+        Names(moreThan).ShouldBe([Name("match")]);
+        moreThan.GetProperty("totalItems").GetInt32().ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Pages_are_taken_from_the_narrowed_set_and_the_total_does_not_move_between_them()
     {
         await SeedAsync();
@@ -380,7 +396,7 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
     /// the cave kind, which a document saved from the registry carries so it means the same thing
     /// wherever it is run.
     /// </summary>
-    private FilterDocument RegionTagAndLength() => new()
+    private FilterDocument RegionTagAndLength(FilterOp lengthOp = FilterOp.GreaterOrEqual) => new()
     {
         Scope =
         [
@@ -389,12 +405,8 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
                 new ConditionNode(FeatureFilterFields.Kind, FilterOp.Equals, [new IdValue("cave")]),
                 new ConditionNode(FeatureFilterFields.Region, FilterOp.Contains, [new TextValue("bihor")]),
                 new ConditionNode(FeatureFilterFields.Tag, FilterOp.Equals, [new IdValue(TagSlug)]),
-                // "At least", spelled the way the registry spells it: no operator says it directly.
-                new AnyOfNode(
-                [
-                    new ConditionNode(FeatureFilterFields.SurveyedLength, FilterOp.GreaterThan, [new NumberValue(300)]),
-                    new ConditionNode(FeatureFilterFields.SurveyedLength, FilterOp.Equals, [new NumberValue(300)]),
-                ]),
+                // "At least", as the registry's length box writes it.
+                new ConditionNode(FeatureFilterFields.SurveyedLength, lengthOp, [new NumberValue(300)]),
                 // Scoped to this class's caves; the suite shares one database.
                 new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]),
             ])),

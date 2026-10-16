@@ -21,7 +21,9 @@ export type FilterOp =
   | 'isEmpty'
   | 'isNotEmpty'
   | 'within'
-  | 'inside';
+  | 'inside'
+  | 'greaterOrEqual'
+  | 'lessOrEqual';
 
 export type FieldKind = 'text' | 'number' | 'boolean' | 'instant' | 'id' | 'spatial';
 
