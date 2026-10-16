@@ -85,7 +85,11 @@ const lightContrast: ThemeConfig = {
     // The outline is all that marks out an empty field or a default button.
     colorBorder: '#8c8c8c',
   },
-  components: { Tag: lightTagText },
+  components: {
+    Tag: lightTagText,
+    // An empty table says so in the disabled grey (1.8:1); it is a message, not a disabled control.
+    Table: { colorTextDisabled: 'rgba(0, 0, 0, 0.56)' },
+  },
 };
 
 /**
@@ -149,6 +153,7 @@ const darkContrast: ThemeConfig = {
     // primary buttons cannot be reached from here — one token feeds both their text and the
     // solid primary button's fill — and are re-pointed in the stylesheet instead.
     Tag: darkTagText,
+    Table: { colorTextDisabled: 'rgba(255, 255, 255, 0.5)' },
     Button: {
       defaultHoverColor: DARK_PRIMARY_TEXT.hover,
       defaultHoverBorderColor: DARK_PRIMARY_TEXT.hover,

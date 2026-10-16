@@ -209,6 +209,11 @@ describe.each(['light', 'dark'] as const)('contrast in the %s theme', (mode) => 
     expect(contrast(tag[`color${status}`] ?? palette[`color${status}`], palette[`color${status}Bg`])).toBeGreaterThanOrEqual(4.5);
   });
 
+  it('an empty table says so at 4.5:1', () => {
+    const empty = (config.components?.Table as { colorTextDisabled?: string } | undefined)?.colorTextDisabled;
+    expect(contrast(empty ?? token.colorTextDisabled, surfaces.page)).toBeGreaterThanOrEqual(4.5);
+  });
+
   it("a default button's text under the pointer reads at 4.5:1", () => {
     const button = config.components?.Button;
     expect(contrast(button?.defaultHoverColor ?? token.colorPrimaryHover, surfaces.page)).toBeGreaterThanOrEqual(4.5);
