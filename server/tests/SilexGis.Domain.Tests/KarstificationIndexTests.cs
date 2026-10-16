@@ -73,4 +73,39 @@ public class KarstificationIndexTests
     [InlineData(0.8d, KarstificationClass.VeryHigh)]
     public void The_classes_are_even_fifths_a_reader_can_reconstruct(double score, KarstificationClass expected) =>
         KarstificationIndex.Classify(score).ShouldBe(expected);
+
+    [Fact]
+    public void A_reading_from_totals_divides_by_the_ground_and_leaves_unmapped_depressions_absent()
+    {
+        // 2 km² with 4 caves and no depressions drawn: 2 caves per km², depression component absent.
+        var reading = KarstificationIndex.Read(2_000_000d, 4, 0, null);
+
+        reading.AreaKm2.ShouldBe(2d);
+        reading.CavesPerKm2.ShouldBe(2d);
+        reading.DepressionAreaRatio.ShouldBeNull();
+        reading.Score!.Value.ShouldBe(2d / KarstificationIndex.CaveDensityReferencePerKm2, 1e-12);
+        reading.Class.ShouldBe(KarstificationIndex.Classify(reading.Score));
+    }
+
+    [Fact]
+    public void A_reading_with_depressions_takes_their_share_of_the_ground()
+    {
+        var reading = KarstificationIndex.Read(1_000_000d, 0, 2, 50_000d);
+
+        reading.DepressionAreaRatio!.Value.ShouldBe(0.05d, 1e-12);
+        reading.Score!.Value.ShouldBe((0d + 0.5d) / 2d, 1e-12);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0d)]
+    public void An_area_with_no_ground_reads_unknown(double? areaM2)
+    {
+        var reading = KarstificationIndex.Read(areaM2, 3, 1, 10d);
+
+        reading.AreaKm2.ShouldBeNull();
+        reading.CavesPerKm2.ShouldBeNull();
+        reading.DepressionAreaRatio.ShouldBeNull();
+        reading.Class.ShouldBe(KarstificationClass.Unknown);
+    }
 }

@@ -30,6 +30,22 @@ public enum KarstificationClass : short
 /// </param>
 public sealed record KarstificationComponent(string Name, double? Value, double? Normalised, double Reference);
 
+/// <summary>An area's karstification reading, with the figures it was derived from.</summary>
+/// <param name="AreaKm2">The outline's ground area, or null when it encloses none.</param>
+/// <param name="CavesPerKm2">Caves over that ground, or null without a denominator.</param>
+/// <param name="DepressionAreaRatio">Share of the ground under mapped depressions, or null when
+/// none are mapped.</param>
+/// <param name="Components">The index's components, absent ones included.</param>
+/// <param name="Score">The index, or null when no component could be measured.</param>
+/// <param name="Class">The class the score falls in.</param>
+public sealed record KarstificationReading(
+    double? AreaKm2,
+    double? CavesPerKm2,
+    double? DepressionAreaRatio,
+    IReadOnlyList<KarstificationComponent> Components,
+    double? Score,
+    KarstificationClass Class);
+
 /// <summary>
 /// A composite reading of how karstified an area is, combining what has actually been recorded
 /// about it.
@@ -114,6 +130,36 @@ public static class KarstificationIndex
         < 0.8d => KarstificationClass.High,
         _ => KarstificationClass.VeryHigh,
     };
+
+    /// <summary>
+    /// The whole reading for one area from its totals: the per-square-kilometre figures, the
+    /// components, the score and the class. Every route that publishes an index derives it here, so
+    /// an area read on its own page and the same area read in a map window cannot disagree.
+    /// </summary>
+    /// <param name="areaM2">The outline's ground area, or null when it has none.</param>
+    /// <param name="caveCount">Caves counted in the area.</param>
+    /// <param name="depressionCount">Depression outlines counted in it.</param>
+    /// <param name="depressionAreaM2">Ground under those outlines, summed.</param>
+    public static KarstificationReading Read(
+        double? areaM2, int caveCount, int depressionCount, double? depressionAreaM2)
+    {
+        var areaKm2 = areaM2 is { } m2 && m2 > 0d ? m2 / 1_000_000d : (double?)null;
+
+        // No depression outlines means the reading could not be taken, not that the reading is
+        // nought. Most registries hold caves long before anybody draws a doline, and scoring an
+        // unmapped area zero on this component would rank it below an area genuinely without
+        // depressions. The two are indistinguishable from here, so the honest answer is silence.
+        var depressionRatio = areaM2 is { } ground && ground > 0d && depressionCount > 0
+            ? (depressionAreaM2 ?? 0d) / ground
+            : (double?)null;
+
+        var cavesPerKm2 = areaKm2 is { } km2 ? caveCount / km2 : (double?)null;
+        var components = Components(cavesPerKm2, depressionRatio);
+        var score = Score(components);
+
+        return new KarstificationReading(
+            areaKm2, cavesPerKm2, depressionRatio, components, score, Classify(score));
+    }
 
     private static double? Normalise(double? value, double reference) =>
         value is null || !double.IsFinite(value.Value) || reference <= 0d

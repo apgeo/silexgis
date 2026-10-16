@@ -207,19 +207,11 @@ public static class AreaKarstStatisticsEndpoints
         var unparentedInside = await KarstAreaStatisticsSql.UnparentedInsideCountAsync(db, ctx, id, ct);
         var placeable = await KarstAreaStatisticsSql.PlaceableCaveCountAsync(db, ctx, id, ct);
 
-        var areaKm2 = totals.AreaM2 is { } m2 && m2 > 0d ? m2 / 1_000_000d : (double?)null;
-        // No depression outlines means the reading could not be taken, not that the reading is
-        // nought. Most registries hold caves long before anybody draws a doline, and scoring an
-        // unmapped area zero on this component would rank it below an area genuinely without
-        // depressions. The two are indistinguishable from here, so the honest answer is silence.
-        var depressionRatio = totals.AreaM2 is { } ground && ground > 0d && totals.DepressionCount > 0
-            ? (totals.DepressionAreaM2 ?? 0d) / ground
-            : (double?)null;
-
-        var cavesPerKm2 = areaKm2 is { } km2 ? totals.CaveCount / km2 : (double?)null;
-
-        var components = KarstificationIndex.Components(cavesPerKm2, depressionRatio);
-        var score = KarstificationIndex.Score(components);
+        var reading = KarstificationIndex.Read(
+            totals.AreaM2, totals.CaveCount, totals.DepressionCount, totals.DepressionAreaM2);
+        var areaKm2 = reading.AreaKm2;
+        var cavesPerKm2 = reading.CavesPerKm2;
+        var depressionRatio = reading.DepressionAreaRatio;
 
         return TypedResults.Ok(new AreaKarstStatisticsDto(
             id,
@@ -239,9 +231,9 @@ public static class AreaKarstStatisticsEndpoints
             [.. longest.Select(ToExtreme)],
             [.. rockTypes.Select(r => new AreaRockTypeCountDto(r.RockTypeId, r.Code, r.Name, r.CaveCount))],
             new KarstificationIndexDto(
-                score,
-                KarstificationIndex.Classify(score),
-                [.. components.Select(c =>
+                reading.Score,
+                reading.Class,
+                [.. reading.Components.Select(c =>
                     new KarstificationComponentDto(c.Name, c.Value, c.Normalised, c.Reference))]),
             unparentedInside,
             placeable));
