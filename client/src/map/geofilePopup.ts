@@ -3,7 +3,9 @@ import type Map from 'ol/Map';
 import type MapBrowserEvent from 'ol/MapBrowserEvent';
 import Overlay from 'ol/Overlay';
 import type Point from 'ol/geom/Point';
+import i18n from '../i18n';
 import { GEOFILE_LAYER_PREFIX } from './geofileLayers.ts';
+import { describeMapPopup } from './mapPopup.ts';
 import {
   GEOFILE_DESCRIPTION_PROPERTY,
   GEOFILE_ELEVATION_PROPERTY,
@@ -161,7 +163,13 @@ export function attachGeofilePopup(map: Map): () => void {
       return;
     }
 
-    element.replaceChildren(...geofilePopupNodes(feature.getProperties()));
+    const props = feature.getProperties();
+    element.replaceChildren(...geofilePopupNodes(props));
+    const label = geofileLabel(props);
+    describeMapPopup(
+      element,
+      label ? i18n.t('map.popup.geofilePointNamed', { name: label }) : i18n.t('map.popup.geofilePoint'),
+    );
     overlay.setPosition((geometry as Point).getCoordinates());
   };
 

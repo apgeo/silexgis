@@ -3,6 +3,8 @@ import type Map from 'ol/Map';
 import type MapBrowserEvent from 'ol/MapBrowserEvent';
 import type Point from 'ol/geom/Point';
 import Overlay from 'ol/Overlay';
+import i18n from '../i18n';
+import { describeMapPopup } from './mapPopup.ts';
 import { PHOTO_LAYER_ID } from './photoLayer.ts';
 
 /**
@@ -49,7 +51,14 @@ export function attachPhotoPopup(map: Map): () => void {
       return;
     }
 
-    element.replaceChildren(...photoPopupNodes(feature.getProperties()));
+    const props = feature.getProperties();
+    element.replaceChildren(...photoPopupNodes(props));
+    describeMapPopup(
+      element,
+      typeof props.name === 'string' && props.name !== ''
+        ? i18n.t('map.popup.photoNamed', { name: props.name })
+        : i18n.t('map.popup.photo'),
+    );
     overlay.setPosition((feature.getGeometry() as Point).getCoordinates());
   };
 

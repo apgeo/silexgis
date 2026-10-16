@@ -528,7 +528,15 @@
     "locationWithheld": "Localizare nedivulgată — geometria exactă este protejată.",
     "closestApproach": "Cea mai mică distanță",
     "overburdenHighlight": "Citirea rocii de deasupra",
-    "georeferencedMaps": "Hărți georeferențiate"
+    "georeferencedMaps": "Hărți georeferențiate",
+    "popup": {
+      "photo": "Fotografie",
+      "photoNamed": "Fotografia {{name}}",
+      "geofilePoint": "Punct dintr-un fișier importat",
+      "geofilePointNamed": "Punct dintr-un fișier importat: {{name}}",
+      "libraryPhoto": "Fotografie din {{library}}",
+      "libraryPhotoUnnamed": "Fotografie dintr-o bibliotecă foto"
+    }
   },
   "dialog": {
     "dockToSide": "Andochează lângă hartă",

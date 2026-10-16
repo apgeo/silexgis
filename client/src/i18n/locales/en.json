@@ -528,7 +528,15 @@
     "locationWithheld": "Location withheld — exact geometry is protected.",
     "closestApproach": "Closest approach",
     "overburdenHighlight": "Overburden reading",
-    "georeferencedMaps": "Georeferenced maps"
+    "georeferencedMaps": "Georeferenced maps",
+    "popup": {
+      "photo": "Photo",
+      "photoNamed": "Photo {{name}}",
+      "geofilePoint": "Point from an imported file",
+      "geofilePointNamed": "Point from an imported file: {{name}}",
+      "libraryPhoto": "Photograph from {{library}}",
+      "libraryPhotoUnnamed": "Photograph from a photo library"
+    }
   },
   "dialog": {
     "dockToSide": "Dock to the side of the map",

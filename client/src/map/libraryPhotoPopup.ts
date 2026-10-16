@@ -10,6 +10,7 @@ import {
   markLibraryPictureFailed,
 } from '../photolibrary/pictureUrl.ts';
 import { getLibraryPhotoLoadState, libraryPhotoSourceOf } from './libraryPhotoLayer.ts';
+import { describeMapPopup } from './mapPopup.ts';
 
 /**
  * What the balloon needs to know about the library a photograph came from, as opposed to about
@@ -286,6 +287,12 @@ export function attachLibraryPhotoPopup(map: Map): () => void {
         },
         requestFeature,
       ),
+    );
+    describeMapPopup(
+      element,
+      state.libraryName
+        ? i18n.t('map.popup.libraryPhoto', { library: state.libraryName })
+        : i18n.t('map.popup.libraryPhotoUnnamed'),
     );
     overlay.setPosition((feature.getGeometry() as Point).getCoordinates());
   };
