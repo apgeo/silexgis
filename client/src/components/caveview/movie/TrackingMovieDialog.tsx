@@ -74,6 +74,8 @@ import {
   buildMovieTimeline,
   movieFrameCount,
   movieFrames,
+  moviePlayedMs,
+  movieQuietGapMs,
   movieSpansAt,
   movieSpansShowing,
   movieTripIsLive,
@@ -282,13 +284,22 @@ interface PreviewFacts {
 }
 
 /** The movie's clock over these trips' spans, as the reader set it; null when there is no trip. */
-function timelineOf(spans: readonly MovieTripSpan[], timeline: MovieSettings['timeline']): MovieTimeline | null {
-  return spans.length === 0
-    ? null
-    : buildMovieTimeline(spans, {
-        mode: timeline.mode,
-        quietGapMs: timeline.shortenQuiet ? timeline.quietGapMin * 60_000 : null,
-      });
+function timelineOf(
+  spans: readonly MovieTripSpan[],
+  settings: Pick<MovieSettings, 'timeline' | 'fps' | 'durationS' | 'holdEndS'>,
+): MovieTimeline | null {
+  if (spans.length === 0) {
+    return null;
+  }
+  const { timeline } = settings;
+  const playedMs = moviePlayedMs(settings);
+  return buildMovieTimeline(spans, {
+    mode: timeline.mode,
+    quietGapMs:
+      timeline.shortenQuiet && playedMs !== null
+        ? movieQuietGapMs(spans, timeline.mode, timeline.quietGapS * 1000, playedMs)
+        : null,
+  });
 }
 
 /**
@@ -306,11 +317,25 @@ function spansShowing(
     : movieSpansShowing(spans, trips, surveyModelId, (tripLogId, caverId) => !excluded.has(movieMarkerId(tripLogId, caverId)));
 }
 
-/** The settings without a written title, which belongs to one movie and is never remembered. */
-function withoutTitleText(settings: MovieSettings): MovieSettings {
-  return settings.captions.titleText === ''
+/**
+ * The settings as they are remembered: without what belongs to one movie.
+ *
+ * - **The written title** — written for one cave's trip, it would caption and name the next movie.
+ * - **How several trips share the clock** — side by side is a choice about the trips in front of
+ *   the reader. Remembered, it went on applying to every later movie of several trips, from a group
+ *   of the form that opens folded, so a reader who once compared two trips found the next
+ *   expedition's movie playing every trip from the same start and no longer saw why: the clock ran
+ *   over one trip's length and the calendar was gone. Every movie starts on one calendar.
+ */
+function forRemembering(settings: MovieSettings): MovieSettings {
+  const { captions, timeline } = settings;
+  return captions.titleText === '' && timeline.mode === DEFAULT_MOVIE_SETTINGS.timeline.mode
     ? settings
-    : { ...settings, captions: { ...settings.captions, titleText: '' } };
+    : {
+        ...settings,
+        captions: { ...captions, titleText: '' },
+        timeline: { ...timeline, mode: DEFAULT_MOVIE_SETTINGS.timeline.mode },
+      };
 }
 
 /**
@@ -363,13 +388,13 @@ function MovieDialogBody({
   const remembered = useUiPrefsStore((state) => state.movieSettings);
   const remember = useUiPrefsStore((state) => state.setMovieSettings);
   const [settings, setSettings] = useState<MovieSettings>(() =>
-    withoutTitleText(remembered === undefined ? DEFAULT_MOVIE_SETTINGS : normaliseMovieSettings(remembered)),
+    forRemembering(remembered === undefined ? DEFAULT_MOVIE_SETTINGS : normaliseMovieSettings(remembered)),
   );
   // Settings remembered in a shape no longer written are written back once, repaired, so the old
   // shape does not outlive the first opening after an update — even for a reader who changes nothing.
   useEffect(() => {
     if (remembered !== undefined && movieSettingsNeedRewriting(remembered)) {
-      remember(withoutTitleText(normaliseMovieSettings(remembered)));
+      remember(forRemembering(normaliseMovieSettings(remembered)));
     }
   }, [remembered, remember]);
   // Playing the preview holds the camera: each of its frames puts the angles back from where play
@@ -384,9 +409,7 @@ function MovieDialogBody({
         stopPlayingRef.current();
       }
       setSettings(next);
-      // Whether a title is drawn is a preference; what it says is about this movie. Remembered, a
-      // title written for one cave's trip would caption and name the next movie, of any cave.
-      remember(withoutTitleText(next));
+      remember(forRemembering(next));
     },
     [remember],
   );
@@ -499,8 +522,14 @@ function MovieDialogBody({
     });
   }, []);
   const timeline = useMemo(
-    () => timelineOf(spansShowing(movie.spans, movie.trips, surveyModelId, excluded), settings.timeline),
-    [movie.spans, movie.trips, surveyModelId, excluded, settings.timeline],
+    () =>
+      timelineOf(spansShowing(movie.spans, movie.trips, surveyModelId, excluded), {
+        timeline: settings.timeline,
+        fps: settings.fps,
+        durationS: settings.durationS,
+        holdEndS: settings.holdEndS,
+      }),
+    [movie.spans, movie.trips, surveyModelId, excluded, settings.timeline, settings.fps, settings.durationS, settings.holdEndS],
   );
   // Each ready trip's roster as the picker lists it, by the names the trip's own page gives.
   const rosters = useMemo(
@@ -953,7 +982,7 @@ function MovieDialogBody({
         recorded =
           (spans === null
             ? null
-            : timelineOf(spansShowing(spans, trips, surveyModelId, excluded), settings.timeline)) ?? timeline;
+            : timelineOf(spansShowing(spans, trips, surveyModelId, excluded), settings)) ?? timeline;
         setWindowEnd((before) => Math.max(before, now));
       }
       const asked: MovieRecording = {
@@ -1301,6 +1330,7 @@ function MovieDialogBody({
             summary={summary}
             onViewAgain={previewReady ? viewAgain : null}
             trips={tripPicker}
+            severalTrips={chosenIds.length > 1}
             onPreset={applyPreset}
             onReset={resetSettings}
           />

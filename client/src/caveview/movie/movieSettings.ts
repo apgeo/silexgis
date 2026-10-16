@@ -84,7 +84,11 @@ export interface MovieSettings {
     degreesPerSecond: number;
     clockwise: boolean;
   };
-  timeline: { mode: MovieTimelineMode; shortenQuiet: boolean; quietGapMin: number };
+  /**
+   * `quietGapS` is the longest a stretch in which nobody reports anything may hold the picture
+   * still, in seconds of the movie — not of the trips — when `shortenQuiet` is on.
+   */
+  timeline: { mode: MovieTimelineMode; shortenQuiet: boolean; quietGapS: number };
   cavers: {
     labels: MovieCaverLabels;
     /** Pixels of the output frame. */
@@ -235,7 +239,7 @@ export const DEFAULT_MOVIE_SETTINGS: MovieSettings = {
   holdEndS: 2,
   quality: 'medium',
   rotation: { enabled: true, mode: 'speed', degreesPerSecond: 6, clockwise: true },
-  timeline: { mode: 'calendar', shortenQuiet: true, quietGapMin: 30 },
+  timeline: { mode: 'calendar', shortenQuiet: true, quietGapS: 1 },
   cavers: {
     labels: 'first',
     labelSize: 16,
@@ -396,7 +400,7 @@ export function normaliseMovieSettings(raw: unknown): MovieSettings {
     timeline: {
       mode: oneOf<MovieTimelineMode>(timeline.mode, ['calendar', 'together'], d.timeline.mode),
       shortenQuiet: flag(timeline.shortenQuiet, d.timeline.shortenQuiet),
-      quietGapMin: number(timeline.quietGapMin, d.timeline.quietGapMin, 1, 24 * 60),
+      quietGapS: number(timeline.quietGapS, d.timeline.quietGapS, 0.2, 30),
     },
     cavers: {
       labels: oneOf<MovieCaverLabels>(cavers.labels, ['first', 'full', 'initials', 'off'], d.cavers.labels),

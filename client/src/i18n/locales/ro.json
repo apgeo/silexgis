@@ -3266,9 +3266,9 @@
         "together": "Toate turele pornesc în același moment, pentru comparație; ceasul arată timpul scurs."
       },
       "shortenQuiet": "Scurtează perioadele liniștite",
-      "shortenQuietHelp": "Perioadele mai lungi decât aceasta în care nicio tură aleasă nu raportează nimic sunt scurtate; ceasul arată saltul.",
-      "quietGap": "Lungimea perioadei liniștite",
-      "minutes": "min",
+      "shortenQuietHelp": "Unde nicio tură aleasă nu raportează nimic, filmul sare înainte: imaginea nu stă nemișcată mai mult decât atât și nu redă mai mult de o jumătate de oră din timpul turelor fără să se întâmple nimic. Ceasul arată saltul.",
+      "quietGap": "Cea mai lungă așteptare",
+      "secondsShort": "s",
       "labels": "Etichetele speologilor",
       "labelsHelp": "Prenumele este primul cuvânt al numelui din listă; două persoane care s-ar citi la fel primesc o inițială.",
       "caverLabels": {

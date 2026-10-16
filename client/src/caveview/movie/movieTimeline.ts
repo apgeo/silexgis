@@ -25,7 +25,8 @@ export interface MovieTripSpan {
  * One trip's part in a movie of a model, from the trip's watch and its whole log; null when the
  * trip has nothing to replay (its watch was never armed, or its reports cover no stretch of time).
  *
- * The window is the trip's own replay window, the one its replay bar scrubs over. The moments are
+ * The window is the trip's own replay window, the one its replay bar scrubs over — unless the watch
+ * plainly was not the trip's (see {@link WRITTEN_UP_SLACK_MS}). The moments are
  * the instants something happened in the movie: every report except one measured against another
  * survey model, which the replay does not draw on this one — so a stretch in which the party was
  * reporting on another survey reads as quiet here, which on this model it is.
@@ -40,11 +41,50 @@ export function movieTripSpan(
   openedAt: number,
   surveyModelId: string,
 ): MovieTripSpan | null {
-  const window = replayWindow(tracking, events, openedAt);
-  if (window === null) {
+  const watch = replayWindow(tracking, events, openedAt);
+  if (watch === null) {
     return null;
   }
-  return { tripLogId, window, moments: reportMoments(events, surveyModelId) };
+  return { tripLogId, window: tripStretch(tracking, events, watch), moments: reportMoments(events, surveyModelId) };
+}
+
+/**
+ * How long after a trip's last report its watch may be closed and still be the trip's own.
+ *
+ * <b>A watch armed after the party's first report, or closed hours after its last, was opened to
+ * write the trip up</b> — a log entered from paper the evening after, or a whole expedition's
+ * journal imported weeks later. Its own stretch then runs from the trip to the moment somebody
+ * pressed close, and a movie paced over it spends its length on the weeks nobody was underground:
+ * one trip's three hours become a sliver at the start, and a movie of several trips is mostly the
+ * empty days between the last trip and the import. The reports' own stretch is the trip, so that
+ * is what such a trip plays over. A watch closed within this long of the last report is taken as
+ * the one the party really kept, a slow walk out and a late close included.
+ */
+const WRITTEN_UP_SLACK_MS = 6 * 3_600_000;
+
+/** One report's moment is still somewhere to stand: a trip of one report plays over a minute. */
+const ONE_MOMENT_MS = 60_000;
+
+/** The stretch a trip plays over: its watch's, or its reports' own where the watch was a write-up. */
+function tripStretch(
+  tracking: Pick<TrackingState, 'armedAt' | 'closedAt'>,
+  events: readonly Pick<TrackingEvent, 'recordedAt'>[],
+  watch: ReplayWindow,
+): ReplayWindow {
+  // A watch still running is the party's now, whatever came before it: it ends where the movie does.
+  const closed = tracking.closedAt === null ? Number.NaN : Date.parse(tracking.closedAt);
+  if (!Number.isFinite(closed)) {
+    return watch;
+  }
+  const dated = events.map((event) => Date.parse(event.recordedAt)).filter((at) => Number.isFinite(at));
+  if (dated.length === 0) {
+    return watch;
+  }
+  const first = Math.min(...dated);
+  const last = Math.max(...dated);
+  const armed = tracking.armedAt === null ? Number.NaN : Date.parse(tracking.armedAt);
+  const writtenUp = (Number.isFinite(armed) && armed > first) || closed - last > WRITTEN_UP_SLACK_MS;
+  return writtenUp ? { from: first, to: last > first ? last : first + ONE_MOMENT_MS } : watch;
 }
 
 /** The instants of the reports a movie of this model replays, ascending. */
@@ -199,14 +239,17 @@ function axisAt(pieces: readonly Piece[], position: number): number {
   return into <= half ? piece.from + into : piece.to - (piece.span - into);
 }
 
+/** The ends of `[from, to]` and every anchor inside it, ascending and each once. */
+function cutsOver(from: number, to: number, anchors: readonly number[]): number[] {
+  return [...new Set([from, to, ...anchors.filter((at) => at > from && at < to)])].sort((left, right) => left - right);
+}
+
 /**
  * The pieces covering `[from, to]` of an axis, cut at every anchor, each stretch between anchors
  * that is longer than `quietGap` shortened to it.
  */
 function piecesOver(from: number, to: number, anchors: readonly number[], quietGap: number | null): Piece[] {
-  const cuts = [...new Set([from, to, ...anchors.filter((at) => at > from && at < to)])].sort(
-    (left, right) => left - right,
-  );
+  const cuts = cutsOver(from, to, anchors);
   const pieces: Piece[] = [];
   let start = 0;
   for (let index = 0; index + 1 < cuts.length; index++) {
@@ -216,6 +259,105 @@ function piecesOver(from: number, to: number, anchors: readonly number[], quietG
     start += span;
   }
   return pieces;
+}
+
+/** The stretch of the axis a timeline of these trips covers, and the instants that cut it. */
+function axisOver(trips: readonly MovieTripSpan[], mode: MovieTimelineMode): { from: number; to: number; anchors: number[] } {
+  if (mode === 'calendar') {
+    return {
+      from: Math.min(...trips.map((trip) => trip.window.from)),
+      to: Math.max(...trips.map((trip) => trip.window.to)),
+      anchors: trips.flatMap((trip) => trip.moments),
+    };
+  }
+  return {
+    from: 0,
+    to: Math.max(...trips.map((trip) => trip.window.to - trip.window.from)),
+    anchors: trips.flatMap((trip) => trip.moments.map((at) => at - trip.window.from)),
+  };
+}
+
+/** The lengths of the stretches between consecutive cuts of an axis. */
+function stretchesOver(from: number, to: number, anchors: readonly number[]): number[] {
+  const cuts = cutsOver(from, to, anchors);
+  const stretches: number[] = [];
+  for (let index = 0; index + 1 < cuts.length; index++) {
+    stretches.push(cuts[index + 1] - cuts[index]);
+  }
+  return stretches;
+}
+
+/**
+ * The longest a stretch without a report is ever played for, in the trips' own time: whatever the
+ * screen allows, half an hour of nothing is shown as half an hour at most.
+ */
+export const MOVIE_QUIET_TRIP_MS = 30 * 60_000;
+
+/**
+ * The quiet-stretch threshold, in the trips' own time, for a movie whose replay part plays for
+ * `playedMs`: a stretch in which nobody reports anything is cut to whichever is shorter — half an
+ * hour of the trips' time ({@link MOVIE_QUIET_TRIP_MS}), or what keeps it on screen for no more
+ * than `quietMs`. Null where there is nothing to play.
+ *
+ * <b>Both, because either alone fails one kind of movie.</b> Half an hour of cave time is nothing
+ * in a movie of a month's trips, where the clock runs at thousands of times life — and it is
+ * several seconds of a still picture in a movie of one afternoon's trip, which plays the
+ * stretches it keeps at a few hundred times life. The page that replays the club's journal settles
+ * the second case the reader's way round: whatever it plays, the picture never stands still with
+ * nothing happening for longer than a couple of seconds. So does this.
+ *
+ * The screen half is one equation in one unknown. Everything between reports plays at one speed,
+ * and that speed is whatever lets each cut stretch take `quietMs`: the stretches left at their
+ * length and the ones cut must together fill the movie. Solved here by halving.
+ *
+ * Where even cutting every stretch to the same length cannot keep the wait that short — a few
+ * reports in a long movie — every stretch is cut to the shortest one, so the movie plays its
+ * reports at an even pace rather than dwelling on one gap; the clock still shows every jump.
+ */
+export function movieQuietGapMs(
+  trips: readonly MovieTripSpan[],
+  mode: MovieTimelineMode,
+  quietMs: number,
+  playedMs: number,
+): number | null {
+  if (trips.length === 0) {
+    return null;
+  }
+  const onScreen = quietMs > 0 && playedMs > 0 ? screenQuietGapMs(trips, mode, quietMs / playedMs) : null;
+  return onScreen === null ? MOVIE_QUIET_TRIP_MS : Math.min(onScreen, MOVIE_QUIET_TRIP_MS);
+}
+
+/**
+ * The threshold at which a cut stretch takes `share` of the movie; null where no stretch takes
+ * more than that uncut, or there are no stretches to measure.
+ */
+function screenQuietGapMs(trips: readonly MovieTripSpan[], mode: MovieTimelineMode, share: number): number | null {
+  const axis = axisOver(trips, mode);
+  const stretches = stretchesOver(axis.from, axis.to, axis.anchors).filter((length) => length > 0);
+  if (stretches.length === 0 || stretches.some((length) => !Number.isFinite(length))) {
+    return null;
+  }
+  // At threshold c the timeline is `kept(c)` long, so a cut stretch takes c / kept(c) of the movie.
+  const kept = (cap: number) => stretches.reduce((sum, length) => sum + Math.min(length, cap), 0);
+  const longest = Math.max(...stretches);
+  if (longest / kept(longest) <= share) {
+    return null;
+  }
+  const shortest = Math.min(...stretches);
+  if (shortest / kept(shortest) >= share) {
+    return shortest;
+  }
+  let low = shortest;
+  let high = longest;
+  for (let step = 0; step < 60; step++) {
+    const middle = (low + high) / 2;
+    if (middle / kept(middle) > share) {
+      high = middle;
+    } else {
+      low = middle;
+    }
+  }
+  return low;
 }
 
 /**
@@ -247,9 +389,8 @@ export function buildMovieTimeline(
       : null;
 
   if (options.mode === 'calendar') {
-    const from = Math.min(...trips.map((trip) => trip.window.from));
-    const to = Math.max(...trips.map((trip) => trip.window.to));
-    const pieces = piecesOver(from, to, trips.flatMap((trip) => trip.moments), quietGap);
+    const { from, to, anchors } = axisOver(trips, 'calendar');
+    const pieces = piecesOver(from, to, anchors, quietGap);
     const length = pieces.reduce((sum, piece) => sum + piece.span, 0);
     return {
       mode: 'calendar',
@@ -262,8 +403,7 @@ export function buildMovieTimeline(
     };
   }
 
-  const longest = Math.max(...trips.map((trip) => trip.window.to - trip.window.from));
-  const elapsedMoments = trips.flatMap((trip) => trip.moments.map((at) => at - trip.window.from));
+  const { to: longest, anchors: elapsedMoments } = axisOver(trips, 'together');
   const pieces = piecesOver(0, longest, elapsedMoments, quietGap);
   const length = pieces.reduce((sum, piece) => sum + piece.span, 0);
   return {
@@ -311,6 +451,16 @@ export function movieFrameCount(
 }
 
 /**
+ * How long a movie's replay part takes to cross its timeline on screen, in milliseconds — one
+ * frame's time less than its length, since its last frame shows the timeline's end (see
+ * {@link movieSpeedFactor}); null for a movie of a single replay frame, in which nothing runs.
+ */
+export function moviePlayedMs(settings: Pick<MovieSettings, 'fps' | 'durationS' | 'holdEndS'>): number | null {
+  const { replayFrames } = movieFrameCount(settings);
+  return replayFrames < 2 || !(settings.fps > 0) ? null : ((replayFrames - 1) * 1000) / settings.fps;
+}
+
+/**
  * How many times faster than life a movie's clock runs while it plays, or null when the movie has
  * no rate to speak of.
  *
@@ -333,12 +483,10 @@ export function movieSpeedFactor(
   timeline: Pick<MovieTimeline, 'length'>,
   settings: Pick<MovieSettings, 'fps' | 'durationS' | 'holdEndS'>,
 ): number | null {
-  const { replayFrames } = movieFrameCount(settings);
-  // A single frame shows one moment: nothing runs, at any speed.
-  if (replayFrames < 2 || !(settings.fps > 0)) {
+  const playedMs = moviePlayedMs(settings);
+  if (playedMs === null) {
     return null;
   }
-  const playedMs = ((replayFrames - 1) * 1000) / settings.fps;
   const factor = timeline.length / playedMs;
   return Number.isFinite(factor) && factor > 0 ? factor : null;
 }

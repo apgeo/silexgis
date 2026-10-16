@@ -134,7 +134,7 @@ describe('normaliseMovieSettings', () => {
       durationS: -5,
       holdEndS: 1e9,
       rotation: { mode: 'wobble', degreesPerSecond: 1000, enabled: 'yes' },
-      timeline: { mode: 'sideways', quietGapMin: 0 },
+      timeline: { mode: 'sideways', quietGapS: 0 },
       cavers: { labelSize: 400, colourBy: 'rainbow', transitionS: Number.NaN },
       view: { linewidth: 3, zScale: -1, shading: 'rainbow', camera: 'fisheye' },
       captions: { size: 0, titleText: 7 },
@@ -146,7 +146,7 @@ describe('normaliseMovieSettings', () => {
     expect(settings.holdEndS).toBe(10);
     expect(settings.rotation).toEqual({ ...DEFAULT_MOVIE_SETTINGS.rotation, degreesPerSecond: 90 });
     expect(settings.timeline.mode).toBe('calendar');
-    expect(settings.timeline.quietGapMin).toBe(1);
+    expect(settings.timeline.quietGapS).toBe(0.2);
     // The viewer's glyph atlas refuses labels above 45 pixels.
     expect(settings.cavers.labelSize).toBe(45);
     expect(settings.cavers.colourBy).toBe('auto');

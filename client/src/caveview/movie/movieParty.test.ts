@@ -217,6 +217,27 @@ describe('movieParty', () => {
     expect(party.legend).toEqual([]);
   });
 
+  it('takes a party off a movie of several trips once the last of it is out, and keeps a single trip’s', () => {
+    const done = trip('trip-1', 'One', state([ANA, BOGDAN]), [
+      event({ caverId: ANA, stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ caverId: BOGDAN, stationName: 'p.2', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ caverId: ANA, kind: 'exited', surveyModelId: null, recordedAt: '2026-09-12T10:00:00Z' }),
+      event({ caverId: BOGDAN, kind: 'exited', surveyModelId: null, recordedAt: '2026-09-12T10:30:00Z' }),
+    ]);
+    const underway = trip('trip-2', 'Two', state([CORA]), [
+      event({ caverId: CORA, stationName: 'p.3', recordedAt: '2026-09-12T11:00:00Z' }),
+    ]);
+    // Half the first party out, half still in: the one out stays, in grey, beside the one in.
+    const halfOut = partyOf([done, underway], settings(), [Date.parse('2026-09-12T10:15:00Z'), Date.parse('2026-09-12T10:15:00Z')]);
+    expect([...halfOut.markers.keys()]).toEqual(['trip-1:caver-ana', 'trip-1:caver-bogdan']);
+    // Everybody of the first trip out: its party leaves the model, the second trip's is drawn.
+    const later = partyOf([done, underway]);
+    expect([...later.markers.keys()]).toEqual(['trip-2:caver-cora']);
+    expect(later.legend.some((entry) => entry.color === trackedCaverPalette.out)).toBe(false);
+    // Alone, a trip ends with its party standing where it came out.
+    expect([...partyOf([done]).markers.keys()]).toEqual(['trip-1:caver-ana', 'trip-1:caver-bogdan']);
+  });
+
   it('draws whoever is out in the muted colour, and not at all when asked', () => {
     const one = trip('trip-1', 'One', state([ANA, BOGDAN]), [
       event({ caverId: ANA, stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),

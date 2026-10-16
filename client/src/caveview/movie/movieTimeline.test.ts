@@ -6,6 +6,9 @@ import {
   movieFrameCount,
   movieFrames,
   movieNewReports,
+  moviePlayedMs,
+  movieQuietGapMs,
+  MOVIE_QUIET_TRIP_MS,
   movieSpansAt,
   movieSpansShowing,
   movieSpeedFactor,
@@ -197,6 +200,29 @@ describe('movieTripSpan', () => {
     });
   });
 
+  it('plays a written-up trip over its reports, not over the watch opened to write it up', () => {
+    const events = [report(T0 + 3 * HOUR, 'model-1'), report(T0 + HOUR, 'model-1')];
+    // A journal imported two weeks later: armed and closed after every report it holds.
+    const imported = { armedAt: at(T0 + 14 * 24 * HOUR), closedAt: at(T0 + 14 * 24 * HOUR + MIN) };
+    expect(movieTripSpan('trip-a', imported, events, T0, 'model-1')?.window).toEqual({ from: T0 + HOUR, to: T0 + 3 * HOUR });
+    // Armed in time but closed the next evening, when somebody entered the last reports from paper.
+    const closedLate = { armedAt: at(T0), closedAt: at(T0 + 30 * HOUR) };
+    expect(movieTripSpan('trip-a', closedLate, events, T0, 'model-1')?.window).toEqual({ from: T0 + HOUR, to: T0 + 3 * HOUR });
+    // A watch kept by the party itself, closed a slow walk out after the last report, is the trip.
+    const kept = { armedAt: at(T0), closedAt: at(T0 + 8 * HOUR) };
+    expect(movieTripSpan('trip-a', kept, events, T0, 'model-1')?.window).toEqual({ from: T0, to: T0 + 8 * HOUR });
+    // One report written up is still a minute to stand at.
+    expect(movieTripSpan('trip-a', imported, [report(T0, 'model-1')], T0, 'model-1')?.window).toEqual({ from: T0, to: T0 + MIN });
+  });
+
+  it('keeps a trip still under way running to where the movie ends, however its watch began', () => {
+    const lateArmed = { armedAt: at(T0 + 2 * HOUR), closedAt: null };
+    expect(movieTripSpan('trip-a', lateArmed, [report(T0 + HOUR, 'model-1')], T0 + 5 * HOUR, 'model-1')?.window).toEqual({
+      from: T0 + HOUR,
+      to: T0 + 5 * HOUR,
+    });
+  });
+
   it('has nothing to replay for a watch that was never armed', () => {
     expect(movieTripSpan('trip-a', { armedAt: null, closedAt: null }, [], T0, 'model-1')).toBeNull();
   });
@@ -321,5 +347,84 @@ describe('movieSpeedFactor', () => {
     expect(movieSpeedFactor(twoHours, settings({ fps: 10, durationS: 0 }))).toBeNull();
     expect(movieSpeedFactor({ length: 0 }, settings({ fps: 10, durationS: 10 }))).toBeNull();
     expect(movieSpeedFactor({ length: Number.NaN }, settings({ fps: 10, durationS: 10 }))).toBeNull();
+  });
+});
+
+describe('movieQuietGapMs', () => {
+  const DAY = 24 * HOUR;
+  /** How long, on screen, the longest stretch between two cuts of a calendar timeline lasts. */
+  function longestWaitMs(trips: MovieTripSpan[], quietGapMs: number | null, playedMs: number): number {
+    const timeline = buildMovieTimeline(trips, { mode: 'calendar', quietGapMs })!;
+    const cuts = [...new Set(trips.flatMap((trip) => [trip.window.from, trip.window.to, ...trip.moments]))].sort((a, b) => a - b);
+    let longest = 0;
+    for (let index = 0; index + 1 < cuts.length; index++) {
+      const real = cuts[index + 1] - cuts[index];
+      longest = Math.max(longest, quietGapMs === null ? real : Math.min(real, quietGapMs));
+    }
+    return (longest / timeline.length) * playedMs;
+  }
+
+  /** An expedition: one trip a day for `days` days, each eight hours with a report every half hour. */
+  function expedition(days: number): MovieTripSpan[] {
+    return Array.from({ length: days }, (_, day) => {
+      const from = T0 + day * DAY;
+      const moments = Array.from({ length: 17 }, (_, step) => from + step * 30 * MIN);
+      return span(`trip-${day}`, from, from + 8 * HOUR, moments);
+    });
+  }
+
+  it('keeps the picture from standing still longer than asked, however long the trips run', () => {
+    const playedMs = moviePlayedMs(settings({ fps: 10, durationS: 30 }))!;
+    // A single day of half-hour steps is too few to fill thirty seconds with one-second waits;
+    // that case is played at an even pace, below.
+    for (const days of [4, 28]) {
+      const trips = expedition(days);
+      const gap = movieQuietGapMs(trips, 'calendar', 1000, playedMs);
+      expect(longestWaitMs(trips, gap, playedMs), `${days} days`).toBeLessThanOrEqual(1000 + 1e-6);
+    }
+  });
+
+  it('cuts a quiet stretch to half an hour of the trips’ time at most, however short the screen allows', () => {
+    const trips = expedition(28);
+    const playedMs = moviePlayedMs(settings({ fps: 10, durationS: 60 }))!;
+    // Each night is about a second at the movie's speed: the half hour cuts it shorter still, so
+    // most of the movie is spent underground.
+    expect(movieQuietGapMs(trips, 'calendar', 1000, playedMs)).toBe(MOVIE_QUIET_TRIP_MS);
+  });
+
+  it('holds an afternoon’s quiet hours for a second, not for half an hour of the trip', () => {
+    // Reports two minutes apart for eighty minutes, then nearly three hours of nothing, in a
+    // twenty-second movie.
+    const moments = Array.from({ length: 40 }, (_, step) => T0 + (step + 1) * 2 * MIN);
+    const trips = [span('a', T0, T0 + 4 * HOUR, moments)];
+    const playedMs = moviePlayedMs(settings({ fps: 10, durationS: 20 }))!;
+    const gap = movieQuietGapMs(trips, 'calendar', 1000, playedMs)!;
+    expect(gap).toBeLessThan(MOVIE_QUIET_TRIP_MS);
+    expect(longestWaitMs(trips, gap, playedMs)).toBeCloseTo(1000, 3);
+    // Half an hour, as the movie had alone, held the picture still for over five seconds.
+    expect(longestWaitMs(trips, MOVIE_QUIET_TRIP_MS, playedMs)).toBeGreaterThan(5000);
+  });
+
+  it('shortens nothing where no stretch would hold the picture that long', () => {
+    // Four stretches of twenty minutes in a three-second movie: each holds the picture for 750 ms,
+    // and none is longer than the half hour either.
+    const trips = [span('a', T0, T0 + 80 * MIN, [T0 + 20 * MIN, T0 + 40 * MIN, T0 + 60 * MIN])];
+    expect(movieQuietGapMs(trips, 'calendar', 1000, 3000)).toBe(MOVIE_QUIET_TRIP_MS);
+    expect(buildMovieTimeline(trips, { mode: 'calendar', quietGapMs: MOVIE_QUIET_TRIP_MS })!.length).toBe(80 * MIN);
+  });
+
+  it('plays a few reports at an even pace where no threshold could keep the wait that short', () => {
+    // Two stretches in a twenty-second movie: whatever is cut, each takes about ten seconds.
+    const trips = [span('a', T0, T0 + 4 * HOUR, [T0 + 10 * MIN])];
+    expect(movieQuietGapMs(trips, 'calendar', 1000, 20_000)).toBe(10 * MIN);
+  });
+
+  it('measures side by side along the elapsed time, as that is what is played', () => {
+    const trips = [span('a', T0, T0 + 4 * HOUR, [T0 + 10 * MIN, T0 + 20 * MIN]), span('b', T0 + DAY, T0 + DAY + 4 * HOUR, [T0 + DAY + 10 * MIN, T0 + DAY + 20 * MIN])];
+    // Together the two trips report at the same elapsed moments: 10, 10, then 3 h 40 of nothing.
+    expect(movieQuietGapMs(trips, 'together', 1000, 20_000)).toBe(10 * MIN);
+    expect(movieQuietGapMs([], 'calendar', 1000, 20_000)).toBeNull();
+    // Nothing on screen to measure against: the half hour alone.
+    expect(movieQuietGapMs(trips, 'calendar', 1000, 0)).toBe(MOVIE_QUIET_TRIP_MS);
   });
 });

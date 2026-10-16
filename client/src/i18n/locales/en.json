@@ -3266,9 +3266,9 @@
         "together": "Every trip starts at the same moment, to compare them; the clock shows the time elapsed."
       },
       "shortenQuiet": "Shorten quiet stretches",
-      "shortenQuietHelp": "Stretches longer than this in which no chosen trip reports anything are cut short; the clock shows the jump.",
-      "quietGap": "Quiet stretch length",
-      "minutes": "min",
+      "shortenQuietHelp": "Where no chosen trip reports anything, the movie jumps ahead: the picture never stands still for longer than this, nor plays more than half an hour of the trips' time with nothing happening. The clock shows the jump.",
+      "quietGap": "Longest still wait",
+      "secondsShort": "s",
       "labels": "Caver labels",
       "labelsHelp": "The first name is the first word of the name on the roster; two people who would read the same gain an initial.",
       "caverLabels": {

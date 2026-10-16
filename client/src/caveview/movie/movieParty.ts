@@ -200,7 +200,16 @@ export function movieParty(
   const placed: Placed[] = [];
   trips.forEach((trip, index) => {
     const at = instants[index] ?? Number.NaN;
-    for (const caver of trackedCaversAt(trip.tracking, trip.events, at, trip.nameOf, surveyModelId)) {
+    const cavers = trackedCaversAt(trip.tracking, trip.events, at, trip.nameOf, surveyModelId);
+    // In a movie of several trips a party is on the model while it is underground, and leaves it
+    // when the last of it comes out. Kept in grey after that, every finished trip of an expedition
+    // stood on the model to the end, and a calendar movie of a month of trips ended as one crowd of
+    // grey markers with nobody underground — every party looked like the same one. A single trip
+    // still ends with its party standing where it came out, which is that trip's ending.
+    if (trips.length > 1 && !cavers.some((caver) => !caver.out && caver.lastRecordedAt !== null && shown(trip, caver.caverId))) {
+      return;
+    }
+    for (const caver of cavers) {
       // No marker is invented for a place nobody reported, one that was withheld, or one measured
       // in another survey: there is no station of this model to put it at.
       if (caver.position.kind !== 'station') {

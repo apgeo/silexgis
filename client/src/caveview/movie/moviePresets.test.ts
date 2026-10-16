@@ -29,7 +29,7 @@ function chosen(output: Partial<MovieSettings> = {}): MovieSettings {
     quality: 'low',
     ...output,
     rotation: { enabled: false, mode: 'fullTurn', degreesPerSecond: 11, clockwise: false },
-    timeline: { mode: 'together', shortenQuiet: false, quietGapMin: 45 },
+    timeline: { mode: 'together', shortenQuiet: false, quietGapS: 4.5 },
     cavers: { ...DEFAULT_MOVIE_SETTINGS.cavers, labels: 'initials', labelPlate: false, showOut: false, trails: true },
     view: { ...DEFAULT_MOVIE_SETTINGS.view, HUD: true, grid: true, stationLabels: true, direction: 'plan' },
     captions: { ...DEFAULT_MOVIE_SETTINGS.captions, title: false, titleText: 'Ours', clock: false, note: true },

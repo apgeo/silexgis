@@ -83,16 +83,33 @@ nu trebuie să îi arate.
   păstrată nicăieri: închideți dialogul, sau debifați tura și bifați-o din nou, și toată lumea
   este înapoi.
 
-Cu mai multe ture, **Mai multe ture** (sub *Mișcare*) decide cum împart ele filmul:
+Când sunt bifate mai multe ture, **Mai multe ture** apare sub lista turelor și decide cum împart
+ele filmul:
 
 | Alegere | Ce obțineți | Ceasul arată |
 |---|---|---|
 | **Pe același calendar** | Turele se redau în ordinea reală a timpului, una după alta sau suprapuse, așa cum au fost | Data și ora |
 | **Una lângă alta** | Toate turele pornesc în același moment, pentru comparație | *Timp scurs*, în ore și minute — sau în minute și secunde când întregul film acoperă mai puțin de o oră |
 
-**Scurtează perioadele liniștite** scurtează orice perioadă mai lungă decât lungimea pe care o
-stabiliți (30 de minute la început) în care nicio tură aleasă nu raportează nimic, astfel încât
-o noapte între două zile să nu ocupe jumătate din film. Ceasul arată saltul.
+Fiecare film pornește **Pe același calendar**: *Una lângă alta* este o alegere pentru turele din
+fața dumneavoastră și nu este reținută pentru filmul următor.
+
+Pe același calendar, **echipa fiecărei ture apare pe model cât timp este în subteran** și dispare
+când iese ultimul membru — cine a ieșit în timp ce alții sunt încă înăuntru rămâne, în gri, până
+atunci. Un film cu o singură tură se încheie în continuare cu echipa acolo unde a ieșit.
+
+**O tură consemnată ulterior se redă pe durata rapoartelor ei.** Când urmărirea unei ture a fost
+pornită după primul ei raport sau închisă la mai mult de șase ore după ultimul — un jurnal
+introdus de pe hârtie a doua zi, ori jurnalul unei expediții importat după câteva săptămâni —
+filmul redă tura pe intervalul acoperit de rapoarte, nu până în momentul închiderii urmăririi.
+
+**Scurtează perioadele liniștite** sare înainte acolo unde nicio tură aleasă nu raportează nimic:
+imaginea nu stă nemișcată mai mult decât așteptarea stabilită (o secundă la început) și nu redă
+niciodată mai mult de o jumătate de oră din timpul turelor fără să se întâmple nimic — astfel încât
+o noapte între două zile, sau zilele dintre două ture, să nu ocupe filmul. Ceasul arată saltul. Un
+film cu multe ture trebuie totuși să-și împartă lungimea între ele: turele unei luni în douăzeci
+de secunde dau fiecărei ture mult sub o secundă, așa că dați unui asemenea film o **Durată (secunde)** mai
+mare.
 
 ---
 

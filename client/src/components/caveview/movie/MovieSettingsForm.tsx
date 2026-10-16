@@ -83,6 +83,8 @@ export interface MovieSettingsFormProps {
   autoTitle: string;
   /** The trip picker, shown as the first group. */
   trips: ReactNode;
+  /** Whether more than one trip is chosen, which is when how they share the clock is asked. */
+  severalTrips: boolean;
   /**
    * Turns the preview to the starting view again, after the reader turned or zoomed it away; null
    * until there is a preview to turn.
@@ -200,6 +202,7 @@ export default function MovieSettingsForm({
   autoTitle,
   photographs,
   trips,
+  severalTrips,
   summary,
   onViewAgain,
   onPreset,
@@ -448,22 +451,6 @@ export default function MovieSettingsForm({
           aria-label={t('caveview.movie.transition')}
         />
       </Row>
-      <Row label={t('caveview.movie.timelineMode')} help={t(`caveview.movie.timelineHelp.${timeline.mode}`)}>
-        <Radio.Group
-          value={timeline.mode}
-          onChange={(event) =>
-            patch('timeline', {
-              mode: event.target.value as 'calendar' | 'together',
-            })
-          }
-          data-testid="movie-timeline"
-          aria-label={t('caveview.movie.timelineMode')}
-          options={(['calendar', 'together'] as const).map((mode) => ({
-            value: mode,
-            label: t(`caveview.movie.timelineModes.${mode}`),
-          }))}
-        />
-      </Row>
       {/* In either order of play: side by side, a stretch in which none of the trips reports
           anything is as empty as it is in calendar order, and is cut short the same way. */}
       <Row label={t('caveview.movie.shortenQuiet')} help={t('caveview.movie.shortenQuietHelp')}>
@@ -475,17 +462,45 @@ export default function MovieSettingsForm({
             aria-label={t('caveview.movie.shortenQuiet')}
           />
           <InputNumber
-            min={1}
-            max={1440}
+            min={0.2}
+            max={30}
+            step={0.5}
             disabled={disabled || !timeline.shortenQuiet}
-            value={timeline.quietGapMin}
-            suffix={t('caveview.movie.minutes')}
-            onChange={(value) => value !== null && patch('timeline', { quietGapMin: value })}
+            value={timeline.quietGapS}
+            suffix={t('caveview.movie.secondsShort')}
+            onChange={(value) => value !== null && patch('timeline', { quietGapS: value })}
             aria-label={t('caveview.movie.quietGap')}
             data-testid="movie-quiet-gap"
           />
         </Flex>
       </Row>
+    </Flex>
+  );
+
+  // Under the trips, and only once there are several: it is a question about the trips chosen, and
+  // asked from a group that opens folded it went unseen while it decided what every movie of
+  // several trips looked like.
+  const tripSettings = (
+    <Flex vertical gap="middle">
+      {trips}
+      {severalTrips && (
+        <Row label={t('caveview.movie.timelineMode')} help={t(`caveview.movie.timelineHelp.${timeline.mode}`)}>
+          <Radio.Group
+            value={timeline.mode}
+            onChange={(event) =>
+              patch('timeline', {
+                mode: event.target.value as 'calendar' | 'together',
+              })
+            }
+            data-testid="movie-timeline"
+            aria-label={t('caveview.movie.timelineMode')}
+            options={(['calendar', 'together'] as const).map((mode) => ({
+              value: mode,
+              label: t(`caveview.movie.timelineModes.${mode}`),
+            }))}
+          />
+        </Row>
+      )}
     </Flex>
   );
 
@@ -916,7 +931,7 @@ export default function MovieSettingsForm({
           size="small"
           defaultActiveKey={['trips', 'output']}
           items={[
-            group('trips', trips),
+            group('trips', tripSettings),
             group('output', output),
             group('motion', motion),
             group('cavers', caverSettings),

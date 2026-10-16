@@ -79,16 +79,32 @@ unfold the trip's roster, everybody ticked, and untick the people this movie sho
 - **The choice is for this movie only.** It is not remembered with your settings and is stored
   nowhere: close the dialog, or untick the trip and tick it again, and everybody is back.
 
-With several trips, **Several trips** (under *Motion*) decides how they share the film:
+With several trips ticked, **Several trips** appears under the trip list and decides how they
+share the film:
 
 | Choice | What you get | The clock shows |
 |---|---|---|
 | **On one calendar** | The trips play in real time order, one after another or overlapping as they really did | The date and the time |
 | **Side by side** | Every trip starts at the same moment, to compare them | *Elapsed*, as hours and minutes — or minutes and seconds when the whole movie covers less than an hour |
 
-**Shorten quiet stretches** cuts short any stretch longer than the length you set (30 minutes to
-begin with) in which no chosen trip reports anything, so a night between two days does not take
-up half the film. The clock shows the jump.
+Every movie starts **On one calendar**: *Side by side* is a choice for the trips in front of you
+and is not remembered for the next movie.
+
+On one calendar, **each trip's party is on the model while it is underground** and leaves it when
+the last of it comes out — someone who came out while others are still in stays, in grey, until
+then. A movie of one trip still ends with its party standing where it came out.
+
+**A trip written up afterwards plays over its reports.** When a trip's tracking was started after
+its first report, or closed more than six hours after its last — a log entered from paper the
+next day, or an expedition's journal imported weeks later — the movie plays the trip over the
+stretch its reports cover, not up to the moment the tracking was closed.
+
+**Shorten quiet stretches** jumps ahead wherever no chosen trip reports anything: the picture
+never stands still for longer than the wait you set (a second to begin with), and never plays
+more than half an hour of the trips' time with nothing happening — so a night between two days,
+or the days between two trips, does not take up the film. The clock shows the jump. A movie of
+many trips still has to share its length among them: a month's trips in twenty seconds give each
+trip well under a second, so give such a movie a longer **Length (seconds)**.
 
 ---
 

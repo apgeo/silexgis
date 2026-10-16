@@ -976,11 +976,16 @@ describe('the tracking movie dialog', () => {
   });
 
   it('shortens quiet stretches side by side as in calendar order, and can be told not to in either', async () => {
-    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    // Three reports in the first half hour of each trip, then nothing for three and a half hours.
+    const early = [10, 20, 30].map((minutes) => Date.parse(ARMED) + minutes * 60_000);
+    const alpha = movieTrip('trip-a', 'Alpha');
+    const bravo = movieTrip('trip-b', 'Bravo');
+    reads.movie = ready({ ...alpha, span: { ...alpha.span, moments: early } }, { ...bravo, span: { ...bravo.span, moments: early } });
     recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
-    open(['trip-a']);
-    fireEvent.click(await screen.findByText('Motion'));
+    open(['trip-a', 'trip-b']);
+    // Asked under the trips, without unfolding anything, since it is about the trips chosen.
     fireEvent.click(await screen.findByText('Side by side'));
+    fireEvent.click(await screen.findByText('Motion'));
 
     // The switch that decides it is live in this mode too, since it changes the movie.
     const shorten = await screen.findByTestId('movie-shorten-quiet');
@@ -991,9 +996,9 @@ describe('the tracking movie dialog', () => {
     await waitFor(() => expect(exportButton).not.toBeDisabled());
     fireEvent.click(exportButton);
     await waitFor(() => expect(recordMovie).toHaveBeenCalledTimes(1));
-    // The trip's four hours hold no report, so the stretch is cut to the default half hour.
+    // The empty hours are cut to what the reports' ten-minute steps are given on screen.
     expect(recordMovie.mock.calls[0][0].timeline.mode).toBe('together');
-    expect(recordMovie.mock.calls[0][0].timeline.length).toBe(30 * 60_000);
+    expect(recordMovie.mock.calls[0][0].timeline.length).toBe(40 * 60_000);
     await waitFor(() => expect(exportButton).not.toBeDisabled());
 
     fireEvent.click(shorten);
@@ -1001,6 +1006,24 @@ describe('the tracking movie dialog', () => {
     fireEvent.click(exportButton);
     await waitFor(() => expect(recordMovie).toHaveBeenCalledTimes(2));
     expect(recordMovie.mock.calls[1][0].timeline.length).toBe(4 * 3_600_000);
+  });
+
+  it('asks how several trips share the clock only of several, and starts every movie on one calendar', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+    fireEvent.click(await screen.findByText('Motion'));
+    await screen.findByTestId('movie-shorten-quiet');
+    expect(screen.queryByTestId('movie-timeline')).not.toBeInTheDocument();
+    cleanup();
+
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'), movieTrip('trip-b', 'Bravo'));
+    open(['trip-a', 'trip-b']);
+    fireEvent.click(await screen.findByText('Side by side'));
+    // A setting changed afterwards writes the remembered ones: what is read below has been saved.
+    fireEvent.click(screen.getByText('Captions'));
+    fireEvent.click(await screen.findByTestId('movie-caption-note'));
+    await waitFor(() => expect(useUiPrefsStore.getState().movieSettings?.captions.note).toBe(true));
+    expect(useUiPrefsStore.getState().movieSettings?.timeline.mode).toBe('calendar');
   });
 
   it('does not carry a written title to the next movie, and names a file only by a title it shows', async () => {
@@ -2041,9 +2064,13 @@ describe('who appears in the movie', () => {
   it('paces the preview and the file by the reports of the people who appear', async () => {
     // Ana is reported at the start and the end of the trip, Bogdan alone half-way through.
     const made = tripOfTwo('trip-a', 'Alpha');
-    const MIDDLE = new Date((Date.parse(ARMED) + Date.parse(CLOSED)) / 2).toISOString();
+    const at = (minutes: number) => new Date(Date.parse(ARMED) + minutes * 60_000).toISOString();
     const [ana, bogdan] = made.trip.events;
-    const events = [ana, { ...bogdan, recordedAt: MIDDLE }, { ...ana, id: 'trip-a-event-last', recordedAt: CLOSED }];
+    const events = [
+      ana,
+      ...[10, 20, 30].map((minutes) => ({ ...bogdan, id: `trip-a-bogdan-${minutes}`, recordedAt: at(minutes) })),
+      { ...ana, id: 'trip-a-event-last', recordedAt: CLOSED },
+    ];
     const moments = events.map((event) => Date.parse(event.recordedAt));
     reads.movie = ready({ trip: { ...made.trip, events }, span: { ...made.span, moments } });
     recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
@@ -2065,9 +2092,11 @@ describe('who appears in the movie', () => {
     await waitFor(() => expect(screen.queryByTestId('movie-cancel')).not.toBeInTheDocument());
     const withoutHim = recordMovie.mock.calls[1][0].timeline;
 
-    // Quiet stretches are shortened by default: with him the clock stops around the middle of the
-    // trip, without him nothing in the file marks the moment he was reported.
-    expect(withoutHim.length).toBeLessThan(withHim.length);
+    // Quiet stretches are shortened by default, against the reports of whoever appears: with him
+    // the afternoon nobody reported in is cut to the pace of his ten-minute steps; without him
+    // nothing in the file marks his reports, and the trip is one quiet stretch cut to half an hour.
+    expect(withHim.length).toBe(40 * 60_000);
+    expect(withoutHim.length).toBe(30 * 60_000);
     // A picture is of the same movie as the file.
     const still = screen.getByTestId('movie-still');
     await waitFor(() => expect(still).not.toBeDisabled());
@@ -2318,7 +2347,7 @@ describe('the presets', () => {
     durationS: 40,
     quality: 'low',
     rotation: { ...DEFAULT_MOVIE_SETTINGS.rotation, enabled: false },
-    timeline: { ...DEFAULT_MOVIE_SETTINGS.timeline, mode: 'together' },
+    timeline: { ...DEFAULT_MOVIE_SETTINGS.timeline, shortenQuiet: false },
     cavers: { ...DEFAULT_MOVIE_SETTINGS.cavers, labels: 'initials', labelPlate: false, showOut: false },
     view: { ...DEFAULT_MOVIE_SETTINGS.view, HUD: true, grid: true, direction: 'plan' },
     captions: { ...DEFAULT_MOVIE_SETTINGS.captions, title: false, clock: false, note: true },
