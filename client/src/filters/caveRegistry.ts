@@ -96,15 +96,13 @@ function controlNodes(controls: CaveRegistryControls): FilterNode[] {
     nodes.push(contains('region', region));
   }
   if (controls.minLength !== undefined && Number.isFinite(controls.minLength)) {
-    // "At least": no operator says it directly, and "not less than" would let in every cave with
-    // no length recorded, so it is spelled as more-than or exactly.
-    const value = { type: 'number' as const, value: controls.minLength };
+    // "At least" rather than "not less than": a negation would also let in every cave with no
+    // length recorded.
     nodes.push({
-      node: 'anyOf',
-      of: [
-        { node: 'condition', field: 'surveyedLength', op: 'greaterThan', values: [value] },
-        { node: 'condition', field: 'surveyedLength', op: 'equals', values: [value] },
-      ],
+      node: 'condition',
+      field: 'surveyedLength',
+      op: 'greaterOrEqual',
+      values: [{ type: 'number', value: controls.minLength }],
     });
   }
   if (controls.tag !== undefined && controls.tag !== '') {
@@ -170,6 +168,10 @@ function recognise(node: FilterNode): CaveRegistryControls | 'kind' | null {
     const tag = singleId(node);
     return tag === undefined ? null : { tag };
   }
+  if (isCondition(node, 'surveyedLength', 'greaterOrEqual')) {
+    const length = singleNumber(node);
+    return length === undefined ? null : { minLength: length };
+  }
   if (node.node === 'anyOf' && node.of.length === 2) {
     const [first, second] = node.of;
     if (first === undefined || second === undefined) {
@@ -178,10 +180,6 @@ function recognise(node: FilterNode): CaveRegistryControls | 'kind' | null {
     if (isCondition(first, 'name', 'contains') && isCondition(second, 'otherToponyms', 'contains')) {
       const search = singleText(first);
       return search !== undefined && search === singleText(second) ? { search } : null;
-    }
-    if (isCondition(first, 'surveyedLength', 'greaterThan') && isCondition(second, 'surveyedLength', 'equals')) {
-      const length = singleNumber(first);
-      return length !== undefined && length === singleNumber(second) ? { minLength: length } : null;
     }
   }
   return null;

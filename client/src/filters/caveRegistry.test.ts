@@ -56,21 +56,10 @@ describe('the cave registry controls as one filter document', () => {
               { node: 'condition', field: 'caveTypeId', op: 'equals', values: [{ type: 'id', value: '3' }] },
               { node: 'condition', field: 'region', op: 'contains', values: [{ type: 'text', value: 'Bihor' }] },
               {
-                node: 'anyOf',
-                of: [
-                  {
-                    node: 'condition',
-                    field: 'surveyedLength',
-                    op: 'greaterThan',
-                    values: [{ type: 'number', value: 300 }],
-                  },
-                  {
-                    node: 'condition',
-                    field: 'surveyedLength',
-                    op: 'equals',
-                    values: [{ type: 'number', value: 300 }],
-                  },
-                ],
+                node: 'condition',
+                field: 'surveyedLength',
+                op: 'greaterOrEqual',
+                values: [{ type: 'number', value: 300 }],
               },
               { node: 'condition', field: 'tag', op: 'equals', values: [{ type: 'id', value: 'bats' }] },
             ],
@@ -110,6 +99,22 @@ describe('the cave registry controls as one filter document', () => {
     expect(reading.controls).toEqual({ region: 'Bihor' });
     expect(reading.extra).toEqual([odd, secondRegion]);
     expect(caveRegistryDocument(reading.controls, reading.extra)).toEqual(document);
+  });
+
+  it('show a length the box cannot say as an extra condition rather than as its own', () => {
+    // The box means "at least"; "more than" leaves out the cave exactly at the length, so reading
+    // it into the box would change the question the next time the controls wrote it out.
+    const moreThan: FilterNode = {
+      node: 'condition',
+      field: 'surveyedLength',
+      op: 'greaterThan',
+      values: [{ type: 'number', value: 300 }],
+    };
+
+    const reading = readCaveRegistry(caveRegistryDocument({}, [moreThan])!)!;
+
+    expect(reading.controls).toEqual({});
+    expect(reading.extra).toEqual([moreThan]);
   });
 
   it('read a single condition that is not in a group', () => {
