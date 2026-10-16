@@ -289,6 +289,78 @@ describe('holding and releasing the scene', () => {
 });
 
 describe('imagery layers', () => {
+  it('builds a WMS provider on the tiling its coordinate system names', async () => {
+    const session = acquire();
+    session.engine.addImageryLayer('base:1', {
+      kind: 'wms',
+      url: 'https://maps.example/wms',
+      layers: 'topo',
+      styles: '',
+      format: 'image/png',
+      version: '1.3.0',
+      transparent: false,
+      crs: 'EPSG:3857',
+      attribution: '© Agency',
+      maximumLevel: 18,
+    });
+    session.engine.addImageryLayer('overlay:2', {
+      kind: 'wms',
+      url: 'https://maps.example/wms',
+      layers: 'contours',
+      styles: 'thin',
+      format: 'image/png',
+      version: '1.1.1',
+      transparent: true,
+      crs: 'EPSG:4326',
+    });
+
+    const [mercator, geographic] = engine.engineState.serviceProviders;
+    expect(mercator).toMatchObject({
+      kind: 'wms',
+      url: 'https://maps.example/wms',
+      layers: 'topo',
+      parameters: { styles: '', format: 'image/png', transparent: false, version: '1.3.0' },
+      enablePickFeatures: false,
+      maximumLevel: 18,
+    });
+    expect(mercator.tilingScheme).toBeInstanceOf(engine.WebMercatorTilingScheme);
+    expect(mercator.credit).toEqual(new engine.Credit('© Agency', true));
+    expect(geographic.tilingScheme).toBeInstanceOf(engine.GeographicTilingScheme);
+    // A z/x/y provider was built for neither.
+    expect(engine.engineState.providers).toHaveLength(0);
+    expect(engine.engineState.widgets[0].scene.imageryLayers.layers).toHaveLength(2);
+    session.release();
+  });
+
+  it('builds a WMTS provider with the matrix set and the service’s name for each level', async () => {
+    const session = acquire();
+    session.engine.addImageryLayer('base:3', {
+      kind: 'wmts',
+      url: 'https://tiles.example/wmts/{TileMatrix}/{TileRow}/{TileCol}.png',
+      layer: 'topo',
+      matrixSet: 'google3857',
+      format: 'image/png',
+      style: 'default',
+      crs: 'EPSG:3857',
+      matrixIds: ['0', '1', '2'],
+    });
+
+    const [wmts] = engine.engineState.serviceProviders;
+    expect(wmts).toMatchObject({
+      kind: 'wmts',
+      url: 'https://tiles.example/wmts/{TileMatrix}/{TileRow}/{TileCol}.png',
+      layer: 'topo',
+      style: 'default',
+      format: 'image/png',
+      tileMatrixSetID: 'google3857',
+      tileMatrixLabels: ['0', '1', '2'],
+    });
+    expect(wmts.tilingScheme).toBeInstanceOf(engine.WebMercatorTilingScheme);
+    // No credit at all rather than an empty one, as for every kind.
+    expect(wmts.credit).toBeUndefined();
+    session.release();
+  });
+
   it('stops asking a source for tiles past its last zoom, and hides it below its first', async () => {
     const session = acquire();
     session.engine.addImageryLayer('base:1', {

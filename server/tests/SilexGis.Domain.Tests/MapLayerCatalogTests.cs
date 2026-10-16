@@ -222,4 +222,130 @@ public class MapLayerCatalogTests
         // the whole reason the restricted sources ship at all.
         Assert.False(result.Layers.Single(l => l.Name == "Restricted").Enabled);
     }
+
+    [Fact]
+    public void Reads_a_wms_entry_with_its_service_options_and_their_defaults()
+    {
+        var result = MapLayerCatalog.Read(Doc(
+            """
+            <layer name="Topo WMS" kind="wms" url="https://maps.example.gov/wms" layers="topo,contours" />
+            <layer name="Topo WMS overlay" kind="WMS" base="false" url="https://maps.example.gov/wms"
+                   layers="topo" styles="grey" format="image/jpeg" version="1.1.1" crs="epsg:4326" transparent="false" />
+            """));
+
+        Assert.Empty(result.Problems);
+        var plain = result.Layers.Single(l => l.Name == "Topo WMS");
+        Assert.Equal(MapLayerKind.Wms, plain.Kind);
+        Assert.Null(plain.Wmts);
+        // A basemap asks for an opaque picture in the map's own projection unless told otherwise.
+        Assert.Equal(new MapLayerWmsOptions("topo,contours", "", "image/png", "1.3.0", false, "EPSG:3857"), plain.Wms);
+
+        var overlay = result.Layers.Single(l => l.Name == "Topo WMS overlay");
+        Assert.Equal(new MapLayerWmsOptions("topo", "grey", "image/jpeg", "1.1.1", false, "EPSG:4326"), overlay.Wms);
+    }
+
+    [Fact]
+    public void An_overlay_service_asks_for_a_transparent_picture_unless_told_otherwise()
+    {
+        var entry = Assert.Single(MapLayerCatalog.Read(Doc(
+            """<layer name="Contours" kind="wms" base="false" url="https://maps.example.gov/wms" layers="contours" />""")).Layers);
+
+        Assert.True(entry.Wms!.Transparent);
+    }
+
+    [Fact]
+    public void Reads_a_wmts_entry_by_its_rest_template_or_its_key_value_address()
+    {
+        var result = MapLayerCatalog.Read(Doc(
+            """
+            <layer name="Tiles REST" kind="wmts"
+                   url="https://tiles.example.gov/wmts/topo/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png"
+                   layer="topo" matrixSet="google3857" maxZoom="18" />
+            <layer name="Tiles KVP" kind="wmts" url="https://tiles.example.gov/wmts"
+                   layer="topo" matrixSet="WorldCRS84Quad" crs="EPSG:4326" style="light"
+                   format="image/jpeg" matrixIdPrefix="EPSG:4326:" />
+            """));
+
+        Assert.Empty(result.Problems);
+        Assert.Equal(
+            new MapLayerWmtsOptions("topo", "google3857", "image/png", "default", "EPSG:3857", ""),
+            result.Layers.Single(l => l.Name == "Tiles REST").Wmts);
+        Assert.Equal(
+            new MapLayerWmtsOptions("topo", "WorldCRS84Quad", "image/jpeg", "light", "EPSG:4326", "EPSG:4326:"),
+            result.Layers.Single(l => l.Name == "Tiles KVP").Wmts);
+    }
+
+    [Theory]
+    [InlineData("vector")]
+    [InlineData("cog")]
+    public void A_kind_this_version_cannot_draw_is_refused_and_says_not_supported_yet(string kind)
+    {
+        var result = MapLayerCatalog.Read(Doc(
+            $$"""<layer name="Later" kind="{{kind}}" url="https://tiles.example/{z}/{x}/{y}.pbf" />"""));
+
+        Assert.Empty(result.Layers);
+        var problem = Assert.Single(result.Problems).Message;
+        Assert.Contains("'Later'", problem, StringComparison.Ordinal);
+        Assert.Contains(kind, problem, StringComparison.Ordinal);
+        Assert.Contains("not supported yet", problem, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_kind_that_names_nothing_is_refused_and_names_the_kinds_there_are()
+    {
+        var result = MapLayerCatalog.Read(Doc(
+            """<layer name="Typo" kind="wtms" url="https://tiles.example/{z}/{x}/{y}.png" />"""));
+
+        Assert.Empty(result.Layers);
+        var problem = Assert.Single(result.Problems).Message;
+        Assert.Contains("'wtms'", problem, StringComparison.Ordinal);
+        Assert.Contains("xyz, wms or wmts", problem, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("""<layer name="Bad" kind="wms" url="https://maps.example.gov/wms" />""", "no layers attribute")]
+    [InlineData("""<layer name="Bad" kind="wms" url="https://maps.example.gov/wms?x={z}" layers="a" />""", "service address alone")]
+    [InlineData("""<layer name="Bad" kind="wms" url="https://maps.example.gov/wms" layers="a" version="1.0.0" />""", "1.0.0")]
+    [InlineData("""<layer name="Bad" kind="wms" url="https://maps.example.gov/wms" layers="a" crs="EPSG:31700" />""", "EPSG:31700")]
+    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/wmts" layer="a" />""", "matrixSet")]
+    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/{TileMatrix}/{TileCol}.png" layer="a" matrixSet="m" />""", "{TileRow}")]
+    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/wmts" layer="a" matrixSet="m" crs="EPSG:2056" />""", "EPSG:2056")]
+    public void A_service_entry_that_cannot_be_drawn_is_skipped_and_says_why(string entry, string reason)
+    {
+        var result = MapLayerCatalog.Read(Doc(entry));
+
+        Assert.Empty(result.Layers);
+        Assert.Contains(reason, Assert.Single(result.Problems).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_map_service_loses_the_document_mark_and_says_so()
+    {
+        var result = MapLayerCatalog.Read(Doc(
+            """<layer name="Service" kind="wms" url="https://maps.example.gov/wms" layers="a" attribution="© Agency" inDocuments="true" />"""));
+
+        Assert.False(Assert.Single(result.Layers).InDocuments);
+        Assert.Contains("xyz tiles only", Assert.Single(result.Problems).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Service_options_are_stored_as_their_kind_and_read_back_only_as_it()
+    {
+        var entry = Assert.Single(MapLayerCatalog.Read(Doc(
+            """<layer name="Topo WMS" kind="wms" url="https://maps.example.gov/wms" layers="topo" />""")).Layers);
+
+        var stored = MapLayerOptionsJson.Write(entry);
+        Assert.NotNull(stored);
+        Assert.Equal(entry.Wms, MapLayerOptionsJson.Wms(MapLayerKind.Wms, stored));
+        // Read as another kind, the same text is no options at all — never a half-read bag.
+        Assert.Null(MapLayerOptionsJson.Wmts(MapLayerKind.Wmts, stored));
+        Assert.True(MapLayerOptionsJson.IsDrawable(MapLayerKind.Wms, stored));
+        Assert.False(MapLayerOptionsJson.IsDrawable(MapLayerKind.Wms, null));
+        Assert.False(MapLayerOptionsJson.IsDrawable(MapLayerKind.Wms, "{ not json"));
+        Assert.False(MapLayerOptionsJson.IsDrawable(MapLayerKind.Vector, null));
+        Assert.True(MapLayerOptionsJson.IsDrawable(MapLayerKind.Xyz, null));
+        // A plain tile entry stores no options.
+        Assert.Null(MapLayerOptionsJson.Write(Assert.Single(MapLayerCatalog.Read(Doc(
+            """<layer name="Plain" url="https://tile.example/{z}/{x}/{y}.png" />""")).Layers)));
+    }
 }

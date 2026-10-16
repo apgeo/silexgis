@@ -280,6 +280,34 @@ public sealed class MapBackgroundDocumentChoiceTests : IAsyncLifetime, IDisposab
         await ProblemAsync(await ChooseAsync(admin, unpublished, "on"), HttpStatusCode.NotFound, "map_layer.not_found");
     }
 
+    /// <summary>
+    /// A map service is never copied into a document: an administrator can switch one off or
+    /// leave it to the catalogue, and is refused, in words of its own, when switching it on.
+    /// </summary>
+    [Fact]
+    public async Task A_map_service_background_can_be_switched_off_and_never_on()
+    {
+        long service;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var row = Layer($"Service {suffix}", isBase: true, attribution: "© Agency", enabled: true);
+            row.LayerKind = MapLayerKind.Wms;
+            row.UrlTemplate = "https://maps.example.gov/wms";
+            row.Options = """{"layers":"topo","styles":"","format":"image/png","version":"1.3.0","transparent":false,"crs":"EPSG:3857"}""";
+            db.MapLayers.Add(row);
+            await db.SaveChangesAsync();
+            service = row.Id;
+        }
+
+        await ProblemAsync(
+            await ChooseAsync(admin, service, "on"), HttpStatusCode.Conflict, MapLayerDocumentRules.NotPlainTilesCode);
+        (await ChooseAsync(admin, service, "off")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ChooseAsync(admin, service, "default")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await BackgroundsAsync())[$"Service {suffix}"].CanBeCopied.ShouldBeFalse();
+        (await PublishedAsync())[$"Service {suffix}"].ShouldBeFalse();
+    }
+
     // ---- fixtures
 
     private sealed record Background(long Id, bool InDocuments, bool CatalogueDefault, string Choice, bool CanBeCopied);

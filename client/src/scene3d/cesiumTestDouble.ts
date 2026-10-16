@@ -66,6 +66,11 @@ export const engineState = {
   widgets: [] as CesiumWidget[],
   widgetOptions: [] as FakeWidgetOptions[],
   providers: [] as FakeImageryProviderOptions[],
+  /** The map-service providers the scene built, WMS and WMTS, in order. */
+  serviceProviders: [] as (
+    | ({ kind: 'wms' } & FakeWmsProviderOptions)
+    | ({ kind: 'wmts' } & FakeWmtsProviderOptions)
+  )[],
   /** Pointer handlers the scene built, so a test can drive a click or a move through one. */
   eventHandlers: [] as ScreenSpaceEventHandler[],
   /**
@@ -112,6 +117,7 @@ export const engineState = {
     engineState.widgets = [];
     engineState.widgetOptions = [];
     engineState.providers = [];
+    engineState.serviceProviders = [];
     engineState.eventHandlers = [];
     engineState.webgl2 = true;
     engineState.depthTexture = true;
@@ -616,6 +622,59 @@ export class UrlTemplateImageryProvider {
   }
 }
 
+/** The two tilings a map service is drawn on; the double records which one it was given. */
+export class WebMercatorTilingScheme {
+  readonly name = 'web-mercator';
+}
+
+export class GeographicTilingScheme {
+  readonly name = 'geographic';
+}
+
+export interface FakeWmsProviderOptions {
+  url: string;
+  layers: string;
+  parameters: Record<string, unknown>;
+  tilingScheme: WebMercatorTilingScheme | GeographicTilingScheme;
+  credit: Credit | string | undefined;
+  enablePickFeatures: boolean;
+  maximumLevel?: number;
+}
+
+export class WebMapServiceImageryProvider {
+  options: FakeWmsProviderOptions;
+  constructor(options: FakeWmsProviderOptions) {
+    this.options = options;
+    engineState.serviceProviders.push({ kind: 'wms', ...options });
+  }
+}
+
+export interface FakeWmtsProviderOptions {
+  url: string;
+  layer: string;
+  style: string;
+  format: string;
+  tileMatrixSetID: string;
+  tileMatrixLabels: string[];
+  tilingScheme: WebMercatorTilingScheme | GeographicTilingScheme;
+  credit: Credit | string | undefined;
+  maximumLevel?: number;
+}
+
+export class WebMapTileServiceImageryProvider {
+  options: FakeWmtsProviderOptions;
+  constructor(options: FakeWmtsProviderOptions) {
+    this.options = options;
+    engineState.serviceProviders.push({ kind: 'wmts', ...options });
+  }
+}
+
+type FakeImageryProvider =
+  | UrlTemplateImageryProvider
+  | SingleTileImageryProvider
+  | WebMapServiceImageryProvider
+  | WebMapTileServiceImageryProvider;
+
 /** One picture pinned to a rectangle of ground, as the scene asks for a georeferenced map. */
 export class SingleTileImageryProvider {
   options: Record<string, unknown>;
@@ -633,12 +692,9 @@ export interface FakeImageryLayerOptions {
 export class ImageryLayer {
   show = true;
   alpha = 1;
-  provider: UrlTemplateImageryProvider | SingleTileImageryProvider;
+  provider: FakeImageryProvider;
   options: FakeImageryLayerOptions;
-  constructor(
-    provider: UrlTemplateImageryProvider | SingleTileImageryProvider,
-    options: FakeImageryLayerOptions = {},
-  ) {
+  constructor(provider: FakeImageryProvider, options: FakeImageryLayerOptions = {}) {
     this.provider = provider;
     this.options = options;
     this.show = options.show ?? true;
@@ -651,7 +707,7 @@ type FakeImageryLayer = ImageryLayer;
 
 class FakeImageryLayerCollection {
   readonly layers: FakeImageryLayer[] = [];
-  addImageryProvider(provider: UrlTemplateImageryProvider | SingleTileImageryProvider) {
+  addImageryProvider(provider: FakeImageryProvider) {
     const layer = new FakeImageryLayer(provider);
     this.layers.push(layer);
     return layer;

@@ -498,6 +498,42 @@ it can answers nothing for the whole screen at once, and a map that goes blank w
 the application breaking. Every value in the shipped file was measured against the real servers rather than
 copied from their documentation.
 
+**Map services: WMS and WMTS.** A national mapping agency usually publishes its maps as a *Web Map
+Service* (WMS, which draws a picture for whatever area is asked) or a *Web Map Tile Service* (WMTS,
+ready-cut tiles), rather than as `{z}/{x}/{y}` tiles. Both can be listed with a `kind` attribute; the
+`url` is then the service's address, and the service is described by a few more attributes:
+
+```xml
+<layer name="National topo (WMS)"
+       kind="wms"
+       url="https://maps.example.gov/wms"
+       layers="topo"
+       attribution="© National Mapping Agency" />
+
+<layer name="National topo (WMTS)"
+       kind="wmts"
+       url="https://maps.example.gov/wmts"
+       layer="topo"
+       matrixSet="GoogleMapsCompatible"
+       attribution="© National Mapping Agency"
+       maxZoom="18" />
+```
+
+For `wms`: `layers` (required, comma-separated as the service's capabilities name them), `styles`
+(default: each layer's own), `format` (`image/png`), `version` (`1.3.0`, or `1.1.1`), `transparent`
+(`true` for an overlay, `false` for a background, unless you say otherwise) and `crs` (`EPSG:3857`, the
+map's own; `EPSG:4326` for a service that offers nothing else). For `wmts`: `layer` and `matrixSet`
+(both required, exactly as the service names them), `format` (`image/png`), `style` (`default`), `crs` —
+`EPSG:3857` for a web-mercator matrix set, `EPSG:4326` for a two-tile longitude/latitude one; those are
+the two grids the map and the 3D view can draw — and `matrixIdPrefix` when the service names its levels
+`EPSG:3857:0`, `EPSG:3857:1`… rather than `0`, `1`…. A WMTS `url` may also be the service's REST
+template, naming `{TileMatrix}`, `{TileRow}` and `{TileCol}`. The grid is named rather than read from the
+service's capabilities document on purpose: the 3D view reads no capabilities, so a background that
+depended on them would draw in one view and not the other. The shipped file ends with one switched-off
+example of each. Any other `kind` (`vector`, `cog`, or a typo) is reported at startup and not offered —
+those kinds are not drawn by this version. A map service is never copied into a trip's write-up, whatever
+its entry says; the write-up's map is drawn from `{z}/{x}/{y}` tiles only.
+
 **Backgrounds that need an account.** Some services — Thunderforest, Stadia Maps, MapTiler, Mapbox — need a
 key you register for. The catalogue names the key, and you supply its value:
 

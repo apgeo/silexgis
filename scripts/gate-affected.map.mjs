@@ -178,6 +178,8 @@ export const groups = {
     'PersistenceTests', 'TerrainOptionsTests',
     // Which protected rows a caller's window holds, decided on the position they are shown.
     'MapWindowMembershipTests', 'MapClusterConfigurationTests', 'HiddenRowCapTests',
+    // The catalogue's kinds as the seeder stores them and the layer list publishes them.
+    'MapLayerKindTests',
   ],
   mapViews: ['MapViewTests'],
   // The one statement deciding which protected rows a caller's window holds, on the position

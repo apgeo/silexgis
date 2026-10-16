@@ -13,7 +13,13 @@
 
   ATTRIBUTES
     name          Required. The catalogue key, and what the layer selector shows.
-    url           Required. XYZ template with {z}/{x}/{y}. Some services order it {z}/{y}/{x}.
+    kind          xyz (default), wms or wmts — how the source is asked for its pictures. Any
+                  other value is reported at startup and the entry is not offered: vector tiles
+                  and cloud-optimised GeoTIFFs have names here and nothing that draws them yet.
+    url           Required. For xyz, a template with {z}/{x}/{y} (some services order it
+                  {z}/{y}/{x}). For wms, the service's address alone — the map adds the request.
+                  For wmts, the service's key-value address, or its REST template naming
+                  {TileMatrix}, {TileRow} and {TileCol}.
     group         Heading to list it under. Groups collapse in the panel; ungrouped entries sit
                   at the top, always open.
     attribution   Credit shown on the map. Most of these sources REQUIRE it — it is not a nicety.
@@ -31,6 +37,28 @@
                   rather than published with the placeholder still in it — a url like that answers
                   401 for every tile, which on screen is indistinguishable from a source that is
                   simply down.
+    WMS ONLY
+    layers        Required. The service's layer names, comma-separated, as its capabilities list them.
+    styles        One style per layer, comma-separated; empty (default) for each layer's own.
+    format        image/png (default) or image/jpeg — whatever the service offers.
+    version       1.3.0 (default) or 1.1.1.
+    transparent   true for an overlay and false for a basemap unless you say otherwise.
+    crs           EPSG:3857 (default, the map's own, every tile lines up exactly) or EPSG:4326.
+    WMTS ONLY
+    layer         Required. The service's layer identifier.
+    matrixSet     Required. The tile matrix set identifier, exactly as the service names it.
+    crs           EPSG:3857 (default) for a web-mercator matrix set (GoogleMapsCompatible and its
+                  look-alikes), EPSG:4326 for a two-tile longitude/latitude one (WorldCRS84Quad).
+                  Those are the two grids the map and the 3D view can draw. The grid is named here
+                  rather than read from the service's capabilities on purpose: the 3D view reads no
+                  capabilities, so a source that depended on them would draw in one view only.
+    format        image/png (default).
+    style         default (default).
+    matrixIdPrefix  What the service puts before the level in each matrix id: empty (default) for
+                  0, 1, 2…, or e.g. EPSG:3857: for EPSG:3857:0, EPSG:3857:1….
+    maxZoom       For wmts, the deepest level of the matrix set — the grid is built up to it.
+    A wms or wmts source is never copied into a document, whatever inDocuments says: the
+    document's map is drawn from xyz tiles only (see inDocuments below).
     inDocuments   true lets a basemap be drawn into a document this application writes: the map
                   in a trip's write-up. Default false, and deliberately. Showing a tile on a
                   screen and putting it into a file that is then mailed and printed are different
@@ -376,4 +404,36 @@
          attribution="Map data © Google"
          maxZoom="20" />
 
+
+  <!-- ======================= Map services: WMS and WMTS ======================= -->
+  <!--
+    One example of each, SWITCHED OFF, so that the syntax is in front of you when you add your own
+    national or regional service. Both are public and need no key; both cover only their own
+    country, which is why they are not switched on here. Turn one on with enabled="true".
+      - swisstopo's national map as a WMS. Swiss federal geodata are free to use under the
+        "free geodata" (OGD) terms with the source named: "© swisstopo".
+      - basemap.at, Austria's administrative basemap, as WMTS tiles through its REST template.
+        Licensed CC BY 4.0, credited "Grundkarte: basemap.at".
+    Neither may be copied into a document: a map service never is.
+  -->
+  <layer name="swisstopo national map (WMS)"
+         group="Map services"
+         kind="wms"
+         url="https://wms.geo.admin.ch/"
+         layers="ch.swisstopo.pixelkarte-farbe"
+         format="image/png"
+         attribution="© swisstopo"
+         enabled="false"
+         maxZoom="19" />
+
+  <layer name="basemap.at (WMTS)"
+         group="Map services"
+         kind="wmts"
+         url="https://mapsneu.wien.gv.at/basemap/geolandbasemap/normal/google3857/{TileMatrix}/{TileRow}/{TileCol}.png"
+         layer="geolandbasemap"
+         matrixSet="google3857"
+         format="image/png"
+         attribution="Grundkarte: basemap.at"
+         enabled="false"
+         maxZoom="19" />
 </silexgis-map-layers>

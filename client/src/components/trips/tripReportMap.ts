@@ -116,6 +116,9 @@ export function documentBasemap(catalog: readonly MapLayerInfo[] | undefined): M
       (layer) =>
         layer.inDocuments === true &&
         layer.isBase &&
+        // Plain tiles only. Whether a WMS or WMTS service's terms let its pictures into a
+        // circulated file is a separate question nobody has answered for one, so the server never
+        // marks a map service for documents and this never draws one even if it were marked.
         layer.layerKind === 'xyz' &&
         // The credit is what the source's terms ask for beside the picture. The catalogue
         // already refuses to mark a source without one; a row that reached here without it is

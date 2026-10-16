@@ -1,8 +1,111 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type Map from 'ol/Map';
+import { getTopLeft, getWidth, type Extent } from 'ol/extent';
 import TileLayer from 'ol/layer/Tile';
+import { get as getProjection } from 'ol/proj';
+import type TileSource from 'ol/source/Tile';
+import TileWMS from 'ol/source/TileWMS';
+import WMTS from 'ol/source/WMTS';
 import XYZ from 'ol/source/XYZ';
+import WMTSTileGrid from 'ol/tilegrid/WMTS';
 import type { MapLayerInfo } from '../api/hooks.ts';
+
+/**
+ * What a source needs in order to be drawn: a catalogue entry, or the background a shared view
+ * was saved with — the same fields, so both are drawn by the same code.
+ */
+export type DrawableLayer = Pick<
+  MapLayerInfo,
+  'layerKind' | 'urlTemplate' | 'wms' | 'wmts' | 'attribution' | 'minZoom' | 'maxZoom'
+>;
+
+/**
+ * Whether this client can draw the entry: tiles on a z/x/y template, or a map service carrying
+ * the options its kind needs. The server publishes nothing else, and this keeps a list from
+ * offering a radio button or a switch that would draw nothing if it ever did.
+ */
+export function isDrawable(entry: DrawableLayer): boolean {
+  switch (entry.layerKind) {
+    case 'xyz':
+      return true;
+    case 'wms':
+      return Boolean(entry.wms);
+    case 'wmts':
+      return Boolean(entry.wmts);
+    default:
+      return false;
+  }
+}
+
+/**
+ * The tile matrix identifiers of a WMTS grid from level 0 to `maxZoom`, as the service spells
+ * them: the level number, after whatever the service puts before it.
+ */
+export function wmtsMatrixIds(prefix: string, maxZoom: number): string[] {
+  return Array.from({ length: maxZoom + 1 }, (_, level) => `${prefix}${level}`);
+}
+
+/**
+ * The tile grid of a WMTS matrix set on one of the two well-known grids. Web mercator starts with
+ * one tile covering the world; plain longitude and latitude with two, side by side.
+ */
+function wmtsTileGrid(crs: string, maxZoom: number, matrixIdPrefix: string): WMTSTileGrid {
+  const geographic = crs === 'EPSG:4326';
+  const extent: Extent = geographic ? [-180, -90, 180, 90] : getProjection('EPSG:3857')!.getExtent();
+  const levelZero = geographic ? 180 / 256 : getWidth(extent) / 256;
+  return new WMTSTileGrid({
+    extent,
+    origin: getTopLeft(extent),
+    resolutions: Array.from({ length: maxZoom + 1 }, (_, level) => levelZero / 2 ** level),
+    matrixIds: wmtsMatrixIds(matrixIdPrefix, maxZoom),
+  });
+}
+
+/**
+ * The OpenLayers source for an entry, by its kind.
+ *
+ * A Web Map Service is asked for one picture per tile, so it has no last zoom to respect and is
+ * drawn at whatever resolution the view needs. A Web Map Tile Service has ready-cut levels; its
+ * grid is built from the coordinate system the catalogue names, up to the entry's last zoom, past
+ * which the last level is stretched — the same blur-rather-than-blank an XYZ source gets.
+ */
+export function tileSourceFor(entry: DrawableLayer): TileSource {
+  const { max } = zoomBand(entry);
+  const attributions = entry.attribution ?? undefined;
+  if (entry.layerKind === 'wms' && entry.wms) {
+    const wms = entry.wms;
+    return new TileWMS({
+      url: entry.urlTemplate,
+      params: {
+        LAYERS: wms.layers,
+        STYLES: wms.styles,
+        FORMAT: wms.format,
+        VERSION: wms.version,
+        TRANSPARENT: wms.transparent ? 'TRUE' : 'FALSE',
+      },
+      projection: wms.crs,
+      attributions,
+    });
+  }
+  if (entry.layerKind === 'wmts' && entry.wmts) {
+    const wmts = entry.wmts;
+    return new WMTS({
+      url: entry.urlTemplate,
+      layer: wmts.layer,
+      matrixSet: wmts.matrixSet,
+      format: wmts.format,
+      style: wmts.style,
+      projection: wmts.crs,
+      tileGrid: wmtsTileGrid(wmts.crs, max, wmts.matrixIdPrefix),
+      // A url naming the tile matrix is the service's REST template; anything else is its
+      // key-value endpoint.
+      requestEncoding: entry.urlTemplate.includes('{TileMatrix}') ? 'REST' : 'KVP',
+      attributions,
+      wrapX: true,
+    });
+  }
+  return new XYZ({ url: entry.urlTemplate, attributions, maxZoom: max });
+}
 
 const BASE_ID_PROP = 'silexgis:baseLayerId';
 const TILE_OVERLAY_ID_PROP = 'silexgis:tileOverlayId';
@@ -35,7 +138,7 @@ const TILE_OVERLAY_Z = 0.5;
  * The 3D scene reads the same band from here, so the two views can never disagree about where a
  * source stops.
  */
-export function zoomBand(entry: MapLayerInfo): { min: number; max: number } {
+export function zoomBand(entry: Pick<DrawableLayer, 'minZoom' | 'maxZoom'>): { min: number; max: number } {
   const min = entry.minZoom ?? 0;
   // A catalogue row that predates the zoom columns, or one an operator left at zero, would
   // otherwise be a source that draws at zoom 0 and nowhere else — invisible, with the reason
@@ -44,21 +147,17 @@ export function zoomBand(entry: MapLayerInfo): { min: number; max: number } {
   return { min, max };
 }
 
-function tileLayerFor(entry: MapLayerInfo, zIndex: number): TileLayer {
-  const { min, max } = zoomBand(entry);
+export function tileLayerFor(entry: DrawableLayer, zIndex: number): TileLayer {
+  const { min } = zoomBand(entry);
   return new TileLayer({
-    source: new XYZ({
-      url: entry.urlTemplate,
-      attributions: entry.attribution ?? undefined,
-      maxZoom: max,
-    }),
+    source: tileSourceFor(entry),
     minZoom: min,
     visible: false,
     zIndex,
   });
 }
 
-/** Creates/refreshes base tile layers from the server catalog (only XYZ for now). */
+/** Creates/refreshes base tile layers from the server catalog: every kind this client can draw. */
 export function syncBaseLayers(map: Map, catalog: MapLayerInfo[], activeId: number): void {
   const existing = new Set(
     map
@@ -71,7 +170,7 @@ export function syncBaseLayers(map: Map, catalog: MapLayerInfo[], activeId: numb
   for (const entry of catalog) {
     // int64 ids arrive as number | string from the generated contract — normalize once here.
     const entryId = Number(entry.id);
-    if (entry.layerKind !== 'xyz' || !entry.isBase || existing.has(entryId)) {
+    if (!isDrawable(entry) || !entry.isBase || existing.has(entryId)) {
       continue;
     }
     const layer = tileLayerFor(entry, 0);
@@ -110,7 +209,7 @@ export function syncTileOverlays(
 
   for (const entry of catalog) {
     const entryId = Number(entry.id);
-    if (entry.layerKind !== 'xyz' || entry.isBase) {
+    if (!isDrawable(entry) || entry.isBase) {
       continue;
     }
 

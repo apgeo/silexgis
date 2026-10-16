@@ -9,6 +9,7 @@ import {
   ENTRANCE_SOURCE_ID,
   type CaveData3DLayer,
 } from '../../scene3d/caveData3d.ts';
+import { isDrawable } from '../../map/baseLayers.ts';
 import { CENTERLINE_DEPTH_BANDS } from '../../scene3d/centerlines3d.ts';
 import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
 import type { Scene3DSurfaceMode, Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
@@ -241,8 +242,9 @@ export default function Scene3DLayerPanel({
     : terrainBuilds.find((build) => build.isDrawn)?.id;
   const terrainEntry = terrainChoice ?? defaultTerrainEntry;
 
-  const baseLayers = layers.filter((layer) => layer.isBase);
-  const tileOverlays = layers.filter((layer) => !layer.isBase && layer.layerKind === 'xyz');
+  // Every kind the scene can drape, and nothing it cannot — the same rule as the flat map's panel.
+  const baseLayers = layers.filter((layer) => layer.isBase && isDrawable(layer));
+  const tileOverlays = layers.filter((layer) => !layer.isBase && isDrawable(layer));
   // Only rasters that finished converting have anything to drape. The others are shown in the
   // georeferenced-maps screen with their status; offering them here would be offering a switch
   // that does nothing and says nothing about why.

@@ -48,7 +48,19 @@ public class ShippedMapLayerCatalogTests
         foreach (var layer in Shipped().Layers)
         {
             Assert.False(string.IsNullOrWhiteSpace(layer.Name));
-            foreach (var token in new[] { "{z}", "{x}", "{y}" })
+
+            // A map service is addressed by its options rather than by placeholders in its url;
+            // the reader has already refused one missing what its kind needs.
+            var tokens = layer.Kind switch
+            {
+                MapLayerKind.Xyz => new[] { "{z}", "{x}", "{y}" },
+                MapLayerKind.Wmts when layer.UrlTemplate.Contains("{TileMatrix}", StringComparison.Ordinal) =>
+                    ["{TileMatrix}", "{TileRow}", "{TileCol}"],
+                _ => [],
+            };
+            Assert.True(layer.Kind == MapLayerKind.Xyz || layer.Wms is not null || layer.Wmts is not null,
+                $"{layer.Name}: a {layer.Kind} entry with no options draws nothing");
+            foreach (var token in tokens)
             {
                 Assert.True(
                     layer.UrlTemplate.Contains(token, StringComparison.Ordinal),
@@ -136,6 +148,20 @@ public class ShippedMapLayerCatalogTests
     /// The checkout both halves of the application sit in, found by walking up from the test
     /// assembly rather than assumed, so the path holds wherever the build output lands.
     /// </summary>
+    [Fact]
+    public void The_shipped_map_service_examples_are_one_of_each_and_switched_off()
+    {
+        var services = Shipped().Layers.Where(l => l.Kind != MapLayerKind.Xyz).ToList();
+
+        // An example the operator reads, not a source switched on for them: each covers one
+        // country, and switching one on is a decision about their own installation.
+        Assert.Single(services, l => l.Kind == MapLayerKind.Wms);
+        Assert.Single(services, l => l.Kind == MapLayerKind.Wmts);
+        Assert.All(services, l => Assert.False(l.Enabled, $"{l.Name} ships switched on"));
+        Assert.All(services, l => Assert.False(l.InDocuments, $"{l.Name} may be copied into a document"));
+        Assert.All(services, l => Assert.Null(l.ApiKeyName));
+    }
+
     private static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

@@ -34,6 +34,13 @@ public enum MapLayerDocumentObstacle
     /// wrote down cannot be put there.
     /// </summary>
     NoAttribution,
+
+    /// <summary>
+    /// The source is a map service rather than plain z/x/y tiles. A document's picture is drawn
+    /// from tiles only, and whether a service's terms allow its pictures into a circulated file is
+    /// a separate question nobody has answered for one yet.
+    /// </summary>
+    NotPlainTiles,
 }
 
 /// <summary>
@@ -63,15 +70,23 @@ public static class MapLayerDocumentRules
     /// <summary>Refusal: the source has no credit to write under a picture.</summary>
     public const string AttributionRequiredCode = "map_layer.attribution_required";
 
+    /// <summary>Refusal: the source is a map service, and a document's picture is drawn from tiles.</summary>
+    public const string NotPlainTilesCode = "map_layer.not_plain_tiles";
+
     /// <summary>
     /// What stands in the way of marking a source as one a document may copy, or null when
     /// nothing does.
     /// </summary>
-    public static MapLayerDocumentObstacle? ObstacleTo(bool isBase, string? attribution)
+    public static MapLayerDocumentObstacle? ObstacleTo(bool isBase, string? attribution, MapLayerKind kind)
     {
         if (!isBase)
         {
             return MapLayerDocumentObstacle.NotABackground;
+        }
+
+        if (kind != MapLayerKind.Xyz)
+        {
+            return MapLayerDocumentObstacle.NotPlainTiles;
         }
 
         return string.IsNullOrWhiteSpace(attribution) ? MapLayerDocumentObstacle.NoAttribution : null;
@@ -79,9 +94,10 @@ public static class MapLayerDocumentRules
 
     /// <summary>
     /// Whether a document may copy the source: the administrator's answer where they gave one,
-    /// the catalogue's otherwise.
+    /// the catalogue's otherwise — and never for a map service, whatever either said.
     /// </summary>
-    public static bool Effective(bool catalogue, bool? administrator) => administrator ?? catalogue;
+    public static bool Effective(bool catalogue, bool? administrator, MapLayerKind kind) =>
+        kind == MapLayerKind.Xyz && (administrator ?? catalogue);
 
     /// <summary>The stored form of a choice: null while the catalogue is followed.</summary>
     public static bool? Stored(MapLayerDocumentChoice choice) => choice switch

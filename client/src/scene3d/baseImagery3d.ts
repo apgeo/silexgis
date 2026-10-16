@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { MapLayerInfo } from '../api/hooks.ts';
-import { zoomBand } from '../map/baseLayers.ts';
-import type { Scene3DImagery } from './scene3dEngine.ts';
+import { isDrawable, wmtsMatrixIds, zoomBand, type DrawableLayer } from '../map/baseLayers.ts';
+import type { Scene3DImagery, Scene3DImageryOptions, Scene3DServiceCrs } from './scene3dEngine.ts';
 
 // Basemaps for the 3D scene come from the same server-side layer catalog the 2D map reads, so an
 // administrator configures one list and both views follow it. Takes the scene as an argument
@@ -28,12 +28,50 @@ export function tileOverlayImageryLayerId(catalogId: number): string {
 }
 
 /**
+ * What the scene is handed for one catalogue entry, by its kind: a z/x/y template, or a map
+ * service with the options the catalogue gave it. The flat map draws the same entry from the same
+ * fields, so the two views ask a service for the same pictures.
+ */
+export function imageryOptionsFor(entry: DrawableLayer): Scene3DImageryOptions {
+  const common = { attribution: entry.attribution ?? undefined, visible: false, ...levelsOf(entry) };
+  if (entry.layerKind === 'wms' && entry.wms) {
+    const wms = entry.wms;
+    return {
+      kind: 'wms',
+      url: entry.urlTemplate,
+      layers: wms.layers,
+      styles: wms.styles,
+      format: wms.format,
+      version: wms.version,
+      transparent: wms.transparent,
+      crs: wms.crs as Scene3DServiceCrs,
+      ...common,
+    };
+  }
+  if (entry.layerKind === 'wmts' && entry.wmts) {
+    const wmts = entry.wmts;
+    return {
+      kind: 'wmts',
+      url: entry.urlTemplate,
+      layer: wmts.layer,
+      matrixSet: wmts.matrixSet,
+      format: wmts.format,
+      style: wmts.style,
+      crs: wmts.crs as Scene3DServiceCrs,
+      matrixIds: wmtsMatrixIds(wmts.matrixIdPrefix, zoomBand(entry).max),
+      ...common,
+    };
+  }
+  return { urlTemplate: entry.urlTemplate, ...common };
+}
+
+/**
  * Creates any missing base layers from the catalog and leaves `activeId` as the visible one.
  *
- * Only tiled `xyz` entries are used, matching what the 2D map implements; the other kinds the
- * catalog can describe have no client-side implementation anywhere yet and are skipped rather
- * than half-rendered. Every base layer is created up front and only its visibility changes, so
- * switching basemap is instant and each keeps whatever opacity it was given.
+ * Every kind the 2D map draws is draped here too — z/x/y tiles, WMS and WMTS — and anything else
+ * is skipped rather than half-rendered. Every base layer is created up front and only its
+ * visibility changes, so switching basemap is instant and each keeps whatever opacity it was
+ * given.
  */
 export function syncBaseImagery(
   engine: Scene3DImagery,
@@ -43,15 +81,10 @@ export function syncBaseImagery(
   for (const entry of catalog) {
     // int64 ids arrive as number | string from the generated contract — normalize once here.
     const layerId = baseImageryLayerId(Number(entry.id));
-    if (entry.layerKind !== 'xyz' || !entry.isBase || engine.hasImageryLayer(layerId)) {
+    if (!isDrawable(entry) || !entry.isBase || engine.hasImageryLayer(layerId)) {
       continue;
     }
-    engine.addImageryLayer(layerId, {
-      urlTemplate: entry.urlTemplate,
-      attribution: entry.attribution ?? undefined,
-      visible: false,
-      ...levelsOf(entry),
-    });
+    engine.addImageryLayer(layerId, imageryOptionsFor(entry));
   }
   setActiveBaseImagery(engine, activeId);
 }
@@ -72,17 +105,12 @@ export function syncTileOverlayImagery(
 ): void {
   for (const entry of catalog) {
     const catalogId = Number(entry.id);
-    if (entry.layerKind !== 'xyz' || entry.isBase) {
+    if (!isDrawable(entry) || entry.isBase) {
       continue;
     }
     const layerId = tileOverlayImageryLayerId(catalogId);
     if (!engine.hasImageryLayer(layerId)) {
-      engine.addImageryLayer(layerId, {
-        urlTemplate: entry.urlTemplate,
-        attribution: entry.attribution ?? undefined,
-        visible: false,
-        ...levelsOf(entry),
-      });
+      engine.addImageryLayer(layerId, imageryOptionsFor(entry));
     }
     engine.setImageryLayerVisible(layerId, visibleIds.has(catalogId));
     engine.setImageryLayerOpacity(layerId, opacityById[catalogId] ?? 1);
@@ -95,7 +123,7 @@ export function syncTileOverlayImagery(
  * two shipped imagery sources stop at 16 and 17 and went blank in 3D past them, and a street map
  * stopping at 19 answered every closer request with a refusal the console recorded by the hundred.
  */
-function levelsOf(entry: MapLayerInfo): { minimumLevel: number; maximumLevel: number } {
+function levelsOf(entry: DrawableLayer): { minimumLevel: number; maximumLevel: number } {
   const { min, max } = zoomBand(entry);
   return { minimumLevel: min, maximumLevel: max };
 }

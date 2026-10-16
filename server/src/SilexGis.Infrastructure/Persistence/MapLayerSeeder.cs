@@ -92,7 +92,8 @@ public static class MapLayerSeeder
         // The template is kept when the key is missing, so that setting the key and restarting is
         // all it takes. Publishing is what the Enabled flag above withholds.
         row.UrlTemplate = url ?? entry.UrlTemplate;
-        row.LayerKind = MapLayerKind.Xyz;
+        row.LayerKind = entry.Kind;
+        row.Options = MapLayerOptionsJson.Write(entry);
         row.Attribution = entry.Attribution;
         row.GroupName = entry.GroupName;
         row.ApiKeyName = entry.ApiKeyName;

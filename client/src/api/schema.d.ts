@@ -10833,7 +10833,8 @@ export interface components {
             name: string;
             layerKind: components["schemas"]["MapLayerKind"];
             urlTemplate: string;
-            options: null | string;
+            wms: null | components["schemas"]["MapLayerWmsOptions"];
+            wmts: null | components["schemas"]["MapLayerWmtsOptions"];
             attribution: null | string;
             groupName: null | string;
             /** Format: int32 */
@@ -10848,6 +10849,22 @@ export interface components {
         };
         /** @enum {unknown} */
         MapLayerKind: "xyz" | "wmts" | "wms" | "vector" | "cog";
+        MapLayerWmsOptions: {
+            layers: string;
+            styles: string;
+            format: string;
+            version: string;
+            transparent: boolean;
+            crs: string;
+        };
+        MapLayerWmtsOptions: {
+            layer: string;
+            matrixSet: string;
+            format: string;
+            style: string;
+            crs: string;
+            matrixIdPrefix: string;
+        };
         MapViewDto: {
             /** Format: uuid */
             id: string;

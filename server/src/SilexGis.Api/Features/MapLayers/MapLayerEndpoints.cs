@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
+using SilexGis.Domain.Map;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.MapLayers;
@@ -25,8 +27,16 @@ namespace SilexGis.Api.Features.MapLayers;
 /// source that says yes; this is that answer, published, and never a guess made from the
 /// address.
 /// </param>
+/// <param name="UrlTemplate">
+/// For <c>xyz</c> a z/x/y tile template; for <c>wms</c> the service address the map adds its
+/// requests to; for <c>wmts</c> either the service's key-value address or its REST template naming
+/// <c>{TileMatrix}</c>, <c>{TileRow}</c> and <c>{TileCol}</c>.
+/// </param>
+/// <param name="Wms">How to ask a <c>wms</c> layer for pictures; null for every other kind.</param>
+/// <param name="Wmts">Which tiles of a <c>wmts</c> layer to fetch; null for every other kind.</param>
 public sealed record MapLayerDto(
-    long Id, string Name, MapLayerKind LayerKind, string UrlTemplate, string? Options,
+    long Id, string Name, MapLayerKind LayerKind, string UrlTemplate,
+    MapLayerWmsOptions? Wms, MapLayerWmtsOptions? Wmts,
     string? Attribution, string? GroupName, int MinZoom, int MaxZoom,
     bool IsBase, bool IsDefault, int SortOrder, bool InDocuments);
 
@@ -61,16 +71,29 @@ public static class MapLayerEndpoints
             return ApiProblems.Forbidden();
         }
 
-        return TypedResults.Ok(await db.MapLayers.AsNoTracking()
+        var rows = await db.MapLayers.AsNoTracking()
             .Where(l => l.Enabled)
             .OrderBy(l => l.SortOrder)
-            .Select(l => new MapLayerDto(
-                l.Id, l.Name, l.LayerKind, l.UrlTemplate, l.Options,
-                l.Attribution, l.GroupName, l.MinZoom, l.MaxZoom,
-                l.IsBase, l.IsDefault, l.SortOrder,
-                // The administrator's answer where there is one, the catalogue's otherwise —
-                // spelt out here because it is evaluated in the database.
-                l.InDocumentsChoice ?? l.InDocuments))
-            .ToListAsync(ct));
+            .ToListAsync(ct);
+
+        // Only what a map can draw is published: a kind this version has nothing for, or a
+        // service layer whose stored options do not read back, would be a radio button or a
+        // switch that draws nothing. The catalogue reports such entries when it is read; a row
+        // put into the table some other way is simply not offered.
+        return TypedResults.Ok(rows
+            .Where(l => MapLayerOptionsJson.IsDrawable(l.LayerKind, l.Options))
+            .Select(ToDto)
+            .ToList());
     }
+
+    /// <summary>A stored layer as the map reads it.</summary>
+    internal static MapLayerDto ToDto(MapLayer l) => new(
+        l.Id, l.Name, l.LayerKind, l.UrlTemplate,
+        MapLayerOptionsJson.Wms(l.LayerKind, l.Options),
+        MapLayerOptionsJson.Wmts(l.LayerKind, l.Options),
+        l.Attribution, l.GroupName, l.MinZoom, l.MaxZoom,
+        l.IsBase, l.IsDefault, l.SortOrder,
+        // The administrator's answer where there is one, the catalogue's otherwise — and never
+        // for a map service, whose pictures are kept out of documents whatever either said.
+        MapLayerDocumentRules.Effective(l.InDocuments, l.InDocumentsChoice, l.LayerKind));
 }

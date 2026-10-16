@@ -16,7 +16,18 @@ public class MapLayerDocumentRulesTests
     public void An_administrators_answer_stands_over_the_catalogues_and_no_answer_follows_it(
         bool catalogue, bool? administrator, bool expected)
     {
-        MapLayerDocumentRules.Effective(catalogue, administrator).ShouldBe(expected);
+        MapLayerDocumentRules.Effective(catalogue, administrator, MapLayerKind.Xyz).ShouldBe(expected);
+    }
+
+    [Theory]
+    [InlineData(MapLayerKind.Wms)]
+    [InlineData(MapLayerKind.Wmts)]
+    public void A_map_service_is_never_copied_into_a_document_whatever_anybody_said(MapLayerKind kind)
+    {
+        MapLayerDocumentRules.Effective(true, null, kind).ShouldBeFalse();
+        MapLayerDocumentRules.Effective(false, true, kind).ShouldBeFalse();
+        MapLayerDocumentRules.ObstacleTo(isBase: true, "© Somebody", kind)
+            .ShouldBe(MapLayerDocumentObstacle.NotPlainTiles);
     }
 
     [Fact]
@@ -35,12 +46,12 @@ public class MapLayerDocumentRulesTests
     [Fact]
     public void An_overlay_and_an_uncredited_source_cannot_carry_the_mark_whoever_asks()
     {
-        MapLayerDocumentRules.ObstacleTo(isBase: true, "© Somebody").ShouldBeNull();
-        MapLayerDocumentRules.ObstacleTo(isBase: false, "© Somebody")
+        MapLayerDocumentRules.ObstacleTo(isBase: true, "© Somebody", MapLayerKind.Xyz).ShouldBeNull();
+        MapLayerDocumentRules.ObstacleTo(isBase: false, "© Somebody", MapLayerKind.Xyz)
             .ShouldBe(MapLayerDocumentObstacle.NotABackground);
-        MapLayerDocumentRules.ObstacleTo(isBase: true, null).ShouldBe(MapLayerDocumentObstacle.NoAttribution);
-        MapLayerDocumentRules.ObstacleTo(isBase: true, "   ").ShouldBe(MapLayerDocumentObstacle.NoAttribution);
+        MapLayerDocumentRules.ObstacleTo(isBase: true, null, MapLayerKind.Xyz).ShouldBe(MapLayerDocumentObstacle.NoAttribution);
+        MapLayerDocumentRules.ObstacleTo(isBase: true, "   ", MapLayerKind.Xyz).ShouldBe(MapLayerDocumentObstacle.NoAttribution);
         // An overlay with no credit is first of all not a background.
-        MapLayerDocumentRules.ObstacleTo(isBase: false, null).ShouldBe(MapLayerDocumentObstacle.NotABackground);
+        MapLayerDocumentRules.ObstacleTo(isBase: false, null, MapLayerKind.Xyz).ShouldBe(MapLayerDocumentObstacle.NotABackground);
     }
 }

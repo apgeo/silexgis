@@ -17,10 +17,7 @@ import type {
 // A plain object standing in for the scene — the point of the engine contract is that everything
 // around it is testable without a graphics context.
 class FakeImagery implements Scene3DImagery {
-  readonly layers = new Map<
-    string,
-    Partial<Scene3DImageryOptions & Scene3DImageOverlayOptions> & { visible: boolean; opacity: number }
-  >();
+  readonly layers = new Map<string, Record<string, unknown> & { visible: boolean; opacity: number }>();
 
   addImageryLayer(id: string, options: Scene3DImageryOptions) {
     if (this.layers.has(id)) return;
@@ -54,7 +51,8 @@ function layer(overrides: Partial<MapLayerInfo> & { id: number }): MapLayerInfo 
     name: `Layer ${overrides.id}`,
     layerKind: 'xyz',
     urlTemplate: `https://tiles.example/${overrides.id}/{z}/{x}/{y}.png`,
-    options: null,
+    wms: null,
+    wmts: null,
     attribution: null,
     isBase: true,
     isDefault: false,
@@ -120,6 +118,69 @@ describe('syncBaseImagery', () => {
     expect(engine.getImageryLayerIds()).toHaveLength(2);
     // The layer was updated in place, not rebuilt: its opacity survived.
     expect(engine.layers.get(baseImageryLayerId(1))!.opacity).toBe(0.4);
+  });
+});
+
+describe('map services in the scene', () => {
+  const wms = {
+    layers: 'topo',
+    styles: '',
+    format: 'image/png',
+    version: '1.3.0',
+    transparent: false,
+    crs: 'EPSG:3857',
+  };
+  const wmts = {
+    layer: 'topo',
+    matrixSet: 'WorldCRS84Quad',
+    format: 'image/jpeg',
+    style: 'default',
+    crs: 'EPSG:4326',
+    matrixIdPrefix: 'EPSG:4326:',
+  };
+
+  it('drapes a WMS basemap with the catalogue’s request parameters', () => {
+    const engine = new FakeImagery();
+    syncBaseImagery(
+      engine,
+      [layer({ id: 5, layerKind: 'wms', urlTemplate: 'https://maps.example/wms', wms, attribution: '© Agency' })],
+      5,
+    );
+
+    expect(engine.layers.get(baseImageryLayerId(5))).toMatchObject({
+      kind: 'wms',
+      url: 'https://maps.example/wms',
+      layers: 'topo',
+      version: '1.3.0',
+      transparent: false,
+      crs: 'EPSG:3857',
+      attribution: '© Agency',
+      visible: true,
+    });
+  });
+
+  it('drapes a WMTS overlay with one matrix id per level up to its last zoom', () => {
+    const engine = new FakeImagery();
+    const catalog = [layer({ id: 6, isBase: false, layerKind: 'wmts', urlTemplate: 'https://tiles.example/wmts', wmts, maxZoom: 2 })];
+    syncTileOverlayImagery(engine, catalog, new Set([6]), {});
+
+    expect(engine.layers.get(tileOverlayImageryLayerId(6))).toMatchObject({
+      kind: 'wmts',
+      url: 'https://tiles.example/wmts',
+      layer: 'topo',
+      matrixSet: 'WorldCRS84Quad',
+      crs: 'EPSG:4326',
+      matrixIds: ['EPSG:4326:0', 'EPSG:4326:1', 'EPSG:4326:2'],
+      maximumLevel: 2,
+      visible: true,
+    });
+  });
+
+  it('skips a map service that arrives without the options its kind needs', () => {
+    const engine = new FakeImagery();
+    syncBaseImagery(engine, [layer({ id: 8, layerKind: 'wmts' }), layer({ id: 9 })], 9);
+
+    expect(engine.getImageryLayerIds()).toEqual([baseImageryLayerId(9)]);
   });
 });
 

@@ -15,6 +15,7 @@ import {
   Credit,
   Ellipsoid,
   EllipsoidTerrainProvider,
+  GeographicTilingScheme,
   GeometryInstance,
   GroundPolylineGeometry,
   GroundPolylinePrimitive,
@@ -44,6 +45,9 @@ import {
   UrlTemplateImageryProvider,
   VerticalOrigin,
   WallGeometry,
+  WebMapServiceImageryProvider,
+  WebMapTileServiceImageryProvider,
+  WebMercatorTilingScheme,
 } from 'cesium';
 import { coarsePointer } from '../map/pointer.ts';
 import { drawnAltitude, samePlacement } from './altitude3d.ts';
@@ -82,6 +86,7 @@ import type {
   Scene3DPosition,
   Scene3DProjection,
   Scene3DScreenPosition,
+  Scene3DServiceCrs,
   Scene3DSurfaceMode,
   Scene3DSurfaceState,
   Scene3DTerrainSource,
@@ -262,6 +267,75 @@ interface LoadedModel {
   status: Scene3DModelStatus;
   /** Absent while the file is still being read, and after the model has been taken out again. */
   model?: Model;
+}
+
+
+/**
+ * The engine's imagery provider for one basemap, by the kind of source behind it.
+ *
+ * Three things hold for every kind. The credit is shown on the scene rather than behind the
+ * engine's "data attribution" link, where a plain string would land: tile licences ask for visible
+ * credit, and the 2D map puts the same text on the map itself. A layer with no attribution passes
+ * `undefined`, not an empty string: the engine wraps any string it is given — including '' — into
+ * a credit object, and a credit not marked for on-screen display is filed under the engine's
+ * collapsed "data attribution" list, where one empty entry reveals a hard-coded English link
+ * opening a hard-coded English panel listing a blank line. And past the source's last zoom the
+ * engine stretches that level instead of asking for tiles that do not exist — blurry rather than
+ * blank, as the 2D map does, and no refused requests.
+ *
+ * A map service is drawn on the tiling its coordinate system names: web mercator for EPSG:3857,
+ * the two-tile geographic pyramid for EPSG:4326 — the same two grids the flat map builds, so the
+ * two views ask a service for the same tiles.
+ */
+function imageryProviderFor(
+  options: Scene3DImageryOptions,
+): UrlTemplateImageryProvider | WebMapServiceImageryProvider | WebMapTileServiceImageryProvider {
+  const credit = options.attribution ? new Credit(options.attribution, true) : undefined;
+  const ceiling = options.maximumLevel !== undefined ? { maximumLevel: options.maximumLevel } : {};
+  switch (options.kind) {
+    case 'wms':
+      return new WebMapServiceImageryProvider({
+        url: options.url,
+        layers: options.layers,
+        parameters: {
+          styles: options.styles,
+          format: options.format,
+          transparent: options.transparent,
+          version: options.version,
+        },
+        tilingScheme: tilingSchemeFor(options.crs),
+        credit,
+        // Nothing in this application picks features out of a raster basemap, and leaving it on
+        // invites a GetFeatureInfo request the catalogue never configured.
+        enablePickFeatures: false,
+        ...ceiling,
+      });
+    case 'wmts':
+      return new WebMapTileServiceImageryProvider({
+        url: options.url,
+        layer: options.layer,
+        style: options.style,
+        format: options.format,
+        tileMatrixSetID: options.matrixSet,
+        tileMatrixLabels: options.matrixIds,
+        tilingScheme: tilingSchemeFor(options.crs),
+        credit,
+        ...ceiling,
+      });
+    default:
+      return new UrlTemplateImageryProvider({
+        url: options.urlTemplate,
+        credit,
+        // As above: no feature-info requests to a URL the catalogue never configured.
+        enablePickFeatures: false,
+        // The provider's tiling is the same web-mercator pyramid the template's {z} counts in.
+        ...ceiling,
+      });
+  }
+}
+
+function tilingSchemeFor(crs: Scene3DServiceCrs): GeographicTilingScheme | WebMercatorTilingScheme {
+  return crs === 'EPSG:4326' ? new GeographicTilingScheme() : new WebMercatorTilingScheme();
 }
 
 class CesiumScene3D implements Scene3DCore {
@@ -702,27 +776,7 @@ class CesiumScene3D implements Scene3DCore {
     if (this.imageryById.has(id)) {
       return;
     }
-    const provider = new UrlTemplateImageryProvider({
-      url: options.urlTemplate,
-      // Shown on the scene rather than behind the engine's "data attribution" link, which is
-      // where a plain string would land: tile licences ask for visible credit, and the 2D map
-      // puts the same text on the map itself.
-      //
-      // A layer with no attribution must pass `undefined`, not an empty string: the engine wraps
-      // any string it is given — including '' — into a credit object, and a credit that is not
-      // marked for on-screen display is filed under the engine's collapsed "data attribution"
-      // list. One empty entry there is enough to reveal that control, which is a hard-coded
-      // English link opening a hard-coded English panel listing a blank line. `undefined` leaves
-      // the provider with no credit at all and the control stays hidden.
-      credit: options.attribution ? new Credit(options.attribution, true) : undefined,
-      // Nothing in this application picks features out of a raster basemap, and leaving it on
-      // invites a request to a per-tile feature-info URL the catalog never configured.
-      enablePickFeatures: false,
-      // Past the source's last zoom the engine stretches that level instead of asking for tiles
-      // that do not exist — blurry rather than blank, as the 2D map does, and no refused requests.
-      // The provider's tiling is the same web-mercator pyramid the template's {z} counts in.
-      ...(options.maximumLevel !== undefined ? { maximumLevel: options.maximumLevel } : {}),
-    });
+    const provider = imageryProviderFor(options);
     const layer = new ImageryLayer(provider, {
       show: options.visible ?? true,
       alpha: options.opacity ?? 1,

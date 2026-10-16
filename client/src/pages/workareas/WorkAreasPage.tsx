@@ -92,6 +92,8 @@ export default function WorkAreasPage() {
   // the vector layer was added first and would otherwise be painted beneath it.
   useEffect(() => {
     const map = mapRef.current;
+    // XYZ only, deliberately: this overview draws one plain tile background and has no use for a
+    // map service, whose pictures are kept to the workspace map and the 3D scene.
     const base = layers?.find((l) => l.layerKind === 'xyz' && l.isBase);
     if (!map || !base || map.getLayers().getArray().some((l) => l.get('silexgis:overviewBase'))) {
       return;

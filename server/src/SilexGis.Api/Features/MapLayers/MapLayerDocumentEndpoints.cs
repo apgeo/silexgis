@@ -111,7 +111,10 @@ public static class MapLayerDocumentEndpoints
         }
 
         var rows = await Backgrounds(db).AsNoTracking().OrderBy(l => l.SortOrder).ToListAsync(ct);
-        return TypedResults.Ok(rows.Select(ToDto).ToList());
+        return TypedResults.Ok(rows
+            .Where(l => MapLayerOptionsJson.IsDrawable(l.LayerKind, l.Options))
+            .Select(ToDto)
+            .ToList());
     }
 
     private static async Task<Results<Ok<MapBackgroundDto>, UnauthorizedHttpResult, ProblemHttpResult>> ChooseAsync(
@@ -135,12 +138,12 @@ public static class MapLayerDocumentEndpoints
         // A layer that is not published is answered as one that is not there: it is on no list
         // this route's reader was shown.
         var layer = await db.MapLayers.FirstOrDefaultAsync(l => l.Id == id && l.Enabled, ct);
-        if (layer is null)
+        if (layer is null || !MapLayerOptionsJson.IsDrawable(layer.LayerKind, layer.Options))
         {
             return ApiProblems.NotFound("map_layer.not_found");
         }
 
-        var obstacle = MapLayerDocumentRules.ObstacleTo(layer.IsBase, layer.Attribution);
+        var obstacle = MapLayerDocumentRules.ObstacleTo(layer.IsBase, layer.Attribution, layer.LayerKind);
         if (obstacle == MapLayerDocumentObstacle.NotABackground)
         {
             return ApiProblems.Conflict(
@@ -148,9 +151,18 @@ public static class MapLayerDocumentEndpoints
                 "A document's picture is drawn over one background, and this layer is an overlay.");
         }
 
+        // Taking a mark off is always possible; putting one on a map service is not, because a
+        // document's picture is drawn from plain tiles only.
+        var choice = request.Choice!.Value;
+        if (choice == MapLayerDocumentChoice.On && obstacle == MapLayerDocumentObstacle.NotPlainTiles)
+        {
+            return ApiProblems.Conflict(
+                MapLayerDocumentRules.NotPlainTilesCode,
+                "This background is a map service, and a document's picture is drawn from plain tiles only.");
+        }
+
         // Switching off, or going back to the catalogue, is always possible; only saying yes
         // needs the credit that would be written under the picture.
-        var choice = request.Choice!.Value;
         if (choice == MapLayerDocumentChoice.On && obstacle == MapLayerDocumentObstacle.NoAttribution)
         {
             return ApiProblems.Conflict(
@@ -186,12 +198,16 @@ public static class MapLayerDocumentEndpoints
         return TypedResults.Ok(ToDto(layer));
     }
 
-    /// <summary>The backgrounds this installation publishes: what a document could be drawn over.</summary>
+    /// <summary>
+    /// The backgrounds this installation publishes: what a document could be drawn over. A row the
+    /// map cannot draw is also left off the list, by the caller, exactly as the catalogue leaves it
+    /// off the map.
+    /// </summary>
     private static IQueryable<MapLayer> Backgrounds(SilexGisDbContext db) =>
         db.MapLayers.Where(l => l.Enabled && l.IsBase);
 
     private static bool Effective(MapLayer layer) =>
-        MapLayerDocumentRules.Effective(layer.InDocuments, layer.InDocumentsChoice);
+        MapLayerDocumentRules.Effective(layer.InDocuments, layer.InDocumentsChoice, layer.LayerKind);
 
     private static string ChoiceName(bool? stored) =>
         JsonNamingPolicy.CamelCase.ConvertName(MapLayerDocumentRules.ChoiceOf(stored).ToString());
@@ -204,5 +220,5 @@ public static class MapLayerDocumentEndpoints
         Effective(layer),
         layer.InDocuments,
         MapLayerDocumentRules.ChoiceOf(layer.InDocumentsChoice),
-        MapLayerDocumentRules.ObstacleTo(layer.IsBase, layer.Attribution) is null);
+        MapLayerDocumentRules.ObstacleTo(layer.IsBase, layer.Attribution, layer.LayerKind) is null);
 }

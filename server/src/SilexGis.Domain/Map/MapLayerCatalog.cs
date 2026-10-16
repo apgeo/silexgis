@@ -25,6 +25,12 @@ namespace SilexGis.Domain.Map;
 /// about a tile address says which kind of terms stand behind it. Only somebody who has read
 /// them can.
 /// </param>
+/// <param name="Kind">
+/// How the source is drawn: tiles on a z/x/y template (<c>xyz</c>), a Web Map Service, or a Web Map
+/// Tile Service. Only kinds this version can draw are ever read into an entry.
+/// </param>
+/// <param name="Wms">The service options of a <c>wms</c> entry; null for every other kind.</param>
+/// <param name="Wmts">The service options of a <c>wmts</c> entry; null for every other kind.</param>
 public sealed record MapLayerEntry(
     string Name,
     string UrlTemplate,
@@ -37,7 +43,10 @@ public sealed record MapLayerEntry(
     int MinZoom,
     int MaxZoom,
     int SortOrder,
-    bool InDocuments = false);
+    bool InDocuments = false,
+    MapLayerKind Kind = MapLayerKind.Xyz,
+    MapLayerWmsOptions? Wms = null,
+    MapLayerWmtsOptions? Wmts = null);
 
 /// <summary>Why a catalogue file could not be read.</summary>
 public sealed record MapLayerCatalogProblem(string Message);
@@ -133,6 +142,46 @@ public static class MapLayerCatalog
                 continue;
             }
 
+            var isBase = Bool(element.Attribute("base"), true);
+
+            // A kind this version cannot draw is refused here, where an operator reads the reason,
+            // rather than accepted and then left off every map with nothing anywhere saying why.
+            var kindWord = Trimmed(element.Attribute("kind"));
+            var kind = MapLayerKinds.Parse(kindWord);
+            if (kind is null)
+            {
+                problems.Add(new MapLayerCatalogProblem(
+                    $"'{name}' has kind '{kindWord}', which is not a kind of map layer (xyz, wms or wmts); skipped"));
+                continue;
+            }
+
+            if (!MapLayerKinds.IsDrawable(kind.Value))
+            {
+                problems.Add(new MapLayerCatalogProblem(
+                    $"'{name}' has kind '{MapLayerKinds.NameOf(kind.Value)}', which this version cannot draw yet "
+                    + "(it draws xyz, wms and wmts); not supported yet, skipped"));
+                continue;
+            }
+
+            MapLayerWmsOptions? wms = null;
+            MapLayerWmtsOptions? wmts = null;
+            if (kind == MapLayerKind.Wms)
+            {
+                wms = ReadWms(element, name, url, isBase, problems);
+                if (wms is null)
+                {
+                    continue;
+                }
+            }
+            else if (kind == MapLayerKind.Wmts)
+            {
+                wmts = ReadWmts(element, name, url, problems);
+                if (wmts is null)
+                {
+                    continue;
+                }
+            }
+
             var minZoom = Int(element.Attribute("minZoom"), 0);
             var maxZoom = Int(element.Attribute("maxZoom"), 19);
             if (maxZoom < minZoom)
@@ -143,14 +192,13 @@ public static class MapLayerCatalog
             }
 
             var attribution = Trimmed(element.Attribute("attribution"));
-            var isBase = Bool(element.Attribute("base"), true);
             var inDocuments = Bool(element.Attribute("inDocuments"), false);
 
             // The mark is taken off rather than the entry dropped: in both cases below the source
             // is still a perfectly good thing to look at, and only the claim that it may be put
             // into a file cannot be honoured. Said out loud, because the alternative reading of a
             // picture that comes out with no background is that the application is broken.
-            var obstacle = inDocuments ? MapLayerDocumentRules.ObstacleTo(isBase, attribution) : null;
+            var obstacle = inDocuments ? MapLayerDocumentRules.ObstacleTo(isBase, attribution, kind.Value) : null;
             if (obstacle == MapLayerDocumentObstacle.NoAttribution)
             {
                 // Terms that allow a copy allow it with the credit beside the picture, and a
@@ -168,6 +216,15 @@ public static class MapLayerCatalog
                 inDocuments = false;
             }
 
+            if (obstacle == MapLayerDocumentObstacle.NotPlainTiles)
+            {
+                // Whether a service's terms allow its pictures into a circulated file is a
+                // question of its own, and the picture is drawn from z/x/y tiles only.
+                problems.Add(new MapLayerCatalogProblem(
+                    $"'{name}' is marked inDocuments but is a {MapLayerKinds.NameOf(kind.Value)} layer, and a document's picture is drawn from xyz tiles only; kept, without the mark"));
+                inDocuments = false;
+            }
+
             layers.Add(new MapLayerEntry(
                 name.Trim(),
                 url.Trim(),
@@ -180,7 +237,10 @@ public static class MapLayerCatalog
                 minZoom,
                 maxZoom,
                 index,
-                inDocuments));
+                inDocuments,
+                kind.Value,
+                wms,
+                wmts));
         }
 
         // A name declared twice is one source the operator edited into the file twice, so the last
@@ -220,6 +280,99 @@ public static class MapLayerCatalog
         return apiKeys.TryGetValue(entry.ApiKeyName, out var key) && !string.IsNullOrWhiteSpace(key)
             ? entry.UrlTemplate.Replace(ApiKeyPlaceholder, key.Trim(), StringComparison.Ordinal)
             : null;
+    }
+
+    private static MapLayerWmsOptions? ReadWms(
+        XElement element, string name, string url, bool isBase, List<MapLayerCatalogProblem> problems)
+    {
+        var layers = Trimmed(element.Attribute("layers"));
+        if (layers is null)
+        {
+            problems.Add(new MapLayerCatalogProblem($"'{name}' is a wms layer with no layers attribute; skipped"));
+            return null;
+        }
+
+        if (url.Contains('{', StringComparison.Ordinal) && !url.Contains(ApiKeyPlaceholder, StringComparison.Ordinal))
+        {
+            // A WMS url is the service's address; the map adds the request itself.
+            problems.Add(new MapLayerCatalogProblem(
+                $"'{name}' is a wms layer whose url holds a {{placeholder}}; a wms url is the service address alone; skipped"));
+            return null;
+        }
+
+        var version = Trimmed(element.Attribute("version")) ?? MapLayerKinds.SupportedWmsVersions[0];
+        if (!MapLayerKinds.SupportedWmsVersions.Contains(version))
+        {
+            problems.Add(new MapLayerCatalogProblem(
+                $"'{name}' asks for wms version {version}; the map speaks {string.Join(" and ", MapLayerKinds.SupportedWmsVersions)}; skipped"));
+            return null;
+        }
+
+        var crs = Crs(element, name, "wms", problems);
+        if (crs is null)
+        {
+            return null;
+        }
+
+        return new MapLayerWmsOptions(
+            layers,
+            Trimmed(element.Attribute("styles")) ?? string.Empty,
+            Trimmed(element.Attribute("format")) ?? "image/png",
+            version,
+            // An overlay asks for a transparent picture unless told otherwise — an opaque one
+            // would hide the basemap under it entirely.
+            Bool(element.Attribute("transparent"), !isBase),
+            crs);
+    }
+
+    private static MapLayerWmtsOptions? ReadWmts(
+        XElement element, string name, string url, List<MapLayerCatalogProblem> problems)
+    {
+        var layer = Trimmed(element.Attribute("layer"));
+        var matrixSet = Trimmed(element.Attribute("matrixSet"));
+        if (layer is null || matrixSet is null)
+        {
+            problems.Add(new MapLayerCatalogProblem(
+                $"'{name}' is a wmts layer and needs both a layer and a matrixSet attribute; skipped"));
+            return null;
+        }
+
+        // A url naming the tile matrix is the service's REST template and must name the row and
+        // the column too; one naming none of the three is its key-value endpoint.
+        var rest = url.Contains("{TileMatrix}", StringComparison.Ordinal);
+        if (rest && !(url.Contains("{TileRow}", StringComparison.Ordinal) && url.Contains("{TileCol}", StringComparison.Ordinal)))
+        {
+            problems.Add(new MapLayerCatalogProblem(
+                $"'{name}' is a wmts template with {{TileMatrix}} but without both {{TileRow}} and {{TileCol}}; skipped"));
+            return null;
+        }
+
+        var crs = Crs(element, name, "wmts", problems);
+        if (crs is null)
+        {
+            return null;
+        }
+
+        return new MapLayerWmtsOptions(
+            layer,
+            matrixSet,
+            Trimmed(element.Attribute("format")) ?? "image/png",
+            Trimmed(element.Attribute("style")) ?? "default",
+            crs,
+            Trimmed(element.Attribute("matrixIdPrefix")) ?? string.Empty);
+    }
+
+    private static string? Crs(XElement element, string name, string kindName, List<MapLayerCatalogProblem> problems)
+    {
+        var crs = Trimmed(element.Attribute("crs"))?.ToUpperInvariant() ?? MapLayerKinds.WebMercator;
+        if (MapLayerKinds.SupportedCrs.Contains(crs))
+        {
+            return crs;
+        }
+
+        problems.Add(new MapLayerCatalogProblem(
+            $"'{name}' is a {kindName} layer in {crs}; the map draws {string.Join(" and ", MapLayerKinds.SupportedCrs)}; skipped"));
+        return null;
     }
 
     private static string? Trimmed(XAttribute? attribute)

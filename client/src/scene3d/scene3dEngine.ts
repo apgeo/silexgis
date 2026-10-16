@@ -70,9 +70,48 @@ export interface Scene3DScreenPosition {
 /** Longitude/latitude bounds in degrees, west, south, east, north. */
 export type Scene3DBounds = [number, number, number, number];
 
-export interface Scene3DImageryOptions {
+/** The coordinate system a map service is asked in — the scene's tiling follows it. */
+export type Scene3DServiceCrs = 'EPSG:3857' | 'EPSG:4326';
+
+/**
+ * A tiled basemap, by the kind of source behind it: tiles on a z/x/y template, a Web Map Service
+ * asked for one picture per tile, or a Web Map Tile Service's ready-cut tiles. `kind` may be left
+ * out for a z/x/y template, which is what every source was before the other two existed.
+ */
+export type Scene3DImageryOptions = Scene3DXyzImagery | Scene3DWmsImagery | Scene3DWmtsImagery;
+
+export interface Scene3DXyzImagery extends Scene3DImageryCommon {
+  kind?: 'xyz';
   /** Tile URL with `{z}`/`{x}`/`{y}` placeholders, exactly as the layer catalog stores it. */
   urlTemplate: string;
+}
+
+export interface Scene3DWmsImagery extends Scene3DImageryCommon {
+  kind: 'wms';
+  /** The service address; the scene adds the requests to it. */
+  url: string;
+  layers: string;
+  styles: string;
+  format: string;
+  version: string;
+  transparent: boolean;
+  crs: Scene3DServiceCrs;
+}
+
+export interface Scene3DWmtsImagery extends Scene3DImageryCommon {
+  kind: 'wmts';
+  /** The key-value address, or the REST template naming `{TileMatrix}`, `{TileRow}`, `{TileCol}`. */
+  url: string;
+  layer: string;
+  matrixSet: string;
+  format: string;
+  style: string;
+  crs: Scene3DServiceCrs;
+  /** The service's name for each level from 0 up. */
+  matrixIds: string[];
+}
+
+export interface Scene3DImageryCommon {
   /** Attribution text; shown by the scene because the licence of the tiles requires it. */
   attribution?: string;
   visible?: boolean;
