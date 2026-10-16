@@ -6795,5 +6795,9 @@
       "done": "Linkuri retrase: {{links}} · Ture: {{trips}}",
       "doneMoreThanListed": "Linkuri retrase: {{links}} · Ture: {{trips}} · Linkuri arătate de această listă: {{listed}}. Sunt retrase și linkurile turelor șterse, pe care lista nu le arată."
     }
+  },
+  "a11y": {
+    "skipToMain": "Sari la conținutul principal",
+    "mainNav": "Navigația principală"
   }
 }

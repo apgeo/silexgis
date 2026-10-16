@@ -148,6 +148,19 @@ export default function AppLayout() {
 
   return (
     <Layout style={{ height: '100%' }}>
+      {/* First in the tab order, and out of sight until it has focus: without it a keyboard has to
+          walk the header and every entry of the rail before it reaches the page. Moves focus
+          rather than following its address, because on the map the hash is the camera's. */}
+      <a
+        href="#main-content"
+        className="skip-link"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById('main-content')?.focus();
+        }}
+      >
+        {t('a11y.skipToMain')}
+      </a>
       <Layout.Header style={{ display: 'flex', alignItems: 'center' }}>
         <Flex align="center" gap={10} style={{ flex: 1 }}>
           {/* On a light chip because the mark is mostly black line work: the passage drawn in it
@@ -253,29 +266,31 @@ export default function AppLayout() {
           theme="light"
           data-testid="app-sider"
         >
-          <Menu
-            mode="inline"
-            selectedKeys={[selectedKey]}
-            // Handed over as it stands, collapsed or not. Which groups may be open while the
-            // rail is narrow is decided where the state is kept, not here: filtering it out at
-            // this point cannot tell a group that opened itself on arrival from one the reader
-            // clicked the icon for, so it suppressed both and the collapsed rail — which is how
-            // the rail opens — stopped opening any group at all.
-            openKeys={openKeys}
-            onOpenChange={setOpenKeys}
-            // "/map" rather than "/": the root dispatches to the dashboard for users who
-            // chose it as their landing page, which would make this item unable to reach the map.
-            onClick={({ key }) => {
-              navigate(key === 'map' ? '/map' : `/${key}`);
-              // Off-canvas, the rail covers the content it just navigated to.
-              if (isMobile) {
-                setNavCollapsed(true);
-              }
-            }}
-            items={navItems}
-          />
+          <nav aria-label={t('a11y.mainNav')}>
+            <Menu
+              mode="inline"
+              selectedKeys={[selectedKey]}
+              // Handed over as it stands, collapsed or not. Which groups may be open while the
+              // rail is narrow is decided where the state is kept, not here: filtering it out at
+              // this point cannot tell a group that opened itself on arrival from one the reader
+              // clicked the icon for, so it suppressed both and the collapsed rail — which is how
+              // the rail opens — stopped opening any group at all.
+              openKeys={openKeys}
+              onOpenChange={setOpenKeys}
+              // "/map" rather than "/": the root dispatches to the dashboard for users who
+              // chose it as their landing page, which would make this item unable to reach the map.
+              onClick={({ key }) => {
+                navigate(key === 'map' ? '/map' : `/${key}`);
+                // Off-canvas, the rail covers the content it just navigated to.
+                if (isMobile) {
+                  setNavCollapsed(true);
+                }
+              }}
+              items={navItems}
+            />
+          </nav>
         </Layout.Sider>
-        <Layout.Content style={{ overflow: 'auto' }}>
+        <Layout.Content id="main-content" tabIndex={-1} className="app-main" style={{ overflow: 'auto' }}>
           {/* A screen that fails takes only itself down, not the navigation around it; keyed
               by the address so that going somewhere else is also the way out of the failure. */}
           <ErrorBoundary key={location.pathname}>

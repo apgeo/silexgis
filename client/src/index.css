@@ -60,6 +60,29 @@ html[data-reduce-motion='true'] *::after {
   pointer-events: none;
 }
 
+/* The skip link: off screen until it has keyboard focus, then over the header's corner. */
+.skip-link {
+  position: absolute;
+  inset-inline-start: 8px;
+  top: -100px;
+  z-index: 2000;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--ant-color-bg-elevated, #fff);
+  color: var(--ant-color-link, #0958d9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.skip-link:focus {
+  top: 8px;
+}
+
+/* Focus lands on the page container only so that the next Tab starts inside it; the container
+   itself is not a control and draws no ring. */
+.app-main:focus {
+  outline: none;
+}
+
 /* A control that acts in place rather than navigating, drawn as a link: a button, so it is in
    the tab order, without the button's own height and padding around the words. */
 .ant-btn.link-button {

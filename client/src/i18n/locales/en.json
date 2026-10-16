@@ -6795,5 +6795,9 @@
       "done": "Links taken back: {{links}} · Trips: {{trips}}",
       "doneMoreThanListed": "Links taken back: {{links}} · Trips: {{trips}} · Links this list showed: {{listed}}. The links of deleted trips, which the list leaves out, are taken back too."
     }
+  },
+  "a11y": {
+    "skipToMain": "Skip to main content",
+    "mainNav": "Main navigation"
   }
 }

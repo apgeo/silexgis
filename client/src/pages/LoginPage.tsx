@@ -367,8 +367,10 @@ export default function LoginPage() {
   };
 
   return (
-    <Flex align="center" justify="center" style={{ minHeight: '100%' }}>
-      <Card style={{ width: 360 }}>
+    // The page's main landmark, so that a screen reader's "go to main" lands on the form; and a
+    // card that gives way on a screen narrower than itself rather than pushing the page sideways.
+    <Flex component="main" align="center" justify="center" style={{ minHeight: '100%' }}>
+      <Card style={{ width: 360, maxWidth: '100%' }}>
         <Typography.Title level={3} style={{ textAlign: 'center' }}>
           {t('app.name')}
         </Typography.Title>
