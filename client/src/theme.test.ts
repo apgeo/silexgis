@@ -74,3 +74,83 @@ describe('buildThemeConfig', () => {
     expect(calendarDayContentStyle.minHeight).toBeGreaterThan(0);
   });
 });
+
+/** WCAG relative luminance contrast of a colour drawn over an opaque background. */
+function contrast(foreground: string, background: string): number {
+  const parse = (colour: string): number[] => {
+    const value = colour.trim();
+    if (value.startsWith('#')) {
+      const hex = value.length === 4 ? value.slice(1).split('').map((c) => c + c).join('') : value.slice(1);
+      const n = parseInt(hex.slice(0, 6), 16);
+      const alpha = hex.length === 8 ? parseInt(hex.slice(6), 16) / 255 : 1;
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255, alpha];
+    }
+    const parts = /rgba?\(([^)]+)\)/.exec(value)![1].split(',').map((p) => parseFloat(p));
+    return [parts[0], parts[1], parts[2], parts[3] ?? 1];
+  };
+  const back = parse(background);
+  const fore = parse(foreground);
+  const flattened = [0, 1, 2].map((i) => fore[i] * fore[3] + back[i] * (1 - fore[3]));
+  const luminance = ([r, g, b]: number[]) => {
+    const channel = (v: number) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+  };
+  const a = luminance(flattened);
+  const b = luminance(back);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+/**
+ * Every pair is measured on the tokens antd actually derives, not on the values written in the
+ * theme, because the algorithms rewrite seeds: the dark algorithm darkens the brand colour and the
+ * link colour, and a ratio computed from what was written would pass while the screen failed.
+ */
+describe.each(['light', 'dark'] as const)('contrast in the %s theme', (mode) => {
+  const config = buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: mode });
+  const token = theme.getDesignToken(config);
+  const surfaces = { page: token.colorBgContainer, raised: token.colorBgElevated };
+
+  it.each([
+    ['body text', token.colorText],
+    ['secondary text', token.colorTextSecondary],
+    ['description text', token.colorTextDescription],
+    ['placeholder text', token.colorTextPlaceholder],
+    ['links', token.colorLink],
+    ['error text', token.colorErrorText],
+    ['warning text', token.colorWarningText],
+    ['success text', token.colorSuccessText],
+    ['info text', token.colorInfoText],
+  ])('%s reads at 4.5:1 on the page and on raised surfaces', (_, colour) => {
+    expect(contrast(colour, surfaces.page)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(colour, surfaces.raised)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('description text also reads on the grey layout background', () => {
+    expect(contrast(token.colorTextDescription, token.colorBgLayout)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('text on a primary or a danger button reads at 4.5:1', () => {
+    expect(contrast(token.colorTextLightSolid, token.colorPrimary)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token.colorTextLightSolid, token.colorError)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the focus ring and a field outline stand out at 3:1', () => {
+    expect(contrast(token.colorPrimaryBorder, surfaces.page)).toBeGreaterThanOrEqual(3);
+    expect(contrast(token.colorPrimaryBorder, surfaces.raised)).toBeGreaterThanOrEqual(3);
+    expect(contrast(token.colorBorder, surfaces.page)).toBeGreaterThanOrEqual(3);
+    expect(contrast(token.colorBorder, surfaces.raised)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('the selected item of a menu reads at 4.5:1 on its highlight', () => {
+    const selectedText = config.components?.Menu?.itemSelectedColor ?? token.colorPrimary;
+    expect(contrast(selectedText, token.colorPrimaryBg)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the selected tab reads at 4.5:1', () => {
+    const selectedTab = config.components?.Tabs?.itemSelectedColor ?? token.colorPrimary;
+    expect(contrast(selectedTab, surfaces.page)).toBeGreaterThanOrEqual(4.5);
+  });
+});

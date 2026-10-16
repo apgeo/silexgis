@@ -25,6 +25,61 @@ export const themeConfig: ThemeConfig = {
 };
 
 /**
+ * Token overrides that bring text and controls up to readable contrast — 4.5:1 for text, 3:1 for
+ * the outline of a control and for the focus ring — against the page and against the raised
+ * surfaces (dialogs, menus) it sits on.
+ *
+ * antd's own defaults miss these in several places, and two of the misses come from the brand
+ * colour rather than from antd: the palette generated from a teal this dark has a grey-green as
+ * its lightest step, which antd puts behind the selected row of every menu, list and picker — so
+ * the selected page in the navigation read at 2.7:1 — and the dark algorithm darkens the brand
+ * colour further, which left the focus ring at 1.2:1 against the dark page, i.e. not there. The
+ * seed stays the brand colour in both modes; only derived values are replaced, and where a value
+ * is itself a seed (link, error) it is chosen so that what the algorithm makes of it lands where
+ * it must.
+ *
+ * Each mode has its own set because the two fail in different places: the darker amber that
+ * rescues warning text on the light page is exactly the one that fails on the dark page.
+ * `theme.test.ts` recomputes every ratio from the tokens antd derives, so a change here that
+ * drops a pair below its threshold fails there rather than on somebody's screen.
+ */
+const lightContrast: ThemeConfig = {
+  token: {
+    colorPrimaryBg: '#e3efee',
+    colorPrimaryBgHover: '#cde3e1',
+    colorLink: '#0958d9',
+    colorTextTertiary: 'rgba(0, 0, 0, 0.56)',
+    colorTextPlaceholder: 'rgba(0, 0, 0, 0.54)',
+    colorError: '#d32f2f',
+    colorWarningText: '#874d00',
+    colorSuccessText: '#237804',
+    colorInfoText: '#0958d9',
+    // The outline is all that marks out an empty field or a default button.
+    colorBorder: '#8c8c8c',
+  },
+};
+
+const darkContrast: ThemeConfig = {
+  token: {
+    colorPrimaryBorder: '#3fa8a8',
+    colorLink: '#69b1ff',
+    colorTextTertiary: 'rgba(255, 255, 255, 0.5)',
+    colorTextPlaceholder: 'rgba(255, 255, 255, 0.5)',
+    colorError: '#f04040',
+    colorErrorText: '#ff7875',
+    colorInfoText: '#69b1ff',
+    colorBorder: '#6b6b6b',
+  },
+  components: {
+    // The brand colour as text is too dark to read on the dark page; these are the places antd
+    // draws it as text rather than as a fill.
+    Menu: { itemSelectedColor: '#5cbdbd' },
+    Tabs: { itemSelectedColor: '#5cbdbd', itemActiveColor: '#5cbdbd', inkBarColor: '#5cbdbd' },
+  },
+};
+
+
+/**
  * How the stack of records inside one day of a month grid is allowed to grow — an override of the
  * calendar's own shipped sizing, kept here with the rest of the theming rather than in the page
  * that draws the grid.
@@ -94,12 +149,14 @@ export function resolveDark(preference: Appearance['theme']): boolean {
  */
 export function buildThemeConfig(appearance: Appearance): ThemeConfig {
   const dark = resolveDark(appearance.theme);
+  const contrast = dark ? darkContrast : lightContrast;
   return {
     ...themeConfig,
     algorithm: [
       dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
       ...(appearance.density === 'compact' ? [theme.compactAlgorithm] : []),
     ],
-    token: { ...themeConfig.token, motion: !appearance.reduceMotion },
+    token: { ...themeConfig.token, ...contrast.token, motion: !appearance.reduceMotion },
+    components: { ...themeConfig.components, ...contrast.components },
   };
 }
