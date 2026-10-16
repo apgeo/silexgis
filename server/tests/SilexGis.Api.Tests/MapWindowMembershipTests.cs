@@ -45,13 +45,20 @@ public sealed class MapWindowMembershipTests : IAsyncLifetime, IDisposable, ICla
 
     private readonly SilexGisApiFactory factory;
 
+    private readonly PostgresFixture postgres;
+
     private HttpClient owner = null!;
     private HttpClient viewer = null!;
+    private HttpClient granted = null!;
+    private Guid grantedId;
     private long caveTypeId;
     private long entranceTypeId;
 
-    public MapWindowMembershipTests(PostgresFixture postgres) =>
+    public MapWindowMembershipTests(PostgresFixture postgres)
+    {
+        this.postgres = postgres;
         factory = new SilexGisApiFactory(postgres.ConnectionString);
+    }
 
     private static double Cell => LocationProtection.CellDegrees(GridMeters);
 
@@ -60,6 +67,7 @@ public sealed class MapWindowMembershipTests : IAsyncLifetime, IDisposable, ICla
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"win-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"win-view-{suffix}@t.local");
+        grantedId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"win-grant-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -70,6 +78,7 @@ public sealed class MapWindowMembershipTests : IAsyncLifetime, IDisposable, ICla
 
         owner = await AuthHelper.BearerClientAsync(factory, $"win-own-{suffix}@t.local");
         viewer = await AuthHelper.BearerClientAsync(factory, $"win-view-{suffix}@t.local");
+        granted = await AuthHelper.BearerClientAsync(factory, $"win-grant-{suffix}@t.local");
     }
 
     /// <summary>
@@ -211,6 +220,112 @@ public sealed class MapWindowMembershipTests : IAsyncLifetime, IDisposable, ICla
     }
 
     /// <summary>
+    /// Exact placement by a grant, not by ownership, is what makes a window exact for a caller:
+    /// somebody holding ViewExactLocation on the protected cave sees the entrance come and go at
+    /// its true position, exactly as the owner does, while the ordinary reader beside them does
+    /// not. Without this half a rule that only recognised the owner arm would pass.
+    /// </summary>
+    [Theory]
+    [InlineData(6, 13.5, 55.2)]
+    [InlineData(14, 16.5, 56.6)]
+    public async Task A_caller_granted_exact_view_who_is_not_the_owner_gets_the_exact_window(
+        int zoom, double nearLon, double nearLat)
+    {
+        var snappedLon = Math.Round(nearLon / Cell, MidpointRounding.AwayFromZero) * Cell;
+        var snappedLat = Math.Round(nearLat / Cell, MidpointRounding.AwayFromZero) * Cell;
+        var lon = snappedLon - (0.3 * Cell);
+        var lat = snappedLat + (0.1 * Cell);
+        var step = 0.05 * Cell;
+
+        var caveId = await CreateCaveWithEntranceAsync(owner, "Window Granted", lon, lat, locationProtected: true);
+        var grant = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/access", new
+        {
+            entries = new[]
+            {
+                new
+                {
+                    subjectKind = "user",
+                    subjectId = grantedId,
+                    effect = "allow",
+                    actions = "read, viewExactLocation",
+                    scopeKind = "object",
+                },
+            },
+        });
+        grant.StatusCode.ShouldBe(HttpStatusCode.OK, await grant.Content.ReadAsStringAsync());
+
+        var westInside = Window(lon - step, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4);
+        var westOutside = Window(lon + step, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4);
+
+        (await CountAsync(granted, westInside, zoom)).ShouldBe(1);
+        (await CountAsync(granted, westOutside, zoom)).ShouldBe(0, "a granted caller places the entrance exactly");
+        (await CountAsync(viewer, westInside, zoom)).ShouldBe(1);
+        (await CountAsync(viewer, westOutside, zoom)).ShouldBe(1, "the ordinary reader is still decided on the snapped point");
+    }
+
+    /// <summary>
+    /// <c>/features?bbox</c> with no <c>kind</c> asks the membership rule about every kind at
+    /// once, which is a different statement from the one-kind form the other cases drive.
+    /// </summary>
+    [Fact]
+    public async Task A_listing_with_no_kind_decides_a_protected_point_on_its_shown_position()
+    {
+        var snappedLon = Math.Round(26.5 / Cell, MidpointRounding.AwayFromZero) * Cell;
+        var snappedLat = Math.Round(54.5 / Cell, MidpointRounding.AwayFromZero) * Cell;
+        var lon = snappedLon - (0.3 * Cell);
+        var lat = snappedLat + (0.1 * Cell);
+        var step = 0.05 * Cell;
+        await CreateGenericAsync("Window Anykind", new { type = "Point", coordinates = new[] { lon, lat } });
+
+        var westInside = Window(lon - step, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4);
+        var westOutside = Window(lon + step, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4);
+
+        (await ListedAsync(viewer, "features-any-kind", westInside)).ShouldBe(1);
+        (await ListedAsync(viewer, "features-any-kind", westOutside)).ShouldBe(1, "the west edge crossed the true position and the answer moved");
+        (await ListedAsync(owner, "features-any-kind", westInside)).ShouldBe(1);
+        (await ListedAsync(owner, "features-any-kind", westOutside)).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A hidden row cannot take a slot of a capped answer. With the cap at one, a window holding
+    /// a protected entrance whose shown point lies outside it and an ordinary entrance inside it
+    /// answers with the ordinary entrance — even though the protected one is older and so sorts
+    /// first by id, which is the order the cap is applied in.
+    /// </summary>
+    [Fact]
+    public async Task A_hidden_entrance_cannot_take_the_only_slot_of_a_capped_answer()
+    {
+        using var capped = new SilexGisApiFactory(
+            postgres.ConnectionString, new Dictionary<string, string?> { ["Map:MaxPoints"] = "1" });
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        _ = await AuthHelper.CreateUserAsync(capped, GlobalRoles.Editor, $"win-cap-own-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(capped, GlobalRoles.Viewer, $"win-cap-view-{suffix}@t.local");
+        using var cappedOwner = await AuthHelper.BearerClientAsync(capped, $"win-cap-own-{suffix}@t.local");
+        using var cappedViewer = await AuthHelper.BearerClientAsync(capped, $"win-cap-view-{suffix}@t.local");
+
+        var snappedLon = Math.Round(17.5 / Cell, MidpointRounding.AwayFromZero) * Cell;
+        var snappedLat = Math.Round(57.5 / Cell, MidpointRounding.AwayFromZero) * Cell;
+        var hiddenLon = snappedLon - (0.3 * Cell);
+        var hiddenLat = snappedLat + (0.1 * Cell);
+
+        // Created first, so its id sorts first: the slot it would take is the only one there is.
+        await CreateCaveWithEntranceAsync(cappedOwner, "Window Hidden", hiddenLon, hiddenLat, locationProtected: true);
+        var visibleCave = await CreateCaveWithEntranceAsync(
+            cappedOwner, "Window Visible", hiddenLon + (0.1 * Cell), hiddenLat, locationProtected: false);
+
+        // The window holds both true positions and not the protected entrance's snapped point.
+        var window = Window(hiddenLon - (0.05 * Cell), snappedLat - 0.1, snappedLon - (0.1 * Cell), snappedLat + 0.1);
+        var viewerFeatures = (await EntrancesAsync(cappedViewer, window, 14))["features"]!.AsArray();
+        viewerFeatures.Count.ShouldBe(1, "the cap still admits one row");
+        viewerFeatures[0]!["properties"]!["caveId"]!.GetValue<Guid>().ShouldBe(visibleCave);
+
+        // The control: the owner places both, and the older one does take the slot.
+        var ownerFeatures = (await EntrancesAsync(cappedOwner, window, 14))["features"]!.AsArray();
+        ownerFeatures.Count.ShouldBe(1);
+        ownerFeatures[0]!["properties"]!["caveId"]!.GetValue<Guid>().ShouldNotBe(visibleCave);
+    }
+
+    /// <summary>
     /// A window the wrong way round, or off the globe, is refused by both layers that decide
     /// membership per row, on both branches of the entrance layer. Read instead, it answered
     /// unprotected rows and no protected ones on the points branch and nothing at all on the
@@ -237,6 +352,7 @@ public sealed class MapWindowMembershipTests : IAsyncLifetime, IDisposable, ICla
         {
             "map-features" => $"/api/v1/map/features?bbox={bbox}&kinds=generic",
             "features" => $"/api/v1/features?bbox={bbox}&kind=generic",
+            "features-any-kind" => $"/api/v1/features?bbox={bbox}",
             "caves" => $"/api/v1/caves?bbox={bbox}",
             _ => throw new ArgumentOutOfRangeException(nameof(route)),
         };
@@ -339,6 +455,7 @@ public sealed class MapWindowMembershipTests : IAsyncLifetime, IDisposable, ICla
     {
         owner.Dispose();
         viewer.Dispose();
+        granted.Dispose();
         return Task.CompletedTask;
     }
 
