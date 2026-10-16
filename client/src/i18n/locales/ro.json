@@ -1050,6 +1050,26 @@
     "batchStarted": "Încărcat"
   },
   "gallery": {
+    "filter": {
+      "advanced": "Condiții…",
+      "advancedTitle": "Condiții pentru fotografii",
+      "on": "active",
+      "applySaved": "Aplică o vizualizare salvată a galeriei…",
+      "noSaved": "Încă nu există filtre salvate pentru fotografii",
+      "saveAs": "Salvează ca vizualizare…",
+      "manage": "Filtre salvate",
+      "forget": "Nu mai numi această vizualizare salvată",
+      "active": "Vizualizare salvată: {{name}}",
+      "activeUnavailable": "Vizualizarea salvată nu îți este disponibilă",
+      "changed": "modificată între timp",
+      "saveTitle": "Salvează aceste condiții ca vizualizare a galeriei",
+      "saved": "Salvată ca „{{name}}”.",
+      "savedUnreadable": "Acel filtru salvat nu poate fi citit cu accesul tău, așa că nu a fost aplicat.",
+      "savedNotAboutPhotographs": "Acel filtru salvat nu se referă la fotografii.",
+      "unreadableLink": "Condițiile din acest link nu au putut fi citite, așa că au fost lăsate deoparte. Cere-i celui care l-a trimis un link nou.",
+      "refused": "Aceste condiții nu au putut fi aplicate. Modifică-le sau nu mai numi vizualizarea salvată.",
+      "unsavedControls": "O vizualizare salvată păstrează căutarea, eticheta, datele și condițiile. Fotograful, albumul, „fără poziție” și ce a deschis un link în galerie — o peșteră, o tură, o tabără, o zonă de pe hartă — nu sunt păstrate și se aleg din nou de fiecare dată."
+    },
     "title": "Fotografii",
     "publicTitle": "Galerie",
     "albums": "Albume",
@@ -5191,6 +5211,28 @@
           "published": "Publicată",
           "cancelled": "Anulată",
           "delayed": "Amânată"
+        },
+        "mapKinds": {
+          "geological": "Geologică",
+          "topographic": "Topografică",
+          "tourist": "Turistică",
+          "caveMap": "Hartă de peșteră",
+          "other": "Altele"
+        },
+        "surveyModelFormats": {
+          "lox": "Therion (.lox)",
+          "survex3d": "Survex (.3d)",
+          "stl": "Plasă de pereți (.stl)"
+        },
+        "geofileFormats": {
+          "gpx": "GPX",
+          "kml": "KML",
+          "geoJson": "GeoJSON",
+          "shapefile": "Shapefile",
+          "wkt": "WKT",
+          "wkb": "WKB",
+          "kmz": "KMZ",
+          "csv": "CSV"
         }
       }
     },
@@ -5198,7 +5240,12 @@
       "feature": "Obiective",
       "tripLog": "Jurnale de tură",
       "mapView": "Vizualizări de hartă",
-      "document": "Documente"
+      "document": "Documente",
+      "georeferencedMap": "Hărți georeferențiate",
+      "cabinet": "Dulapuri",
+      "surveyModel": "Modele topografice",
+      "photograph": "Fotografii",
+      "geofile": "Fișiere de geodate"
     },
     "fields": {
       "name": "Nume",
@@ -5225,7 +5272,16 @@
       "depth": "Denivelare (m)",
       "caveType": "Tip de peșteră",
       "otherToponyms": "Alte denumiri",
-      "property": "Proprietate"
+      "property": "Proprietate",
+      "mapKind": "Tip de hartă",
+      "surveyFormat": "Format topografie",
+      "surveyedAt": "Topografiat la",
+      "isCurrent": "Model curent",
+      "takenAt": "Fotografiat la",
+      "caption": "Descriere",
+      "placeName": "Nume de loc",
+      "datedAt": "Datată (fotografiată, altfel încărcată)",
+      "fileFormat": "Format fișier"
     },
     "problems": {
       "noWorlds": "Alege cel puțin un fel de obiect de căutat.",
@@ -5262,7 +5318,8 @@
       "features": "Toate obiectivele",
       "documents": "Documente",
       "trips": "Ture",
-      "views": "Vizualizări"
+      "views": "Vizualizări",
+      "photographs": "Fotografii"
     }
   },
   "notificationHealth": {

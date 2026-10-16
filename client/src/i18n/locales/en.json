@@ -1050,6 +1050,26 @@
     "batchStarted": "Uploaded"
   },
   "gallery": {
+    "filter": {
+      "advanced": "Conditions…",
+      "advancedTitle": "Photograph conditions",
+      "on": "on",
+      "applySaved": "Apply a saved gallery view…",
+      "noSaved": "No saved photograph filters yet",
+      "saveAs": "Save as view…",
+      "manage": "Saved filters",
+      "forget": "Stop naming this saved view",
+      "active": "Saved view: {{name}}",
+      "activeUnavailable": "Saved view not available to you",
+      "changed": "changed since",
+      "saveTitle": "Save these conditions as a gallery view",
+      "saved": "Saved as “{{name}}”.",
+      "savedUnreadable": "That saved filter cannot be read with your access, so it was not applied.",
+      "savedNotAboutPhotographs": "That saved filter is not about photographs.",
+      "unreadableLink": "The conditions in this link could not be read, so they were left out. Ask whoever sent it for a fresh link.",
+      "refused": "These conditions could not be applied. Change them, or stop naming the saved view.",
+      "unsavedControls": "A saved view keeps the search, the tag, the dates and the conditions. The photographer, the album, “without a position” and what a link opened the gallery on — a cave, a trip, a camp, a map extent — are not kept, and are set afresh each time."
+    },
     "title": "Photographs",
     "publicTitle": "Gallery",
     "albums": "Albums",
@@ -5191,6 +5211,28 @@
           "published": "Published",
           "cancelled": "Cancelled",
           "delayed": "Delayed"
+        },
+        "mapKinds": {
+          "geological": "Geological",
+          "topographic": "Topographic",
+          "tourist": "Tourist",
+          "caveMap": "Cave map",
+          "other": "Other"
+        },
+        "surveyModelFormats": {
+          "lox": "Therion (.lox)",
+          "survex3d": "Survex (.3d)",
+          "stl": "Wall mesh (.stl)"
+        },
+        "geofileFormats": {
+          "gpx": "GPX",
+          "kml": "KML",
+          "geoJson": "GeoJSON",
+          "shapefile": "Shapefile",
+          "wkt": "WKT",
+          "wkb": "WKB",
+          "kmz": "KMZ",
+          "csv": "CSV"
         }
       }
     },
@@ -5198,7 +5240,12 @@
       "feature": "Features",
       "tripLog": "Trip logs",
       "mapView": "Map views",
-      "document": "Documents"
+      "document": "Documents",
+      "georeferencedMap": "Georeferenced maps",
+      "cabinet": "Cabinets",
+      "surveyModel": "Survey models",
+      "photograph": "Photographs",
+      "geofile": "Geodata files"
     },
     "fields": {
       "name": "Name",
@@ -5225,7 +5272,16 @@
       "depth": "Depth (m)",
       "caveType": "Cave type",
       "otherToponyms": "Other names",
-      "property": "Property"
+      "property": "Property",
+      "mapKind": "Map kind",
+      "surveyFormat": "Survey format",
+      "surveyedAt": "Surveyed on",
+      "isCurrent": "Current model",
+      "takenAt": "Taken on",
+      "caption": "Caption",
+      "placeName": "Place name",
+      "datedAt": "Dated (taken, else uploaded)",
+      "fileFormat": "File format"
     },
     "problems": {
       "noWorlds": "Choose at least one kind of object to search.",
@@ -5262,7 +5318,8 @@
       "features": "All features",
       "documents": "Documents",
       "trips": "Trips",
-      "views": "Views"
+      "views": "Views",
+      "photographs": "Photographs"
     }
   },
   "notificationHealth": {

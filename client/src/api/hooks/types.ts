@@ -395,6 +395,10 @@ export interface PhotoQueryParams {
   from?: string;
   to?: string;
   search?: string;
+  /** The photograph world's conditions, as a filter link token. */
+  filter?: string;
+  /** A saved photograph filter, run under the caller's own access. */
+  savedFilterId?: string;
   page?: number;
   pageSize?: number;
 }
