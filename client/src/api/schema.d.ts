@@ -658,28 +658,6 @@ export interface paths {
         };
         /** Geotagged photos as GeoJSON points for the given bbox; photos touching protected features withheld. */
         get: operations["mapPhotos"];
-        get: {
-            parameters: {
-                query: {
-                    bbox: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["PhotoFeatureCollection"];
-                    };
-                };
-            };
-        };
         put?: never;
         post?: never;
         delete?: never;
@@ -696,31 +674,7 @@ export interface paths {
             cookie?: never;
         };
         /** Public cave entrances for a shared view's link (anonymous): clusters below the cluster zoom, protected positions snapped. */
-        get: {
-            parameters: {
-                query: {
-                    bbox: string;
-                    zoom?: number;
-                };
-                header?: never;
-                path: {
-                    token: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["FeatureCollection"];
-                    };
-                };
-            };
-        };
+        get: operations["sharedViewMapEntrances"];
         put?: never;
         post?: never;
         delete?: never;
@@ -737,30 +691,7 @@ export interface paths {
             cookie?: never;
         };
         /** Public surface features for a shared view's link (anonymous): protected points snapped, protected outlines left out. */
-        get: {
-            parameters: {
-                query: {
-                    bbox: string;
-                };
-                header?: never;
-                path: {
-                    token: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["FeatureCollection"];
-                    };
-                };
-            };
-        };
+        get: operations["sharedViewMapFeatures"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1357,31 +1288,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read-only shared view by token (anonymous). */
-        get: operations["mapViewShared"];
         /** Read-only shared view by token (anonymous): its document, a keyless background and which data overlays it draws. */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    token: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["SharedViewDto"];
-                    };
-                };
-            };
-        };
+        get: operations["mapViewShared"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4541,43 +4449,6 @@ export interface paths {
         };
         /** Photographs the caller may see, newest first, narrowed by cave, feature, trip, camp, caver, tag, album, camera, date or map extent. */
         get: operations["photoList"];
-        get: {
-            parameters: {
-                query?: {
-                    CaveId?: string;
-                    FeatureId?: string;
-                    TripLogId?: string;
-                    CaverId?: string;
-                    TagId?: number;
-                    AlbumId?: string;
-                    UploadBatchId?: string;
-                    Camera?: string;
-                    Bbox?: string;
-                    Unplaced?: boolean;
-                    From?: string;
-                    To?: string;
-                    Search?: string;
-                    ExpeditionId?: string;
-                    page?: number;
-                    pageSize?: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["PhotoPage"];
-                    };
-                };
-            };
-        };
         put?: never;
         post?: never;
         delete?: never;
@@ -16697,6 +16568,15 @@ export interface operations {
                     "application/json": components["schemas"]["FeatureCollection"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
                 headers: {
@@ -16730,6 +16610,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeatureCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Unauthorized */
@@ -16927,11 +16816,114 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FeatureCollection"];
+                    "application/json": components["schemas"]["PhotoFeatureCollection"];
                 };
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    sharedViewMapEntrances: {
+        parameters: {
+            query: {
+                bbox: string;
+                zoom?: number;
+            };
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    sharedViewMapFeatures: {
+        parameters: {
+            query: {
+                bbox: string;
+            };
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18107,6 +18099,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SharedViewDto"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -26646,7 +26656,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PagedResultOfPhotoDto"];
+                    "application/json": components["schemas"]["PhotoPage"];
                 };
             };
             /** @description Unauthorized */
