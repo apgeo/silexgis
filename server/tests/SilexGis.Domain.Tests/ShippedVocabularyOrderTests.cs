@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Shouldly;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Expeditions;
 using SilexGis.Domain.ResLinks;
 using SilexGis.Domain.Trips;
@@ -45,6 +46,11 @@ public class ShippedVocabularyOrderTests
                 "trip-searched-not-found", "trip-lead", "trip-follows-on-from", "text-of", "map-plan-of",
                 "map-profile-of", "map-other-of", "map-station-point"],
             [.. ResLinkRelationTypeSeeds.All.Select(s => s.Code)]
+        },
+        {
+            "document kinds",
+            ["survey_report", "trip_report", "map", "photo", "permit", "article", "correspondence", "other"],
+            [.. DocumentTypeSeeds.All.Select(s => s.Code)]
         },
     };
 

@@ -288,23 +288,21 @@ public static class TaxonomySeeder
             }}
             """;
 
-        (string Code, string Name, string? Schema)[] items =
-        [
-            ("survey_report", "Survey report", surveyReportSchema),
-            ("trip_report", "Trip report", tripReportSchema),
-            ("map", "Map / plan", null),
-            ("photo", "Photograph", null),
-            ("permit", "Permit / authorization", permitSchema),
-            ("article", "Article / publication", null),
-            ("correspondence", "Correspondence", null),
-            ("other", "Other document", null),
-        ];
+        // The shipped kinds and their order come from the shared seed list, so the write path
+        // refusing to re-code one and this insert can never disagree about which codes those are.
+        var schemas = new Dictionary<string, string>
+        {
+            ["survey_report"] = surveyReportSchema,
+            ["trip_report"] = tripReportSchema,
+            ["permit"] = permitSchema,
+        };
 
         var existing = await db.DocumentTypes.ToDictionaryAsync(x => x.Code, ct);
-        var sort = 0;
-        foreach (var (code, name, schema) in items)
+        foreach (var (seed, position) in Domain.Documents.DocumentTypeSeeds.All.Select((s, i) => (s, i)))
         {
-            sort += 10;
+            var sort = ShippedVocabularyOrder.Of(position);
+            var (code, name) = (seed.Code, seed.Name);
+            var schema = schemas.GetValueOrDefault(code);
             if (existing.TryGetValue(code, out var row))
             {
                 // Backfill a shipped schema only onto a kind nobody has edited. A null schema

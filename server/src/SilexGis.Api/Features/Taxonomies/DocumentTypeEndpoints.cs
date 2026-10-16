@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Documents;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
@@ -13,11 +14,12 @@ namespace SilexGis.Api.Features.Taxonomies;
 /// A kind of document, and the JSON Schema documents of that kind describe themselves with.
 /// The raw schema text is served so a client can build the metadata form from it rather
 /// than shipping a form per kind; <c>MetadataSchemaVersion</c> is what a document stamps
-/// when its metadata is validated.
+/// when its metadata is validated. <c>IsSeeded</c> travels with the row so an editor can say
+/// before saving that a shipped kind keeps its code.
 /// </summary>
 public sealed record DocumentTypeDto(
     long Id, string Code, string Name, string? Description, int SortOrder,
-    int MetadataSchemaVersion, string? MetadataSchema);
+    int MetadataSchemaVersion, string? MetadataSchema, bool IsSeeded);
 
 /// <summary>A document kind as an editor asks for it to be. A blank schema means "no schema".</summary>
 public sealed record DocumentTypeRequest(
@@ -60,7 +62,9 @@ public static class DocumentTypeEndpoints
             .WithSummary("Adds a document kind.");
         types.MapPut("/{id:long}", UpdateAsync)
             .WithValidation<DocumentTypeRequest>()
-            .WithSummary("Updates a document kind; a changed metadata schema publishes a new version.");
+            .WithSummary(
+                "Updates a document kind; a changed metadata schema publishes a new version. A shipped "
+                + "kind keeps its code (400 document_type.seeded_immutable).");
 
         return api;
     }
@@ -74,12 +78,11 @@ public static class DocumentTypeEndpoints
             return ApiProblems.Forbidden();
         }
 
-        return TypedResults.Ok(await db.DocumentTypes.AsNoTracking()
+        var rows = await db.DocumentTypes.AsNoTracking()
             .OrderBy(t => t.SortOrder)
             .ThenBy(t => t.Id)
-            .Select(t => new DocumentTypeDto(
-                t.Id, t.Code, t.Name, t.Description, t.SortOrder, t.MetadataSchemaVersion, t.MetadataSchema))
-            .ToListAsync(ct));
+            .ToListAsync(ct);
+        return TypedResults.Ok(rows.Select(ToDto).ToList());
     }
 
     private static async Task<Results<Created<DocumentTypeDto>, ProblemHttpResult>> CreateAsync(
@@ -140,5 +143,5 @@ public static class DocumentTypeEndpoints
 
     private static DocumentTypeDto ToDto(Domain.Entities.DocumentType type) =>
         new(type.Id, type.Code, type.Name, type.Description, type.SortOrder,
-            type.MetadataSchemaVersion, type.MetadataSchema);
+            type.MetadataSchemaVersion, type.MetadataSchema, DocumentTypeSeeds.IsSeeded(type.Code));
 }

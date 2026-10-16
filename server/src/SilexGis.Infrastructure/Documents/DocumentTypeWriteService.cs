@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Metadata;
 using SilexGis.Infrastructure.Persistence;
@@ -23,6 +24,7 @@ public sealed class DocumentTypeWriteService(SilexGisDbContext db, ITypedPropert
     public const string InvalidSchemaCode = "document_type.schema_invalid";
     public const string CodeTakenCode = "document_type.code_taken";
     public const string NotFoundCode = "document_type.not_found";
+    public const string SeededImmutableCode = "document_type.seeded_immutable";
 
     /// <summary>
     /// Adds a kind of document, together with its first published schema. Owns its
@@ -73,7 +75,8 @@ public sealed class DocumentTypeWriteService(SilexGisDbContext db, ITypedPropert
     /// </summary>
     /// <exception cref="DocumentWriteException">
     /// <c>document_type.not_found</c>, <c>document_type.code_taken</c>,
-    /// <c>document_type.schema_invalid</c>.
+    /// <c>document_type.schema_invalid</c>, <c>document_type.seeded_immutable</c> when a shipped
+    /// kind would be given another code.
     /// </exception>
     public async Task<DocumentType> UpdateAsync(long id, DocumentTypeInput input, CancellationToken ct = default)
     {
@@ -81,6 +84,14 @@ public sealed class DocumentTypeWriteService(SilexGisDbContext db, ITypedPropert
 
         var type = await db.DocumentTypes.FirstOrDefaultAsync(t => t.Id == id, ct)
             ?? throw new DocumentWriteException(NotFoundCode, "The document type no longer exists.");
+
+        // A shipped code is what the seeder matches its row by and what clients translate the
+        // label by: re-coded, the row would be seeded again under its own code on the next start
+        // and lose its translated label. The wording, the order and the schema stay editable.
+        if (DocumentTypeSeeds.IsSeeded(type.Code) && input.Code != type.Code)
+        {
+            throw new DocumentWriteException(SeededImmutableCode, "A shipped document type keeps its code.");
+        }
 
         if (await db.DocumentTypes.AsNoTracking().AnyAsync(t => t.Code == input.Code && t.Id != id, ct))
         {

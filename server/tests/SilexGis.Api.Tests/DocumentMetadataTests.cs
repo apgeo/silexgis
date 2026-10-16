@@ -362,6 +362,41 @@ public sealed class DocumentMetadataTests : IAsyncLifetime, IDisposable, IClassF
     }
 
     [Fact]
+    public async Task A_shipped_kind_keeps_its_code_and_a_club_kind_does_not_have_to()
+    {
+        var types = await owner.GetFromJsonAsync<JsonElement>("/api/v1/document-types");
+        var shipped = types.EnumerateArray().Single(t => t.GetProperty("code").GetString() == "trip_report");
+        shipped.GetProperty("isSeeded").GetBoolean().ShouldBeTrue();
+        var shippedId = shipped.GetProperty("id").GetInt64();
+        object Write(string code, JsonElement row) => new
+        {
+            code,
+            name = row.GetProperty("name").GetString(),
+            description = (string?)null,
+            sortOrder = row.GetProperty("sortOrder").GetInt32(),
+            metadataSchema = row.GetProperty("metadataSchema").GetString(),
+        };
+
+        // Re-coded, the seeder would insert the shipped row again under its own code on the next
+        // start, and the translated label looked up by that code would be lost.
+        var recoded = await admin.PutAsJsonAsync($"/api/v1/document-types/{shippedId}", Write("expedition_report", shipped));
+        recoded.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ReadCodeAsync(recoded)).ShouldBe("document_type.seeded_immutable");
+
+        // The refusal is about the code alone: the same row written back with its own code is fine.
+        var kept = await admin.PutAsJsonAsync($"/api/v1/document-types/{shippedId}", Write("trip_report", shipped));
+        kept.StatusCode.ShouldBe(HttpStatusCode.OK, await kept.Content.ReadAsStringAsync());
+
+        // And a kind a club added is the club's to re-code.
+        var clubId = await CreateTypeAsync("dig_diary", null);
+        var club = (await owner.GetFromJsonAsync<JsonElement>("/api/v1/document-types"))
+            .EnumerateArray().Single(t => t.GetProperty("id").GetInt64() == clubId);
+        club.GetProperty("isSeeded").GetBoolean().ShouldBeFalse();
+        var renamed = await admin.PutAsJsonAsync($"/api/v1/document-types/{clubId}", Write("dig_journal", club));
+        renamed.StatusCode.ShouldBe(HttpStatusCode.OK, await renamed.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task A_metadata_schema_that_is_not_a_schema_is_refused()
     {
         var response = await admin.PostAsJsonAsync("/api/v1/document-types", new
