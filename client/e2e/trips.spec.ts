@@ -446,7 +446,8 @@ test('what a trip measured and what it found are stored on it, not held by the p
     .getByRole('dialog')
     .getByRole('textbox', { name: /^\*?\s*Title$/ })
     .fill(title);
-  await page.getByLabel('Trip type').click();
+  // In the dialog too: the listing's type filter behind it is labelled "Trip type" as well.
+  await page.getByRole('dialog').getByLabel('Trip type').click();
   // Waited for before it is clicked: a click landing while the list is still opening selects
   // nothing at all, and the trip is then created with no purpose.
   const purpose = page.getByTitle('Survey / mapping', { exact: true });
