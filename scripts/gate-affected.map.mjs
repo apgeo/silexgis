@@ -116,7 +116,7 @@ export const groups = {
   caves: [
     'AssociationDisclosureTests', 'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests',
     'CaveListingSortStabilityTests', 'CaveOverburdenTests', 'CaveSubtypeMissingTests',
-    'CenterlineTests', 'CenterlineColdCacheMeasurementTests', 'EntrancePlacementGuardTests',
+    'CenterlineTests', 'EntrancePlacementGuardTests',
     'HypsometryTests',
     'MapWindowMembershipTests', 'PerformanceTests',
     'PersistenceTests', 'ProtectionDepthTests', 'StructureComparisonTests', 'SurveyMeshTests',
@@ -176,6 +176,14 @@ export const groups = {
     'MapWindowMembershipTests', 'MapClusterConfigurationTests',
   ],
   mapViews: ['MapViewTests'],
+  // The one statement deciding which protected rows a caller's window holds, on the position
+  // each caller is shown: every route that reads a window through it, and the plan pins on it.
+  windowMembership: [
+    'GeofileTests', 'MapClusterConfigurationTests', 'MapWindowMembershipTests', 'PerformanceTests',
+  ],
+  // How long a centreline is, measured once over its passage: the upload path and the survey
+  // compiler both ask it.
+  centerlines: ['CenterlineTests', 'SurveyGraphTests'],
   me: [
     'AccountEmailTests', 'AccountSettingsTests', 'CredentialRevocationTests',
     'PhoneCredentialTests', 'TwoFactorChannelTests', 'UiDefaultsTests',
@@ -352,9 +360,11 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Documents/': 'documents',
   'server/src/SilexGis.Infrastructure/Email/': 'notifications',
   'server/src/SilexGis.Infrastructure/Features/': 'geoFeatures',
+  'server/src/SilexGis.Infrastructure/Features/CenterlineSql.cs': 'centerlines',
   'server/src/SilexGis.Infrastructure/Files/': 'files',
   'server/src/SilexGis.Infrastructure/Filters/': 'filters',
   'server/src/SilexGis.Infrastructure/Geodata/': 'geofiles',
+  'server/src/SilexGis.Infrastructure/Geodata/WindowMembershipSql.cs': 'windowMembership',
   'server/src/SilexGis.Infrastructure/Import/': 'imports',
   'server/src/SilexGis.Infrastructure/Jobs/': 'jobs',
   // The two jobs that belong to terrain: running a build, and sweeping the rasters no build names.

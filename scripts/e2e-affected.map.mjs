@@ -45,6 +45,8 @@ export const specs = {
   cavingGroups: [
     'announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts', 'caver-caving-groups.spec.ts',
   ],
+  // How long an uploaded or compiled centreline is: the cave figures that show it.
+  centerlines: ['cave-statistics.spec.ts', 'survey-extraction.spec.ts'],
   checklists: ['checklists.spec.ts'],
   crs: [],
   dashboard: ['my-trips.spec.ts'],
@@ -131,6 +133,9 @@ export const specs = {
   ],
   uploads: ['uploads.spec.ts'],
   users: ['settings.spec.ts', 'permission-groups.spec.ts', 'users-admin.spec.ts'],
+  // Which protected rows a window holds, decided on the position each reader is shown — the
+  // workspace map's entrance and feature layers.
+  windowMembership: ['cave-clustering.spec.ts', 'map-editing.spec.ts'],
   workAreas: ['karst-density.spec.ts'],
 };
 
