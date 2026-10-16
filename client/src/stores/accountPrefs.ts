@@ -148,36 +148,6 @@ function diffPatch(from: unknown, to: unknown): unknown {
 }
 
 /**
- * The document trimmed to the server's limit, or null when even that cannot be done.
- *
- * Named layouts are the one preference that grows without bound, so they are what gives way —
- * the oldest first, since a list is appended to. The ones left out stay in this browser: it does
- * not take the account's word for a layout the account never had.
- */
-export function fitToBudget(
-  document: Record<string, unknown>,
-  maxLength: number = PREFERENCES_MAX_LENGTH,
-): { document: Record<string, unknown>; leftOutLayouts: number } | null {
-  let candidate = document;
-  let leftOut = 0;
-  while (preferencesLength(candidate) > maxLength) {
-    const layouts = candidate.layouts;
-    if (!Array.isArray(layouts) || layouts.length === 0) {
-      return null;
-    }
-    const rest = layouts.slice(1);
-    candidate = { ...candidate };
-    if (rest.length > 0) {
-      candidate.layouts = rest;
-    } else {
-      delete candidate.layouts;
-    }
-    leftOut++;
-  }
-  return { document: candidate, leftOutLayouts: leftOut };
-}
-
-/**
  * The stored document's account preferences, read for this browser: only the known keys, each
  * taken as stored. Absent keys are absent — the caller decides what an absent key means.
  */
@@ -390,7 +360,13 @@ export interface AccountWrite {
 
 /**
  * What to send to bring this browser's changes into the stored document, held to the server's
- * limit — or null when even leaving layouts out does not make it fit.
+ * limit — or null when it cannot be.
+ *
+ * Named layouts are the one preference that grows without bound, so they are what gives way: the
+ * newest of those this browser added, one at a time, until the document fits. Never one the
+ * account already holds — that would take it from every other browser the member uses to make
+ * room for one only this browser has. The ones left out stay in this browser, as layouts the
+ * account does not have yet; they go up with a later save once there is room.
  */
 export function planAccountWrite(
   stored: Record<string, unknown>,
@@ -398,36 +374,51 @@ export function planAccountWrite(
   local: AccountPrefs,
   maxLength: number = PREFERENCES_MAX_LENGTH,
 ): AccountWrite | null {
-  const patch = accountPrefsPatchSince(stored, base, local);
-  if (Object.keys(patch).length === 0) {
-    return { patch, leftOut: [] };
+  let patch = accountPrefsPatchSince(stored, base, local);
+  const held = new Set(layoutsOf(readAccountPrefs(stored)).map((layout) => layout.id));
+  const leftOut: string[] = [];
+  while (Object.keys(patch).length > 0 && preferencesLength(applyMergePatch(stored, patch)) > maxLength) {
+    const layouts = Array.isArray(patch.layouts) ? (patch.layouts as Layout[]) : [];
+    let newest = layouts.length - 1;
+    while (newest >= 0 && held.has(layouts[newest].id)) {
+      newest--;
+    }
+    if (newest < 0) {
+      return null;
+    }
+    leftOut.push(layouts[newest].id);
+    const rest = layouts.filter((_, index) => index !== newest);
+    patch = { ...patch };
+    if (rest.length > 0) {
+      patch.layouts = rest;
+    } else {
+      delete patch.layouts;
+    }
   }
-  const document = applyMergePatch(stored, patch) as Record<string, unknown>;
-  const fitted = fitToBudget(document, maxLength);
-  if (!fitted) {
-    return null;
-  }
-  if (fitted.leftOutLayouts === 0) {
-    return { patch, leftOut: [] };
-  }
-  const kept = Array.isArray(fitted.document.layouts) ? (fitted.document.layouts as Layout[]) : [];
-  const keptIds = new Set(kept.map((layout) => layout.id));
-  const leftOut = (document.layouts as Layout[]).filter((layout) => !keptIds.has(layout.id)).map((layout) => layout.id);
-  return { patch: { ...patch, layouts: kept.length > 0 ? kept : null }, leftOut };
+  return { patch, leftOut };
 }
 
 /**
- * The baseline once a write has been given up: what was changed here is taken as settled, except
- * the named layouts, so the refused change is not offered again at every save, and the next sign-in
- * takes the account's own values rather than holding on to one the account would not take. The
- * layouts keep their baseline: one the account never had stays this browser's.
+ * The baseline once a write has been given up: what was changed here is taken as settled, so the
+ * refused change is not offered again at every save, and the next sign-in takes the account's own
+ * values rather than holding on to one the account would not take — except a layout added here,
+ * which the account never had and which stays this browser's.
  */
 export function baselineAfterRefusal(base: AccountPrefs, local: AccountPrefs): AccountPrefs {
   const settled: AccountPrefs = {};
   for (const key of ACCOUNT_PREF_KEYS) {
-    const value = key === 'layouts' ? base.layouts : local[key];
-    if (value !== undefined) {
-      settled[key] = value;
+    if (key === 'layouts') {
+      // A layout changed or removed here is settled like any other refused change; one added here
+      // is left out of the baseline, so that it stays an addition this browser keeps.
+      const known = new Set(layoutsOf(base).map((layout) => layout.id));
+      const layouts = layoutsOf(local).filter((layout) => known.has(layout.id));
+      if (layouts.length > 0) {
+        settled.layouts = layouts;
+      }
+      continue;
+    }
+    if (local[key] !== undefined) {
+      settled[key] = local[key];
     }
   }
   return settled;

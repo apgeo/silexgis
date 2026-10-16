@@ -7,7 +7,6 @@ import {
   accountPrefsPatchSince,
   applyMergePatch,
   changedSince,
-  fitToBudget,
   mergeAccountPrefs,
   mergeLayouts,
   pickAccountPrefs,
@@ -160,22 +159,37 @@ describe('two browsers writing to one account', () => {
   });
 });
 
-describe('fitToBudget', () => {
+describe('planAccountWrite held to the limit', () => {
   const layout = (n: number) => ({ id: `l${n}`, name: `Layout ${n}`, panels: { main: { width: 20 + n } } });
+  const ids = (layouts: unknown) => (layouts as { id: string }[]).map((l) => l.id);
 
-  it('leaves a document within the limit untouched', () => {
-    const document = { layouts: [layout(1)], coordinateFormat: 'utm' };
-    expect(fitToBudget(document)).toEqual({ document, leftOutLayouts: 0 });
+  it('sends this browser’s changes as they are when the document fits', () => {
+    expect(planAccountWrite({}, {}, { layouts: [layout(1)], coordinateFormat: 'utm' })).toEqual({
+      patch: { layouts: [layout(1)], coordinateFormat: 'utm' },
+      leftOut: [],
+    });
   });
 
-  it('leaves out the oldest layouts until the document fits', () => {
+  it('leaves out the newest layouts added here until the document fits', () => {
     const layouts = Array.from({ length: 20 }, (_, n) => layout(n));
     const size = JSON.stringify({ layouts }).length;
-    const fitted = fitToBudget({ layouts }, size - 10)!;
+    const write = planAccountWrite({}, {}, { layouts }, size - 10)!;
 
-    expect(fitted.leftOutLayouts).toBe(1);
-    expect((fitted.document.layouts as { id: string }[])[0].id).toBe('l1');
-    expect(JSON.stringify(fitted.document).length).toBeLessThanOrEqual(size - 10);
+    expect(write.leftOut).toEqual(['l19']);
+    expect(ids(write.patch.layouts)).toEqual(ids(layouts.slice(0, 19)));
+  });
+
+  it('never leaves out a layout the account already holds to make room for one added here', () => {
+    const held = Array.from({ length: 10 }, (_, n) => layout(n));
+    const stored = { layouts: held };
+    const size = JSON.stringify(stored).length;
+    const base = accountPrefsIn(stored);
+
+    const write = planAccountWrite(stored, base, { layouts: [...held, layout(99)] }, size + 5)!;
+
+    expect(write.leftOut).toEqual(['l99']);
+    // Nothing of the account's is touched: the layouts it holds are what it is sent.
+    expect(applyMergePatch(stored, write.patch)).toEqual(stored);
   });
 
   it('counts the document as the server does, a character outside the basic plane as two escapes', () => {
@@ -185,15 +199,16 @@ describe('fitToBudget', () => {
     expect(preferencesLength({ n: '🦇' })).toBe(JSON.stringify({ n: '' }).length + 12);
 
     const named = (n: number) => ({ id: `l${n}`, name: '🦇'.repeat(40) });
-    const document = { layouts: [named(1), named(2)] };
+    const layouts = [named(1), named(2)];
     // Room for one such layout as the server counts it — and, as JSON.stringify counts, for both.
-    const budget = preferencesLength({ layouts: [named(2)] });
-    expect(JSON.stringify(document).length).toBeLessThan(budget);
-    expect(fitToBudget(document, budget)!.leftOutLayouts).toBe(1);
+    const budget = preferencesLength({ layouts: [named(1)] });
+    expect(JSON.stringify({ layouts }).length).toBeLessThan(budget);
+    expect(planAccountWrite({}, {}, { layouts }, budget)!.leftOut).toEqual(['l2']);
   });
 
-  it('gives up when there are no layouts left to leave out', () => {
-    expect(fitToBudget({ selectors: { x: 'y'.repeat(PREFERENCES_MAX_LENGTH) } })).toBeNull();
+  it('gives up when there are no layouts of its own left to leave out', () => {
+    const selectors = { x: { presentation: 'y'.repeat(PREFERENCES_MAX_LENGTH) } };
+    expect(planAccountWrite({}, {}, { selectors })).toBeNull();
   });
 
   it('holds a realistic full workspace well inside the server limit', () => {

@@ -218,4 +218,29 @@ describe('account preferences between this browser and the account', () => {
     sync('account-a');
     await waitFor(() => expect(useUiPrefsStore.getState().coordinateFormat).toBe('dms'));
   });
+
+  it('leaves the layouts the account holds alone when one saved here does not fit, and keeps that one here', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // Saved from another browser, filling the account's document nearly to its limit.
+    stored = { layouts: layouts(19).map((layout) => ({ ...layout, name: `${layout.name} ${'x'.repeat(240)}` })) };
+    expect(JSON.stringify(stored).length).toBeGreaterThan(7500);
+    const held = stored.layouts;
+    sync('account-a');
+    await waitFor(() => expect(useUiPrefsStore.getState().layouts).toHaveLength(19));
+
+    act(() => useUiPrefsStore.getState().saveLayout('One more '.repeat(30), false));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(stored.layouts).toEqual(held);
+
+    // And after a reload, this browser still has it; the account still has every one of its own.
+    cleanup();
+    sync('account-a');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(useUiPrefsStore.getState().layouts).toHaveLength(20);
+    expect(stored.layouts).toEqual(held);
+  });
 });
