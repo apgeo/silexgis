@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login, mapAddress } from './helpers.ts';
+import { centreOnDemoCave, gotoRoute, login, mapAddress } from './helpers.ts';
 
 /** The camera the map's address says it is at: `#zoom/lat/lon`. */
 async function cameraLongitude(page: Page): Promise<number> {
@@ -84,11 +84,38 @@ test('the map workspace can be reached and driven from the keyboard', async ({ p
           - row /Zoom out/
   `);
 
-  // Escape closes it — and only it: the map's own Escape (clear the selection) stays out of it —
-  // and focus goes back to the map it was opened from.
+  // Escape closes it, and focus goes back to the map it was opened from.
   await page.keyboard.press('Escape');
   await expect(help).toBeHidden();
   await expect(map).toBeFocused();
+});
+
+/**
+ * The map's own Escape clears the selection, and the help is opened over the map — so one press
+ * must close the help and leave the selection alone: losing what one had selected to dismiss a
+ * list of keys is the kind of surprise that makes a keyboard user stop trusting Escape.
+ */
+test('Escape closes the help, and only it', async ({ page }) => {
+  await login(page);
+  // Something selected to lose: the feature list's "show on map" selects what it frames.
+  await centreOnDemoCave(page);
+  const selected = page.getByRole('heading', { name: 'Peștera Demo Mare' });
+  await expect(selected).toBeVisible({ timeout: 15_000 });
+
+  const map = page.getByRole('application', { name: /^Map\./ });
+  await map.focus();
+  await page.keyboard.press('?');
+  const help = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await expect(help).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(help).toBeHidden();
+  await expect(selected).toBeVisible();
+
+  // And the selection was one Escape could clear: with the help gone, the same key clears it —
+  // so the assertion above is about the help, not about a selection that would have stayed anyway.
+  await page.keyboard.press('Escape');
+  await expect(selected).toBeHidden();
 });
 
 test('the shortcut list also opens from a visible control on the map', async ({ page }) => {
