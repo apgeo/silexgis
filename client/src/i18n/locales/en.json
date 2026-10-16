@@ -562,6 +562,9 @@
     "changed": "changed since",
     "extra": "This filter also has conditions these controls do not show ({{count}}). They still narrow the list.",
     "clearExtra": "Remove them",
+    "editExtra": "Edit them",
+    "advanced": "Advanced filter…",
+    "advancedTitle": "Advanced filter",
     "saveTitle": "Save these conditions as a filter"
   },
   "savedFilters": {
@@ -5120,6 +5123,77 @@
     }
   },
   "filters": {
+    "editor": {
+      "apply": "Apply",
+      "count": "Matches: {{count}}",
+      "rowRefused": "The server cannot use this condition. Check its comparison and values, or remove it.",
+      "refused": "The server refused this filter. Check its conditions, or remove the ones you do not need.",
+      "allOf": "All of these (AND)",
+      "anyOf": "Any of these (OR)",
+      "combinator": "How the conditions combine",
+      "not": "Not",
+      "addCondition": "Add condition",
+      "addGroup": "Add group",
+      "removeCondition": "Remove condition",
+      "removeGroup": "Remove group",
+      "tooDeep": "Groups are nested at most {{max}} deep.",
+      "field": "Field",
+      "chooseField": "Choose a field",
+      "operator": "Comparison",
+      "value": "Value",
+      "from": "From",
+      "to": "To",
+      "yes": "Yes",
+      "no": "No",
+      "unavailableField": "a field not available to you",
+      "needsType": "Asked only together with its feature type in the same AND group.",
+      "propertyField": "Property: {{label}}",
+      "ops": {
+        "equals": "is",
+        "in": "is one of",
+        "contains": "contains",
+        "startsWith": "starts with",
+        "lessThan": "less than",
+        "lessOrEqual": "at most",
+        "greaterThan": "more than",
+        "greaterOrEqual": "at least",
+        "between": "between",
+        "isEmpty": "is empty",
+        "isNotEmpty": "is not empty",
+        "within": "within",
+        "inside": "inside"
+      },
+      "values": {
+        "featureKinds": {
+          "generic": "Generic",
+          "cave": "Cave",
+          "caveEntrance": "Cave entrance",
+          "centerline": "Centreline"
+        },
+        "featureCategories": {
+          "surface": "Surface",
+          "underground": "Underground",
+          "area": "Area",
+          "structure": "Structure"
+        },
+        "visibilities": {
+          "private": "Private",
+          "cavingGroup": "Caving group",
+          "authenticated": "Signed-in accounts",
+          "public": "Public"
+        },
+        "activityStates": {
+          "draft": "Draft",
+          "proposed": "Proposed",
+          "planned": "Planned",
+          "confirmed": "Confirmed",
+          "done": "Done",
+          "published": "Published",
+          "cancelled": "Cancelled",
+          "delayed": "Delayed"
+        }
+      }
+    },
     "worlds": {
       "feature": "Features",
       "tripLog": "Trip logs",
@@ -5150,7 +5224,8 @@
       "surveyedLength": "Surveyed length (m)",
       "depth": "Depth (m)",
       "caveType": "Cave type",
-      "otherToponyms": "Other names"
+      "otherToponyms": "Other names",
+      "property": "Property"
     },
     "problems": {
       "noWorlds": "Choose at least one kind of object to search.",

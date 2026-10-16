@@ -562,6 +562,9 @@
     "changed": "modificat între timp",
     "extra": "Acest filtru mai are condiții pe care aceste câmpuri nu le arată ({{count}}). Ele restrâng lista în continuare.",
     "clearExtra": "Eliminați-le",
+    "editExtra": "Editați-le",
+    "advanced": "Filtru avansat…",
+    "advancedTitle": "Filtru avansat",
     "saveTitle": "Salvați aceste condiții ca filtru"
   },
   "savedFilters": {
@@ -5120,6 +5123,77 @@
     }
   },
   "filters": {
+    "editor": {
+      "apply": "Aplică",
+      "count": "Rezultate: {{count}}",
+      "rowRefused": "Serverul nu poate folosi această condiție. Verificați comparația și valorile ei sau eliminați-o.",
+      "refused": "Serverul a refuzat acest filtru. Verificați condițiile sau eliminați-le pe cele de care nu aveți nevoie.",
+      "allOf": "Toate acestea (ȘI)",
+      "anyOf": "Oricare dintre acestea (SAU)",
+      "combinator": "Cum se combină condițiile",
+      "not": "Nu",
+      "addCondition": "Adaugă condiție",
+      "addGroup": "Adaugă grup",
+      "removeCondition": "Elimină condiția",
+      "removeGroup": "Elimină grupul",
+      "tooDeep": "Grupurile pot fi imbricate pe cel mult {{max}} niveluri.",
+      "field": "Câmp",
+      "chooseField": "Alege un câmp",
+      "operator": "Comparație",
+      "value": "Valoare",
+      "from": "De la",
+      "to": "Până la",
+      "yes": "Da",
+      "no": "Nu",
+      "unavailableField": "un câmp care nu îți este accesibil",
+      "needsType": "Se poate cere doar împreună cu tipul său de obiect, în același grup ȘI.",
+      "propertyField": "Proprietate: {{label}}",
+      "ops": {
+        "equals": "este",
+        "in": "este unul dintre",
+        "contains": "conține",
+        "startsWith": "începe cu",
+        "lessThan": "mai mic decât",
+        "lessOrEqual": "cel mult",
+        "greaterThan": "mai mare decât",
+        "greaterOrEqual": "cel puțin",
+        "between": "între",
+        "isEmpty": "este gol",
+        "isNotEmpty": "nu este gol",
+        "within": "în raza",
+        "inside": "în interiorul"
+      },
+      "values": {
+        "featureKinds": {
+          "generic": "Generic",
+          "cave": "Peșteră",
+          "caveEntrance": "Intrare de peșteră",
+          "centerline": "Linie de poligonație"
+        },
+        "featureCategories": {
+          "surface": "Suprafață",
+          "underground": "Subteran",
+          "area": "Zonă",
+          "structure": "Structură"
+        },
+        "visibilities": {
+          "private": "Privat",
+          "cavingGroup": "Club",
+          "authenticated": "Conturi autentificate",
+          "public": "Public"
+        },
+        "activityStates": {
+          "draft": "Ciornă",
+          "proposed": "Propusă",
+          "planned": "Planificată",
+          "confirmed": "Confirmată",
+          "done": "Încheiată",
+          "published": "Publicată",
+          "cancelled": "Anulată",
+          "delayed": "Amânată"
+        }
+      }
+    },
     "worlds": {
       "feature": "Obiective",
       "tripLog": "Jurnale de tură",
@@ -5150,7 +5224,8 @@
       "surveyedLength": "Lungime cartată (m)",
       "depth": "Denivelare (m)",
       "caveType": "Tip de peșteră",
-      "otherToponyms": "Alte denumiri"
+      "otherToponyms": "Alte denumiri",
+      "property": "Proprietate"
     },
     "problems": {
       "noWorlds": "Alege cel puțin un fel de obiect de căutat.",

@@ -97,11 +97,14 @@ export function isComplete(node: FilterNode): boolean {
       return true;
     }
 
+    // A range with one end written is not a range yet: the editor holds the unwritten end as an
+    // empty value in its position, so the count alone does not say the row is finished.
+    const filled = node.values.every((v) => v.value !== '' && v.value !== null);
     if (node.op === 'between') {
-      return node.values.length === 2;
+      return node.values.length === 2 && filled;
     }
 
-    return node.values.length >= 1 && node.values.every((v) => v.value !== '' && v.value !== null);
+    return node.values.length >= 1 && filled;
   }
 
   const children = node.node === 'not' ? [node.of] : node.of;
