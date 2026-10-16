@@ -52,6 +52,16 @@ public static class FeatureTypeSeeds
     public const string Sinkhole = "sinkhole";
 
     /// <summary>
+    /// A karst area: an outline a registry files caves under. With <see cref="Massif"/> it is the
+    /// kind the karstification index is published for in a map window, so a rename fails the build
+    /// rather than leaving that layer answering, plausibly, with no areas anywhere.
+    /// </summary>
+    public const string KarstArea = "karst_area";
+
+    /// <summary>A massif or mountain: the wider outline karst areas sit in. See <see cref="KarstArea"/>.</summary>
+    public const string Massif = "massif";
+
+    /// <summary>
     /// A mapped fracture or fault trace: the line somebody drew where the rock is broken. It is
     /// resolved by this code when a cave's passage trends are compared against the structure around
     /// it, so a rename of the shipped kind fails the build rather than turning that comparison into

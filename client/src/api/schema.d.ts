@@ -717,6 +717,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/map/karst-index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The karstification index of each karst area and massif in a bbox that the caller may place exactly, with its outline to draw, its class and its components. Areas the caller may not place are absent. */
+        get: operations["mapKarstIndexKarstIndex"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/map/point-pattern": {
         parameters: {
             query?: never;
@@ -10642,6 +10659,42 @@ export interface components {
             class: components["schemas"]["KarstificationClass"];
             components: components["schemas"]["KarstificationComponentDto"][];
         };
+        KarstIndexAreaDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            outline: components["schemas"]["GeoJsonGeometry"];
+            /** Format: double */
+            areaKm2: null | number;
+            /** Format: int32 */
+            caveCount: number;
+            /** Format: double */
+            cavesPerKm2: null | number;
+            /** Format: int32 */
+            depressionCount: number;
+            /** Format: double */
+            depressionAreaRatio: null | number;
+            /** Format: double */
+            score: null | number;
+            class: components["schemas"]["KarstificationClass"];
+            components: components["schemas"]["KarstIndexComponentDto"][];
+        };
+        KarstIndexComponentDto: {
+            name: string;
+            /** Format: double */
+            value: null | number;
+            /** Format: double */
+            normalised: null | number;
+            /** Format: double */
+            reference: number;
+        };
+        KarstIndexWindowDto: {
+            basis: string;
+            areas: components["schemas"]["KarstIndexAreaDto"][];
+            truncated: boolean;
+            /** Format: int32 */
+            maxAreas: number;
+        };
         KarstLinkExportPreview: {
             /** Format: int32 */
             caveCount: number;
@@ -16962,6 +17015,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DensityGridDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    mapKarstIndexKarstIndex: {
+        parameters: {
+            query?: {
+                bbox?: string;
+                zoom?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KarstIndexWindowDto"];
                 };
             };
             /** @description Bad Request */

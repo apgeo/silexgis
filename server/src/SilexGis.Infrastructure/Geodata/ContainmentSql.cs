@@ -46,4 +46,14 @@ public static class ContainmentSql
     /// </summary>
     public static string StrictlyUnder(string parameterName, string alias = "f") =>
         $"{Under(parameterName, alias)}\n          AND {alias}.id <> @{parameterName}";
+
+    /// <summary>
+    /// Under the feature named by a column of another row, and not that feature itself — the same
+    /// test as <see cref="StrictlyUnder"/> for a statement that answers many areas at once and joins
+    /// each area row to its contents. Spelled with the column on the left for the same reason.
+    /// </summary>
+    /// <param name="ancestorColumn">The qualified column holding the ancestor's id, e.g. <c>area.id</c>.</param>
+    /// <param name="alias">Table alias the ancestry column is read from.</param>
+    public static string StrictlyUnderColumn(string ancestorColumn, string alias = "f") =>
+        $"{alias}.ancestor_ids @> ARRAY[{ancestorColumn}]::uuid[]\n          AND {alias}.id <> {ancestorColumn}";
 }

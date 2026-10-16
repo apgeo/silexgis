@@ -33,6 +33,16 @@ public sealed class MapOptions
     public int MaxPoints { get; set; } = 10000;
 
     /// <summary>
+    /// The most areas one karstification-index answer carries. A window holding more answers with
+    /// the first this many in a stable order and says it was cut.
+    /// </summary>
+    /// <remarks>
+    /// Each area is an outline drawn and filled, and its counts are a containment walk, so the
+    /// number is smaller than the point cap: a few hundred karst areas is a whole country's register.
+    /// </remarks>
+    public int KarstIndexMaxAreas { get; set; } = 500;
+
+    /// <summary>
     /// Below this zoom the entrance layer answers with clusters — counts over a fixed global
     /// lattice — instead of individual entrances; from it up, with points.
     /// </summary>

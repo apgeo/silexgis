@@ -199,6 +199,9 @@ try
         .Validate(
             o => o.ClusterMaxZoom is >= 0 and <= MapOptions.HighestZoom,
             $"Map:ClusterMaxZoom must be a zoom from 0 to {MapOptions.HighestZoom}.")
+        .Validate(
+            o => o.KarstIndexMaxAreas >= 1,
+            "Map:KarstIndexMaxAreas must be at least 1.")
         .ValidateOnStart();
     builder.Services.AddOptions<MapLayerOptions>()
         .BindConfiguration(MapLayerOptions.SectionName);
@@ -476,6 +479,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapCaveQrPublicationEndpoints();
     api.MapMapDataEndpoints();
     api.MapMapDensityEndpoints();
+    api.MapMapKarstIndexEndpoints();
     api.MapMapPointPatternEndpoints();
     api.MapMapCaveMeshEndpoints();
     api.MapSearchEndpoints();

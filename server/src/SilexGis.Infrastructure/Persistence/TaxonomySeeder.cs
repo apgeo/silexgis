@@ -489,8 +489,8 @@ public static class TaxonomySeeder
             ("cave_sector", "Cave sector", FeatureCategory.Underground, area, true, snap, "generic_feature.png", null),
 
             // Areas & groupings
-            ("karst_area", "Karst area", FeatureCategory.Area, area, false, snap, null, null),
-            ("massif", "Massif / Mountain", FeatureCategory.Area, area, false, snap, null, null),
+            (FeatureTypeSeeds.KarstArea, "Karst area", FeatureCategory.Area, area, false, snap, null, null),
+            (FeatureTypeSeeds.Massif, "Massif / Mountain", FeatureCategory.Area, area, false, snap, null, null),
             ("cave_system", "Cave system", FeatureCategory.Area, area, false, snap, null, null),
 
             // Structures
