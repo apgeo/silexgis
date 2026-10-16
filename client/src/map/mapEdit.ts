@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type Map from 'ol/Map';
-import Feature from 'ol/Feature';
+import Feature, { type FeatureLike } from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import type Geometry from 'ol/geom/Geometry';
 import LineString from 'ol/geom/LineString';
@@ -26,6 +26,8 @@ export interface EditState {
   canUndo: boolean;
   canRedo: boolean;
   dirty: number; // created + geometry-modified features not yet saved
+  /** Features drawn here and not saved yet — always this person's to reshape. */
+  created: number;
   /** A multi-vertex sketch is in progress (between the first click and the finish). */
   sketchActive: boolean;
   /** Shape/type the draw tool is armed with (kept while mode is 'draw'). */
@@ -57,7 +59,7 @@ export class MapEditController {
   private undoStack: Command[] = [];
   private redoStack: Command[] = [];
   private state: EditState = {
-    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0, sketchActive: false,
+    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0, created: 0, sketchActive: false,
   };
   private readonly listeners = new Set<(s: EditState) => void>();
 
@@ -72,6 +74,9 @@ export class MapEditController {
 
   private createdFeatures: { feature: Feature; geometryType: DrawShape }[] = [];
   private modifiedGeometries = new globalThis.Map<string, object>();
+
+  /** Which saved features the reshaping tools may take hold of; undefined is every one. */
+  private reshapable: ((feature: Feature) => boolean) | undefined;
 
   constructor(map: Map) {
     this.map = map;
@@ -133,6 +138,23 @@ export class MapEditController {
 
     this.emit();
   }
+
+  /**
+   * Limits modify and move to the saved features this person may change — the one selected, when
+   * that feature's own rights are what allow it. Without a limit the tools take hold of every
+   * feature on the map, including ones the person may not change: the save would be refused, but
+   * only after the shape had been dragged about. A feature drawn here and not saved yet is always
+   * theirs to reshape. An armed tool is re-attached so the limit holds at once.
+   */
+  setReshapable(filter: ((feature: Feature) => boolean) | undefined): void {
+    this.reshapable = filter;
+    if (this.state.mode === 'modify' || this.state.mode === 'translate') {
+      this.setMode(this.state.mode);
+    }
+  }
+
+  private readonly mayReshape = (feature: FeatureLike): boolean =>
+    feature.get('pendingNew') === true || (this.reshapable?.(feature as Feature) ?? true);
 
   toggleSnap(): void {
     this.state = { ...this.state, snap: !this.state.snap };
@@ -333,7 +355,11 @@ export class MapEditController {
 
   private attachModify(): void {
     // A fingertip covers far more than the 10px OL grabs a vertex within by default.
-    const modify = new Modify({ source: this.source, pixelTolerance: coarsePointer() ? 16 : 10 });
+    const modify = new Modify({
+      source: this.source,
+      pixelTolerance: coarsePointer() ? 16 : 10,
+      filter: this.mayReshape,
+    });
     this.trackGeometryChanges(modify);
     this.map.addInteraction(modify);
     this.interactions.push(modify);
@@ -343,6 +369,7 @@ export class MapEditController {
     // Translate hit-tests exactly under the pointer by default, which a finger cannot aim.
     const translate = new Translate({
       layers: (l) => l.getSource() === this.source,
+      filter: this.mayReshape,
       hitTolerance: coarsePointer() ? 10 : 4,
     });
     this.trackGeometryChanges(translate);
@@ -447,6 +474,7 @@ export class MapEditController {
       canUndo: this.undoStack.length > 0,
       canRedo: this.redoStack.length > 0,
       dirty: this.createdFeatures.length + this.modifiedGeometries.size,
+      created: this.createdFeatures.length,
     };
   }
 

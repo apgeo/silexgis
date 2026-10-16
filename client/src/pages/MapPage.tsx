@@ -51,6 +51,7 @@ import { transformExtent } from 'ol/proj';
 import { extentOf } from '../workareas/tree.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
+import { useEditScope } from '../components/map/useEditScope.ts';
 import FeatureListPanel from '../components/map/FeatureListPanel.tsx';
 import { drawShapeForType } from '../components/map/featureTypeGroups.ts';
 import LayerPanel from '../components/map/LayerPanel.tsx';
@@ -341,7 +342,6 @@ export default function MapPage() {
   const mayCreateFeatures = useCan('features', 'create');
   const selectedFeatureId = selection?.kind === 'feature' ? selection.featureId : undefined;
   const selectedRights = useFeatureRights(selectedFeatureId, { enabled: selectedFeatureId !== undefined });
-  const canEdit = mayWriteFeatures || mayCreateFeatures || selectedRights.canEdit;
   const mapChromeHidden = useUiPrefsStore((s) => s.mapChromeHidden);
   const setMapChromeHidden = useUiPrefsStore((s) => s.setMapChromeHidden);
   const setPanelPrefs = useUiPrefsStore((s) => s.setPanelPrefs);
@@ -355,6 +355,15 @@ export default function MapPage() {
   // can warn even while the edit toolbar is hidden with the rest of the chrome.
   const [editDirty, setEditDirty] = useState(0);
   useEffect(() => editController?.subscribe((s) => setEditDirty(s.dirty)), [editController]);
+
+  const { canEdit, toolbarShown, mayReshapeSaved } = useEditScope({
+    controller: editController,
+    selectedFeatureId,
+    selectedRights,
+    mayWriteFeatures,
+    mayCreateFeatures,
+    unsavedEdits: editDirty,
+  });
 
   // Right-click (long-press on touch) context menu over the canvas.
   const [contextTarget, setContextTarget] = useState<MapContextMenuTarget | null>(null);
@@ -1447,9 +1456,9 @@ export default function MapPage() {
               </>
             )}
           </div>
-          {canEdit && editController && (
+          {toolbarShown && editController && (
             <div className={`map-edit-overlay map-chrome${isMobile ? ' map-edit-overlay-mobile' : ''}`}>
-              <EditToolbar controller={editController} mayModify={selectedRights.canEdit} />
+              <EditToolbar controller={editController} mayModify={mayReshapeSaved} />
             </div>
           )}
           <MapContextMenu

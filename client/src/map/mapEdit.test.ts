@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import Map from 'ol/Map';
 import View from 'ol/View';
-import type Point from 'ol/geom/Point';
+import Feature from 'ol/Feature';
+import LineString from 'ol/geom/LineString';
+import Point from 'ol/geom/Point';
 import { Draw, Modify, Translate } from 'ol/interaction';
 import { toLonLat } from 'ol/proj';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -284,5 +286,54 @@ describe('MapEditController.requestPlacement', () => {
 
     expect(placed).toHaveBeenCalledWith('add-cave', [22.1, 46.9]);
     expect(state?.mode).toBe('none');
+  });
+});
+
+describe('what the reshaping tools may take hold of', () => {
+  const featureWithId = (id: string) => {
+    const feature = new Feature(new LineString([[0, 0], [100, 100]]));
+    feature.set('id', id);
+    return feature;
+  };
+
+  /** The filter an attached interaction applies to a feature it could take hold of. */
+  function takesHold(map: Map, kind: typeof Modify | typeof Translate, feature: Feature): boolean {
+    const interaction = map.getInteractions().getArray().find((i) => i instanceof kind)!;
+    const filter = (interaction as unknown as { filter_: (f: Feature, layer?: unknown) => boolean }).filter_;
+    return filter(feature, undefined);
+  }
+
+  it('takes hold of every feature until it is limited', () => {
+    const map = realMap();
+    const controller = new MapEditController(map);
+    controller.setMode('modify');
+    expect(takesHold(map, Modify, featureWithId('a'))).toBe(true);
+  });
+
+  it('takes hold only of the features allowed, and always of one drawn here and not saved', () => {
+    const map = realMap();
+    const controller = new MapEditController(map);
+    controller.setReshapable((feature) => feature.get('id') === 'mine');
+    const unsaved = new Feature(new Point([0, 0]));
+    unsaved.set('pendingNew', true);
+
+    for (const mode of ['modify', 'translate'] as const) {
+      controller.setMode(mode);
+      const kind = mode === 'modify' ? Modify : Translate;
+      expect(takesHold(map, kind, featureWithId('mine'))).toBe(true);
+      expect(takesHold(map, kind, featureWithId('somebody-else'))).toBe(false);
+      expect(takesHold(map, kind, unsaved)).toBe(true);
+    }
+  });
+
+  it('holds a new limit at once on a tool already armed', () => {
+    const map = realMap();
+    const controller = new MapEditController(map);
+    controller.setMode('modify');
+
+    controller.setReshapable(() => false);
+
+    expect(takesHold(map, Modify, featureWithId('a'))).toBe(false);
+    expect(map.getInteractions().getArray().filter((i) => i instanceof Modify)).toHaveLength(1);
   });
 });

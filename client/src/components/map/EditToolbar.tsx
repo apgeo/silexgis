@@ -45,9 +45,10 @@ import { drawShapeForType, drawShapesForType } from './featureTypeGroups.ts';
 interface EditToolbarProps {
   controller: MapEditController;
   /**
-   * Whether the reshaping tools — modify and move — are offered. False while a feature this
-   * person may not change is selected: the tools act on what is on the map, and the panel beside
-   * them is already saying this one is not theirs to change. The server refuses the save either way.
+   * Whether the reshaping tools — modify and move — may take hold of a saved feature. False while
+   * a feature this person may not change is selected, or until its own rights have answered: the
+   * panel beside them is saying this one is not theirs to change. Features drawn here and not
+   * saved yet can be reshaped regardless. The server refuses the save either way.
    */
   mayModify?: boolean;
 }
@@ -62,7 +63,7 @@ export default function EditToolbar({ controller, mayModify = true }: EditToolba
   const isMobile = useIsMobile();
   const { data: featureTypes } = useFeatureTypes();
   const [state, setState] = useState<EditState>({
-    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0, sketchActive: false,
+    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0, created: 0, sketchActive: false,
   });
   const [typeId, setTypeId] = useState<number>();
   // Which shape a many-shaped type is being drawn as, until another one is picked.
@@ -88,13 +89,17 @@ export default function EditToolbar({ controller, mayModify = true }: EditToolba
     [controller],
   );
 
-  // A feature this person may not change was selected while a reshaping tool was armed: the tool
-  // is put down rather than left working on it.
+  // The reshaping tools are offered while there is something they may take hold of: a saved
+  // feature this person may change, or one drawn here and not saved yet.
+  const reshapeOffered = mayModify || state.created > 0;
+
+  // Nothing left the tools may take hold of while one was armed (a feature this person may not
+  // change was selected, say): the tool is put down rather than left working on it.
   useEffect(() => {
-    if (!mayModify && (state.mode === 'modify' || state.mode === 'translate')) {
+    if (!reshapeOffered && (state.mode === 'modify' || state.mode === 'translate')) {
       controller.setMode('none');
     }
-  }, [mayModify, state.mode, controller]);
+  }, [reshapeOffered, state.mode, controller]);
 
   useEffect(() => {
     controller.onDrawEnd = (feature) => setPendingFeature(feature);
@@ -300,25 +305,25 @@ export default function EditToolbar({ controller, mayModify = true }: EditToolba
           />
         </span>
       )}
-      <Tooltip title={mayModify ? t('mapEdit.modify') : t('mapEdit.selectionNotEditable')}>
+      <Tooltip title={reshapeOffered ? t('mapEdit.modify') : t('mapEdit.selectionNotEditable')}>
         <Button
           size="small"
           type={state.mode === 'modify' ? 'primary' : 'default'}
           icon={<AimOutlined />}
           aria-label={t('mapEdit.modify')}
           aria-pressed={state.mode === 'modify'}
-          disabled={!mayModify}
+          disabled={!reshapeOffered}
           onClick={() => setMode('modify')}
         />
       </Tooltip>
-      <Tooltip title={mayModify ? t('mapEdit.translate') : t('mapEdit.selectionNotEditable')}>
+      <Tooltip title={reshapeOffered ? t('mapEdit.translate') : t('mapEdit.selectionNotEditable')}>
         <Button
           size="small"
           type={state.mode === 'translate' ? 'primary' : 'default'}
           icon={<DragOutlined />}
           aria-label={t('mapEdit.translate')}
           aria-pressed={state.mode === 'translate'}
-          disabled={!mayModify}
+          disabled={!reshapeOffered}
           onClick={() => setMode('translate')}
         />
       </Tooltip>

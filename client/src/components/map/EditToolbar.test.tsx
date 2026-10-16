@@ -46,7 +46,7 @@ let finishedDrawing = true;
 
 function fakeController(over: Partial<EditState> = {}): MapEditController {
   const state: EditState = {
-    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0, sketchActive: false, ...over,
+    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0, created: 0, sketchActive: false, ...over,
   };
   return {
     subscribe: (cb: (s: EditState) => void) => {
@@ -212,5 +212,13 @@ describe('EditToolbar for a selected feature the person may not change', () => {
     renderToolbar({ mode: 'modify' }, false);
 
     expect(controller.setMode).toHaveBeenCalledWith('none');
+  });
+
+  it('still offers them for what was drawn here and not saved yet', () => {
+    renderToolbar({ mode: 'modify', created: 1, dirty: 1 }, false);
+
+    expect(screen.getByRole('button', { name: /^Modify/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Move geometry' })).toBeEnabled();
+    expect(controller.setMode).not.toHaveBeenCalledWith('none');
   });
 });
