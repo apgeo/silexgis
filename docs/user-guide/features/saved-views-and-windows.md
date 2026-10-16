@@ -37,7 +37,9 @@ conditions**:
   one screen's width of margin on each side, and at most two zoom levels further out than it was
   saved at. The map on the shared page stops at that area;
 - **narrowed as the view was**: a view saved with a tag filter shows only what the filter let
-  through;
+  through, and a view narrowed by a saved filter or any other filter shows no caves or features
+  at all, because a link has nobody to run that filter as. Layers drawn from saved filters are
+  never shown through a link;
 - **the protections hold harder than for any account**: a protected cave is shown only
   approximately (*"Approximate position"*), a protected outline is not shown at all, and nothing
   on the page identifies a record or opens it.

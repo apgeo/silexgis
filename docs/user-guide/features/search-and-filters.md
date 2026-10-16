@@ -82,6 +82,45 @@ that moves the map to them.
 
 ---
 
+## Filters on the map
+
+The map reads the same filters. A saved filter, or a filter built in the cave registry, narrows
+the map's cave entrances, surface features, survey lines and — in the 3D view — the cave walls.
+A filter about caves keeps those caves' entrances; a filter about entrances keeps those entrances.
+It only ever takes away from what you can already see.
+
+- **In the address.** The map's address carries its filter as the cave registry's does, so a
+  filtered map is a link you can send. A link whose filter cannot be read — or which the person
+  opening it cannot run, such as your private saved filter — opens the map unfiltered and says
+  *"The filter in this link could not be read…"*.
+- **A notice names it**: *"Map filtered by …"*, with a button to clear it. A filter that stops
+  working while you look (deleted, no longer shared) empties the layers it narrowed and says so.
+- **The layer panel's tag chooser** is a one-condition filter: it keeps entrances carrying the
+  tag and the entrances of caves carrying it.
+- **Saved views** remember the filter and bring it back when applied. A **shared link** to a view
+  narrowed by anything more than a tag shows its area and background but no caves, because a
+  link has nobody to run the filter as; the share dialog says so.
+
+### Layers from saved filters
+
+**Add a layer from a saved filter…** in the layer panel draws a second (third…) question over
+the map: the entrances and features that saved filter keeps, in a colour and a symbol of their
+own, both changed from the layer's row. Up to six at once. They are switched, reordered and made
+transparent like every other layer and are kept in saved views. A layer whose filter is gone or
+cannot be run any more stays in the list marked **Unreadable** and draws nothing. Markers on
+these layers are for looking at; selection stays with the main layers. Shared links do not show
+them.
+
+### Quick filters
+
+Pin up to six saved filters — yours or ones shared with you — from **Saved filters** (*"Pin as a
+quick filter"*). They appear as one-click chips on the map and in the cave registry's toolbar,
+on every browser you sign in to. A chip applies its filter; pressing it again lifts it. A chip
+whose filter is no longer there, or cannot be run, is greyed out and says so until you unpin
+it, from the chip or from **Saved filters**.
+
+---
+
 ## Scopes
 
 Where a scope selector appears, it narrows to: **Caves · Entrances · All features ·

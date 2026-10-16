@@ -82,6 +82,47 @@ care mută harta acolo.
 
 ---
 
+## Filtre pe hartă
+
+Harta citește aceleași filtre. Un filtru salvat, sau un filtru construit în registrul de
+peșteri, restrânge intrările de peșteri, elementele de suprafață, liniile de topografie și — în
+vederea 3D — pereții peșterilor. Un filtru despre peșteri păstrează intrările acelor peșteri; un
+filtru despre intrări păstrează acele intrări. Nu face decât să scoată din ce puteți vedea deja.
+
+- **În adresă.** Adresa hărții poartă filtrul ei la fel ca adresa registrului de peșteri, așa că
+  o hartă filtrată este un link pe care îl puteți trimite. Un link al cărui filtru nu poate fi
+  citit — sau pe care cel care îl deschide nu îl poate rula, de pildă filtrul dumneavoastră salvat
+  privat — deschide harta nefiltrată și spune *„Filtrul din acest link nu a putut fi citit…"*.
+- **O notificare îl numește**: *„Hartă filtrată după …"*, cu un buton care îl golește. Un filtru
+  care nu mai merge cât priviți (șters, nemaipartajat) golește straturile pe care le restrângea
+  și spune asta.
+- **Selectorul de etichete din panoul de straturi** este un filtru cu o singură condiție: păstrează
+  intrările care poartă eticheta și intrările peșterilor care o poartă.
+- **Vederile salvate** țin minte filtrul și îl readuc când sunt aplicate. Un **link partajat**
+  către o vedere restrânsă de mai mult decât o etichetă arată zona și fundalul, dar nicio peșteră,
+  pentru că în spatele unui link nu este nimeni ca care să ruleze filtrul; dialogul de partajare
+  spune asta.
+
+### Straturi din filtre salvate
+
+**Adaugă un strat dintr-un filtru salvat…** în panoul de straturi desenează peste hartă încă o
+întrebare: intrările și elementele pe care le păstrează filtrul salvat, într-o culoare și un
+simbol proprii, schimbate din rândul stratului. Cel mult șase deodată. Se aprind, se reordonează
+și se fac transparente ca orice alt strat și se păstrează în vederile salvate. Un strat al cărui
+filtru a dispărut sau nu mai poate fi rulat rămâne în listă marcat **Ilizibil** și nu desenează
+nimic. Marcajele acestor straturi sunt doar de privit; selecția rămâne la straturile principale.
+Linkurile partajate nu le arată.
+
+### Filtre rapide
+
+Fixați până la șase filtre salvate — ale dumneavoastră sau partajate cu dumneavoastră — din
+**Filtre salvate** (*„Fixați ca filtru rapid"*). Apar ca butoane de un clic pe hartă și în bara
+registrului de peșteri, în orice browser în care vă autentificați. Un buton aplică filtrul;
+apăsat din nou, îl ridică. Un buton al cărui filtru nu mai există sau nu poate fi rulat apare
+estompat și spune asta, până îl scoateți, din buton sau din **Filtre salvate**.
+
+---
+
 ## Domenii
 
 Acolo unde apare un selector de domeniu, îngustează la: **Peșteri · Intrări · Toate elementele ·

@@ -13,6 +13,10 @@ feature and walkthroughs of whole jobs.
   Two karst layers are computed by the server: a cave-density grid (caves per km², smoothed,
   or hot and cold spots, never finer than the location-protection grid) and the karstification
   index of each karst area and massif in view, with a key, both kept in saved views.
+  The map reads the same saved filters as the cave registry: a filter narrows its entrances,
+  features, survey lines and 3D walls, travels in the map's address and in saved views, can be
+  drawn as a layer of its own in its own colour and symbol, and up to six can be pinned to the
+  account as one-click quick filters on the map and the registry.
 - **Surface features, files & media** — typed symbols and properties, photo galleries,
   documents, audio and video, and georeferenced raster (COG) map overlays. A document has a
   kind (survey report, permit, trip report, …) and each kind decides which details its

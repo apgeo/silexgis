@@ -37,7 +37,9 @@ elemente de suprafață, în patru condiții**:
   ecran de margine pe fiecare parte, și cel mult două niveluri de zoom mai departe decât a fost
   salvată. Harta din pagina partajată se oprește la această zonă;
 - **restrânse cum era vederea**: o vedere salvată cu un filtru de etichetă arată doar ce lăsa
-  filtrul să treacă;
+  filtrul să treacă, iar o vedere restrânsă de un filtru salvat sau de orice alt filtru nu arată
+  nicio peșteră și niciun element, pentru că în spatele unui link nu este nimeni ca care să ruleze
+  filtrul. Straturile desenate din filtre salvate nu se arată niciodată printr-un link;
 - **protecțiile țin mai strâns decât pentru orice cont**: o peșteră protejată apare doar
   aproximativ (*„Poziție aproximativă"*), un contur protejat nu apare deloc, iar nimic de pe
   pagină nu identifică sau nu deschide o înregistrare.
