@@ -4,6 +4,7 @@ import {
   ApiOutlined,
   AppstoreOutlined,
   BarChartOutlined,
+  BoxPlotOutlined,
   BorderOuterOutlined,
   CalendarOutlined,
   CameraOutlined,
@@ -241,6 +242,7 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
       { key: 'statistics/distribution', icon: <BarChartOutlined />, label: t('nav.registryDistribution') },
       { key: 'statistics/correlation', icon: <LineChartOutlined />, label: t('nav.registryCorrelation') },
       { key: 'statistics/regions', icon: <PieChartOutlined />, label: t('nav.registryRegions') },
+      { key: 'statistics/categories', icon: <BoxPlotOutlined />, label: t('nav.registryCategories') },
     ]),
     // The filing tree is readable by anyone who may read documents at all; what
     // is on a shelf is decided per document, not by hiding the shelf.

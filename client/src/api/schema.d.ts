@@ -6574,6 +6574,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/registry/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How one measured column compares across the cave types or rock types of the caves the caller may read: each group's size and its box (10th, 25th, 50th, 75th and 90th percentiles), the box withheld for a group measured on too few caves. */
+        get: operations["registryStatisticsCategories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stats/registry/regions": {
         parameters: {
             query?: never;
@@ -11950,6 +11967,14 @@ export interface components {
             startedAt: null | string;
             /** Format: date-time */
             completedAt: null | string;
+            /** Format: int32 */
+            attempts: number;
+            /** Format: date-time */
+            notBefore: null | string;
+            /** Format: int32 */
+            progressDone: null | number;
+            /** Format: int32 */
+            progressTotal: null | number;
         };
         /** @enum {unknown} */
         ProcessingJobStatus: "queued" | "running" | "succeeded" | "failed";
@@ -12271,6 +12296,34 @@ export interface components {
             email: string;
             password: string;
             displayName: null | string;
+        };
+        /** @enum {unknown} */
+        RegistryCategory: "caveType" | "rockType";
+        RegistryCategoryComparison: {
+            measure: components["schemas"]["RegistryMeasure"];
+            category: components["schemas"]["RegistryCategory"];
+            /** Format: int32 */
+            minimumGroupCaveCount: number;
+            groups: components["schemas"]["RegistryCategoryGroup"][];
+            basis: string;
+        };
+        RegistryCategoryGroup: {
+            /** Format: int64 */
+            categoryId: null | number;
+            /** Format: int32 */
+            caveCount: number;
+            /** Format: int32 */
+            measuredCount: number;
+            /** Format: double */
+            lowerDecile: null | number;
+            /** Format: double */
+            lowerQuartile: null | number;
+            /** Format: double */
+            median: null | number;
+            /** Format: double */
+            upperQuartile: null | number;
+            /** Format: double */
+            upperDecile: null | number;
         };
         RegistryClusterAssignmentDto: {
             /** Format: uuid */
@@ -32243,6 +32296,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RegistryClusteringDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    registryStatisticsCategories: {
+        parameters: {
+            query?: {
+                measure?: string;
+                category?: string;
+                areaId?: string;
+                caveTypeId?: number;
+                rockTypeId?: number;
+                region?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryCategoryComparison"];
                 };
             };
             /** @description Bad Request */

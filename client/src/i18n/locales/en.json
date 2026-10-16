@@ -53,6 +53,7 @@
     "tripImport": "Import trips",
     "speleolocImport": "Import a recording",
     "registryRegions": "Regions",
+    "registryCategories": "Categories",
     "publishedTrips": "Published trips"
   },
   "terrain": {
@@ -4850,7 +4851,9 @@
     "batchFromTrips": "From a trip spreadsheet",
     "batchFromSpeleoloc": "From a phone's trip recording",
     "creating": "Creating {{count}} objects. This runs on the server and keeps going if you leave this page.",
-    "creatingHint": "The batch appears under Import batches when it is done, and reverts as one thing."
+    "creatingHint": "The batch appears under Import batches when it is done, and reverts as one thing.",
+    "progress": "{{done}} of {{total}} rows reached",
+    "retrying": "The last attempt did not finish and will be tried again shortly."
   },
   "photoImport": {
     "title": "Features from photographs",
@@ -5645,7 +5648,21 @@
     "noRegion": "No region recorded",
     "regionsCounts": "{{placed}} caves stand under a region below, out of {{total}} in this set that you may read.",
     "regionsShortfall": "The rows below do not add up to the total, and that is the answer rather than a fault in it: {{missing}} of the {{total}} caves you may read here have a position you may not see, so they are counted in the total and stand under no region. Which regions they belong to is exactly what is being withheld, so there is no row gathering them and no percentage that reconciles.",
-    "regionsEmpty": "No cave in this set has a position you may see, so there is nothing to divide between regions. The total above still counts the caves you may read."
+    "regionsEmpty": "No cave in this set has a position you may see, so there is nothing to divide between regions. The total above still counts the caves you may read.",
+    "categoriesTitle": "The registry by category",
+    "groupBy": "Grouped by",
+    "categories": {
+      "caveType": "Cave type",
+      "rockType": "Rock"
+    },
+    "noCategory": "None recorded",
+    "categoriesFailed": "The comparison could not be worked out.",
+    "nothingInScope": "No caves in this scope.",
+    "categoriesCard": "{{measure}} by group",
+    "categoriesNote": "Each box runs from the 25th to the 75th percentile, with the median across it and whiskers to the 10th and 90th. A group measured on fewer than {{count}} caves has its counts and no box.",
+    "measured": "Measured",
+    "box": "10th · 25th · median · 75th · 90th",
+    "tooFewForABox": "Too few measured caves to draw"
   },
   "morphometry": {
     "title": "Measured shape",

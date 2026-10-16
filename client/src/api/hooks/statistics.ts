@@ -167,6 +167,30 @@ export function useRegistryRegions(params: RegistryRegionsParams) {
   });
 }
 
+export type RegistryCategoriesParams = NonNullable<
+  paths['/api/v1/stats/registry/categories']['get']['parameters']['query']
+>;
+
+/** A measure compared across the cave types or rock types of the caves this caller may read. */
+export type RegistryCategoryComparison = components['schemas']['RegistryCategoryComparison'];
+
+/** One group of that comparison: its counts, and its box where it holds enough measured caves. */
+export type RegistryCategoryGroup = components['schemas']['RegistryCategoryGroup'];
+
+/**
+ * A measure compared across the groups of one category. A group measured on fewer caves than the
+ * floor the answer names comes with its counts and no box — its five numbers would be its caves'
+ * own values — and is shown as such rather than left out.
+ */
+export function useRegistryCategories(params: RegistryCategoriesParams) {
+  return useQuery({
+    queryKey: queryKeys.registryCategories(params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/stats/registry/categories', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
 /** How many caves recorded one named measure, and how many were left out for want of it alone. */
 export type RegistryClusterCoverage = components['schemas']['RegistryClusterCoverageDto'];
 

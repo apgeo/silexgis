@@ -297,6 +297,13 @@ export default function ImportWorkspacePage() {
         queued={queuedCommit?.queued ?? 0}
         status={job.data?.status}
         error={job.data?.error ?? null}
+        progress={
+          job.data?.progressTotal != null && job.data.progressDone != null
+            ? { done: job.data.progressDone, total: job.data.progressTotal }
+            : null
+        }
+        // Queued again after an attempt that got under way: the wait is a retry, not the first turn.
+        retrying={job.data?.status === 'queued' && job.data.attempts > 0}
         open={queuedCommit !== null}
         onClose={() => setQueuedCommit(null)}
       />

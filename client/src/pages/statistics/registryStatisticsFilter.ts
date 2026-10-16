@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type {
+  RegistryCategoriesParams,
   RegistryCorrelationParams,
   RegistryDistributionParams,
   RegistryRegionsParams,
@@ -292,4 +293,51 @@ export function writeRegistryRegionsFilter(filter: RegistryRegionsFilter): URLSe
  */
 export function registryRegionsQuery(filter: RegistryRegionsFilter): RegistryRegionsParams {
   return registryScopeQuery(filter);
+}
+
+/** What a comparison groups its caves by. A closed list, for the same reason the measures are. */
+export const RegistryCategoryNames = ['caveType', 'rockType'] as const;
+
+export type RegistryCategoryName = (typeof RegistryCategoryNames)[number];
+
+/** A scope, plus the measurement compared and what the caves are grouped by. */
+export interface RegistryCategoriesFilter extends RegistryScope {
+  /** The measurement's own name, as the server spells it. Passed on unchecked. */
+  measure: string;
+  category: RegistryCategoryName;
+}
+
+/** Rock is what the comparison is most often asked about: do caves in one rock differ from another. */
+export const DefaultRegistryCategory: RegistryCategoryName = 'rockType';
+
+/** Read a comparison's whole state out of the address. */
+export function readRegistryCategoriesFilter(params: URLSearchParams): RegistryCategoriesFilter {
+  const category = one(params.get('category'));
+  return {
+    measure: one(params.get('measure')) ?? DefaultRegistryMeasure,
+    category: (RegistryCategoryNames as readonly string[]).includes(category ?? '')
+      ? (category as RegistryCategoryName)
+      : DefaultRegistryCategory,
+    areaId: one(params.get('areaId')),
+    caveTypeId: numeric(params.get('caveTypeId')),
+    rockTypeId: numeric(params.get('rockTypeId')),
+    region: one(params.get('region')),
+  };
+}
+
+/** Write it back, defaults as absent keys. */
+export function writeRegistryCategoriesFilter(filter: RegistryCategoriesFilter): URLSearchParams {
+  const params = writeRegistryRegionsFilter(filter);
+  if (filter.measure !== DefaultRegistryMeasure) {
+    params.set('measure', filter.measure);
+  }
+  if (filter.category !== DefaultRegistryCategory) {
+    params.set('category', filter.category);
+  }
+  return params;
+}
+
+/** What the comparison route is asked. */
+export function registryCategoriesQuery(filter: RegistryCategoriesFilter): RegistryCategoriesParams {
+  return { ...registryScopeQuery(filter), measure: filter.measure, category: filter.category };
 }

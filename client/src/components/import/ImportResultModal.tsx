@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Alert, Modal, Spin, Statistic, Flex, Table, Typography } from 'antd';
+import { Alert, Modal, Progress, Spin, Statistic, Flex, Table, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { ImportBatch, ImportFailure, ProcessingJob } from '../../api/hooks.ts';
@@ -20,6 +20,13 @@ interface Props {
   queued: number;
   status: ProcessingJob['status'] | undefined;
   error: string | null;
+  /**
+   * How far the work has got, once it says — rows reached of rows confirmed. Absent before the
+   * first word from the job and for work that reports none.
+   */
+  progress?: { done: number; total: number } | null;
+  /** True when the last attempt failed in passing and the work is queued to be tried again. */
+  retrying?: boolean;
   open: boolean;
   onClose: () => void;
 }
@@ -32,7 +39,7 @@ interface Props {
  * which is what the link at the bottom leads to.
  */
 export default function ImportResultModal(
-  { batch, failures, queued, status, error, open, onClose }: Props,
+  { batch, failures, queued, status, error, progress, retrying = false, open, onClose }: Props,
 ) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -57,11 +64,33 @@ export default function ImportResultModal(
     >
       {working && (
         <Flex vertical gap={12}>
-          {/* A spinner, not a bar. The work reports no per-row progress, and antd's bar has no
-              indeterminate form — drawn at 100 it reads as finished, which is exactly the wrong
-              thing to show somebody wondering whether their import is stuck. */}
-          <Spin />
-          <Typography.Text>{t('vectorImport.creating', { count: queued })}</Typography.Text>
+          {/* A bar only once the work has said how far it has got; until then a spinner. antd's
+              bar has no indeterminate form, and drawn at 100 it reads as finished — exactly the
+              wrong thing to show somebody wondering whether their import is stuck. */}
+          {progress && progress.total > 0 ? (
+            <>
+              <Progress
+                percent={Math.floor((progress.done * 100) / progress.total)}
+                data-testid="import-progress"
+              />
+              <Typography.Text>
+                {t('vectorImport.progress', { done: progress.done, total: progress.total })}
+              </Typography.Text>
+            </>
+          ) : (
+            <>
+              <Spin />
+              <Typography.Text>{t('vectorImport.creating', { count: queued })}</Typography.Text>
+            </>
+          )}
+          {retrying && (
+            <Alert
+              type="info"
+              showIcon
+              title={t('vectorImport.retrying')}
+              description={error ?? undefined}
+            />
+          )}
           <Typography.Text type="secondary">{t('vectorImport.creatingHint')}</Typography.Text>
         </Flex>
       )}

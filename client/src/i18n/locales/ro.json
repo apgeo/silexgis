@@ -53,6 +53,7 @@
     "tripImport": "Importă ture",
     "speleolocImport": "Importă o înregistrare",
     "registryRegions": "Regiuni",
+    "registryCategories": "Categorii",
     "publishedTrips": "Ture publicate"
   },
   "terrain": {
@@ -4850,7 +4851,9 @@
     "batchFromTrips": "Dintr-un tabel de ture",
     "batchFromSpeleoloc": "Dintr-o tură înregistrată pe telefon",
     "creating": "Se creează {{count}} obiecte. Procesul rulează pe server și continuă dacă părăsești această pagină.",
-    "creatingHint": "Lotul apare la Loturi de import când s-a terminat și se anulează ca un întreg."
+    "creatingHint": "Lotul apare la Loturi de import când s-a terminat și se anulează ca un întreg.",
+    "progress": "{{done}} din {{total}} rânduri parcurse",
+    "retrying": "Ultima încercare nu s-a încheiat; se reia în scurt timp."
   },
   "photoImport": {
     "title": "Obiecte din fotografii",
@@ -5645,7 +5648,21 @@
     "noRegion": "Fără regiune înregistrată",
     "regionsCounts": "{{placed}} peșteri se află sub o regiune mai jos, din {{total}} din acest set pe care le puteți citi.",
     "regionsShortfall": "Rândurile de mai jos nu însumează totalul, iar acesta este răspunsul, nu o eroare a lui: {{missing}} dintre cele {{total}} peșteri pe care le puteți citi aici au o poziție pe care nu o puteți vedea, așa că sunt numărate în total și nu stau sub nicio regiune. Tocmai cărei regiuni îi aparțin este ceea ce nu vi se spune, deci nu există un rând care să le adune și niciun procent care să închidă socoteala.",
-    "regionsEmpty": "Nicio peșteră din acest set nu are o poziție pe care să o puteți vedea, deci nu este nimic de împărțit pe regiuni. Totalul de mai sus numără în continuare peșterile pe care le puteți citi."
+    "regionsEmpty": "Nicio peșteră din acest set nu are o poziție pe care să o puteți vedea, deci nu este nimic de împărțit pe regiuni. Totalul de mai sus numără în continuare peșterile pe care le puteți citi.",
+    "categoriesTitle": "Registrul pe categorii",
+    "groupBy": "Grupat după",
+    "categories": {
+      "caveType": "Tip de peșteră",
+      "rockType": "Rocă"
+    },
+    "noCategory": "Neînregistrat",
+    "categoriesFailed": "Comparația nu a putut fi calculată.",
+    "nothingInScope": "Nicio peșteră în acest domeniu.",
+    "categoriesCard": "{{measure}} pe grupe",
+    "categoriesNote": "Fiecare cutie merge de la percentila 25 la 75, cu mediana în interior și mustăți până la percentilele 10 și 90. O grupă măsurată pe mai puțin de {{count}} peșteri are doar numărătorile, fără cutie.",
+    "measured": "Măsurate",
+    "box": "P10 · P25 · mediană · P75 · P90",
+    "tooFewForABox": "Prea puține peșteri măsurate pentru o cutie"
   },
   "morphometry": {
     "title": "Formă măsurată",

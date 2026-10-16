@@ -249,6 +249,8 @@ export const queryKeys = {
     ['stats', 'registry', 'distribution', params] as const,
   registryCorrelation: (params: Record<string, unknown>) =>
     ['stats', 'registry', 'correlation', params] as const,
+  registryCategories: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'categories', params] as const,
   registryRegions: (params: Record<string, unknown>) =>
     ['stats', 'registry', 'regions', params] as const,
   registryClustering: (params: Record<string, unknown>) =>

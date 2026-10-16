@@ -50,6 +50,7 @@ const RegistryCorrelationPage = lazy(
   () => import('./pages/statistics/RegistryCorrelationPage.tsx'),
 );
 const RegistryRegionsPage = lazy(() => import('./pages/statistics/RegistryRegionsPage.tsx'));
+const RegistryCategoriesPage = lazy(() => import('./pages/statistics/RegistryCategoriesPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
 const TripReportPage = lazy(() => import('./pages/trips/TripReportPage.tsx'));
 const EventListPage = lazy(() => import('./pages/events/EventListPage.tsx'));
@@ -191,6 +192,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/statistics/distribution', element: <Loadable><RegistryDistributionPage /></Loadable> },
           { path: '/statistics/correlation', element: <Loadable><RegistryCorrelationPage /></Loadable> },
           { path: '/statistics/regions', element: <Loadable><RegistryRegionsPage /></Loadable> },
+          { path: '/statistics/categories', element: <Loadable><RegistryCategoriesPage /></Loadable> },
           { path: '/trip-logs/import', element: <Loadable><TripImportPage /></Loadable> },
           { path: '/trip-logs/import/:fileId', element: <Loadable><TripImportPage /></Loadable> },
           { path: '/trip-logs/speleoloc-import', element: <Loadable><SpeleolocImportPage /></Loadable> },
