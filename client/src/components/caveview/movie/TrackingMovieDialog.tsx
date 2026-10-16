@@ -1245,6 +1245,9 @@ function MovieDialogBody({
             role="group"
             tabIndex={0}
             aria-label={t('caveview.movie.preview')}
+            // aria-description is a global attribute since ARIA 1.3; the lint rule's table of which
+            // roles take which attributes predates it.
+            // oxlint-disable-next-line jsx-a11y/role-supports-aria-props
             aria-description={t('caveview.movie.keysHint')}
             data-testid="movie-preview-keys"
           >

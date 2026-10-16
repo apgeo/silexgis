@@ -42,11 +42,5 @@
     "jsx-a11y/no-noninteractive-element-interactions": "off",
     "jsx-a11y/no-noninteractive-tabindex": "off",
     "jsx-a11y/prefer-tag-over-role": "off"
-  },
-  "overrides": [
-    {
-      "files": ["src/components/caveview/movie/TrackingMovieDialog.tsx"],
-      "rules": { "jsx-a11y/role-supports-aria-props": "off" }
-    }
-  ]
+  }
 }

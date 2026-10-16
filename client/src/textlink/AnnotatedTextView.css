@@ -73,12 +73,13 @@
 }
 
 /*
- * A marked passage. `mark` rather than a span: it is what the element means, and it is what a
- * screen reader announces without being told.
+ * A marked passage. A span with the link role rather than a `mark`: the passage is something to
+ * follow, and a `mark` would contradict the role it is given — a screen reader announces the
+ * link and its label, which say which relation this is.
  *
- * The browser's own yellow is cleared because the colour here carries information — which
- * relation this is — and leaving the default under it would tint every relation towards yellow
- * differently depending on the browser.
+ * Colour and background are reset so that the wash set per relation is the only tint the passage
+ * carries: the colour here carries information — which relation this is — and anything inherited
+ * under it would shift every relation's colour by the same amount.
  */
 .tl-passage {
   color: inherit;
