@@ -11,16 +11,19 @@ namespace SilexGis.Infrastructure.Filters;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Map views are the first of several the same shape — geofiles, georeferenced maps and survey
-/// models are all a row somebody owns, which a group may share, with a name to search and dates to
-/// sort by. Written out separately they would be four copies of one paragraph, and within a year
-/// one of them would have a subtly different idea of what "contains" means, or would have forgotten
-/// to break a sort tie.
+/// Map views, georeferenced maps and geofiles are the same shape — a row somebody owns, which a group may
+/// share, with a name to search and dates to sort by. Written out separately they would be copies of
+/// one paragraph, and within a year one of them would have a subtly different idea of what
+/// "contains" means, or would have forgotten to break a sort tie. A world may add fields of its own
+/// (<see cref="OwnFields"/> and <see cref="OwnLeaf"/>), and may withhold more than the walk does by
+/// overriding <see cref="VisibleAsync"/>.
 /// </para>
 /// <para>
 /// Features and trip logs do not use this, and should not be made to. A feature has a second
 /// visibility rule about centrelines and a taxonomy of its own; a trip has a date that is not a
-/// timestamp. Bending either into this shape would cost more than the paragraph it saved.
+/// timestamp. Bending either into this shape would cost more than the paragraph it saved. Nor do
+/// survey models or cabinets, which have no owner and no visibility of their own: a survey model is
+/// seen through its cave, and the cabinet tree is shown to every signed-in account.
 /// </para>
 /// </remarks>
 public abstract class ProtectedFilterWorld<TEntity> : FilterWorld<TEntity>
@@ -50,10 +53,19 @@ public abstract class ProtectedFilterWorld<TEntity> : FilterWorld<TEntity>
         AccessContext caller, CancellationToken ct) =>
         ValueTask.FromResult(Rows.VisibleTo(caller, Domain));
 
+    /// <summary>The fields this world offers beyond the common ones; each needs its arm in <see cref="OwnLeaf"/>.</summary>
+    protected virtual IReadOnlyList<FieldDescriptor> OwnFields => [];
+
+    /// <summary>
+    /// The compiled condition for one of <see cref="OwnFields"/>, or null when the field is not
+    /// this world's — which the caller turns into a refusal rather than a match-everything.
+    /// </summary>
+    protected virtual Expression<Func<TEntity, bool>>? OwnLeaf(ConditionNode condition) => null;
+
     public override ValueTask<WorldVocabulary> VocabularyAsync(
         AccessContext caller, CancellationToken ct) =>
         ValueTask.FromResult(
-            CommonFilterFields.Vocabulary(World, $"filters.worlds.{World}"));
+            CommonFilterFields.Vocabulary(World, $"filters.worlds.{World}", OwnFields));
 
     protected override Expression<Func<TEntity, bool>> HasId(IReadOnlyCollection<Guid> ids) =>
         e => ids.Contains(e.Id);
@@ -89,7 +101,7 @@ public abstract class ProtectedFilterWorld<TEntity> : FilterWorld<TEntity>
                 FilterLeaves.EnumField<TEntity, Visibility>(condition, e => e.Visibility),
             CommonFilterFields.CreatedAt => FilterLeaves.Instant<TEntity>(condition, e => e.CreatedAt),
             CommonFilterFields.UpdatedAt => FilterLeaves.Instant<TEntity>(condition, e => e.UpdatedAt),
-            _ => throw new InvalidOperationException(
+            _ => OwnLeaf(condition) ?? throw new InvalidOperationException(
                 $"No compiler arm for '{condition.Field}'. A field the vocabulary declares must have "
                 + "one here, or a validated filter would silently match everything."),
         };
@@ -136,8 +148,9 @@ public abstract class ProtectedFilterWorld<TEntity> : FilterWorld<TEntity>
                 Title = string.IsNullOrWhiteSpace(name(row)) ? World : name(row)!,
                 Subtitle = SubtitleOf(row),
                 Symbol = Symbol,
-                // These worlds hold no position anybody is shown through a filter. A geofile has a
-                // bounding box and a map view has a camera, and neither is this route's to disclose.
+                // These worlds hold no position anybody is shown through a filter. A georeferenced
+                // map has a footprint and a map view has a camera, and neither is this route's to
+                // disclose.
                 Placeable = false,
             }),
         ]);

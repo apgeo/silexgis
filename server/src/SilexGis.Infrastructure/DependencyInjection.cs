@@ -191,6 +191,11 @@ public static class DependencyInjection
         services.AddScoped<Filters.IFilterWorld, Filters.TripLogFilterWorld>();
         services.AddScoped<Filters.IFilterWorld, Filters.DocumentFilterWorld>();
         services.AddScoped<Filters.IFilterWorld, Filters.MapViewFilterWorld>();
+        services.AddScoped<Filters.IFilterWorld, Filters.GeoreferencedMapFilterWorld>();
+        services.AddScoped<Filters.IFilterWorld, Filters.CabinetFilterWorld>();
+        services.AddScoped<Filters.IFilterWorld, Filters.SurveyModelFilterWorld>();
+        services.AddScoped<Filters.IFilterWorld, Filters.PhotographFilterWorld>();
+        services.AddScoped<Filters.IFilterWorld, Filters.GeofileFilterWorld>();
         services.AddScoped<Filters.FilterWorldRegistry>();
         services.AddScoped<Filters.SavedFilterReader>();
         services.AddScoped<Filters.SurfaceFilters>();

@@ -7,6 +7,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Persistence;
 
@@ -26,9 +27,24 @@ public abstract class WorldFixture
     public abstract string World { get; }
 
     /// <summary>
-    /// Creates a row only <paramref name="ownerId"/> may see, and returns a filter matching it.
+    /// Creates a row only <paramref name="ownerId"/> may see, and returns a filter matching it — or
+    /// null when this world has no row anybody is kept from, which <see cref="EveryRowIsSharedBecause"/>
+    /// must then explain.
     /// </summary>
-    public abstract Task<FilterNode> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag);
+    public abstract Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag);
+
+    /// <summary>
+    /// Why no row of this world is private, for the one kind of world where that is true: rows with
+    /// no owner and no visibility of their own, shown whole to every signed-in account by their own
+    /// list. Null for every other world.
+    /// </summary>
+    /// <remarks>
+    /// Not an exemption. A world that declares it is asked the opposite question instead — a row it
+    /// seeds must reach somebody with no relation to it, which is what its own list does — and the
+    /// suite refuses the declaration outright for a world over rows that carry a visibility, so it
+    /// cannot become the way a protected world skips the private-row proof.
+    /// </remarks>
+    public virtual string? EveryRowIsSharedBecause => null;
 
     /// <summary>
     /// Creates rows anybody may see, all sharing one sort key, and returns a filter matching them.
@@ -54,6 +70,19 @@ public abstract class WorldFixture
     /// generous answer. That happened once here; this is what would have caught it.
     /// </remarks>
     public virtual Task<FilterNode?> SeedWithheldAsync(SilexGisDbContext db, Guid ownerId, string tag) =>
+        Task.FromResult<FilterNode?>(null);
+
+    /// <summary>
+    /// The row <see cref="SeedWithheldAsync"/> creates with the one thing that withholds it taken
+    /// away, returning a filter that matches it — required of every fixture that seeds a withheld row.
+    /// </summary>
+    /// <remarks>
+    /// The withheld row coming back empty to an outsider proves nothing by itself: a fixture whose
+    /// filter stopped matching, or a walk that refused the outsider for an unrelated reason, comes
+    /// back empty too. The twin reaching the same outsider is what shows the walk admits them and
+    /// the withholding rule is the only thing that kept the first row back.
+    /// </remarks>
+    public virtual Task<FilterNode?> SeedWithheldTwinAsync(SilexGisDbContext db, Guid ownerId, string tag) =>
         Task.FromResult<FilterNode?>(null);
 
     /// <summary>A value of the right shape for one of this world's declared fields.</summary>
@@ -91,7 +120,7 @@ public sealed class FeatureWorldFixture : WorldFixture
 {
     public override string World => FeatureFilterWorld.Key;
 
-    public override async Task<FilterNode> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    public override async Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
     {
         var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
         Add(db, Rootless(typeId, ownerId, $"Conformance {tag}", Visibility.Private));
@@ -132,13 +161,25 @@ public sealed class FeatureWorldFixture : WorldFixture
     {
         // Public, so the visibility walk lets it straight through — which is the point. What keeps
         // it back is the centreline rule, and nothing else would.
+        await CentrelineAsync(db, ownerId, tag, locationProtected: true);
+        return new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+    }
+
+    public override async Task<FilterNode?> SeedWithheldTwinAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        await CentrelineAsync(db, ownerId, tag, locationProtected: false);
+        return new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+    }
+
+    private static async Task CentrelineAsync(SilexGisDbContext db, Guid ownerId, string tag, bool locationProtected)
+    {
         var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
         var row = Rootless(typeId, ownerId, $"Centreline {tag}", Visibility.Public);
         row.Kind = FeatureKind.Centerline;
         // A type belongs to a generic feature and to nothing else; the schema checks both ways.
         row.FeatureTypeId = null;
-        row.LocationProtected = true;
-        row.IsProtectedEffective = true;
+        row.LocationProtected = locationProtected;
+        row.IsProtectedEffective = locationProtected;
         // The schema insists a centreline has a course, which is the whole reason it is withheld:
         // the geometry is the survey, and the survey is where the cave goes.
         row.Geom = new NetTopologySuite.Geometries.MultiLineString(
@@ -152,8 +193,6 @@ public sealed class FeatureWorldFixture : WorldFixture
         { SRID = 4326 };
         Add(db, row);
         await db.SaveChangesAsync();
-
-        return new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
     }
 
         // A rootless feature is its own ancestor, and that fact lives in two places the write
@@ -210,7 +249,7 @@ public sealed class TripLogWorldFixture : WorldFixture
 {
     public override string World => TripLogFilterWorld.Key;
 
-    public override async Task<FilterNode> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    public override async Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
     {
         db.TripLogs.Add(Trip(ownerId, $"Conformance {tag}", Visibility.Private));
         await db.SaveChangesAsync();
@@ -290,7 +329,7 @@ public sealed class DocumentWorldFixture : WorldFixture
 {
     public override string World => DocumentFilterWorld.Key;
 
-    public override async Task<FilterNode> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    public override async Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
     {
         Add(db, $"Conformance {tag}", ownerId, Visibility.Private);
         await db.SaveChangesAsync();
@@ -357,7 +396,7 @@ public sealed class MapViewWorldFixture : WorldFixture
 {
     public override string World => MapViewFilterWorld.Key;
 
-    public override async Task<FilterNode> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    public override async Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
     {
         db.MapViews.Add(new MapView
         {
@@ -392,6 +431,407 @@ public sealed class MapViewWorldFixture : WorldFixture
 }
 
 /// <summary>
+/// Rows several fixtures need underneath their own: the stored file a raster or a model points at,
+/// and a cave for something to belong to.
+/// </summary>
+public static class ConformanceSeeds
+{
+    /// <summary>
+    /// A stored file with the document and the revision it belongs to.
+    /// </summary>
+    /// <remarks>
+    /// The document is titled without the test's tag. Every world is seeded under the same tag in
+    /// one test, and the document world matches its rows by that tag in the title — a backing
+    /// document carrying it would be counted there as one of that world's own rows.
+    /// </remarks>
+    public static StoredFile File(SilexGisDbContext db, Guid ownerId, FileKind kind, string extension)
+    {
+        var document = new Document
+        {
+            Title = "Conformance backing file",
+            OwnerUserId = ownerId,
+            Visibility = Visibility.Private,
+        };
+        db.Documents.Add(document);
+        var version = new DocumentVersion
+        {
+            DocumentId = document.Id,
+            VersionNumber = 1,
+            IsCurrent = true,
+            UploadedBy = ownerId,
+        };
+        db.DocumentVersions.Add(version);
+        var file = new StoredFile
+        {
+            DocumentVersionId = version.Id,
+            StoragePath = Guid.NewGuid().ToString("N"),
+            OriginalName = "conformance." + extension,
+            MimeType = "application/octet-stream",
+            SizeBytes = 1,
+            Sha256 = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
+            Kind = kind,
+        };
+        db.StoredFiles.Add(file);
+        return file;
+    }
+
+    /// <summary>
+    /// A photograph: a document whose current revision carries a picture.
+    /// </summary>
+    /// <remarks>
+    /// The picture kind on the file is what makes a document a photograph to every surface that
+    /// shows them, and the taken date is set because the photograph world offers it as a field.
+    /// </remarks>
+    public static Document Photograph(SilexGisDbContext db, string title, Guid ownerId, Visibility visibility)
+    {
+        var document = new Document
+        {
+            Title = title,
+            OwnerUserId = ownerId,
+            Visibility = visibility,
+        };
+        db.Documents.Add(document);
+        var version = new DocumentVersion
+        {
+            DocumentId = document.Id,
+            VersionNumber = 1,
+            IsCurrent = true,
+            UploadedBy = ownerId,
+        };
+        db.DocumentVersions.Add(version);
+        db.StoredFiles.Add(new StoredFile
+        {
+            DocumentVersionId = version.Id,
+            StoragePath = Guid.NewGuid().ToString("N"),
+            OriginalName = "conformance.jpg",
+            MimeType = "image/jpeg",
+            SizeBytes = 1,
+            Sha256 = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
+            Kind = FileKind.Image,
+            ContentCreatedAt = new DateTimeOffset(2025, 7, 19, 10, 0, 0, TimeSpan.Zero),
+        });
+        return document;
+    }
+
+    /// <summary>
+    /// A cave with no parent, its own ancestor in both places the write service records that, and
+    /// optionally location-protected at its own root.
+    /// </summary>
+    /// <remarks>
+    /// Named without the test's tag, for the same reason as <see cref="File"/>: the feature world
+    /// matches its rows by the tag in the name.
+    /// </remarks>
+    public static async Task<Feature> CaveAsync(
+        SilexGisDbContext db, Guid ownerId, Visibility visibility, bool locationProtected)
+    {
+        var caveTypeId = await db.CaveTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var id = Guid.NewGuid();
+        var feature = new Feature
+        {
+            Id = id,
+            Name = "Conformance cave",
+            Kind = FeatureKind.Cave,
+            // A type belongs to a generic feature and to nothing else; the schema checks both ways.
+            FeatureTypeId = null,
+            OwnerUserId = ownerId,
+            Visibility = visibility,
+            AncestorIds = [id],
+            LocationProtected = locationProtected,
+            IsProtectedEffective = locationProtected,
+        };
+        db.Features.Add(feature);
+        db.FeatureAncestors.Add(new FeatureAncestor { FeatureId = id, AncestorId = id });
+        // Through the navigation, not the id alone: the cave row's half of the key it shares with
+        // the feature includes a kind the database fills in, so without the navigation nothing
+        // tells the save that the feature has to be written first.
+        db.Caves.Add(new Cave { Id = id, Feature = feature, CaveTypeId = caveTypeId });
+        return feature;
+    }
+}
+
+/// <summary>A georeferenced map nobody but its owner may see.</summary>
+/// <remarks>
+/// The withheld row is a public cave map whose cave is location-protected: the walk admits it, and
+/// only the rule that a cave map's footprint is its cave's location keeps it back.
+/// </remarks>
+public sealed class GeoreferencedMapWorldFixture : WorldFixture
+{
+    public override string World => GeoreferencedMapFilterWorld.Key;
+
+    public override async Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        Add(db, $"Conformance {tag}", ownerId, Visibility.Private);
+        await db.SaveChangesAsync();
+        return Named(tag);
+    }
+
+    public override async Task<FilterNode> SeedIndistinguishableAsync(
+        SilexGisDbContext db, Guid ownerId, string tag, int count)
+    {
+        var stamp = DateTimeOffset.UtcNow;
+        for (var i = 0; i < count; i++)
+        {
+            var row = Add(db, $"Paged {tag}", ownerId, Visibility.Public);
+            row.CreatedAt = stamp;
+            row.UpdatedAt = stamp;
+        }
+
+        await db.SaveChangesAsync();
+        return Named(tag);
+    }
+
+    public override async Task<FilterNode?> SeedWithheldAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        await CaveMapAsync(db, ownerId, tag, locationProtected: true);
+        return Named(tag);
+    }
+
+    public override async Task<FilterNode?> SeedWithheldTwinAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        await CaveMapAsync(db, ownerId, tag, locationProtected: false);
+        return Named(tag);
+    }
+
+    private static async Task CaveMapAsync(SilexGisDbContext db, Guid ownerId, string tag, bool locationProtected)
+    {
+        var cave = await ConformanceSeeds.CaveAsync(db, ownerId, Visibility.Public, locationProtected);
+        var row = Add(db, $"Cave map {tag}", ownerId, Visibility.Public);
+        row.MapKind = MapKind.CaveMap;
+        row.CaveFeatureId = cave.Id;
+        await db.SaveChangesAsync();
+    }
+
+    public override FilterValue[] ValuesFor(FieldDescriptor field, FilterOp op) =>
+        field.Key == GeoreferencedMapFilterFields.MapKind
+            ? [.. Enum.GetNames<MapKind>().Take(FilterOps.Arity(op) ?? 2).Select(n => new IdValue(n))]
+            : ConformanceValues.Default(field, op);
+
+    private static ConditionNode Named(string tag) =>
+        new(CommonFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+
+    private static GeoreferencedMap Add(SilexGisDbContext db, string name, Guid ownerId, Visibility visibility)
+    {
+        var file = ConformanceSeeds.File(db, ownerId, FileKind.Raster, "tif");
+        var map = new GeoreferencedMap
+        {
+            Name = name,
+            FileId = file.Id,
+            OwnerUserId = ownerId,
+            Visibility = visibility,
+        };
+        db.GeoreferencedMaps.Add(map);
+        return map;
+    }
+}
+
+/// <summary>The cabinets of the filing scheme, which every signed-in account sees whole.</summary>
+public sealed class CabinetWorldFixture : WorldFixture
+{
+    public override string World => CabinetFilterWorld.Key;
+
+    public override string EveryRowIsSharedBecause =>
+        "A cabinet has no owner and no visibility; the cabinet list shows the whole tree to every "
+        + "signed-in account, and only the per-reader document counts beside it differ.";
+
+    public override Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag) =>
+        Task.FromResult<FilterNode?>(null);
+
+    public override async Task<FilterNode> SeedIndistinguishableAsync(
+        SilexGisDbContext db, Guid ownerId, string tag, int count)
+    {
+        var writer = new CabinetWriteService(db);
+        var stamp = DateTimeOffset.UtcNow;
+        for (var i = 0; i < count; i++)
+        {
+            // Root cabinets are unique by name, so the rows are told apart by a suffix the sort
+            // never looks at: every one of them shares the timestamp the paging check is about.
+            var row = await writer.CreateAsync($"Paged {tag} {i}", null, null);
+            row.CreatedAt = stamp;
+            row.UpdatedAt = stamp;
+        }
+
+        await db.SaveChangesAsync();
+        return new ConditionNode(CommonFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+    }
+}
+
+/// <summary>A survey model nobody but its cave's owner may see.</summary>
+/// <remarks>
+/// A model has no visibility of its own, so the private one sits on a private cave. The withheld
+/// one sits on a public cave that is location-protected: the cave walk admits it to everybody, and
+/// only the rule that a survey is its cave's position keeps the model back. The rows here are line
+/// plots that are not current, because the schema allows one current model per cave and kind.
+/// </remarks>
+public sealed class SurveyModelWorldFixture : WorldFixture
+{
+    public override string World => SurveyModelFilterWorld.Key;
+
+    public override async Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        var cave = await ConformanceSeeds.CaveAsync(db, ownerId, Visibility.Private, locationProtected: false);
+        Add(db, cave, ownerId, $"Conformance {tag}");
+        await db.SaveChangesAsync();
+        return Named(tag);
+    }
+
+    public override async Task<FilterNode> SeedIndistinguishableAsync(
+        SilexGisDbContext db, Guid ownerId, string tag, int count)
+    {
+        var cave = await ConformanceSeeds.CaveAsync(db, ownerId, Visibility.Public, locationProtected: false);
+        var stamp = DateTimeOffset.UtcNow;
+        for (var i = 0; i < count; i++)
+        {
+            var row = Add(db, cave, ownerId, $"Paged {tag}");
+            row.CreatedAt = stamp;
+            row.UpdatedAt = stamp;
+        }
+
+        await db.SaveChangesAsync();
+        return Named(tag);
+    }
+
+    public override async Task<FilterNode?> SeedWithheldAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        var cave = await ConformanceSeeds.CaveAsync(db, ownerId, Visibility.Public, locationProtected: true);
+        Add(db, cave, ownerId, $"Protected survey {tag}");
+        await db.SaveChangesAsync();
+        return Named(tag);
+    }
+
+    public override async Task<FilterNode?> SeedWithheldTwinAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        var cave = await ConformanceSeeds.CaveAsync(db, ownerId, Visibility.Public, locationProtected: false);
+        Add(db, cave, ownerId, $"Open survey {tag}");
+        await db.SaveChangesAsync();
+        return Named(tag);
+    }
+
+    public override FilterValue[] ValuesFor(FieldDescriptor field, FilterOp op) =>
+        field.Key == SurveyModelFilterFields.Format
+            ? [.. Enum.GetNames<SurveyModelFormat>().Take(FilterOps.Arity(op) ?? 2).Select(n => new IdValue(n))]
+            : ConformanceValues.Default(field, op);
+
+    private static ConditionNode Named(string tag) =>
+        new(CommonFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+
+    public static SurveyModel Add(SilexGisDbContext db, Feature cave, Guid ownerId, string name)
+    {
+        var file = ConformanceSeeds.File(db, ownerId, FileKind.Other, "lox");
+        var model = new SurveyModel
+        {
+            CaveFeatureId = cave.Id,
+            Name = name,
+            FileId = file.Id,
+            Format = SurveyModelFormat.Lox,
+            SurveyedAt = new DateOnly(2024, 8, 12),
+            IsCurrent = false,
+        };
+        db.SurveyModels.Add(model);
+        return model;
+    }
+}
+
+/// <summary>A photograph nobody but its owner may see.</summary>
+/// <remarks>
+/// <para>
+/// No withheld row: the gallery lists every picture the photograph read rule admits and withholds
+/// only positions, which this world never answers about. The parity tests compare the two lists
+/// for a reader who may not place the cave a picture hangs on.
+/// </para>
+/// <para>
+/// A photograph is a document, and the document world matches its rows by the test's tag in the
+/// title. So these are titled by the tag written backwards — a token of this test that the tag
+/// itself never contains — or the document world would count them as its own.
+/// </para>
+/// </remarks>
+public sealed class PhotographWorldFixture : WorldFixture
+{
+    public override string World => PhotographFilterWorld.Key;
+
+    public override async Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        ConformanceSeeds.Photograph(db, $"Conformance {Token(tag)}", ownerId, Visibility.Private);
+        await db.SaveChangesAsync();
+        return Titled(tag);
+    }
+
+    public override async Task<FilterNode> SeedIndistinguishableAsync(
+        SilexGisDbContext db, Guid ownerId, string tag, int count)
+    {
+        var stamp = DateTimeOffset.UtcNow;
+        for (var i = 0; i < count; i++)
+        {
+            var row = ConformanceSeeds.Photograph(db, $"Paged {Token(tag)}", ownerId, Visibility.Public);
+            row.CreatedAt = stamp;
+            row.UpdatedAt = stamp;
+        }
+
+        await db.SaveChangesAsync();
+        return Titled(tag);
+    }
+
+    public static string Token(string tag) => "p" + new string([.. tag.Reverse()]);
+
+    private static ConditionNode Titled(string tag) =>
+        new(PhotographFilterFields.Title, FilterOp.Contains, [new TextValue(Token(tag))]);
+}
+
+/// <summary>A geodata file nobody but its owner may see.</summary>
+/// <remarks>
+/// Seedable now that the stored file it hangs on can be written with its document and revision;
+/// the geofile list applies the visibility walk alone, so there is no withheld row.
+/// </remarks>
+public sealed class GeofileWorldFixture : WorldFixture
+{
+    public override string World => GeofileFilterWorld.Key;
+
+    public override async Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        Add(db, $"Conformance {tag}", ownerId, Visibility.Private);
+        await db.SaveChangesAsync();
+        return Named(tag);
+    }
+
+    public override async Task<FilterNode> SeedIndistinguishableAsync(
+        SilexGisDbContext db, Guid ownerId, string tag, int count)
+    {
+        var stamp = DateTimeOffset.UtcNow;
+        for (var i = 0; i < count; i++)
+        {
+            var row = Add(db, $"Paged {tag}", ownerId, Visibility.Public);
+            row.CreatedAt = stamp;
+            row.UpdatedAt = stamp;
+        }
+
+        await db.SaveChangesAsync();
+        return Named(tag);
+    }
+
+    public override FilterValue[] ValuesFor(FieldDescriptor field, FilterOp op) =>
+        field.Key == GeofileFilterFields.Format
+            ? [.. Enum.GetNames<GeofileFormat>().Take(FilterOps.Arity(op) ?? 2).Select(n => new IdValue(n))]
+            : ConformanceValues.Default(field, op);
+
+    private static ConditionNode Named(string tag) =>
+        new(CommonFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+
+    public static Geofile Add(SilexGisDbContext db, string name, Guid ownerId, Visibility visibility)
+    {
+        var file = ConformanceSeeds.File(db, ownerId, FileKind.Other, "gpx");
+        var geofile = new Geofile
+        {
+            Name = name,
+            FileId = file.Id,
+            Format = GeofileFormat.Gpx,
+            OwnerUserId = ownerId,
+            Visibility = visibility,
+        };
+        db.Geofiles.Add(geofile);
+        return geofile;
+    }
+}
+
+/// <summary>
 /// The suite every filterable world passes, or is not shipped.
 /// </summary>
 /// <remarks>
@@ -416,6 +856,11 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
         new TripLogWorldFixture(),
         new DocumentWorldFixture(),
         new MapViewWorldFixture(),
+        new GeoreferencedMapWorldFixture(),
+        new CabinetWorldFixture(),
+        new SurveyModelWorldFixture(),
+        new PhotographWorldFixture(),
+        new GeofileWorldFixture(),
     ];
 
     private readonly SilexGisApiFactory factory;
@@ -572,11 +1017,18 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
         var owner = new AccessContext(ownerId, isFullAdmin: false, [], []);
         var outsider = await CallerAsync(GlobalRoles.Viewer, "conf-out");
 
+        var exercised = 0;
         foreach (var world in Worlds(scope))
         {
             var fixture = Fixtures.Single(f => f.World == world.World);
             var matching = await fixture.SeedHiddenAsync(db, ownerId, tag);
+            if (matching is null)
+            {
+                await EveryRowReachesAnOutsiderAsync(world, fixture, db, ownerId, outsider);
+                continue;
+            }
 
+            exercised++;
             var toOwner = await world.QueryAsync(
                 new WorldQuery(owner, matching, SortKey.Updated, true, null, 0, 20, true), default);
             var toOutsider = await world.QueryAsync(
@@ -593,6 +1045,45 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
             // the row without listing it — which is a disclosure with nothing on screen to show it.
             toOutsider.Total.ShouldBe(0, $"{world.World} counted a row it did not return.");
         }
+
+        exercised.ShouldBeGreaterThan(0, "No world exercised the private-row case.");
+    }
+
+    /// <summary>
+    /// The other half of a world declaring that none of its rows is private: then a row nobody was
+    /// given anything on reaches somebody with no relation to it, as its own list would show it.
+    /// </summary>
+    /// <remarks>
+    /// Refused outright for a world over rows that carry an owner and a visibility. Those always
+    /// have a private row to seed, and a declaration there would only be a way not to.
+    /// </remarks>
+    private async Task EveryRowReachesAnOutsiderAsync(
+        IFilterWorld world, WorldFixture fixture, SilexGisDbContext db, Guid ownerId, AccessContext outsider)
+    {
+        fixture.EveryRowIsSharedBecause.ShouldNotBeNullOrWhiteSpace(
+            $"{world.World}'s fixture seeds no private row and says nothing about why.");
+        typeof(IProtectedEntity).IsAssignableFrom(EntityOf(world)).ShouldBeFalse(
+            $"{world.World} is over rows with a visibility of their own; seed one only its owner may see.");
+
+        var matching = await fixture.SeedIndistinguishableAsync(db, ownerId, $"{tag}s", 1);
+        var answer = await world.QueryAsync(
+            new WorldQuery(outsider, matching, SortKey.Updated, true, null, 0, 20, true), default);
+
+        answer.Hits.Count.ShouldBe(1, $"{world.World} says every row is shared but kept one back.");
+        answer.Total.ShouldBe(1);
+    }
+
+    private static Type EntityOf(IFilterWorld world)
+    {
+        for (var type = world.GetType(); type is not null; type = type.BaseType)
+        {
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(FilterWorld<>))
+            {
+                return type.GetGenericArguments()[0];
+            }
+        }
+
+        throw new InvalidOperationException($"{world.World} is not a FilterWorld<T>.");
     }
 
     [Fact]
@@ -604,6 +1095,9 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
 
         var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"conf-wh-{tag}@t.local");
+        // The owner places their own protected rows exactly, so they are the reader the withheld
+        // row must reach: an empty answer to the outsider means something only beside a full one.
+        var owner = new AccessContext(ownerId, isFullAdmin: false, [], []);
         var outsider = await CallerAsync(GlobalRoles.Viewer, "conf-whout");
 
         var exercised = 0;
@@ -617,11 +1111,27 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
             }
 
             exercised++;
+            var toOwner = await world.QueryAsync(
+                new WorldQuery(owner, matching, SortKey.Updated, true, null, 0, 20, true), default);
+            toOwner.Hits.Count.ShouldBe(1, $"{world.World}'s withheld row does not reach its own owner.");
+            toOwner.Total.ShouldBe(1);
+
             var answer = await world.QueryAsync(
                 new WorldQuery(outsider, matching, SortKey.Updated, true, null, 0, 20, true), default);
 
             answer.Hits.ShouldBeEmpty($"{world.World} returned a row its own list withholds.");
             answer.Total.ShouldBe(0, $"{world.World} counted a row its own list withholds.");
+
+            // A tag of its own, so the withheld row's filter and the twin's never match each other.
+            var twinTag = Guid.NewGuid().ToString("N")[..8];
+            var twin = await fixture.SeedWithheldTwinAsync(db, ownerId, twinTag);
+            twin.ShouldNotBeNull(
+                $"{world.World}'s fixture seeds a withheld row but no twin without the withholding.");
+            var toOutsider = await world.QueryAsync(
+                new WorldQuery(outsider, twin, SortKey.Updated, true, null, 0, 20, true), default);
+            toOutsider.Hits.Count.ShouldBe(
+                1, $"{world.World} keeps back from the outsider a row nothing should withhold.");
+            toOutsider.Total.ShouldBe(1);
         }
 
         // Said out loud rather than left to a silent pass: a run where no world contributed a

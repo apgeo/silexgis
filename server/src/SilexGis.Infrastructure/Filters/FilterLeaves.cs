@@ -173,6 +173,28 @@ internal static class FilterLeaves
     }
 
     /// <summary>
+    /// A calendar date that may be missing — the day a survey was taken, when anybody wrote it down.
+    /// </summary>
+    /// <remarks>
+    /// A missing date answers no comparison, so "surveyed before 2000" does not quietly include
+    /// every survey nobody dated, and its negation does — which is what "not before 2000" means.
+    /// </remarks>
+    public static Expression<Func<T, bool>> NullableDate<T>(
+        ConditionNode condition, Expression<Func<T, DateOnly?>> selector)
+    {
+        if (condition.Op is FilterOp.IsEmpty or FilterOp.IsNotEmpty)
+        {
+            return NullCheck(selector, condition.Op == FilterOp.IsNotEmpty);
+        }
+
+        var day = Expression.Convert(selector.Body, typeof(DateOnly));
+        var present = Expression.NotEqual(selector.Body, Expression.Constant(null, typeof(DateOnly?)));
+        var compared = Date(condition, Expression.Lambda<Func<T, DateOnly>>(day, selector.Parameters));
+        return Expression.Lambda<Func<T, bool>>(
+            Expression.AndAlso(present, compared.Body), selector.Parameters);
+    }
+
+    /// <summary>
     /// An enum column the schema never leaves empty.
     /// </summary>
     /// <remarks>
