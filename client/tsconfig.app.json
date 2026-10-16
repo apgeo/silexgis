@@ -17,9 +17,12 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Type checking. Of the strict family only this member is on: what a `catch` receives is
-       `unknown`, so a block has to establish what was thrown before it reads anything off it. */
-    "useUnknownInCatchVariables": true,
+    /* Type checking: the whole strict family. Null and undefined are checked wherever a value
+       flows, a parameter without a type is refused, and what a `catch` receives is `unknown`, so a
+       block has to establish what was thrown before it reads anything off it. Before this, the
+       application compiled with null checks off while the browser specs had them on, and three
+       real defects passed because of it. */
+    "strict": true,
 
     /* Linting */
     "noUnusedLocals": true,
