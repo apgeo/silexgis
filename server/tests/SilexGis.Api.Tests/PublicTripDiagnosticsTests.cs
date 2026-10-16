@@ -366,12 +366,12 @@ public sealed class PublicTripDiagnosticsTests : IAsyncLifetime, IDisposable, IC
         int.TryParse(wait, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds).ShouldBeTrue(wait);
         seconds.ShouldBeInRange(1, 60);
 
-        // The body is still the limiter's problem document, with no code — a header was added and
-        // nothing was written in its place.
+        // The body is still the limiter's problem document — a header was added and nothing was
+        // written in its place — and it carries the code every refusal of this API carries.
         refused.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
         var body = await refused.Content.ReadFromJsonAsync<JsonElement>();
         body.GetProperty("status").GetInt32().ShouldBe(429);
-        body.TryGetProperty("code", out _).ShouldBeFalse();
+        body.GetProperty("code").GetString().ShouldBe("rate.limited");
 
         // Counted as turned away on the route it was aimed at, and not as a read: it reached no
         // route, so there was nothing to serve or refuse and nothing to log.

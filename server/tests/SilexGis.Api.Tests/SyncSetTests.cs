@@ -118,7 +118,7 @@ public sealed class SyncSetTests : IAsyncLifetime, IDisposable, IClassFixture<Po
     /// the catalogue is transcribed from it.
     /// </remarks>
     [Fact]
-    public async Task The_refusal_without_a_token_is_a_problem_document_with_no_code()
+    public async Task The_refusal_without_a_token_is_a_problem_document_with_the_servers_own_code()
     {
         var response = await anonymous.GetAsync("/api/v1/sync/capabilities");
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -129,10 +129,10 @@ public sealed class SyncSetTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         body.GetProperty("status").GetInt32().ShouldBe(401);
         body.GetProperty("title").GetString().ShouldBe("Unauthorized");
 
-        // The whole point of pinning it. Every refusal this surface mints carries a stable `code`;
-        // this one does not, because it is answered before any route runs.
-        body.TryGetProperty("code", out _).ShouldBeFalse(
-            "a 401 is answered before the route and mints no code, and the catalogue says so");
+        // The whole point of pinning it. It is answered before any route runs, so no handler mints
+        // its code; the server adds one, and the catalogue says which.
+        body.GetProperty("code").GetString().ShouldBe(
+            "auth.unauthenticated", "a 401 carries the code the server adds, and the catalogue says so");
     }
 
     [Fact]

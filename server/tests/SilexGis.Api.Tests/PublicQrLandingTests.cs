@@ -377,17 +377,15 @@ public sealed class PublicQrRateLimitTests(PostgresFixture postgres) : IDisposab
 
         refused.ShouldNotBeNull("the landing route should stop answering a burst within its window");
 
-        // The body, not just the status. The limiter answers before the route, so this refusal
-        // mints no `code` — while still arriving as a problem document. A client that branches on
-        // `code`, as every other failure on this surface asks it to, meets a document without one
-        // here, and the published catalogue has to say so rather than call the answer empty.
+        // The body, not just the status. The limiter answers before the route, so no handler mints
+        // this refusal's `code`; the server adds one, and the published catalogue says which.
         refused.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
 
         var body = await refused.Content.ReadFromJsonAsync<JsonElement>();
         body.GetProperty("status").GetInt32().ShouldBe(429);
         body.GetProperty("title").GetString().ShouldBe("Too Many Requests");
-        body.TryGetProperty("code", out _).ShouldBeFalse(
-            "the limiter answers before the route and mints no code, and the catalogue says so");
+        body.GetProperty("code").GetString().ShouldBe(
+            "rate.limited", "the limiter answers before the route, the server adds the code, and the catalogue says so");
     }
 
     public void Dispose() => factory.Dispose();

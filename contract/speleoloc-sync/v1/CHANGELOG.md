@@ -83,3 +83,20 @@ without any recording changing, and that is precisely the case a copy would othe
 current through. Taking it is a second pass over the directory rather than part of the recording
 run, so an entry is written first and hashed with everything else; `README.md` gives the two
 commands.
+
+## 2026-10-16 — the 401 and the 429 carry a code
+
+**Contract version: 1, unchanged. A build pinned to it keeps working.** Two refusals that arrived
+as problem documents with no `code` now carry one, and nothing else about them moved: a client that
+branched on the status first, as `docs/speleoloc-sync/04-errors.md` told it to, behaves exactly as
+before.
+
+- `401` now carries `auth.unauthenticated`. Same status, same `title`, same `type`; the action is
+  still `re-auth`.
+- `429`, from the rate limiter in front of the QR landing route, now carries `rate.limited`. Same
+  status and `title`; the action is still `retry` after a wait.
+
+Recorded exchanges written in this entry: none — neither refusal is recorded here.
+
+Codes: `auth.unauthenticated` and `rate.limited` appeared. They are written by the server itself
+when an answer would otherwise leave without a code, so every refusal of this API now carries one.

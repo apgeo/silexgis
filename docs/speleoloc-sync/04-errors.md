@@ -54,21 +54,23 @@ what this document is a list of. `detail` is a sentence for a human reading a lo
 translated, it is not stable, and it is sometimes absent. `status` is the HTTP status and is
 meaningful, but several different codes share one status.
 
-**Two answers are problem documents without a `code`, and they are the exceptions to everything
-below.** A `401`, and the QR route's `429`. Both are produced before the route runs — the first by
-authentication, the second by the rate limiter — so there is no handler to mint a code. They arrive
-as `application/problem+json` all the same, carrying `status`, `title` and a `traceId` and no
-`detail`. The `401` carries a `type` as well; the `429` does not, which is one more reason not to
-key anything off that field:
+**Two answers are produced before any route runs, and carry a code the server adds itself.** A
+`401`, from authentication, and the QR route's `429`, from the rate limiter. No handler runs for
+either, so until 2026-10-16 they arrived with no `code`; the server now writes one wherever an answer
+would otherwise leave without it — `auth.unauthenticated` and `rate.limited`. They are
+`application/problem+json` like every other refusal, carrying `status`, `title`, a `traceId` and the
+`code`, and no `detail`. The `401` carries a `type` as well; the `429` does not, which is one more
+reason not to key anything off that field:
 
 ```json
 {"type": "https://tools.ietf.org/html/rfc9110#section-15.5.2", "title": "Unauthorized", "status": 401,
- "traceId": "00-f755a89a14e9ed9515a25af937676607-36e31dc4d28ba6ed-00"}
+ "traceId": "00-f755a89a14e9ed9515a25af937676607-36e31dc4d28ba6ed-00", "code": "auth.unauthenticated"}
 ```
 
-**So branch on the status first, and on `code` only afterwards.** A client that reaches for `code`
-before looking at the status finds none on these two and falls through to whatever it does with an
-answer it does not understand — which for a `401` means never refreshing the credential.
+**Branch on the status first all the same.** A server older than that date answers both with no
+`code`, and a client that reached for `code` before the status would find none there and fall
+through to whatever it does with an answer it does not understand — which for a `401` means never
+refreshing the credential.
 
 **On any other status, a response with no `code` is not from this API.** A proxy, a captive portal
 or a load balancer between the device and the server produces its own errors, usually as HTML. On a
@@ -81,7 +83,7 @@ stop within the access token's lifetime with nothing in the log but retries.
 
 | Status | Code | Means | Action |
 |---|---|---|---|
-| 401 | *(none)* | No token, an expired token, or a token this server did not issue. **A problem document with no `code`** — `status`, `title` (`Unauthorized`) and a `traceId`, nothing more. **Every route in this slice answers this** — none of them is anonymous | `re-auth` — refresh the credential, then send the request again. Never resend with the same token, and never treat this as a transport failure to retry |
+| 401 | `auth.unauthenticated` | No token, an expired token, or a token this server did not issue. A problem document carrying `status`, `title` (`Unauthorized`), a `traceId` and this code — the code since 2026-10-16; an older server sends none, so branch on the status. **Every route in this slice answers this** — none of them is anonymous | `re-auth` — refresh the credential, then send the request again. Never resend with the same token, and never treat this as a transport failure to retry |
 
 **There is no general `403` code on this surface.** Every refusal a sync route can answer with a
 `403` names its own reason — `sync.caving_group_forbidden` is the only one today, in section 4 and
@@ -258,7 +260,7 @@ it belongs in one catalogue with the rest because the same application calls bot
 | Status | Code | Means | Action |
 |---|---|---|---|
 | 404 | `qr.not_found` | Nothing resolves here. **Four different facts share this one answer on purpose**: the code is malformed, the code is longer than this server will look up, no cave carries it, or the cave that carries it is not published. They are indistinguishable so the address cannot be used to enumerate caves | `surface-to-user` — tell the visitor the code does not resolve at this installation, and say nothing about why |
-| 429 | *(none)* | The per-address rate limit. **A problem document with no `code`** — the limiter answers before the route does, so the body is `status`, `title` (`Too Many Requests`) and a `traceId` | `retry` — after a wait. The window is one minute and the allowance is per installation |
+| 429 | `rate.limited` | The per-address rate limit. The limiter answers before the route does; the body is `status`, `title` (`Too Many Requests`), a `traceId` and this code — the code since 2026-10-16, none from an older server | `retry` — after a wait. The window is one minute and the allowance is per installation |
 | 200 | — | The code resolves and the cave is published. The answer is deliberately contentless: it says the code resolves at this installation and nothing else, so it carries no cave name and no coordinate | — |
 
 ## 8. Codes this document deliberately does not carry

@@ -42,11 +42,11 @@ The sign-in routes are anonymous too, by nature: `POST /api/v1/auth/login`, `GET
 else this package documents requires a bearer token. The two answers in
 §2 are its answers; the page is a rendering of them.
 
-**There is a third response, and it carries no `code`**: `429`, from the rate limiter described in
-§3, which answers before the route does. It is still a problem document — `application/problem+json`,
-carrying `status`, `title` (`Too Many Requests`) and a `traceId` — but nothing mints a code for it,
-so a client that branches on `code` must branch on the status here instead. Back off and retry; the
-window is a minute.
+**There is a third response**: `429`, from the rate limiter described in §3, which answers before
+the route does. It is a problem document — `application/problem+json`, carrying `status`, `title`
+(`Too Many Requests`), a `traceId` and, since 2026-10-16, the code `rate.limited`, which the server
+adds itself since no route ran to mint one. An older server sends it with no code, so branch on the
+status here. Back off and retry; the window is a minute.
 
 ## 2. What it answers
 
