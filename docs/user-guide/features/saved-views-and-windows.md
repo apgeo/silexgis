@@ -24,9 +24,16 @@ A **saved view** is a named map configuration: its extent, its layers, its filte
 
 Your saved views appear on the **dashboard** under *My saved views*.
 
-A shared view opens for an anonymous visitor **with protections intact** — a protected cave
-is still approximate, a withheld geometry is still withheld. If a link has been revoked or
-never existed: *"This shared view does not exist or was revoked."*
+A shared view opens for an anonymous visitor over the **background it was saved with** — or,
+when that one needs an access key, over the installation's default background — and, if the
+view had them switched on, with the **cave entrances and surface features whose visibility is
+Public**. Nothing narrower is shown, whoever shared the view, and the **protections hold harder
+than for any account**: a protected cave is shown only approximately (*"Approximate position"*),
+a protected outline is not shown at all, and nothing on the page identifies a record or opens
+it. Clicking a marker shows its name; clicking a cluster zooms in. Survey lines, photographs,
+trips and imported files are never shown on a shared view. Revoking the link stops all of it at
+once; an administrator can also switch data on shared views off for the whole installation. If
+a link has been revoked or never existed: *"This shared view does not exist or was revoked."*
 
 Saved views can also be [linked](links.md) to other records like anything else.
 

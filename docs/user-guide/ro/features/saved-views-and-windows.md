@@ -24,9 +24,17 @@ O **vedere salvată** este o configurație de hartă denumită: extinderea, stra
 
 Vederile dumneavoastră salvate apar pe **panoul de bord**, la *Vederile mele salvate*.
 
-O vedere partajată se deschide pentru un vizitator anonim **cu protecțiile intacte** — o peșteră
-protejată este tot aproximativă, o geometrie reținută este tot reținută. Dacă un link a fost
-revocat sau nu a existat: *„Această vedere partajată nu există sau a fost revocată."*
+O vedere partajată se deschide pentru un vizitator anonim peste **fundalul cu care a fost
+salvată** — sau, dacă acela cere o cheie de acces, peste fundalul implicit al instalării — și,
+dacă vederea le avea pornite, cu **intrările de peșteri și elementele de suprafață a căror
+vizibilitate este Public**. Nimic mai restrâns nu apare, oricine ar fi partajat vederea, iar
+**protecțiile țin mai strâns decât pentru orice cont**: o peșteră protejată apare doar
+aproximativ (*„Poziție aproximativă"*), un contur protejat nu apare deloc, iar nimic de pe
+pagină nu identifică sau nu deschide o înregistrare. Un clic pe un marcaj arată numele lui; un
+clic pe un grup apropie harta. Liniile topografice, fotografiile, ieșirile și fișierele importate
+nu apar niciodată pe o vedere partajată. Revocarea linkului oprește totul imediat; un
+administrator poate opri și datele pe vederile partajate pentru toată instalarea. Dacă un link a
+fost revocat sau nu a existat: *„Această vedere partajată nu există sau a fost revocată."*
 
 Vederile salvate pot fi și [legate](links.md) de alte înregistrări, ca orice altceva.
 
