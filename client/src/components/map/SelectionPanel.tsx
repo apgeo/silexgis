@@ -401,8 +401,12 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
     );
   }
 
+  // Drawn from the installation-wide stand-in at first, so the card does not jump when the
+  // feature's own answer arrives, but usable only once it has: the stand-in can be wrong both
+  // ways for one feature. Its tags, attachments and history are editable only then too.
   const canEdit = envelope.kind === 'generic' && rights.canEdit;
   const canDelete = envelope.kind === 'generic' && rights.canDelete;
+  const mayEditNow = canEdit && rights.settled;
   // A protected feature the viewer may not see exactly can arrive without geometry.
   // Multi* geometries (imported geodata) collapse to their base shape for display
   // and for constraining the edit modal's type options.
@@ -511,7 +515,13 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
           </Button>
         )}
         {canEdit && (
-          <Button ref={editButton} icon={<EditOutlined />} size="small" onClick={() => setEditing(true)}>
+          <Button
+            ref={editButton}
+            icon={<EditOutlined />}
+            size="small"
+            disabled={!rights.settled}
+            onClick={() => setEditing(true)}
+          >
             {t('features.edit')}
           </Button>
         )}
@@ -520,8 +530,9 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
             title={t('features.deleteConfirm')}
             onConfirm={() => void onDelete()}
             okButtonProps={{ danger: true, loading: deleteFeatureM.isPending }}
+            disabled={!rights.settled}
           >
-            <Button icon={<DeleteOutlined />} size="small" danger>
+            <Button icon={<DeleteOutlined />} size="small" danger disabled={!rights.settled}>
               {t('features.delete')}
             </Button>
           </Popconfirm>
@@ -543,9 +554,9 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
           // The same name this panel puts at its top: a nameless feature still has to read as
           // something in the sentence a link is composed from.
           entityTitle: title,
-          canEdit,
+          canEdit: mayEditNow,
           details,
-          history: canEdit
+          history: mayEditNow
             ? ({
                 // Audit rows carry the kind-qualified entity name.
                 entityType: 'Feature:Generic',

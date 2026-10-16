@@ -23,6 +23,14 @@ export async function unwrap<T>(
   return data;
 }
 
+/**
+ * A query's retry rule for an answer where a refusal is itself the answer: a 4xx is settled and
+ * not asked again; a failure to reach the server is asked again, up to three times.
+ */
+export function retryUnlessRefused(failureCount: number, error: unknown): boolean {
+  return !(error instanceof ApiError && error.status >= 400 && error.status < 500) && failureCount < 3;
+}
+
 /** unwrap for endpoints with no response body (DELETE / 204). */
 export async function unwrapVoid(
   call: Promise<{ error?: unknown; response: Response }>,

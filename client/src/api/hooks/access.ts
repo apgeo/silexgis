@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client.ts';
 import type { components } from '../schema';
-import { unwrap, unwrapVoid } from './shared.ts';
+import { retryUnlessRefused, unwrap, unwrapVoid } from './shared.ts';
 import type { EntityType } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 
@@ -121,8 +121,10 @@ export function useEffectiveAccess(
         params: { path: { entityType, id: entityId! }, query: { explain } },
       })),
     enabled: (options.enabled ?? true) && !!entityId,
-    // A 403/404 is a settled answer here, not worth retrying.
-    retry: false,
+    // A refusal (403, 404, any 4xx) is a settled answer here, not worth retrying. A failure to
+    // reach the server is no answer at all, and is asked again: a control waiting on this answer
+    // would otherwise wait for it for good.
+    retry: retryUnlessRefused,
   });
 }
 export type ObjectAccessEntry = components['schemas']['ObjectAccessEntryDto'];

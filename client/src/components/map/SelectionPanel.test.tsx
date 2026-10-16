@@ -7,6 +7,7 @@ import '../../i18n';
 import { useWorkspaceStore, type WorkspaceSelection } from '../../stores/workspaceStore.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera, type ViewCameraTarget } from '../../workspace/viewCamera.ts';
+import { ApiError } from '../../api/client.ts';
 import SelectionPanel from './SelectionPanel.tsx';
 
 // What this panel does to the rest of the application, rather than what it renders.
@@ -85,7 +86,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useFeatureTypes: () => ({
     data: [{ id: 1, code: 'fracture', name: 'Fracture', propertiesSchema: null }],
   }),
-  useCan: () => installationWide,
+  useCan: (_domain: string, action: string) => holdsInstallationWide(action),
   useDeleteFeature: () => ({ mutateAsync: deleteFeature, isPending: false }),
   useUpdateFeature: () => ({ mutateAsync: updateFeature, isPending: false }),
   // The panel's arrangement now merges an installation default over the person's own; with
@@ -96,14 +97,21 @@ vi.mock('../../api/hooks.ts', () => ({
 
 // What the caller may do: installation-wide, and on the one selected object. Reassigned per test;
 // the default holds both, which is what the tests about other things assume.
-let installationWide = true;
+let installationWide: boolean | string[] = true;
+const holdsInstallationWide = (action: string) =>
+  installationWide === true || (Array.isArray(installationWide) && installationWide.includes(action));
 let objectActions: string | undefined = 'read, write, delete, share';
+/** What the feature's own answer failed with, when it failed. */
+let objectError: unknown;
 vi.mock('../../api/hooks/access.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks/access.ts')>('../../api/hooks/access.ts');
   return {
     ...actual,
-    useCan: () => installationWide,
-    useEffectiveAccess: () => ({ data: objectActions === undefined ? undefined : { actions: objectActions } }),
+    useCan: (_domain: string, action: string) => holdsInstallationWide(action),
+    useEffectiveAccess: () => ({
+      data: objectActions === undefined ? undefined : { actions: objectActions },
+      error: objectError,
+    }),
   };
 });
 
@@ -156,6 +164,7 @@ beforeEach(() => {
   caveSummary = { headlinePicture: null };
   installationWide = true;
   objectActions = 'read, write, delete, share';
+  objectError = undefined;
 });
 
 afterEach(() => {
@@ -302,12 +311,33 @@ describe('the edit affordances of a selected feature', () => {
     expect(editAffordances()).toMatchObject({ edit: true, delete: false });
   });
 
-  it('stands in with the installation-wide right until the feature has answered', async () => {
+  it('stands in with the installation-wide right until the feature has answered, unusable meanwhile', async () => {
     installationWide = true;
     objectActions = undefined;
     renderPanel({ kind: 'feature', featureId: 'feature-1' });
 
     await screen.findByText('Fracture', { selector: 'h5' });
-    expect(editAffordances()).toMatchObject({ edit: true });
+    expect(editAffordances()).toMatchObject({ edit: true, delete: true, tags: 'false' });
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+  });
+
+  it('stands in for Delete with the installation-wide right to delete, not the right to write', async () => {
+    installationWide = ['write'];
+    objectActions = undefined;
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    await screen.findByText('Fracture', { selector: 'h5' });
+    expect(editAffordances()).toMatchObject({ edit: true, delete: false });
+  });
+
+  it('takes a refused answer about the feature as no rights on it, not as no answer', async () => {
+    installationWide = true;
+    objectActions = undefined;
+    objectError = new ApiError(403, 'forbidden');
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    await screen.findByText('Fracture', { selector: 'h5' });
+    expect(editAffordances()).toMatchObject({ edit: false, delete: false, tags: 'false' });
   });
 });
