@@ -22,6 +22,29 @@ const FOUND = 'Peștera Demo Mare';
 const SHORT = 'Peștera Demo Mică';
 const ELSEWHERE = 'Peștera Demo Ursului';
 
+/** Picks an option of a select by its visible text, typing first where the list is long and searchable. */
+async function choose(page: Page, testId: string, option: RegExp, search?: string) {
+  await page.getByTestId(testId).click();
+  if (search !== undefined) {
+    await page.keyboard.type(search);
+  }
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: option }).first().click();
+}
+
+/** The live count the editor shows before anything is applied. */
+async function editorCount(page: Page): Promise<number> {
+  const count = page.getByTestId('filter-editor-count');
+  await expect(count).toHaveText(/Matches: \d+/, { timeout: 30_000 });
+  return Number((await count.textContent())!.replace(/\D/g, ''));
+}
+
+/** The filter document a token in the address carries, as the client wrote it. */
+function documentIn(url: string): string {
+  const token = new URL(url).searchParams.get('filter');
+  expect(token).toBeTruthy();
+  return Buffer.from(token!, 'base64url').toString('utf8');
+}
+
 async function expectTheNarrowedRows(page: Page) {
   await expect(page.getByRole('cell', { name: FOUND, exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('cell', { name: SHORT, exact: true })).toHaveCount(0);
@@ -99,4 +122,85 @@ test('the cave registry keeps its filter in the address, exports it and saves it
   await row.getByRole('button', { name: 'Delete' }).click();
   await page.locator('.ant-popconfirm').getByRole('button', { name: 'Delete' }).click();
   await expect(page.getByRole('row').filter({ hasText: filterName })).toHaveCount(0);
+});
+
+/**
+ * The advanced filter writes into the question the controls compose: a region set by its control,
+ * then — in the editor — an any-of holding an at-least length and a group that fixes a feature type
+ * and asks one of that type's own typed properties. The count is read before applying; once applied
+ * the list narrows, the address holds the whole of it so a reload draws the same rows, the export is
+ * asked with it, and the editor reopens on the rows that were written.
+ *
+ * No demonstration cave carries a feature type, so the property branch matches none of them here and
+ * the length decides which caves are listed: what the browser proves is the road (offered only beside
+ * its type, accepted by the server, kept through the address), while the server's tests prove what a
+ * typed property matches.
+ */
+test('the advanced filter edits the registry’s own question and keeps it in the address', async ({ page }) => {
+  test.slow();
+
+  await login(page);
+  await gotoRoute(page, '/caves');
+  const region = page.getByTestId('cave-registry-region');
+  await region.fill('Brașov');
+  await region.press('Enter');
+  await expect(page).toHaveURL(/[?&]filter=/);
+  await expect(page.getByRole('cell', { name: SHORT, exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('cell', { name: ELSEWHERE, exact: true })).toHaveCount(0);
+
+  // ---- the editor opens on the region the control set ----
+  const opener = page.getByTestId('cave-registry-advanced');
+  await opener.click();
+  await expect(page.getByTestId('filter-editor')).toBeVisible();
+  await expect(page.getByTestId('filter-editor-field-0')).toContainText('Region');
+  const before = await editorCount(page);
+
+  // ---- any of: at least 1000 m, or a sinkhole at least 1 m deep ----
+  await page.getByTestId('filter-editor-add-group-root').click();
+  await choose(page, 'filter-editor-field-1.0', /^Surveyed length \(m\)$/, 'Surveyed');
+  await choose(page, 'filter-editor-op-1.0', /^at least$/);
+  await page.getByTestId('filter-editor-value-1.0').fill('1000');
+
+  await page.getByTestId('filter-editor-add-group-1').click();
+  await choose(page, 'filter-editor-field-1.1.0', /^Type$/, 'Type');
+  await choose(page, 'filter-editor-value-1.1.0', /^Sinkhole/, 'Sinkhole');
+  await page.getByTestId('filter-editor-add-row-1.1').click();
+  await choose(page, 'filter-editor-field-1.1.1', /^Property: Depth \(m\)$/, 'Property');
+  await choose(page, 'filter-editor-op-1.1.1', /^at least$/);
+  await page.getByTestId('filter-editor-value-1.1.1').fill('1');
+
+  // The count follows the draft before anything is applied.
+  await expect.poll(() => editorCount(page), { timeout: 30_000 }).toBeLessThan(before);
+  expect(await editorCount(page)).toBeGreaterThan(0);
+
+  await page.getByTestId('filter-editor-apply').click();
+  await expect(page.getByTestId('filter-editor')).toHaveCount(0);
+  await expect(opener).toBeFocused();
+
+  // ---- the list, and the address that carries all of it ----
+  await expectTheNarrowedRows(page);
+  await expect(page.getByTestId('cave-registry-region')).toHaveValue('Brașov');
+  await expect(page.getByTestId('cave-registry-extra')).toBeVisible();
+  const written = documentIn(page.url());
+  expect(written).toContain('"op":"greaterOrEqual"');
+  expect(written).toContain('"field":"property:sinkhole:depth_m"');
+
+  const address = new URL(page.url());
+  await gotoRoute(page, `${address.pathname}${address.search}`);
+  await expectTheNarrowedRows(page);
+  expect(documentIn(page.url())).toBe(written);
+
+  // ---- the export is asked with that same filter ----
+  const exportRequest = page.waitForRequest((request) => request.url().includes('/api/v1/export/caves?'));
+  await page.getByRole('button', { name: 'Export' }).hover();
+  await page.getByRole('menuitem', { name: 'CSV' }).click();
+  expect(new URL((await exportRequest).url()).searchParams.get('filter')).toBe(address.searchParams.get('filter'));
+
+  // ---- and the editor reopens on what was written ----
+  await page.getByTestId('cave-registry-edit-extra').click();
+  await expect(page.getByTestId('filter-editor-field-1.1.1')).toContainText('Property: Depth (m)');
+  await expect(page.getByTestId('filter-editor-value-1.0')).toHaveValue('1000');
+  await page.getByTestId('filter-editor-cancel').click();
+  await expect(page.getByTestId('cave-registry-edit-extra')).toBeFocused();
+  expect(documentIn(page.url())).toBe(written);
 });
