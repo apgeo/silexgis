@@ -10,6 +10,9 @@ feature and walkthroughs of whole jobs.
   discovery data, and protection of sensitive locations.
 - **Map workspace** — OpenLayers map with base layers, cave/feature/geofile overlays,
   geometry editing with snapping and undo, measurement, and search (internal + Nominatim).
+  Two karst layers are computed by the server: a cave-density grid (caves per km², smoothed,
+  or hot and cold spots, never finer than the location-protection grid) and the karstification
+  index of each karst area and massif in view, with a key, both kept in saved views.
 - **Surface features, files & media** — typed symbols and properties, photo galleries,
   documents, audio and video, and georeferenced raster (COG) map overlays. A document has a
   kind (survey report, permit, trip report, …) and each kind decides which details its

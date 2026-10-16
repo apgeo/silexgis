@@ -38,6 +38,29 @@ Additional tile layers configured by the installation, drawn over the base.
 | **Georeferenced maps** | Raster sheets — see [Georeferenced raster maps](georeferenced-maps.md) |
 | **Geotagged photos** | Photographs that carry a position |
 | **Entrance heatmap** | Density rather than individual markers |
+| **Cave density (grid)** | How many caves lie in each cell of a grid, counted by the server |
+| **Karstification index (areas)** | Each karst area and massif in view, filled by how karstified it reads |
+
+### Karst layers
+
+The two karst layers are computed by the server over the caves you may read; the map never
+works them out from the markers it happens to have, which are capped per view. Each has a row
+under the layer list while it is on, with a key to its colours.
+
+- **Cave density (grid)** shows, cell by cell, **caves per km²**, a **smoothed** density, or
+  **hot and cold spots** (cells clearly denser or sparser than the rest of the view). The row
+  names the cell size used: never finer than the location grid that protects cave positions,
+  and coarser when the view is wide. Colours are relative to the view — the darkest cell is the
+  densest *here* — so compare two views by the key's numbers, not by colour. If the view is too
+  wide even for the coarsest cell, the row says so: zoom in.
+- **Karstification index (areas)** fills each karst area and massif by its index class, from
+  *very low* to *very high*; an area that cannot be measured is grey with a dashed edge. A karst
+  area inside a massif is drawn over it. Point at an area for its name and class; click it to
+  open the area, whose page has the full statistics. Only areas you may see exactly are drawn;
+  if a view holds more than the installation draws at once, the key says some are not shown.
+
+Both take an opacity and are kept in a [saved view](saved-views-and-windows.md). Neither is
+drawn in the 3D view or on a shared view's link.
 
 ### Label decluttering
 

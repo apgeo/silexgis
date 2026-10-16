@@ -39,6 +39,31 @@ Straturi suplimentare de dale configurate de instalare, desenate peste fundal.
 | **Hărți georeferențiate** | Foi raster — vedeți [Hărți raster georeferențiate](georeferenced-maps.md) |
 | **Fotografii geolocalizate** | Fotografiile care poartă o poziție |
 | **Hartă de densitate a intrărilor** | Densitate în loc de puncte individuale |
+| **Densitatea peșterilor (grilă)** | Câte peșteri se află în fiecare celulă a unei grile, numărate de server |
+| **Indice de carstificare (zone)** | Fiecare zonă carstică și masiv din imagine, colorat după cât de carstificat apare |
+
+### Straturile carstice
+
+Cele două straturi carstice sunt calculate de server peste peșterile pe care le puteți citi;
+harta nu le deduce niciodată din marcajele pe care le are, care sunt limitate pe imagine. Cât
+timp e pornit, fiecare are un rând sub lista de straturi, cu o legendă a culorilor.
+
+- **Densitatea peșterilor (grilă)** arată, celulă cu celulă, **peșteri pe km²**, o densitate
+  **netezită** sau **zone fierbinți și reci** (celule clar mai dense sau mai rare decât restul
+  imaginii). Rândul spune mărimea celulei folosite: niciodată mai fină decât grila de localizare
+  care protejează pozițiile peșterilor, și mai mare când imaginea e largă. Culorile sunt relative
+  la imagine — celula cea mai închisă este cea mai densă *aici* — așa că două imagini se compară
+  după numerele din legendă, nu după culoare. Dacă imaginea e prea largă chiar și pentru celula
+  cea mai mare, rândul o spune: măriți harta.
+- **Indice de carstificare (zone)** colorează fiecare zonă carstică și masiv după clasa
+  indicelui, de la *foarte scăzut* la *foarte ridicat*; o zonă care nu poate fi măsurată este gri,
+  cu margine întreruptă. O zonă carstică din interiorul unui masiv se desenează peste el. Indicați
+  o zonă pentru numele și clasa ei; un clic o deschide, iar pagina ei are statisticile complete.
+  Se desenează doar zonele pe care le puteți vedea exact; dacă o imagine cuprinde mai multe decât
+  desenează instalarea deodată, legenda spune că unele nu sunt arătate.
+
+Amândouă au opacitate și se păstrează într-o [vedere salvată](saved-views-and-windows.md).
+Niciunul nu se desenează în vederea 3D sau pe linkul unei vederi partajate.
 
 ### Rărirea etichetelor
 
