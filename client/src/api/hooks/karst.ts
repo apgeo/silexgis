@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client.ts';
+import { densityBboxParam, fetchSteppedDensity, type LonLatBox } from '../../map/densityCells.ts';
 import type { components } from '../schema';
 import { unwrap } from './shared.ts';
 import { queryKeys } from './queryKeys.ts';
@@ -404,6 +405,28 @@ export async function fetchMapDensity(query: DensityQuery, signal?: AbortSignal)
       signal,
     }),
   );
+}
+
+/**
+ * A window's grid at the finest cell that fits it, found by the same step search the map overlay
+ * uses: no cell on the first request, and when the floor makes the window too many cells, the
+ * multiple the refusal's own numbers say fits. The answer is either the grid or the refusal's code,
+ * so a caller can tell "too wide even when coarsened" from a grid with nothing in it.
+ */
+export function useSteppedMapDensity(query: { box: LonLatBox; areaId?: string } | undefined) {
+  return useQuery({
+    queryKey: queryKeys.mapDensityStepped(query ? densityBboxParam(query.box) : '', query?.areaId),
+    queryFn: ({ signal }) =>
+      fetchSteppedDensity(
+        query!.box,
+        null,
+        (request, requestSignal) => fetchMapDensity({ ...request, areaId: query!.areaId }, requestSignal),
+        signal,
+      ),
+    enabled: !!query,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
 }
 
 export type KarstIndexWindow = components['schemas']['KarstIndexWindowDto'];

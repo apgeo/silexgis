@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { ApiError } from '../api/client.ts';
 
-// Which cell size to ask the density grid for, shared by every screen that draws it.
+// Which cell size to ask the density grid for, shared by every screen that draws it — and the
+// one search that asks for it, so the map overlay and an area's own card cannot drift into two
+// ideas of what to do when the floor does not fit a window.
 //
 // The server decides the finest cell it will publish — its location-protection grid — and how
 // many cells one answer may hold. Neither number is a client constant: both arrive in an answer
@@ -104,4 +107,86 @@ export function limitsFromRefusal(problem: Readonly<Record<string, unknown>> | u
 export function clampToWorld(box: LonLatBox): LonLatBox {
   const clamp = (value: number, limit: number) => Math.min(limit, Math.max(-limit, value));
   return [clamp(box[0], 180), clamp(box[1], 90), clamp(box[2], 180), clamp(box[3], 90)];
+}
+
+/** A window as the density route takes it, formatted the one way every caller sends it. */
+export function densityBboxParam(box: LonLatBox): string {
+  return clampToWorld(box)
+    .map((n) => n.toFixed(5))
+    .join(',');
+}
+
+/** The part of a density request the step search decides; a caller adds the rest (an area). */
+export interface DensityStepRequest {
+  bbox: string;
+  cellMetres?: number;
+}
+
+export type SteppedDensityAnswer<G extends DensityGridLimits> =
+  | { kind: 'grid'; grid: G; limits: DensityGridLimits }
+  | { kind: 'refused'; code: string; limits: DensityGridLimits | null };
+
+/** The code the step search answers with when no multiple fits the window. */
+export const TOO_MANY_CELLS = 'density.too_many_cells';
+
+/**
+ * Asks for a window's grid at the finest cell that fits it.
+ *
+ * Without known limits the first request names no cell, and the answer (or a too-many-cells
+ * refusal, which carries the same two numbers) states the floor and the cell limit. With them the
+ * cell is chosen before asking. A server that still finds the window too large — its count is the
+ * authority, this one is a forecast — is asked again one doubling coarser, a bounded number of
+ * times. Any other refusal is the answer and is reported as itself, never as an empty grid.
+ */
+export async function fetchSteppedDensity<G extends DensityGridLimits>(
+  box: LonLatBox,
+  limits: DensityGridLimits | null,
+  fetchGrid: (request: DensityStepRequest, signal?: AbortSignal) => Promise<G>,
+  signal?: AbortSignal,
+): Promise<SteppedDensityAnswer<G>> {
+  const bbox = densityBboxParam(box);
+  let known = limits;
+  let multiple: number | null = known ? fittingCellMultiple(clampToWorld(box), known) : null;
+  if (known && multiple === null) {
+    return { kind: 'refused', code: TOO_MANY_CELLS, limits: known };
+  }
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const cellMetres = known && multiple !== null ? densityCellMetres(known.minimumCellMetres, multiple) : undefined;
+    try {
+      const grid = await fetchGrid({ bbox, cellMetres }, signal);
+      return {
+        kind: 'grid',
+        grid,
+        limits: { minimumCellMetres: grid.minimumCellMetres, maxCells: grid.maxCells },
+      };
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status < 400 || error.status >= 500 || !error.code) {
+        throw error;
+      }
+      if (error.code !== TOO_MANY_CELLS) {
+        return { kind: 'refused', code: error.code, limits: known };
+      }
+      const stated = limitsFromRefusal(error.problem);
+      if (stated && !known) {
+        known = stated;
+        multiple = fittingCellMultiple(clampToWorld(box), stated);
+      } else {
+        multiple = multiple === null ? null : coarserCellMultiple(multiple);
+      }
+      if (!known || multiple === null) {
+        return { kind: 'refused', code: TOO_MANY_CELLS, limits: known };
+      }
+    }
+  }
+  return { kind: 'refused', code: TOO_MANY_CELLS, limits: known };
+}
+
+/**
+ * The multiple of the floor a stepped answer was taken at: one when the floor fitted, a power of
+ * two above it when the window was too wide for the floor. Coarser choices are offered from here,
+ * so none of them is a cell the search already found too fine for the window.
+ */
+export function answeredCellMultiple(grid: DensityGridLimits & { cellMetres: number }): number {
+  return Math.max(1, Math.round(grid.cellMetres / grid.minimumCellMetres));
 }

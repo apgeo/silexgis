@@ -258,6 +258,8 @@ export const queryKeys = {
     ['stats', 'registry', 'clustering', params] as const,
   mapDensity: (bbox: string, cellMetres: number | null, bandwidthMetres: number | null, areaId?: string) =>
     ['map', 'density', bbox, cellMetres, bandwidthMetres, areaId ?? null] as const,
+  mapDensityStepped: (bbox: string, areaId?: string) =>
+    ['map', 'density', 'stepped', bbox, areaId ?? null] as const,
   mapPointPattern: (bbox: string, simulations: number, seed: number, areaId?: string) =>
     ['map', 'point-pattern', bbox, simulations, seed, areaId ?? null] as const,
   closestApproach: (id: string, other: string) => ['caves', id, 'closest-approach', other] as const,

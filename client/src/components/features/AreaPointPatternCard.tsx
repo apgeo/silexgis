@@ -3,8 +3,14 @@ import { Alert, Card, Descriptions, Empty, Segmented, Space, Statistic, Typograp
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useMapDensity, useMapPointPattern } from '../../api/hooks.ts';
-import { DENSITY_CELL_MULTIPLES, densityCellMetres } from '../../map/densityCells.ts';
+import { useMapDensity, useMapPointPattern, useSteppedMapDensity } from '../../api/hooks.ts';
+import {
+  answeredCellMultiple,
+  DENSITY_CELL_MULTIPLES,
+  densityBboxParam,
+  densityCellMetres,
+  type LonLatBox,
+} from '../../map/densityCells.ts';
 import { EnvelopeChart } from '../statistics/DistributionCharts.tsx';
 import RoseDiagram from '../statistics/RoseDiagram.tsx';
 
@@ -26,7 +32,9 @@ import RoseDiagram from '../statistics/RoseDiagram.tsx';
  * location-protection grid, below which a count per cell would start describing where an individual
  * cave is rather than how thick the karst is. The control offers multiples of that number, so it
  * cannot ask for something that will be refused, and the floor is shown rather than left to be
- * discovered by a failed request.
+ * discovered by a failed request. That first request is the map overlay's own step search: over an
+ * area too wide to grid at the floor the refusal states the floor and the cell limit, the search
+ * asks again at the finest multiple that fits, and the choices start from there.
  * </p>
  * <p>
  * The point-pattern half is computed only over the caves this reader may place exactly. That is a
@@ -50,26 +58,33 @@ export default function AreaPointPatternCard({
   // Only the kinds that stand for a tract of karst, matching the statistics card beside this one.
   // Caves per square kilometre of a building is not a reading anybody wants offered.
   const enabled = featureTypeCode === 'karst_area' || featureTypeCode === 'massif';
-  const bbox = useMemo(() => (enabled ? bboxOf(geometry) : null), [enabled, geometry]);
+  const box = useMemo(() => (enabled ? boxOf(geometry) : null), [enabled, geometry]);
+  const bbox = box ? densityBboxParam(box) : null;
 
-  // The floor is not known until an answer arrives, so the first request names no cell. Afterwards
-  // the multiple is applied to the floor the server published.
-  const probe = useMapDensity(bbox ? { bbox, areaId: featureId } : undefined);
-  const floor = probe.data?.minimumCellMetres ?? null;
+  // The floor is not known until an answer arrives, so the first request names no cell; the shared
+  // step search coarsens it when the floor does not fit the outline's window. Afterwards each
+  // choice is a multiple of the cell that first answer was taken at.
+  const probe = useSteppedMapDensity(box ? { box, areaId: featureId } : undefined);
+  const first = probe.data?.kind === 'grid' ? probe.data.grid : undefined;
+  const fitting = first ? answeredCellMultiple(first) : 1;
 
   const density = useMapDensity(
-    bbox && floor && cellMultiple > 1
-      ? { bbox, areaId: featureId, cellMetres: densityCellMetres(floor, cellMultiple) }
+    bbox && first && cellMultiple > 1
+      ? {
+          bbox,
+          areaId: featureId,
+          cellMetres: densityCellMetres(first.minimumCellMetres, fitting * cellMultiple),
+        }
       : undefined,
   );
-  const grid = cellMultiple > 1 ? density.data : probe.data;
+  const grid = cellMultiple > 1 ? density.data : first;
 
   const pattern = useMapPointPattern(
-    bbox ? { bbox, areaId: featureId, simulations: 99, seed: 1 } : undefined,
+    box ? { bbox: box.map((v) => v.toFixed(6)).join(','), areaId: featureId, simulations: 99, seed: 1 } : undefined,
   );
 
   // A refusal and an area nobody may place answer identically, so there is nothing honest to show.
-  if (!enabled || !bbox || probe.isError) return null;
+  if (!enabled || !box || probe.isError || probe.data?.kind === 'refused') return null;
 
   if (probe.isLoading || !grid) {
     return (
@@ -110,7 +125,7 @@ export default function AreaPointPatternCard({
             onChange={(value) => setCellMultiple(Number(value))}
             data-testid="karst-density-cell"
             options={DENSITY_CELL_MULTIPLES.map((multiple) => ({
-              label: `${round(densityCellMetres(grid.minimumCellMetres, multiple))} m`,
+              label: `${round(densityCellMetres(grid.minimumCellMetres, fitting * multiple))} m`,
               value: multiple,
             }))}
           />
@@ -289,8 +304,8 @@ export default function AreaPointPatternCard({
   );
 }
 
-/** The outline's window, as the API's `west,south,east,north`. */
-function bboxOf(geometry: { type?: string; coordinates?: unknown } | null): string | null {
+/** The outline's window, west, south, east, north. */
+function boxOf(geometry: { type?: string; coordinates?: unknown } | null): LonLatBox | null {
   if (!geometry) return null;
 
   let west = Infinity;
@@ -314,7 +329,7 @@ function bboxOf(geometry: { type?: string; coordinates?: unknown } | null): stri
   if (!Number.isFinite(west) || !Number.isFinite(south) || west >= east || south >= north) {
     return null;
   }
-  return [west, south, east, north].map((v) => v.toFixed(6)).join(',');
+  return [west, south, east, north];
 }
 
 /**

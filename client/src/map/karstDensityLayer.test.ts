@@ -4,13 +4,8 @@ import type { Polygon } from 'ol/geom';
 import { toLonLat } from 'ol/proj';
 import { ApiError } from '../api/client.ts';
 import type { DensityCell, DensityGrid, DensityQuery } from '../api/hooks.ts';
-import {
-  bandOf,
-  densityBandMaxima,
-  densityCellFeatures,
-  fetchSteppedDensity,
-  TOO_MANY_CELLS,
-} from './karstDensityLayer.ts';
+import { fetchSteppedDensity, TOO_MANY_CELLS } from './densityCells.ts';
+import { bandOf, densityBandMaxima, densityCellFeatures } from './karstDensityLayer.ts';
 
 // Invented cells and grids: the shapes the density route answers with, none of it real.
 

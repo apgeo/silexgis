@@ -7,18 +7,8 @@ import type Map from 'ol/Map';
 import { fromLonLat, transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Fill, Stroke, Style } from 'ol/style';
-import { ApiError } from '../api/client.ts';
 import { fetchMapDensity, type DensityCell, type DensityGrid, type DensityQuery } from '../api/hooks.ts';
-import {
-  clampToWorld,
-  coarserCellMultiple,
-  densityCellMetres,
-  fittingCellMultiple,
-  limitsFromRefusal,
-  type DensityGridLimits,
-  type KarstDensityMode,
-  type LonLatBox,
-} from './densityCells.ts';
+import { fetchSteppedDensity, type DensityGridLimits, type KarstDensityMode } from './densityCells.ts';
 import { karstDensityPalette as palette } from './markerPalette.ts';
 
 export const KARST_DENSITY_LAYER_ID = 'karst-density';
@@ -247,72 +237,10 @@ function okState(grid: DensityGrid): KarstDensityLoadState {
 }
 
 // ---------------------------------------------------------------------------
-// Choosing the cell, then asking
+// Asking — the cell is chosen by the shared step search
 // ---------------------------------------------------------------------------
 
 export type DensityFetch = (query: DensityQuery, signal?: AbortSignal) => Promise<DensityGrid>;
-
-export type SteppedDensityAnswer =
-  | { kind: 'grid'; grid: DensityGrid; limits: DensityGridLimits }
-  | { kind: 'refused'; code: string; limits: DensityGridLimits | null };
-
-/** The code the step search answers with when no multiple fits the window. */
-export const TOO_MANY_CELLS = 'density.too_many_cells';
-
-/**
- * Asks for a window's grid at the finest cell that fits it.
- *
- * Without known limits the first request names no cell, and the answer (or a too-many-cells
- * refusal, which carries the same two numbers) states the floor and the cell limit. With them the
- * cell is chosen before asking. A server that still finds the window too large — its count is the
- * authority, this one is a forecast — is asked again one doubling coarser, a bounded number of
- * times. Any other refusal is the answer and is reported as itself, never as an empty layer.
- */
-export async function fetchSteppedDensity(
-  box: LonLatBox,
-  limits: DensityGridLimits | null,
-  fetchGrid: DensityFetch,
-  signal?: AbortSignal,
-): Promise<SteppedDensityAnswer> {
-  const bbox = clampToWorld(box)
-    .map((n) => n.toFixed(5))
-    .join(',');
-  let known = limits;
-  let multiple: number | null = known ? fittingCellMultiple(clampToWorld(box), known) : null;
-  if (known && multiple === null) {
-    return { kind: 'refused', code: TOO_MANY_CELLS, limits: known };
-  }
-
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const cellMetres = known && multiple !== null ? densityCellMetres(known.minimumCellMetres, multiple) : undefined;
-    try {
-      const grid = await fetchGrid({ bbox, cellMetres }, signal);
-      return {
-        kind: 'grid',
-        grid,
-        limits: { minimumCellMetres: grid.minimumCellMetres, maxCells: grid.maxCells },
-      };
-    } catch (error) {
-      if (!(error instanceof ApiError) || error.status < 400 || error.status >= 500 || !error.code) {
-        throw error;
-      }
-      if (error.code !== TOO_MANY_CELLS) {
-        return { kind: 'refused', code: error.code, limits: known };
-      }
-      const stated = limitsFromRefusal(error.problem);
-      if (stated && !known) {
-        known = stated;
-        multiple = fittingCellMultiple(clampToWorld(box), stated);
-      } else {
-        multiple = multiple === null ? null : coarserCellMultiple(multiple);
-      }
-      if (!known || multiple === null) {
-        return { kind: 'refused', code: TOO_MANY_CELLS, limits: known };
-      }
-    }
-  }
-  return { kind: 'refused', code: TOO_MANY_CELLS, limits: known };
-}
 
 // ---------------------------------------------------------------------------
 // Loading

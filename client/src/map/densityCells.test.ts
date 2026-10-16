@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import {
+  answeredCellMultiple,
   clampToWorld,
   coarserCellMultiple,
   densityCellCount,
@@ -77,5 +78,12 @@ describe('density cell stepping', () => {
 
   it('clamps a window wider than the world to what the server accepts', () => {
     expect(clampToWorld([-400, -95, 400, 95])).toEqual([-180, -90, 180, 90]);
+  });
+});
+
+describe('the multiple an answer was taken at', () => {
+  it('is one at the floor and the stepped power of two above it', () => {
+    expect(answeredCellMultiple({ minimumCellMetres: 5000, maxCells: 5000, cellMetres: 5000 })).toBe(1);
+    expect(answeredCellMultiple({ minimumCellMetres: 5000, maxCells: 5000, cellMetres: 40000 })).toBe(8);
   });
 });

@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { DensityGrid, PointPattern } from '../../api/hooks.ts';
 
-const { densitySpy, patternSpy } = vi.hoisted(() => ({
+const { densitySpy, steppedSpy, patternSpy } = vi.hoisted(() => ({
   densitySpy: vi.fn(),
+  steppedSpy: vi.fn(),
   patternSpy: vi.fn(),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
   useMapDensity: (...args: unknown[]) => densitySpy(...args),
+  useSteppedMapDensity: (...args: unknown[]) => steppedSpy(...args),
   useMapPointPattern: (...args: unknown[]) => patternSpy(...args),
 }));
 
@@ -111,30 +113,98 @@ function pattern(overrides: Partial<PointPattern> = {}): PointPattern {
   } as unknown as PointPattern;
 }
 
+// Most cases below set one grid on `densitySpy` and are about how it is read. The card's first
+// answer comes from the shared step search, so by default that answer is the same grid, reached at
+// the floor; the cases about the step search set `steppedSpy` themselves.
+beforeEach(() => {
+  steppedSpy.mockImplementation((query: unknown) => {
+    const served = densitySpy(query) as { data?: DensityGrid; isLoading: boolean; isError: boolean } | undefined;
+    return {
+      ...served,
+      data: served?.data
+        ? { kind: 'grid', grid: served.data, limits: { minimumCellMetres: 500, maxCells: 5000 } }
+        : undefined,
+    };
+  });
+});
+
 afterEach(() => {
   cleanup();
   densitySpy.mockReset();
+  steppedSpy.mockReset();
   patternSpy.mockReset();
 });
 
-it('asks with no cell size first, so the floor comes from the server rather than a guess', () => {
-  densitySpy.mockReturnValue({ data: grid(), isLoading: false, isError: false });
+it('takes its first grid from the shared step search, over the outline\'s own window', () => {
+  steppedSpy.mockReturnValue({
+    data: { kind: 'grid', grid: grid(), limits: { minimumCellMetres: 500, maxCells: 5000 } },
+    isLoading: false,
+    isError: false,
+  });
+  densitySpy.mockReturnValue({ data: undefined, isLoading: false, isError: false });
   patternSpy.mockReturnValue({ data: pattern(), isLoading: false, isError: false });
 
   render(
     <AreaPointPatternCard featureId="a1" featureTypeCode="karst_area" geometry={OUTLINE} />,
   );
 
-  // The finest publishable cell is the installation's protection grid, which this client does not
-  // know. Naming one on the first request is how a control ends up hard-coding a number that is
-  // right on one installation and refused on every other.
-  const first = densitySpy.mock.calls[0][0];
-  expect(first).toMatchObject({ areaId: 'a1' });
-  expect(first.cellMetres).toBeUndefined();
+  // The step search is what asks with no cell first (its own tests say so), so the floor comes from
+  // the server rather than a guess. What the card owes it is the window — the outline's own, in
+  // the order the API states, not the coordinates in the order they happened to be written — and
+  // the area.
+  expect(steppedSpy.mock.calls[0][0]).toEqual({ box: [25.42, 45.51, 25.46, 45.54], areaId: 'a1' });
 
-  // The window is the outline's own, in the order the API states, and not the coordinates in the
-  // order they happened to be written.
-  expect(first.bbox).toBe('25.420000,45.510000,25.460000,45.540000');
+  // No second, fixed-cell request is made until the reader chooses a coarser cell.
+  expect(densitySpy.mock.calls.every(([query]) => query === undefined)).toBe(true);
+});
+
+it('offers coarser cells from the multiple the step search fitted, when the floor was too fine', () => {
+  // An area too wide to grid at the floor: the search was refused for too many cells, read the
+  // floor (500 m) and the limit off the refusal, and was answered at four times the floor. The
+  // card shows that grid and offers its choices from there — not the floor the window cannot hold.
+  steppedSpy.mockReturnValue({
+    data: {
+      kind: 'grid',
+      grid: grid({ cellMetres: 2000 }),
+      limits: { minimumCellMetres: 500, maxCells: 5000 },
+    },
+    isLoading: false,
+    isError: false,
+  });
+  densitySpy.mockReturnValue({ data: grid({ cellMetres: 4000 }), isLoading: false, isError: false });
+  patternSpy.mockReturnValue({ data: pattern(), isLoading: false, isError: false });
+
+  render(
+    <AreaPointPatternCard featureId="a1" featureTypeCode="karst_area" geometry={OUTLINE} />,
+  );
+
+  expect(screen.getByTestId('area-point-pattern')).toBeTruthy();
+  expect(screen.getByTestId('karst-density-cell-value').textContent).toBe('2000');
+  const options = screen.getByTestId('karst-density-cell').textContent ?? '';
+  expect(options).toContain('2000 m');
+  expect(options).toContain('16000 m');
+  expect(options).not.toContain('500 m');
+
+  fireEvent.click(screen.getByText('4000 m'));
+  const asked = densitySpy.mock.calls.map(([query]) => query).filter(Boolean);
+  expect(asked.at(-1)).toMatchObject({ areaId: 'a1', cellMetres: 4000 });
+});
+
+it('shows nothing when the step search was refused, rather than an empty grid', () => {
+  // Too wide even when coarsened, or an area this reader may not place: both refusals, and a
+  // refusal is not a grid with no caves in it.
+  steppedSpy.mockReturnValue({
+    data: { kind: 'refused', code: 'density.too_many_cells', limits: null },
+    isLoading: false,
+    isError: false,
+  });
+  patternSpy.mockReturnValue({ data: pattern(), isLoading: false, isError: false });
+
+  const { container } = render(
+    <AreaPointPatternCard featureId="a1" featureTypeCode="karst_area" geometry={OUTLINE} />,
+  );
+
+  expect(container.textContent).toBe('');
 });
 
 it('states the floor, the counts and both readings the spacing statistics cannot give', () => {
