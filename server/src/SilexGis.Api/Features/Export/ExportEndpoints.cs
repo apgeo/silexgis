@@ -135,9 +135,8 @@ public static class ExportEndpoints
 
         if (Bbox.TryParse(bbox, out var box))
         {
-            // Membership follows the point the file will publish, never the stored one.
-            query = await PublishedPositionBox.NarrowAsync(
-                query, ctx, protection, box.ToPolygon(), access.Value.LocationGridMeters, ct);
+            query = await NarrowedToBoxAsync(
+                query, db, ctx, box, access.Value.LocationGridMeters, [FeatureKind.Cave], ct);
         }
 
         var caveTypes = await db.CaveTypes.AsNoTracking().ToDictionaryAsync(t => t.Id, t => t.Code, ct);
@@ -202,6 +201,42 @@ public static class ExportEndpoints
         return WriteFile(vectorIO, target, "caves", features);
     }
 
+    /// <summary>
+    /// Applies a bounding box so that membership follows the point the file will publish.
+    ///
+    /// <para>
+    /// These exports place a feature the caller may not see exactly on the protection grid, so
+    /// the honest box test is against that same snapped point: the row is in the file exactly
+    /// when the point printed in the file is inside the box. Tested against the stored
+    /// coordinate instead, the box becomes a probe — membership flips when a caller-chosen edge
+    /// crosses the true position, which bisects a protected cave onto the map to any precision,
+    /// while the snapped point moves only in whole grid steps and gives nothing finer away.
+    /// Exactly-placeable rows are narrowed by their true geometry, as ever: for them position is
+    /// not a secret.
+    /// </para>
+    /// </summary>
+    private static async Task<IQueryable<Feature>> NarrowedToBoxAsync(
+        IQueryable<Feature> query,
+        SilexGisDbContext db,
+        AccessContext ctx,
+        Bbox box,
+        double gridMeters,
+        IReadOnlyCollection<FeatureKind>? kinds,
+        CancellationToken ct)
+    {
+        // Which protected rows are inside is the window-membership rule's question, asked of its
+        // single home: by the snapped point for a point the caller may not place, nowhere for a
+        // line or polygon (it is dropped from the file below anyway), and by the stored geometry
+        // for what the caller may place.
+        var polygon = box.ToPolygon();
+        var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(
+            db, ctx, box.West, box.South, box.East, box.North, gridMeters, kinds, ct);
+
+        return query.Where(f =>
+            (!f.IsProtectedEffective && f.Geom!.Intersects(polygon))
+            || protectedMembers.Contains(f.Id));
+    }
+
     private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> ExportFeaturesAsync(
         string format,
         string? kind,
@@ -261,9 +296,9 @@ public static class ExportEndpoints
 
         if (Bbox.TryParse(bbox, out var box))
         {
-            // Membership follows the point the file will publish, never the stored one.
-            query = await PublishedPositionBox.NarrowAsync(
-                query, ctx, protection, box.ToPolygon(), access.Value.LocationGridMeters, ct);
+            query = await NarrowedToBoxAsync(
+                query, db, ctx, box, access.Value.LocationGridMeters,
+                kindFilter is { } only ? new[] { only } : null, ct);
         }
 
         var featureTypes = await db.FeatureTypes.AsNoTracking()
