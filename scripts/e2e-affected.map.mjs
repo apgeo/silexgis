@@ -66,7 +66,7 @@ export const specs = {
   files: ['uploads.spec.ts', 'documents.spec.ts', 'gallery.spec.ts', 'cave-attachments.spec.ts'],
   filters: [
     'trip-list.spec.ts', 'trip-map.spec.ts', 'registry-statistics.spec.ts',
-    'cave-registry-filters.spec.ts',
+    'cave-registry-filters.spec.ts', 'gallery-filters.spec.ts', 'reslinks.spec.ts',
   ],
   geoFeatures: [
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
@@ -95,7 +95,7 @@ export const specs = {
     'photo-library-smoke.spec.ts', 'photo-library-browse.spec.ts',
     'photo-library-health.spec.ts', 'photo-library-pictures.spec.ts',
   ],
-  photos: ['gallery.spec.ts', 'photo-import.spec.ts', 'cave-attachments.spec.ts'],
+  photos: ['gallery.spec.ts', 'photo-import.spec.ts', 'cave-attachments.spec.ts', 'gallery-filters.spec.ts'],
   qr: ['qr-landing.spec.ts'],
   resLinks: ['reslinks.spec.ts', 'annotated-text.spec.ts', 'cave-grant-link.spec.ts'],
   scene: ['scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts'],

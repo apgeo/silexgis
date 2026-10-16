@@ -63,11 +63,16 @@ async function upload(page: Page, files: { name: string; mimeType: string; buffe
 
 /** The gallery, filtered to one run's photographs so other runs' pictures cannot drift in. */
 async function openGallery(page: Page, run: string) {
-  await page.goto(`/gallery?search=${run}`);
+  await page.goto('/gallery');
   await page.waitForURL((url) => url.pathname === '/gallery', { timeout: 60_000 });
   // The heading before the grid: the address matches while the sign-in round trip is still in
   // flight, so waiting on the grid alone would look for it on a redirect page.
   await expect(page.getByRole('heading', { name: 'Photographs' })).toBeVisible({ timeout: 45_000 });
+  // The search box writes its search into the gallery's filter in the address.
+  const box = page.getByPlaceholder('Search captions and places');
+  await box.fill(run);
+  await box.press('Enter');
+  await expect(page).toHaveURL(/[?&]filter=/);
   await expect(page.getByTestId('photo-grid')).toBeVisible({ timeout: 30_000 });
 }
 
