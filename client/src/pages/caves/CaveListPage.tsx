@@ -310,6 +310,7 @@ export default function CaveListPage() {
       <Flex gap={8} wrap style={{ marginBottom: 12 }}>
         <Input.Search
           placeholder={t('caves.searchPlaceholder')}
+          aria-label={t('caves.searchPlaceholder')}
           allowClear
           style={{ maxWidth: 320 }}
           value={searchInput}
@@ -319,6 +320,7 @@ export default function CaveListPage() {
         <Select
           allowClear
           placeholder={t('caves.allTypes')}
+          aria-label={t('caves.allTypes')}
           style={{ width: 200 }}
           value={controls.caveTypeId}
           data-testid="cave-registry-type"

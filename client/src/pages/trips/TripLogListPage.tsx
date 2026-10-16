@@ -287,6 +287,7 @@ export default function TripLogListPage() {
       <Flex gap={8} style={{ marginBottom: 12 }} wrap align="center">
         <Input.Search
           placeholder={t('trips.searchPlaceholder')}
+          aria-label={t('trips.searchPlaceholder')}
           allowClear
           style={{ maxWidth: 320 }}
           value={searchInput}

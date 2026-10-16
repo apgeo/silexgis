@@ -115,8 +115,8 @@ test('surface feature draw, attributes, selection and table round-trip', async (
   await toolbar.getByRole('button', { name: /Feature type/ }).click();
   await page.getByRole('button', { name: 'Sinkhole / Doline' }).click();
 
-  // Draw a point by clicking the map canvas (icon-only button → name "edit").
-  await toolbar.getByRole('button', { name: 'edit' }).click();
+  // Draw a point by clicking the map canvas.
+  await toolbar.getByRole('button', { name: 'Draw', exact: true }).click();
   const canvas = page.locator('.map-canvas');
   await canvas.click({ position: { x: 420, y: 260 } });
 
@@ -190,7 +190,7 @@ test('pinned feature-type shortcuts and the map chrome toggle', async ({ page })
   await expect(toolbar).toBeVisible();
 
   // Cleanup: discard the pending edit; unpinning removes the shortcut.
-  await toolbar.getByRole('button', { name: 'close' }).click();
+  await toolbar.getByRole('button', { name: 'Discard edits' }).click();
   await paletteTrigger.click();
   await paletteItem.hover();
   await paletteItem.getByRole('button', { name: 'Unpin from toolbar' }).click();
@@ -307,7 +307,7 @@ test('surface feature history records edits and restores in the map panel', asyn
   await page.getByRole('button', { name: 'Sinkhole / Doline' }).click();
 
   // Draw and save a point feature.
-  await toolbar.getByRole('button', { name: 'edit' }).click();
+  await toolbar.getByRole('button', { name: 'Draw', exact: true }).click();
   const canvas = page.locator('.map-canvas');
   await canvas.click({ position: { x: 420, y: 260 } });
   const modal = page.getByRole('dialog');

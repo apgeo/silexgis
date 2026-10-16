@@ -145,6 +145,7 @@ export default function TripFacetPanel({
         {...many}
         data-testid="trip-facet-types"
         placeholder={t('trips.type')}
+        aria-label={t('trips.type')}
         value={filter.types}
         options={typeOptions}
         onChange={(values: string[]) => onChange({ types: values })}
@@ -153,6 +154,7 @@ export default function TripFacetPanel({
         {...many}
         data-testid="trip-facet-states"
         placeholder={t('trips.state')}
+        aria-label={t('trips.state')}
         value={filter.states}
         options={stateOptions}
         onChange={(values: string[]) => onChange({ states: values })}
@@ -161,6 +163,7 @@ export default function TripFacetPanel({
         {...many}
         data-testid="trip-facet-visibilities"
         placeholder={t('features.visibility')}
+        aria-label={t('features.visibility')}
         value={filter.visibilities}
         options={visibilityOptions}
         onChange={(values: string[]) => onChange({ visibilities: values })}
@@ -169,6 +172,7 @@ export default function TripFacetPanel({
         {...single}
         data-testid="trip-facet-incident"
         placeholder={t('trips.filters.incident')}
+        aria-label={t('trips.filters.incident')}
         value={filter.hadIncident === undefined ? undefined : String(filter.hadIncident)}
         options={incidentOptions}
         onChange={(value?: string) =>
@@ -179,6 +183,7 @@ export default function TripFacetPanel({
         {...many}
         data-testid="trip-facet-participant"
         placeholder={t('trips.filters.participant')}
+        aria-label={t('trips.filters.participant')}
         value={filter.participantIds}
         options={participantOptions}
         onChange={(values: string[]) => onChange({ participantIds: values })}
@@ -195,6 +200,7 @@ export default function TripFacetPanel({
         {...many}
         data-testid="trip-facet-area"
         placeholder={t('trips.filters.area')}
+        aria-label={t('trips.filters.area')}
         value={filter.areaIds}
         options={areaOptions}
         onChange={(values: string[]) => onChange({ areaIds: values })}

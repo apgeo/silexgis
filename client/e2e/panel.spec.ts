@@ -25,7 +25,7 @@ test.describe('lateral panel', () => {
     await expect(toolbar).toBeVisible();
     await toolbar.getByRole('button', { name: /Feature type/ }).click();
     await page.getByRole('button', { name: 'Sinkhole / Doline' }).click();
-    await toolbar.getByRole('button', { name: 'edit' }).click();
+    await toolbar.getByRole('button', { name: 'Draw', exact: true }).click();
 
     const canvas = page.locator('.map-canvas');
     await canvas.click({ position: { x: 380, y: 300 } });

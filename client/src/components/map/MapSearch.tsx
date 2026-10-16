@@ -179,7 +179,12 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
       onSelect={onSelect}
       popupMatchSelectWidth={fullWidth ? true : 360}
     >
-      <Input prefix={<SearchOutlined />} placeholder={t('map.searchPlaceholder')} allowClear />
+      <Input
+        prefix={<SearchOutlined />}
+        placeholder={t('map.searchPlaceholder')}
+        aria-label={t('map.searchPlaceholder')}
+        allowClear
+      />
     </AutoComplete>
   );
 }

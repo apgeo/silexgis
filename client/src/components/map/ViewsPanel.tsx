@@ -76,19 +76,32 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
       <Flex justify="space-between" align="center">
         <Typography.Text strong>{t('views.title')}</Typography.Text>
         <Tooltip title={t('views.exportImage')}>
-          <Button size="small" type="text" icon={<CameraOutlined />} onClick={() => void exportImage()} />
+          <Button
+            size="small"
+            type="text"
+            icon={<CameraOutlined />}
+            aria-label={t('views.exportImage')}
+            onClick={() => void exportImage()}
+          />
         </Tooltip>
       </Flex>
       <Flex gap={4} style={{ marginTop: 8 }}>
         <Input
           size="small"
           placeholder={t('views.namePlaceholder')}
+          aria-label={t('a11y.viewName')}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onPressEnter={() => void save(false)}
         />
         <Tooltip title={t('views.save')}>
-          <Button size="small" icon={<SaveOutlined />} disabled={!name.trim()} onClick={() => void save(false)} />
+          <Button
+            size="small"
+            icon={<SaveOutlined />}
+            aria-label={t('views.save')}
+            disabled={!name.trim()}
+            onClick={() => void save(false)}
+          />
         </Tooltip>
       </Flex>
       <List
@@ -100,7 +113,13 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
             style={{ paddingInline: 0 }}
             actions={[
               <Tooltip key="share" title={t('views.share')}>
-                <Button size="small" type="text" icon={<LinkOutlined />} onClick={() => void share(view)} />
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<LinkOutlined />}
+                  aria-label={t('a11y.shareView', { name: view.name })}
+                  onClick={() => void share(view)}
+                />
               </Tooltip>,
               <Button
                 key="delete"
@@ -108,14 +127,17 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
                 type="text"
                 danger
                 icon={<DeleteOutlined />}
+                aria-label={t('a11y.deleteView', { name: view.name })}
                 onClick={() => deleteView.mutateAsync(view.id).catch(() => message.error(t('common.saveFailed')))}
               />,
             ]}
           >
-            <Typography.Link onClick={() => onApply(view)}>
+            {/* A button drawn as a link: an anchor without an address is skipped by Tab, which
+                left saved views unreachable from the keyboard. */}
+            <Button type="link" size="small" className="link-button" onClick={() => onApply(view)}>
               {view.isHome && <HomeFilled style={{ marginRight: 4 }} />}
               {view.name}
-            </Typography.Link>
+            </Button>
           </List.Item>
         )}
       />

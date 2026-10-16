@@ -262,6 +262,8 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           size="small"
           type={state.mode === 'draw' ? 'primary' : 'default'}
           icon={<EditOutlined />}
+          aria-label={t('mapEdit.draw')}
+          aria-pressed={state.mode === 'draw'}
           disabled={typeId === undefined}
           onClick={() => setMode('draw', fixedShape)}
         />
@@ -288,6 +290,8 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           size="small"
           type={state.mode === 'modify' ? 'primary' : 'default'}
           icon={<AimOutlined />}
+          aria-label={t('mapEdit.modify')}
+          aria-pressed={state.mode === 'modify'}
           onClick={() => setMode('modify')}
         />
       </Tooltip>
@@ -296,6 +300,8 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           size="small"
           type={state.mode === 'translate' ? 'primary' : 'default'}
           icon={<DragOutlined />}
+          aria-label={t('mapEdit.translate')}
+          aria-pressed={state.mode === 'translate'}
           onClick={() => setMode('translate')}
         />
       </Tooltip>
@@ -304,6 +310,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           size="small"
           type={state.snap ? 'primary' : 'default'}
           ghost={state.snap}
+          aria-pressed={state.snap}
           onClick={() => controller.toggleSnap()}
         >
           {t('mapEdit.snapShort')}
@@ -315,6 +322,8 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           size="small"
           type={state.mode === 'add-cave' ? 'primary' : 'default'}
           icon={<EnvironmentOutlined />}
+          aria-label={t('mapEdit.newCaveHere')}
+          aria-pressed={state.mode === 'add-cave'}
           onClick={() => setMode('add-cave')}
           data-testid="tool-add-cave"
         />
@@ -324,16 +333,30 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           size="small"
           type={state.mode === 'add-entrance' ? 'primary' : 'default'}
           icon={<LoginOutlined />}
+          aria-label={t('mapEdit.newEntranceHere')}
+          aria-pressed={state.mode === 'add-entrance'}
           onClick={() => setMode('add-entrance')}
           data-testid="tool-add-entrance"
         />
       </Tooltip>
       <Divider orientation="vertical" />
       <Tooltip title={t('mapEdit.undo')}>
-        <Button size="small" icon={<UndoOutlined />} disabled={!state.canUndo} onClick={() => controller.undo()} />
+        <Button
+          size="small"
+          icon={<UndoOutlined />}
+          aria-label={t('mapEdit.undo')}
+          disabled={!state.canUndo}
+          onClick={() => controller.undo()}
+        />
       </Tooltip>
       <Tooltip title={t('mapEdit.redo')}>
-        <Button size="small" icon={<RedoOutlined />} disabled={!state.canRedo} onClick={() => controller.redo()} />
+        <Button
+          size="small"
+          icon={<RedoOutlined />}
+          aria-label={t('mapEdit.redo')}
+          disabled={!state.canRedo}
+          onClick={() => controller.redo()}
+        />
       </Tooltip>
       <Divider orientation="vertical" />
       <MeasureButton
@@ -342,6 +365,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
         pressed={measure === 'line'}
         onChange={() => toggleMeasure('line')}
         tooltip={t('mapEdit.measureDistance')}
+        aria-label={t('mapEdit.measureDistance')}
         icon={<ColumnWidthOutlined />}
         pressedIcon={<ColumnWidthOutlined />}
         showSegmentLengths
@@ -354,6 +378,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
         pressed={measure === 'polygon'}
         onChange={() => toggleMeasure('polygon')}
         tooltip={t('mapEdit.measureArea')}
+        aria-label={t('mapEdit.measureArea')}
         icon={<BorderOutlined />}
         pressedIcon={<BorderOutlined />}
         clickToDrawText={t('mapEdit.clickToMeasure')}
@@ -380,6 +405,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
         <Button
           size="small"
           icon={<CloseOutlined />}
+          aria-label={t('mapEdit.discard')}
           disabled={state.dirty === 0}
           onClick={discard}
         />

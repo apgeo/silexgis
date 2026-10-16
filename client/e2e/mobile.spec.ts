@@ -237,7 +237,7 @@ test('a line is drawn, corrected and finished entirely by finger', async ({ page
 
   // The saved line is then reshaped by finger: touch a vertex and delete it from the bar.
   // Desktop deletes vertices with alt-click, which needs a keyboard the phone has not got.
-  await page.getByTestId('edit-tool-strip').getByRole('button', { name: 'aim' }).click();
+  await page.getByTestId('edit-tool-strip').getByRole('button', { name: /^Modify/ }).click();
   await tapMap(page, 200, 380);
   await page.getByTestId('map-sketch-bar').getByTestId('sketch-delete-vertex').click();
 
@@ -279,7 +279,7 @@ test('a measurement is finished from the same sketch bar', async ({ page }) => {
   // Measuring is a different interaction owned by a different component, but a finger
   // cannot end it either — so the one Finish button has to reach it too.
   const strip = page.getByTestId('edit-tool-strip');
-  await strip.getByRole('button', { name: 'column-width' }).click();
+  await strip.getByRole('button', { name: 'Measure distance' }).click();
   const sketchBar = page.getByTestId('map-sketch-bar');
   await expect(sketchBar).toBeVisible();
 
@@ -294,7 +294,7 @@ test('a measurement is finished from the same sketch bar', async ({ page }) => {
   await expect(total.first()).toContainText(/\d/);
 
   // Toggling the tool off clears the drawing and retires the bar with it.
-  await strip.getByRole('button', { name: 'column-width' }).click();
+  await strip.getByRole('button', { name: 'Measure distance' }).click();
   await expect(sketchBar).toBeHidden();
   await expect(total).toHaveCount(0);
 });

@@ -41,6 +41,8 @@ export default function GroupBySelect<T extends string>({
       <Select<T>
         style={{ minWidth: 160 }}
         data-testid={testId}
+        // The words beside it are only text; this is what names the field to a screen reader.
+        aria-label={label}
         value={value}
         disabled={disabled}
         options={[...options]}

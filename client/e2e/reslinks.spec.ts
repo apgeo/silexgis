@@ -75,7 +75,7 @@ async function createPointFeature(page: Page, name: string) {
   await toolbar.getByRole('button', { name: /Feature type/ }).click();
   await page.getByRole('button', { name: 'Sinkhole / Doline' }).click();
 
-  await toolbar.getByRole('button', { name: 'edit' }).click();
+  await toolbar.getByRole('button', { name: 'Draw', exact: true }).click();
   await page.locator('.map-canvas').click({ position: { x: 180, y: 380 } });
   const modal = page.getByRole('dialog');
   await expect(modal.getByText('New feature')).toBeVisible();

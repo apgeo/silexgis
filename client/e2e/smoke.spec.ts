@@ -124,7 +124,7 @@ test('pop-out registry drives the main map across windows', async ({ page, conte
 
   // Open the registry pop-out; it shares the session and the workspace bus.
   const popupPromise = context.waitForEvent('page');
-  await page.getByRole('button', { name: 'export' }).click();
+  await page.getByRole('button', { name: 'Pop out the registry into its own window' }).click();
   const popup = await popupPromise;
   await expect(popup.getByText('Cave registry')).toBeVisible({ timeout: 15_000 });
 

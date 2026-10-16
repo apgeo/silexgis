@@ -304,7 +304,9 @@ export default function LayerPanel({
           value={Math.round((baseOpacity[id] ?? 1) * 100)}
           onChange={(value) => onBaseOpacityChange(id, (value as number) / 100)}
           tooltip={{ formatter: (value) => `${value ?? 0}%` }}
-          aria-label={t('map.baseOpacity', { name: l.name })}
+          // On the handle: that is the element with the slider role, and antd does not pass a
+          // plain aria-label down to it.
+          ariaLabelForHandle={t('map.baseOpacity', { name: l.name })}
         />
       </div>
     );
@@ -327,7 +329,9 @@ export default function LayerPanel({
           value={Math.round((tileOverlayOpacity[id] ?? 1) * 100)}
           onChange={(value) => onTileOverlayOpacityChange(id, (value as number) / 100)}
           tooltip={{ formatter: (value) => `${value ?? 0}%` }}
-          aria-label={t('map.baseOpacity', { name: l.name })}
+          // On the handle: that is the element with the slider role, and antd does not pass a
+          // plain aria-label down to it.
+          ariaLabelForHandle={t('map.baseOpacity', { name: l.name })}
         />
       </div>
     );
@@ -465,6 +469,7 @@ export default function LayerPanel({
         size="small"
         optionFilterProp="label"
         placeholder={t('tags.filterPlaceholder')}
+        aria-label={t('tags.filterPlaceholder')}
         style={{ width: '100%', marginTop: 8 }}
         value={tagFilter ?? undefined}
         options={tags?.map((x) => ({ value: x.slug, label: x.name }))}
@@ -604,6 +609,7 @@ export default function LayerPanel({
             size="small"
             optionFilterProp="label"
             placeholder={t('map.tripsTypeFilter')}
+            aria-label={t('map.tripsTypeFilter')}
             style={{ width: '100%', marginTop: 8 }}
             value={tripFilter.types ?? []}
             options={tripTypes?.map((x) => ({ value: String(x.id), label: tripTypeLabelOf(x.id, tripTypes, t) }))}
