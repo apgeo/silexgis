@@ -115,6 +115,11 @@ describe('picking from the map selector', () => {
     pick('tripLog', 't1');
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/trip-logs/t1'));
 
+    // A photograph is a document, and its page is where its position is decided.
+    cleanup();
+    pick('photograph', 'p1');
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/documents/p1'));
+
     expect(fetchFeature).not.toHaveBeenCalled();
   });
 

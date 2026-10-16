@@ -45,6 +45,11 @@ const MAP_SCOPES: SelectorScope[] = [
   { id: 'documents', labelKey: 'filters.scopes.documents', world: 'document', where: null, prefix: '@' },
   { id: 'trips', labelKey: 'filters.scopes.trips', world: 'tripLog', where: null, prefix: '!' },
   { id: 'views', labelKey: 'filters.scopes.views', world: 'mapView', where: null },
+  // A picture opens on its own page, which decides for itself how much of where it was taken this
+  // reader is shown. Georeferenced maps are not offered yet: a map has no page of its own, and the
+  // destination a pick should have — its raster layer switched on over the map — is not something
+  // this selector can reach.
+  { id: 'photographs', labelKey: 'filters.scopes.photographs', world: 'photograph', where: null },
 ];
 
 interface MapObjectSelectorProps {
@@ -93,6 +98,7 @@ export default function MapObjectSelector({ fullWidth = false }: MapObjectSelect
       }
 
       case 'document':
+      case 'photograph':
         navigate(`/documents/${encodeURIComponent(hit.id)}`);
         return;
 
