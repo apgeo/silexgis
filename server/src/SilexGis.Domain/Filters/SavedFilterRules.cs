@@ -50,9 +50,7 @@ public static class SavedFilterRules
             return ["A saved filter never stores a place to measure from."];
         }
 
-        return IsWellFormed(document)
-            ? FilterValidation.Validate(document, authorVocabularies)
-            : ["This is not a filter document."];
+        return FilterValidation.Validate(document, authorVocabularies);
     }
 
     /// <summary>
@@ -66,7 +64,6 @@ public static class SavedFilterRules
         FilterDocument? document, IReadOnlyDictionary<string, WorldVocabulary> readerVocabularies) =>
         document is not null
         && document.Anchor is null
-        && IsWellFormed(document)
         && FilterValidation.Validate(document, readerVocabularies).Count == 0;
 
     /// <summary>
@@ -99,13 +96,6 @@ public static class SavedFilterRules
     /// <summary>The conditions a document asks of one world, or null when it is not about that world.</summary>
     public static WorldScope? ScopeFor(FilterDocument document, string world) =>
         document.Scope.FirstOrDefault(s => string.Equals(s.World, world, StringComparison.Ordinal));
-
-    /// <summary>
-    /// Shape the deserialiser lets through but nothing downstream can read: a missing scope list,
-    /// or a hole in it. Answered as unreadable rather than left to fail further on.
-    /// </summary>
-    public static bool IsWellFormed(FilterDocument document) =>
-        document.Scope is not null && document.Scope.All(s => s is not null && s.World is not null);
 
     private static void Collect(
         FilterNode node, WorldVocabulary vocabulary, Dictionary<string, HashSet<string>> found)

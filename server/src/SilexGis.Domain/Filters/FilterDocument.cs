@@ -75,6 +75,11 @@ public sealed record FilterDocument
     /// read. Null rather than an exception: a saved filter that has become unreadable must not stop
     /// the page that lists it from rendering.
     /// </summary>
+    /// <remarks>
+    /// A document that parses but has a member missing — a group without its list, a value without
+    /// its payload — is one this version cannot read either, and answers null here rather than
+    /// reaching whatever would dereference the hole.
+    /// </remarks>
     public static FilterDocument? Deserialize(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -85,7 +90,11 @@ public sealed record FilterDocument
         try
         {
             var document = JsonSerializer.Deserialize<FilterDocument>(json, SerializerOptions);
-            return document?.Version > CurrentVersion ? null : document;
+            return document is null
+                || document.Version > CurrentVersion
+                || !FilterValidation.IsWellFormed(document)
+                ? null
+                : document;
         }
         catch (JsonException)
         {

@@ -70,11 +70,41 @@ public class FilterTokenTests
         FilterToken.Decode(token).ShouldBeNull();
     }
 
+    /// <summary>
+    /// Documents that parse but have a member left out or spelled as null. The deserialiser fills
+    /// such a hole with null rather than refusing it, so each of these used to come out of the
+    /// decoder as a document and reach a validator that dereferenced the hole — a server error for
+    /// what is only a bad link.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"allOf"}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"anyOf","of":null}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"not"}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","op":"contains"}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","op":"contains","values":[{"type":"text","value":"x"}]}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","op":"contains","values":[{"type":"text","value":null}]}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"tag","op":"in","values":[{"type":"id"}]}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","op":"contains","values":[null]}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"allOf","of":[{"node":"condition","field":"name","op":"contains","values":[{"type":"text","value":"x"}]},{"node":"anyOf","of":[{"node":"not"}]}]}}]}""")]
+    [InlineData("""{"version":1,"scope":null}""")]
+    [InlineData("""{"version":1,"scope":[null]}""")]
+    [InlineData("""{"version":1,"scope":[{"where":null}]}""")]
+    public void A_token_with_a_member_missing_reads_as_nothing_rather_than_as_a_document(string json)
+    {
+        FilterToken.Decode(Tokenise(json)).ShouldBeNull();
+        FilterDocument.Deserialize(json).ShouldBeNull();
+    }
+
     [Fact]
     public void A_token_past_the_ceiling_is_not_decoded_at_all()
     {
         FilterToken.Decode(new string('A', FilterToken.MaxLength + 1)).ShouldBeNull();
     }
+
+    /// <summary>A document's text as the browser would carry it: base64url over its UTF-8, unpadded.</summary>
+    private static string Tokenise(string json) =>
+        Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     /// <summary>Documents compare by their serialised form, which is what a link and a saved row hold.</summary>
     private sealed class DocumentComparer : IEqualityComparer<FilterDocument?>

@@ -86,6 +86,13 @@ public static class FilterEndpoints
             return ApiProblems.BadRequest("filter.malformed", "A filter has to say what it is about.");
         }
 
+        // A body that parsed with a member missing — a group without its list, a value without
+        // its payload — is refused as unreadable, the same as a link token with the same hole.
+        if (!FilterValidation.IsWellFormed(document))
+        {
+            return ApiProblems.BadRequest("filter.malformed", "This filter could not be read.");
+        }
+
         // Validated against the vocabularies this caller may ask about, not against a global list.
         // A world absent from theirs is refused in the same words as a world that does not exist,
         // so a refusal never distinguishes "not for you" from "no such thing".

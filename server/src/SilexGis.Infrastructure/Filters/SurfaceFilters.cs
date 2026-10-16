@@ -66,8 +66,10 @@ public sealed class SurfaceFilters(FilterWorldRegistry registry, SavedFilterRead
         FilterDocument document;
         if (hasToken)
         {
+            // Null as well for a document that parses with a member missing from it, so a hole
+            // in a link is the same refusal as a link cut short.
             var decoded = FilterToken.Decode(filter);
-            if (decoded is null || !SavedFilterRules.IsWellFormed(decoded))
+            if (decoded is null)
             {
                 return Refused<TEntity>(400, MalformedCode, "This filter could not be read.");
             }

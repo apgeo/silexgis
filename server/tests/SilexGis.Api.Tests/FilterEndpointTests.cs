@@ -177,6 +177,32 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task A_document_with_a_member_missing_is_refused_as_unreadable_rather_than_failing()
+    {
+        // Each body names its document properly and leaves one member out of it, which model
+        // binding fills with null; the validator used to dereference that and answer with a fault.
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-holed");
+
+        string[] bodies =
+        [
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"allOf"}}]}}""",
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","op":"contains"}}]}}""",
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","op":"contains","values":[{"type":"text","value":null}]}}]}}""",
+            """{"document":{"version":1,"scope":null}}""",
+        ];
+
+        foreach (var body in bodies)
+        {
+            var response = await client.PostAsync(
+                "/api/v1/filters/query",
+                new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+            (await response.Content.ReadAsStringAsync()).ShouldContain("filter.malformed", Case.Sensitive, body);
+        }
+    }
+
     // ---------- what comes back ----------
 
     [Fact]

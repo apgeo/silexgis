@@ -97,6 +97,37 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
         (await response.Content.ReadAsStringAsync()).ShouldContain("filter.malformed");
     }
 
+    /// <summary>
+    /// Links whose document parses but has a member left out, which the reader fills with null.
+    /// Each used to reach the validator and fault there, so the answer was a server error.
+    /// </summary>
+    public static TheoryData<string> LinksWithAHole => new()
+    {
+        Token(new FilterDocument { Scope = [new WorldScope("feature", new AllOfNode(null!))] }),
+        Token(new FilterDocument
+        {
+            Scope = [new WorldScope("feature", new ConditionNode(FeatureFilterFields.Region, FilterOp.Contains, null!))],
+        }),
+        Token(new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope("feature", new ConditionNode(
+                    FeatureFilterFields.Region, FilterOp.Contains, [new TextValue(null!)])),
+            ],
+        }),
+    };
+
+    [Theory]
+    [MemberData(nameof(LinksWithAHole))]
+    public async Task A_link_with_a_member_missing_is_refused_as_unreadable_rather_than_failing(string token)
+    {
+        var response = await reader.GetAsync($"/api/v1/caves?filter={token}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+        (await response.Content.ReadAsStringAsync()).ShouldContain("filter.malformed");
+    }
+
     [Fact]
     public async Task A_filter_naming_a_position_or_an_altitude_is_refused_not_ignored()
     {

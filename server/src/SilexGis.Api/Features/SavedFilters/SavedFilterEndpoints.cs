@@ -267,6 +267,11 @@ public static class SavedFilterEndpoints
     private static async Task<ProblemHttpResult?> DocumentProblemAsync(
         FilterDocument document, SavedFilterReader reader, AccessContext ctx, CancellationToken ct)
     {
+        if (!FilterValidation.IsWellFormed(document))
+        {
+            return ApiProblems.BadRequest(SurfaceFilters.MalformedCode, "This filter could not be read.");
+        }
+
         if (document.Anchor is not null)
         {
             return ApiProblems.BadRequest(

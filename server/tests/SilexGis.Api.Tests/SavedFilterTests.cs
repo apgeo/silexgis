@@ -171,6 +171,35 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
         read.GetProperty("document").GetRawText().ShouldContain("Bihor");
     }
 
+    [Fact]
+    public async Task A_question_with_a_member_missing_is_refused_as_unreadable_on_save_and_on_update()
+    {
+        // Written by the wire's own serialiser, which leaves a null member out: the body arrives
+        // with the member missing, and model binding fills it back in with null.
+        FilterDocument[] holed =
+        [
+            About(new AllOfNode(null!)),
+            About(new ConditionNode(FeatureFilterFields.Region, FilterOp.Contains, null!)),
+            About(new ConditionNode(FeatureFilterFields.Region, FilterOp.Contains, [new TextValue(null!)])),
+        ];
+        var id = (await CreateAsync(author, Body($"Whole {tag}"))).GetProperty("id").GetGuid();
+
+        foreach (var document in holed)
+        {
+            var created = await author.PostAsJsonAsync(Url, Body($"Holed {tag}", document), Wire);
+            created.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await created.Content.ReadAsStringAsync());
+            (await CodeAsync(created)).ShouldBe("filter.malformed");
+
+            var updated = await author.PutAsJsonAsync($"{Url}/{id}", Body($"Whole {tag}", document), Wire);
+            updated.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await updated.Content.ReadAsStringAsync());
+            (await CodeAsync(updated)).ShouldBe("filter.malformed");
+        }
+
+        var kept = await author.GetFromJsonAsync<JsonElement>($"{Url}/{id}");
+        kept.GetProperty("state").GetString().ShouldBe("ready");
+        kept.GetProperty("document").GetRawText().ShouldContain("Bihor");
+    }
+
     // ---------- who may read it ----------
 
     [Fact]
@@ -312,6 +341,10 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
     [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"noSuchField","op":"contains","values":[{"type":"text","value":"x"}]}}],"sort":"updated","descending":true}""")]
     [InlineData("""{"version":7,"scope":[]}""")]
     [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"nodeType":"condition"}}],"sort":"updated","descending":true}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"allOf"}}],"sort":"updated","descending":true}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"region","op":"contains"}}],"sort":"updated","descending":true}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"region","op":"contains","values":[{"type":"text","value":null}]}}],"sort":"updated","descending":true}""")]
+    [InlineData("""{"version":1,"scope":null,"sort":"updated","descending":true}""")]
     public async Task A_stored_question_its_reader_cannot_run_reads_as_unreadable_in_the_same_words(string stored)
     {
         Guid id;
@@ -333,6 +366,13 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
 
         (await clubmate.GetFromJsonAsync<JsonElement>($"{Url}/{id}")).GetProperty("state").GetString()
             .ShouldBe("unreadable");
+
+        // And one broken row never takes the list down for the people it is shared with.
+        var listed = await clubmate.GetAsync(Url);
+        listed.StatusCode.ShouldBe(HttpStatusCode.OK, await listed.Content.ReadAsStringAsync());
+        (await listed.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray()
+            .Single(f => f.GetProperty("id").GetGuid() == id)
+            .GetProperty("state").GetString().ShouldBe("unreadable");
 
         var run = await clubmate.GetAsync($"/api/v1/caves?savedFilterId={id}");
         run.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -371,6 +411,12 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
         var response = await client.PostAsJsonAsync(Url, body, Wire);
         response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    private static async Task<string?> CodeAsync(HttpResponseMessage response)
+    {
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return problem.RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
     private static async Task<List<Guid>> ListedIdsAsync(HttpClient client) =>

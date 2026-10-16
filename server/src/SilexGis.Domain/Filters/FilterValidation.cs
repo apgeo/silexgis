@@ -72,6 +72,12 @@ public static class FilterValidation
             return errors;
         }
 
+        if (!IsWellFormed(document))
+        {
+            errors.Add("This filter has a part missing and cannot be read.");
+            return errors;
+        }
+
         if (document.Scope.Count == 0)
         {
             errors.Add("A filter has to say which kinds of object it is about.");
@@ -142,12 +148,6 @@ public static class FilterValidation
                 return;
 
             case NotNode not:
-                if (not.Of is null)
-                {
-                    errors.Add("A negation has nothing to negate.");
-                    return;
-                }
-
                 Walk(not.Of, vocabulary, depth + 1, ref counted, errors);
                 return;
 
@@ -163,22 +163,56 @@ public static class FilterValidation
 
                 foreach (var child in node.Children)
                 {
-                    if (child is null)
-                    {
-                        // A hole in a group, which arrives from a document whose list of children
-                        // contains a literal null. Refused rather than skipped: skipped, it becomes
-                        // a group with fewer conditions than the person wrote, which matches more
-                        // than they asked for and says nothing about having done so.
-                        errors.Add("A group has a condition missing from it.");
-                        continue;
-                    }
-
                     Walk(child, vocabulary, depth + 1, ref counted, errors);
                 }
 
                 return;
         }
     }
+
+    /// <summary>
+    /// Whether every member the document's shape needs is there.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The deserialiser fills a member a document leaves out, or spells as null, with null rather
+    /// than refusing it, so a document can parse and still have holes in it: no scope list, an
+    /// entry of one with no world, a group with no list of children, a negation of nothing, a
+    /// condition with no field or no values, a value with no payload. Nothing downstream can read
+    /// such a document, and each road one arrives by — a link token, a request body, a stored row —
+    /// asks this before anything else is asked of it, so a hole is a refusal and never a fault.
+    /// </para>
+    /// <para>
+    /// A hole is refused rather than skipped. A group read with its missing member left out is a
+    /// group with fewer conditions than the person wrote, which matches more than they asked for
+    /// and says nothing about having done so.
+    /// </para>
+    /// <para>
+    /// The walk recurses without a bound of its own: a document off the wire is no deeper than the
+    /// reader's nesting limit, and its depth is judged, with a sentence, by <see cref="Validate"/>.
+    /// </para>
+    /// </remarks>
+    public static bool IsWellFormed(FilterDocument? document) =>
+        document?.Scope is { } scope
+        && scope.All(s => s?.World is not null && (s.Where is null || IsWellFormed(s.Where)));
+
+    private static bool IsWellFormed(FilterNode? node) => node switch
+    {
+        AllOfNode all => all.Of is { } children && children.All(IsWellFormed),
+        AnyOfNode any => any.Of is { } children && children.All(IsWellFormed),
+        NotNode not => IsWellFormed(not.Of),
+        ConditionNode condition =>
+            condition.Field is not null && condition.Values is { } values && values.All(IsWellFormed),
+        _ => false,
+    };
+
+    private static bool IsWellFormed(FilterValue? value) => value switch
+    {
+        TextValue text => text.Value is not null,
+        IdValue id => id.Value is not null,
+        NumberValue or BooleanValue or InstantValue => true,
+        _ => false,
+    };
 
     private static void Check(ConditionNode condition, WorldVocabulary vocabulary, List<string> errors)
     {

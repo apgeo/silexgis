@@ -319,6 +319,33 @@ public class FilterValidationTests
             .ShouldContain(e => e.Contains("missing", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Shapes a request body can arrive in, since model binding fills a left-out member with null
+    /// exactly as the token reader does. Each must be a sentence, never a dereference.
+    /// </summary>
+    public static TheoryData<string, FilterDocument> DocumentsWithAHole => new()
+    {
+        { "no scope list", new FilterDocument { Scope = null! } },
+        { "a hole in the scope", new FilterDocument { Scope = [null!] } },
+        { "a scope with no world", new FilterDocument { Scope = [new WorldScope(null!, null)] } },
+        { "a group with no list", Over("feature", new AllOfNode(null!)) },
+        { "an alternative with no list", Over("feature", new AnyOfNode(null!)) },
+        { "a condition with no values", Over("feature", new ConditionNode("name", FilterOp.Contains, null!)) },
+        { "a condition with no field", Over("feature", new ConditionNode(null!, FilterOp.Contains, [new TextValue("x")])) },
+        { "a text with no payload", Over("feature", Named(null!)) },
+        { "an identity with no payload", Over("feature", new ConditionNode("typeId", FilterOp.In, [new IdValue(null!)])) },
+        { "a hole among the values", Over("feature", new ConditionNode("name", FilterOp.Contains, [null!])) },
+        { "a hole deep down", Over("feature", new AllOfNode([Named("a"), new NotNode(new AnyOfNode(null!))])) },
+    };
+
+    [Theory]
+    [MemberData(nameof(DocumentsWithAHole))]
+    public void A_document_with_a_member_missing_is_refused_in_words_rather_than_dereferenced(
+        string shape, FilterDocument document)
+    {
+        Validate(document).ShouldNotBeEmpty(shape);
+    }
+
     [Fact]
     public void A_negation_of_nothing_is_refused()
     {
