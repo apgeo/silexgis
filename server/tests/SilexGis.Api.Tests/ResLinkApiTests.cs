@@ -981,20 +981,23 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable, IClassFixture
         var openId = await CreateGenericFeatureAsync(owner, $"{token} open", "authenticated");
         var secretId = await CreateGenericFeatureAsync(owner, $"{token} secret", "private");
 
-        var forViewer = await viewer.GetFromJsonAsync<JsonElement>(
-            $"/api/v1/reslinks/targets/search?type=feature&q={token}");
-        var viewerIds = forViewer.EnumerateArray().Select(h => h.GetProperty("id").GetGuid()).ToList();
+        var viewerIds = await SearchIdsAsync(viewer, "feature", token);
         viewerIds.ShouldBe([openId]);
         viewerIds.ShouldNotContain(secretId);
 
         // The owner finds both, so the thinning above was visibility, not the query.
-        var forOwner = await owner.GetFromJsonAsync<JsonElement>(
-            $"/api/v1/reslinks/targets/search?type=feature&q={token}");
-        forOwner.EnumerateArray().Select(h => h.GetProperty("id").GetGuid())
-            .ShouldBe([openId, secretId], ignoreOrder: true);
+        (await SearchIdsAsync(owner, "feature", token)).ShouldBe([openId, secretId], ignoreOrder: true);
 
-        // No query, no feed — the picker never dumps a domain.
-        (await owner.GetFromJsonAsync<JsonElement>("/api/v1/reslinks/targets/search?type=feature"))
+        // The link surface's own feed no longer answers for a kind the filter model serves: it
+        // refuses, naming why, rather than answering empty and letting a stale caller conclude
+        // that nothing matches.
+        var retired = await owner.GetAsync($"/api/v1/reslinks/targets/search?type=feature&q={token}");
+        retired.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ReadCodeAsync(retired)).ShouldBe("reslink.target_search.use_filter");
+
+        // Where the feed still serves — people, clubs, camps — no query is no feed: the picker
+        // never dumps a domain.
+        (await owner.GetFromJsonAsync<JsonElement>("/api/v1/reslinks/targets/search?type=caver"))
             .GetArrayLength().ShouldBe(0);
     }
 
@@ -2397,12 +2400,24 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable, IClassFixture
 
         // …and from outside, where an unregistered resolver would surface as a failure
         // rather than an answer.
+        // A kind is either found through the filter query or through the link surface's own
+        // feed, and the two lists are exact complements: a kind in neither could be linked but
+        // never picked.
         foreach (var name in linkable
             .Select(t => JsonNamingPolicy.CamelCase.ConvertName(t.ToString()))
             .Append(ResLinkTargets.FeatureName))
         {
             var response = await owner.GetAsync($"/api/v1/reslinks/targets/search?type={name}&q=a");
-            response.StatusCode.ShouldBe(HttpStatusCode.OK, name);
+            if (LinkTargetSearch.IsWorld(name))
+            {
+                response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, name);
+                (await ReadCodeAsync(response)).ShouldBe("reslink.target_search.use_filter", name);
+                (await SearchIdsAsync(owner, name, "a")).ShouldNotBeNull(name);
+            }
+            else
+            {
+                response.StatusCode.ShouldBe(HttpStatusCode.OK, name);
+            }
         }
 
         // The rule and the wire vocabulary agree about what is linkable, in both
@@ -3061,12 +3076,8 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable, IClassFixture
         await db.SaveChangesAsync();
     }
 
-    private static async Task<List<Guid>> SearchIdsAsync(HttpClient client, string type, string query)
-    {
-        var hits = await client.GetFromJsonAsync<JsonElement>(
-            $"/api/v1/reslinks/targets/search?type={type}&q={Uri.EscapeDataString(query)}");
-        return [.. hits.EnumerateArray().Select(h => h.GetProperty("id").GetGuid())];
-    }
+    private static Task<List<Guid>> SearchIdsAsync(HttpClient client, string type, string query) =>
+        LinkTargetSearch.IdsAsync(client, type, query);
 
     /// <summary>The document member at one sort position, as one caller sees it.</summary>
     private async Task<JsonElement> DocumentMemberAsync(HttpClient client, Guid linkId, int sortOrder = 1)

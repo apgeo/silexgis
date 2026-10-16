@@ -93,9 +93,8 @@ internal static class ResLinkPictures
 }
 
 /// <summary>
-/// One target world of the resource-link surface: how its rows display, how they are
-/// searched for the picker, and — because both answers are visibility-filtered by the
-/// world's own rules — the authoring read floor. A target absent from
+/// One target world of the resource-link surface: how its rows display and — because that
+/// answer is visibility-filtered by the world's own rules — the authoring read floor. A target absent from
 /// <see cref="ResolveAsync"/>'s answer is missing and unreadable alike: the link surface
 /// never distinguishes the two, so it can never be used to probe for existence.
 /// </summary>
@@ -108,11 +107,6 @@ public interface IResLinkTargetResolver
     /// are missing or unreadable simply have no entry.</summary>
     Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct);
-
-    /// <summary>Picker feed: readable rows matching the query, at most
-    /// <paramref name="limit"/>.</summary>
-    Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
-        AccessContext ctx, string query, int limit, CancellationToken ct);
 
     /// <summary>
     /// Which of these targets the caller may write, asked in whatever way that world
@@ -132,6 +126,24 @@ public interface IResLinkTargetResolver
     /// </remarks>
     Task<HashSet<Guid>> WritableIdsAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct);
+}
+
+/// <summary>
+/// The picker feed for a target kind the filter model does not serve: readable rows matching
+/// the query, at most <paramref name="limit"/>.
+/// </summary>
+/// <remarks>
+/// Only the kinds that are not filter worlds implement it — cavers, caving groups and camps. A
+/// kind that is a world is found through the filter model's query instead, whose visibility is
+/// that kind's list visibility and is proved for every world by one conformance suite; a second
+/// search here would be a second copy of the same rule that nothing keeps in step with the first.
+/// People and clubs stay out of the filter model on purpose (what is shown of a person is decided
+/// per field and per reader), so for them this feed is the permanent shape, not a leftover.
+/// </remarks>
+public interface IResLinkTargetSearch
+{
+    Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
+        AccessContext ctx, string query, int limit, CancellationToken ct);
 }
 
 /// <summary>The registered resolvers, one per admissible target type. Fully populated by
@@ -155,6 +167,12 @@ public sealed class ResLinkTargetDirectory
                 ? resolver
                 : throw new InvalidOperationException($"No resource-link resolver is registered for {entityType}.")
             : feature;
+
+    /// <summary>
+    /// The picker feed for a kind that has one, or null for a kind found through the filter
+    /// model's query.
+    /// </summary>
+    public IResLinkTargetSearch? SearchOf(AttachedEntityType? type) => Of(type) as IResLinkTargetSearch;
 
     /// <summary>The authoring floor: whether the caller may read one target.</summary>
     public async Task<bool> CanReadAsync(
@@ -218,20 +236,6 @@ public sealed class FeatureTargetResolver(
         return rows.ToDictionary(
             r => r.Id,
             r => Display(r, paths.GetValueOrDefault(r.Id), headlines.GetValueOrDefault(r.Id)));
-    }
-
-    public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
-        AccessContext ctx, string query, int limit, CancellationToken ct)
-    {
-        var pattern = $"%{query}%";
-        var rows = await Project(Readable(ctx)
-                .Where(f => f.Name != null
-                    && EF.Functions.ILike(EF.Functions.Unaccent(f.Name!), EF.Functions.Unaccent(pattern)))
-                .OrderBy(f => f.Name)
-                .ThenBy(f => f.Id)
-                .Take(limit))
-            .ToListAsync(ct);
-        return [.. rows.Select(r => new ResLinkTargetHitDto(r.Id, Title(r), r.TypeName))];
     }
 
     private IQueryable<Feature> Readable(AccessContext ctx) =>
@@ -470,24 +474,6 @@ public sealed class DocumentTargetResolver(
         return result;
     }
 
-    public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
-        AccessContext ctx, string query, int limit, CancellationToken ct)
-    {
-        var pattern = $"%{query}%";
-        var rows = await db.Documents.AsNoTracking()
-            .VisibleTo(ctx, AccessDomain.Documents, null, (db.CabinetDocuments, db.Cabinets))
-            .Where(d => EF.Functions.ILike(EF.Functions.Unaccent(d.Title), EF.Functions.Unaccent(pattern)))
-            .OrderBy(d => d.Title)
-            .ThenBy(d => d.Id)
-            .Take(limit)
-            .ToListAsync(ct);
-        var typeNames = await TypeNamesAsync(rows.Select(d => d.DocumentTypeId), ct);
-        return [.. rows.Select(d => new ResLinkTargetHitDto(
-            d.Id,
-            d.Title,
-            d.DocumentTypeId is { } typeId ? typeNames.GetValueOrDefault(typeId) : null))];
-    }
-
     /// <summary>The served file of every named document in one query — the rules
     /// themselves stay the per-row document walk, but their one storage-backed fact must
     /// not cost a round trip per member of a listing.</summary>
@@ -550,19 +536,6 @@ public sealed class TripLogTargetResolver(SilexGisDbContext db, IAccessService a
                 t.Title, Subtitle(t), $"/trip-logs/{t.Id}", null));
     }
 
-    public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
-        AccessContext ctx, string query, int limit, CancellationToken ct)
-    {
-        var pattern = $"%{query}%";
-        var rows = await Readable(ctx)
-            .Where(t => EF.Functions.ILike(EF.Functions.Unaccent(t.Title), EF.Functions.Unaccent(pattern)))
-            .OrderByDescending(t => t.TripDate)
-            .ThenBy(t => t.Id)
-            .Take(limit)
-            .ToListAsync(ct);
-        return [.. rows.Select(t => new ResLinkTargetHitDto(t.Id, t.Title, Subtitle(t)))];
-    }
-
     private IQueryable<TripLog> Readable(AccessContext ctx) =>
         db.TripLogs.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs);
 
@@ -579,7 +552,7 @@ public sealed class TripLogTargetResolver(SilexGisDbContext db, IAccessService a
 public sealed class CaverTargetResolver(
     SilexGisDbContext db,
     IUserContextAccessor userAccessor,
-    IFileAccessTokenService tokens) : IResLinkTargetResolver
+    IFileAccessTokenService tokens) : IResLinkTargetResolver, IResLinkTargetSearch
 {
     public AttachedEntityType? TargetType => AttachedEntityType.Caver;
 
@@ -697,7 +670,7 @@ public sealed class CaverTargetResolver(
 /// <summary>Caving groups at directory level: the walk against the group record decides,
 /// which every account passes through the domain-wide read unless a deny names the
 /// group. Directory facts only — never the club's content.</summary>
-public sealed class CavingGroupTargetResolver(SilexGisDbContext db) : IResLinkTargetResolver
+public sealed class CavingGroupTargetResolver(SilexGisDbContext db) : IResLinkTargetResolver, IResLinkTargetSearch
 {
     public AttachedEntityType? TargetType => AttachedEntityType.CavingGroup;
 
@@ -800,19 +773,6 @@ public sealed class MapViewTargetResolver(SilexGisDbContext db, IAccessService a
             v => v.Id, v => new ResLinkTargetDisplayDto(v.Name, null, null, null));
     }
 
-    public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
-        AccessContext ctx, string query, int limit, CancellationToken ct)
-    {
-        var pattern = $"%{query}%";
-        var rows = await Readable(ctx)
-            .Where(v => EF.Functions.ILike(EF.Functions.Unaccent(v.Name), EF.Functions.Unaccent(pattern)))
-            .OrderBy(v => v.Name)
-            .ThenBy(v => v.Id)
-            .Take(limit)
-            .ToListAsync(ct);
-        return [.. rows.Select(v => new ResLinkTargetHitDto(v.Id, v.Name, null))];
-    }
-
     private IQueryable<MapView> Readable(AccessContext ctx) =>
         db.MapViews.AsNoTracking().VisibleTo(ctx, AccessDomain.MapViews);
 }
@@ -863,20 +823,6 @@ public sealed class CabinetTargetResolver(SilexGisDbContext db) : IResLinkTarget
             // the documents filed on it, and those answer under their own rules rather than
             // through the shelf's.
             c => new ResLinkTargetDisplayDto(c.Name, breadcrumbs.GetValueOrDefault(c.Id), null, null));
-    }
-
-    public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
-        AccessContext ctx, string query, int limit, CancellationToken ct)
-    {
-        var pattern = $"%{query}%";
-        var rows = await db.Cabinets.AsNoTracking()
-            .Where(c => EF.Functions.ILike(EF.Functions.Unaccent(c.Name), EF.Functions.Unaccent(pattern)))
-            .OrderBy(c => c.Name)
-            .ThenBy(c => c.Id)
-            .Take(limit)
-            .ToListAsync(ct);
-        var breadcrumbs = await BreadcrumbsAsync(rows, ct);
-        return [.. rows.Select(c => new ResLinkTargetHitDto(c.Id, c.Name, breadcrumbs.GetValueOrDefault(c.Id)))];
     }
 
     /// <summary>Ancestor names root-first, excluding the cabinet itself; null for roots.</summary>
@@ -999,27 +945,6 @@ public sealed class SurveyModelTargetResolver(
                     m.Name, caves[m.CaveFeatureId], $"/caves/{m.CaveFeatureId}", null));
     }
 
-    public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
-        AccessContext ctx, string query, int limit, CancellationToken ct)
-    {
-        var pattern = $"%{query}%";
-        // Cave visibility composes into the query; the exact-view cut runs after it, so
-        // a page thinned by protected caves under-fills rather than over-shows.
-        var rows = await (
-                from m in db.SurveyModels.AsNoTracking()
-                join f in db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-                    on m.CaveFeatureId equals f.Id
-                where EF.Functions.ILike(EF.Functions.Unaccent(m.Name), EF.Functions.Unaccent(pattern))
-                orderby m.Name, m.Id
-                select new { m.Id, m.Name, CaveId = f.Id, CaveName = f.Name })
-            .Take(limit)
-            .ToListAsync(ct);
-        var exact = await protection.ExactViewIdsAsync(
-            ctx, rows.Select(r => r.CaveId).Distinct().ToList(), ct);
-        return [.. rows
-            .Where(r => exact.Contains(r.CaveId))
-            .Select(r => new ResLinkTargetHitDto(r.Id, r.Name, r.CaveName))];
-    }
 }
 
 public sealed class GeofileTargetResolver(SilexGisDbContext db, IAccessService access) : IResLinkTargetResolver
@@ -1054,19 +979,6 @@ public sealed class GeofileTargetResolver(SilexGisDbContext db, IAccessService a
             g => new ResLinkTargetDisplayDto(g.Name, g.Format.ToString(), null, null));
     }
 
-    public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
-        AccessContext ctx, string query, int limit, CancellationToken ct)
-    {
-        var pattern = $"%{query}%";
-        var rows = await Readable(ctx)
-            .Where(g => EF.Functions.ILike(EF.Functions.Unaccent(g.Name), EF.Functions.Unaccent(pattern)))
-            .OrderBy(g => g.Name)
-            .ThenBy(g => g.Id)
-            .Take(limit)
-            .ToListAsync(ct);
-        return [.. rows.Select(g => new ResLinkTargetHitDto(g.Id, g.Name, g.Format.ToString()))];
-    }
-
     private IQueryable<Geofile> Readable(AccessContext ctx) =>
         db.Geofiles.AsNoTracking().VisibleTo(ctx, AccessDomain.Geofiles);
 }
@@ -1075,7 +987,7 @@ public sealed class GeofileTargetResolver(SilexGisDbContext db, IAccessService a
 /// governed in its own right, so neither answer here is derived from the trips it gathers.
 /// The subtitle is the span of days, written the way the row stores it: a camp that never ran
 /// on past its first day has no end and reads as that one day.</summary>
-public sealed class ExpeditionTargetResolver(SilexGisDbContext db, IAccessService access) : IResLinkTargetResolver
+public sealed class ExpeditionTargetResolver(SilexGisDbContext db, IAccessService access) : IResLinkTargetResolver, IResLinkTargetSearch
 {
     public AttachedEntityType? TargetType => AttachedEntityType.Expedition;
 

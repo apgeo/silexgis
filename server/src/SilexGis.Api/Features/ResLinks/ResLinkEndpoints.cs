@@ -62,6 +62,7 @@ public static class ResLinkEndpoints
     public const string NotFoundCode = "reslink.not_found";
     public const string CodeUnresolvedCode = "reslink.code.unresolved";
     public const string EntityTypeUnknownCode = "reslink.entity_type_unknown";
+    public const string TargetSearchedByFilterCode = "reslink.target_search.use_filter";
     public const string TargetNotFoundCode = "reslink.target_not_found";
     public const string RelationNotFoundCode = "reslink.relation.not_found";
     public const string MemberNotFoundCode = "reslink.member.not_found";
@@ -81,7 +82,7 @@ public static class ResLinkEndpoints
         links.MapGet("/for-target", ForTargetAsync)
             .WithSummary("Links incident to one target, sibling members resolved, optionally narrowed to one relation code; the total doubles as the badge count.");
         links.MapGet("/targets/search", SearchTargetsAsync)
-            .WithSummary("Picker feed: readable targets of one type matching a query, as uniform rows.");
+            .WithSummary("Picker feed for cavers, caving groups and camps: readable targets of one type matching a query, as uniform rows. Every other kind is found through the filter query.");
         links.MapGet("/point-default", PointDefaultAsync)
             .WithSummary("The audience a new GPS point takes when the request names none, for this caller.");
         links.MapPost("/", CreateAsync).WithValidation<ResLinkCreateRequest>()
@@ -978,13 +979,21 @@ public static class ResLinkEndpoints
             return ApiProblems.BadRequest(EntityTypeUnknownCode, $"Unknown target type '{type}'.");
         }
 
+        // A kind the filter model serves is refused rather than answered empty, so a caller still
+        // asking here learns where the question moved instead of concluding that nothing matches.
+        if (targets.SearchOf(parsedType) is not { } search)
+        {
+            return ApiProblems.BadRequest(
+                TargetSearchedByFilterCode,
+                $"Targets of type '{type}' are found through the filter query, not this feed.");
+        }
+
         if (string.IsNullOrWhiteSpace(q))
         {
             return TypedResults.Ok(new List<ResLinkTargetHitDto>());
         }
 
-        var hits = await targets.Of(parsedType)
-            .SearchAsync(ctx, q.Trim(), Math.Clamp(limit ?? 20, 1, 50), ct);
+        var hits = await search.SearchAsync(ctx, q.Trim(), Math.Clamp(limit ?? 20, 1, 50), ct);
         return TypedResults.Ok(hits.ToList());
     }
 

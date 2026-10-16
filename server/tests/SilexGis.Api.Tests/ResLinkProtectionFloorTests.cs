@@ -1460,12 +1460,8 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable, I
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    private async Task<List<Guid>> SearchIdsAsync(HttpClient client, string type, string query)
-    {
-        var hits = await client.GetFromJsonAsync<JsonElement>(
-            $"/api/v1/reslinks/targets/search?type={type}&q={Uri.EscapeDataString(query)}");
-        return [.. hits.EnumerateArray().Select(h => h.GetProperty("id").GetGuid())];
-    }
+    private static Task<List<Guid>> SearchIdsAsync(HttpClient client, string type, string query) =>
+        LinkTargetSearch.IdsAsync(client, type, query);
 
     private static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response)
     {
