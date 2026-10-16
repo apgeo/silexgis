@@ -287,7 +287,11 @@ function CaveCard({
         <Descriptions.Item label={t('caves.entrances')}>{cave.entranceCount}</Descriptions.Item>
         {entrance && (
           <Descriptions.Item label={t('entrances.coordinates')}>
-            {formatPosition(entrance.geom.coordinates[0], entrance.geom.coordinates[1])}
+            {formatPosition(
+              entrance.geom.coordinates[0],
+              entrance.geom.coordinates[1],
+              entrance.approximateLocation ? 'approximate' : undefined,
+            )}
           </Descriptions.Item>
         )}
         <Descriptions.Item label={t('caves.visibility')}>

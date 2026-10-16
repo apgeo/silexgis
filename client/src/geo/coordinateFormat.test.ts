@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { formatCoordinate, fromUtm, isCoordinateFormat, toUtm } from './coordinateFormat.ts';
+import { formatApproximateCoordinate, formatCoordinate, fromUtm, isCoordinateFormat, toUtm } from './coordinateFormat.ts';
 
 // Reference points are public, published examples or exact identities of the projection — no
 // position from any cave register.
@@ -99,3 +99,28 @@ describe('formatCoordinate', () => {
     expect(isCoordinateFormat(undefined)).toBe(false);
   });
 });
+
+describe('formatApproximateCoordinate', () => {
+  // The summit of Moldoveanu, a public trig point, standing in for a position snapped to the grid.
+  const [lon, lat] = [24.73617, 45.59944];
+
+  it('writes decimal degrees no finer than the 5 km grid: to the hundredth, about a kilometre', () => {
+    expect(formatApproximateCoordinate(lon, lat, 'dd')).toBe('45.60°N 24.74°E');
+  });
+
+  it('writes degrees and whole minutes, with no seconds', () => {
+    expect(formatApproximateCoordinate(lon, lat, 'dms')).toBe('45°36′N 24°44′E');
+  });
+
+  it('writes UTM to the kilometre, never to the metre', () => {
+    const text = formatApproximateCoordinate(lon, lat, 'utm');
+    expect(text).toMatch(/^35T \d+000 E \d+000 N$/);
+    expect(text).not.toBe(formatCoordinate(lon, lat, 'utm'));
+  });
+
+  it('follows a coarser or finer grid when told one', () => {
+    expect(formatApproximateCoordinate(lon, lat, 'dd', 20_000)).toBe('45.6°N 24.7°E');
+    expect(formatApproximateCoordinate(lon, lat, 'utm', 10_000)).toMatch(/^35T \d+0000 E \d+0000 N$/);
+  });
+});
+

@@ -217,6 +217,18 @@ describe('the shared detail panel', () => {
     expect(screen.queryByAltText('The entrance')).toBeNull();
   });
 
+  it('writes a snapped entrance position no finer than the grid it was snapped to', async () => {
+    entrances[0] = { ...entrances[0], approximateLocation: true } as (typeof entrances)[number];
+    try {
+      renderPanel({ kind: 'entrance', entranceId: 'entrance-a', caveId: 'cave-1' });
+
+      // To the hundredth of a degree, not the five places a surveyed position gets.
+      expect(await screen.findByText('45.21°N 25.11°E')).toBeInTheDocument();
+    } finally {
+      entrances[0] = { ...entrances[0], approximateLocation: false } as (typeof entrances)[number];
+    }
+  });
+
   it('moves it to a cave entrance', async () => {
     renderPanel({ kind: 'entrance', entranceId: 'entrance-a', caveId: 'cave-1' });
 

@@ -260,6 +260,14 @@ describe('CaveDetailPage entrances table', () => {
     expect(within(row('Entrance a')).queryByText('approx.')).toBeNull();
   });
 
+  it('writes the approximate row no finer than the grid, and the surveyed one to the metre', () => {
+    entrances = [entrance('a', 22.85, 46.55, false), entrance('b', 23.6, 46.77, true)];
+    show();
+
+    expect(within(row('Entrance a')).getByText('46.55000°N 22.85000°E')).toBeInTheDocument();
+    expect(within(row('Entrance b')).getByText('46.77°N 23.60°E')).toBeInTheDocument();
+  });
+
   it('offers the map button on an approximate row rather than withholding it', () => {
     // Hiding it would protect nothing: the coordinate is printed in the same cell the button sits
     // in. The honest control is one that goes there and says how well the place is known.

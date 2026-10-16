@@ -39,6 +39,12 @@ function dms(angle: number, secondsDecimals: number): string {
     .padStart(secondsDecimals > 0 ? secondsDecimals + 3 : 2, '0')}″`;
 }
 
+/** One angle as whole degrees and minutes — a minute of latitude is about 1.85 km. */
+function dm(angle: number): string {
+  const totalMinutes = Math.round(Math.abs(angle) * 60);
+  return `${Math.floor(totalMinutes / 60)}°${String(totalMinutes % 60).padStart(2, '0')}′`;
+}
+
 // ---- UTM ---------------------------------------------------------------------------------------
 
 /** WGS84, the datum every position in this application is held in. */
@@ -234,3 +240,49 @@ export function formatCoordinate(lon: number, lat: number, format: CoordinateFor
       return formatLonLat(lon, lat, decimals);
   }
 }
+
+// ---- protected positions -------------------------------------------------------------------------
+
+/**
+ * The location-protection grid the server snaps a protected position to unless its operator set
+ * another — 5 km. The server does not say which grid it uses alongside each position, so this is
+ * what a position marked approximate is written for.
+ */
+export const DEFAULT_PROTECTION_GRID_METRES = 5000;
+
+/** Metres in a degree of latitude, as the server reckons its grid. */
+const METRES_PER_DEGREE = 111_320;
+
+/**
+ * A position the server has snapped to its location-protection grid, written no finer than that
+ * grid: printed to the metre, a point moved by up to half a grid square reads as a surveyed one.
+ *
+ * Decimal degrees get the places whose last step is the largest not coarser than the grid (two,
+ * about a kilometre, for 5 km); degrees and minutes stop at the whole minute (about 1.85 km); UTM
+ * is truncated to the largest power of ten in metres not above the grid (the kilometre, for 5 km).
+ */
+export function formatApproximateCoordinate(
+  lon: number,
+  lat: number,
+  format: CoordinateFormat,
+  gridMetres: number = DEFAULT_PROTECTION_GRID_METRES,
+): string {
+  switch (format) {
+    case 'dms':
+      return `${dm(lat)}${lat >= 0 ? 'N' : 'S'} ${dm(lon)}${lon >= 0 ? 'E' : 'W'}`;
+    case 'utm': {
+      const utm = toUtm(lon, lat);
+      if (!utm) {
+        break;
+      }
+      const step = 10 ** Math.floor(Math.log10(gridMetres));
+      const truncate = (value: number) => String(Math.floor(value / step) * step);
+      return `${utm.zone}${utm.band} ${truncate(utm.easting)} E ${truncate(utm.northing)} N`;
+    }
+    default:
+      break;
+  }
+  const decimals = Math.min(5, Math.max(0, Math.ceil(Math.log10(METRES_PER_DEGREE / gridMetres))));
+  return formatLonLat(lon, lat, decimals);
+}
+

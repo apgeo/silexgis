@@ -365,11 +365,18 @@ export default function CaveDetailPage() {
               render: (_, e) => (
                 <Flex align="center" gap={4}>
                   <EnvironmentOutlined />
-                  <span>{formatPosition(e.geom.coordinates[0], e.geom.coordinates[1])}</span>
+                  <span>
+                    {formatPosition(
+                      e.geom.coordinates[0],
+                      e.geom.coordinates[1],
+                      e.approximateLocation ? 'approximate' : undefined,
+                    )}
+                  </span>
                   {/* This table printed five decimals for every row, including the ones the server
                       had snapped to a 5 km grid before sending. Five decimals reads as one metre
-                      whatever the provenance, so the row has to say otherwise itself — the
-                      card-level warning above is about the cave, not about which entrance. */}
+                      whatever the provenance, so a snapped row is written no finer than the grid
+                      and says so itself — the card-level warning above is about the cave, not
+                      about which entrance. */}
                   {e.approximateLocation && (
                     <Tag color="orange" style={{ marginInlineEnd: 0 }}>
                       {t('map.approximateShort')}

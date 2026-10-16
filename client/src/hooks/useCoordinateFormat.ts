@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback } from 'react';
-import { formatCoordinate, formatCoordinateForCopy } from '../geo/coordinateFormat.ts';
+import { formatApproximateCoordinate, formatCoordinate, formatCoordinateForCopy } from '../geo/coordinateFormat.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 
-/** Writes a position as text, in the format chosen; `decimals` is the decimal-degree precision. */
-export type CoordinateFormatter = (lon: number, lat: number, decimals?: number) => string;
+/**
+ * Writes a position as text, in the format chosen. The precision is the decimal-degree places to
+ * print, or `'approximate'` for a position the server snapped to its location-protection grid,
+ * which is then written no finer than that grid.
+ */
+export type CoordinateFormatter = (lon: number, lat: number, precision?: number | 'approximate') => string;
 
 /**
  * Positions written the way the signed-in person chose to read them — every display of a
@@ -13,7 +17,13 @@ export type CoordinateFormatter = (lon: number, lat: number, decimals?: number) 
  */
 export function useCoordinateFormatter(): CoordinateFormatter {
   const format = useUiPrefsStore((s) => s.coordinateFormat);
-  return useCallback((lon, lat, decimals) => formatCoordinate(lon, lat, format, decimals), [format]);
+  return useCallback(
+    (lon, lat, precision) =>
+      precision === 'approximate'
+        ? formatApproximateCoordinate(lon, lat, format)
+        : formatCoordinate(lon, lat, format, precision),
+    [format],
+  );
 }
 
 /** A position as it goes on the clipboard, in the format chosen. */
