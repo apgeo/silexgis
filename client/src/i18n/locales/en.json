@@ -7142,5 +7142,30 @@
     "activeUnnamed": "Map filtered by a filter from a link or a saved view",
     "savedUnavailable": "a saved filter you cannot open",
     "clear": "Clear the map's filter"
+  },
+  "filterLayers": {
+    "add": "Add a layer from a saved filter…",
+    "full": "The map holds {{count}} filter layers at most — remove one to add another",
+    "noneToAdd": "No saved filter to add — save one from the cave registry first",
+    "unavailableName": "A saved filter you cannot open",
+    "unreadable": "Unreadable",
+    "unreadableHint": "This filter was deleted, is no longer shared with you, or can no longer be run. The layer draws nothing until you remove it.",
+    "changeColor": "Colour of {{name}}: {{color}}. Change colour",
+    "changeSymbol": "Symbol of {{name}}: {{symbol}}. Change symbol",
+    "remove": "Remove the layer {{name}}",
+    "colors": {
+      "violet": "violet",
+      "magenta": "magenta",
+      "indigo": "indigo",
+      "green": "green",
+      "gold": "gold",
+      "slate": "slate grey"
+    },
+    "symbols": {
+      "circle": "circle",
+      "square": "square",
+      "triangle": "triangle",
+      "diamond": "diamond"
+    }
   }
 }

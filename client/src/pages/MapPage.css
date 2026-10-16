@@ -628,6 +628,27 @@
   white-space: nowrap;
 }
 
+/* A saved-filter layer's name line: its two style buttons, the name, its state and remove. */
+.filter-layer-title {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.filter-layer-title .filter-layer-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.filter-layer-title .filter-layer-unreadable {
+  margin-inline-end: 0;
+}
+
+.filter-layer-swatch {
+  display: block;
+}
+
 /* The slider sits under the layer name inside the (draggable) tree row. */
 .layer-node-opacity {
   margin: 0 8px 2px 0;

@@ -149,6 +149,18 @@ import {
   type MapFilter,
 } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
+import {
+  addFilterLayer,
+  filterLayerCandidates,
+  filterLayerSavedIdOf,
+  filterLayerStatus,
+  removeFilterLayer,
+  updateFilterLayer,
+  type FilterLayerSpec,
+} from '../map/filterLayerList.ts';
+import { detachFilterLayers, onFilterLayerRefusal, syncFilterLayers } from '../map/filterLayers.ts';
+import { useSavedFilters } from '../api/hooks/savedFilters.ts';
+import type { FilterLayerRowInfo } from '../components/map/FilterLayerRow.tsx';
 import { attachViewSync2d, type ViewSync2dHandle } from '../map/viewSync2d.ts';
 import { openModelWindow } from '../caveview/openModelWindow.ts';
 import { useCompareOffer } from '../caveview/useCompareOffer.ts';
@@ -737,6 +749,48 @@ export default function MapPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the filter changes, not on every address change
   }, [mapFilter]);
 
+  // Layers drawn from saved filters, each beside the main layers rather than instead of them. The
+  // list is this page's state and a saved view's; the OpenLayers layers follow it. Whether a
+  // layer's filter can still be run is decided from the saved-filter list and from the server's
+  // own refusals, and a layer whose filter cannot is kept as a row that says so and draws nothing.
+  const [filterLayers, setFilterLayers] = useState<FilterLayerSpec[]>([]);
+  const [refusedFilterLayers, setRefusedFilterLayers] = useState<ReadonlySet<string>>(() => new Set());
+  const { data: savedFilters } = useSavedFilters();
+  useEffect(
+    () =>
+      onFilterLayerRefusal((savedFilterId) =>
+        setRefusedFilterLayers((current) => new Set([...current, savedFilterId.toLowerCase()])),
+      ),
+    [],
+  );
+  const filterLayerRows = useMemo<FilterLayerRowInfo[]>(
+    () =>
+      filterLayers.map((spec) => ({
+        spec,
+        name:
+          savedFilters?.find((filter) => filter.id.toLowerCase() === spec.savedFilterId.toLowerCase())?.name ?? null,
+        status: filterLayerStatus(spec, savedFilters, refusedFilterLayers),
+      })),
+    [filterLayers, savedFilters, refusedFilterLayers],
+  );
+  const unreadableFilterLayerKey = filterLayerRows
+    .filter((row) => row.status === 'unreadable')
+    .map((row) => row.spec.savedFilterId.toLowerCase())
+    .join(',');
+  useEffect(() => () => detachFilterLayers(), []);
+
+  // The saved-filter layers follow their list, their filters' readability and their transparency.
+  useEffect(() => {
+    syncFilterLayers(
+      getWorkspaceMap(),
+      filterLayers,
+      new Set(unreadableFilterLayerKey === '' ? [] : unreadableFilterLayerKey.split(',')),
+      new globalThis.Map(Object.entries(overlayOpacity)),
+    );
+    // A just-applied saved view may prescribe a stacking that includes these layers.
+    applyPendingOverlayOrder();
+  }, [filterLayers, unreadableFilterLayerKey, overlayOpacity]);
+
   /**
    * The trip listing's "show on map" button (?trips=1, plus the narrowings it was showing).
    *
@@ -1096,6 +1150,9 @@ export default function MapPage() {
       setLibraryPhotoSources((current) =>
         visible ? [...new Set([...current, source])] : current.filter((s) => s !== source),
       );
+    } else if (filterLayerSavedIdOf(id)) {
+      const savedFilterId = filterLayerSavedIdOf(id)!;
+      setFilterLayers((current) => updateFilterLayer(current, savedFilterId, { visible }));
     } else if (id?.startsWith(GEOFILE_LAYER_PREFIX)) {
       setGeofileVisible(id.slice(GEOFILE_LAYER_PREFIX.length), visible);
     } else if (id?.startsWith(RASTER_LAYER_PREFIX)) {
@@ -1121,6 +1178,7 @@ export default function MapPage() {
       geofileIds: visibleGeofileIds,
       rasters: visibleRasterIds.map((id) => ({ id, opacity: rasterOpacity[id] })),
       mapFilter,
+      filterLayers,
       overlayOpacity,
       baseOpacity,
     });
@@ -1243,6 +1301,10 @@ export default function MapPage() {
     // camera then stays in the document for the next time one is, rather than being staged for a
     // scene the viewer has not opened.
     applyViewCamera3d(ui.camera3d);
+    // A refusal remembered from before is about this session's filters, not the view's; each layer
+    // the view brings asks the server afresh.
+    setRefusedFilterLayers(new Set());
+    setFilterLayers(ui.filterLayers);
     // Reloads both data layers, which the view's visibility toggles above need as well.
     adoptMapFilter(ui.mapFilter);
   };
@@ -1281,6 +1343,23 @@ export default function MapPage() {
       treeNonce={treeNonce}
       tagFilter={tagOfMapFilter(mapFilter)}
       onTagFilterChange={(slug) => adoptMapFilter(tagChipFilter(slug))}
+      filterLayers={filterLayerRows}
+      filterLayerCandidates={filterLayerCandidates(savedFilters, filterLayers).map((filter) => ({
+        id: filter.id,
+        name: filter.name,
+      }))}
+      onAddFilterLayer={(savedFilterId) => {
+        setRefusedFilterLayers((current) => {
+          const next = new Set(current);
+          next.delete(savedFilterId.toLowerCase());
+          return next;
+        });
+        setFilterLayers((current) => addFilterLayer(current, savedFilterId));
+      }}
+      onRemoveFilterLayer={(savedFilterId) =>
+        setFilterLayers((current) => removeFilterLayer(current, savedFilterId))}
+      onFilterLayerStyleChange={(savedFilterId, patch) =>
+        setFilterLayers((current) => updateFilterLayer(current, savedFilterId, patch))}
       centerlinesVisible={centerlinesVisible}
       tripsVisible={tripsVisible}
       karstDensityVisible={karstDensityVisible}

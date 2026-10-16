@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import LayerTree from '@terrestris/react-geo/dist/LayerTree/LayerTree';
 import LayerTransparencySlider from '@terrestris/react-geo/dist/Slider/LayerTransparencySlider/LayerTransparencySlider';
 import { Alert, Checkbox, Collapse, Divider, Input, InputNumber, Radio, Select, Slider, Tag, Tooltip, Typography } from 'antd';
+import type { RefSelectProps } from 'antd';
 import Button from '../Button.tsx';
 import type OlLayerBase from 'ol/layer/Base';
 import { useTranslation } from 'react-i18next';
@@ -58,6 +59,9 @@ import {
   type TripLoadState,
 } from '../../map/tripLayer.ts';
 import { getOverlayGroup } from '../../map/mapContext.ts';
+import { filterLayerSavedIdOf, MAX_FILTER_LAYERS, type FilterLayerSymbol } from '../../map/filterLayerList.ts';
+import type { FilterLayerColor } from '../../map/markerPalette.ts';
+import { FilterLayerRowTitle, type FilterLayerRowInfo } from './FilterLayerRow.tsx';
 import { staleHintKey } from '../../pages/admin/terrain/terrainDerivative.ts';
 
 /**
@@ -137,6 +141,16 @@ interface LayerPanelProps {
   treeNonce: number;
   tagFilter: string | null;
   onTagFilterChange: (slug: string | null) => void;
+  /** The layers drawn from saved filters, each with what its filter reads as now. */
+  filterLayers?: FilterLayerRowInfo[];
+  /** The saved filters a new layer can be made from. */
+  filterLayerCandidates?: { id: string; name: string }[];
+  onAddFilterLayer?: (savedFilterId: string) => void;
+  onRemoveFilterLayer?: (savedFilterId: string) => void;
+  onFilterLayerStyleChange?: (
+    savedFilterId: string,
+    patch: { color?: FilterLayerColor; symbol?: FilterLayerSymbol },
+  ) => void;
   /** True while the centerline overlay is on — its detail controls are hidden otherwise. */
   centerlinesVisible: boolean;
   /** True while the trip overlay is on — its filters are hidden otherwise. */
@@ -194,6 +208,11 @@ export default function LayerPanel({
   treeNonce,
   tagFilter,
   onTagFilterChange,
+  filterLayers = [],
+  filterLayerCandidates = [],
+  onAddFilterLayer,
+  onRemoveFilterLayer,
+  onFilterLayerStyleChange,
   centerlinesVisible,
   tripsVisible,
   karstDensityVisible,
@@ -211,6 +230,9 @@ export default function LayerPanel({
 }: LayerPanelProps) {
   const { t } = useTranslation();
   const { data: tags } = useTags('');
+  // Removing a filter layer takes its row, and the focus with it; it comes back to the chooser
+  // that adds one, which is where the next thing a keyboard user does with these layers starts.
+  const addFilterLayerRef = useRef<RefSelectProps | null>(null);
 
   // The overlay reports what its limits held back; the panel is where that gets explained.
   const [centerlineLoad, setCenterlineLoad] = useState<CenterlineLoadState>(getCenterlineLoadState);
@@ -352,8 +374,19 @@ export default function LayerPanel({
     );
   };
 
+  const filterLayerRowOf = (layer: OlLayerBase): FilterLayerRowInfo | undefined => {
+    const savedFilterId = filterLayerSavedIdOf(layer.get('id') as string | undefined);
+    return savedFilterId === null
+      ? undefined
+      : filterLayers.find((row) => row.spec.savedFilterId.toLowerCase() === savedFilterId.toLowerCase());
+  };
+
   const overlayName = (layer: OlLayerBase): string => {
     const id = layer.get('id') as string | undefined;
+    const filterRow = filterLayerRowOf(layer);
+    if (filterRow) {
+      return filterRow.name ?? t('filterLayers.unavailableName');
+    }
     // Photo-library overlays are named for the library they read rather than for their layer id,
     // and only the frame around that name is translated.
     const librarySource = libraryPhotoSourceOf(id);
@@ -390,9 +423,24 @@ export default function LayerPanel({
     }
   };
 
+  const filterRowTitle = (row: FilterLayerRowInfo) => (
+    <FilterLayerRowTitle
+      row={row}
+      onStyleChange={(patch) => onFilterLayerStyleChange?.(row.spec.savedFilterId, patch)}
+      onRemove={() => {
+        onRemoveFilterLayer?.(row.spec.savedFilterId);
+        addFilterLayerRef.current?.focus();
+      }}
+    />
+  );
+
   const nodeTitle = (layer: OlLayerBase) => (
     <div className="layer-node">
-      <span className="layer-node-name">{overlayName(layer)}</span>
+      {filterLayerRowOf(layer) ? (
+        filterRowTitle(filterLayerRowOf(layer)!)
+      ) : (
+        <span className="layer-node-name">{overlayName(layer)}</span>
+      )}
       {/* The tree row is HTML5-draggable for reordering; grabbing the slider
           must not start a row drag. */}
       <div
@@ -495,6 +543,33 @@ export default function LayerPanel({
         options={tags?.map((x) => ({ value: x.slug, label: x.name }))}
         onChange={(value?: string) => onTagFilterChange(value ?? null)}
       />
+      {onAddFilterLayer && (
+        <Select
+          ref={addFilterLayerRef}
+          showSearch
+          size="small"
+          optionFilterProp="label"
+          data-testid="add-filter-layer"
+          placeholder={
+            filterLayers.length >= MAX_FILTER_LAYERS
+              ? t('filterLayers.full', { count: MAX_FILTER_LAYERS })
+              : t('filterLayers.add')
+          }
+          aria-label={t('filterLayers.add')}
+          disabled={filterLayers.length >= MAX_FILTER_LAYERS}
+          style={{ width: '100%', marginTop: 8 }}
+          // A chooser that acts, not one that holds a value: picking a filter adds its layer and
+          // the chooser is empty again for the next one.
+          value={null}
+          notFoundContent={t('filterLayers.noneToAdd')}
+          options={filterLayerCandidates.map((filter) => ({ value: filter.id, label: filter.name }))}
+          onChange={(value: string | null) => {
+            if (value) {
+              onAddFilterLayer(value);
+            }
+          }}
+        />
+      )}
       {/* The composer: visibility checkboxes, drag-to-reorder stacking (top row
           renders topmost) and a per-layer transparency slider. */}
       <LayerTree

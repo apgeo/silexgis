@@ -7142,5 +7142,30 @@
     "activeUnnamed": "Hartă filtrată după un filtru dintr-un link sau dintr-o vedere salvată",
     "savedUnavailable": "un filtru salvat pe care nu îl puteți deschide",
     "clear": "Goliți filtrul hărții"
+  },
+  "filterLayers": {
+    "add": "Adaugă un strat dintr-un filtru salvat…",
+    "full": "Harta ține cel mult {{count}} straturi din filtre — elimină unul ca să adaugi altul",
+    "noneToAdd": "Niciun filtru salvat de adăugat — salvează mai întâi unul din registrul peșterilor",
+    "unavailableName": "Un filtru salvat pe care nu îl poți deschide",
+    "unreadable": "Ilizibil",
+    "unreadableHint": "Filtrul a fost șters, nu mai este partajat cu tine sau nu mai poate fi rulat. Stratul nu desenează nimic până îl elimini.",
+    "changeColor": "Culoarea stratului {{name}}: {{color}}. Schimbă culoarea",
+    "changeSymbol": "Simbolul stratului {{name}}: {{symbol}}. Schimbă simbolul",
+    "remove": "Elimină stratul {{name}}",
+    "colors": {
+      "violet": "violet",
+      "magenta": "magenta",
+      "indigo": "indigo",
+      "green": "verde",
+      "gold": "auriu",
+      "slate": "gri ardezie"
+    },
+    "symbols": {
+      "circle": "cerc",
+      "square": "pătrat",
+      "triangle": "triunghi",
+      "diamond": "romb"
+    }
   }
 }

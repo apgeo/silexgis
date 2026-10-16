@@ -7,6 +7,8 @@ import { ApiError } from '../../api/client.ts';
 import type { LibraryPhotoHealth, LibraryPhotoProvider, MapLayerInfo } from '../../api/hooks.ts';
 import type { LibraryPhotoLoadState, LibraryPhotoLoadStates } from '../../map/libraryPhotoLayer.ts';
 import LayerPanel from './LayerPanel.tsx';
+import type { FilterLayerRowInfo } from './FilterLayerRow.tsx';
+import { addFilterLayer, MAX_FILTER_LAYERS } from '../../map/filterLayerList.ts';
 
 /**
  * The block of the layer panel that says what a neighbouring photo library is doing.
@@ -92,6 +94,9 @@ interface PanelOverrides {
   suspendedPhotoLibraries?: LibraryPhotoProvider[];
   visibleLibraryPhotoSources?: string[];
   centerlinesVisible?: boolean;
+  filterLayers?: FilterLayerRowInfo[];
+  filterLayerCandidates?: { id: string; name: string }[];
+  onAddFilterLayer?: (savedFilterId: string) => void;
 }
 
 function renderPanel(overrides: PanelOverrides = {}) {
@@ -129,6 +134,9 @@ function panel(overrides: PanelOverrides = {}) {
       treeNonce={0}
       tagFilter={null}
       onTagFilterChange={vi.fn()}
+      filterLayers={overrides.filterLayers}
+      filterLayerCandidates={overrides.filterLayerCandidates}
+      onAddFilterLayer={overrides.onAddFilterLayer}
       centerlinesVisible={overrides.centerlinesVisible ?? false}
       onCenterlineLimitsChange={vi.fn()}
       tripsVisible={false}
@@ -448,5 +456,40 @@ describe('the survey-line limits of the layer panel', () => {
     expect(detailZoom).toHaveAttribute('aria-valuemin', '1');
     expect(detailZoom).toHaveAttribute('aria-valuemax', '22');
     expect(screen.getByRole('spinbutton', { name: 'Line budget' })).toHaveAttribute('aria-valuemin', '100');
+  });
+});
+
+describe('adding a layer from a saved filter', () => {
+  const filterId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
+  it('offers the saved filters by name and adds the one picked', () => {
+    const onAdd = vi.fn();
+    renderPanel({
+      filterLayerCandidates: [{ id: filterId(1), name: 'Bihor over 300 m' }],
+      onAddFilterLayer: onAdd,
+    });
+    const chooser = screen.getByRole('combobox', { name: /add a layer from a saved filter/i });
+    fireEvent.mouseDown(chooser);
+    fireEvent.click(screen.getByTitle('Bihor over 300 m'));
+    expect(onAdd).toHaveBeenCalledWith(filterId(1));
+  });
+
+  it('is shut, and says why, once the map holds as many filter layers as it can', () => {
+    let list = addFilterLayer([], filterId(1));
+    for (let n = 2; n <= MAX_FILTER_LAYERS; n++) {
+      list = addFilterLayer(list, filterId(n));
+    }
+    renderPanel({
+      filterLayers: list.map((spec) => ({ spec, name: 'A filter', status: 'ready' })),
+      filterLayerCandidates: [{ id: filterId(99), name: 'One more' }],
+      onAddFilterLayer: vi.fn(),
+    });
+    expect(screen.getByRole('combobox', { name: /add a layer from a saved filter/i })).toBeDisabled();
+    expect(screen.getByText(new RegExp(`${MAX_FILTER_LAYERS} filter layers at most`, 'i'))).toBeInTheDocument();
+  });
+
+  it('is not shown where the page offers no filter layers', () => {
+    renderPanel();
+    expect(screen.queryByRole('combobox', { name: /add a layer from a saved filter/i })).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import { getOverlayOrder, getWorkspaceMap } from './mapContext.ts';
 import { readFilterDocument } from '../filters/url.ts';
 import type { FilterDocument } from '../filters/types.ts';
 import { isSavedFilterId, tagChipFilter, tagOfMapFilter, type MapFilter } from './mapFilters.ts';
+import { readFilterLayers, type FilterLayerSpec } from './filterLayerList.ts';
 
 /**
  * The saved-view config document (client-owned, versioned). Everything needed to
@@ -87,6 +88,17 @@ export interface ViewConfig {
    * after v1 shipped; older views omit it.
    */
   filterDocument?: FilterDocument;
+  /**
+   * The layers drawn from saved filters, bottom of the list first as they were added; their
+   * stacking among the other overlays is in `overlayOrder` and their transparency in
+   * `overlayOpacity`, both under each layer's `filter:<id>` layer id. Added after v1 shipped;
+   * older views omit it (treated as none), and a view with none does not write it.
+   *
+   * A shared link reads none of this and draws none of these layers. Each one draws a subset of
+   * what the main entrance and feature layers draw, so leaving them out of a link can only show
+   * less than the view did, never more.
+   */
+  filterLayers?: FilterLayerSpec[];
   /** Added after v1 shipped; older saved views omit it (treated as fully opaque). */
   overlayOpacity?: Record<string, number>;
   /** Per-base-layer opacity keyed by catalog id. Older saved views omit it (opaque). */
@@ -126,6 +138,8 @@ export interface WorkspaceUiState {
   rasters: { id: string; opacity?: number }[];
   /** The filter the map's layers draw through, or null for none. */
   mapFilter: MapFilter | null;
+  /** The layers drawn from saved filters, in the order they were added. */
+  filterLayers: FilterLayerSpec[];
   overlayOpacity: Record<string, number>;
   baseOpacity: Record<number, number>;
   overlayOrder: string[];
@@ -165,6 +179,7 @@ export function captureViewConfig(
     geofileIds: ui.geofileIds,
     rasters: ui.rasters,
     ...viewFilterFields(ui.mapFilter),
+    ...(ui.filterLayers.length > 0 ? { filterLayers: ui.filterLayers.map((layer) => ({ ...layer })) } : {}),
     overlayOpacity: ui.overlayOpacity,
     baseOpacity: ui.baseOpacity,
     overlayOrder: getOverlayOrder(),
@@ -198,6 +213,7 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     geofileIds: parsed.geofileIds ?? [],
     rasters: parsed.rasters ?? [],
     mapFilter: viewFilterOf(parsed),
+    filterLayers: readFilterLayers(parsed.filterLayers),
     overlayOpacity: parsed.overlayOpacity ?? {},
     baseOpacity: parsed.baseOpacity ?? {},
     overlayOrder: parsed.overlayOrder ?? [],

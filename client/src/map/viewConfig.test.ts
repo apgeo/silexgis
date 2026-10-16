@@ -23,6 +23,7 @@ const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
   geofileIds: [],
   rasters: [],
   mapFilter: null,
+  filterLayers: [],
   overlayOpacity: { entrances: 0.5 },
   baseOpacity: { 3: 0.6 },
 };
@@ -340,5 +341,65 @@ describe('the filter a saved view carries', () => {
       filterDocument: { version: 99, scope: [], sort: 'updated', descending: true },
     };
     expect(applyViewConfig(view)?.mapFilter).toBeNull();
+  });
+});
+
+describe('the filter layers a saved view carries', () => {
+  const first = '0e6f2c4a-5b1d-4c39-9b7e-2f8a1d3c4e5f';
+  const second = '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+  const legacy = {
+    configVersion: 1,
+    center: [25.3, 45.7],
+    zoom: 10,
+    entrancesVisible: true,
+    surfaceFeaturesVisible: true,
+    geofileIds: [],
+    rasters: [],
+    tagFilter: null,
+  };
+
+  it('round-trips each layer with its colour, symbol and visibility, in order', () => {
+    const filterLayers = [
+      { savedFilterId: first, color: 'magenta' as const, symbol: 'triangle' as const, visible: true },
+      { savedFilterId: second, color: 'violet' as const, symbol: 'circle' as const, visible: false },
+    ];
+    const overlayOpacity = { [`filter:${first}`]: 0.4 };
+    const config = captureViewConfig({ ...baseUi, filterLayers, overlayOpacity });
+    const restored = applyViewConfig(JSON.parse(JSON.stringify(config)));
+    expect(restored?.filterLayers).toEqual(filterLayers);
+    // Transparency travels with every other overlay's, under the layer's own id.
+    expect(restored?.overlayOpacity).toEqual(overlayOpacity);
+  });
+
+  it('writes nothing for a view with no filter layers, and reads an older view as none', () => {
+    expect('filterLayers' in captureViewConfig(baseUi)).toBe(false);
+    expect(applyViewConfig(legacy)?.filterLayers).toEqual([]);
+  });
+
+  it('keeps the filter layers out of what the main filter is stored as', () => {
+    // A shared link reads `tagFilter`, `savedFilterId` and `filterDocument` to decide what it may
+    // draw; a filter layer written into any of them would change what the link shows.
+    const config = captureViewConfig({
+      ...baseUi,
+      filterLayers: [{ savedFilterId: first, color: 'violet', symbol: 'circle', visible: true }],
+    });
+    expect(config.tagFilter).toBeNull();
+    expect(config.savedFilterId).toBeUndefined();
+    expect(config.filterDocument).toBeUndefined();
+  });
+
+  it('drops entries it cannot read and repairs a style it does not know', () => {
+    const restored = applyViewConfig({
+      ...legacy,
+      filterLayers: [
+        { savedFilterId: 'not-an-id', color: 'violet', symbol: 'circle', visible: true },
+        { savedFilterId: first, color: 'chartreuse', symbol: 'star' },
+        { savedFilterId: first.toUpperCase(), color: 'gold', symbol: 'square', visible: true },
+        'nonsense',
+      ],
+    });
+    expect(restored?.filterLayers).toEqual([
+      { savedFilterId: first, color: 'violet', symbol: 'circle', visible: true },
+    ]);
   });
 });

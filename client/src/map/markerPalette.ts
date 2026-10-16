@@ -150,6 +150,26 @@ export function featureSymbolUrl(symbolFile: string): string {
 }
 
 /**
+ * The colours a layer drawn from a saved filter can take, in the order a new layer is given them.
+ *
+ * Six, and chosen to be told apart from each other and from everything above: the main entrance
+ * layer's teal and its snapped orange, the features' brown, the centreline maroon, the measurement
+ * blue and the highlight red are all left out, so a filter layer laid over the main one never
+ * reads as part of it. The keys are what a saved view stores, so a colour can be retuned here
+ * without every view that names it changing meaning.
+ */
+export const filterLayerPalette = {
+  violet: '#722ed1',
+  magenta: '#c41d7f',
+  indigo: '#1d39c4',
+  green: '#389e0d',
+  gold: '#ad8b00',
+  slate: '#434343',
+} as const;
+
+export type FilterLayerColor = keyof typeof filterLayerPalette;
+
+/**
  * The density overlay's fills. A sequential ramp from pale to dark in one hue family, so "more"
  * always reads as "darker" whichever basemap is under it, and the hot and cold spots of the
  * hot-spot reading in two hues far from that ramp so they are never taken for a density band.
