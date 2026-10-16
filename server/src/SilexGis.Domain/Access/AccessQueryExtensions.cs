@@ -10,6 +10,14 @@ namespace SilexGis.Domain.Access;
 /// all three forms — change them together or not at all. Flat throughout: subtree
 /// matching is an array overlap on the row's ancestor ids, set matching one membership
 /// EXISTS, the visibility cascade one EXISTS over the ancestor rows.
+/// <para>
+/// The cascade is written as "some id of the row's ancestor array names a row that admits the
+/// caller" — the array walked, each id looked up by primary key — and not as "some feature whose id
+/// the array contains". The two mean the same; the second translates to <c>ancestor_ids @>
+/// ARRAY[a.id]</c>, a test on the outer row that no index on the inner one can answer, so the
+/// planner scans the whole feature table once per candidate row. Measured on 100k entrances it
+/// cost four seconds for a window of 137, for every reader who owned none of them.
+/// </para>
 /// </summary>
 public static class AccessQueryExtensions
 {
@@ -43,11 +51,11 @@ public static class AccessQueryExtensions
             // EXPLAIN pins guard.
             return query.Where(f =>
                 f.OwnerUserId == userId
-                || allFeatures.Any(a => f.AncestorIds.Contains(a.Id)
+                || f.AncestorIds.Any(ancestorId => allFeatures.Any(a => a.Id == ancestorId
                     && (a.Visibility >= Visibility.Authenticated
                         || (a.Visibility == Visibility.CavingGroup
                             && a.CavingGroupId != null
-                            && cavingGroupIds.Contains(a.CavingGroupId.Value)))));
+                            && cavingGroupIds.Contains(a.CavingGroupId.Value))))));
         }
 
         var denyObj = set.DenyObjectIds;
@@ -98,11 +106,11 @@ public static class AccessQueryExtensions
                   && (allowOwnKinds.Contains((short)f.Kind)
                       || (f.FeatureTypeId != null && allowOwnTypes.Contains(f.FeatureTypeId.Value))))
               || f.OwnerUserId == userId
-              || allFeatures.Any(a => f.AncestorIds.Contains(a.Id)
+              || f.AncestorIds.Any(ancestorId => allFeatures.Any(a => a.Id == ancestorId
                   && (a.Visibility >= Visibility.Authenticated
                       || (a.Visibility == Visibility.CavingGroup
                           && a.CavingGroupId != null
-                          && cavingGroupIds.Contains(a.CavingGroupId.Value)))));
+                          && cavingGroupIds.Contains(a.CavingGroupId.Value))))));
     }
 
     /// <summary>

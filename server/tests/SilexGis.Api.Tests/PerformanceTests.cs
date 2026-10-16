@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Data.Common;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using System.Net;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
@@ -337,7 +338,11 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     /// </summary>
     private static void AssertAncestorProbeIsIndexed(string plan, string label)
     {
-        plan.ShouldContain("Index Cond: (id = ANY (f.ancestor_ids))", Case.Sensitive,
+        // Two spellings of one probe: the SQL fragments look the ancestor array up as
+        // `id = ANY (f.ancestor_ids)`, and EF walks the array with unnest and looks each element up
+        // by key (`id = <alias>.value`). Either is a primary-key probe; what neither may be is the
+        // containment form `ancestor_ids @> ARRAY[id]`, which no index answers.
+        Regex.IsMatch(plan, @"Index Cond: \(id = (ANY \(f\.ancestor_ids\)|\w+\.value)\)").ShouldBeTrue(
             $"{label}: the visibility-inheritance EXISTS arm must probe ancestors through an "
             + "index, not scan for them");
     }
