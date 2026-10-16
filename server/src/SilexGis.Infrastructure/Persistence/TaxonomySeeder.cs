@@ -75,10 +75,9 @@ public static class TaxonomySeeder
     private static async Task SeedTripTypesAsync(SilexGisDbContext db, CancellationToken ct)
     {
         var existing = await db.TripTypes.ToDictionaryAsync(x => x.Code, ct);
-        var sort = 0;
-        foreach (var seed in Domain.Trips.TripTypeSeeds.All)
+        foreach (var (seed, position) in Domain.Trips.TripTypeSeeds.All.Select((s, i) => (s, i)))
         {
-            sort += 10;
+            var sort = ShippedVocabularyOrder.Of(position);
             var sections = TripTypeStarterSchemas.For(seed.Code);
             if (existing.TryGetValue(seed.Code, out var row))
             {
@@ -195,10 +194,9 @@ public static class TaxonomySeeder
     private static async Task SeedTripParticipantRolesAsync(SilexGisDbContext db, CancellationToken ct)
     {
         var existing = await db.TripParticipantRoles.Select(x => x.Code).ToHashSetAsync(ct);
-        var sort = 0;
-        foreach (var seed in Domain.Trips.TripParticipantRoleSeeds.All)
+        foreach (var (seed, position) in Domain.Trips.TripParticipantRoleSeeds.All.Select((s, i) => (s, i)))
         {
-            sort += 10;
+            var sort = ShippedVocabularyOrder.Of(position);
             if (!existing.Contains(seed.Code))
             {
                 db.TripParticipantRoles.Add(new TripParticipantRole
@@ -220,10 +218,9 @@ public static class TaxonomySeeder
     private static async Task SeedExpeditionRosterRolesAsync(SilexGisDbContext db, CancellationToken ct)
     {
         var existing = await db.ExpeditionRosterRoles.Select(x => x.Code).ToHashSetAsync(ct);
-        var sort = 0;
-        foreach (var seed in Domain.Expeditions.ExpeditionRosterRoleSeeds.All)
+        foreach (var (seed, position) in Domain.Expeditions.ExpeditionRosterRoleSeeds.All.Select((s, i) => (s, i)))
         {
-            sort += 10;
+            var sort = ShippedVocabularyOrder.Of(position);
             if (!existing.Contains(seed.Code))
             {
                 db.ExpeditionRosterRoles.Add(new ExpeditionRosterRole
@@ -243,10 +240,9 @@ public static class TaxonomySeeder
     private static async Task SeedResLinkRelationTypesAsync(SilexGisDbContext db, CancellationToken ct)
     {
         var existing = await db.ResLinkRelationTypes.Select(x => x.Code).ToHashSetAsync(ct);
-        var sort = 0;
-        foreach (var seed in Domain.ResLinks.ResLinkRelationTypeSeeds.All)
+        foreach (var (seed, position) in Domain.ResLinks.ResLinkRelationTypeSeeds.All.Select((s, i) => (s, i)))
         {
-            sort += 10;
+            var sort = ShippedVocabularyOrder.Of(position);
             if (!existing.Contains(seed.Code))
             {
                 db.ResLinkRelationTypes.Add(new ResLinkRelationType
