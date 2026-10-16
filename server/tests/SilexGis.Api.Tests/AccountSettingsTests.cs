@@ -457,6 +457,21 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
         (await ReadPreferencesAsync()).TryGetProperty("second", out _).ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task A_member_named_twice_is_refused_rather_than_guessed_at()
+    {
+        using var body = new StringContent(
+            """{"preferences":{"appearance":{"theme":"dark"},"appearance":{"theme":"light"}}}""",
+            System.Text.Encoding.UTF8,
+            "application/json");
+
+        var response = await me.PatchAsync("/api/v1/me/preferences/", body);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+        // The positive twin: the same member once is stored.
+        (await PatchPreferencesAsync(new { appearance = new { theme = "light" } })).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     private Task<HttpResponseMessage> PatchPreferencesAsync(object preferences) =>
         me.PatchAsJsonAsync("/api/v1/me/preferences/", new { preferences });
 

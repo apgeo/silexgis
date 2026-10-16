@@ -95,6 +95,7 @@ public static class MePreferenceEndpoints
     }
 
     public const string TooLargeCode = "preferences.too_large";
+    public const string InvalidCode = "preferences.invalid";
 
     /// <summary>How often a merge is retried when another write to the same account landed first.</summary>
     private const int MergeAttempts = 3;
@@ -115,7 +116,18 @@ public static class MePreferenceEndpoints
         for (var attempt = 1; ; attempt++)
         {
             var account = await db.Users.FirstAsync(u => u.Id == user.UserId, ct);
-            var merged = JsonMergePatch.Apply(JsonNode.Parse(account.UiPreferences), patch)!.ToJsonString();
+            string merged;
+            try
+            {
+                merged = JsonMergePatch.Apply(JsonNode.Parse(account.UiPreferences), patch)!.ToJsonString();
+            }
+            catch (Exception e) when (e is ArgumentException or InvalidOperationException)
+            {
+                // A member named twice in one object: JSON allows it to be written, but there is
+                // no saying which of the two is meant, so the request is refused rather than
+                // guessed at.
+                return ApiProblems.BadRequest(InvalidCode, "A member is named twice.");
+            }
             if (merged.Length > UiPreferencesWriteRequestValidator.MaxRawLength)
             {
                 return ApiProblems.BadRequest(TooLargeCode, "Preferences are too large.");
