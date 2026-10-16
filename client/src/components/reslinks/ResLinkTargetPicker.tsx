@@ -15,12 +15,15 @@ import type { ResLinkTargetType } from './registry.ts';
  * of target is a world the filter model serves, this is the ordinary selector — which means it
  * inherits the things that were decided once: an id it cannot describe reads as restricted rather
  * than as a raw identifier, nothing is asked until enough has been typed, and a search box never
- * asks the server for a total. Where the kind is not yet a world, it stays the search it always
+ * asks the server for a total. Where the kind is not a world, it stays the search it always
  * was.
  *
- * When the remaining six kinds become worlds, the second branch goes and this file becomes a
- * thin call to the selector. Until then the branch lives here rather than in the dialog, so the
- * dialog does not have to know there are two.
+ * The kinds left on that search are people, clubs and camps. People and clubs are kept out of the
+ * filter model on purpose — what is shown of a person is decided per field and per reader, which
+ * a world's vocabulary cannot express — so the second branch is not waiting to disappear. It
+ * lives here rather than in the dialog, so the dialog does not have to know there are two. The
+ * server refuses its own search for every kind listed below, so a kind added here and forgotten
+ * there, or the reverse, shows at once rather than as a picker that finds nothing.
  */
 
 /** The target kinds the filter model can already answer for. */
@@ -29,6 +32,9 @@ export const WORLD_OF: Partial<Record<ResLinkTargetType, string>> = {
   document: 'document',
   tripLog: 'tripLog',
   mapView: 'mapView',
+  cabinet: 'cabinet',
+  surveyModel: 'surveyModel',
+  geofile: 'geofile',
 };
 
 const SEARCH_MIN_LENGTH = 2;
@@ -92,8 +98,7 @@ export default function ResLinkTargetPicker({
 }
 
 /**
- * The search as it was, for the kinds that are not worlds yet — cavers, caving groups, cabinets,
- * survey models, geofiles and expeditions.
+ * The search as it was, for the kinds that are not worlds — cavers, caving groups and camps.
  */
 function LegacyTargetSearch({
   targetType,

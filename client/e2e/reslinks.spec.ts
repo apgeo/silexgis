@@ -121,17 +121,17 @@ async function pickOption(page: Page, select: Locator, label: string | RegExp) {
  * Picks an existing item in the record-a-link dialog by typing part of its name.
  *
  * The dialog draws one of two controls depending on which kind is being linked, and they are not
- * interchangeable to a test. Four kinds — a feature, a document, a trip and a map view — are
- * answerable by the filter model and get the object selector, which is a search box over a list of
- * rows. The remaining five are still the search this dialog always had, an antd `Select`. Both
+ * interchangeable to a test. Seven kinds — a feature, a document, a trip, a map view, a cabinet, a
+ * 3D survey model and a geodata file — are answerable by the filter model and get the object
+ * selector, which is a search box over a list of rows. People, clubs and camps keep the search this
+ * dialog always had, an antd `Select`, and will: they are kept out of the filter model on purpose. Both
  * carry the same accessible name, "Item", which is what made the breakage quiet: the selector's
  * box is an `Input` and so a **textbox**, while the old control is a **combobox**, so a lookup by
  * the combobox role stopped matching for the converted kinds and matched nothing at all rather
  * than matching the wrong thing.
  *
  * So the selector is addressed by the test ids it emits rather than by role, and the old control
- * is kept as the fallback for the kinds that have not moved. When the remaining five become
- * worlds this second branch goes, along with the one in the component.
+ * is kept for those three kinds.
  */
 async function pickExistingItem(page: Page, dialog: Locator, name: string, query: string) {
   const selector = dialog.getByTestId('reslink-target-picker');

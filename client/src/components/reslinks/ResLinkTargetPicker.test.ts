@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { textFieldOf } from '../selector/useObjectSelector.ts';
 import { WORLD_OF } from './ResLinkTargetPicker.tsx';
+import { RESLINK_TARGET_TYPES } from './registry.ts';
 
 /**
  * Picking the other end of a link is done by typing part of its name. For the kinds the picker
@@ -16,4 +17,11 @@ describe('the link picker', () => {
       expect(textFieldOf(world!)).toEqual(expect.any(String));
     },
   );
+
+  // The server answers its own target search only for these three and refuses it for every
+  // other kind, so a kind the picker still sent there would find nothing however it was typed.
+  it('sends only people, clubs and camps to the link search, and every other kind to a world', () => {
+    const searched = RESLINK_TARGET_TYPES.filter((kind) => !WORLD_OF[kind]);
+    expect(searched).toEqual(['caver', 'cavingGroup', 'expedition']);
+  });
 });
