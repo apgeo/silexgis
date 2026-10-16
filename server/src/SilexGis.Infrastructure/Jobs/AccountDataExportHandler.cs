@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Filters;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Jobs;
@@ -192,6 +193,9 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
     /// </summary>
     private async Task<object> ContentInventoryAsync(Guid userId, CancellationToken ct) => new
     {
+        // A saved filter is the person's own words — a question, not a record — so it travels
+        // whole: name, description, the question itself and who it is shared with.
+        SavedFilters = await SavedFiltersAsync(userId, ct),
         // One inventory over the supertype covers caves, entrances, centerlines and every
         // generic kind (the soft-delete query filter hides deleted rows).
         Features = await db.Features.AsNoTracking()
@@ -235,6 +239,50 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
             .ToListAsync(ct),
     };
 
+    private async Task<object> SavedFiltersAsync(Guid userId, CancellationToken ct)
+    {
+        var rows = await (from filter in db.SavedFilters.AsNoTracking()
+                          where filter.OwnerUserId == userId
+                          join cavingGroup in db.CavingGroups.AsNoTracking()
+                              on filter.CavingGroupId equals (Guid?)cavingGroup.Id into groups
+                          from cavingGroup in groups.DefaultIfEmpty()
+                          orderby filter.Name
+                          select new
+                          {
+                              filter.Id,
+                              filter.Name,
+                              filter.Description,
+                              filter.Document,
+                              filter.Visibility,
+                              filter.CavingGroupId,
+                              CavingGroupName = cavingGroup == null ? null : cavingGroup.Name,
+                              filter.CreatedAt,
+                              filter.UpdatedAt,
+                          })
+            .ToListAsync(ct);
+
+        return rows.Select(f => new
+        {
+            f.Id,
+            f.Name,
+            f.Description,
+            // Re-read and re-written rather than copied, so this archive keeps its promise of no
+            // coordinates even for a row somebody wrote an anchor into by hand. A document this
+            // version cannot read is named as such rather than reproduced.
+            Document = FilterDocument.Deserialize(f.Document) is { } document
+                ? JsonSerializer.Deserialize<JsonElement>(FilterDocument.Serialize(document with { Anchor = null }))
+                : (JsonElement?)null,
+            Audience = new
+            {
+                Visibility = f.Visibility.ToString(),
+                f.CavingGroupId,
+                f.CavingGroupName,
+            },
+            f.CreatedAt,
+            f.UpdatedAt,
+        }).ToList();
+    }
+
     /// <summary>
     /// The record this installation holds of the user having taken a copy of a document.
     /// It is data about them rather than about the documents, so a request for a copy of
@@ -271,7 +319,8 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
               preferences.json  notification and interface settings
               caver.json          your entry in the roster of people
               caving-groups.json  the caving groups you belong to
-              content.json      what you have authored: identifiers, names and dates
+              content.json      what you have authored: identifiers, names and dates, and
+                                your saved filters in full
               reading.json      when you took a copy of a document, and which one
 
             The records you authored are not reproduced here in full. Use the export options on

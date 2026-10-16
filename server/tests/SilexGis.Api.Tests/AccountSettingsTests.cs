@@ -9,6 +9,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain;
+using SilexGis.Domain.Filters;
 using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Settings;
@@ -795,6 +796,24 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
             website = (string?)null,
         })).StatusCode.ShouldBe(HttpStatusCode.Created);
 
+        // A saved filter is the person's own question, so the copy owes it to them whole.
+        var filterName = $"Export filter {suffix}";
+        var saved = await me.PostAsJsonAsync("/api/v1/saved-filters", new
+        {
+            name = filterName,
+            description = "every cave in Bihor",
+            document = new FilterDocument
+            {
+                Scope =
+                [
+                    new WorldScope("feature", new ConditionNode(
+                        FeatureFilterFields.Region, FilterOp.Contains, [new TextValue($"Bihor {suffix}")])),
+                ],
+            },
+            visibility = "private",
+        }, FilterDocument.SerializerOptions);
+        saved.StatusCode.ShouldBe(HttpStatusCode.Created, await saved.Content.ReadAsStringAsync());
+
         var requested = await me.PostAsync("/api/v1/me/data-export/", null);
         var exportId = JsonDocument.Parse(await requested.Content.ReadAsStringAsync())
             .RootElement.GetProperty("id").GetGuid();
@@ -843,6 +862,15 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
         }
 
         (await ReadEntryAsync(archive, "caving-groups.json")).ShouldContain(clubName);
+
+        var content = JsonDocument.Parse(await ReadEntryAsync(archive, "content.json")).RootElement;
+        var filter = content.GetProperty("savedFilters").EnumerateArray()
+            .Single(f => f.GetProperty("name").GetString() == filterName);
+        filter.GetProperty("description").GetString().ShouldBe("every cave in Bihor");
+        filter.GetProperty("document").GetRawText().ShouldContain($"Bihor {suffix}");
+        filter.GetProperty("audience").GetProperty("visibility").GetString().ShouldBe("Private");
+        filter.TryGetProperty("createdAt", out _).ShouldBeTrue();
+        filter.TryGetProperty("updatedAt", out _).ShouldBeTrue();
     }
 
     [Fact]
