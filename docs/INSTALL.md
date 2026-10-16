@@ -191,7 +191,9 @@ address (a CDN, a proxy on another machine) must also be named under
 private ranges rather than adding to it, so name the range your Docker network speaks from as well
 (usually inside `172.16.0.0/12` — `docker network inspect` says which — for example
 `SILEXGIS__Proxy__TrustedNetworks__1=172.16.0.0/12`). The bundled Caddy
-overlay needs none of this, because it sets the hop count itself.
+overlay needs none of this, because it sets the hop count itself. Survey files arrive at your
+proxy already compressed by the bundled nginx; a proxy that compresses leaves an answer that is
+already compressed alone, so there is nothing to set for them.
 
 **To see whether the count is right**, sign in as a full administrator from outside and open
 **Administration → Published trips**: under the counts the page prints the address the server
@@ -1565,8 +1567,10 @@ destination of the code that proves it.
    cd client && npm ci && npm run build
    ```
    Use `deploy/nginx/silexgis.conf` as a template — it serves the static files, proxies
-   `/api`, `/connect`, `/health`, `/openapi` and `/.well-known` to the API, and sets a
-   `client_max_body_size` above the default upload limit.
+   `/api`, `/connect`, `/health`, `/openapi` and `/.well-known` to the API, sets a
+   `client_max_body_size` above the default upload limit, and compresses survey files on their
+   way to the browser (they are stored with no type of their own, which nginx otherwise sends
+   whole: an expedition's model of 20 MB goes over the wire as about 4).
 4. **Admin.** If you did not set `SILEXGIS__Admin__Email/Password`, create the first admin
    interactively:
    ```bash
