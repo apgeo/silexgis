@@ -146,7 +146,11 @@ export function useObjectSelector(options: UseObjectSelectorOptions) {
     [found, describedChoices, current],
   );
 
-  const vocabularies = (vocabulary.data?.worlds ?? []) as unknown as WorldVocabulary[];
+  // Held across renders: built afresh on every one, it made the sorts below recompute every time.
+  const vocabularies = useMemo(
+    () => (vocabulary.data?.worlds ?? []) as unknown as WorldVocabulary[],
+    [vocabulary.data],
+  );
   const availableSorts = useMemo(() => {
     const shared = sortsOffered(vocabularies, worlds);
     return options.sorts ? shared.filter((s) => options.sorts!.includes(s)) : shared;

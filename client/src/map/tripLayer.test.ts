@@ -9,13 +9,14 @@ const feature = (properties: Record<string, unknown>) => ({
   get: (key: string) => properties[key],
 });
 
-/** The colour a style paints its symbol in, whichever symbol class it happens to be. */
+/**
+ * The colour a style paints its symbol in, whichever symbol class it happens to be. Through
+ * `any` because OpenLayers' image styles share no fill or stroke accessor type.
+ */
 const symbolColour = (style: ReturnType<typeof tripStyleFor>) =>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- OL's image styles share no fill accessor type
   ((style.getImage() as any)?.getFill?.()?.getColor?.() ?? undefined) as string | undefined;
 
 const strokeColour = (style: ReturnType<typeof tripStyleFor>) =>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- as above
   ((style.getImage() as any)?.getStroke?.()?.getColor?.() ?? undefined) as string | undefined;
 
 describe('the three things a trip dot can mean are drawn as three different things', () => {

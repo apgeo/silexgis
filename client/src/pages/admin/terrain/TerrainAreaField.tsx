@@ -137,7 +137,6 @@ export default function TerrainAreaField({ value, onChange, height = 320 }: Prop
       setBbox(value ?? null);
       drawValue(value);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the incoming value alone
   }, [value]);
 
   // Arming attaches the draw; disarming, finishing or unmounting removes it, so arming twice can

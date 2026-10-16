@@ -213,7 +213,6 @@ export default function TripGeometryField({
       setHasShape(value != null);
       drawValue(value);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the incoming value alone
   }, [value]);
 
   // Arming a shape attaches a draw interaction; disarming, finishing or unmounting removes it, so

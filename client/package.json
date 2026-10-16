@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:trips": "vite build --config vite.trips.config.ts",
-    "lint": "oxlint",
+    "lint": "oxlint --report-unused-disable-directives",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "e2e": "node ../scripts/e2e.mjs",

@@ -89,7 +89,7 @@ export default function TripLogListPage() {
     }
     writtenSearch.current = debouncedSearch;
     apply({ search: debouncedSearch }, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `apply` is made anew from the current filter on every render; this answers the settled word alone, and the ref keeps it from writing that word twice
   }, [debouncedSearch]);
   useEffect(() => {
     if (filter.search !== writtenSearch.current) {
