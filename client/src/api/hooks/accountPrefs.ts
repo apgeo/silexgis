@@ -62,8 +62,18 @@ function baselineHere(): AccountPrefs {
   return (useUiPrefsStore.getState().accountPrefsBaseline ?? {}) as AccountPrefs;
 }
 
-/** Saves run one after another, each from where the last one left the baseline. */
-let saving: Promise<unknown> = Promise.resolve();
+/**
+ * Reads and writes of the account's document run one after another, each from where the last
+ * one left the baseline: a save made while the sign-in read is on its way waits for it, and a read
+ * never lands over a later save's answer.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+
+function enqueue<T>(work: () => Promise<T>): Promise<T> {
+  const run = queue.then(work);
+  queue = run.catch(() => undefined);
+  return run;
+}
 
 /**
  * Writes what was changed in this browser to the account's stored document — the one place that
@@ -84,9 +94,7 @@ let saving: Promise<unknown> = Promise.resolve();
  * after that is given up — and never left standing as a change still to be written.
  */
 export function saveAccountPreferences(queryClient: QueryClient, accountId: string): Promise<void> {
-  const run = saving.then(() => saveOnce(queryClient, accountId));
-  saving = run.catch(() => undefined);
-  return run;
+  return enqueue(() => saveOnce(queryClient, accountId));
 }
 
 async function saveOnce(queryClient: QueryClient, accountId: string): Promise<void> {
@@ -193,13 +201,31 @@ export function useSaveAccountPreferences() {
 /** How long a burst of changes — a panel being dragged wider — is let settle before it is written. */
 const SAVE_DELAY_MS = 1500;
 
+/** The longest a sign-out waits for the last change to be written before going ahead without it. */
+const FLUSH_WAIT_MS = 3000;
+
+/** Sends the change still waiting to be written, if any, of the sync now running. */
+let flushRunning: (() => Promise<void>) | undefined;
+
+/**
+ * Writes now what is waiting to be written — called on the way out of a session, before the
+ * cache is released, so a change made in the last moment before signing out reaches the account
+ * instead of being thrown away with the cache. Bounded: an unreachable server delays a sign-out
+ * by moments, not for good.
+ */
+export async function flushAccountPreferences(): Promise<void> {
+  const flushing = flushRunning?.() ?? queue;
+  await Promise.race([flushing.catch(() => undefined), new Promise((resolve) => setTimeout(resolve, FLUSH_WAIT_MS))]);
+}
+
 /**
  * Keeps the account preferences in step between this browser and the account, for as long as the
  * signed-in shell is drawn.
  *
  * At sign-in the browser's cache is claimed for the account (reset first if another account held
- * it) and the account's stored values are taken for every preference not changed here; from then
- * on, a change to any account preference is written back, a moment after the changes stop.
+ * it) and the account's stored values are taken for every preference not changed here; from the
+ * start, a change to any account preference is written back, a moment after the changes stop —
+ * whether or not the account's values could be read.
  */
 export function useAccountPrefsSync(accountId: string | null) {
   const queryClient = useQueryClient();
@@ -210,62 +236,76 @@ export function useAccountPrefsSync(accountId: string | null) {
     }
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let unsubscribe: (() => void) | undefined;
+    let due = false;
 
+    const save = () =>
+      saveAccountPreferences(queryClient, accountId).catch(() => {
+        // The cache keeps the choice; the next change, or the next sign-in, writes it.
+      });
     const scheduleSave = () => {
       clearTimeout(timer);
+      due = true;
       timer = setTimeout(() => {
-        void saveAccountPreferences(queryClient, accountId).catch(() => {
-          // The cache keeps the choice; the next change, or the next sign-in, writes it.
-        });
+        due = false;
+        void save();
       }, SAVE_DELAY_MS);
     };
+    const flush = () => {
+      if (!due) {
+        return queue.then(() => undefined);
+      }
+      clearTimeout(timer);
+      due = false;
+      return save();
+    };
+    flushRunning = flush;
 
     useUiPrefsStore.getState().adoptAccount(accountId);
-    void (async () => {
-      try {
-        const stored = await readStoredDocument(queryClient);
-        if (cancelled) {
-          return;
-        }
-        // Measured from the baseline the cache kept: a change made here and not yet written — the
-        // page reloaded within moments of it, or made while this read was on its way — is newer
-        // than the account and stays, to be written; everything else is the account's.
-        takeAccount(stored, baselineHere());
-      } catch {
-        // Unreachable or refused: what this browser holds for the account stands in until the
-        // next sign-in, and nothing is written over an account document that could not be read.
+
+    // Listening from the start, before the account's values are read: a change made while the
+    // read is on its way, or after it failed, is still written.
+    const unsubscribe = useUiPrefsStore.subscribe((state, previous) => {
+      // A sign-out resetting the cache is not a change to this account's preferences, and nor
+      // is the account's own value being taken.
+      if (takingFromAccount || state.accountId !== accountId) {
         return;
       }
-      if (cancelled) {
-        return;
-      }
-      if (changedSince(baselineHere(), pickAccountPrefs(useUiPrefsStore.getState()))) {
-        // What this browser holds that the account has not yet — a change the last page did not
-        // get to write — is written up now rather than at the next change.
+      // Compared by what would be stored, not by reference: a screen that writes back the same
+      // arrangement it read (the map's search box does, each time it is drawn) changes nothing.
+      if (
+        ACCOUNT_PREF_KEYS.some((key) => state[key] !== previous[key]) &&
+        JSON.stringify(pickAccountPrefs(state)) !== JSON.stringify(pickAccountPrefs(previous))
+      ) {
         scheduleSave();
       }
-      unsubscribe = useUiPrefsStore.subscribe((state, previous) => {
-        // A sign-out resetting the cache is not a change to this account's preferences, and nor
-        // is the account's own value being taken.
-        if (takingFromAccount || state.accountId !== accountId) {
-          return;
-        }
-        // Compared by what would be stored, not by reference: a screen that writes back the same
-        // arrangement it read (the map's search box does, each time it is drawn) changes nothing.
-        if (
-          ACCOUNT_PREF_KEYS.some((key) => state[key] !== previous[key]) &&
-          JSON.stringify(pickAccountPrefs(state)) !== JSON.stringify(pickAccountPrefs(previous))
-        ) {
-          scheduleSave();
-        }
-      });
-    })();
+    });
+
+    void enqueue(async () => {
+      const stored = await readStoredDocument(queryClient);
+      if (cancelled || useUiPrefsStore.getState().accountId !== accountId) {
+        return;
+      }
+      // Measured from the baseline the cache kept: a change made here and not yet written — the
+      // page reloaded within moments of it, or made while this read was on its way — is newer
+      // than the account and stays, to be written; everything else is the account's.
+      takeAccount(stored, baselineHere());
+      if (changedSince(baselineHere(), pickAccountPrefs(useUiPrefsStore.getState()))) {
+        // What this browser holds that the account has not yet — a change the last page did
+        // not get to write — is written up now rather than at the next change.
+        scheduleSave();
+      }
+    }).catch(() => {
+      // Unreachable or refused: what this browser holds for the account stands in, and changes
+      // are still written as they are made.
+    });
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
-      unsubscribe?.();
+      unsubscribe();
+      if (flushRunning === flush) {
+        flushRunning = undefined;
+      }
     };
   }, [accountId, queryClient]);
 }

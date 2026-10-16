@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { flushAccountPreferences } from '../api/hooks/accountPrefs.ts';
+import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { userManager } from './auth.tsx';
 
 /** The address the sign-in page reads to say why the reader is there. */
@@ -23,6 +25,11 @@ export const PASSWORD_CHANGED_LOGIN = '/login?passwordChanged=1';
  * start a sign-in redirect of its own before the navigation below had happened.
  */
 export async function signOutAfterPasswordChange(): Promise<void> {
+  // A sign-out like any other for the preferences this browser holds for the account: what is
+  // still waiting is written while the access token still works, then the cache is released, so
+  // the sign-in page — and whoever signs in next — starts from the defaults.
+  await flushAccountPreferences();
+  useUiPrefsStore.getState().releaseAccount();
   userManager.stopSilentRenew();
   try {
     await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin' });

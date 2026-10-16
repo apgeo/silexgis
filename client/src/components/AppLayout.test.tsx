@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { ReactNode } from 'react';
 import { matchRoutes, MemoryRouter, Route, Routes } from 'react-router-dom';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import AppLayout from './AppLayout.tsx';
+import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { sectionFor } from './navSections.ts';
 import { routes } from '../App.tsx';
 import type { UnreadNotificationCount } from '../api/hooks.ts';
@@ -59,11 +60,20 @@ vi.mock('../api/hooks.ts', () => ({
 // account that never set a display name it is a generated pseudonym, not a name or an address.
 // Keeps the account's preferences in step with the server; not what these tests are about.
 vi.mock('./AccountPrefsGate.tsx', () => ({ default: ({ children }: { children: ReactNode }) => children }));
+const signOut = vi.fn(() => Promise.resolve());
 vi.mock('../auth/auth.tsx', () => ({
   useAuth: () => ({
     user: { profile: { preferred_username: 'user-4f2b8c1d', email: 'caver@example.org' } },
-    signOut: vi.fn(),
+    signOut,
   }),
+}));
+// What a sign-out does with the account's preferences this browser holds, in the order it does it.
+const signOutSteps: string[] = [];
+vi.mock('../api/hooks/accountPrefs.ts', () => ({
+  flushAccountPreferences: () => {
+    signOutSteps.push(`written while held by ${useUiPrefsStore.getState().accountId ?? 'nobody'}`);
+    return Promise.resolve();
+  },
 }));
 
 function renderShell(at = '/map') {
@@ -597,5 +607,22 @@ describe('AppLayout account menu', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('writes what is waiting to the account before releasing this browser’s copy and signing out', async () => {
+    useUiPrefsStore.getState().adoptAccount('account-a');
+    signOutSteps.length = 0;
+    signOut.mockImplementation(() => {
+      signOutSteps.push(`signed out, held by ${useUiPrefsStore.getState().accountId ?? 'nobody'}`);
+      return Promise.resolve();
+    });
+    renderShell();
+
+    fireEvent.click(screen.getByTestId('account-menu'));
+    fireEvent.click(await screen.findByText('Sign out'));
+
+    await waitFor(() =>
+      expect(signOutSteps).toEqual(['written while held by account-a', 'signed out, held by nobody']),
+    );
   });
 });

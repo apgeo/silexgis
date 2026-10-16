@@ -23,6 +23,7 @@ import ErrorBoundary from './ErrorBoundary.tsx';
 import NotificationBell from './NotificationBell.tsx';
 import HeldReportsSentinel from './trips/HeldReportsSentinel.tsx';
 import AccountPrefsGate from './AccountPrefsGate.tsx';
+import { flushAccountPreferences } from '../api/hooks/accountPrefs.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useIsFullAdmin } from './reslinks/permissions.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
@@ -247,10 +248,14 @@ function AppShell() {
                   icon: <LogoutOutlined />,
                   label: t('auth.signOut'),
                   onClick: () => {
-                    // The arrangement this browser holds is the member's, not the browser's: it
-                    // goes with them, and the next person to sign in here starts from the defaults.
-                    useUiPrefsStore.getState().releaseAccount();
-                    void signOut();
+                    void (async () => {
+                      // The arrangement this browser holds is the member's, not the browser's: a
+                      // change still waiting to be written goes to their account first, then it
+                      // goes with them, and the next person to sign in here starts from the defaults.
+                      await flushAccountPreferences();
+                      useUiPrefsStore.getState().releaseAccount();
+                      await signOut();
+                    })();
                   },
                 },
               ],

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { ReactNode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,6 +19,8 @@ let stored: Record<string, unknown> = {};
 const put = vi.fn();
 /** The longest merged document the server accepts — its own count, which may not be this client's. */
 let serverLimit = Infinity;
+/** When set, the next read waits for this before answering; when it rejects, the read fails. */
+let readGate: Promise<void> | undefined;
 
 vi.mock('../client.ts', async () => {
   // The server's merging write, applied with the same rule it uses.
@@ -35,7 +37,12 @@ vi.mock('../client.ts', async () => {
   }
   return {
     api: {
-      GET: () => Promise.resolve({ data: { preferences: stored }, response: new Response() }),
+      GET: async () => {
+        const gate = readGate;
+        readGate = undefined;
+        await gate;
+        return { data: { preferences: stored }, response: new Response() };
+      },
       PATCH: (_path: string, { body }: { body: { preferences: Record<string, unknown> } }) => {
         put(body.preferences);
         const merged = applyMergePatch(stored, body.preferences) as Record<string, unknown>;
@@ -54,19 +61,21 @@ vi.mock('../client.ts', async () => {
   };
 });
 
-const { useAccountPrefsSync } = await import('./accountPrefs.ts');
+const { flushAccountPreferences, useAccountPrefsSync } = await import('./accountPrefs.ts');
 
-function sync(accountId: string | null) {
+function sync(accountId: string | null, { strict = false } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  );
+  const wrapper = ({ children }: { children: ReactNode }) => {
+    const tree = <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    return strict ? <StrictMode>{tree}</StrictMode> : tree;
+  };
   return renderHook(({ id }) => useAccountPrefsSync(id), { initialProps: { id: accountId }, wrapper });
 }
 
 beforeEach(() => {
   stored = {};
   serverLimit = Infinity;
+  readGate = undefined;
   put.mockReset();
   useUiPrefsStore.getState().releaseAccount();
 });
@@ -242,5 +251,70 @@ describe('account preferences between this browser and the account', () => {
     });
     expect(useUiPrefsStore.getState().layouts).toHaveLength(20);
     expect(stored.layouts).toEqual(held);
+  });
+
+  it('writes a change made after the account could not be read', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    readGate = Promise.reject(new Error('offline'));
+    sync('account-a');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    act(() => useUiPrefsStore.getState().setCoordinateFormat('utm'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(put).toHaveBeenCalledWith({ coordinateFormat: 'utm' });
+  });
+
+  it('keeps a change made while the account was being read, and writes it', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    stored = { coordinateFormat: 'dms', overviewMap: true };
+    let answer!: () => void;
+    readGate = new Promise((resolve) => (answer = resolve));
+    sync('account-a');
+
+    act(() => useUiPrefsStore.getState().setCoordinateFormat('utm'));
+    await act(async () => {
+      answer();
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(useUiPrefsStore.getState().coordinateFormat).toBe('utm');
+    expect(useUiPrefsStore.getState().overviewMap).toBe(true);
+    expect(stored.coordinateFormat).toBe('utm');
+  });
+
+  it('writes a change still waiting when it is flushed, as a sign-out does', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    sync('account-a');
+    await waitFor(() => expect(useUiPrefsStore.getState().accountPrefsBaseline).toBeDefined());
+
+    act(() => useUiPrefsStore.getState().setDocks({ leftHidden: true }));
+    await act(async () => {
+      await flushAccountPreferences();
+    });
+
+    expect(put).toHaveBeenCalledWith({ docks: { leftHidden: true, rightHidden: false } });
+  });
+
+  it('behaves under StrictMode as it does in production: one write, of the one change', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // Another member's cache, and an account with values of its own.
+    useUiPrefsStore.getState().adoptAccount('account-b');
+    useUiPrefsStore.getState().setPanelPrefs('main', { width: 40 });
+    stored = { coordinateFormat: 'dms' };
+
+    sync('account-a', { strict: true });
+    await waitFor(() => expect(useUiPrefsStore.getState().coordinateFormat).toBe('dms'));
+    expect(useUiPrefsStore.getState().panels).toEqual({});
+
+    act(() => useUiPrefsStore.getState().setOverviewMap(true));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(put.mock.calls).toEqual([[{ overviewMap: true }]]);
   });
 });
