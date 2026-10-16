@@ -10,6 +10,8 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Filters;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -78,7 +80,13 @@ public static class GeoreferencedMapEndpoints
             .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxUploadBytes))
             .WithSummary("Uploads a georeferenced raster (GeoTIFF) and queues COG normalization.");
         maps.MapGet("/", ListAsync)
-            .WithSummary("Paged catalog; visibility-filtered; protected-cave-linked maps omitted.");
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary(
+                "Paged catalog; visibility-filtered; protected-cave-linked maps omitted and not counted. "
+                + "`filter` (a filter document as a link token) or `savedFilterId` narrows it by the "
+                + "georeferenced map world's conditions, applied after visibility and counted over the "
+                + "narrowed set.");
         maps.MapGet("/{id:guid}", GetAsync)
             .WithSummary("Single georeferenced map with a fresh COG delivery URL.");
         maps.MapPut("/{id:guid}", UpdateAsync).WithValidation<GeoreferencedMapUpdateRequest>()
@@ -162,15 +170,18 @@ public static class GeoreferencedMapEndpoints
         return TypedResults.Created($"/api/v1/georeferenced-maps/{map.Id}", map.ToDto(tokens));
     }
 
-    private static async Task<Results<Ok<PagedResult<GeoreferencedMapDto>>, UnauthorizedHttpResult>> ListAsync(
+    private static async Task<Results<Ok<PagedResult<GeoreferencedMapDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
         FeatureProtection protection,
+        SurfaceFilters surfaceFilters,
         IAccessContextAccessor accessAccessor,
         int? page,
         int? pageSize,
         Guid? caveFeatureId,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? filter = null,
+        Guid? savedFilterId = null)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null)
@@ -178,28 +189,26 @@ public static class GeoreferencedMapEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var query = db.GeoreferencedMaps.AsNoTracking().VisibleTo(ctx, AccessDomain.GeoreferencedMaps);
+        var narrowing = await surfaceFilters.ForAsync<GeoreferencedMap>(
+            ctx, GeoreferencedMapFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return refusal.ToProblem();
+        }
+
+        // A cave-linked raster IS the cave's location, so a map on a cave this caller may not place
+        // exactly is left out before the count and the page — the total never announces how many
+        // were withheld. The filter can only intersect what is left.
+        var query = narrowing.Narrowing!.Apply(await GeoreferencedMapReads.ShownAsync(db, protection, ctx, ct));
         if (caveFeatureId is not null)
         {
             query = query.Where(m => m.CaveFeatureId == caveFeatureId);
         }
 
         var (p, size) = Paging.Normalize(page, pageSize);
-        var total = await query.CountAsync(ct);
-        var rows = await query.OrderByDescending(m => m.UpdatedAt)
-            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
-
-        // A cave-linked raster IS the cave's location — omit them entirely for callers
-        // without exact view on the cave (unlike point features, no partial redaction).
-        var exact = await protection.ExactViewIdsAsync(
-            ctx, [.. rows.Where(m => m.CaveFeatureId is not null).Select(m => m.CaveFeatureId!.Value)], ct);
-        var items = rows
-            .Where(m => m.CaveFeatureId is null || exact.Contains(m.CaveFeatureId.Value))
-            .Select(m => m.ToDto(tokens))
-            .ToList();
-
-        // totalItems counts pre-omission rows; acceptable page-size jitter for a rare case.
-        return TypedResults.Ok(new PagedResult<GeoreferencedMapDto>(items, p, size, total));
+        var result = await query.OrderByDescending(m => m.UpdatedAt).ThenByDescending(m => m.Id)
+            .ToPagedAsync(p, size, m => m.ToDto(tokens), ct);
+        return TypedResults.Ok(result);
     }
 
     private static async Task<Results<Ok<GeoreferencedMapDto>, ProblemHttpResult>> GetAsync(

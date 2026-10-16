@@ -10,6 +10,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
@@ -26,7 +27,12 @@ public static class GeofileEndpoints
             .DisableAntiforgery() // bearer-token API; no cookie-form surface to forge
             .WithSummary("Uploads a vector file (multipart) and queues the server-side import.");
         geofiles.MapGet("/", ListAsync)
-            .WithSummary("Paged geofile list; visibility-filtered.");
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary(
+                "Paged geofile list; visibility-filtered. `filter` (a filter document as a link token) or "
+                + "`savedFilterId` narrows it by the geofile world's conditions, applied after visibility "
+                + "and counted over the narrowed set.");
         geofiles.MapGet("/{id:guid}", GetAsync)
             .WithSummary("Single geofile.");
         geofiles.MapGet("/{id:guid}/status", GetStatusAsync)
@@ -149,13 +155,16 @@ public static class GeofileEndpoints
         return TypedResults.Created($"/api/v1/geofiles/{geofile.Id}", geofile.ToDto());
     }
 
-    private static async Task<Results<Ok<PagedResult<GeofileDto>>, UnauthorizedHttpResult>> ListAsync(
+    private static async Task<Results<Ok<PagedResult<GeofileDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         SilexGisDbContext db,
+        SurfaceFilters surfaceFilters,
         IAccessContextAccessor accessAccessor,
         int? page,
         int? pageSize,
         string? search,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? filter = null,
+        Guid? savedFilterId = null)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null)
@@ -163,7 +172,15 @@ public static class GeofileEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var query = db.Geofiles.AsNoTracking().VisibleTo(ctx, AccessDomain.Geofiles);
+        var narrowing = await surfaceFilters.ForAsync<Geofile>(ctx, GeofileFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return refusal.ToProblem();
+        }
+
+        // The filter only intersects what the walk admits, so the count and the page are taken over
+        // rows this caller may see and nothing else.
+        var query = narrowing.Narrowing!.Apply(db.Geofiles.AsNoTracking().VisibleTo(ctx, AccessDomain.Geofiles));
 
         if (!string.IsNullOrWhiteSpace(search))
         {

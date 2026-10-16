@@ -9,6 +9,7 @@ using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -44,7 +45,13 @@ public static class PhotoEndpoints
         var photos = api.MapGroup("/photos").WithTags("Photos");
 
         photos.MapGet("/", ListAsync)
-            .WithSummary("Photographs the caller may see, newest first, narrowed by cave, feature, trip, camp, caver, tag, album, camera, date or map extent.");
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary(
+                "Photographs the caller may see, newest first, narrowed by cave, feature, trip, camp, caver, "
+                + "tag, album, camera, date or map extent. `filter` (a filter document as a link token) or "
+                + "`savedFilterId` narrows it by the photograph world's conditions, applied after visibility "
+                + "and counted over the narrowed set.");
         photos.MapGet("/duplicates", DuplicatesAsync)
             .WithSummary("Groups of photographs holding byte-identical content.");
         photos.MapGet("/deleted", DeletedAsync)
@@ -71,8 +78,11 @@ public static class PhotoEndpoints
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
         PhotoPositionDisclosure disclosure,
+        SurfaceFilters surfaceFilters,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct,
+        string? filter = null,
+        Guid? savedFilterId = null,
         int? page = null,
         int? pageSize = null)
     {
@@ -82,7 +92,21 @@ public static class PhotoEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var photographs = (await PhotographReads.VisiblePhotographsAsync(db, ctx, ct)).Narrow(db, ctx, query);
+        var narrowing = await surfaceFilters.ForAsync<Document>(
+            ctx, PhotographFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return refusal.ToProblem();
+        }
+
+        // The filter only intersects the pictures this caller may already see, and the gallery's
+        // own narrowings and the map extent are applied on top of it: the count, the page and the
+        // extent's candidate set are all taken over the composed set. Nothing the filter asks
+        // about is a position, so whether a picture's fix is disclosed is still decided below, per
+        // picture, exactly as it is without a filter.
+        var photographs = narrowing.Narrowing!
+            .Apply(await PhotographReads.VisiblePhotographsAsync(db, ctx, ct))
+            .Narrow(db, ctx, query);
         var extentCutShort = false;
 
         if (!string.IsNullOrWhiteSpace(query.Bbox))

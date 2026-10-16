@@ -248,6 +248,21 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
     }
 
     /// <summary>
+    /// The gallery reads a filter, so it declares the refusals a filter brings: an unreadable,
+    /// invalid, ambiguous or off-world filter (400) and a saved filter that is not there for this
+    /// caller (404) — beside the 400 a malformed map extent always sent.
+    /// </summary>
+    [Fact]
+    public async Task OpenApi_document_declares_the_gallerys_filter_refusals()
+    {
+        var operations = (await OperationsAsync()).ToDictionary(o => o.Id!);
+
+        operations.ShouldContainKey("photoList");
+        Responses(operations["photoList"].Value).Where(code => code[0] is '4' or '5')
+            .ShouldBe(["400", "401", "404"], ignoreOrder: true);
+    }
+
+    /// <summary>
     /// An enumeration's own values never include null; a property that may be null says so itself.
     /// </summary>
     [Fact]

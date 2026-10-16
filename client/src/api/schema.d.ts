@@ -3111,7 +3111,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Paged geofile list; visibility-filtered. */
+        /** Paged geofile list; visibility-filtered. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the geofile world's conditions, applied after visibility and counted over the narrowed set. */
         get: operations["geofileList"];
         put?: never;
         /** Uploads a vector file (multipart) and queues the server-side import. */
@@ -4447,7 +4447,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Photographs the caller may see, newest first, narrowed by cave, feature, trip, camp, caver, tag, album, camera, date or map extent. */
+        /** Photographs the caller may see, newest first, narrowed by cave, feature, trip, camp, caver, tag, album, camera, date or map extent. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the photograph world's conditions, applied after visibility and counted over the narrowed set. */
         get: operations["photoList"];
         put?: never;
         post?: never;
@@ -4774,7 +4774,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Picker feed: readable targets of one type matching a query, as uniform rows. */
+        /** Picker feed for cavers, caving groups and camps: readable targets of one type matching a query, as uniform rows. Every other kind is found through the filter query. */
         get: operations["resLinkSearchTargets"];
         put?: never;
         post?: never;
@@ -4931,7 +4931,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Paged catalog; visibility-filtered; protected-cave-linked maps omitted. */
+        /** Paged catalog; visibility-filtered; protected-cave-linked maps omitted and not counted. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the georeferenced map world's conditions, applied after visibility and counted over the narrowed set. */
         get: operations["georeferencedMapList"];
         put?: never;
         /** Uploads a georeferenced raster (GeoTIFF) and queues COG normalization. */
@@ -23000,6 +23000,8 @@ export interface operations {
                 page?: number;
                 pageSize?: number;
                 search?: string;
+                filter?: string;
+                savedFilterId?: string;
             };
             header?: never;
             path?: never;
@@ -23016,8 +23018,26 @@ export interface operations {
                     "application/json": components["schemas"]["PagedResultOfGeofileDto"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -26648,6 +26668,8 @@ export interface operations {
                 To?: string;
                 Search?: string;
                 ExpeditionId?: string;
+                filter?: string;
+                savedFilterId?: string;
                 page?: number;
                 pageSize?: number;
             };
@@ -26666,8 +26688,26 @@ export interface operations {
                     "application/json": components["schemas"]["PhotoPage"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -27882,6 +27922,8 @@ export interface operations {
                 page?: number;
                 pageSize?: number;
                 caveFeatureId?: string;
+                filter?: string;
+                savedFilterId?: string;
             };
             header?: never;
             path?: never;
@@ -27898,8 +27940,26 @@ export interface operations {
                     "application/json": components["schemas"]["PagedResultOfGeoreferencedMapDto"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
