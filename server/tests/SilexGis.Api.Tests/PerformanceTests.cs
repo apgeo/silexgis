@@ -3,6 +3,8 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json.Nodes;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +16,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Access;
 using SilexGis.Infrastructure.Geodata;
+using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
@@ -116,6 +119,149 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
 
         await AssertEntranceLayerPlansAsync(ownerId, strangerId);
         await AssertSurveySubstratePlansAsync(strangerId);
+        await AssertProximityPlanAsync(strangerId);
+        await AssertSharedLinkAsync(client, ownerId);
+    }
+
+    /// <summary>
+    /// The proximity pool every importer compares against decides readable and placeable inside
+    /// its one ordered, capped statement; over the seeded rows that statement must reach the
+    /// feature table by its geometry index and probe protection roots by key — never scan.
+    /// </summary>
+    private async Task AssertProximityPlanAsync(Guid strangerId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var connection = db.Database.GetDbConnection();
+
+        var ctx = new AccessContext(strangerId, false, [], []);
+        var (sql, parameters) = ProximitySql.Build(
+            ctx,
+            new NetTopologySuite.Geometries.Envelope(West, East, South, North),
+            new NetTopologySuite.Geometries.Coordinate((West + East) / 2, (South + North) / 2),
+            [FeatureKind.CaveEntrance, FeatureKind.Generic],
+            VisibleProximitySearch.MaxNearbyFeatures);
+        var plan = await ExplainAsync(connection, parameters, "proximity pool (guarded)", sql);
+        plan.ShouldContain("ix_features_geom", Case.Insensitive,
+            "the proximity pool must reach the feature table through a geometry index");
+        plan.ShouldNotContain("Seq Scan on features", Case.Insensitive,
+            "the proximity pool must never scan the feature table");
+        AssertAncestorProbeIsIndexed(plan, "proximity pool (guarded)");
+    }
+
+    /// <summary>
+    /// A shared view's link, which anybody holding it can ask anything: the worst request it can
+    /// be sent — the whole world, from the furthest zoom — timed against the same budget, and the
+    /// three statements its data routes send pinned like the workspace map's.
+    /// </summary>
+    /// <remarks>
+    /// The world window is clipped to the view's own reach before anything is read, so its cost is
+    /// the view's, however wide the window it was asked about. A quarter of the seeded caves are
+    /// made public first, so the link's own narrowing — an entrance is drawn only when its cave is
+    /// itself public — has rows to keep and rows to drop, and the probe it adds per row is real.
+    /// </remarks>
+    private async Task AssertSharedLinkAsync(HttpClient owner, Guid ownerId)
+    {
+        const int publicCaves = CaveCount / 4;
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
+        await db.Database.ExecuteSqlAsync($"""
+            UPDATE features SET visibility = {(short)Visibility.Public}
+            WHERE id IN (SELECT id FROM features
+                         WHERE kind = {(short)FeatureKind.Cave} AND owner_user_id = {ownerId}
+                         ORDER BY id LIMIT {publicCaves})
+            """);
+        await db.Database.ExecuteSqlRawAsync("ANALYZE features;");
+
+        // A view over the whole seeded box, shared: its reach covers every seeded entrance.
+        var created = await owner.PostAsJsonAsync("/api/v1/map-views/", new
+        {
+            name = $"Perf shared {Guid.NewGuid():N}"[..30],
+            description = (string?)null,
+            config = new
+            {
+                configVersion = 1,
+                zoom = 6,
+                center = new[] { (SeedWest + SeedEast) / 2, (SeedSouth + SeedNorth) / 2 },
+                entrancesVisible = true,
+                surfaceFeaturesVisible = false,
+            },
+            isHome = false,
+            cavingGroupId = (Guid?)null,
+            visibility = "private",
+        });
+        var createdPayload = await created.Content.ReadAsStringAsync();
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, createdPayload);
+        var viewId = JsonNode.Parse(createdPayload)!["id"]!.GetValue<Guid>();
+        var shared = await owner.PostAsync($"/api/v1/map-views/{viewId}/share", null);
+        var sharedPayload = await shared.Content.ReadAsStringAsync();
+        shared.StatusCode.ShouldBe(HttpStatusCode.OK, sharedPayload);
+        var token = JsonNode.Parse(sharedPayload)!["shareToken"]!.GetValue<Guid>();
+
+        using var anonymous = factory.CreateClient();
+        var url = $"/api/v1/shared/views/{token}/cave-entrances?bbox=-180,-90,180,90&zoom=0";
+        (await anonymous.GetAsync(url)).StatusCode.ShouldBe(HttpStatusCode.OK, url);
+        var stopwatch = Stopwatch.StartNew();
+        var response = await anonymous.GetAsync(url);
+        stopwatch.Stop();
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        output.WriteLine($"shared link, world window from zoom 0: {stopwatch.ElapsedMilliseconds} ms");
+        stopwatch.ElapsedMilliseconds.ShouldBeLessThan(BudgetMs, $"the shared link's world window exceeded {BudgetMs}ms");
+
+        // Every entrance of a public cave, and nothing of the others.
+        JsonNode.Parse(payload)!["features"]!.AsArray()
+            .Sum(f => f!["properties"]!["count"]!.GetValue<int>())
+            .ShouldBe(publicCaves * EntrancesPerCave);
+
+        var connection = db.Database.GetDbConnection();
+        var anyAccount = await AccessContextResolver.ResolveForAnyAccountAsync(db, CancellationToken.None);
+        var viewport = new Bbox(West, South, East, North);
+
+        var (clusterSql, clusterParameters, _) = MapSql.BuildClusters(
+            FeatureAudienceSql.SharedLink(anyAccount, "f"), viewport, zoom: 9, protectionGridMeters: 5000d, tag: null);
+        var clusters = await ExplainAsync(connection, clusterParameters, "shared link clusters", clusterSql);
+        AssertRidesEntranceIndex(clusters, "shared link clusters");
+        AssertAncestorProbeIsIndexed(clusters, "shared link clusters");
+        AssertCaveProbeIsIndexed(clusters, "shared link clusters");
+
+        var (membersSql, membersParameters) = WindowMembershipSql.Build(
+            FeatureAudienceSql.SharedLink(anyAccount, "f"), West, South, East, North, 5000d, [FeatureKind.CaveEntrance]);
+        var members = await ExplainAsync(connection, membersParameters, "shared link window membership", membersSql);
+        AssertRidesEntranceIndex(members, "shared link window membership");
+
+        var points = await ExplainEfAsync(
+            MapEndpoints.EntrancePointsQuery(
+                db,
+                FeatureAudienceSql.SharedLinkReadable(db, anyAccount).AsNoTracking(),
+                viewport,
+                [Guid.NewGuid()],
+                tag: null,
+                maxPoints: 10000),
+            "shared link points");
+        AssertRidesEntranceIndex(points, "shared link points");
+        AssertCaveProbeIsIndexed(points, "shared link points");
+    }
+
+    /// <summary>
+    /// The link's public narrowing looks each entrance's cave up — through the entrance subtype
+    /// row, then the cave's own row. Both must be key lookups; a scan of either table per entrance
+    /// is the regression this guards.
+    /// </summary>
+    /// <remarks>
+    /// Either id-keyed index on <c>cave_entrances</c> counts — its primary key, or the id+kind key
+    /// the subtype's composite foreign key is served by — and the second half of the check is what
+    /// keeps the first from passing on a plan that never reached the table at all.
+    /// </remarks>
+    private static void AssertCaveProbeIsIndexed(string plan, string label)
+    {
+        plan.ShouldNotContain("Seq Scan on cave_entrances", Case.Insensitive,
+            $"{label}: an entrance's cave must be found by key, not by scanning every entrance");
+        Regex.IsMatch(plan, @"Index (Only )?Scan using (pk_cave_entrances|ix_cave_entrances_id_kind) on cave_entrances")
+            .ShouldBeTrue(
+                $"{label}: the entrance's subtype row must be reached through an id-keyed index — and if "
+                + "neither appears, the public narrowing never ran");
     }
 
     /// <summary>
