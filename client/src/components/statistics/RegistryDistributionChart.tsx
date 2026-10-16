@@ -56,8 +56,10 @@ export function RegistryDistributionChart({
         nameLocation: 'middle',
         nameGap: 56,
         data: bars.map((bar) => bar.label),
-        axisLabel: { rotate: 40, hideOverlap: true },
         ...axisStyle(token),
+        // After the shared style, and merged with its label colour: spread last, the shared
+        // style's own label settings replaced these and the long bin names were drawn flat.
+        axisLabel: { ...axisStyle(token).axisLabel, rotate: 40, hideOverlap: true },
       },
       yAxis: {
         type: logCount ? 'log' : 'value',

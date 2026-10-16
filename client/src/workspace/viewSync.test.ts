@@ -308,6 +308,8 @@ describe('sameSelection', () => {
         { kind: 'cluster', lon: 25, lat: 45, count: 4, zoom: 10 },
       ),
     ).toBe(false);
+    expect(sameSelection({ kind: 'trip', tripId: 't' }, { kind: 'trip', tripId: 't' })).toBe(true);
+    expect(sameSelection({ kind: 'trip', tripId: 't' }, { kind: 'trip', tripId: 'u' })).toBe(false);
   });
 });
 

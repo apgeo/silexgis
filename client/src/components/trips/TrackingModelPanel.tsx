@@ -440,7 +440,7 @@ export default function TrackingModelPanel({
   const enteredAt = useMemo(() => {
     const entries = new Map<string, string>();
     for (const event of events ?? []) {
-      if (event.kind === 'entered' && !entries.has(event.caverId)) {
+      if (event.kind === 'entered' && event.caverId !== null && !entries.has(event.caverId)) {
         entries.set(event.caverId, event.recordedAt);
       }
     }

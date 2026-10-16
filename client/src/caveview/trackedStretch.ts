@@ -122,9 +122,12 @@ export function withStretchesAt(
   // twice, and the two disagree".
   const farEnds = new Map<string, string | null>();
   for (const event of events) {
-    const place = placed.get(event.caverId);
+    // A note about the cave names nobody, so it cannot be anybody's placing report.
+    const caverId = event.caverId;
+    const place = caverId === null ? undefined : placed.get(caverId);
     if (
-      place === undefined
+      caverId === null
+      || place === undefined
       || event.kind !== 'atStation'
       || event.recordedAt !== place.at
       || event.stationName !== place.station
@@ -133,8 +136,8 @@ export function withStretchesAt(
       continue;
     }
     const said = farEnd(event.toStationName);
-    const before = farEnds.get(event.caverId);
-    farEnds.set(event.caverId, before === undefined || before === said ? said : null);
+    const before = farEnds.get(caverId);
+    farEnds.set(caverId, before === undefined || before === said ? said : null);
   }
   return mapped(cavers, (caver) => farEnds.get(caver.caverId) ?? null);
 }

@@ -361,6 +361,10 @@ export function sameSelection(
         left.count === right.count &&
         left.zoom === right.zoom
       );
+    case 'trip':
+      // Missing until the compiler was made to check that every kind has an arm: two picks of
+      // the same trip compared as different, so every echo of one was taken for a change.
+      return right.kind === 'trip' && left.tripId === right.tripId;
   }
 }
 
