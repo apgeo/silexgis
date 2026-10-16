@@ -453,7 +453,7 @@ internal static class ExpeditionReportEndpoints
     private static async Task<List<ExpeditionReportStay>> RosterAsync(
         Guid id, SilexGisDbContext db, AccessContext reading, UserContext user, CancellationToken ct)
     {
-        if (!AccessEvaluator.Decide(reading, AccessDomain.Cavers, AccessAction.Read, null).Allowed)
+        if (!CaverDirectory.MayReadPeople(reading))
         {
             return [];
         }
@@ -490,7 +490,7 @@ internal static class ExpeditionReportEndpoints
     /// <summary>How many people the roster comes to — distinct by person, never a count of rows.</summary>
     private static async Task<int> RosterPeopleAsync(
         Guid id, SilexGisDbContext db, AccessContext reading, CancellationToken ct) =>
-        AccessEvaluator.Decide(reading, AccessDomain.Cavers, AccessAction.Read, null).Allowed
+        CaverDirectory.MayReadPeople(reading)
             ? await db.ExpeditionRoster.AsNoTracking()
                 .Where(x => x.ExpeditionId == id)
                 .Select(x => x.CaverId)

@@ -150,7 +150,7 @@ public static class HistoryEndpoints
         // same one the live roster demands before it will name anybody.
         var readableMembers = await ReadableMemberTripIdsAsync(
             db, ctx, parsed.Select(x => (x.Row.EntityType, x.Changes)), ct);
-        var peopleHidden = !AccessEvaluator.Decide(ctx, AccessDomain.Cavers, AccessAction.Read, null).Allowed;
+        var peopleHidden = !CaverDirectory.MayReadPeople(ctx);
 
         var items = parsed.Select(r =>
         {

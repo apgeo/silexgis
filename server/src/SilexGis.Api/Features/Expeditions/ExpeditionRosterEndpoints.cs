@@ -130,7 +130,7 @@ public static class ExpeditionRosterEndpoints
         // Refused rather than answered blank: the camp is readable and the caller has been told so
         // by every other route on it, so hiding behind "no such camp" here would be a lie, and rows
         // with the names struck out would still say how many people were there and when.
-        if (!AccessEvaluator.Decide(ctx, AccessDomain.Cavers, AccessAction.Read, null).Allowed)
+        if (!CaverDirectory.MayReadPeople(ctx))
         {
             return ApiProblems.Forbidden(PeopleUnreadableCode);
         }

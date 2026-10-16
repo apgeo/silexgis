@@ -28,6 +28,17 @@ public static class CaverDirectory
     public static bool CanKeepRoster(AccessContext? ctx) =>
         AccessEvaluator.Decide(ctx, AccessDomain.Cavers, AccessAction.Write, null).Allowed;
 
+    /// <summary>
+    /// Whether the caller may be told who people are at all: Read over the caver domain, asked of
+    /// no one entry in particular. The one definition every disclosure that names people without
+    /// reading a particular roster entry defers to — a camp's roster and its write-up, a record's
+    /// history, the relation chips that offer a person. Every account holds it on a default
+    /// installation, but the entry is removable, and an installation that removed it must find
+    /// people withheld everywhere at once rather than wherever somebody remembered to ask.
+    /// </summary>
+    public static bool MayReadPeople(AccessContext? ctx) =>
+        AccessEvaluator.Decide(ctx, AccessDomain.Cavers, AccessAction.Read, null).Allowed;
+
     /// <summary>Display labels for roster rows, trip participants and credits.</summary>
     public static async Task<Dictionary<Guid, string>> ResolveLabelsAsync(
         SilexGisDbContext db, UserContext? user, IEnumerable<Guid> caverIds, CancellationToken ct)

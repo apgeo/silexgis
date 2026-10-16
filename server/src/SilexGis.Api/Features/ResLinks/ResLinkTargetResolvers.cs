@@ -672,7 +672,7 @@ public sealed class CaverTargetResolver(
         // list serves — so it answers under the roster's own domain read gate. Every
         // account holds that read on a default install, but the entry is removable, and
         // an installation that removed it must not find its roster searchable here.
-        if (!AccessEvaluator.Decide(ctx, AccessDomain.Cavers, AccessAction.Read, null).Allowed)
+        if (!CaverDirectory.MayReadPeople(ctx))
         {
             return [];
         }
