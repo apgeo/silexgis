@@ -394,6 +394,13 @@ export default defineConfig({
     PDFJS_STANDARD_FONT_URL: JSON.stringify(`/${pdfjsOutputDir}/standard_fonts/`),
     PDFJS_WASM_URL: JSON.stringify(`/${pdfjsOutputDir}/wasm/`),
   },
+  build: {
+    // Source maps beside the bundle, so an error captured from an installation — a stack copied
+    // out of a browser's console, a trace a browser test kept — names the source line rather than
+    // a column in one minified file. Nothing is disclosed by them: the source is published under
+    // the AGPL, and a browser fetches a map only when its developer tools are open.
+    sourcemap: true,
+  },
   server: {
     port: devPort,
     // A busy port must fail loudly: silently moving to the next one would serve this
@@ -401,6 +408,13 @@ export default defineConfig({
     strictPort: true,
     // changeOrigin stays false so the API sees the browser's Host header and the
     // OIDC issuer matches the SPA origin.
+    proxy: Object.fromEntries(proxiedPaths.map((path) => [path, { target: apiTarget }])),
+  },
+  // The production bundle served the same way, for the browser specs run against it: the same
+  // port rule and the same same-origin proxy as the development server.
+  preview: {
+    port: devPort,
+    strictPort: true,
     proxy: Object.fromEntries(proxiedPaths.map((path) => [path, { target: apiTarget }])),
   },
   test: {

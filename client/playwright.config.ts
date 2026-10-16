@@ -148,7 +148,11 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
+    // SILEXGIS_E2E_BUNDLE=production runs the specs against the bundle an installation ships —
+    // built, minified and served as files — instead of the development server, so an error that
+    // only the production build has (a chunk that fails to load, a minifier's renaming, an asset
+    // path the development server answers and the bundle does not) is swept like any other.
+    command: process.env.SILEXGIS_E2E_BUNDLE === 'production' ? 'npm run build && npm run preview' : 'npm run dev',
     url: baseURL,
     // Reusing a running dev server is a convenience by hand and a trap under the runner: a Vite
     // started before an edit keeps serving the code from before it, so the suite passes or fails
@@ -157,6 +161,8 @@ export default defineConfig({
     // moment the server was started fresh. `scripts/e2e.mjs` sets the marker, so a managed run
     // always builds its own server and an ordinary `npx playwright test` keeps the convenience.
     reuseExistingServer: !process.env.SILEXGIS_E2E_MANAGED,
-    timeout: 60_000,
+    // A production run builds the bundle first, which takes longer than a development server's
+    // start.
+    timeout: process.env.SILEXGIS_E2E_BUNDLE === 'production' ? 600_000 : 60_000,
   },
 });
