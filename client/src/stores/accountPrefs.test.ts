@@ -12,6 +12,7 @@ import {
   mergeLayouts,
   pickAccountPrefs,
   planAccountWrite,
+  preferencesLength,
   readAccountPrefs,
   sanitizeAccountPrefs,
   withoutLayouts,
@@ -175,6 +176,20 @@ describe('fitToBudget', () => {
     expect(fitted.leftOutLayouts).toBe(1);
     expect((fitted.document.layouts as { id: string }[])[0].id).toBe('l1');
     expect(JSON.stringify(fitted.document).length).toBeLessThanOrEqual(size - 10);
+  });
+
+  it('counts the document as the server does, a character outside the basic plane as two escapes', () => {
+    // A Romanian letter is one character either way; an emoji is two to JSON.stringify and the
+    // twelve characters of two `\uXXXX` escapes to the server.
+    expect(preferencesLength({ n: 'ț' })).toBe(JSON.stringify({ n: 'ț' }).length);
+    expect(preferencesLength({ n: '🦇' })).toBe(JSON.stringify({ n: '' }).length + 12);
+
+    const named = (n: number) => ({ id: `l${n}`, name: '🦇'.repeat(40) });
+    const document = { layouts: [named(1), named(2)] };
+    // Room for one such layout as the server counts it — and, as JSON.stringify counts, for both.
+    const budget = preferencesLength({ layouts: [named(2)] });
+    expect(JSON.stringify(document).length).toBeLessThan(budget);
+    expect(fitToBudget(document, budget)!.leftOutLayouts).toBe(1);
   });
 
   it('gives up when there are no layouts left to leave out', () => {

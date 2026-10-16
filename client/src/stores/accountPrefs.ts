@@ -40,6 +40,26 @@ export const ACCOUNT_PREF_DEFAULTS: Record<AccountPrefKey, unknown> = {
 /** The server's limit on the stored document, in characters of its JSON. */
 export const PREFERENCES_MAX_LENGTH = 8000;
 
+/**
+ * The budget a write is planned against the second time, after the server found the first plan
+ * too large: a tenth below the limit. The server's count and this client's can differ — the
+ * server writes the document out itself before measuring it, and how it spells a character can
+ * change between versions of it — so a refused write is planned once more with room to spare
+ * rather than sent again as it was.
+ */
+export const PREFERENCES_RETRY_LENGTH = Math.floor(PREFERENCES_MAX_LENGTH * 0.9);
+
+/**
+ * The length of a document's JSON as the server counts it: compact, with a character outside the
+ * Basic Multilingual Plane (an emoji in a layout's name) written as the two `\uXXXX` escapes the
+ * server writes it as — twelve characters where `JSON.stringify` counts two.
+ */
+export function preferencesLength(document: unknown): number {
+  const text = JSON.stringify(document) ?? '';
+  const pairs = text.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)?.length ?? 0;
+  return text.length + 10 * pairs;
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -140,7 +160,7 @@ export function fitToBudget(
 ): { document: Record<string, unknown>; leftOutLayouts: number } | null {
   let candidate = document;
   let leftOut = 0;
-  while (JSON.stringify(candidate).length > maxLength) {
+  while (preferencesLength(candidate) > maxLength) {
     const layouts = candidate.layouts;
     if (!Array.isArray(layouts) || layouts.length === 0) {
       return null;
@@ -394,6 +414,23 @@ export function planAccountWrite(
   const keptIds = new Set(kept.map((layout) => layout.id));
   const leftOut = (document.layouts as Layout[]).filter((layout) => !keptIds.has(layout.id)).map((layout) => layout.id);
   return { patch: { ...patch, layouts: kept.length > 0 ? kept : null }, leftOut };
+}
+
+/**
+ * The baseline once a write has been given up: what was changed here is taken as settled, except
+ * the named layouts, so the refused change is not offered again at every save, and the next sign-in
+ * takes the account's own values rather than holding on to one the account would not take. The
+ * layouts keep their baseline: one the account never had stays this browser's.
+ */
+export function baselineAfterRefusal(base: AccountPrefs, local: AccountPrefs): AccountPrefs {
+  const settled: AccountPrefs = {};
+  for (const key of ACCOUNT_PREF_KEYS) {
+    const value = key === 'layouts' ? base.layouts : local[key];
+    if (value !== undefined) {
+      settled[key] = value;
+    }
+  }
+  return settled;
 }
 
 /** `prefs` without the named layouts whose ids are given. */

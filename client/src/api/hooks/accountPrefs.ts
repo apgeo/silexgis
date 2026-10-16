@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from 'react';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { api } from '../client.ts';
+import { ApiError, api } from '../client.ts';
 import {
   ACCOUNT_PREF_KEYS,
+  PREFERENCES_MAX_LENGTH,
+  PREFERENCES_RETRY_LENGTH,
   accountPrefsIn,
+  baselineAfterRefusal,
   changedSince,
   mergeAccountPrefs,
   pickAccountPrefs,
@@ -76,7 +79,9 @@ let saving: Promise<unknown> = Promise.resolve();
  * what was changed elsewhere.
  *
  * Before sending, the patched document is held to the server's size limit by leaving named
- * layouts out of it, rather than having the whole write refused; the ones left out stay here.
+ * layouts out of it, rather than having the whole write refused; the ones left out stay here. A
+ * write the server still finds too large is planned once more with room to spare; one refused
+ * after that is given up — and never left standing as a change still to be written.
  */
 export function saveAccountPreferences(queryClient: QueryClient, accountId: string): Promise<void> {
   const run = saving.then(() => saveOnce(queryClient, accountId));
@@ -97,26 +102,79 @@ async function saveOnce(queryClient: QueryClient, accountId: string): Promise<vo
   if (!changedSince(base, local)) {
     return;
   }
-  const stored = await readStoredDocument(queryClient);
-  if (!ownedBy()) {
+  for (const budget of [PREFERENCES_MAX_LENGTH, PREFERENCES_RETRY_LENGTH]) {
+    const stored = await readStoredDocument(queryClient);
+    if (!ownedBy()) {
+      return;
+    }
+    const write = planAccountWrite(stored, base, local, budget);
+    if (!write) {
+      // Nothing that fits, even with layouts left out: the account keeps what it had.
+      giveUp(base, local);
+      throw new AccountPrefsRefused();
+    }
+    let answer = stored;
+    if (Object.keys(write.patch).length > 0) {
+      try {
+        const written = await unwrap(api.PATCH('/api/v1/me/preferences', { body: { preferences: write.patch } }));
+        queryClient.setQueryData(queryKeys.uiPreferences, written);
+        answer = asDocument(written.preferences);
+      } catch (error) {
+        if (!(error instanceof ApiError) || !isRefusal(error)) {
+          // Not reached, or not now: what is held here is still unsent, and goes with the next
+          // change or the next sign-in.
+          throw error;
+        }
+        if (error.code === TOO_LARGE && budget === PREFERENCES_MAX_LENGTH) {
+          // Counted otherwise on the server, or added to elsewhere since the read: planned once
+          // more, from a fresh read, with room to spare.
+          continue;
+        }
+        if (ownedBy()) {
+          giveUp(base, local);
+        }
+        throw error;
+      }
+    }
+    if (!ownedBy()) {
+      return;
+    }
+    // Measured from what was sent: a layout left out to fit is not one the account removed.
+    takeAccount(answer, withoutLayouts(local, write.leftOut));
     return;
   }
-  const write = planAccountWrite(stored, base, local);
-  if (!write) {
-    // Nothing that fits: the browser keeps it, and the account keeps what it had.
-    return;
+}
+
+/** The server's code for a document over its limit. */
+const TOO_LARGE = 'preferences.too_large';
+
+/** A refusal of what was sent, as opposed to a failure to reach the server or a session ended. */
+function isRefusal(error: ApiError): boolean {
+  return error.status === 400 || error.status === 413 || error.status === 422;
+}
+
+/** A write given up because the account's document cannot hold it. */
+export class AccountPrefsRefused extends Error {
+  constructor() {
+    super('The account cannot hold these preferences.');
+    this.name = 'AccountPrefsRefused';
   }
-  let answer = stored;
-  if (Object.keys(write.patch).length > 0) {
-    const written = await unwrap(api.PATCH('/api/v1/me/preferences', { body: { preferences: write.patch } }));
-    queryClient.setQueryData(queryKeys.uiPreferences, written);
-    answer = asDocument(written.preferences);
+}
+
+/**
+ * Gives a refused write up for good. The values stay on screen here for the rest of the visit, but
+ * are no longer counted as changed here — a refusal that stuck would be offered again at every
+ * save and, kept as this browser's change, would stop every later sign-in from taking the account's
+ * own values.
+ */
+function giveUp(base: AccountPrefs, local: AccountPrefs): void {
+  const state = useUiPrefsStore.getState();
+  takingFromAccount = true;
+  try {
+    state.applyAccountPrefs({}, baselineAfterRefusal(base, local));
+  } finally {
+    takingFromAccount = false;
   }
-  if (!ownedBy()) {
-    return;
-  }
-  // Measured from what was sent: a layout left out to fit is not one the account removed.
-  takeAccount(answer, withoutLayouts(local, write.leftOut));
 }
 
 /** `saveAccountPreferences` as a mutation, for a screen that says whether the save went through. */

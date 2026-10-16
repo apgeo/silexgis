@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { changedSince, pickAccountPrefs, type AccountPrefs } from '../../stores/accountPrefs.ts';
+import type { PanelLayout } from '../../stores/panelPrefs.ts';
 import { DEFAULT_DOCKS, useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
 /** Whether this browser holds a change the account has not been sent yet. */
@@ -16,20 +17,39 @@ function unsaved(): boolean {
 let stored: Record<string, unknown> = {};
 /** Each merge patch the server was sent. */
 const put = vi.fn();
+/** The longest merged document the server accepts — its own count, which may not be this client's. */
+let serverLimit = Infinity;
 
 vi.mock('../client.ts', async () => {
   // The server's merging write, applied with the same rule it uses.
   const { applyMergePatch } = await import('../../stores/accountPrefs.ts');
+  class ApiError extends Error {
+    readonly status: number;
+    readonly code?: string;
+
+    constructor(status: number, code?: string) {
+      super(code);
+      this.status = status;
+      this.code = code;
+    }
+  }
   return {
     api: {
       GET: () => Promise.resolve({ data: { preferences: stored }, response: new Response() }),
       PATCH: (_path: string, { body }: { body: { preferences: Record<string, unknown> } }) => {
         put(body.preferences);
-        stored = applyMergePatch(stored, body.preferences) as Record<string, unknown>;
+        const merged = applyMergePatch(stored, body.preferences) as Record<string, unknown>;
+        if (JSON.stringify(merged).length > serverLimit) {
+          return Promise.resolve({
+            error: { code: 'preferences.too_large' },
+            response: new Response(null, { status: 400 }),
+          });
+        }
+        stored = merged;
         return Promise.resolve({ data: { preferences: stored }, response: new Response() });
       },
     },
-    ApiError: class extends Error {},
+    ApiError,
     retryAfterOf: () => undefined,
   };
 });
@@ -46,6 +66,7 @@ function sync(accountId: string | null) {
 
 beforeEach(() => {
   stored = {};
+  serverLimit = Infinity;
   put.mockReset();
   useUiPrefsStore.getState().releaseAccount();
 });
@@ -147,5 +168,54 @@ describe('account preferences between this browser and the account', () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
     expect(put).toHaveBeenCalledWith({ overviewMap: true });
+  });
+
+  /** Named layouts, each about 160 characters of the document. */
+  const layouts = (count: number): PanelLayout[] =>
+    Array.from({ length: count }, (_, n) => ({
+      id: `layout-${n}`,
+      name: `Arrangement ${n}`,
+      panels: { main: { width: 20 + n, order: ['details', 'tags', 'attachments', 'links', 'text', 'history'] } },
+      mapChromeHidden: false,
+    }));
+
+  it('plans a write the server finds too large once more, with room to spare, and sends it', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    sync('account-a');
+    await waitFor(() => expect(useUiPrefsStore.getState().accountPrefsBaseline).toBeDefined());
+    // The server counts this document longer than the client does.
+    serverLimit = 7600;
+
+    act(() => useUiPrefsStore.setState({ layouts: layouts(48), coordinateFormat: 'utm' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(put).toHaveBeenCalledTimes(2);
+    expect(stored.coordinateFormat).toBe('utm');
+    expect(JSON.stringify(stored).length).toBeLessThanOrEqual(7600);
+    expect(unsaved()).toBe(true); // the layouts the account could not take are still this browser's
+  });
+
+  it('gives a refused write up rather than leaving it standing at every later save and sign-in', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    stored = { coordinateFormat: 'dms' };
+    sync('account-a');
+    await waitFor(() => expect(useUiPrefsStore.getState().coordinateFormat).toBe('dms'));
+    serverLimit = 0; // refuses everything
+
+    act(() => useUiPrefsStore.getState().setCoordinateFormat('utm'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(put).toHaveBeenCalledTimes(2);
+    expect(stored.coordinateFormat).toBe('dms');
+    expect(unsaved()).toBe(false);
+
+    // The next sign-in takes the account's own value, rather than holding the refused one.
+    cleanup();
+    serverLimit = Infinity;
+    sync('account-a');
+    await waitFor(() => expect(useUiPrefsStore.getState().coordinateFormat).toBe('dms'));
   });
 });
