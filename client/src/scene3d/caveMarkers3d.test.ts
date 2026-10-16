@@ -94,7 +94,7 @@ describe('entranceMarkers', () => {
   });
 
   it('gives a cluster the place it stands and no name, because a patch of ground has none', () => {
-    const markers = entranceMarkers(collection([point(25, 45.5, { cluster: true, count: 7 })]), 7);
+    const markers = entranceMarkers(collection([point(25, 45.5, { cluster: true, count: 7, cell: [24.9, 45.3, 25.6, 45.7] })]), 7);
 
     expect(markers[0].id).not.toHaveProperty('label');
     expect(markers[0].id).toMatchObject({ anchor: { longitude: 25, latitude: 45.5, height: 0 } });
@@ -114,8 +114,8 @@ describe('entranceMarkers', () => {
   it('renders the server\'s own clusters as clusters and does not re-cluster anything', () => {
     const markers = entranceMarkers(
       collection([
-        point(25.0, 45.5, { cluster: true, count: 7 }),
-        point(25.4, 45.5, { cluster: true, count: 3 }),
+        point(25.0, 45.5, { cluster: true, count: 7, cell: [24.9, 45.3, 25.6, 45.7] }),
+        point(25.4, 45.5, { cluster: true, count: 3, cell: [24.9, 45.3, 25.6, 45.7] }),
       ]),
       7,
     );
@@ -128,7 +128,7 @@ describe('entranceMarkers', () => {
     // The zoom fixed the size of the cell the server added up. Reading it back when the cluster is
     // clicked would ask about whatever the camera had drifted to, which is a different patch of
     // ground and a different set of caves.
-    const markers = entranceMarkers(collection([point(25.0, 45.5, { cluster: true, count: 7 })]), 7);
+    const markers = entranceMarkers(collection([point(25.0, 45.5, { cluster: true, count: 7, cell: [24.9, 45.3, 25.6, 45.7] })]), 7);
 
     expect(markers[0].id).toMatchObject({
       kind: 'cluster',
@@ -136,6 +136,7 @@ describe('entranceMarkers', () => {
       lat: 45.5,
       count: 7,
       zoom: 7,
+      cell: [24.9, 45.3, 25.6, 45.7],
     });
   });
 
@@ -143,7 +144,7 @@ describe('entranceMarkers', () => {
     // The coordinates are the grid cell's, because a protected cave is snapped to that same grid
     // before it is ever aggregated. Moving them here would be undoing the protection.
     const markers = entranceMarkers(
-      collection([point(25.3125, 45.5625, { cluster: true, count: 12 })]),
+      collection([point(25.3125, 45.5625, { cluster: true, count: 12, cell: [24.9, 45.3, 25.6, 45.7] })]),
       7,
     );
 

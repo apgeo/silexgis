@@ -72,7 +72,8 @@ public static class MapSql
         // window is still fetched; a snap moves a coordinate by at most half a cell on each
         // axis, in the same degrees on both, so one cell is a safe margin anywhere.
         var sql = $"""
-            SELECT avg(g.gx) AS lon, avg(g.gy) AS lat, COUNT(*)::int AS count
+            SELECT avg(g.gx) AS lon, avg(g.gy) AS lat, COUNT(*)::int AS count,
+                   g.cx AS cellX, g.cy AS cellY
             FROM (
                 SELECT p.gx, p.gy,
                        round(p.gx / @cluster_cell) AS cx,
@@ -101,13 +102,28 @@ public static class MapSql
             """;
 
         var connection = db.Database.GetDbConnection();
-        var rows = await connection.QueryAsync<(double Lon, double Lat, int Count)>(
+        var rows = await connection.QueryAsync<(double Lon, double Lat, int Count, double CellX, double CellY)>(
             new CommandDefinition(sql, parameters, cancellationToken: ct));
 
+        // Each cluster names the lattice cell it summed over. The lattice is global and the
+        // same for every caller, so its bounds say nothing about any entrance; a client that
+        // lists a cluster's members asks for exactly this cell instead of re-deriving the
+        // lattice arithmetic and drifting from it.
         var features = rows
             .Select(r => GeoFeature.Of(
                 new Point(r.Lon, r.Lat) { SRID = 4326 },
-                new Dictionary<string, object?> { ["cluster"] = true, ["count"] = r.Count }))
+                new Dictionary<string, object?>
+                {
+                    ["cluster"] = true,
+                    ["count"] = r.Count,
+                    ["cell"] = new[]
+                    {
+                        (r.CellX - 0.5) * clusterCellDegrees,
+                        (r.CellY - 0.5) * clusterCellDegrees,
+                        (r.CellX + 0.5) * clusterCellDegrees,
+                        (r.CellY + 0.5) * clusterCellDegrees,
+                    },
+                }))
             .ToList();
 
         return FeatureCollection.Of(features);

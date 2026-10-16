@@ -693,7 +693,7 @@ describe('a layer the server stopped at its limit', () => {
       features: Array.from({ length: count }, (_, index) => ({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [25.4 + index * 0.1, 45.5] },
-        properties: { cluster: true, count: 40 },
+        properties: { cluster: true, count: 40, cell: [24.9, 45.3, 25.6, 45.7] },
       })),
     };
   }

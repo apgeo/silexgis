@@ -106,12 +106,7 @@ export default function SelectionPanel({ scope = 'main' }: { scope?: PanelScope 
 function ClusterCard({ selection }: { selection: ClusterSelection }) {
   const { t } = useTranslation();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
-  const { data, isPending } = useClusterEntrances(
-    selection.lon,
-    selection.lat,
-    selection.zoom,
-    getMapTagFilter() ?? undefined,
-  );
+  const { data, isPending } = useClusterEntrances(selection.cell, getMapTagFilter() ?? undefined);
 
   const entrances = useMemo(() => {
     return (data?.features ?? [])

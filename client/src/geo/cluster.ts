@@ -1,18 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Mirrors the server's cluster grid (~64 px cells on a 256 px tile pyramid):
-// cell = 360° / 2^zoom / 4. Keep in sync with the map endpoints' aggregation.
-export function clusterCellDegrees(zoom: number): number {
-  return 360 / Math.pow(2, zoom) / 4;
+/**
+ * The lattice cell a low-zoom entrance cluster was summed over, as the server names it:
+ * west, south, east, north in degrees. The lattice is global and the same for every caller, so
+ * these bounds disclose nothing; the client never derives them itself, because a copy of the
+ * server's lattice arithmetic is a copy that can drift from it.
+ */
+export type ClusterCell = readonly [west: number, south: number, east: number, north: number];
+
+/** The cell a cluster feature's properties carry, or undefined when it is malformed. */
+export function clusterCellOf(value: unknown): ClusterCell | undefined {
+  if (!Array.isArray(value) || value.length !== 4) {
+    return undefined;
+  }
+  const numbers = value.map(Number);
+  const [west, south, east, north] = numbers;
+  if (!numbers.every(Number.isFinite) || !(west < east) || !(south < north)) {
+    return undefined;
+  }
+  return [west, south, east, north];
 }
 
 /**
- * The bbox (west,south,east,north) covering a cluster's members: one full cell
- * of margin on each side of the centroid. The margin absorbs protected caves
- * whose grid-snapped coordinates fall just outside the exact cell, at the cost
- * of occasionally listing a close neighbor too.
+ * The bbox query value for a cluster's members. Membership on the server is decided on the
+ * position each caller is shown — the snapped point for an entrance they may not place exactly —
+ * which is also what decided the cell, so the cell itself is the whole query: no margin is needed
+ * for protected entrances, and none would be correct.
  */
-export function clusterCellBbox(lon: number, lat: number, zoom: number): string {
-  const cell = clusterCellDegrees(zoom);
-  return [lon - cell, lat - cell, lon + cell, lat + cell].map((n) => n.toFixed(6)).join(',');
+export function clusterCellBbox(cell: ClusterCell): string {
+  // Written at full precision: rounding an edge inward could drop a member sitting on it.
+  return cell.map((n) => String(n)).join(',');
 }

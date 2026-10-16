@@ -195,7 +195,11 @@ try
     builder.Services.AddOptions<AccessOptions>()
         .BindConfiguration(AccessOptions.SectionName);
     builder.Services.AddOptions<MapOptions>()
-        .BindConfiguration(MapOptions.SectionName);
+        .BindConfiguration(MapOptions.SectionName)
+        .Validate(
+            o => o.ClusterMaxZoom is >= 0 and <= MapOptions.HighestZoom,
+            $"Map:ClusterMaxZoom must be a zoom from 0 to {MapOptions.HighestZoom}.")
+        .ValidateOnStart();
     builder.Services.AddOptions<MapLayerOptions>()
         .BindConfiguration(MapLayerOptions.SectionName);
     builder.Services.AddOptions<TerrainOptions>()

@@ -112,7 +112,7 @@ describe('the hover tooltip', () => {
   it('describes a cluster by its count, which is all a patch of ground has', () => {
     withMeasuredElements();
     renderOverlay({
-      hovered: { kind: 'cluster', lon: 25, lat: 45, count: 7, zoom: 9 },
+      hovered: { kind: 'cluster', lon: 25, lat: 45, count: 7, zoom: 9, cell: [24.9, 45.3, 25.6, 45.7] },
       hoveredAt: { x: 100, y: 100 },
     });
 

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { clusterCellOf } from '../geo/cluster.ts';
 import { entranceLabel, surfaceFeatureLabel } from '../map/featureLabels.ts';
 import { surfaceFeaturePalette } from '../map/markerPalette.ts';
 import {
@@ -56,6 +57,10 @@ export function entranceMarkers(collection: unknown, zoom: number): Scene3DMarke
 
     if (properties.cluster === true) {
       const count = typeof properties.count === 'number' ? properties.count : 0;
+      const cell = clusterCellOf(properties.cell);
+      if (!cell) {
+        continue;
+      }
       const icon = clusterIcon(count);
       for (const position of positions) {
         // No name: a cluster is a count over a patch of ground, and the patch has no name. What
@@ -66,6 +71,7 @@ export function entranceMarkers(collection: unknown, zoom: number): Scene3DMarke
           lat: position.latitude,
           count,
           zoom,
+          cell,
           anchor: drawnOnTheGround(position),
         };
         markers.push({ position, clampToGround: true, image: icon.image, scale: icon.scale, id });

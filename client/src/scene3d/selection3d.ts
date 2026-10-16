@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Scene3DAnchor, Scene3DPick } from './scene3dEngine.ts';
 import type { WorkspaceSelection } from '../stores/workspaceStore.ts';
+import { clusterCellOf, type ClusterCell } from '../geo/cluster.ts';
 
 // What clicking something in the scene means.
 //
@@ -70,6 +71,8 @@ export interface ClusterPick extends Scene3DPickChrome {
   lat: number;
   count: number;
   zoom: number;
+  /** The lattice cell the server summed over, as it named it. */
+  cell: ClusterCell;
 }
 
 export type Scene3DPickPayload = EntrancePick | FeaturePick | CenterlinePick | ClusterPick;
@@ -97,6 +100,7 @@ export function selectionFromPick(pick: Scene3DPick | null): WorkspaceSelection 
         lat: payload.lat,
         count: payload.count,
         zoom: payload.zoom,
+        cell: payload.cell,
       };
   }
 }
@@ -177,6 +181,7 @@ export function pickPayload(pick: Scene3DPick | null): Scene3DPickPayload | unde
   // `kind`, so narrowing has to come from the checks below and not from the declared type.
   const bag = id as Record<string, unknown>;
   const { entranceId, caveId, featureId, centerlineId, lon, lat, count, zoom } = bag;
+  const cell = clusterCellOf(bag.cell);
   // Checked the same way as everything else here rather than passed through: what the scene hands
   // back is whatever object was attached to an item, and a later batch attaching a half-built one
   // must read as a pick with no name to show, not put `undefined` on the screen.
@@ -204,8 +209,9 @@ export function pickPayload(pick: Scene3DPick | null): Scene3DPickPayload | unde
       return typeof lon === 'number' &&
         typeof lat === 'number' &&
         typeof count === 'number' &&
-        typeof zoom === 'number'
-        ? { kind: 'cluster', lon, lat, count, zoom, ...chrome }
+        typeof zoom === 'number' &&
+        cell
+        ? { kind: 'cluster', lon, lat, count, zoom, cell, ...chrome }
         : undefined;
     default:
       return undefined;

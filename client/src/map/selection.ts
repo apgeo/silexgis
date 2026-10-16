@@ -3,6 +3,7 @@ import type Map from 'ol/Map';
 import type MapBrowserEvent from 'ol/MapBrowserEvent';
 import type Point from 'ol/geom/Point';
 import { toLonLat } from 'ol/proj';
+import { clusterCellOf } from '../geo/cluster.ts';
 import type { SelectedRef, WorkspaceSelection } from '../stores/workspaceStore.ts';
 import { ENTRANCE_LAYER_ID } from './entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from './featureLayer.ts';
@@ -34,16 +35,16 @@ export function attachSelection(
         const props = feature.getProperties();
         if (props.cluster === true) {
           const geometry = feature.getGeometry() as Point | undefined;
-          if (geometry) {
+          const cell = clusterCellOf(props.cell);
+          if (geometry && cell) {
             const [lon, lat] = toLonLat(geometry.getCoordinates());
             onPick({
               kind: 'cluster',
               lon,
               lat,
               count: Number(props.count ?? 0),
-              // Same rounding the entrance loader sends, so the cell matches
-              // what the server aggregated.
               zoom: Math.round(map.getView().getZoom() ?? 8),
+              cell,
             });
           }
           handled = true;

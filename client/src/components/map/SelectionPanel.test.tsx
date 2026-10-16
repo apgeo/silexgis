@@ -147,7 +147,7 @@ afterEach(() => {
 
 describe('the shared detail panel', () => {
   it('moves the camera of the view on screen when a cluster asks to be zoomed into', () => {
-    renderPanel({ kind: 'cluster', lon: 25.1, lat: 45.2, count: 7, zoom: 8 });
+    renderPanel({ kind: 'cluster', lon: 25.1, lat: 45.2, count: 7, zoom: 8, cell: [24.9, 45.3, 25.6, 45.7] });
 
     fireEvent.click(screen.getByRole('button', { name: /Zoom here/ }));
 
@@ -156,7 +156,7 @@ describe('the shared detail panel', () => {
   });
 
   it('moves it to a cluster member the viewer picks out of the list', () => {
-    renderPanel({ kind: 'cluster', lon: 25.1, lat: 45.2, count: 7, zoom: 8 });
+    renderPanel({ kind: 'cluster', lon: 25.1, lat: 45.2, count: 7, zoom: 8, cell: [24.9, 45.3, 25.6, 45.7] });
 
     fireEvent.click(screen.getByRole('button', { name: /Gura Mare/ }));
 

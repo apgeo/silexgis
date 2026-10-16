@@ -33,6 +33,22 @@ public sealed class MapOptions
     public int MaxPoints { get; set; } = 10000;
 
     /// <summary>
+    /// Below this zoom the entrance layer answers with clusters — counts over a fixed global
+    /// lattice — instead of individual entrances; from it up, with points.
+    /// </summary>
+    /// <remarks>
+    /// Published in the map configuration, because a client listing a cluster's members has to
+    /// ask at a zoom that answers with points, and a zoom compiled into the client is a zoom one
+    /// installation cannot change. An installation with a dense register may want clusters a
+    /// level or two further in; one with a few hundred caves may want points from a country view.
+    /// 0 never clusters.
+    /// </remarks>
+    public int ClusterMaxZoom { get; set; } = 11;
+
+    /// <summary>The highest zoom the map endpoints accept; the top of <see cref="ClusterMaxZoom"/>'s range.</summary>
+    public const int HighestZoom = 24;
+
+    /// <summary>
     /// From this zoom up the map serves bbox-clipped full detail (splays included) instead of
     /// the skeleton — provided the clipped result fits <see cref="CenterlineMaxPaths"/>.
     /// The default is where the splays start to be visible at all.

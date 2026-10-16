@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { clusterCellBbox } from '../../geo/cluster.ts';
+import { clusterCellBbox, type ClusterCell } from '../../geo/cluster.ts';
 import { api } from '../client.ts';
 import type { components } from '../schema';
 import { unwrap } from './shared.ts';
@@ -122,14 +122,19 @@ export async function fetchEntranceFeatures(bbox: string, zoom: number, tag?: st
 }
 
 /**
- * Members of a low-zoom entrance cluster: its cluster cell (+margin) fetched at
- * a zoom above the server's clustering threshold, so points come back.
+ * Members of a low-zoom entrance cluster: the lattice cell the server named for it, fetched at
+ * the zoom the server publishes as the first one that answers with points rather than clusters.
+ * Waits for that published zoom rather than guessing it — a guess below an installation's own
+ * setting would come back as clusters again.
  */
-export function useClusterEntrances(lon: number, lat: number, zoom: number, tag?: string) {
-  const bbox = clusterCellBbox(lon, lat, zoom);
+export function useClusterEntrances(cell: ClusterCell, tag?: string) {
+  const bbox = clusterCellBbox(cell);
+  const { data: config } = useMapConfig();
+  const pointsZoom = config?.clusterMaxZoom;
   return useQuery({
-    queryKey: ['map', 'cluster-entrances', bbox, tag ?? null] as const,
-    queryFn: () => fetchEntranceFeatures(bbox, 14, tag),
+    queryKey: ['map', 'cluster-entrances', bbox, tag ?? null, pointsZoom ?? null] as const,
+    queryFn: () => fetchEntranceFeatures(bbox, pointsZoom!, tag),
+    enabled: pointsZoom !== undefined,
     staleTime: 30_000,
   });
 }

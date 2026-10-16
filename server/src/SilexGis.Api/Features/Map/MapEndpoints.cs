@@ -184,9 +184,6 @@ public sealed record MapConfigDto(
 /// </summary>
 public static class MapEndpoints
 {
-    /// <summary>Below this zoom the entrance endpoint returns clusters instead of points.</summary>
-    public const int ClusterMaxZoom = 11;
-
     // The safety cap for individual point features per request now lives in MapOptions, so that
     // an installation importing a survey of tens of thousands of waypoints can raise it without a
     // rebuild. Every query that applies it orders by id first: without an order the database is
@@ -255,7 +252,7 @@ public static class MapEndpoints
             options.CenterlineMaxPaths,
             options.CenterlineMaxPathsLimit,
             options.CenterlineGateZoom,
-            ClusterMaxZoom,
+            options.ClusterMaxZoom,
             options.MaxPoints,
             sources.Primary,
             sources.Fallback,
@@ -1248,7 +1245,7 @@ public static class MapEndpoints
         }
 
         var effectiveZoom = Math.Clamp(zoom ?? 14, 0, 24);
-        return effectiveZoom < ClusterMaxZoom
+        return effectiveZoom < mapOptions.Value.ClusterMaxZoom
             ? TypedResults.Ok(await MapSql.ClustersAsync(db, ctx, box, effectiveZoom, accessOptions.Value.LocationGridMeters, tag, ct))
             : TypedResults.Ok(await PointsAsync(
                 db, protection, ctx, box, accessOptions.Value.LocationGridMeters, tag, mapOptions.Value.MaxPoints, ct));

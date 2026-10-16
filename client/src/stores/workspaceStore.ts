@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { create } from 'zustand';
+import type { ClusterCell } from '../geo/cluster.ts';
 import type { Scene3DSurfaceMode } from '../scene3d/scene3dEngine.ts';
 import type { SurveyWalls3DMode } from '../scene3d/surveyMeshesInView3d.ts';
 
@@ -28,8 +29,10 @@ export interface ClusterSelection {
   lon: number;
   lat: number;
   count: number;
-  /** Map zoom at click time — determines the server's cluster cell size. */
+  /** Map zoom at click time — where "zoom here" starts from. */
   zoom: number;
+  /** The lattice cell the server summed this cluster over; its members are listed from it. */
+  cell: ClusterCell;
 }
 
 /** A trip picked off the map layer; the card fetches the trip and links to its page. */

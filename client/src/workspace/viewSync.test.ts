@@ -304,8 +304,8 @@ describe('sameSelection', () => {
     ).toBe(true);
     expect(
       sameSelection(
-        { kind: 'cluster', lon: 25, lat: 45, count: 4, zoom: 9 },
-        { kind: 'cluster', lon: 25, lat: 45, count: 4, zoom: 10 },
+        { kind: 'cluster', lon: 25, lat: 45, count: 4, zoom: 9, cell: [24.9, 45.3, 25.6, 45.7] },
+        { kind: 'cluster', lon: 25, lat: 45, count: 4, zoom: 10, cell: [24.9, 45.3, 25.6, 45.7] },
       ),
     ).toBe(false);
     expect(sameSelection({ kind: 'trip', tripId: 't' }, { kind: 'trip', tripId: 't' })).toBe(true);

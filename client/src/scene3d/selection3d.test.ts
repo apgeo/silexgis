@@ -31,8 +31,8 @@ describe('selectionFromPick', () => {
 
   it('carries a cluster with the zoom it was summed at, so its members can be listed', () => {
     expect(
-      selectionFromPick({ id: { kind: 'cluster', lon: 25.3, lat: 45.5, count: 7, zoom: 7 } }),
-    ).toEqual({ kind: 'cluster', lon: 25.3, lat: 45.5, count: 7, zoom: 7 });
+      selectionFromPick({ id: { kind: 'cluster', lon: 25.3, lat: 45.5, count: 7, zoom: 7, cell: [24.9, 45.3, 25.6, 45.7] } }),
+    ).toEqual({ kind: 'cluster', lon: 25.3, lat: 45.5, count: 7, zoom: 7, cell: [24.9, 45.3, 25.6, 45.7] });
   });
 
   it('clears the selection for a click that found nothing, or only bare ground', () => {
@@ -78,6 +78,10 @@ describe('pickPayload', () => {
     expect(pickPayload({ id: { kind: 'centerline', caveId: 'c1' } })).toBeUndefined();
     expect(
       pickPayload({ id: { kind: 'cluster', lon: 25, lat: 45, count: 7 } }),
+    ).toBeUndefined();
+    // A cluster without the cell the server named cannot list its members, so it is no pick.
+    expect(
+      pickPayload({ id: { kind: 'cluster', lon: 25, lat: 45, count: 7, zoom: 9 } }),
     ).toBeUndefined();
   });
 
@@ -159,7 +163,7 @@ describe('pickMatchesSelection', () => {
   });
 
   it('holds a cluster only while the same summed patch of ground is selected', () => {
-    const cluster = { kind: 'cluster', lon: 25, lat: 45, count: 7, zoom: 9 } as const;
+    const cluster = { kind: 'cluster', lon: 25, lat: 45, count: 7, zoom: 9, cell: [24.9, 45.3, 25.6, 45.7] } as const;
     expect(pickMatchesSelection(cluster, { ...cluster })).toBe(true);
     // The zoom fixed the size of the cell that was summed, so the same coordinates at another
     // zoom are a different set of caves.
@@ -209,7 +213,7 @@ describe('samePickTarget', () => {
   });
 
   it('holds a cluster to the patch of ground and the zoom that summed it', () => {
-    const cluster = { kind: 'cluster', lon: 25, lat: 45, count: 7, zoom: 9 } as const;
+    const cluster = { kind: 'cluster', lon: 25, lat: 45, count: 7, zoom: 9, cell: [24.9, 45.3, 25.6, 45.7] } as const;
     // The count is not part of it: a cluster whose count changed is still the same cell.
     expect(samePickTarget(cluster, { ...cluster, count: 8 })).toBe(true);
     expect(samePickTarget(cluster, { ...cluster, zoom: 10 })).toBe(false);
