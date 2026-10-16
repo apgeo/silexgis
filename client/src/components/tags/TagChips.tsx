@@ -11,6 +11,7 @@ import {
   type AttachedEntityType,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import Button from '../Button.tsx';
 
 interface TagChipsProps {
   entityType: AttachedEntityType;
@@ -58,14 +59,17 @@ export default function TagChips({ entityType, entityId, canEdit }: TagChipsProp
           {tagging.tag.name}
         </AntTag>
       ))}
+      {/* A button rather than a clickable tag: a tag takes no focus, so adding a tag was a
+          pointer's job only. */}
       {canEdit && !adding && (
-        <AntTag style={{ borderStyle: 'dashed', cursor: 'pointer' }} onClick={() => setAdding(true)}>
-          <PlusOutlined /> {t('tags.add')}
-        </AntTag>
+        <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
+          {t('tags.add')}
+        </Button>
       )}
       {canEdit && adding && (
         <AutoComplete
           autoFocus
+          aria-label={t('tags.add')}
           size="small"
           style={{ width: 160 }}
           value={input}
