@@ -572,7 +572,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Features as GeoJSON for the given bbox, filtered by kinds/type/category/tag and a filter (`filter` token or `savedFilterId`); protected points snapped, other protected geometry omitted. */
+        /** Features as GeoJSON for the given bbox, filtered by kinds/type/category and a filter (`filter` token or `savedFilterId`); protected points snapped, other protected geometry omitted. */
         get: operations["mapFeatures"];
         put?: never;
         post?: never;
@@ -640,7 +640,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Cave centerlines as GeoJSON for the given bbox and zoom; splay-free below the detail zoom, protected caves' lines omitted. z=true opts in to altitudes, which the flat display skeleton cannot carry. */
+        /** Cave centerlines as GeoJSON for the given bbox and zoom; splay-free below the detail zoom, protected caves' lines omitted. z=true opts in to altitudes, which the flat display skeleton cannot carry. A filter (`filter` token or `savedFilterId`) keeps the centerlines of the caves it keeps on the entrance layer. */
         get: operations["mapCaveCenterlines"];
         put?: never;
         post?: never;
@@ -776,7 +776,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The wall mesh each cave is drawn by, for the caves whose mesh is anchored in the given bbox, nearest its middle first and capped at maxCaves (the installation's default when absent, never above its ceiling); caves the caller may not read or may not place exactly are omitted and not counted. */
+        /** The wall mesh each cave is drawn by, for the caves whose mesh is anchored in the given bbox, nearest its middle first and capped at maxCaves (the installation's default when absent, never above its ceiling); caves the caller may not read or may not place exactly are omitted and not counted. A filter (`filter` token or `savedFilterId`) keeps the caves it keeps on the entrance layer, and the total counts only those. */
         get: operations["caveMeshMapCaveMeshes"];
         put?: never;
         post?: never;
@@ -16793,7 +16793,6 @@ export interface operations {
             query: {
                 bbox: string;
                 zoom?: number;
-                tag?: string;
                 filter?: string;
                 savedFilterId?: string;
             };
@@ -16848,7 +16847,6 @@ export interface operations {
                 kinds?: string;
                 featureTypeId?: number;
                 category?: string;
-                tag?: string;
                 filter?: string;
                 savedFilterId?: string;
             };
@@ -17007,6 +17005,8 @@ export interface operations {
                 detailZoom?: number;
                 maxPaths?: number;
                 z?: boolean;
+                filter?: string;
+                savedFilterId?: string;
             };
             header?: never;
             path?: never;
@@ -17023,8 +17023,26 @@ export interface operations {
                     "application/json": components["schemas"]["CenterlineFeatureCollection"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17351,6 +17369,8 @@ export interface operations {
             query: {
                 bbox: string;
                 maxCaves?: number;
+                filter?: string;
+                savedFilterId?: string;
             };
             header?: never;
             path?: never;
@@ -17367,8 +17387,26 @@ export interface operations {
                     "application/json": components["schemas"]["CaveMeshesInViewDto"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -222,8 +222,8 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
     }
 
     /// <summary>
-    /// The two layers every map draws, and a shared view's link with the data it draws, declare
-    /// each refusal their handlers send — pinned so that one quietly dropped is noticed. The link's
+    /// The two layers every map draws, the survey lines and walls a filtered map draws beside
+    /// them, and a shared view's link with the data it draws, declare each refusal their handlers send — pinned so that one quietly dropped is noticed. The link's
     /// routes need no token, so they carry no 401, and sit behind a rate limit, so they carry 429.
     /// </summary>
     [Fact]
@@ -234,6 +234,8 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
         {
             ["mapCaveEntrances"] = ["400", "401", "404"],
             ["mapFeatures"] = ["400", "401", "404"],
+            ["mapCaveCenterlines"] = ["400", "401", "404"],
+            ["caveMeshMapCaveMeshes"] = ["400", "401", "404"],
             ["mapViewShared"] = ["404", "429"],
             ["sharedViewMapEntrances"] = ["400", "404", "429"],
             ["sharedViewMapFeatures"] = ["400", "404", "429"],

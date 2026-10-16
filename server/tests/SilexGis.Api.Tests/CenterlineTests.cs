@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Filters;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -472,6 +473,58 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable, IClassFixture
             .GetProperty("properties").GetProperty("paths").GetInt32().ShouldBeGreaterThan(0);
     }
 
+    /// <summary>
+    /// A filtered map draws the survey lines of the caves its entrance layer keeps and no others,
+    /// on the flat overlay and on the altitude-carrying read the 3D scene makes; a filter that
+    /// cannot be run is refused rather than answered unfiltered.
+    /// </summary>
+    [Fact]
+    public async Task A_filter_keeps_the_centerlines_of_the_caves_it_keeps_and_a_bad_one_is_refused()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var kept = await CreateCaveAsync("authenticated", locationProtected: false, name: $"Kept {marker}");
+        var other = await CreateCaveAsync("authenticated", locationProtected: false, name: $"Other {marker}");
+        await UploadAsync(kept, "kept.gpx", GpxTrack());
+        await UploadAsync(other, "other.gpx", GpxTrack());
+        const string bbox = "25.4,45.4,25.6,45.6";
+
+        var token = FilterToken.Encode(new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope("feature", new AllOfNode(
+                [
+                    new ConditionNode(FeatureFilterFields.Kind, FilterOp.Equals, [new IdValue("cave")]),
+                    new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue($"Kept {marker}")]),
+                ])),
+            ],
+        });
+
+        foreach (var withZ in new[] { false, true })
+        {
+            var query = $"/api/v1/map/cave-centerlines?bbox={bbox}&zoom=14&z={(withZ ? "true" : "false")}";
+            var unfiltered = await reader.GetFromJsonAsync<JsonElement>(query);
+            CaveIdsOf(unfiltered).ShouldContain(kept);
+            CaveIdsOf(unfiltered).ShouldContain(other);
+
+            var filtered = await reader.GetFromJsonAsync<JsonElement>($"{query}&filter={token}");
+            CaveIdsOf(filtered).ShouldContain(kept);
+            CaveIdsOf(filtered).ShouldNotContain(other);
+        }
+
+        var malformed = await reader.GetAsync($"/api/v1/map/cave-centerlines?bbox={bbox}&zoom=14&filter=eyJ2ZXJzaW9uIjox");
+        malformed.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await malformed.Content.ReadAsStringAsync()).ShouldContain("filter.malformed");
+        var missing = await reader.GetAsync(
+            $"/api/v1/map/cave-centerlines?bbox={bbox}&zoom=14&savedFilterId={Guid.NewGuid()}");
+        missing.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await missing.Content.ReadAsStringAsync()).ShouldContain("saved_filter.not_found");
+    }
+
+    private static List<Guid> CaveIdsOf(JsonElement collection) =>
+        [.. collection.GetProperty("features").EnumerateArray()
+            .Select(f => f.GetProperty("properties").GetProperty("caveId").GetGuid())];
+
     [Fact]
     public async Task A_kml_export_uploads_and_survives_its_zero_length_shots()
     {
@@ -850,11 +903,12 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable, IClassFixture
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateCaveAsync(string visibility, bool locationProtected, Guid? parentId = null)
+    private async Task<Guid> CreateCaveAsync(
+        string visibility, bool locationProtected, Guid? parentId = null, string? name = null)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/caves", new
         {
-            name = $"Centerline Cave {Guid.NewGuid():N}"[..30],
+            name = name ?? $"Centerline Cave {Guid.NewGuid():N}"[..30],
             caveTypeId,
             visibility,
             locationProtected,

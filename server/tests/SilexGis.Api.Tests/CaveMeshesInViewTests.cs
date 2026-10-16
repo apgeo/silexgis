@@ -11,6 +11,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Filters;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
@@ -443,6 +444,44 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
         (await notANumber.Content.ReadAsStringAsync()).ShouldContain("request.binding_failed");
     }
 
+    /// <summary>
+    /// A filtered map's scene draws the walls of the caves the filter keeps and counts only those,
+    /// so "a few of how many" is about the caves on the screen; a filter that cannot be run is
+    /// refused rather than answered unfiltered.
+    /// </summary>
+    [Fact]
+    public async Task A_filter_keeps_the_walls_of_the_caves_it_keeps_and_counts_only_those()
+    {
+        var spot = Spot.Somewhere();
+        var kept = await CreateCaveWithMeshAsync(spot.North(0.001));
+        var other = await CreateCaveWithMeshAsync(spot.North(0.002));
+
+        (await MeshesAsync(owner, spot)).Total.ShouldBe(2);
+
+        var token = FilterToken.Encode(new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope("feature", new AllOfNode(
+                [
+                    new ConditionNode(FeatureFilterFields.Kind, FilterOp.Equals, [new IdValue("cave")]),
+                    new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(kept.CaveName)]),
+                ])),
+            ],
+        });
+        var filtered = await MeshesAsync(owner, spot, extra: $"&filter={token}");
+        filtered.CaveIds.ShouldBe([kept.CaveId]);
+        filtered.CaveIds.ShouldNotContain(other.CaveId);
+        filtered.Total.ShouldBe(1);
+
+        var malformed = await owner.GetAsync($"/api/v1/map/cave-meshes?bbox={spot.Box}&filter=eyJ2ZXJzaW9uIjox");
+        malformed.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await malformed.Content.ReadAsStringAsync()).ShouldContain("filter.malformed");
+        var missing = await owner.GetAsync($"/api/v1/map/cave-meshes?bbox={spot.Box}&savedFilterId={Guid.NewGuid()}");
+        missing.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await missing.Content.ReadAsStringAsync()).ShouldContain("saved_filter.not_found");
+    }
+
     // ---- helpers ----
 
     /// <summary>The middle of one test's box, and positions measured from it.</summary>
@@ -471,10 +510,10 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
         public IReadOnlyList<Guid> ModelIds => [.. Items.Select(i => i.GetProperty("surveyModelId").GetGuid())];
     }
 
-    private static async Task<Answer> MeshesAsync(HttpClient client, Spot spot, int? maxCaves = null)
+    private static async Task<Answer> MeshesAsync(HttpClient client, Spot spot, int? maxCaves = null, string extra = "")
     {
         var count = maxCaves is null ? string.Empty : $"&maxCaves={maxCaves}";
-        var response = await client.GetAsync($"/api/v1/map/cave-meshes?bbox={spot.Box}{count}");
+        var response = await client.GetAsync($"/api/v1/map/cave-meshes?bbox={spot.Box}{count}{extra}");
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         return new Answer([.. body.GetProperty("items").EnumerateArray()], body.GetProperty("total").GetInt32());

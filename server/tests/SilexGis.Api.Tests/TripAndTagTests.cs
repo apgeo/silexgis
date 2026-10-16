@@ -9,6 +9,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Filters;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -723,14 +724,22 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable, IClassFixture
         featureIds.ShouldContain(tagged);
         featureIds.ShouldContain(taggedEntrance);
 
-        // Map: point path (zoom 14) and clustered SQL path (zoom 7) both honor the tag.
+        // Map: point path (zoom 14) and clustered SQL path (zoom 7) both honor the tag, spoken as a
+        // filter document — the one way the map's layers take a narrowing.
+        var tagFilter = FilterToken.Encode(new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope("feature", new ConditionNode(FeatureFilterFields.Tag, FilterOp.Equals, [new IdValue(slug)])),
+            ],
+        });
         var points = await outsider.GetFromJsonAsync<JsonElement>(
-            $"/api/v1/map/cave-entrances?bbox=25.2,45.2,25.4,45.4&zoom=14&tag={slug}");
+            $"/api/v1/map/cave-entrances?bbox=25.2,45.2,25.4,45.4&zoom=14&filter={tagFilter}");
         points.GetProperty("features").GetArrayLength().ShouldBe(1);
         points.GetProperty("features")[0].GetProperty("properties").GetProperty("id").GetGuid()
             .ShouldBe(taggedEntrance);
         var clusters = await outsider.GetFromJsonAsync<JsonElement>(
-            $"/api/v1/map/cave-entrances?bbox=25.2,45.2,25.4,45.4&zoom=7&tag={slug}");
+            $"/api/v1/map/cave-entrances?bbox=25.2,45.2,25.4,45.4&zoom=7&filter={tagFilter}");
         clusters.GetProperty("features").EnumerateArray()
             .Sum(f => f.GetProperty("properties").GetProperty("count").GetInt32()).ShouldBe(1);
 

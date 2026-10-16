@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -57,7 +59,9 @@ public static class CaveMeshMapEndpoints
     {
         api.MapGet("/map/cave-meshes", CaveMeshesAsync)
             .WithTags("Map")
-            .WithSummary("The wall mesh each cave is drawn by, for the caves whose mesh is anchored in the given bbox, nearest its middle first and capped at maxCaves (the installation's default when absent, never above its ceiling); caves the caller may not read or may not place exactly are omitted and not counted.");
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("The wall mesh each cave is drawn by, for the caves whose mesh is anchored in the given bbox, nearest its middle first and capped at maxCaves (the installation's default when absent, never above its ceiling); caves the caller may not read or may not place exactly are omitted and not counted. A filter (`filter` token or `savedFilterId`) keeps the caves it keeps on the entrance layer, and the total counts only those.");
         return api;
     }
 
@@ -85,9 +89,12 @@ public static class CaveMeshMapEndpoints
     private static async Task<Results<Ok<CaveMeshesInViewDto>, UnauthorizedHttpResult, ProblemHttpResult>> CaveMeshesAsync(
         string bbox,
         int? maxCaves,
+        string? filter,
+        Guid? savedFilterId,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
+        SurfaceFilters surfaceFilters,
         IFileAccessTokenService tokens,
         IOptions<MapOptions> mapOptions,
         CancellationToken ct)
@@ -103,11 +110,24 @@ public static class CaveMeshMapEndpoints
             return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
         }
 
+        var narrowing = await surfaceFilters.ForAsync<Feature>(
+            ctx, FeatureFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return refusal.ToProblem();
+        }
+
         // Readable caves first, then the exact-location rule over exactly those ids, then meshes
         // for the ones that passed. Only the last statement reads an anchor out for the response.
         var caveIds = await CaveMeshMapSql.CaveIdsWithMeshInViewAsync(db, ctx, box, ct);
         var exactViewIds = await protection.ExactViewIdsAsync(ctx, caveIds, ct);
         var eligibleIds = caveIds.Where(exactViewIds.Contains).ToList();
+        if (!narrowing.Narrowing!.NarrowsNothing)
+        {
+            // After the protection rule, so the filter only takes caves away from a decided set.
+            var kept = await MapEndpoints.CavesTheFilterKeepsAsync(db, ctx, narrowing.Narrowing!, eligibleIds, ct);
+            eligibleIds = [.. eligibleIds.Where(kept.Contains)];
+        }
 
         var rows = await CaveMeshMapSql.QueryAsync(db, ctx, box, eligibleIds, ct);
 

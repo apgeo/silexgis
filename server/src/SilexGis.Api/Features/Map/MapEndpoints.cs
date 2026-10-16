@@ -237,7 +237,7 @@ public static class MapEndpoints
             .WithTags("Map")
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .WithSummary("Features as GeoJSON for the given bbox, filtered by kinds/type/category/tag and a filter (`filter` token or `savedFilterId`); protected points snapped, other protected geometry omitted.");
+            .WithSummary("Features as GeoJSON for the given bbox, filtered by kinds/type/category and a filter (`filter` token or `savedFilterId`); protected points snapped, other protected geometry omitted.");
         api.MapGet("/map/geofiles/{id:guid}/features", GeofileFeaturesAsync)
             .WithTags("Map")
             .WithSummary("Imported geofile rows as GeoJSON for the given bbox.");
@@ -249,7 +249,9 @@ public static class MapEndpoints
             .WithSummary("Camps' own working areas as GeoJSON for the given bbox and date range — the shape drawn on each camp's plan, and nothing a camp's trips or caves would add.");
         api.MapGet("/map/cave-centerlines", CaveCenterlinesAsync)
             .WithTags("Map")
-            .WithSummary("Cave centerlines as GeoJSON for the given bbox and zoom; splay-free below the detail zoom, protected caves' lines omitted. z=true opts in to altitudes, which the flat display skeleton cannot carry.");
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("Cave centerlines as GeoJSON for the given bbox and zoom; splay-free below the detail zoom, protected caves' lines omitted. z=true opts in to altitudes, which the flat display skeleton cannot carry. A filter (`filter` token or `savedFilterId`) keeps the centerlines of the caves it keeps on the entrance layer.");
         api.MapGet("/map/config", MapConfigAsync)
             .WithTags("Map")
             .WithSummary("Client-relevant map rendering limits for this installation.");
@@ -553,9 +555,12 @@ public static class MapEndpoints
         int? detailZoom,
         int? maxPaths,
         bool? z,
+        string? filter,
+        Guid? savedFilterId,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
+        SurfaceFilters surfaceFilters,
         IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
@@ -568,6 +573,13 @@ public static class MapEndpoints
         if (!Bbox.TryParse(bbox, out var box))
         {
             return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
+        }
+
+        var narrowing = await surfaceFilters.ForAsync<Feature>(
+            ctx, FeatureFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return refusal.ToProblem();
         }
 
         var options = mapOptions.Value;
@@ -587,6 +599,18 @@ public static class MapEndpoints
         var idsInView = await CenterlineMapSql.CenterlineIdsInViewAsync(db, ctx, box, ct);
         var exactViewIds = await protection.ExactViewIdsAsync(ctx, idsInView, ct);
         var eligibleIds = idsInView.Where(exactViewIds.Contains).ToList();
+        if (!narrowing.Narrowing!.NarrowsNothing && eligibleIds.Count > 0)
+        {
+            // Narrowed after the protection rule, so the filter only ever takes rows away from a
+            // set that was already decided; nothing about a withheld centerline reaches it.
+            var caveOf = await db.Centerlines.AsNoTracking()
+                .Where(c => eligibleIds.Contains(c.Id))
+                .Select(c => new { c.Id, c.CaveFeatureId })
+                .ToListAsync(ct);
+            var kept = await CavesTheFilterKeepsAsync(
+                db, ctx, narrowing.Narrowing!, [.. caveOf.Select(c => c.CaveFeatureId).Distinct()], ct);
+            eligibleIds = [.. caveOf.Where(c => kept.Contains(c.CaveFeatureId)).Select(c => c.Id)];
+        }
 
         var withZ = z == true;
         var rows = await CenterlineMapSql.QueryAsync(
@@ -1188,7 +1212,6 @@ public static class MapEndpoints
         string? kinds,
         long? featureTypeId,
         string? category,
-        string? tag,
         string? filter,
         Guid? savedFilterId,
         SilexGisDbContext db,
@@ -1260,12 +1283,6 @@ public static class MapEndpoints
             query = query.Where(f => f.Category == categoryFilter);
         }
 
-        if (!string.IsNullOrWhiteSpace(tag))
-        {
-            query = query.Where(f => db.Taggings.Any(tg =>
-                tg.FeatureId == f.Id && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
-        }
-
         var rows = await query
             .Select(f => new { f.Id, f.Kind, f.Name, f.Geom, f.FeatureTypeId, f.IsProtectedEffective })
             .OrderBy(f => f.Id)
@@ -1331,7 +1348,6 @@ public static class MapEndpoints
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> CaveEntrancesAsync(
         string bbox,
         int? zoom,
-        string? tag,
         string? filter,
         Guid? savedFilterId,
         SilexGisDbContext db,
@@ -1368,13 +1384,13 @@ public static class MapEndpoints
         if (effectiveZoom >= mapOptions.Value.ClusterMaxZoom)
         {
             return TypedResults.Ok(await PointsAsync(
-                db, protection, ctx, readable, box, gridMeters, tag, mapOptions.Value.MaxPoints, ct));
+                db, protection, ctx, readable, box, gridMeters, mapOptions.Value.MaxPoints, ct));
         }
 
         var onlyIds = narrowing.Narrowing!.NarrowsNothing
             ? null
             : await FilteredEntranceIdsAsync(readable, box, gridMeters, ct);
-        return TypedResults.Ok(await MapSql.ClustersAsync(db, ctx, box, effectiveZoom, gridMeters, tag, onlyIds, ct));
+        return TypedResults.Ok(await MapSql.ClustersAsync(db, ctx, box, effectiveZoom, gridMeters, tag: null, onlyIds, ct));
     }
 
     /// <summary>
@@ -1406,6 +1422,38 @@ public static class MapEndpoints
         var matching = narrowing.Apply(readable).Select(m => m.Id);
         return readable.Where(f => matching.Contains(f.Id)
             || (f.Entrance != null && matching.Contains(f.Entrance.CaveFeatureId)));
+    }
+
+    /// <summary>
+    /// Which of <paramref name="caveIds"/> a filter keeps on the map: a cave its conditions match,
+    /// and a cave one of whose entrances they match — the caves whose entrances the entrance layer
+    /// draws under the same filter, so a cave's survey and walls appear exactly beside the dots.
+    /// </summary>
+    /// <remarks>
+    /// Only ever a subset of the ids passed in, and taken over what the caller may read, so it
+    /// cannot bring back a cave a caller's earlier checks left out. Callers pass ids that have
+    /// already passed those checks.
+    /// </remarks>
+    public static async Task<HashSet<Guid>> CavesTheFilterKeepsAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        FilterNarrowing<Feature> narrowing,
+        IReadOnlyCollection<Guid> caveIds,
+        CancellationToken ct)
+    {
+        if (caveIds.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = caveIds as Guid[] ?? [.. caveIds];
+        var kept = FilteredReadable(
+            db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers), narrowing);
+        return [.. await kept
+            .Select(f => f.Entrance != null ? f.Entrance.CaveFeatureId : f.Id)
+            .Where(id => ids.Contains(id))
+            .Distinct()
+            .ToListAsync(ct)];
     }
 
     /// <summary>
@@ -1480,7 +1528,6 @@ public static class MapEndpoints
         IQueryable<Feature> readable,
         Bbox box,
         double gridMeters,
-        string? tag,
         int maxPoints,
         CancellationToken ct)
     {
@@ -1494,7 +1541,7 @@ public static class MapEndpoints
         // The entrance's own row decides nothing alone anymore: visibility cascades at
         // read time over the ancestor chain, so a private entrance row under a readable
         // cave is served — the filter's inheritance arm does that work.
-        var rows = await EntrancePointsQuery(db, readable, box, protectedMembers, tag, maxPoints)
+        var rows = await EntrancePointsQuery(db, readable, box, protectedMembers, tag: null, maxPoints)
             .ToListAsync(ct);
         if (rows.Count == 0)
         {
