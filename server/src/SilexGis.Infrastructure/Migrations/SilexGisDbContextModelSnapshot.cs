@@ -4012,6 +4012,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
+                    b.Property<bool>("OnSharedLinks")
+                        .HasColumnType("boolean")
+                        .HasColumnName("on_shared_links");
+
                     b.Property<string>("Options")
                         .HasColumnType("jsonb")
                         .HasColumnName("options");

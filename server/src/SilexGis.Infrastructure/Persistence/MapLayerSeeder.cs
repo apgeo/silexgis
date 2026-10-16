@@ -104,6 +104,7 @@ public static class MapLayerSeeder
         row.SortOrder = entry.SortOrder;
         row.Enabled = enabled;
         row.InDocuments = entry.InDocuments;
+        row.OnSharedLinks = entry.OnSharedLinks;
         return row;
     }
 }

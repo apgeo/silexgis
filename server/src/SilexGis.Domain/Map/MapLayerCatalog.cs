@@ -31,6 +31,12 @@ namespace SilexGis.Domain.Map;
 /// </param>
 /// <param name="Wms">The service options of a <c>wms</c> entry; null for every other kind.</param>
 /// <param name="Wmts">The service options of a <c>wmts</c> entry; null for every other kind.</param>
+/// <param name="OnSharedLinks">
+/// Whether a shared view's link may draw this source for somebody with no account. True unless the
+/// entry says otherwise or sits in <see cref="MapLayerCatalog.RestrictedTermsGroup"/>: a source
+/// whose terms bind the installation's own users — or that was switched on for them by an override
+/// — is not thereby offered to whoever is sent a link.
+/// </param>
 public sealed record MapLayerEntry(
     string Name,
     string UrlTemplate,
@@ -46,7 +52,8 @@ public sealed record MapLayerEntry(
     bool InDocuments = false,
     MapLayerKind Kind = MapLayerKind.Xyz,
     MapLayerWmsOptions? Wms = null,
-    MapLayerWmtsOptions? Wmts = null);
+    MapLayerWmtsOptions? Wmts = null,
+    bool OnSharedLinks = true);
 
 /// <summary>Why a catalogue file could not be read.</summary>
 public sealed record MapLayerCatalogProblem(string Message);
@@ -84,6 +91,13 @@ public static class MapLayerCatalog
 {
     /// <summary>The placeholder an entry's URL uses where its configured key belongs.</summary>
     public const string ApiKeyPlaceholder = "{apikey}";
+
+    /// <summary>
+    /// The heading the shipped catalogue files sources under whose terms do not permit the way
+    /// this application fetches them. An entry under it is kept off shared links unless it says
+    /// <c>sharedLinks="true"</c> itself.
+    /// </summary>
+    public const string RestrictedTermsGroup = "Restricted terms of use";
 
     /// <summary>Reads a catalogue document, returning what it declared and what was wrong with it.</summary>
     public static MapLayerCatalogResult Read(string xml)
@@ -225,11 +239,16 @@ public static class MapLayerCatalog
                 inDocuments = false;
             }
 
+            var group = Trimmed(element.Attribute("group"));
+            var onSharedLinks = Bool(
+                element.Attribute("sharedLinks"),
+                !string.Equals(group, RestrictedTermsGroup, StringComparison.OrdinalIgnoreCase));
+
             layers.Add(new MapLayerEntry(
                 name.Trim(),
                 url.Trim(),
                 attribution,
-                Trimmed(element.Attribute("group")),
+                group,
                 apiKeyName,
                 isBase,
                 Bool(element.Attribute("default"), false),
@@ -240,7 +259,8 @@ public static class MapLayerCatalog
                 inDocuments,
                 kind.Value,
                 wms,
-                wmts));
+                wmts,
+                onSharedLinks));
         }
 
         // A name declared twice is one source the operator edited into the file twice, so the last

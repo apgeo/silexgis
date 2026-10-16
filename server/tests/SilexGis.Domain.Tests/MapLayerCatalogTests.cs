@@ -318,6 +318,16 @@ public class MapLayerCatalogTests
         Assert.Contains(reason, Assert.Single(result.Problems).Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("""<layer name="Plain" url="https://t.example/{z}/{x}/{y}.png" />""", true)]
+    [InlineData("""<layer name="Plain" url="https://t.example/{z}/{x}/{y}.png" sharedLinks="false" />""", false)]
+    [InlineData("""<layer name="Plain" url="https://t.example/{z}/{x}/{y}.png" group="Restricted terms of use" />""", false)]
+    [InlineData("""<layer name="Plain" url="https://t.example/{z}/{x}/{y}.png" group="Restricted terms of use" sharedLinks="true" />""", true)]
+    public void A_source_is_on_shared_links_unless_kept_off_by_its_mark_or_its_group(string entry, bool onLinks)
+    {
+        Assert.Equal(onLinks, Assert.Single(MapLayerCatalog.Read(Doc(entry)).Layers).OnSharedLinks);
+    }
+
     [Fact]
     public void A_map_service_loses_the_document_mark_and_says_so()
     {

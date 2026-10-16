@@ -59,6 +59,14 @@
     maxZoom       For wmts, the deepest level of the matrix set — the grid is built up to it.
     A wms or wmts source is never copied into a document, whatever inDocuments says: the
     document's map is drawn from xyz tiles only (see inDocuments below).
+    sharedLinks   false keeps the source off shared map views: a link somebody is sent draws the
+                  installation's default basemap instead (or the first one it may draw). Default
+                  true, except under the group "Restricted terms of use", where it defaults to
+                  false. Showing a source to the accounts this installation created and showing it
+                  to anybody holding a link are different uses, and a source switched on under
+                  terms that bind your own users — or by an override made for them — is not
+                  thereby offered to the public. A source that needs an apiKey is never drawn on
+                  a link whatever this says: the key would travel with the link.
     inDocuments   true lets a basemap be drawn into a document this application writes: the map
                   in a trip's write-up. Default false, and deliberately. Showing a tile on a
                   screen and putting it into a file that is then mailed and printed are different
@@ -197,9 +205,12 @@
          maxZoom="17" />
 
   <!-- Cloud-free composite. Coarser than the Esri imagery but never obscured, which is what makes
-       it useful for a doline survey where the one clear pass over your area is a decade old. -->
+       it useful for a doline survey where the one clear pass over your area is a decade old.
+       Licensed for non-commercial use only, which is a decision about your installation's own
+       users; a shared link reaches anybody, so it stays off links (sharedLinks). -->
   <layer name="Sentinel-2 cloudless"
          group="Imagery"
+         sharedLinks="false"
          url="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg"
          attribution="Sentinel-2 cloudless 2020 by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2020)"
          maxZoom="18" />
@@ -371,6 +382,10 @@
     long-term source is settled. If you are running this installation and did not make that choice
     yourself, this is the first thing to revisit.
 
+    Switched on or not, none of them is ever drawn on a shared map view's link (sharedLinks="false"):
+    the override was made so that this installation's own users have imagery, and a link goes to
+    anybody.
+
     TO PUT IT BACK: set enabled="false" on the four entries below. Do NOT delete them. A stored
     source this file stops naming is left alone rather than withdrawn, so a deleted entry would
     stay enabled in the database for ever on every installation that had already started once.
@@ -382,24 +397,28 @@
 
   <layer name="Google Road"
          group="Restricted terms of use"
+         sharedLinks="false"
          url="https://mt1.google.com/vt/lyrs=m&amp;x={x}&amp;y={y}&amp;z={z}"
          attribution="Map data © Google"
          maxZoom="20" />
 
   <layer name="Google Satellite"
          group="Restricted terms of use"
+         sharedLinks="false"
          url="https://mt1.google.com/vt/lyrs=s&amp;x={x}&amp;y={y}&amp;z={z}"
          attribution="Imagery © Google"
          maxZoom="21" />
 
   <layer name="Google Hybrid"
          group="Restricted terms of use"
+         sharedLinks="false"
          url="https://mt1.google.com/vt/lyrs=y&amp;x={x}&amp;y={y}&amp;z={z}"
          attribution="Map data and imagery © Google"
          maxZoom="21" />
 
   <layer name="Google Terrain"
          group="Restricted terms of use"
+         sharedLinks="false"
          url="https://mt1.google.com/vt/lyrs=p&amp;x={x}&amp;y={y}&amp;z={z}"
          attribution="Map data © Google"
          maxZoom="20" />

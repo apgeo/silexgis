@@ -277,6 +277,8 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
             IsBase = true,
             Enabled = true,
             Attribution = entry.Attribution,
+            // A row added by hand is off links until it says otherwise, as one from the file would be.
+            OnSharedLinks = true,
         });
 
         var token = await ShareAsync(await CreateViewAsync(entrances: false, features: false, 10.1, 60.1, baseLayerId: serviceId));
@@ -429,6 +431,42 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=10")).ShouldBe(1);
         (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={window}"))["features"]!.AsArray()
             .ShouldHaveSingleItem()!["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(18.111, 1e-9);
+    }
+
+    /// <summary>
+    /// A source switched on for this installation's own accounts under terms that do not reach the
+    /// public — the four Google entries and the non-commercial Sentinel-2 composite — is never a
+    /// link's background, whatever the view was saved over and whether or not it is switched on.
+    /// </summary>
+    [Theory]
+    [InlineData("Google Satellite", "google.com")]
+    [InlineData("Google Road", "google.com")]
+    [InlineData("Sentinel-2 cloudless", "eox.at")]
+    public async Task A_restricted_terms_background_never_reaches_a_link(string layerName, string host)
+    {
+        long restrictedId;
+        string defaultName;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var restricted = await db.MapLayers.SingleAsync(l => l.Name == layerName);
+            restricted.Enabled = true;
+            await db.SaveChangesAsync();
+            restrictedId = restricted.Id;
+            defaultName = await db.MapLayers
+                .Where(l => l.IsDefault && l.IsBase && l.Enabled && l.ApiKeyName == null)
+                .OrderBy(l => l.SortOrder)
+                .Select(l => l.Name)
+                .FirstAsync();
+        }
+
+        var token = await ShareAsync(await CreateViewAsync(entrances: false, features: false, 10.1, 60.1, baseLayerId: restrictedId));
+        var response = await anonymous.GetAsync($"/api/v1/shared/views/{token}");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+
+        payload.ShouldNotContain(host, Case.Insensitive);
+        JsonNode.Parse(payload)!["background"]!["name"]!.GetValue<string>().ShouldBe(defaultName);
     }
 
     private sealed record CaveRef(Guid Id, string Name, Guid EntranceId);

@@ -340,8 +340,10 @@ public static class MapViewEndpoints
     /// <remarks>
     /// <para>
     /// A source that needs an access key is never one, because the key is in its address and the
-    /// address goes to whoever holds the link. The view's own choice falls back rather than failing:
-    /// a view saved over a keyed basemap still opens, over a background anybody may be sent.
+    /// address goes to whoever holds the link. Nor is a source the catalogue keeps off links — one
+    /// whose terms, or an owner's override, made it a source for this installation's own accounts
+    /// (<see cref="MapLayer.OnSharedLinks"/>). The view's own choice falls back rather than failing:
+    /// a view saved over such a basemap still opens, over a background anybody may be sent.
     /// </para>
     /// <para>
     /// Read as the least-privileged reader: an installation that takes the catalogue away from its
@@ -357,7 +359,7 @@ public static class MapViewEndpoints
         }
 
         var usable = (await db.MapLayers.AsNoTracking()
-                .Where(l => l.Enabled && l.IsBase && l.ApiKeyName == null)
+                .Where(l => l.Enabled && l.IsBase && l.ApiKeyName == null && l.OnSharedLinks)
                 .OrderBy(l => l.SortOrder)
                 .ToListAsync(ct))
             .Where(l => MapLayerOptionsJson.IsDrawable(l.LayerKind, l.Options))

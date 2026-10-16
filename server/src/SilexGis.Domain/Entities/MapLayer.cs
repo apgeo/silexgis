@@ -92,6 +92,19 @@ public class MapLayer : ITimestamped
     /// </remarks>
     public bool? InDocumentsChoice { get; set; }
 
+    /// <summary>
+    /// Whether a shared view's link may draw this source as its background, for somebody with no
+    /// account on this installation.
+    /// </summary>
+    /// <remarks>
+    /// Its own answer, like <see cref="InDocuments"/>, because showing a source to the accounts an
+    /// installation created and showing it to whoever is sent a link are different uses. A source
+    /// switched on under terms that bind the installation's own users — or under an owner's
+    /// override made for them — is not thereby offered to the public. Declared by the catalogue,
+    /// and false for a source added any other way, so a link falls back to one that was declared.
+    /// </remarks>
+    public bool OnSharedLinks { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
