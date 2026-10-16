@@ -114,6 +114,12 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
             FeatureFilterFields.Region => FilterLeaves.Text<Feature>(condition, f => f.Cave!.Region),
             FeatureFilterFields.RockTypeId =>
                 FilterLeaves.Longs<Feature>(condition, f => f.Cave!.RockTypeId),
+            // Read through a nullable selector: the column is never null on a cave, but a feature
+            // that is not a cave has no row on the other side and must read as empty, not fault.
+            FeatureFilterFields.CaveTypeId =>
+                FilterLeaves.Longs<Feature>(condition, f => (long?)f.Cave!.CaveTypeId),
+            FeatureFilterFields.OtherToponyms =>
+                FilterLeaves.Text<Feature>(condition, f => f.Cave!.OtherToponyms),
             FeatureFilterFields.SurveyedLength =>
                 FilterLeaves.Decimals<Feature>(condition, f => f.Cave!.SurveyedLength),
             FeatureFilterFields.Depth => FilterLeaves.Decimals<Feature>(condition, f => f.Cave!.Depth),

@@ -106,6 +106,11 @@ public sealed record FilterDocument
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            // A stored document comes back out of a jsonb column with its keys in the database's
+            // order, not the order they were written in — "of" before "node", "value" before
+            // "type". The discriminators are found wherever they sit, or every saved filter would
+            // read back as unreadable the moment it was stored.
+            AllowOutOfOrderMetadataProperties = true,
         };
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         return options;

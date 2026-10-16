@@ -66,6 +66,19 @@ public static class FeatureFilterFields
     /// <summary>The rock the cave is recorded as being formed in.</summary>
     public const string RockTypeId = "rockTypeId";
 
+    /// <summary>
+    /// What kind of cave it is recorded as — the cave registry's own classification, as distinct
+    /// from <see cref="TypeId"/>, which is a generic feature's type.
+    /// </summary>
+    public const string CaveTypeId = "caveTypeId";
+
+    /// <summary>
+    /// The other names a cave is known by. Declarable for the reason the region is: every caller
+    /// who may read the cave is shown them, and the cave registry's search box has always matched
+    /// them beside the name, so a registry search composed as a filter has to be able to say so.
+    /// </summary>
+    public const string OtherToponyms = "otherToponyms";
+
     /// <summary>Surveyed length in metres, as recorded on the cave.</summary>
     public const string SurveyedLength = "surveyedLength";
 
@@ -114,6 +127,8 @@ public static class FeatureFilterFields
             new FieldDescriptor(UpdatedAt, "filters.fields.updated", FieldKind.Instant),
             new FieldDescriptor(Region, "filters.fields.region", FieldKind.Text),
             new FieldDescriptor(RockTypeId, "filters.fields.rockType", FieldKind.Id, Options: "rockTypes"),
+            new FieldDescriptor(CaveTypeId, "filters.fields.caveType", FieldKind.Id, Options: "caveTypes"),
+            new FieldDescriptor(OtherToponyms, "filters.fields.otherToponyms", FieldKind.Text),
             new FieldDescriptor(SurveyedLength, "filters.fields.surveyedLength", FieldKind.Number),
             new FieldDescriptor(Depth, "filters.fields.depth", FieldKind.Number),
         ],
