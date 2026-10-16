@@ -204,6 +204,30 @@ public sealed class MapDensityTests : IAsyncLifetime, IDisposable, IClassFixture
     }
 
     [Fact]
+    public async Task A_study_area_is_refused_by_the_shared_gate_in_the_same_words_whatever_the_reason()
+    {
+        const string bbox = "7.6,39.6,7.9,39.9";
+        var guardedAreaId = await CreateKarstAreaAsync(
+            "Dens Gate Area", 7.65, 39.65, 7.85, 39.85, locationProtected: true);
+
+        // Readable: the feature itself answers for the Viewer, so the refusal below is the
+        // placement rule and not a visibility one.
+        (await viewer.GetAsync($"/api/v1/features/{guardedAreaId}")).StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+
+        // Positive half: the owner, who may place the outline, is answered over it.
+        (await GridAsync(owner, bbox, GridMeters, guardedAreaId))["studyAreaId"]!
+            .GetValue<Guid>().ShouldBe(guardedAreaId);
+
+        await StudyAreaRefusal.ShouldBeTheSharedRefusalAsync(
+            await viewer.GetAsync($"/api/v1/map/density?bbox={bbox}&areaId={guardedAreaId}"),
+            "an outline the viewer may read but not place");
+        await StudyAreaRefusal.ShouldBeTheSharedRefusalAsync(
+            await viewer.GetAsync($"/api/v1/map/density?bbox={bbox}&areaId={Guid.NewGuid()}"),
+            "an outline that does not exist");
+    }
+
+    [Fact]
     public async Task The_route_refuses_a_window_it_cannot_answer_and_a_denominator_with_no_area()
     {
         var caveId = await CreateCaveWithEntranceAsync(owner, "Dens Point Area", 8.6, 40.6);

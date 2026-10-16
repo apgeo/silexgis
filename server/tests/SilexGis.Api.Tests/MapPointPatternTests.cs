@@ -360,6 +360,39 @@ public sealed class MapPointPatternTests : IAsyncLifetime, IDisposable, IClassFi
             + "to match whatever came back.");
     }
 
+    [Fact]
+    public async Task A_study_area_is_refused_by_the_shared_gate_and_a_point_is_not_an_outline()
+    {
+        const string bbox = "22.3,43.0,22.5,43.2";
+        var caveId = await CreateCaveWithEntranceAsync(owner, "Pp Gate Point", 22.4, 43.1);
+
+        // Positive half: an outline the viewer may use is used, and named back as the study area.
+        var areaId = await CreateKarstAreaAsync("Pp Gate Area", 22.32, 43.02, 22.48, 43.18);
+        (await PatternAsync(viewer, bbox, $"&areaId={areaId}"))["studyAreaId"]!
+            .GetValue<Guid>().ShouldBe(areaId);
+
+        // An outline the viewer can read but may not place: readable first, so the refusal that
+        // follows is the placement rule and not a visibility one; and the owner, who may place it,
+        // is answered over the very same outline.
+        var guardedAreaId = await CreateKarstAreaAsync(
+            "Pp Gate Guarded", 22.32, 43.02, 22.48, 43.18, locationProtected: true);
+        (await viewer.GetAsync($"/api/v1/features/{guardedAreaId}")).StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+        (await PatternAsync(owner, bbox, $"&areaId={guardedAreaId}"))["studyAreaId"]!
+            .GetValue<Guid>().ShouldBe(guardedAreaId);
+
+        await StudyAreaRefusal.ShouldBeTheSharedRefusalAsync(
+            await viewer.GetAsync($"/api/v1/map/point-pattern?bbox={bbox}&areaId={guardedAreaId}"),
+            "an outline the viewer may read but not place");
+        await StudyAreaRefusal.ShouldBeTheSharedRefusalAsync(
+            await viewer.GetAsync($"/api/v1/map/point-pattern?bbox={bbox}&areaId={Guid.NewGuid()}"),
+            "an outline that does not exist");
+
+        // A point the caller may place is past the gate, and is refused for what it is.
+        await ExpectAsync(owner, $"?bbox={bbox}&areaId={caveId}",
+            HttpStatusCode.BadRequest, "point_pattern.study_area_not_an_outline");
+    }
+
     private async Task<JsonObject> PatternAsync(HttpClient client, string bbox, string extra)
     {
         AssertWindowBelongsToThisClass(bbox);
@@ -421,7 +454,8 @@ public sealed class MapPointPatternTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     private async Task<Guid> CreateKarstAreaAsync(
-        string name, double west, double south, double east, double north)
+        string name, double west, double south, double east, double north,
+        bool locationProtected = false)
     {
         var ring = new[]
         {
@@ -435,6 +469,7 @@ public sealed class MapPointPatternTests : IAsyncLifetime, IDisposable, IClassFi
             featureTypeId = karstAreaTypeId,
             geometry = new { type = "Polygon", coordinates = new[] { ring } },
             visibility = "authenticated",
+            locationProtected,
         });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);

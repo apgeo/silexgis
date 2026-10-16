@@ -455,9 +455,9 @@ public static class RegistryStatisticsEndpoints
             // Readable and exactly placeable, both, answered alike when either fails — and alike
             // with an area that does not exist. The rule is the shared one rather than a fourth
             // copy of the same ladder.
-            if (!await protection.MayScopeByAsync(ctx, areaId, ct))
+            if (await StudyAreaGate.RefusalAsync(protection, ctx, areaId, ct) is { } refusal)
             {
-                return (null, new Answer<object>(false, ApiProblems.NotFound("feature.not_found"), null));
+                return (null, new Answer<object>(false, refusal, null));
             }
         }
 

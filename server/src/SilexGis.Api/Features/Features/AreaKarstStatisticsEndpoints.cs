@@ -185,9 +185,9 @@ public static class AreaKarstStatisticsEndpoints
         // the answer requires exact placement, and to everybody else — and for an outline that is
         // not there at all — the shared gate answers the same way, so the refusal discloses
         // nothing by being the refusal it is.
-        if (!await protection.MayScopeByAsync(ctx, id, ct))
+        if (await StudyAreaGate.RefusalAsync(protection, ctx, id, ct) is { } refusal)
         {
-            return ApiProblems.NotFound("feature.not_found");
+            return refusal;
         }
 
         var depressionTypeId = await db.FeatureTypes.AsNoTracking()

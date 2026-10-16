@@ -45,9 +45,6 @@ public static class MapDensityEndpoints
     /// <summary>Refused: the window at that cell size would be more cells than one answer holds.</summary>
     private const string TooManyCellsCode = "density.too_many_cells";
 
-    /// <summary>Refused: the named study area is not an outline, so it has no area to divide by.</summary>
-    private const string StudyAreaNotAnOutlineCode = "density.study_area_not_an_outline";
-
     /// <summary>Refused: the requested kernel is narrower than the cell the counts sit in.</summary>
     private const string BandwidthTooFineCode = "density.bandwidth_below_cell";
 
@@ -138,18 +135,11 @@ public static class MapDensityEndpoints
             // only for a caller who may both read the outline and place it exactly, and answers
             // null otherwise — for an outline that does not exist as well, so the refusal below
             // discloses nothing by being the refusal it is.
-            var areaGeometry = await protection.ScopeGeometryAsync(ctx, areaId, ct);
-            if (areaGeometry is null)
+            var (_, refusal) = await StudyAreaGate.OutlineAsync(
+                protection, ctx, areaId, "density", "divide a count by", ct);
+            if (refusal is not null)
             {
-                return ApiProblems.NotFound("feature.not_found");
-            }
-
-            if (areaGeometry is not (Polygon or MultiPolygon))
-            {
-                return ApiProblems.BadRequest(
-                    StudyAreaNotAnOutlineCode,
-                    "the study area must be an outline; a point or a line encloses no ground to "
-                    + "divide a count by.");
+                return refusal;
             }
         }
 

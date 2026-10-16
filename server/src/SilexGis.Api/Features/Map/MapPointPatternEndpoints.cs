@@ -33,9 +33,6 @@ public static class MapPointPatternEndpoints
     /// <summary>Refused: the window encloses no ground to measure over.</summary>
     private const string EmptyWindowCode = "point_pattern.empty_window";
 
-    /// <summary>Refused: the named study area is not an outline, so it encloses no ground.</summary>
-    private const string StudyAreaNotAnOutlineCode = "point_pattern.study_area_not_an_outline";
-
     /// <summary>Refused: points, radii and simulations are each permitted but their product is not.</summary>
     private const string TooMuchWorkCode = "point_pattern.too_much_work";
 
@@ -84,18 +81,11 @@ public static class MapPointPatternEndpoints
             // Measuring inside an outline draws its edges, so the window is only available to a
             // caller who may place it exactly. The shared gate answers null otherwise — and for an
             // outline that does not exist as well, so the refusal below discloses nothing.
-            var areaGeometry = await protection.ScopeGeometryAsync(ctx, areaId, ct);
-            if (areaGeometry is null)
+            var (_, refusal) = await StudyAreaGate.OutlineAsync(
+                protection, ctx, areaId, "point_pattern", "measure a spacing over", ct);
+            if (refusal is not null)
             {
-                return ApiProblems.NotFound("feature.not_found");
-            }
-
-            if (areaGeometry is not (Polygon or MultiPolygon))
-            {
-                return ApiProblems.BadRequest(
-                    StudyAreaNotAnOutlineCode,
-                    "the study area must be an outline; a point or a line encloses no ground to "
-                    + "measure a spacing over.");
+                return refusal;
             }
         }
 

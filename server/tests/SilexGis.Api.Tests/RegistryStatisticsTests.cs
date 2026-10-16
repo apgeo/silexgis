@@ -409,6 +409,24 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
+    public async Task An_unusable_area_is_refused_by_the_shared_gate()
+    {
+        var areaId = await CreateKarstAreaAsync();
+        var query = $"distribution?measure=surveyedLength&areaId={areaId}";
+
+        // Positive half before the deny: the viewer is answered about this area.
+        (await viewer.GetAsync($"/api/v1/stats/registry/{query}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await DenyReadAsync(owner, areaId, viewerId);
+
+        await StudyAreaRefusal.ShouldBeTheSharedRefusalAsync(
+            await viewer.GetAsync($"/api/v1/stats/registry/{query}"), "an area denied to the viewer");
+        await StudyAreaRefusal.ShouldBeTheSharedRefusalAsync(
+            await viewer.GetAsync(
+                $"/api/v1/stats/registry/distribution?measure=surveyedLength&areaId={Guid.NewGuid()}"),
+            "an area that does not exist");
+    }
+
+    [Fact]
     public async Task An_area_the_caller_may_not_read_is_answered_as_one_that_is_not_there()
     {
         var areaId = await CreateKarstAreaAsync();

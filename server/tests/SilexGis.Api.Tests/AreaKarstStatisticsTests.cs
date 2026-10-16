@@ -252,6 +252,29 @@ public sealed class AreaKarstStatisticsTests : IAsyncLifetime, IDisposable, ICla
     }
 
     [Fact]
+    public async Task An_unusable_area_is_refused_by_the_shared_gate_on_both_routes()
+    {
+        var areaId = await CreateKarstAreaAsync(
+            "Kst Gate", -3.30, 37.30, -3.10, 37.50, locationProtected: true);
+
+        // Readable: the feature itself answers for the Viewer, so the refusal below is the
+        // placement rule and not a visibility one.
+        (await viewer.GetAsync($"/api/v1/features/{areaId}")).StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+
+        // Positive half: the owner is answered for the same area.
+        (await StatisticsAsync(owner, areaId))["areaId"]!.GetValue<Guid>().ShouldBe(areaId);
+
+        foreach (var route in new[] { "karst-statistics", "karst-statistics.csv" })
+        {
+            await StudyAreaRefusal.ShouldBeTheSharedRefusalAsync(
+                await viewer.GetAsync($"/api/v1/features/{areaId}/{route}"), $"unplaceable, {route}");
+            await StudyAreaRefusal.ShouldBeTheSharedRefusalAsync(
+                await viewer.GetAsync($"/api/v1/features/{Guid.NewGuid()}/{route}"), $"missing, {route}");
+        }
+    }
+
+    [Fact]
     public async Task The_same_figures_come_back_as_a_spreadsheet()
     {
         var areaId = await CreateKarstAreaAsync("Kst Csv", -2.60, 36.60, -2.40, 36.80);
