@@ -659,6 +659,22 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable, IClassFixture
     }
 
     [Fact]
+    public async Task The_tag_catalogue_names_the_tags_of_the_slugs_asked_for_and_nothing_else()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var cave = await CreateCaveAsync($"Slugged {marker}", "authenticated");
+        (await TagAsync(owner, $"Alpha {marker}", "feature", cave)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await TagAsync(owner, $"Beta {marker}", "feature", cave)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await TagAsync(owner, $"Gamma {marker}", "feature", cave)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var found = await outsider.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/tags?slug=alpha-{marker}&slug=gamma-{marker}&slug=never-made-{marker}");
+
+        found.EnumerateArray().Select(t => t.GetProperty("slug").GetString()).Order()
+            .ShouldBe([$"alpha-{marker}", $"gamma-{marker}"]);
+    }
+
+    [Fact]
     public async Task Tags_filter_lists_and_both_map_paths()
     {
         var marker = Guid.NewGuid().ToString("N")[..8];

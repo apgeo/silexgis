@@ -765,6 +765,20 @@ export function useTags(search: string) {
   });
 }
 
+/**
+ * The tags named by these slugs, which is how a stored tag condition is put back into words. The
+ * name listing answers only its first hundred, so a chosen tag is looked up by itself rather than
+ * expected among them; a slug missing from the answer is one this reader cannot resolve.
+ */
+export function useTagsBySlug(slugs: readonly string[]) {
+  return useQuery({
+    queryKey: queryKeys.tagsBySlug(slugs),
+    queryFn: () => unwrap(api.GET('/api/v1/tags', { params: { query: { slug: [...slugs] } } })),
+    enabled: slugs.length > 0,
+    staleTime: 60_000,
+  });
+}
+
 /** @param enabled false keeps the request from being made — see {@link useAttachments}. */
 export function useTaggings(
   entityType: AttachedEntityType,

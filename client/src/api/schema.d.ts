@@ -1186,7 +1186,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Tag catalog with optional name search. */
+        /** Tag catalog with optional name search, or the tags of the slugs named. */
         get: operations["tagListTags"];
         put?: never;
         post?: never;
@@ -17894,6 +17894,7 @@ export interface operations {
         parameters: {
             query?: {
                 search?: string;
+                slug?: string[];
             };
             header?: never;
             path?: never;

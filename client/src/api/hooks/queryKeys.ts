@@ -229,6 +229,7 @@ export const queryKeys = {
   reportTemplates: ['report-templates'] as const,
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
+  tagsBySlug: (slugs: readonly string[]) => ['tags', { slugs }] as const,
   cavingGroups: ['cavingGroups'] as const,
   syncCapabilities: ['sync', 'capabilities'] as const,
   syncSets: ['sync', 'sets'] as const,

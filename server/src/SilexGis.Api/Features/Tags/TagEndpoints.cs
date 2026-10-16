@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SilexGis.Api.Common;
@@ -42,7 +43,7 @@ public static class TagEndpoints
     {
         api.MapGet("/tags", ListTagsAsync)
             .WithTags("Tags")
-            .WithSummary("Tag catalog with optional name search.");
+            .WithSummary("Tag catalog with optional name search, or the tags of the slugs named.");
 
         var taggings = api.MapGroup("/taggings").WithTags("Tags");
         taggings.MapGet("/", ListTaggingsAsync)
@@ -59,6 +60,7 @@ public static class TagEndpoints
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         string? search,
+        [FromQuery(Name = "slug")] string[]? slug,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -76,6 +78,15 @@ public static class TagEndpoints
         }
 
         var query = db.Tags.AsNoTracking();
+
+        // Naming tags by slug is how a stored filter's tag condition is put back into words: the
+        // catalogue answers only its first hundred by name, so a tag past them would otherwise read
+        // as one the caller may not see.
+        if (slug is { Length: > 0 })
+        {
+            query = query.Where(x => slug.Contains(x.Slug));
+        }
+
         if (!string.IsNullOrWhiteSpace(search))
         {
             var pattern = $"%{search}%";
