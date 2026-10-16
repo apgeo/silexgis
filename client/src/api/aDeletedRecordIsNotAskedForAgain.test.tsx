@@ -16,6 +16,8 @@ vi.mock('./client.ts', () => ({
   },
   ApiError: class ApiError extends Error {},
   lastReadETag: () => undefined,
+  // Read by the shared unwrap on a refusal; nothing here is refused, so it never answers.
+  retryAfterOf: () => undefined,
 }));
 
 const hooks = await import('./hooks.ts');
@@ -49,7 +51,15 @@ beforeEach(() => {
   get.mockReset();
   del.mockReset();
   get.mockImplementation(() => answers({ id: 'gone', items: [], page: 1, pageSize: 20, totalItems: 0 }));
-  del.mockImplementation(() => answers(undefined));
+  // Deleting the rest of a series answers with what went, as the server does; every other delete
+  // answers with no body.
+  del.mockImplementation((path: string) =>
+    answers(
+      path === '/api/v1/events/{id}/series/following'
+        ? { seriesId: 'series', deleted: 1, kept: 0 }
+        : undefined,
+    ),
+  );
 });
 
 const cases = [
