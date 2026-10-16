@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Alert, Spin } from 'antd';
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Alert, Button, Spin } from 'antd';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSurveyModel } from '../../../api/hooks.ts';
 import {
@@ -14,6 +14,12 @@ import { markerLabelTheme } from '../../../caveview/markerLabelTheme.ts';
 import { MOVIE_LABEL_SIZE_RANGE, type MovieSettings } from '../../../caveview/movie/movieSettings.ts';
 import { applyMovieMarkerLabels, applyMovieView, turnToMovieView } from '../../../caveview/movie/movieView.ts';
 import { releaseWebGlContext } from '../../../caveview/releaseWebGlContext.ts';
+import {
+  downloadSurveyFile,
+  SURVEY_FILE_STALL_MS,
+  SurveyFileStalledError,
+  type SurveyFileProgress,
+} from '../../../caveview/surveyFileDownload.ts';
 import { viewerFileName } from '../../../caveview/viewerFileName.ts';
 import { previewBox, previewSurface } from './previewBox.ts';
 import './MoviePreviewHost.css';
@@ -112,11 +118,16 @@ export default function MoviePreviewHost({
   // is not a reason to build the viewer and read the model again.
   const languageRef = useRef(i18n.language);
   languageRef.current = i18n.language;
+  const tRef = useRef(t);
+  tRef.current = t;
   const containerId = `movie-preview-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const roomRef = useRef<HTMLDivElement | null>(null);
   const [room, setRoom] = useState({ width: 0, height: 0 });
   const [status, setStatus] = useState<Status>('loading');
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  // How much of the model has arrived: on a slow server a large survey takes a minute, and a
+  // spinner alone over that minute reads as a preview that will never load.
+  const [progress, setProgress] = useState<SurveyFileProgress | null>(null);
   // The viewer lives in a ref; React state holds only a count of the viewers that have loaded, so
   // the effects that set things on one run again for the next — and are never keyed on the engine.
   const loadedRef = useRef<Loaded | null>(null);
@@ -139,6 +150,22 @@ export default function MoviePreviewHost({
       setErrorDetail(model.error instanceof Error ? model.error.message : String(model.error));
     }
   }, [source, model.error]);
+  // Trying again asks for the model's address afresh: the one that failed may have been signed
+  // long enough ago to have lapsed while the file was failing to arrive.
+  const { refetch } = model;
+  const tryAgain = useCallback(() => {
+    setStatus('loading');
+    setErrorDetail(null);
+    setProgress(null);
+    void refetch().then((read) => {
+      if (read.data !== undefined) {
+        setSource({ url: read.data.modelUrl, fileName: viewerFileName(read.data) });
+      } else {
+        setStatus('error');
+        setErrorDetail(read.error instanceof Error ? read.error.message : String(read.error));
+      }
+    });
+  }, [refetch]);
 
   // ---- the room the box is fitted into ----
   useLayoutEffect(() => {
@@ -177,11 +204,16 @@ export default function MoviePreviewHost({
     const container = document.getElementById(containerId);
     setStatus('loading');
     setErrorDetail(null);
+    setProgress(null);
     (async () => {
       const cv2 = await loadCaveView();
-      const response = await fetch(source.url, { signal: download.signal });
-      if (!response.ok) throw new Error(`survey file request failed (${response.status})`);
-      const blob = await response.blob();
+      // The same download as the viewer behind the dialog, where that one is reading this file.
+      const blob = await downloadSurveyFile(source.url, {
+        signal: download.signal,
+        onProgress: (arrived) => {
+          if (!disposed) setProgress(arrived);
+        },
+      });
       if (disposed) return;
       // Built with what the viewer on the page behind the dialog was built with, and the movie's
       // labels on top. The language is not this viewer's alone: all the viewers on a page share
@@ -214,7 +246,13 @@ export default function MoviePreviewHost({
     })().catch((error: unknown) => {
       if (disposed) return;
       setStatus('error');
-      setErrorDetail(error instanceof Error ? error.message : String(error));
+      setErrorDetail(
+        error instanceof SurveyFileStalledError
+          ? tRef.current('caveview.movie.previewStalled', { seconds: Math.round(SURVEY_FILE_STALL_MS / 1000) })
+          : error instanceof Error
+            ? error.message
+            : String(error),
+      );
     });
     return () => {
       disposed = true;
@@ -314,16 +352,44 @@ export default function MoviePreviewHost({
       data-status={status}
     >
       {status === 'error' ? (
-        <Alert type="error" showIcon title={t('caveview.movie.previewError')} description={errorDetail} />
+        <Alert
+          type="error"
+          showIcon
+          title={t('caveview.movie.previewError')}
+          description={errorDetail}
+          action={
+            <Button size="small" onClick={tryAgain} data-testid="movie-preview-retry">
+              {t('caveview.movie.previewRetry')}
+            </Button>
+          }
+        />
       ) : (
         <div className="movie-preview-box" style={{ width: box.width, height: box.height }}>
           <div id={containerId} className="movie-preview-surface" style={surfaceStyle} data-reduced={reduced || undefined} />
           {status === 'ready' && overlay}
           {status === 'loading' && (
-            <Spin className="movie-preview-loading" description={t('caveview.movie.previewLoading')} />
+            <Spin
+              className="movie-preview-loading"
+              description={
+                progress === null || progress.received === 0
+                  ? t('caveview.movie.previewLoading')
+                  : progress.total === null
+                    ? t('caveview.movie.previewLoadingSoFar', { received: megabytes(progress.received, i18n.language) })
+                    : t('caveview.movie.previewLoadingOf', {
+                        received: megabytes(progress.received, i18n.language),
+                        total: megabytes(progress.total, i18n.language),
+                      })
+              }
+              data-testid="movie-preview-loading"
+            />
           )}
         </div>
       )}
     </div>
   );
+}
+
+/** A size in megabytes, as the reader's language writes a number with one decimal. */
+function megabytes(bytes: number, language: string): string {
+  return `${(bytes / 1_000_000).toLocaleString(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MB`;
 }

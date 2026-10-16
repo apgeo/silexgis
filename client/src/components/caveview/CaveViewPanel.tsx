@@ -16,6 +16,7 @@ import {
 } from '../../caveview/loadCaveView.ts';
 import { markerLabelTheme, type MarkerLabelPlate } from '../../caveview/markerLabelTheme.ts';
 import { modelDeliveryIdentity } from '../../caveview/modelDelivery.ts';
+import { downloadSurveyFile } from '../../caveview/surveyFileDownload.ts';
 import {
   focusForRef,
   partFromLeg,
@@ -652,9 +653,9 @@ export default function CaveViewPanel({
 
     (async () => {
       const cv2 = await loadCaveView();
-      const response = await fetch(fileUrlRef.current);
-      if (!response.ok) throw new Error(`survey file request failed (${response.status})`);
-      const blob = await response.blob();
+      // Shared with any other viewer on the page reading the same file — a movie dialog opened
+      // over this one reads the bytes this panel has just read.
+      const blob = await downloadSurveyFile(fileUrlRef.current);
       if (disposed) return;
 
       // Built with what every viewer here is built with — see `caveViewerOptions` for why none of

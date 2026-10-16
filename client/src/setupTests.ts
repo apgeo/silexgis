@@ -13,6 +13,12 @@ import { afterEach } from 'vitest';
 // Unmounting after each test drains that work while the environment still exists.
 afterEach(cleanup);
 import i18n from './i18n';
+import { forgetSurveyFiles } from './caveview/surveyFileDownload.ts';
+
+// Survey files are kept for the life of a page, and a test file is one page: a model one test read
+// through its own stubbed fetch would otherwise be handed to the next test, whose stub is never
+// asked — every assertion on what was fetched would then be about the test before it.
+afterEach(forgetSurveyFiles);
 
 // A component library's deprecation notice fails the test that provoked it.
 //

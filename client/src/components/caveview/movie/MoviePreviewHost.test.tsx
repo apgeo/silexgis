@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../../i18n';
 import { CAVEVIEW_HOME, type Cv2Namespace } from '../../../caveview/loadCaveView.ts';
 import { DEFAULT_MOVIE_SETTINGS } from '../../../caveview/movie/movieSettings.ts';
+import { SURVEY_FILE_STALL_MS } from '../../../caveview/surveyFileDownload.ts';
 import MoviePreviewHost, { type MoviePreviewHandle } from './MoviePreviewHost.tsx';
 import { previewBox, previewSurface } from './previewBox.ts';
 
@@ -15,6 +16,10 @@ const model = vi.hoisted(() => ({
     isStale: false,
     isFetchedAfterMount: false,
     error: null as unknown,
+    refetch: (() => Promise.resolve({ data: undefined, error: null })) as () => Promise<{
+      data: { modelUrl: string; name: string; format: string } | undefined;
+      error: unknown;
+    }>,
   },
 }));
 vi.mock('../../../api/hooks.ts', () => ({ useSurveyModel: () => model.current }));
@@ -107,6 +112,7 @@ beforeEach(() => {
     isStale: false,
     isFetchedAfterMount: false,
     error: null,
+    refetch: () => Promise.resolve({ data: undefined, error: null }),
   };
   window.CV2 = {
     CaveViewer: FakeViewer,
@@ -418,6 +424,51 @@ describe('MoviePreviewHost', () => {
 });
 
 describe('a model still on its way', () => {
+  it('says how much of it has arrived', async () => {
+    let body: ReadableStreamDefaultController<Uint8Array> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(new ReadableStream<Uint8Array>({ start: (controller) => void (body = controller) }), {
+          headers: { 'content-length': '21600000' },
+        }),
+      ),
+    );
+    render(host());
+    await waitFor(() => expect(body).toBeDefined());
+    act(() => body!.enqueue(new Uint8Array(4_200_000)));
+    await waitFor(() =>
+      expect(screen.getByTestId('movie-preview-loading')).toHaveTextContent('Loading the model for the preview… 4.2 MB of 21.6 MB'),
+    );
+  });
+
+  it('is given up when it stops arriving, says why, and is asked for again at a fresh address', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const fetchMock = vi.fn((url: string, init?: RequestInit) =>
+        url.endsWith('sig=fresh')
+          ? Promise.resolve(new Response(new Blob(['survey'])))
+          : new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal!.reason))),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const fresh = { ...model.current.data!, modelUrl: 'http://files.local/model?sig=fresh' };
+      model.current = { ...model.current, refetch: () => Promise.resolve({ data: fresh, error: null }) };
+      render(host());
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SURVEY_FILE_STALL_MS + 1000);
+      });
+      await waitFor(() => expect(screen.getByTestId('movie-preview')).toHaveAttribute('data-status', 'error'));
+      expect(screen.getByText(/Nothing of the survey file arrived for 45 seconds/)).toBeInTheDocument();
+
+      act(() => screen.getByTestId('movie-preview-retry').click());
+      await waitFor(() => expect(loadCave).toHaveBeenCalledTimes(1));
+      expect(fetchMock).toHaveBeenLastCalledWith('http://files.local/model?sig=fresh', expect.anything());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('is called off when the preview goes', async () => {
     let signal: AbortSignal | undefined;
     vi.stubGlobal(

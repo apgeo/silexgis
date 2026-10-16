@@ -8,6 +8,7 @@ import { STRETCH_TRAIL_PREFIX, stretchKey } from '../../caveview/trackedStretch.
 import { shortNameOf } from '../../caveview/modelParts.ts';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
 import { reveal, resetViewControlsForTests } from '../../viewlinks/viewTargets.ts';
+import { forgetSurveyFiles } from '../../caveview/surveyFileDownload.ts';
 import CaveViewPanel from './CaveViewPanel.tsx';
 
 // How much room there is across, which is what decides how many of the viewer's own controls the
@@ -454,7 +455,7 @@ describe('CaveViewPanel', () => {
       <CaveViewPanel fileUrl="http://files.local/files/b/content?token=third" fileName="demo.lox" />,
     );
     await waitFor(() => expect(viewers).toHaveLength(2));
-    expect(fetch).toHaveBeenLastCalledWith('http://files.local/files/b/content?token=third');
+    expect(fetch).toHaveBeenLastCalledWith('http://files.local/files/b/content?token=third', expect.anything());
   });
 
   it('asks for a model at the newest address in hand, not the one the panel was mounted with', async () => {
@@ -468,12 +469,26 @@ describe('CaveViewPanel', () => {
       <CaveViewPanel fileUrl="http://files.local/files/a/content?token=second" fileName="demo.lox" />,
     );
 
-    // The same bytes under another name are read by another parser, which is a load.
+    // The same bytes under another name are read by another parser, which is a load. Arrived
+    // files are kept, so a load would take them as they are; with them gone, it reads the file again.
+    forgetSurveyFiles();
     rerender(
       <CaveViewPanel fileUrl="http://files.local/files/a/content?token=second" fileName="demo.3d" />,
     );
     await waitFor(() => expect(viewers).toHaveLength(2));
-    expect(fetch).toHaveBeenLastCalledWith('http://files.local/files/a/content?token=second');
+    expect(fetch).toHaveBeenLastCalledWith('http://files.local/files/a/content?token=second', expect.anything());
+  });
+
+  it('draws a file the page has already read without reading it again', async () => {
+    const { rerender } = render(
+      <CaveViewPanel fileUrl="http://files.local/files/a/content?token=first" fileName="demo.lox" />,
+    );
+    await waitFor(() => expect(viewers).toHaveLength(1));
+    rerender(
+      <CaveViewPanel fileUrl="http://files.local/files/a/content?token=second" fileName="demo.3d" />,
+    );
+    await waitFor(() => expect(viewers).toHaveLength(2));
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('reports entrance label clicks through onEntrancePick', async () => {
