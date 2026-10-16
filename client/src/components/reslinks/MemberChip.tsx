@@ -58,7 +58,10 @@ export default function MemberChip({
           // to bubble, the click reaches the surrounding link and the reader is taken to the
           // thing they were trying to unname — the membership goes, and the page they are then
           // looking at is the target's, which is a bad place to be holding a delete button.
+          // Presentation: the wrapper only stops a click on its way out; the control is the icon
+          // inside it, which the confirmation makes operable.
           <span
+            role="presentation"
             onClick={(event: MouseEvent<HTMLElement>) => {
               event.preventDefault();
               event.stopPropagation();

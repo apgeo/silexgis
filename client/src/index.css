@@ -59,3 +59,10 @@ html[data-reduce-motion='true'] *::after {
 .ant-tooltip {
   pointer-events: none;
 }
+
+/* A control that acts in place rather than navigating, drawn as a link: a button, so it is in
+   the tab order, without the button's own height and padding around the words. */
+.ant-btn.link-button {
+  height: auto;
+  padding: 0;
+}

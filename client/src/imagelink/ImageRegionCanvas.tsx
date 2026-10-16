@@ -267,6 +267,10 @@ export default function ImageRegionCanvas({
         }}
       />
       {size !== null && (
+        // Drawing a region and picking one off the picture are pointer gestures here, and there is
+        // as yet no keyboard way to reach a region: a known gap, left visible by this exemption
+        // rather than hidden behind a role that would claim the surface is operable.
+        // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
         <svg
           width={size.width}
           height={size.height}

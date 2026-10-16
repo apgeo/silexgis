@@ -184,9 +184,21 @@ export default function WorkAreasPage() {
         <Typography.Title level={4} style={{ margin: 0 }}>{t('workAreas.title')}</Typography.Title>
         <Breadcrumb
           items={[
-            { title: <a onClick={() => setOpenId(null)}>{t('workAreas.allAreas')}</a> },
+            // Buttons, not bare anchors: an anchor without an address is skipped by Tab, so the
+            // trail could only be climbed with a pointer.
+            {
+              title: (
+                <Button type="link" size="small" className="link-button" onClick={() => setOpenId(null)}>
+                  {t('workAreas.allAreas')}
+                </Button>
+              ),
+            },
             ...trail.map((area) => ({
-              title: <a onClick={() => setOpenId(area.id)}>{area.name ?? t('workAreas.untitled')}</a>,
+              title: (
+                <Button type="link" size="small" className="link-button" onClick={() => setOpenId(area.id)}>
+                  {area.name ?? t('workAreas.untitled')}
+                </Button>
+              ),
             })),
           ]}
         />

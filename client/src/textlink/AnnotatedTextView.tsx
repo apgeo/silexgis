@@ -171,7 +171,7 @@ export default function AnnotatedTextView({
       const active = activeMemberId != null && group.covering.some((h) => h.memberId === activeMemberId);
 
       const mark = (
-        <mark
+        <span
           className="tl-passage"
           style={styleFor(colors, active)}
           // A passage is a link and is reached the way every other link is reached: by tabbing
@@ -192,7 +192,7 @@ export default function AnnotatedTextView({
           }}
         >
           {body}
-        </mark>
+        </span>
       );
 
       if (renderCard === undefined) {
@@ -220,7 +220,9 @@ export default function AnnotatedTextView({
   };
 
   return (
-    <div className="tl-root" ref={rootRef} onMouseUp={onMouseUp}>
+    // Presentation: the handler only reads the text selection a drag leaves behind; the controls
+    // are the passages inside, each reachable by Tab.
+    <div className="tl-root" ref={rootRef} onMouseUp={onMouseUp} role="presentation">
       {header}
       {runs.map((run, runIndex) => {
         if (run.list !== null) {
