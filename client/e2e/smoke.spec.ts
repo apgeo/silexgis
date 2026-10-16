@@ -247,15 +247,16 @@ test('saved views: save, share anonymously, delete', async ({ page, browser, con
   // Save the current workspace as a named view.
   const dock = page.locator('.map-workspace-panel').first();
   await dock.getByPlaceholder('View name…').fill(viewName);
-  await dock.getByRole('button', { name: 'save' }).click();
+  // Exact names throughout: a substring match would also find a view whose name happens to
+  // contain the word.
+  await dock.getByRole('button', { name: 'Save current view', exact: true }).click();
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
-  // Typography.Link without href carries no link role; match by text.
-  const viewLink = page.locator('.map-workspace-panel').first().getByText(viewName);
+  const viewLink = dock.getByRole('button', { name: viewName, exact: true });
   await expect(viewLink).toBeVisible();
 
   // Share: the link lands on the clipboard; an anonymous browser can open it.
   await page.getByRole('listitem').filter({ hasText: viewName })
-    .getByRole('button', { name: 'link' }).click();
+    .getByRole('button', { name: `Copy a share link to ${viewName}`, exact: true }).click();
   await expect(page.getByText('Share link copied.')).toBeVisible({ timeout: 15_000 });
   const sharedUrl = await page.evaluate(() => navigator.clipboard.readText());
   expect(sharedUrl).toContain('/shared/view/');
@@ -270,7 +271,7 @@ test('saved views: save, share anonymously, delete', async ({ page, browser, con
 
   // Cleanup.
   await page.getByRole('listitem').filter({ hasText: viewName })
-    .getByRole('button', { name: 'delete' }).click();
+    .getByRole('button', { name: `Delete the view ${viewName}`, exact: true }).click();
   await expect(viewLink).not.toBeVisible({ timeout: 15_000 });
 });
 
@@ -552,7 +553,7 @@ test('dashboard: counts, activity, saved-view jump and the landing preference', 
   // Save a view first so the dashboard has one to list.
   const dock = page.locator('.map-workspace-panel').first();
   await dock.getByPlaceholder('View name…').fill(viewName);
-  await dock.getByRole('button', { name: 'save' }).click();
+  await dock.getByRole('button', { name: 'Save current view', exact: true }).click();
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
 
   await page.getByRole('menuitem', { name: 'Dashboard' }).click();
@@ -597,6 +598,6 @@ test('dashboard: counts, activity, saved-view jump and the landing preference', 
   await page.getByRole('menuitem', { name: 'Map' }).click();
   await page.locator('.map-workspace-panel').first()
     .getByRole('listitem').filter({ hasText: viewName })
-    .getByRole('button', { name: 'delete' }).click();
+    .getByRole('button', { name: `Delete the view ${viewName}`, exact: true }).click();
   await expect(page.getByText(viewName)).not.toBeVisible({ timeout: 15_000 });
 });
