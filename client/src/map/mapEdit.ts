@@ -35,6 +35,13 @@ export interface EditState {
   drawTypeId?: number;
 }
 
+/**
+ * Which saved features the reshaping tools (modify, move) may take hold of: every one, but for one
+ * whose own rights withhold it; one alone; or none. Features drawn here and not saved yet are
+ * always included.
+ */
+export type ReshapeScope = { kind: 'every'; except?: string } | { kind: 'only'; id: string } | { kind: 'none' };
+
 export interface PendingEdits {
   /** Locally drawn features awaiting attributes + save (GeoJSON geometry, 4326). */
   created: { feature: Feature; geometryType: DrawShape }[];
@@ -75,8 +82,8 @@ export class MapEditController {
   private createdFeatures: { feature: Feature; geometryType: DrawShape }[] = [];
   private modifiedGeometries = new globalThis.Map<string, object>();
 
-  /** Which saved features the reshaping tools may take hold of; undefined is every one. */
-  private reshapable: ((feature: Feature) => boolean) | undefined;
+  /** Which saved features the reshaping tools may take hold of. */
+  private reshapeScope: ReshapeScope = { kind: 'every' };
 
   constructor(map: Map) {
     this.map = map;
@@ -140,21 +147,39 @@ export class MapEditController {
   }
 
   /**
-   * Limits modify and move to the saved features this person may change — the one selected, when
-   * that feature's own rights are what allow it. Without a limit the tools take hold of every
-   * feature on the map, including ones the person may not change: the save would be refused, but
-   * only after the shape had been dragged about. A feature drawn here and not saved yet is always
-   * theirs to reshape. An armed tool is re-attached so the limit holds at once.
+   * Limits modify and move to the saved features this person may change. Without a limit the tools
+   * take hold of every feature on the map, including ones the person may not change: the save
+   * would be refused, but only after the shape had been dragged about. A feature drawn here and not
+   * saved yet is always theirs to reshape.
+   *
+   * An armed tool is re-attached when the scope changes, so the limit holds at once — and only
+   * then: re-attaching drops what the tool was holding, such as the vertex a finger last touched.
    */
-  setReshapable(filter: ((feature: Feature) => boolean) | undefined): void {
-    this.reshapable = filter;
+  setReshapeScope(scope: ReshapeScope): void {
+    if (JSON.stringify(scope) === JSON.stringify(this.reshapeScope)) {
+      return;
+    }
+    this.reshapeScope = scope;
     if (this.state.mode === 'modify' || this.state.mode === 'translate') {
       this.setMode(this.state.mode);
     }
   }
 
-  private readonly mayReshape = (feature: FeatureLike): boolean =>
-    feature.get('pendingNew') === true || (this.reshapable?.(feature as Feature) ?? true);
+  private readonly mayReshape = (feature: FeatureLike): boolean => {
+    if (feature.get('pendingNew') === true) {
+      return true;
+    }
+    const id = feature.get('id') as string | undefined;
+    const scope = this.reshapeScope;
+    switch (scope.kind) {
+      case 'every':
+        return id === undefined || id !== scope.except;
+      case 'only':
+        return id === scope.id;
+      case 'none':
+        return false;
+    }
+  };
 
   toggleSnap(): void {
     this.state = { ...this.state, snap: !this.state.snap };

@@ -356,7 +356,7 @@ export default function MapPage() {
   const [editDirty, setEditDirty] = useState(0);
   useEffect(() => editController?.subscribe((s) => setEditDirty(s.dirty)), [editController]);
 
-  const { canEdit, toolbarShown, mayReshapeSaved } = useEditScope({
+  const { canEdit, toolbarShown, mayReshapeSaved, rightsPending } = useEditScope({
     controller: editController,
     selectedFeatureId,
     selectedRights,
@@ -1448,7 +1448,7 @@ export default function MapPage() {
           </div>
           {toolbarShown && editController && (
             <div className={`map-edit-overlay map-chrome${isMobile ? ' map-edit-overlay-mobile' : ''}`}>
-              <EditToolbar controller={editController} mayModify={mayReshapeSaved} />
+              <EditToolbar controller={editController} mayModify={mayReshapeSaved} rightsPending={rightsPending} />
             </div>
           )}
           <MapContextMenu

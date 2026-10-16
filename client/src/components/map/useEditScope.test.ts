@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import Feature from 'ol/Feature';
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ObjectRights } from '../../api/hooks/objectRights.ts';
 import type { MapEditController } from '../../map/mapEdit.ts';
-import { useEditScope, type EditScopeInput } from './useEditScope.ts';
+import { reshapeScopeFor, useEditScope, type EditScopeInput } from './useEditScope.ts';
 
 function controller() {
-  return { setReshapable: vi.fn(), setMode: vi.fn() };
+  return { setReshapeScope: vi.fn(), setMode: vi.fn() };
 }
 
 const rights = (over: Partial<ObjectRights>): ObjectRights => ({
@@ -19,8 +18,8 @@ const rights = (over: Partial<ObjectRights>): ObjectRights => ({
   ...over,
 });
 
-function scope(fake: ReturnType<typeof controller>, over: Partial<EditScopeInput>) {
-  const input: EditScopeInput = {
+function input(fake: ReturnType<typeof controller>, over: Partial<EditScopeInput>): EditScopeInput {
+  return {
     controller: fake as unknown as MapEditController,
     selectedFeatureId: undefined,
     selectedRights: rights({}),
@@ -29,60 +28,50 @@ function scope(fake: ReturnType<typeof controller>, over: Partial<EditScopeInput
     unsavedEdits: 0,
     ...over,
   };
-  return renderHook((props: EditScopeInput) => useEditScope(props), { initialProps: input });
 }
 
-const withId = (id: string) => {
-  const feature = new Feature();
-  feature.set('id', id);
-  return feature;
-};
+describe('reshapeScopeFor', () => {
+  it('limits a member whose right is on the selected feature alone to that feature', () => {
+    expect(reshapeScopeFor('given', rights({ canEdit: true }), false)).toEqual({ kind: 'only', id: 'given' });
+    expect(reshapeScopeFor('other', rights({}), false)).toEqual({ kind: 'none' });
+    expect(reshapeScopeFor(undefined, rights({}), false)).toEqual({ kind: 'none' });
+  });
 
-/** The filter last handed to the controller; undefined is "every feature". */
-function lastFilter(fake: ReturnType<typeof controller>) {
-  return fake.setReshapable.mock.calls.at(-1)?.[0] as ((feature: Feature) => boolean) | undefined;
-}
+  it('lets a member who may write every feature reshape any, but one whose own rights withhold it', () => {
+    expect(reshapeScopeFor(undefined, rights({}), true)).toEqual({ kind: 'every' });
+    expect(reshapeScopeFor('given', rights({ canEdit: true }), true)).toEqual({ kind: 'every' });
+    expect(reshapeScopeFor('held-back', rights({}), true)).toEqual({ kind: 'every', except: 'held-back' });
+  });
+
+  it('takes nothing from a selected feature that has not answered yet', () => {
+    expect(reshapeScopeFor('given', rights({ canEdit: true, settled: false }), false)).toEqual({ kind: 'none' });
+  });
+});
 
 describe('useEditScope', () => {
-  it('limits the reshaping tools to the selected feature when its own rights allow it', () => {
+  it('puts the scope on the controller, and offers the tools for a selected feature only once it has answered', () => {
     const fake = controller();
-    scope(fake, { selectedFeatureId: 'given', selectedRights: rights({ canEdit: true }) });
-
-    const filter = lastFilter(fake)!;
-    expect(filter(withId('given'))).toBe(true);
-    expect(filter(withId('another'))).toBe(false);
-  });
-
-  it('lets them take hold of nothing saved until the selected feature has answered', () => {
-    const fake = controller();
-    // The installation-wide stand-in says yes; the feature has not said anything yet.
-    const { result } = scope(fake, {
-      selectedFeatureId: 'given',
-      selectedRights: rights({ canEdit: true, settled: false }),
-      mayWriteFeatures: true,
+    const view = renderHook((props: EditScopeInput) => useEditScope(props), {
+      initialProps: input(fake, { selectedFeatureId: 'given', selectedRights: rights({ canEdit: true }) }),
     });
+    expect(fake.setReshapeScope).toHaveBeenLastCalledWith({ kind: 'only', id: 'given' });
+    expect(view.result.current.mayReshapeSaved).toBe(true);
 
-    expect(result.current.mayReshapeSaved).toBe(false);
-    expect(lastFilter(fake)!(withId('given'))).toBe(false);
-  });
+    // Another feature selected: until it answers, the tools are not offered and the scope is left
+    // as it was — changing it would drop the vertex the selecting tap took hold of.
+    fake.setReshapeScope.mockClear();
+    view.rerender(input(fake, { selectedFeatureId: 'other', selectedRights: rights({ canEdit: true, settled: false }) }));
+    expect(view.result.current).toMatchObject({ mayReshapeSaved: false, rightsPending: true });
+    expect(fake.setReshapeScope).not.toHaveBeenCalled();
 
-  it('lets a member who may write every feature reshape any, with nothing selected', () => {
-    const fake = controller();
-    scope(fake, { mayWriteFeatures: true });
-    expect(lastFilter(fake)).toBeUndefined();
+    view.rerender(input(fake, { selectedFeatureId: 'other', selectedRights: rights({ canEdit: true }) }));
+    expect(fake.setReshapeScope).toHaveBeenLastCalledWith({ kind: 'only', id: 'other' });
   });
 
   it('puts an armed tool down when the toolbar goes, and keeps the toolbar while edits are unsaved', () => {
     const fake = controller();
-    const given: EditScopeInput = {
-      controller: fake as unknown as MapEditController,
-      selectedFeatureId: 'given',
-      selectedRights: rights({ canEdit: true }),
-      mayWriteFeatures: false,
-      mayCreateFeatures: false,
-      unsavedEdits: 1,
-    };
-    const view = scope(fake, given);
+    const given = input(fake, { selectedFeatureId: 'given', selectedRights: rights({ canEdit: true }), unsavedEdits: 1 });
+    const view = renderHook((props: EditScopeInput) => useEditScope(props), { initialProps: given });
 
     // Another feature, not this member's to change, selected while the first one's edit is unsaved.
     const other = { ...given, selectedFeatureId: 'other', selectedRights: rights({}) };

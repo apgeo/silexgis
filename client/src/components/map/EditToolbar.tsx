@@ -51,13 +51,19 @@ interface EditToolbarProps {
    * saved yet can be reshaped regardless. The server refuses the save either way.
    */
   mayModify?: boolean;
+  /**
+   * The selected feature's own rights are still on their way. The reshaping tools are not offered
+   * meanwhile, but one already armed is left armed: the tap that selected the feature may be the
+   * one that just took hold of its vertex.
+   */
+  rightsPending?: boolean;
 }
 
 /** Pinned shortcuts beyond this many stay reachable through the palette only. */
 const MAX_PINNED_BUTTONS = 8;
 
 /** Dispatches edit intents to the MapEditController; owns no OL objects itself. */
-export default function EditToolbar({ controller, mayModify = true }: EditToolbarProps) {
+export default function EditToolbar({ controller, mayModify = true, rightsPending = false }: EditToolbarProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const isMobile = useIsMobile();
@@ -96,10 +102,10 @@ export default function EditToolbar({ controller, mayModify = true }: EditToolba
   // Nothing left the tools may take hold of while one was armed (a feature this person may not
   // change was selected, say): the tool is put down rather than left working on it.
   useEffect(() => {
-    if (!reshapeOffered && (state.mode === 'modify' || state.mode === 'translate')) {
+    if (!reshapeOffered && !rightsPending && (state.mode === 'modify' || state.mode === 'translate')) {
       controller.setMode('none');
     }
-  }, [reshapeOffered, state.mode, controller]);
+  }, [reshapeOffered, rightsPending, state.mode, controller]);
 
   useEffect(() => {
     controller.onDrawEnd = (feature) => setPendingFeature(feature);

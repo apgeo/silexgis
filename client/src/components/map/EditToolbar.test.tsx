@@ -68,13 +68,13 @@ function fakeController(over: Partial<EditState> = {}): MapEditController {
 
 let controller: MapEditController;
 
-function renderToolbar(over: Partial<EditState> = {}, mayModify = true) {
+function renderToolbar(over: Partial<EditState> = {}, mayModify = true, rightsPending = false) {
   const map = new OlMap({ view: new View({ center: [0, 0], zoom: 2 }) });
   controller = fakeController(over);
   return render(
     <MapContext.Provider value={map}>
       <App>
-        <EditToolbar controller={controller} mayModify={mayModify} />
+        <EditToolbar controller={controller} mayModify={mayModify} rightsPending={rightsPending} />
       </App>
     </MapContext.Provider>,
   );
@@ -212,6 +212,13 @@ describe('EditToolbar for a selected feature the person may not change', () => {
     renderToolbar({ mode: 'modify' }, false);
 
     expect(controller.setMode).toHaveBeenCalledWith('none');
+  });
+
+  it('leaves an armed tool armed while a newly selected feature’s rights are on their way', () => {
+    renderToolbar({ mode: 'modify' }, false, true);
+
+    expect(screen.getByRole('button', { name: /^Modify/ })).toBeDisabled();
+    expect(controller.setMode).not.toHaveBeenCalledWith('none');
   });
 
   it('still offers them for what was drawn here and not saved yet', () => {

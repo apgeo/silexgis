@@ -296,10 +296,12 @@ describe('what the reshaping tools may take hold of', () => {
     return feature;
   };
 
+  const attached = (map: Map, kind: typeof Modify | typeof Translate) =>
+    map.getInteractions().getArray().find((i) => i instanceof kind)!;
+
   /** The filter an attached interaction applies to a feature it could take hold of. */
   function takesHold(map: Map, kind: typeof Modify | typeof Translate, feature: Feature): boolean {
-    const interaction = map.getInteractions().getArray().find((i) => i instanceof kind)!;
-    const filter = (interaction as unknown as { filter_: (f: Feature, layer?: unknown) => boolean }).filter_;
+    const filter = (attached(map, kind) as unknown as { filter_: (f: Feature, layer?: unknown) => boolean }).filter_;
     return filter(feature, undefined);
   }
 
@@ -310,29 +312,42 @@ describe('what the reshaping tools may take hold of', () => {
     expect(takesHold(map, Modify, featureWithId('a'))).toBe(true);
   });
 
-  it('takes hold only of the features allowed, and always of one drawn here and not saved', () => {
-    const map = realMap();
-    const controller = new MapEditController(map);
-    controller.setReshapable((feature) => feature.get('id') === 'mine');
+  it('takes hold only of the features in scope, and always of one drawn here and not saved', () => {
     const unsaved = new Feature(new Point([0, 0]));
     unsaved.set('pendingNew', true);
+    const cases = [
+      { scope: { kind: 'only', id: 'mine' }, mine: true, other: false },
+      { scope: { kind: 'every', except: 'held-back' }, mine: true, other: true },
+      { scope: { kind: 'none' }, mine: false, other: false },
+    ] as const;
 
-    for (const mode of ['modify', 'translate'] as const) {
-      controller.setMode(mode);
-      const kind = mode === 'modify' ? Modify : Translate;
-      expect(takesHold(map, kind, featureWithId('mine'))).toBe(true);
-      expect(takesHold(map, kind, featureWithId('somebody-else'))).toBe(false);
-      expect(takesHold(map, kind, unsaved)).toBe(true);
+    for (const { scope, mine, other } of cases) {
+      const map = realMap();
+      const controller = new MapEditController(map);
+      controller.setReshapeScope(scope);
+      for (const mode of ['modify', 'translate'] as const) {
+        controller.setMode(mode);
+        const kind = mode === 'modify' ? Modify : Translate;
+        expect(takesHold(map, kind, featureWithId('mine')), `${scope.kind} ${mode}`).toBe(mine);
+        expect(takesHold(map, kind, featureWithId('somebody-else')), `${scope.kind} ${mode}`).toBe(other);
+        expect(takesHold(map, kind, featureWithId('held-back'))).toBe(false);
+        expect(takesHold(map, kind, unsaved)).toBe(true);
+      }
     }
   });
 
-  it('holds a new limit at once on a tool already armed', () => {
+  it('holds a new scope at once on a tool already armed, and leaves the tool alone for the same scope', () => {
     const map = realMap();
     const controller = new MapEditController(map);
     controller.setMode('modify');
+    const armed = attached(map, Modify);
 
-    controller.setReshapable(() => false);
+    // The same scope again — the tool keeps what it holds.
+    controller.setReshapeScope({ kind: 'every' });
+    expect(attached(map, Modify)).toBe(armed);
 
+    controller.setReshapeScope({ kind: 'none' });
+    expect(attached(map, Modify)).not.toBe(armed);
     expect(takesHold(map, Modify, featureWithId('a'))).toBe(false);
     expect(map.getInteractions().getArray().filter((i) => i instanceof Modify)).toHaveLength(1);
   });
