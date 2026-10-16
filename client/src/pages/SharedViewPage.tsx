@@ -5,18 +5,12 @@ import Map from 'ol/Map';
 import View from 'ol/View';
 import type { FeatureLike } from 'ol/Feature';
 import type Point from 'ol/geom/Point';
-import { fromLonLat } from 'ol/proj';
+import { fromLonLat, transformExtent } from 'ol/proj';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { fetchSharedView } from '../api/hooks.ts';
 import { tileLayerFor } from '../map/baseLayers.ts';
 import { createSharedViewLayers } from '../map/sharedViewLayers.ts';
-
-interface SharedConfig {
-  configVersion?: number;
-  center?: [number, number];
-  zoom?: number;
-}
 
 /** What a click on the shared map shows: a public name, and whether the position is approximate. */
 interface Picked {
@@ -29,9 +23,11 @@ interface Picked {
  * saved with, and the public cave entrances and surface features it had switched on.
  *
  * Everything drawn here comes from the link's own routes, which answer for nobody in particular:
- * rows at the widest visibility level only, every protected position snapped or left out, and no
- * identifiers. The page adds nothing to that and has nothing to withhold — a click shows the name
- * the server sent, and whether the point is approximate.
+ * rows that are themselves at the widest visibility level, inside the view's own area, every
+ * protected position snapped or left out, and no identifiers. The page adds nothing to that and
+ * has nothing to withhold — a click shows the name the server sent, and whether the point is
+ * approximate. The map is held inside the area the server names, so its reader meets the edge of
+ * what was shared rather than data stopping for no reason they can see.
  */
 export default function SharedViewPage() {
   const { t } = useTranslation();
@@ -55,7 +51,8 @@ export default function SharedViewPage() {
           return;
         }
         setName(shared.name);
-        const config = shared.config as SharedConfig;
+        const camera = shared.camera;
+        const reach = shared.reach;
         const data = createSharedViewLayers(token!, shared.overlays);
         const base = shared.background ? tileLayerFor(shared.background, 0) : null;
         base?.setVisible(true);
@@ -64,8 +61,14 @@ export default function SharedViewPage() {
           target: mapTarget.current ?? undefined,
           layers: [...(base ? [base] : []), ...data.layers],
           view: new View({
-            center: fromLonLat(config.center ?? [25.3, 45.7]),
-            zoom: config.zoom ?? 8,
+            center: fromLonLat(camera ? [camera.longitude, camera.latitude] : [25.3, 45.7]),
+            zoom: camera?.zoom ?? 8,
+            ...(reach
+              ? {
+                  extent: transformExtent([reach.west, reach.south, reach.east, reach.north], 'EPSG:4326', 'EPSG:3857'),
+                  minZoom: reach.minZoom,
+                }
+              : {}),
           }),
         });
         map = created;

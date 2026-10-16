@@ -46,12 +46,12 @@ public sealed class MapOptions
     public int ClusterMaxZoom { get; set; } = 11;
 
     /// <summary>The highest zoom the map endpoints accept; the top of <see cref="ClusterMaxZoom"/>'s range.</summary>
-    public const int HighestZoom = 24;
+    public const int HighestZoom = SilexGis.Domain.Map.MapZoom.Highest;
 
     /// <summary>
-    /// Whether a shared map view's link draws data: the cave entrances and surface features at the
-    /// widest visibility level, with every protected position obfuscated. Off, a link shows its
-    /// background and camera only.
+    /// Whether a shared map view's link draws data: the cave entrances and surface features that are
+    /// themselves at the widest visibility level, inside the view's own area, with every protected
+    /// position obfuscated. Off, a link shows its background and camera only.
     /// </summary>
     /// <remarks>
     /// On by default: an owner who shares a view is sharing a map, and a map with nothing on it is

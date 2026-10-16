@@ -62,8 +62,20 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         shared.StatusCode.ShouldBe(HttpStatusCode.OK);
         var payload = await shared.Content.ReadFromJsonAsync<JsonElement>();
         payload.GetProperty("name").GetString().ShouldBe("Detail area");
-        payload.GetProperty("config").GetProperty("zoom").GetInt32().ShouldBe(12);
-        payload.TryGetProperty("ownerUserId", out _).ShouldBeFalse(); // nothing beyond name+config
+        payload.GetProperty("camera").GetProperty("zoom").GetDouble().ShouldBe(12);
+        payload.GetProperty("camera").GetProperty("longitude").GetDouble().ShouldBe(25.4);
+        payload.GetProperty("camera").GetProperty("latitude").GetDouble().ShouldBe(45.5);
+
+        // What the page draws and nothing else: the stored document is the owner's working state —
+        // the files and rasters they had on, their tag filter, their 3D camera — and none of it is
+        // sent, not even under another name.
+        payload.EnumerateObject().Select(x => x.Name).Order()
+            .ShouldBe(new[] { "background", "camera", "name", "overlays", "reach" });
+        var text = payload.GetRawText();
+        foreach (var privateMember in new[] { ViewGeofileId, ViewRasterId, ViewTagSlug, "camera3d", "geofileIds", "tagFilter", "configVersion" })
+        {
+            text.ShouldNotContain(privateMember, Case.Insensitive);
+        }
 
         // Anonymous callers still cannot browse the API surface.
         (await anonymous.GetAsync("/api/v1/map-views/")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -111,11 +123,24 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable, IClassFixture<Po
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    private const string ViewGeofileId = "6f1c1d36-0d7e-4a3b-9a55-3f0b6b0c2a11";
+    private const string ViewRasterId = "a2b4c6d8-1e3f-4a5b-8c7d-9e0f1a2b3c4d";
+    private const string ViewTagSlug = "private-leads-only";
+
     private static object ViewBody(string name, bool isHome) => new
     {
         name,
         description = (string?)null,
-        config = new { configVersion = 1, zoom = 12, center = new[] { 25.4, 45.5 } },
+        config = new
+        {
+            configVersion = 1,
+            zoom = 12,
+            center = new[] { 25.4, 45.5 },
+            geofileIds = new[] { ViewGeofileId },
+            rasters = new[] { new { id = ViewRasterId, opacity = 0.5 } },
+            tagFilter = ViewTagSlug,
+            camera3d = new { longitude = 25.41, latitude = 45.51, height = 1500, heading = 10, pitch = -30, roll = 0 },
+        },
         isHome,
         cavingGroupId = (Guid?)null,
         visibility = "private",

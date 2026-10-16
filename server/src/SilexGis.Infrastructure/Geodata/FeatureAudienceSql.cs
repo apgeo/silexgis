@@ -22,14 +22,19 @@ public sealed record FeatureAudience(string VisibleSql, string ExactSql, Dynamic
 /// <para>
 /// <b>The link holder is the least-privileged reader there is.</b> They are given what every
 /// signed-in account holds and no account holds less of — no personal grant, no caving group,
-/// nothing owned — and then narrowed twice more. They read only rows at the widest visibility
-/// level, <see cref="Visibility.Public"/>, reached the way any reader reaches a row (its own level
-/// or a containing feature's): a view shared from an account that reads more cannot hand the link
-/// what that account reads. And they place no protected row exactly, whatever the installation
-/// grants every account: a protected point is shown snapped and a protected outline not at all, as for
-/// a signed-in reader without exact view. That is stricter than the least-privileged account,
-/// which an installation can give exact view of a protected area — the link is a URL that leaves
-/// the installation, and nothing an administrator granted to accounts reaches it.
+/// nothing owned — and then narrowed twice more. They read only rows that are <i>themselves</i>
+/// at the widest visibility level, <see cref="Visibility.Public"/>: a generic feature by its own
+/// level, an entrance by its cave's own level (an entrance has no audience of its own; it is the
+/// cave's door). The ordinary cascade — a row is readable when it or any feature containing it
+/// admits the reader — is deliberately not used here: through it a private cave filed inside a
+/// public karst area reads as public, which is right for accounts that may read the area's
+/// contents and wrong for a URL anybody can be sent. A view shared from an account that reads
+/// more cannot hand the link what that account reads. And they place no protected row exactly,
+/// whatever the installation grants every account: a protected point is shown snapped and a
+/// protected outline not at all, as for a signed-in reader without exact view. That is stricter
+/// than the least-privileged account, which an installation can give exact view of a protected
+/// area — the link is a URL that leaves the installation, and nothing an administrator granted
+/// to accounts reaches it.
 /// </para>
 /// <para>
 /// A rule that denies something to every account still denies it here: the visibility fragment
@@ -56,10 +61,14 @@ public static class FeatureAudienceSql
         return new FeatureAudience(
             $"""
             ({visibleSql}
-             AND EXISTS (SELECT 1 FROM features pub
-                         WHERE pub.id = ANY({alias}.ancestor_ids)
-                           AND pub.deleted_at IS NULL
-                           AND pub.visibility = {(short)Visibility.Public}))
+             AND CASE WHEN {alias}.kind = {(short)FeatureKind.CaveEntrance}
+                      THEN EXISTS (SELECT 1 FROM cave_entrances ce
+                                   JOIN features cave ON cave.id = ce.cave_feature_id
+                                   WHERE ce.id = {alias}.id
+                                     AND cave.deleted_at IS NULL
+                                     AND cave.visibility = {(short)Visibility.Public})
+                      ELSE {alias}.visibility = {(short)Visibility.Public}
+                 END)
             """,
             // Exact only where nothing above the row is a protection root at all — the one case in
             // which every reader places a row exactly. No grant, owner arm or administrator arm
@@ -74,13 +83,14 @@ public static class FeatureAudienceSql
 
     /// <summary>
     /// The rows a shared view's link holder may read, as a query: the EF form of
-    /// <see cref="SharedLink"/>'s visibility fragment. A protected row it yields is never placeable by them.
+    /// <see cref="SharedLink"/>'s visibility fragment — an entrance by its cave's own level, every
+    /// other row by its own. A protected row it yields is never placeable by them.
     /// </summary>
     public static IQueryable<Feature> SharedLinkReadable(SilexGisDbContext db, AccessContext anyAccount) =>
         db.Features.AsQueryable()
             .VisibleTo(anyAccount, db.Features, db.FeatureSetMembers)
-            // Walked over the row's own ancestor array, each id looked up by key: the same cascade
-            // the read filter applies, in the same indexable form.
-            .Where(f => f.AncestorIds.Any(ancestorId =>
-                db.Features.Any(pub => pub.Id == ancestorId && pub.Visibility == Visibility.Public)));
+            .Where(f => (f.Kind != FeatureKind.CaveEntrance && f.Visibility == Visibility.Public)
+                || (f.Kind == FeatureKind.CaveEntrance
+                    && db.CaveEntrances.Any(e => e.Id == f.Id
+                        && db.Features.Any(cave => cave.Id == e.CaveFeatureId && cave.Visibility == Visibility.Public))));
 }

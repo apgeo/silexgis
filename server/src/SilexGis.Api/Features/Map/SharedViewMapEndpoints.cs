@@ -14,16 +14,27 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Features.Map;
 
 /// <summary>
-/// The data a shared map view's link draws: cave entrances and surface features at the widest
-/// visibility level, for nobody in particular.
+/// The data a shared map view's link draws: cave entrances and surface features that are
+/// themselves at the widest visibility level, inside the view's own area, for nobody in particular.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Who is answered.</b> The link holder is the least-privileged reader there is (see
-/// <see cref="FeatureAudienceSql.SharedLink"/>): what every account may read, narrowed to public
-/// rows, with nothing placed exactly. A protected entrance or point feature is drawn snapped to the
-/// protection grid, exactly as a signed-in reader without exact view is shown it; a protected line
-/// or polygon is not drawn at all.
+/// <see cref="FeatureAudienceSql.SharedLink"/>): what every account may read, narrowed to rows that
+/// are public in their own right, with nothing placed exactly. A protected entrance or point feature
+/// is drawn snapped to the protection grid, exactly as a signed-in reader without exact view is
+/// shown it; a protected line or polygon is not drawn at all.
+/// </para>
+/// <para>
+/// <b>Where it answers.</b> Only inside the view's reach (<see cref="SharedViewReach"/>): the saved
+/// camera's extent with a margin round it, worked out here from the stored view. A requested window
+/// is clipped to it, a window wholly outside it is answered with nothing, and a zoom further out
+/// than the reach allows is answered at the reach's lowest. The link shares one view; without this
+/// it would be an anonymous, pageable read of every public row in the installation.
+/// </para>
+/// <para>
+/// <b>Narrowed as the view was.</b> A view saved with a tag filter draws, through its link, only
+/// what that filter let through on the owner's map.
 /// </para>
 /// <para>
 /// <b>The same statements as the workspace map.</b> Clusters are the cluster statement, the point
@@ -68,23 +79,31 @@ public static class SharedViewMapEndpoints
         IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
-        if (await SharedConfigAsync(db, token, mapOptions.Value, ct) is not { EntrancesVisible: true })
+        if (await SharedConfigAsync(db, token, mapOptions.Value, ct) is not
+            { EntrancesVisible: true, Camera: { } camera } config)
         {
             return ApiProblems.NotFound("map_view.not_found");
         }
 
-        if (MapEndpoints.WindowProblem(bbox, out var box) is { } windowProblem)
+        if (MapEndpoints.WindowProblem(bbox, out var requested) is { } windowProblem)
         {
             return windowProblem;
         }
 
+        var reach = camera.Reach;
+        if (Within(reach, requested) is not { } box)
+        {
+            return TypedResults.Ok(FeatureCollection.Of([]));
+        }
+
         var gridMeters = accessOptions.Value.LocationGridMeters;
         var anyAccount = await AccessContextResolver.ResolveForAnyAccountAsync(db, ct);
-        var effectiveZoom = Math.Clamp(zoom ?? 14, 0, MapOptions.HighestZoom);
+        var effectiveZoom = Math.Clamp(
+            zoom ?? (int)Math.Round(camera.Zoom), reach.LowestZoom, MapOptions.HighestZoom);
         if (effectiveZoom < mapOptions.Value.ClusterMaxZoom)
         {
             return TypedResults.Ok(await MapSql.ClustersAsync(
-                db, FeatureAudienceSql.SharedLink(anyAccount, "f"), box, effectiveZoom, gridMeters, tag: null, ct));
+                db, FeatureAudienceSql.SharedLink(anyAccount, "f"), box, effectiveZoom, gridMeters, config.TagFilter, ct));
         }
 
         var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(
@@ -92,11 +111,11 @@ public static class SharedViewMapEndpoints
             box.West, box.South, box.East, box.North, gridMeters, [FeatureKind.CaveEntrance], ct);
         var readable = FeatureAudienceSql.SharedLinkReadable(db, anyAccount).AsNoTracking();
         var rows = await MapEndpoints.EntrancePointsQuery(
-                db, readable, box, protectedMembers, tag: null, mapOptions.Value.MaxPoints)
+                db, readable, box, protectedMembers, config.TagFilter, mapOptions.Value.MaxPoints)
             .ToListAsync(ct);
 
-        // A cave's name is shown only where the cave itself is public: an entrance can be public
-        // by a level of its own while its cave is not.
+        // Read through the link's own filter, so a name comes only from a cave that is itself
+        // public and not denied to every account.
         var caveIds = rows.Select(r => r.CaveId).Distinct().ToList();
         var caveNames = await FeatureAudienceSql.SharedLinkReadable(db, anyAccount).AsNoTracking()
             .Where(f => caveIds.Contains(f.Id))
@@ -128,14 +147,20 @@ public static class SharedViewMapEndpoints
         IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
-        if (await SharedConfigAsync(db, token, mapOptions.Value, ct) is not { SurfaceFeaturesVisible: true })
+        if (await SharedConfigAsync(db, token, mapOptions.Value, ct) is not
+            { SurfaceFeaturesVisible: true, Camera: { } camera } config)
         {
             return ApiProblems.NotFound("map_view.not_found");
         }
 
-        if (MapEndpoints.WindowProblem(bbox, out var box) is { } windowProblem)
+        if (MapEndpoints.WindowProblem(bbox, out var requested) is { } windowProblem)
         {
             return windowProblem;
+        }
+
+        if (Within(camera.Reach, requested) is not { } box)
+        {
+            return TypedResults.Ok(FeatureCollection.Of([]));
         }
 
         var gridMeters = accessOptions.Value.LocationGridMeters;
@@ -147,10 +172,18 @@ public static class SharedViewMapEndpoints
             db, FeatureAudienceSql.SharedLink(anyAccount, "f"),
             box.West, box.South, box.East, box.North, gridMeters, [FeatureKind.Generic], ct);
         var polygon = box.ToPolygon();
-        var rows = await FeatureAudienceSql.SharedLinkReadable(db, anyAccount).AsNoTracking()
+        var query = FeatureAudienceSql.SharedLinkReadable(db, anyAccount).AsNoTracking()
             .Where(f => f.Kind == FeatureKind.Generic && f.Geom != null
                 && ((!f.IsProtectedEffective && f.Geom!.Intersects(polygon))
-                    || protectedMembers.Contains(f.Id)))
+                    || protectedMembers.Contains(f.Id)));
+        if (config.TagFilter is { } tag)
+        {
+            // The same narrowing the owner's feature layer applies for the view's tag filter.
+            query = query.Where(f => db.Taggings.Any(tg =>
+                tg.FeatureId == f.Id && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
+        }
+
+        var rows = await query
             .OrderBy(f => f.Id)
             .Take(mapOptions.Value.MaxPoints)
             .Select(f => new { f.Name, f.Geom, f.FeatureTypeId, f.IsProtectedEffective })
@@ -191,6 +224,12 @@ public static class SharedViewMapEndpoints
 
         return TypedResults.Ok(FeatureCollection.Of(features));
     }
+
+    /// <summary>The part of a requested window inside the link's reach, or null when none is.</summary>
+    private static Bbox? Within(SharedViewReach reach, Bbox requested) =>
+        reach.Clip(requested.West, requested.South, requested.East, requested.North) is { } clipped
+            ? new Bbox(clipped.West, clipped.South, clipped.East, clipped.North)
+            : null;
 
     /// <summary>
     /// What a live link's view says it may draw, or null when there is no such link or the

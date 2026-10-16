@@ -86,7 +86,7 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         await CreatePointFeatureAsync("Link Public Sinkhole", 10.111, 60.111, "public", locationProtected: false);
         await CreatePointFeatureAsync("Link Accounts Sinkhole", 10.131, 60.111, "authenticated", locationProtected: false);
 
-        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true));
+        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true, 10.1, 60.1));
         const string window = "10.0,60.0,10.2,60.2";
 
         var view = await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}");
@@ -138,7 +138,7 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         var cave = await CreateCaveAsync("Link Guarded", lon, lat, "public", locationProtected: true);
         await GrantEveryAccountExactViewAsync(cave.Id);
 
-        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: false));
+        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: false, snappedLon, snappedLat, zoom: 10));
         string Url(string bbox) => $"/api/v1/shared/views/{token}/cave-entrances?bbox={bbox}&zoom={zoom}";
 
         var westInside = Window(lon - step, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4);
@@ -174,7 +174,7 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         var snappedLat = Math.Round(62.15 / Cell, MidpointRounding.AwayFromZero) * Cell;
         await CreatePointFeatureAsync("Link Guarded Point", snappedLon - (0.2 * Cell), snappedLat + (0.2 * Cell), "public", locationProtected: true);
 
-        var token = await ShareAsync(await CreateViewAsync(entrances: false, features: true));
+        var token = await ShareAsync(await CreateViewAsync(entrances: false, features: true, 13.2, 62.2, zoom: 10));
         var drawn = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox=13.0,62.0,13.4,62.4"))["features"]!.AsArray();
 
         var point = drawn.ShouldHaveSingleItem()!;
@@ -186,7 +186,7 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
     public async Task Revoking_the_link_stops_its_data_at_once()
     {
         await CreateCaveAsync("Link Revoked", 14.101, 63.101, "public", locationProtected: false);
-        var viewId = await CreateViewAsync(entrances: true, features: true);
+        var viewId = await CreateViewAsync(entrances: true, features: true, 14.1, 63.1);
         var token = await ShareAsync(viewId);
         const string window = "14.0,63.0,14.2,63.2";
         (await anonymous.GetAsync($"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=14"))
@@ -204,7 +204,7 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
     [Fact]
     public async Task An_overlay_the_view_had_off_is_not_drawn()
     {
-        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: false));
+        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: false, 14.1, 63.1));
 
         var view = await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}");
         view["overlays"]!["features"]!.GetValue<bool>().ShouldBeFalse();
@@ -216,7 +216,7 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
     [Fact]
     public async Task A_window_off_the_globe_is_refused()
     {
-        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true));
+        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true, 25.5, 45.5));
 
         var response = await anonymous.GetAsync($"/api/v1/shared/views/{token}/cave-entrances?bbox=26,45,25,46&zoom=14");
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -242,7 +242,7 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
             Attribution = "© Keyed",
         });
 
-        var token = await ShareAsync(await CreateViewAsync(entrances: false, features: false, baseLayerId: keyedId));
+        var token = await ShareAsync(await CreateViewAsync(entrances: false, features: false, 10.1, 60.1, baseLayerId: keyedId));
         var response = await anonymous.GetAsync($"/api/v1/shared/views/{token}");
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
@@ -279,7 +279,7 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
             Attribution = entry.Attribution,
         });
 
-        var token = await ShareAsync(await CreateViewAsync(entrances: false, features: false, baseLayerId: serviceId));
+        var token = await ShareAsync(await CreateViewAsync(entrances: false, features: false, 10.1, 60.1, baseLayerId: serviceId));
         var background = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}"))["background"]!;
 
         background["layerKind"]!.GetValue<string>().ShouldBe("wms");
@@ -294,7 +294,7 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         using var off = new SilexGisApiFactory(
             postgres.ConnectionString, new Dictionary<string, string?> { ["Map:SharedViewData"] = "false" });
         await CreateCaveAsync("Link Switched Off", 15.101, 64.101, "public", locationProtected: false);
-        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true));
+        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true, 15.1, 64.1));
         using var stranger = off.CreateClient();
 
         var view = await GetJsonAsync(stranger, $"/api/v1/shared/views/{token}");
@@ -305,9 +305,136 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         await ShouldBeNotFoundAsync(stranger, $"/api/v1/shared/views/{token}/features?bbox=15.0,64.0,15.2,64.2");
     }
 
-    private sealed record CaveRef(Guid Id, string Name);
+    /// <summary>
+    /// A link answers only inside the view it shares: a public cave a few view-widths away is not
+    /// on it at any window or zoom, a window wholly outside is answered with nothing in the usual
+    /// shape, and a request further out than the reach allows is answered at the reach's lowest
+    /// zoom — so the link is never a read of the installation's whole public register.
+    /// </summary>
+    [Fact]
+    public async Task A_link_answers_only_inside_the_view_it_shares()
+    {
+        await CreateCaveAsync("Link Near", 16.101, 65.101, "public", locationProtected: false);
+        await CreateCaveAsync("Link Far", 19.101, 65.101, "public", locationProtected: false);
+        await CreatePointFeatureAsync("Link Near Sinkhole", 16.111, 65.111, "public", locationProtected: false);
+        await CreatePointFeatureAsync("Link Far Sinkhole", 19.111, 65.111, "public", locationProtected: false);
+        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true, 16.1, 65.1, zoom: 12));
 
-    private async Task<CaveRef> CreateCaveAsync(string name, double lon, double lat, string visibility, bool locationProtected)
+        // A window over both, a whole-world window, and the coarsest zoom anybody can ask: the
+        // near cave only, every time.
+        const string both = "15.9,64.9,19.3,65.3";
+        const string world = "-180,-90,180,90";
+        foreach (var url in new[]
+        {
+            $"/api/v1/shared/views/{token}/cave-entrances?bbox={both}&zoom=14",
+            $"/api/v1/shared/views/{token}/cave-entrances?bbox={both}&zoom=6",
+            $"/api/v1/shared/views/{token}/cave-entrances?bbox={world}&zoom=0",
+            $"/api/v1/shared/views/{token}/cave-entrances?bbox={world}&zoom=14",
+        })
+        {
+            (await CountAsync(anonymous, url)).ShouldBe(1, url);
+        }
+
+        (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={both}"))["features"]!.AsArray()
+            .ShouldHaveSingleItem()!["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(16.111, 1e-9);
+        (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={world}"))["features"]!.AsArray()
+            .Count.ShouldBe(1);
+
+        // Asked about the far cave alone: the usual shape, with nothing in it.
+        const string far = "19.0,65.0,19.2,65.2";
+        var nothing = await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={far}&zoom=14");
+        nothing["type"]!.GetValue<string>().ShouldBe("FeatureCollection");
+        nothing["features"]!.AsArray().ShouldBeEmpty();
+        (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={far}"))["features"]!.AsArray()
+            .ShouldBeEmpty();
+
+        // A zoom further out than the reach allows is answered at the reach's lowest, which is
+        // still a cluster zoom here: the near cave's cluster names a cell of that zoom's lattice.
+        var cluster = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={both}&zoom=2"))["features"]!
+            .AsArray().ShouldHaveSingleItem()!;
+        var cell = cluster["properties"]!["cell"]!.AsArray();
+        (cell[2]!.GetValue<double>() - cell[0]!.GetValue<double>()).ShouldBe(360d / Math.Pow(2, 10) / 4d, 1e-9);
+
+        // Every account still sees both, on the workspace map.
+        (await CountAsync(member, $"/api/v1/map/cave-entrances?bbox={both}&zoom=14")).ShouldBe(2);
+
+        // The page is told the reach, so it can hold its map inside it.
+        var reach = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}"))["reach"]!;
+        reach["minZoom"]!.GetValue<int>().ShouldBe(10);
+        reach["west"]!.GetValue<double>().ShouldBeLessThan(16.1);
+        reach["east"]!.GetValue<double>().ShouldBeGreaterThan(16.1);
+        reach["east"]!.GetValue<double>().ShouldBeLessThan(19.1, "the far cave must be outside the view's reach");
+    }
+
+    /// <summary>
+    /// Only rows that are themselves public are drawn on a link — an entrance by its cave's own
+    /// level, a feature by its own. A private cave and a private sinkhole filed inside a public
+    /// karst area are readable by every account through the area (the ordinary cascade), and are
+    /// not on the link; nor is an entrance marked public whose cave is private.
+    /// </summary>
+    [Fact]
+    public async Task A_private_row_inside_a_public_container_is_not_drawn_on_a_link()
+    {
+        double[][] ring = [[17.05, 66.05], [17.25, 66.05], [17.25, 66.25], [17.05, 66.25], [17.05, 66.05]];
+        var area = await CreateFeatureAsync("Link Public Area", new { type = "Polygon", coordinates = new[] { ring } },
+            "karst_area", "public", locationProtected: false);
+        await CreateCaveAsync("Link Private In Area", 17.101, 66.101, "private", locationProtected: false, parentId: area);
+        await CreateFeatureAsync("Link Private Sinkhole In Area", new { type = "Point", coordinates = new[] { 17.111, 66.111 } },
+            "sinkhole", "private", locationProtected: false, parentId: area);
+        var privateCave = await CreateCaveAsync("Link Private Own Door", 17.121, 66.121, "private", locationProtected: false);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.Features.Where(f => f.Id == privateCave.EntranceId)
+                .ExecuteUpdateAsync(u => u.SetProperty(f => f.Visibility, Visibility.Public));
+        }
+
+        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true, 17.15, 66.15, zoom: 11));
+        const string window = "17.0,66.0,17.3,66.3";
+
+        (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=14")).ShouldBe(0);
+        (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=9")).ShouldBe(0);
+
+        // The public area itself is drawn; the private sinkhole inside it is not.
+        var drawn = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={window}"))["features"]!.AsArray();
+        drawn.ShouldHaveSingleItem()!["geometry"]!["type"]!.GetValue<string>().ShouldBe("Polygon");
+
+        // The control: every account reads both entrances, one through the area and one by its own level.
+        (await CountAsync(member, $"/api/v1/map/cave-entrances?bbox={window}&zoom=14")).ShouldBe(2);
+    }
+
+    /// <summary>A view saved narrowed to a tag is narrowed to it on its link too, on all three statements.</summary>
+    [Fact]
+    public async Task A_link_is_narrowed_by_the_views_tag_filter()
+    {
+        var tagName = $"Link Tag {Guid.NewGuid():N}"[..20];
+        var tagged = await CreateCaveAsync("Link Tagged", 18.101, 67.101, "public", locationProtected: false);
+        await CreateCaveAsync("Link Untagged", 18.121, 67.101, "public", locationProtected: false);
+        var taggedSinkhole = await CreatePointFeatureAsync("Link Tagged Sinkhole", 18.111, 67.111, "public", locationProtected: false);
+        await CreatePointFeatureAsync("Link Untagged Sinkhole", 18.131, 67.111, "public", locationProtected: false);
+        string? slug = null;
+        foreach (var id in new[] { tagged.EntranceId, taggedSinkhole })
+        {
+            var response = await owner.PostAsJsonAsync("/api/v1/taggings/", new { tagName, entityType = "feature", entityId = id });
+            var payload = await response.Content.ReadAsStringAsync();
+            response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+            slug = JsonNode.Parse(payload)!["tag"]!["slug"]!.GetValue<string>();
+        }
+
+        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true, 18.1, 67.1, tagFilter: slug));
+        const string window = "18.0,67.0,18.2,67.2";
+
+        var points = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=14"))["features"]!.AsArray();
+        points.ShouldHaveSingleItem()!["properties"]!["caveName"]!.GetValue<string>().ShouldBe(tagged.Name);
+        (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=10")).ShouldBe(1);
+        (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={window}"))["features"]!.AsArray()
+            .ShouldHaveSingleItem()!["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(18.111, 1e-9);
+    }
+
+    private sealed record CaveRef(Guid Id, string Name, Guid EntranceId);
+
+    private async Task<CaveRef> CreateCaveAsync(
+        string name, double lon, double lat, string visibility, bool locationProtected, Guid? parentId = null)
     {
         var unique = Unique(name);
         var cave = await owner.PostAsJsonAsync("/api/v1/caves", new
@@ -318,6 +445,7 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
             locationProtected,
             explorationStatus = "Unknown",
             isShowCave = false,
+            parentId,
         });
         var payload = await cave.Content.ReadAsStringAsync();
         cave.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
@@ -330,15 +458,16 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
             geom = new { type = "Point", coordinates = new[] { lon, lat } },
             positionQuality = "Gps",
         });
-        entrance.StatusCode.ShouldBe(HttpStatusCode.Created, await entrance.Content.ReadAsStringAsync());
-        return new CaveRef(caveId, unique);
+        var entrancePayload = await entrance.Content.ReadAsStringAsync();
+        entrance.StatusCode.ShouldBe(HttpStatusCode.Created, entrancePayload);
+        return new CaveRef(caveId, unique, JsonNode.Parse(entrancePayload)!["id"]!.GetValue<Guid>());
     }
 
     private Task<Guid> CreatePointFeatureAsync(string name, double lon, double lat, string visibility, bool locationProtected) =>
         CreateFeatureAsync(name, new { type = "Point", coordinates = new[] { lon, lat } }, "sinkhole", visibility, locationProtected);
 
     private async Task<Guid> CreateFeatureAsync(
-        string name, object geometry, string typeCode, string visibility, bool locationProtected)
+        string name, object geometry, string typeCode, string visibility, bool locationProtected, Guid? parentId = null)
     {
         long typeId;
         using (var scope = factory.Services.CreateScope())
@@ -357,13 +486,22 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
             geometry,
             visibility,
             locationProtected,
+            parents = parentId is { } parent ? new[] { new { parentId = parent, isPrimary = true } } : null,
         });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonNode.Parse(payload)!["id"]!.GetValue<Guid>();
     }
 
-    private async Task<Guid> CreateViewAsync(bool entrances, bool features, long? baseLayerId = null)
+    /// <summary>A shared view saved with its camera over the place a test put its rows.</summary>
+    private async Task<Guid> CreateViewAsync(
+        bool entrances,
+        bool features,
+        double centerLon,
+        double centerLat,
+        double zoom = 12,
+        long? baseLayerId = null,
+        string? tagFilter = null)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/map-views/", new
         {
@@ -372,13 +510,14 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
             config = new
             {
                 configVersion = 1,
-                zoom = 12,
-                center = new[] { 10.1, 60.1 },
+                zoom,
+                center = new[] { centerLon, centerLat },
                 baseLayerId,
                 entrancesVisible = entrances,
                 surfaceFeaturesVisible = features,
                 photosVisible = true,
                 centerlinesVisible = true,
+                tagFilter,
             },
             isHome = false,
             cavingGroupId = (Guid?)null,

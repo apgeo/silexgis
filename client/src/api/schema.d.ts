@@ -13021,15 +13021,36 @@ export interface components {
             /** Format: int32 */
             maxZoom: number;
         };
+        SharedViewCameraDto: {
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            zoom: number;
+        };
         SharedViewDto: {
             name: string;
-            config: components["schemas"]["JsonElement"];
+            camera: null | components["schemas"]["SharedViewCameraDto"];
+            reach: null | components["schemas"]["SharedViewReachDto"];
             background: null | components["schemas"]["SharedViewBackgroundDto"];
             overlays: components["schemas"]["SharedViewOverlaysDto"];
         };
         SharedViewOverlaysDto: {
             entrances: boolean;
             features: boolean;
+        };
+        SharedViewReachDto: {
+            /** Format: double */
+            west: number;
+            /** Format: double */
+            south: number;
+            /** Format: double */
+            east: number;
+            /** Format: double */
+            north: number;
+            /** Format: int32 */
+            minZoom: number;
         };
         SmsSettingsDto: {
             enabled: boolean;

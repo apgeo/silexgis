@@ -28,9 +28,23 @@ public sealed record MapViewDto(
     DateTimeOffset UpdatedAt);
 
 /// <summary>
-/// The anonymous shared-view payload: the view's name and document, the background to draw it
+/// The anonymous shared-view payload: what the page needs to draw the view and nothing more — the
+/// view's name, where its camera stood, the area its data is drawn in, the background to draw it
 /// over, and which data overlays the link draws. Nothing about who saved it.
 /// </summary>
+/// <remarks>
+/// Picked out of the stored document member by member rather than handed over whole. The document
+/// is its owner's working state — the imported files and georeferenced maps they had on, the tag
+/// they narrowed to, where their 3D camera stood, the ids of everything they had switched on — and
+/// none of it is the link's to send. A member added to the document later is not sent either until
+/// somebody adds it here, on purpose.
+/// </remarks>
+/// <param name="Camera">Where the view's camera stood, or null when its document does not say readably.</param>
+/// <param name="Reach">
+/// The area the link draws data in and the furthest out it draws it, worked out from the camera;
+/// null when the link draws no data. The page keeps its map inside it, so its reader sees the edge
+/// of what was shared rather than data stopping for no reason they can see.
+/// </param>
 /// <param name="Background">
 /// The background the view was saved with, resolved into what a page with no account needs to draw
 /// it — or the installation's default when that one needs an access key, is switched off, or is
@@ -38,7 +52,17 @@ public sealed record MapViewDto(
 /// </param>
 /// <param name="Overlays">Which data overlays this link draws.</param>
 public sealed record SharedViewDto(
-    string Name, JsonElement Config, SharedViewBackgroundDto? Background, SharedViewOverlaysDto Overlays);
+    string Name,
+    SharedViewCameraDto? Camera,
+    SharedViewReachDto? Reach,
+    SharedViewBackgroundDto? Background,
+    SharedViewOverlaysDto Overlays);
+
+/// <summary>Where a shared view's camera stood: its centre in degrees and its zoom.</summary>
+public sealed record SharedViewCameraDto(double Longitude, double Latitude, double Zoom);
+
+/// <summary>The area a shared view's link draws data in, in degrees, and the lowest zoom it draws it at.</summary>
+public sealed record SharedViewReachDto(double West, double South, double East, double North, int MinZoom);
 
 /// <summary>
 /// A background a shared view's page draws. Only a source that needs no access key is ever one:
@@ -293,15 +317,20 @@ public static class MapViewEndpoints
         }
 
         // The data the link draws comes from its own token-scoped routes, which answer for the
-        // least-privileged reader there is; this answer only says which of them to ask.
+        // least-privileged reader there is; this answer only says which of them to ask, and where.
         var config = SharedViewConfig.Read(view.Config);
         var dataOn = mapOptions.Value.SharedViewData;
+        var overlays = new SharedViewOverlaysDto(
+            dataOn && config.EntrancesVisible, dataOn && config.SurfaceFeaturesVisible);
         var anyAccount = await AccessContextResolver.ResolveForAnyAccountAsync(db, ct);
+        var camera = config.Camera;
+        var reach = (overlays.Entrances || overlays.Features) && camera is not null ? camera.Reach : null;
         return TypedResults.Ok(new SharedViewDto(
             view.Name,
-            JsonSerializer.Deserialize<JsonElement>(view.Config),
+            camera is null ? null : new SharedViewCameraDto(camera.Longitude, camera.Latitude, camera.Zoom),
+            reach is null ? null : new SharedViewReachDto(reach.West, reach.South, reach.East, reach.North, reach.LowestZoom),
             await SharedBackgroundAsync(db, anyAccount, config.BaseLayerId, ct),
-            new SharedViewOverlaysDto(dataOn && config.EntrancesVisible, dataOn && config.SurfaceFeaturesVisible)));
+            overlays));
     }
 
     /// <summary>
