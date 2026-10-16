@@ -416,6 +416,83 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable, IClassF
             .ShouldBe("feature.properties_invalid");
     }
 
+    /// <summary>
+    /// An entrance stays under its own cave and nowhere else, so it can never carry protection
+    /// its cave lacks.
+    /// </summary>
+    /// <remarks>
+    /// The cave's point is the cache of its main entrance and is released on the cave's own
+    /// exact-view decision. An edge from the entrance to a protected area its cave is not in made
+    /// the entrance protected — snapped for every reader — while the cave beside it went on
+    /// publishing the same coordinate exactly to all of them. The route accepted such an edge
+    /// from anybody holding Write on the entrance and exact view on the area; it now accepts only
+    /// the one edge set an entrance may have.
+    /// </remarks>
+    [Fact]
+    public async Task An_entrance_cannot_be_put_under_a_protected_parent_its_cave_is_not_in()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var caveResponse = await owner.PostAsJsonAsync("/api/v1/caves", new
+        {
+            name = $"Fixed parent cave {marker}",
+            caveTypeId,
+            visibility = "authenticated",
+            locationProtected = false,
+            explorationStatus = "unknown",
+            isShowCave = false,
+        });
+        caveResponse.StatusCode.ShouldBe(HttpStatusCode.Created, await caveResponse.Content.ReadAsStringAsync());
+        var caveId = (await caveResponse.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
+
+        long entranceTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            entranceTypeId = await db.EntranceTypes.Select(t => t.Id).FirstAsync();
+        }
+
+        var entranceResponse = await owner.PostAsJsonAsync($"/api/v1/caves/{caveId}/entrances", new
+        {
+            entranceTypeId,
+            isMain = true,
+            geom = Point(25.6312, 45.7134),
+            positionQuality = "Gps",
+        });
+        entranceResponse.StatusCode.ShouldBe(HttpStatusCode.Created, await entranceResponse.Content.ReadAsStringAsync());
+        var entranceId = (await entranceResponse.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
+
+        var area = await CreateFeatureAsync(owner, new
+        {
+            kind = "generic",
+            name = $"Fixed parent area {marker}",
+            featureTypeId = karstAreaTypeId,
+            geometry = (object?)null,
+            visibility = "authenticated",
+            locationProtected = true,
+        });
+
+        // Beside the cave, instead of the cave, and with no parent at all: each is refused.
+        await PutParentsExpectingAsync(owner, entranceId, "feature.parent_fixed",
+            new { parentId = caveId, isPrimary = true }, new { parentId = area, isPrimary = false });
+        await PutParentsExpectingAsync(owner, entranceId, "feature.parent_fixed",
+            new { parentId = area, isPrimary = true });
+        await PutParentsExpectingAsync(owner, entranceId, "feature.parent_fixed");
+
+        // The one set it may have is accepted, so the refusals above are the rule and not a
+        // route that refuses entrances outright.
+        var same = await owner.PutAsJsonAsync($"/api/v1/features/{entranceId}/parents", new
+        {
+            parents = new[] { new { parentId = caveId, isPrimary = true } },
+        });
+        same.StatusCode.ShouldBe(HttpStatusCode.OK, await same.Content.ReadAsStringAsync());
+
+        // And the entrance inherits exactly what its cave does: nothing protects either.
+        var entrances = (await outsider.GetFromJsonAsync<JsonArray>($"/api/v1/caves/{caveId}/entrances"))!;
+        entrances.Single()!["approximateLocation"]!.GetValue<bool>().ShouldBeFalse();
+        var cave = (await outsider.GetFromJsonAsync<JsonObject>($"/api/v1/caves/{caveId}"))!;
+        cave.ToJsonString().ShouldNotContain("\"approximateLocation\":true");
+    }
+
     private static object Point(double lon, double lat) =>
         new { type = "Point", coordinates = new[] { lon, lat } };
 

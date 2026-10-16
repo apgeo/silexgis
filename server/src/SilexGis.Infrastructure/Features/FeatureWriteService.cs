@@ -150,6 +150,22 @@ public sealed class FeatureWriteService(
     /// </summary>
     public async Task SetParentsAsync(Guid featureId, IReadOnlyList<ParentSpec> parents, CancellationToken ct = default)
     {
+        // An entrance and a centreline stay under their own cave and nowhere else, because the
+        // cave releases their position on its own exact-view decision (its point is the main
+        // entrance's; its survey figures are the centreline's). See HasFixedParent.
+        var kind = await db.Features.Where(f => f.Id == featureId).Select(f => (FeatureKind?)f.Kind).FirstOrDefaultAsync(ct);
+        if (kind is { } fixedKind && FeatureHierarchyRules.HasFixedParent(fixedKind))
+        {
+            var caveId = fixedKind == FeatureKind.CaveEntrance
+                ? await db.CaveEntrances.Where(e => e.Id == featureId).Select(e => e.CaveFeatureId).FirstOrDefaultAsync(ct)
+                : await db.Centerlines.Where(c => c.Id == featureId).Select(c => c.CaveFeatureId).FirstOrDefaultAsync(ct);
+            if (!FeatureHierarchyRules.IsFixedParentSet([.. parents.Select(p => (p.ParentId, p.IsPrimary))], caveId))
+            {
+                throw new FeatureWriteException("feature.parent_fixed",
+                    ["an entrance or a centreline sits under its own cave, as its one primary parent, and nowhere else"]);
+            }
+        }
+
         // Replacing the edges with none is the third door to a shape that creation and update
         // already refuse: a kind meaningless outside a container, left with no container.
         //

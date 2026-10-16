@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Entities;
+
 namespace SilexGis.Domain.Features;
 
 /// <summary>
@@ -13,6 +15,30 @@ public static class FeatureHierarchyRules
 {
     /// <summary>One containment edge (parent contains child).</summary>
     public readonly record struct Edge(Guid ParentId, Guid ChildId);
+
+    /// <summary>
+    /// Whether a kind sits under its own cave and nowhere else: one primary edge to that cave,
+    /// and no other.
+    /// </summary>
+    /// <remarks>
+    /// An entrance and a centreline are parts of one cave, and the cave answers for their
+    /// position: a cave's point is the cache of its main entrance and its survey statistics are
+    /// measured over its centreline, and both are released on the cave's own exact-view decision.
+    /// That is only sound while such a row inherits protection from exactly what its cave does.
+    /// An edge from an entrance to a protected area its cave is not in would make the entrance
+    /// protected and leave the cave's point — the same coordinate — exact for every reader of the
+    /// cave. Keeping the edge set fixed keeps "the entrance's protection roots are its cave's" true
+    /// by construction rather than by care.
+    /// </remarks>
+    public static bool HasFixedParent(FeatureKind kind) =>
+        kind is FeatureKind.CaveEntrance or FeatureKind.Centerline;
+
+    /// <summary>
+    /// Whether a requested edge set for a part of a cave is the only one it may have: exactly one
+    /// edge, primary, to <paramref name="caveId"/>.
+    /// </summary>
+    public static bool IsFixedParentSet(IReadOnlyList<(Guid ParentId, bool IsPrimary)> parents, Guid caveId) =>
+        parents.Count == 1 && parents[0].ParentId == caveId && parents[0].IsPrimary;
 
     /// <summary>
     /// Ancestors of <paramref name="featureId"/> over all DAG paths, including itself

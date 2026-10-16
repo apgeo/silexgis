@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Shouldly;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
 using static SilexGis.Domain.Features.FeatureHierarchyRules;
 
@@ -101,5 +102,27 @@ public class FeatureHierarchyRulesTests
         IsProtectedEffective(ancestors, id => id == Guid.Empty).ShouldBeFalse();
         // Self-protection counts.
         IsProtectedEffective(AncestorsOf(CaveX, ParentsByChild(DagEdges())), id => id == CaveX).ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData(FeatureKind.CaveEntrance, true)]
+    [InlineData(FeatureKind.Centerline, true)]
+    [InlineData(FeatureKind.Cave, false)]
+    [InlineData(FeatureKind.Generic, false)]
+    public void Only_the_parts_of_a_cave_have_a_fixed_parent(FeatureKind kind, bool expected) =>
+        HasFixedParent(kind).ShouldBe(expected);
+
+    [Fact]
+    public void A_part_of_a_cave_takes_its_cave_as_its_one_primary_parent_and_nothing_else()
+    {
+        // The one set it may have.
+        IsFixedParentSet([(CaveX, true)], CaveX).ShouldBeTrue();
+
+        // A second parent beside the cave is a second source of protection the cave does not
+        // answer to; so is a different parent instead of it; and so is none at all.
+        IsFixedParentSet([(CaveX, true), (AreaA, false)], CaveX).ShouldBeFalse();
+        IsFixedParentSet([(AreaA, true)], CaveX).ShouldBeFalse();
+        IsFixedParentSet([(CaveX, false)], CaveX).ShouldBeFalse();
+        IsFixedParentSet([], CaveX).ShouldBeFalse();
     }
 }
