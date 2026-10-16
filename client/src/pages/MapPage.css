@@ -666,7 +666,9 @@
 /* The map takes keyboard focus for its own pan and zoom keys, and shows it with a ring drawn over
    the map rather than around it: the canvas fills its pane edge to edge, so an outline outside it
    would be clipped, and one inside it is painted over by the map's own layers. Two tones, so the
-   ring is visible over pale and dark tiles alike. */
+   ring is visible over pale and dark tiles alike — the outer one the theme's focus-ring colour,
+   which is held at 3:1 against the page colour of the inner one in both themes (the brand colour
+   itself is not: the dark theme darkens it to nearly the page). */
 .map-canvas {
   position: relative;
 }
@@ -683,5 +685,5 @@
   z-index: 1;
   box-shadow:
     inset 0 0 0 2px var(--ant-color-bg-container, #fff),
-    inset 0 0 0 4px var(--ant-color-primary, #146262);
+    inset 0 0 0 4px var(--ant-color-primary-border, #5c8783);
 }

@@ -59,9 +59,25 @@ const lightContrast: ThemeConfig = {
   },
 };
 
+/**
+ * The brand teal as the dark theme draws it as TEXT — selected items, the active page number, a
+ * checked button, an outlined or text-only primary button — and its hover and pressed shades.
+ *
+ * The dark algorithm darkens the brand colour to a fill that carries white text well (8.4:1) but
+ * reads at 2.2:1 as text on the dark page, and no single teal can do both: a colour light enough
+ * to be read on the page is too light to carry white text. So the fill keeps antd's derived
+ * colour and every place antd draws the brand colour as text is pointed at these instead. They
+ * are also published as antd's `colorPrimaryText` family, which no antd component reads, so that
+ * the stylesheet can reach them as `--ant-color-primary-text*` where no component token exists.
+ */
+export const DARK_PRIMARY_TEXT = { base: '#5cbdbd', hover: '#7fd0d0', active: '#3fa8a8' } as const;
+
 const darkContrast: ThemeConfig = {
   token: {
     colorPrimaryBorder: '#3fa8a8',
+    colorPrimaryText: DARK_PRIMARY_TEXT.base,
+    colorPrimaryTextHover: DARK_PRIMARY_TEXT.hover,
+    colorPrimaryTextActive: DARK_PRIMARY_TEXT.active,
     colorLink: '#69b1ff',
     colorTextTertiary: 'rgba(255, 255, 255, 0.5)',
     colorTextPlaceholder: 'rgba(255, 255, 255, 0.5)',
@@ -71,10 +87,44 @@ const darkContrast: ThemeConfig = {
     colorBorder: '#6b6b6b',
   },
   components: {
-    // The brand colour as text is too dark to read on the dark page; these are the places antd
-    // draws it as text rather than as a fill.
-    Menu: { itemSelectedColor: '#5cbdbd' },
-    Tabs: { itemSelectedColor: '#5cbdbd', itemActiveColor: '#5cbdbd', inkBarColor: '#5cbdbd' },
+    // The places antd draws the brand colour as text rather than as a fill. Where a component
+    // has a token for that text it is set; where it reads the brand colour itself (a checked
+    // radio button, the steps' icons, the active page's border) the brand colour is replaced for
+    // that component alone, which leaves the fills that read the derived component tokens — the
+    // radio dot, the primary button — on antd's own darker teal.
+    Menu: { itemSelectedColor: DARK_PRIMARY_TEXT.base },
+    Tabs: {
+      itemSelectedColor: DARK_PRIMARY_TEXT.base,
+      itemActiveColor: DARK_PRIMARY_TEXT.base,
+      inkBarColor: DARK_PRIMARY_TEXT.base,
+    },
+    Pagination: {
+      itemActiveColor: DARK_PRIMARY_TEXT.base,
+      itemActiveColorHover: DARK_PRIMARY_TEXT.hover,
+      colorPrimary: DARK_PRIMARY_TEXT.base,
+      colorPrimaryHover: DARK_PRIMARY_TEXT.hover,
+    },
+    Radio: {
+      colorPrimary: DARK_PRIMARY_TEXT.base,
+      colorPrimaryHover: DARK_PRIMARY_TEXT.hover,
+      colorPrimaryActive: DARK_PRIMARY_TEXT.active,
+    },
+    // The current step is a circle of the brand colour with its number on it; once that circle
+    // is the light teal, the number has to be dark to be read.
+    Steps: {
+      colorPrimary: DARK_PRIMARY_TEXT.base,
+      colorPrimaryHover: DARK_PRIMARY_TEXT.hover,
+      colorTextLightSolid: '#141414',
+    },
+    // A default button's text turns brand-coloured under the pointer. The outlined and text-only
+    // primary buttons cannot be reached from here — one token feeds both their text and the
+    // solid primary button's fill — and are re-pointed in the stylesheet instead.
+    Button: {
+      defaultHoverColor: DARK_PRIMARY_TEXT.hover,
+      defaultHoverBorderColor: DARK_PRIMARY_TEXT.hover,
+      defaultActiveColor: DARK_PRIMARY_TEXT.active,
+      defaultActiveBorderColor: DARK_PRIMARY_TEXT.active,
+    },
   },
 };
 
