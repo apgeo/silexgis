@@ -928,7 +928,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Caves (main entrance points) as GeoJSON/GPX/KML/CSV/zipped shapefile. */
+        /** Caves (main entrance points) as GeoJSON/GPX/KML/CSV/zipped shapefile. Takes the cave list's `filter` or `savedFilterId`, so the file holds the rows the list shows (those with a position). */
         get: operations["exportExportCaves"];
         put?: never;
         post?: never;
@@ -2417,7 +2417,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Paged cave list with filters, including `unplaced` for caves that have no position at all; visibility-filtered, protected locations obfuscated. */
+        /** Paged cave list with filters, including `unplaced` for caves that have no position at all; visibility-filtered, protected locations obfuscated. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the feature world's conditions, applied after visibility and counted over the narrowed set. */
         get: operations["caveList"];
         put?: never;
         /** Creates a cave (Create permission in the target context); the caller becomes owner. */
@@ -7256,6 +7256,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/saved-filters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The saved filters the caller may read, each with what it reads as to them. */
+        get: operations["savedFilterList"];
+        put?: never;
+        /** Saves a filter; the caller becomes owner. The document is checked against the caller's vocabulary and may not carry an anchor. */
+        post: operations["savedFilterCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/saved-filters/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One saved filter, with what it reads as to the caller. */
+        get: operations["savedFilterGet"];
+        /** Renames, describes, shares or rewrites a saved filter (its author or a full administrator, holding Write permission). */
+        put: operations["savedFilterUpdate"];
+        post?: never;
+        /** Deletes a saved filter (its author or a full administrator, holding Delete permission). */
+        delete: operations["savedFilterDelete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings": {
         parameters: {
             query?: never;
@@ -10580,6 +10617,9 @@ export interface components {
             caveTypeId?: null | number;
             bbox?: null | string;
             tag?: null | string;
+            filter?: null | string;
+            /** Format: uuid */
+            savedFilterId?: null | string;
             treatments?: null | {
                 [key: string]: string;
             };
@@ -12651,6 +12691,32 @@ export interface components {
             /** Format: double */
             toM: number;
             label: null | string;
+        };
+        SavedFilterDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: null | string;
+            document: null | components["schemas"]["FilterDocument"];
+            state: components["schemas"]["SavedFilterState"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            mine: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {unknown} */
+        SavedFilterState: "ready" | "unreadable" | "stale";
+        SavedFilterWriteRequest: {
+            name: string;
+            description: null | string;
+            document: null | components["schemas"]["FilterDocument"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            visibility?: components["schemas"]["Visibility"];
         };
         SearchDocumentItemDto: {
             /** Format: uuid */
@@ -17171,6 +17237,8 @@ export interface operations {
                 region?: string;
                 search?: string;
                 bbox?: string;
+                filter?: string;
+                savedFilterId?: string;
             };
             header?: never;
             path?: never;
@@ -20609,6 +20677,8 @@ export interface operations {
     caveList: {
         parameters: {
             query?: {
+                filter?: string;
+                savedFilterId?: string;
                 page?: number;
                 pageSize?: number;
                 sort?: string;
@@ -20635,8 +20705,26 @@ export interface operations {
                     "application/json": components["schemas"]["PagedResultOfCaveListItemDto"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -34615,6 +34703,181 @@ export interface operations {
         };
     };
     mapViewUnshare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    savedFilterList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedFilterDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    savedFilterCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedFilterWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedFilterDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    savedFilterGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedFilterDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    savedFilterUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedFilterWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedFilterDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    savedFilterDelete: {
         parameters: {
             query?: never;
             header?: never;
