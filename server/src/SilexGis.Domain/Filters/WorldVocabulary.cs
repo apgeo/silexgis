@@ -16,6 +16,17 @@ namespace SilexGis.Domain.Filters;
 /// Where the builder gets the choices for an identity field, when the choices are a list rather
 /// than something typed. Null means the field takes free input.
 /// </param>
+/// <param name="Label">
+/// The name to show as written, for a field the installation itself declared — a typed property
+/// takes the title its feature type's schema gives it, which is data somebody typed rather than a
+/// string this application translates. Null for every field the application declares, which is
+/// named through <paramref name="LabelKey"/> alone.
+/// </param>
+/// <param name="Requires">
+/// A condition that has to stand beside this one for it to be asked at all — null for nearly every
+/// field. A typed property names the type whose schema declares it, and is valid only inside a
+/// group that also fixes that type; see <see cref="FieldRequirement"/>.
+/// </param>
 /// <remarks>
 /// A field says what can be asked of it, not how results are ordered. Ordering is a
 /// <see cref="SortKey"/>, which is a small closed set precisely so that a merged list of several
@@ -26,7 +37,29 @@ public sealed record FieldDescriptor(
     string Key,
     string LabelKey,
     FieldKind Kind,
-    string? Options = null);
+    string? Options = null,
+    string? Label = null,
+    FieldRequirement? Requires = null);
+
+/// <summary>
+/// The condition a field is only valid beside: <paramref name="Field"/> equal to
+/// <paramref name="Value"/>, as a direct member of an all-of group that encloses the field's own
+/// condition.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A typed property is meaningful only for the type that declares it — "depth under 30" asked of
+/// every feature would test a key on rows whose schema never mentions it. Requiring the type
+/// condition beside it keeps every such question inside the type it was offered for, and the
+/// compiler scopes the property's own test to that type as well, so the two agree.
+/// </para>
+/// <para>
+/// A condition without its companion is refused in exactly the words used for a field that does
+/// not exist. Refusing it differently would make "is there a key called X on some type" a question
+/// with an answer.
+/// </para>
+/// </remarks>
+public sealed record FieldRequirement(string Field, string Value);
 
 /// <summary>
 /// What one world can be asked about.

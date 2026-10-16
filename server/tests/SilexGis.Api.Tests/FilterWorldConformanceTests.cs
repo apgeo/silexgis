@@ -472,12 +472,31 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
         using var scope = factory.Services.CreateScope();
         var caller = await CallerAsync(GlobalRoles.Viewer, "conf-vocab");
 
+        // No seeded feature type declares a dated property, so one is added here: without it the
+        // sweep would never reach the typed leaf's date comparisons.
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.FeatureTypes.Add(new FeatureType
+        {
+            Code = $"confdated{tag}",
+            Name = "Dated",
+            PropertiesSchema = """
+                {"properties":{"on":{"type":"string","format":"date"},"at":{"type":"string","format":"date-time"}}}
+                """,
+        });
+        await db.SaveChangesAsync();
+
         foreach (var world in Worlds(scope))
         {
             var fixture = Fixtures.Single(f => f.World == world.World);
             var vocabulary = await world.VocabularyAsync(caller, default);
 
             vocabulary.World.ShouldBe(world.World);
+            if (world.World == FeatureFilterWorld.Key)
+            {
+                vocabulary.Fields.ShouldContain(f =>
+                    f.Key.StartsWith(FeatureFilterFields.PropertyPrefix) && f.Kind == FieldKind.Instant);
+            }
+
             vocabulary.Fields.ShouldNotBeEmpty();
 
             foreach (var field in vocabulary.Fields)
@@ -493,6 +512,27 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
                 }
             }
         }
+    }
+
+    [Fact]
+    public async Task The_feature_world_offers_typed_properties_only_to_a_caller_who_may_read_the_types()
+    {
+        using var scope = factory.Services.CreateScope();
+        var world = Worlds(scope).Single(w => w.World == FeatureFilterWorld.Key);
+        var reader = await CallerAsync(GlobalRoles.Viewer, "conf-props");
+        // No entries at all: not even the feature-type read All Users normally grants.
+        var refused = new AccessContext(reader.UserId, isFullAdmin: false, [], []);
+
+        var offered = await world.VocabularyAsync(reader, default);
+        var bare = await world.VocabularyAsync(refused, default);
+
+        // Typed, and of more than one kind, so the operator sweep above reached the typed leaf.
+        var properties = offered.Fields.Where(f => f.Key.StartsWith(FeatureFilterFields.PropertyPrefix)).ToList();
+        properties.Select(f => f.Kind).Distinct().Count().ShouldBeGreaterThan(1);
+        properties.ShouldAllBe(f => f.Requires != null && f.Label != null);
+
+        bare.Fields.ShouldNotContain(f => f.Key.StartsWith(FeatureFilterFields.PropertyPrefix));
+        bare.Fields.Count.ShouldBe(offered.Fields.Count - properties.Count);
     }
 
     [Fact]
@@ -651,8 +691,17 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
     private async Task<AccessContext> CallerAsync(string role, string prefix)
     {
         var id = await AuthHelper.CreateUserAsync(factory, role, $"{prefix}-{tag}@t.local");
-        return new AccessContext(id, isFullAdmin: false, [], []);
+        return new AccessContext(id, isFullAdmin: false, [], [TaxonomyReader(id)]);
     }
+
+    /// <summary>
+    /// The one domain-wide read every account holds through All Users that changes what a world
+    /// offers: the feature types, whose schemas the feature world folds into typed property fields.
+    /// Without it the suite would exercise none of them and pass by having nothing to check.
+    /// </summary>
+    private static AccessEntrySnapshot TaxonomyReader(Guid id) => new(
+        1, null, AccessSubjectKind.User, id, AccessEffect.Allow, AccessDomain.Taxonomies,
+        AccessAction.Read, AccessScopeKind.All, null, null, null, null);
 
     public Task DisposeAsync() => Task.CompletedTask;
 

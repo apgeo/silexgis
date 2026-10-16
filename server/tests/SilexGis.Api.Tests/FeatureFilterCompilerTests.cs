@@ -6,6 +6,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.Filters;
 using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Persistence;
@@ -100,14 +101,25 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
             { FeatureFilterFields.UpdatedAt, FilterOp.LessThan, [new InstantValue(now)] },
             { FeatureFilterFields.CreatedAt, FilterOp.GreaterOrEqual, [new InstantValue(now.AddYears(-1))] },
             { FeatureFilterFields.UpdatedAt, FilterOp.LessOrEqual, [new InstantValue(now)] },
-            // The typed-property arms, which nothing in this repository exercised before. The
-            // presence pair matters most: it is the only place a function other than containment
-            // reaches the stored document, and containment being translatable said nothing about it.
+            // The typed-property arms: every comparison a property field can be offered with, each
+            // reaching the stored document through the typed extraction rather than containment.
             { $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.Equals, [new NumberValue(4.5)] },
-            { $"{FeatureFilterFields.PropertyPrefix}sinkhole:label", FilterOp.Equals, [new TextValue("x")] },
+            { $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.LessThan, [new NumberValue(4.5)] },
+            { $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.LessOrEqual, [new NumberValue(4.5)] },
+            { $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.GreaterThan, [new NumberValue(4.5)] },
+            { $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.GreaterOrEqual, [new NumberValue(4.5)] },
+            { $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.Between, [new NumberValue(1), new NumberValue(9)] },
+            { $"{FeatureFilterFields.PropertyPrefix}continuation:note", FilterOp.Equals, [new TextValue("x")] },
+            { $"{FeatureFilterFields.PropertyPrefix}continuation:note", FilterOp.Contains, [new TextValue("x")] },
+            { $"{FeatureFilterFields.PropertyPrefix}continuation:note", FilterOp.StartsWith, [new TextValue("x")] },
             { $"{FeatureFilterFields.PropertyPrefix}sinkhole:wet", FilterOp.Equals, [new BooleanValue(true)] },
             { $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.IsEmpty, [] },
             { $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.IsNotEmpty, [] },
+            { $"{FeatureFilterFields.PropertyPrefix}sinkhole:seen", FilterOp.LessThan, [new InstantValue(now)] },
+            { $"{FeatureFilterFields.PropertyPrefix}sinkhole:seen", FilterOp.LessOrEqual, [new InstantValue(now)] },
+            { $"{FeatureFilterFields.PropertyPrefix}sinkhole:seen", FilterOp.GreaterThan, [new InstantValue(now)] },
+            { $"{FeatureFilterFields.PropertyPrefix}sinkhole:seen", FilterOp.GreaterOrEqual, [new InstantValue(now)] },
+            { $"{FeatureFilterFields.PropertyPrefix}sinkhole:seen", FilterOp.Between, [new InstantValue(now.AddYears(-1)), new InstantValue(now)] },
             // The cave subtype arms. Every one of them is a join the feature world had no reason
             // to emit before, so translation is the whole point of exercising them here.
             { FeatureFilterFields.Region, FilterOp.Contains, [new TextValue("Apuseni")] },
@@ -180,49 +192,101 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
     }
 
     [Fact]
-    public async Task A_property_condition_tells_the_number_apart_from_the_text_that_looks_like_it()
+    public async Task A_property_condition_compares_by_the_stored_type_and_only_within_its_own_type()
     {
-        // The reason a value carries its type from the browser all the way down. A depth recorded
-        // as 4.5 and one recorded as "4.5" are different records — a survey that treats them as the
-        // same finds sinkholes it should not, and a person filtering for a depth range gets rows
-        // whose depth is a label. Containment is what keeps them apart, and this is where that is
-        // proved rather than assumed.
+        // A depth recorded as 4.5 and one recorded as "4.5" are different records: a range over
+        // depths must find the first and simply not match the second — never fail on it — and a
+        // key another type happens to share is never part of the answer.
         var ownerId = await AuthHelper.CreateUserAsync(
             factory, GlobalRoles.Editor, $"fc-prop-{tag}@t.local");
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var sinkhole = await db.FeatureTypes.AsNoTracking()
+            .Where(t => t.Code == FeatureTypeSeeds.Sinkhole).Select(t => t.Id).SingleAsync();
+        var other = await db.FeatureTypes.AsNoTracking()
+            .Where(t => t.Code == FeatureTypeSeeds.Continuation).Select(t => t.Id).SingleAsync();
 
-        Rootless(db, typeId, ownerId, $"Numeric {tag}", properties: """{"depth_m":4.5}""");
-        Rootless(db, typeId, ownerId, $"Textual {tag}", properties: """{"depth_m":"4.5"}""");
-        Rootless(db, typeId, ownerId, $"Silent {tag}", properties: """{"other":1}""");
+        Rootless(db, sinkhole, ownerId, $"Shallow {tag}", properties: """{"depth_m":2,"wet":true,"label":"Gura Mare","seen":"2025-06-01"}""");
+        Rootless(db, sinkhole, ownerId, $"Edge {tag}", properties: """{"depth_m":4.5,"wet":false,"seen":"2025-06-02T08:00:00+03:00"}""");
+        Rootless(db, sinkhole, ownerId, $"Deep {tag}", properties: """{"depth_m":30,"seen":"2025-02-30"}""");
+        Rootless(db, sinkhole, ownerId, $"Textual {tag}", properties: """{"depth_m":"4.5","wet":"true","seen":"soon"}""");
+        Rootless(db, sinkhole, ownerId, $"Odd {tag}", properties: """{"depth_m":{"v":1},"label":7,"seen":20250601}""");
+        Rootless(db, sinkhole, ownerId, $"Blank {tag}", properties: """{"depth_m":null,"label":"","seen":"2025-07-01T08:00:00"}""");
+        Rootless(db, sinkhole, ownerId, $"Silent {tag}", properties: """{"other":1}""");
+        Rootless(db, other, ownerId, $"Elsewhere {tag}", properties: """{"depth_m":3,"label":"Gura","seen":"2025-06-01"}""");
         await db.SaveChangesAsync();
 
         var compiler = new FeatureFilterCompiler(db);
-        var field = $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m";
 
-        async Task<List<string>> Matching(FilterOp op, FilterValue[] values)
+        async Task<List<string>> Matching(string key, FilterOp op, params FilterValue[] values)
         {
-            var predicate = compiler.Compile(new ConditionNode(field, op, values));
+            var predicate = compiler.Compile(new ConditionNode(
+                $"{FeatureFilterFields.PropertyPrefix}{FeatureTypeSeeds.Sinkhole}:{key}", op, values));
             return await db.Features.AsNoTracking()
                 .Where(predicate)
                 .Where(f => f.Name!.EndsWith(tag))
-                .Select(f => f.Name!)
+                .OrderBy(f => f.Name)
+                .Select(f => f.Name!.Replace($" {tag}", ""))
                 .ToListAsync();
         }
 
-        (await Matching(FilterOp.Equals, [new NumberValue(4.5)]))
-            .ShouldBe([$"Numeric {tag}"]);
-        (await Matching(FilterOp.Equals, [new TextValue("4.5")]))
-            .ShouldBe([$"Textual {tag}"]);
+        (await Matching("depth_m", FilterOp.LessThan, new NumberValue(4.5))).ShouldBe(["Shallow"]);
+        (await Matching("depth_m", FilterOp.LessOrEqual, new NumberValue(4.5))).ShouldBe(["Edge", "Shallow"]);
+        (await Matching("depth_m", FilterOp.GreaterOrEqual, new NumberValue(4.5))).ShouldBe(["Deep", "Edge"]);
+        (await Matching("depth_m", FilterOp.GreaterThan, new NumberValue(4.5))).ShouldBe(["Deep"]);
+        (await Matching("depth_m", FilterOp.Equals, new NumberValue(4.5))).ShouldBe(["Edge"]);
+        (await Matching("depth_m", FilterOp.Between, new NumberValue(2), new NumberValue(4.5)))
+            .ShouldBe(["Edge", "Shallow"]);
 
-        // Presence answers about the key regardless of what is under it, and says nothing about
-        // the row that never recorded a depth.
-        (await Matching(FilterOp.IsNotEmpty, [])).Order()
-            .ShouldBe([$"Numeric {tag}", $"Textual {tag}"]);
-        (await Matching(FilterOp.IsEmpty, []))
-            .ShouldBe([$"Silent {tag}"]);
+        (await Matching("label", FilterOp.Contains, new TextValue("gură"))).ShouldBe(["Shallow"]);
+        (await Matching("label", FilterOp.StartsWith, new TextValue("gura m"))).ShouldBe(["Shallow"]);
+        (await Matching("label", FilterOp.Equals, new TextValue("7"))).ShouldBeEmpty();
+
+        (await Matching("wet", FilterOp.Equals, new BooleanValue(true))).ShouldBe(["Shallow"]);
+        (await Matching("wet", FilterOp.Equals, new BooleanValue(false))).ShouldBe(["Edge"]);
+
+        // A date only where the stored string is a real ISO date, or a date-time naming its offset:
+        // a day that does not exist, words, a number and a time with no zone all simply miss.
+        var juneFirst = new DateTimeOffset(2025, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        (await Matching("seen", FilterOp.GreaterOrEqual, new InstantValue(juneFirst))).ShouldBe(["Edge", "Shallow"]);
+        (await Matching("seen", FilterOp.LessThan, new InstantValue(juneFirst.AddDays(1)))).ShouldBe(["Shallow"]);
+        (await Matching("seen", FilterOp.Between,
+            new InstantValue(juneFirst.AddDays(1)), new InstantValue(juneFirst.AddDays(2).AddSeconds(-1))))
+            .ShouldBe(["Edge"]);
+        (await Matching("seen", FilterOp.LessOrEqual, new InstantValue(juneFirst.AddYears(1))))
+            .ShouldBe(["Edge", "Shallow"]);
+
+        // Presence: a value is recorded, whatever its type; JSON null and the empty string are not.
+        (await Matching("depth_m", FilterOp.IsNotEmpty))
+            .ShouldBe(["Deep", "Edge", "Odd", "Shallow", "Textual"]);
+        (await Matching("depth_m", FilterOp.IsEmpty)).ShouldBe(["Blank", "Silent"]);
+        (await Matching("label", FilterOp.IsEmpty)).ShouldBe(["Blank", "Deep", "Edge", "Silent", "Textual"]);
+
+        // Negated, the condition still says nothing about the other type's row: it is outside the
+        // type, so "not under 4.5" holds for it — which is why validation asks for the type beside it.
+        var negated = compiler.Compile(new AllOfNode(
+        [
+            new ConditionNode(FeatureFilterFields.TypeId, FilterOp.Equals, [new IdValue(sinkhole.ToString())]),
+            new NotNode(new ConditionNode(
+                $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.LessThan, [new NumberValue(4.5)])),
+        ]));
+        (await db.Features.AsNoTracking().Where(negated).Where(f => f.Name!.EndsWith(tag)).CountAsync())
+            .ShouldBe(6);
+
+        // Three property conditions in one statement: each fragment's values must stay its own.
+        var together = compiler.Compile(new AllOfNode(
+        [
+            new ConditionNode(
+                $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.GreaterOrEqual, [new NumberValue(2)]),
+            new ConditionNode(
+                $"{FeatureFilterFields.PropertyPrefix}sinkhole:wet", FilterOp.Equals, [new BooleanValue(false)]),
+            new ConditionNode(
+                $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.LessOrEqual, [new NumberValue(10)]),
+        ]));
+        (await db.Features.AsNoTracking().Where(together).Where(f => f.Name!.EndsWith(tag))
+                .Select(f => f.Name!.Replace($" {tag}", "")).ToListAsync())
+            .ShouldBe(["Edge"]);
     }
 
     [Fact]

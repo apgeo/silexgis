@@ -198,7 +198,13 @@ public static class FilterEndpoints
             // The operator list travels with each field rather than being looked up from the kind
             // on the far side, so there is one table and the builder cannot drift from it.
             [.. vocabulary.Fields.Select(f => new FilterFieldDto(
-                f.Key, f.LabelKey, f.Kind, FilterOps.For(f.Kind), f.Options))],
+                f.Key,
+                f.LabelKey,
+                f.Kind,
+                FilterOps.For(f.Kind),
+                f.Options,
+                f.Label,
+                f.Requires is { } r ? new FilterFieldRequirementDto(r.Field, r.Value) : null))],
             vocabulary.Sorts);
 
     private static FilterHitDto ToDto(FilterHit hit) =>

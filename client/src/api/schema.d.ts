@@ -10122,6 +10122,12 @@ export interface components {
             kind: components["schemas"]["FieldKind"];
             ops: components["schemas"]["FilterOp"][];
             options: null | string;
+            label: null | string;
+            requires: null | components["schemas"]["FilterFieldRequirementDto"];
+        };
+        FilterFieldRequirementDto: {
+            field: string;
+            value: string;
         };
         FilterHitDto: {
             world: string;

@@ -8,6 +8,7 @@ using SilexGis.Api.Features.Filters;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.Filters;
 using SilexGis.Infrastructure.Persistence;
 
@@ -140,6 +141,168 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await response.Content.ReadAsStringAsync()).ShouldContain("filter.invalid");
+    }
+
+    // ---------- a feature type's own typed properties ----------
+
+    private static string DepthField => FeaturePropertyFields.FieldKey(FeatureTypeSeeds.Sinkhole, "depth_m");
+
+    private async Task<long> SinkholeTypeIdAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.FeatureTypes.AsNoTracking()
+            .Where(t => t.Code == FeatureTypeSeeds.Sinkhole).Select(t => t.Id).SingleAsync();
+    }
+
+    private static FilterNode SinkholesNamed(long typeId, string text, params FilterNode[] more) =>
+        new AllOfNode([
+            new ConditionNode(FeatureFilterFields.TypeId, FilterOp.Equals, [new IdValue(typeId.ToString())]),
+            new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(text)]),
+            .. more]);
+
+    [Fact]
+    public async Task The_vocabulary_offers_each_typed_property_titled_by_its_schema_and_tied_to_its_type()
+    {
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-props");
+        var sinkhole = await SinkholeTypeIdAsync();
+
+        var body = await client.GetFromJsonAsync<FilterVocabularyResponse>(
+            "/api/v1/filters/vocabulary", Wire);
+
+        var depth = body!.Worlds.Single(w => w.World == "feature").Fields.Single(f => f.Key == DepthField);
+        depth.Kind.ShouldBe(FieldKind.Number);
+        depth.Label.ShouldBe("Depth (m)");
+        depth.LabelKey.ShouldBe(FeaturePropertyFields.LabelKey);
+        depth.Ops.ShouldContain(FilterOp.GreaterOrEqual);
+        depth.Requires.ShouldBe(new FilterFieldRequirementDto(FeatureFilterFields.TypeId, sinkhole.ToString()));
+
+        // The fields every installation has carry neither: they are named by translation alone.
+        var name = body.Worlds.Single(w => w.World == "feature").Fields.Single(f => f.Key == FeatureFilterFields.Name);
+        name.Label.ShouldBeNull();
+        name.Requires.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_typed_property_narrows_by_number_and_counts_only_what_the_caller_may_see()
+    {
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
+        var sinkhole = await SinkholeTypeIdAsync();
+        await SeedSinkholesAsync(ownerId, sinkhole, Visibility.Public,
+            """{"depth_m":2}""", """{"depth_m":4.5}""", """{"depth_m":30}""", """{"depth_m":"3"}""");
+        // Shallow enough to match, and private to its owner: the outsider must not count it.
+        await SeedSinkholesAsync(ownerId, sinkhole, Visibility.Private, """{"depth_m":1}""");
+
+        var atMost = new ConditionNode(DepthField, FilterOp.LessOrEqual, [new NumberValue(4.5)]);
+
+        using var outsider = await ClientAsync(GlobalRoles.Viewer, "fe-prop-out");
+        var seen = await QueryAsync(outsider, About("feature", SinkholesNamed(sinkhole, tag, atMost)));
+        seen.Worlds[0].Total.ShouldBe(2);
+
+        // The private row does match: its owner, asking the same question, gets it counted.
+        using var owner = await ClientAsync(GlobalRoles.Editor, "fe-prop-own", OwnerEmail);
+        var own = await QueryAsync(owner, About("feature", SinkholesNamed(sinkhole, tag, atMost)));
+        own.Worlds[0].Total.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task A_typed_property_asked_without_its_type_is_refused_like_a_field_that_does_not_exist()
+    {
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-prop-alone");
+        var sinkhole = await SinkholeTypeIdAsync();
+
+        async Task<string> RefusalAsync(FilterNode where)
+        {
+            var response = await client.PostAsJsonAsync(
+                "/api/v1/filters/query", new FilterQueryRequest(About("feature", where)), Wire);
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            var problem = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            problem.GetProperty("code").GetString().ShouldBe("filter.invalid");
+            return problem.GetProperty("detail").GetString()!;
+        }
+
+        var alone = await RefusalAsync(new ConditionNode(DepthField, FilterOp.LessThan, [new NumberValue(3)]));
+        var invented = await RefusalAsync(new AllOfNode([
+            new ConditionNode(FeatureFilterFields.TypeId, FilterOp.Equals, [new IdValue(sinkhole.ToString())]),
+            new ConditionNode(
+                FeaturePropertyFields.FieldKey(FeatureTypeSeeds.Sinkhole, "nothing_here"),
+                FilterOp.LessThan,
+                [new NumberValue(3)]),
+        ]));
+
+        alone.Replace("depth_m", "X").ShouldBe(invented.Replace("nothing_here", "X"));
+
+        // Beside its type the same condition is an ordinary question.
+        (await client.PostAsJsonAsync("/api/v1/filters/query", new FilterQueryRequest(About("feature",
+            SinkholesNamed(sinkhole, tag, new ConditionNode(DepthField, FilterOp.LessThan, [new NumberValue(3)])))), Wire))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_dated_property_is_offered_as_an_instant_and_a_value_that_is_not_a_date_simply_does_not_match()
+    {
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
+        var code = $"dated{tag}";
+        long typeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var type = new FeatureType
+            {
+                Code = code,
+                Name = "Dated",
+                PropertiesSchema = """
+                    {"type":"object","properties":{
+                      "surveyed_on":{"type":"string","format":"date","title":"Surveyed on"},
+                      "seen_at":{"type":"string","format":"date-time"}
+                    }}
+                    """,
+            };
+            db.FeatureTypes.Add(type);
+            await db.SaveChangesAsync();
+            typeId = type.Id;
+        }
+
+        // Dates either side of the bound, one on it, one a date-time, and every way a stored value
+        // can fail to be a date: a calendar date that does not exist, words, a number, a time that
+        // names no offset, nothing at all. None of those may fail the question.
+        await SeedSinkholesAsync(ownerId, typeId, Visibility.Public,
+            """{"surveyed_on":"2025-05-31"}""",
+            """{"surveyed_on":"2025-06-01"}""",
+            """{"surveyed_on":"2025-06-02T08:00:00Z"}""",
+            """{"surveyed_on":"2025-02-30"}""",
+            """{"surveyed_on":"last spring"}""",
+            """{"surveyed_on":20250601}""",
+            """{"surveyed_on":"2025-07-01T08:00:00"}""",
+            """{}""");
+
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-prop-dated");
+        var vocabulary = await client.GetFromJsonAsync<FilterVocabularyResponse>(
+            "/api/v1/filters/vocabulary", Wire);
+        var fields = vocabulary!.Worlds.Single(w => w.World == "feature").Fields;
+        var field = FeaturePropertyFields.FieldKey(code, "surveyed_on");
+        var surveyed = fields.Single(f => f.Key == field);
+        surveyed.Kind.ShouldBe(FieldKind.Instant);
+        surveyed.Ops.ShouldBe(FilterOps.For(FieldKind.Instant));
+        fields.Single(f => f.Key == FeaturePropertyFields.FieldKey(code, "seen_at")).Kind
+            .ShouldBe(FieldKind.Instant);
+
+        var juneFirst = new DateTimeOffset(2025, 6, 1, 0, 0, 0, TimeSpan.Zero);
+
+        async Task<int?> CountAsync(FilterOp op, params DateTimeOffset[] values)
+        {
+            var body = await QueryAsync(client, About("feature", SinkholesNamed(typeId, tag,
+                new ConditionNode(field, op, [.. values.Select(v => (FilterValue)new InstantValue(v))]))));
+            return body.Worlds[0].Total;
+        }
+
+        (await CountAsync(FilterOp.GreaterOrEqual, juneFirst)).ShouldBe(2);
+        (await CountAsync(FilterOp.LessThan, juneFirst)).ShouldBe(1);
+        // A bound written in another zone means the same moment.
+        (await CountAsync(FilterOp.LessOrEqual, new DateTimeOffset(2025, 6, 1, 23, 59, 0, TimeSpan.FromHours(3))))
+            .ShouldBe(2);
+        (await CountAsync(FilterOp.Between, juneFirst, juneFirst.AddDays(1).AddSeconds(-1))).ShouldBe(1);
+        (await CountAsync(FilterOp.GreaterThan, juneFirst.AddDays(1))).ShouldBe(1);
     }
 
     [Fact]
@@ -503,6 +666,30 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
 
         await db.SaveChangesAsync();
         return ids;
+    }
+
+    private async Task SeedSinkholesAsync(Guid ownerId, long typeId, Visibility visibility, params string[] properties)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        foreach (var (document, i) in properties.Select((p, i) => (p, i)))
+        {
+            var id = Guid.NewGuid();
+            db.Features.Add(new Feature
+            {
+                Id = id,
+                Name = $"Sinkhole {visibility} {i} {tag}",
+                Kind = FeatureKind.Generic,
+                FeatureTypeId = typeId,
+                OwnerUserId = ownerId,
+                Visibility = visibility,
+                AncestorIds = [id],
+                Properties = document,
+            });
+            db.FeatureAncestors.Add(new FeatureAncestor { FeatureId = id, AncestorId = id });
+        }
+
+        await db.SaveChangesAsync();
     }
 
     private async Task SeedTripsAsync(

@@ -21,13 +21,34 @@ public sealed class FeatureFilterWorld(SilexGisDbContext db, FeatureProtection p
     public override string World => Key;
 
     /// <summary>
-    /// What a feature can be asked about. The same for every caller today, and asynchronous anyway
-    /// because it will not stay that way: this installation's own feature types name typed
-    /// properties, and which of those a caller may ask about is a per-caller answer.
+    /// What a feature can be asked about: the fields every installation has, plus the typed
+    /// properties this installation's feature types declare — only for a caller who may read the
+    /// feature types at all.
     /// </summary>
-    public override ValueTask<WorldVocabulary> VocabularyAsync(
-        AccessContext caller, CancellationToken ct) =>
-        ValueTask.FromResult(FeatureFilterFields.Vocabulary);
+    /// <remarks>
+    /// The schemas are what <c>GET /feature-types</c> already returns to the same readers, so a
+    /// property field offered here names nothing that caller could not have read for themselves; a
+    /// caller refused that list is offered no property, and a condition naming one reads to them
+    /// exactly like a field that does not exist. No schema keyword marks a property as withheld
+    /// today, and every feature answer that carries a row carries its whole property document, so
+    /// there is nothing a filter could reveal about a visible row that reading it would not.
+    /// </remarks>
+    public override async ValueTask<WorldVocabulary> VocabularyAsync(
+        AccessContext caller, CancellationToken ct)
+    {
+        if (!AccessEvaluator.Decide(caller, AccessDomain.Taxonomies, AccessAction.Read, null).Allowed)
+        {
+            return FeatureFilterFields.Vocabulary;
+        }
+
+        var types = await db.FeatureTypes.AsNoTracking()
+            .Where(t => t.PropertiesSchema != null)
+            .OrderBy(t => t.SortOrder).ThenBy(t => t.Code)
+            .Select(t => new FeatureTypeSchema(t.Id, t.Code, t.PropertiesSchema))
+            .ToListAsync(ct);
+
+        return FeaturePropertyFields.Fold(FeatureFilterFields.Vocabulary, types);
+    }
 
     /// <summary>
     /// What this caller may see: the visibility walk, less any protected centreline they may not

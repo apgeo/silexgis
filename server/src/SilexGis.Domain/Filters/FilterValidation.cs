@@ -108,7 +108,7 @@ public static class FilterValidation
             if (scope.Where is { } tree)
             {
                 var counted = 0;
-                Walk(tree, vocabulary, depth: 1, ref counted, errors);
+                Walk(tree, vocabulary, depth: 1, NoGuards, ref counted, errors);
             }
         }
 
@@ -122,8 +122,22 @@ public static class FilterValidation
         return errors;
     }
 
+    private static readonly IReadOnlyList<FieldRequirement> NoGuards = [];
+
+    /// <param name="guards">
+    /// The conditions that fix a field to one value for every row this node can match: the
+    /// equality conditions standing directly in an enclosing all-of group. A field that
+    /// <see cref="FieldDescriptor.Requires"/> a companion is valid only where its companion is
+    /// among these. Nothing else counts — a companion under an any-of could be the branch not
+    /// taken, and one under a negation says the opposite.
+    /// </param>
     private static void Walk(
-        FilterNode node, WorldVocabulary vocabulary, int depth, ref int counted, List<string> errors)
+        FilterNode node,
+        WorldVocabulary vocabulary,
+        int depth,
+        IReadOnlyList<FieldRequirement> guards,
+        ref int counted,
+        List<string> errors)
     {
         if (++counted > MaxNodes)
         {
@@ -144,11 +158,11 @@ public static class FilterValidation
         switch (node)
         {
             case ConditionNode condition:
-                Check(condition, vocabulary, errors);
+                Check(condition, vocabulary, guards, errors);
                 return;
 
             case NotNode not:
-                Walk(not.Of, vocabulary, depth + 1, ref counted, errors);
+                Walk(not.Of, vocabulary, depth + 1, guards, ref counted, errors);
                 return;
 
             case AllOfNode or AnyOfNode:
@@ -161,9 +175,10 @@ public static class FilterValidation
                     return;
                 }
 
+                var inner = node is AllOfNode ? WithGuards(guards, node.Children) : guards;
                 foreach (var child in node.Children)
                 {
-                    Walk(child, vocabulary, depth + 1, ref counted, errors);
+                    Walk(child, vocabulary, depth + 1, inner, ref counted, errors);
                 }
 
                 return;
@@ -214,15 +229,43 @@ public static class FilterValidation
         _ => false,
     };
 
-    private static void Check(ConditionNode condition, WorldVocabulary vocabulary, List<string> errors)
+    /// <summary>
+    /// The guards in force inside an all-of group: those inherited, plus each direct member that
+    /// pins a field to exactly one identity — an equality, or a one-valued (or all-equal) "in".
+    /// </summary>
+    private static IReadOnlyList<FieldRequirement> WithGuards(
+        IReadOnlyList<FieldRequirement> inherited, IReadOnlyList<FilterNode> members)
+    {
+        List<FieldRequirement>? added = null;
+        foreach (var member in members)
+        {
+            if (member is ConditionNode { Op: FilterOp.Equals or FilterOp.In } pin
+                && pin.Values is { Count: > 0 } values
+                && values.All(v => v is IdValue)
+                && values.Select(v => ((IdValue)v).Value).Distinct(StringComparer.Ordinal).ToList() is [var only])
+            {
+                (added ??= [.. inherited]).Add(new FieldRequirement(pin.Field, only));
+            }
+        }
+
+        return added ?? inherited;
+    }
+
+    private static void Check(
+        ConditionNode condition,
+        WorldVocabulary vocabulary,
+        IReadOnlyList<FieldRequirement> guards,
+        List<string> errors)
     {
         var field = vocabulary.Field(condition.Field);
-        if (field is null)
+        if (field is null || (field.Requires is { } companion && !guards.Contains(companion)))
         {
             // Deliberately does not name what the world does hold. A condition naming a field that
             // exists but is not offerable — somebody's address, or which cave a trip visited — must
             // read exactly like one naming a field that does not exist at all, or refusal becomes
-            // the answer to a question that was not supposed to have one.
+            // the answer to a question that was not supposed to have one. A typed property asked
+            // without the type that declares it is refused in the same words, for the same reason:
+            // a different sentence would tell somebody probing keys that this one exists somewhere.
             errors.Add($"'{vocabulary.World}' cannot be filtered by '{condition.Field}'.");
             return;
         }

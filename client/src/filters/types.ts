@@ -97,6 +97,22 @@ export interface FilterField {
    */
   ops: FilterOp[];
   options: string | null;
+  /**
+   * The name to show as written, for a field the installation declared — a feature type's typed
+   * property, titled by its schema. Null for the application's own fields, named by `labelKey`.
+   */
+  label: string | null;
+  /**
+   * A condition this field is valid only beside: `field` equal to `value`, standing directly in an
+   * enclosing all-of group. A typed property requires its feature type; without it the server
+   * refuses the condition as though the field did not exist.
+   */
+  requires: FieldRequirement | null;
+}
+
+export interface FieldRequirement {
+  field: string;
+  value: string;
 }
 
 export interface WorldVocabulary {

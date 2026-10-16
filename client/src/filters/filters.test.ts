@@ -40,7 +40,15 @@ const VOCABULARIES: WorldVocabulary[] = [
     world: 'feature',
     labelKey: 'filters.worlds.feature',
     fields: [
-      { key: 'name', labelKey: 'x', kind: 'text', ops: ['contains'], options: null },
+      {
+        key: 'name',
+        labelKey: 'x',
+        kind: 'text',
+        ops: ['contains'],
+        options: null,
+        label: null,
+        requires: null,
+      },
     ],
     sorts: ['created', 'updated', 'title', 'owner'],
   },

@@ -82,9 +82,10 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
             return ids.Count == 0 ? _ => false : f => ids.Contains(f.Id);
         }
 
-        if (FeatureFilterFields.TryReadProperty(condition.Field, out _, out var key))
+        if (FeatureFilterFields.TryReadProperty(condition.Field, out var typeCode, out var key))
         {
-            return PropertyLeaf(key, condition);
+            var ids = FeaturePropertySql.Matching(db, typeCode, key, condition);
+            return f => ids.Contains(f.Id);
         }
 
         return condition.Field switch
@@ -152,42 +153,6 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
         var slugs = condition.Values.OfType<IdValue>().Select(v => v.Value).ToArray();
         return f => db.Taggings.Any(tg =>
             tg.FeatureId == f.Id && db.Tags.Any(t => t.Id == tg.TagId && slugs.Contains(t.Slug)));
-    }
-
-    private Expression<Func<Feature, bool>> PropertyLeaf(string key, ConditionNode condition)
-    {
-        // Containment against the stored document. Proved against the database rather than
-        // assumed: this reaches PostgreSQL as `@>`, and it distinguishes the number 4.5 from the
-        // string "4.5" — which is why the values carried a type all the way from the browser. No
-        // index serves it: the only indexes over the column are the two expression indexes on
-        // lower-cased printed-code keys, which answer an equality and never a containment. The
-        // rows reaching it are already narrowed by kind and by what the caller may read, and a GIN
-        // index over the column is the step to take if that stops being enough.
-        if (condition.Op is FilterOp.IsEmpty or FilterOp.IsNotEmpty)
-        {
-            return condition.Op == FilterOp.IsEmpty
-                ? f => !EF.Functions.JsonExists(f.Properties, key)
-                : f => EF.Functions.JsonExists(f.Properties, key);
-        }
-
-        var json = PropertyProbe(key, condition.Values[0]);
-        return f => EF.Functions.JsonContains(f.Properties, json);
-    }
-
-    /// <summary>One key and one typed value, as the containment document to compare against.</summary>
-    private static string PropertyProbe(string key, FilterValue value)
-    {
-        var encoded = value switch
-        {
-            NumberValue number => System.Text.Json.JsonSerializer.Serialize(number.Value),
-            BooleanValue boolean => boolean.Value ? "true" : "false",
-            TextValue text => System.Text.Json.JsonSerializer.Serialize(text.Value),
-            IdValue id => System.Text.Json.JsonSerializer.Serialize(id.Value),
-            InstantValue instant => System.Text.Json.JsonSerializer.Serialize(instant.Value),
-            _ => "null",
-        };
-
-        return $"{{{System.Text.Json.JsonSerializer.Serialize(key)}:{encoded}}}";
     }
 
     private static Func<string, Expression<Func<Feature, bool>>> EnumMatcher<TEnum>(

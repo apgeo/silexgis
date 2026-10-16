@@ -91,12 +91,26 @@ public sealed record FilterWorldVocabularyDto(
 /// <param name="Options">
 /// Where the choices come from for a field picked from a list, or null when it takes free input.
 /// </param>
+/// <param name="Label">
+/// The name to show as written, for a field this installation declared rather than the
+/// application: a feature type's typed property, titled by its schema. Null otherwise.
+/// </param>
+/// <param name="Requires">
+/// The condition this field is valid only beside, or null. A typed property requires its feature
+/// type fixed in an enclosing all-of group; without it the condition is refused like an unknown
+/// field.
+/// </param>
 public sealed record FilterFieldDto(
     string Key,
     string LabelKey,
     FieldKind Kind,
     IReadOnlyList<FilterOp> Ops,
-    string? Options);
+    string? Options,
+    string? Label,
+    FilterFieldRequirementDto? Requires);
+
+/// <summary>A condition a field has to stand beside: <c>Field</c> equal to <c>Value</c>.</summary>
+public sealed record FilterFieldRequirementDto(string Field, string Value);
 
 public sealed record FilterLimitsDto(
     int MaxNodes,
