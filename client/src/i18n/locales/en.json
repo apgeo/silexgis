@@ -505,6 +505,24 @@
     "contextCopyCoords": "Copy coordinates",
     "coordsCopied": "Coordinates copied.",
     "heatmap": "Entrance heatmap",
+    "karstDensity": {
+      "layer": "Cave density (grid)",
+      "reading": "What the cells show",
+      "mode": {
+        "density": "Caves per km²",
+        "kernel": "Smoothed",
+        "hotSpot": "Hot and cold spots"
+      },
+      "cell": "Cells of {{metres}} m (the finest published here is {{floor}} m).",
+      "loading": "Reading the grid…",
+      "failed": "The density grid could not be read. Moving the map asks again.",
+      "refused": {
+        "tooWide": "This view is too wide for the density grid even at its coarsest cell. Zoom in to see it.",
+        "tooFine": "The grid was asked for cells finer than this installation publishes.",
+        "window": "This view cannot be asked about. Move the map to ask again.",
+        "other": "The density grid was refused for this view."
+      }
+    },
     "baseOpacity": "Opacity of {{name}}",
     "photos": "Geotagged photos",
     "tripsLayer": "Trip logs",

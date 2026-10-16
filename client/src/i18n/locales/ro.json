@@ -505,6 +505,24 @@
     "contextCopyCoords": "Copiază coordonatele",
     "coordsCopied": "Coordonate copiate.",
     "heatmap": "Hartă de căldură (intrări)",
+    "karstDensity": {
+      "layer": "Densitatea peșterilor (grilă)",
+      "reading": "Ce arată celulele",
+      "mode": {
+        "density": "Peșteri pe km²",
+        "kernel": "Netezită",
+        "hotSpot": "Zone fierbinți și reci"
+      },
+      "cell": "Celule de {{metres}} m (cea mai fină publicată aici este de {{floor}} m).",
+      "loading": "Se citește grila…",
+      "failed": "Grila de densitate nu a putut fi citită. Mutarea hărții o cere din nou.",
+      "refused": {
+        "tooWide": "Această vedere este prea largă pentru grila de densitate, chiar și la cea mai mare celulă. Măriți harta pentru a o vedea.",
+        "tooFine": "Grila a fost cerută cu celule mai fine decât publică această instalare.",
+        "window": "Pentru această vedere nu se poate întreba. Mutați harta pentru a întreba din nou.",
+        "other": "Grila de densitate a fost refuzată pentru această vedere."
+      }
+    },
     "baseOpacity": "Opacitatea stratului {{name}}",
     "photos": "Fotografii geolocalizate",
     "tripsLayer": "Ture",

@@ -132,6 +132,9 @@ function panel(overrides: PanelOverrides = {}) {
       centerlinesVisible={overrides.centerlinesVisible ?? false}
       onCenterlineLimitsChange={vi.fn()}
       tripsVisible={false}
+      karstDensityVisible={false}
+      karstDensityMode="density"
+      onKarstDensityModeChange={() => {}}
       tripFilter={{}}
       onTripFilterChange={vi.fn()}
       unappliedTripFilters={0}

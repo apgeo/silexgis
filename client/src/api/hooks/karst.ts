@@ -383,6 +383,29 @@ export function useMapDensity(query: DensityQuery | undefined) {
   });
 }
 
+/**
+ * Imperative fetch of the same grid, for the map's density overlay (not a hook).
+ *
+ * The overlay asks again on every pan, so it lives outside the query cache: a cache entry per
+ * window would only grow, and an answer for a window the reader has already left is discarded
+ * rather than kept. The signal lets a newer window abort the request it supersedes.
+ */
+export async function fetchMapDensity(query: DensityQuery, signal?: AbortSignal): Promise<DensityGrid> {
+  return unwrap(
+    api.GET('/api/v1/map/density', {
+      params: {
+        query: {
+          bbox: query.bbox,
+          cellMetres: query.cellMetres,
+          bandwidthMetres: query.bandwidthMetres,
+          areaId: query.areaId,
+        },
+      },
+      signal,
+    }),
+  );
+}
+
 export interface PointPatternQuery {
   bbox: string;
   simulations: number;

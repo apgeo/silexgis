@@ -3,6 +3,7 @@ import { fromLonLat, toLonLat } from 'ol/proj';
 import { normalizeCamera3DState, type Camera3DState } from '../scene3d/camera3d.ts';
 import { viewCamera3dState } from '../workspace/viewCamera.ts';
 import { unreadableTileLayers } from './baseLayers.ts';
+import { isKarstDensityMode, type KarstDensityMode } from './densityCells.ts';
 import { getOverlayOrder, getWorkspaceMap } from './mapContext.ts';
 
 /**
@@ -27,6 +28,13 @@ export interface ViewConfig {
   centerlinesVisible?: boolean;
   /** Added after v1 shipped; older saved views omit it (treated as off). */
   heatmapVisible?: boolean;
+  /** The server's cave-density grid. Added after v1 shipped; older saved views omit it (off). */
+  karstDensityVisible?: boolean;
+  /**
+   * Which reading fills the density cells: `density` (caves per km²), `kernel` (the smoothed
+   * surface) or `hotSpot`. Added after v1 shipped; omitted or unrecognised reads as `density`.
+   */
+  karstDensityMode?: KarstDensityMode;
   /** Added after v1 shipped; older saved views omit it (treated as false — an opt-in overlay). */
   photosVisible?: boolean;
   /** Added after v1 shipped; older saved views omit it (treated as false — an opt-in overlay). */
@@ -79,6 +87,8 @@ export interface WorkspaceUiState {
   surfaceFeaturesVisible: boolean;
   centerlinesVisible: boolean;
   heatmapVisible: boolean;
+  karstDensityVisible: boolean;
+  karstDensityMode: KarstDensityMode;
   photosVisible: boolean;
   tripsVisible: boolean;
   tripsFrom?: string;
@@ -115,6 +125,8 @@ export function captureViewConfig(
     surfaceFeaturesVisible: ui.surfaceFeaturesVisible,
     centerlinesVisible: ui.centerlinesVisible,
     heatmapVisible: ui.heatmapVisible,
+    karstDensityVisible: ui.karstDensityVisible,
+    karstDensityMode: ui.karstDensityMode,
     photosVisible: ui.photosVisible,
     tripsVisible: ui.tripsVisible,
     tripsFrom: ui.tripsFrom,
@@ -145,6 +157,8 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     surfaceFeaturesVisible: parsed.surfaceFeaturesVisible ?? true,
     centerlinesVisible: parsed.centerlinesVisible ?? false,
     heatmapVisible: parsed.heatmapVisible ?? false,
+    karstDensityVisible: parsed.karstDensityVisible ?? false,
+    karstDensityMode: isKarstDensityMode(parsed.karstDensityMode) ? parsed.karstDensityMode : 'density',
     photosVisible: parsed.photosVisible ?? false,
     tripsVisible: parsed.tripsVisible ?? false,
     tripsFrom: parsed.tripsFrom,

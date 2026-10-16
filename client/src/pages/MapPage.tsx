@@ -96,6 +96,14 @@ import {
   createOverburdenHighlightLayer,
 } from '../map/overburdenHighlightLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID, createEntranceHeatmapLayer } from '../map/heatmapLayer.ts';
+import {
+  KARST_DENSITY_LAYER_ID,
+  attachKarstDensityLoader,
+  createKarstDensityLayer,
+  setKarstDensityEnabled,
+  setKarstDensityMode,
+  type KarstDensityMode,
+} from '../map/karstDensityLayer.ts';
 import { GEOFILE_LAYER_PREFIX, attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
 import { PHOTO_LAYER_ID, attachPhotoLoader, createPhotoLayer, setPhotosEnabled } from '../map/photoLayer.ts';
 import { readTripListFilter } from './trips/tripListFilter.ts';
@@ -254,6 +262,8 @@ export default function MapPage() {
   // invisible at the zooms most sessions spend their time at.
   const [centerlinesVisible, setCenterlinesVisible] = useState(false);
   const [heatmapVisible, setHeatmapVisible] = useState(false);
+  const [karstDensityVisible, setKarstDensityVisible] = useState(false);
+  const [karstDensityMode, setKarstDensityModeState] = useState<KarstDensityMode>('density');
   const [photosVisible, setPhotosVisible] = useState(false);
   const [tripsVisible, setTripsVisible] = useState(false);
   // What the trip overlay is asking for. Held here rather than only in the layer module so a
@@ -391,6 +401,9 @@ export default function MapPage() {
     // is the default stacking (users can re-drag it in the composer tree). The
     // entrance heatmap sits at the bottom as a density wash beneath the points.
     for (const [id, create] of [
+      // Under everything, the entrance wash included: a cell is a statement about a tract of
+      // ground, and every other overlay is a statement about something on it.
+      [KARST_DENSITY_LAYER_ID, createKarstDensityLayer],
       [ENTRANCE_HEATMAP_LAYER_ID, createEntranceHeatmapLayer],
       [SURFACE_FEATURE_LAYER_ID, createSurfaceFeatureLayer],
       [ENTRANCE_LAYER_ID, createEntranceLayer],
@@ -422,6 +435,7 @@ export default function MapPage() {
     const detachGeofileLoader = attachGeofileLoader(map);
     const detachPhotoLoader = attachPhotoLoader(map);
     const detachTripLoader = attachTripLoader(map);
+    const detachKarstDensityLoader = attachKarstDensityLoader(map);
     const detachPhotoPopup = attachPhotoPopup(map);
     // The foreign libraries' end of the same two things. Attached unconditionally: both are
     // gated on a layer being switched on, and no library configured means no layer to switch on.
@@ -479,6 +493,7 @@ export default function MapPage() {
       detachGeofileLoader();
       detachPhotoLoader();
       detachTripLoader();
+      detachKarstDensityLoader();
       detachPhotoPopup();
       detachLibraryPhotoLoader();
       detachLibraryPhotoPopup();
@@ -506,7 +521,13 @@ export default function MapPage() {
 
   // Built-in vector overlays (entrances, surface features, centerlines, heatmap) follow their opacity.
   useEffect(() => {
-    for (const id of [ENTRANCE_LAYER_ID, SURFACE_FEATURE_LAYER_ID, CENTERLINE_LAYER_ID, ENTRANCE_HEATMAP_LAYER_ID]) {
+    for (const id of [
+      ENTRANCE_LAYER_ID,
+      SURFACE_FEATURE_LAYER_ID,
+      CENTERLINE_LAYER_ID,
+      ENTRANCE_HEATMAP_LAYER_ID,
+      KARST_DENSITY_LAYER_ID,
+    ]) {
       setLayerOpacity(id, overlayOpacity[id] ?? 1);
     }
   }, [overlayOpacity]);
@@ -877,6 +898,15 @@ export default function MapPage() {
   }, [heatmapVisible]);
 
   useEffect(() => {
+    findOverlayLayer(KARST_DENSITY_LAYER_ID)?.setVisible(karstDensityVisible);
+    setKarstDensityEnabled(karstDensityVisible); // hidden = no fetches
+  }, [karstDensityVisible]);
+
+  useEffect(() => {
+    setKarstDensityMode(karstDensityMode);
+  }, [karstDensityMode]);
+
+  useEffect(() => {
     findOverlayLayer(PHOTO_LAYER_ID)?.setVisible(photosVisible);
     setPhotosEnabled(photosVisible); // gate the bbox loader so hidden = no fetches
   }, [photosVisible]);
@@ -973,6 +1003,8 @@ export default function MapPage() {
       setCenterlinesVisible(visible);
     } else if (id === ENTRANCE_HEATMAP_LAYER_ID) {
       setHeatmapVisible(visible);
+    } else if (id === KARST_DENSITY_LAYER_ID) {
+      setKarstDensityVisible(visible);
     } else if (id === PHOTO_LAYER_ID) {
       setPhotosVisible(visible);
     } else if (id === TRIP_LAYER_ID) {
@@ -996,6 +1028,8 @@ export default function MapPage() {
       surfaceFeaturesVisible,
       centerlinesVisible,
       heatmapVisible,
+      karstDensityVisible,
+      karstDensityMode,
       photosVisible,
       tripsVisible,
       tripsFrom: tripFilter.from,
@@ -1084,6 +1118,8 @@ export default function MapPage() {
     setSurfaceFeaturesVisible(ui.surfaceFeaturesVisible);
     setCenterlinesVisible(ui.centerlinesVisible);
     setHeatmapVisible(ui.heatmapVisible);
+    setKarstDensityVisible(ui.karstDensityVisible);
+    setKarstDensityModeState(ui.karstDensityMode);
     setPhotosVisible(ui.photosVisible);
     setTripsVisible(ui.tripsVisible);
     // Only the window is restored, and deliberately not the facet narrowings: those are carried
@@ -1170,6 +1206,9 @@ export default function MapPage() {
       }}
       centerlinesVisible={centerlinesVisible}
       tripsVisible={tripsVisible}
+      karstDensityVisible={karstDensityVisible}
+      karstDensityMode={karstDensityMode}
+      onKarstDensityModeChange={setKarstDensityModeState}
       tripFilter={tripFilter}
       onTripFilterChange={setTripFilter}
       unappliedTripFilters={unappliedTripFilters}

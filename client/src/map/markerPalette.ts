@@ -148,3 +148,23 @@ export const rasterMapPalette = {
 export function featureSymbolUrl(symbolFile: string): string {
   return `/feature_symbols/${encodeURIComponent(symbolFile)}`;
 }
+
+/**
+ * The density overlay's fills. A sequential ramp from pale to dark in one hue family, so "more"
+ * always reads as "darker" whichever basemap is under it, and the hot and cold spots of the
+ * hot-spot reading in two hues far from that ramp so they are never taken for a density band.
+ * Partly transparent on purpose: a cell is a statement about an area, and the ground under it is
+ * what that statement is about.
+ */
+export const karstDensityPalette = {
+  ramp: [
+    'rgba(255, 237, 160, 0.55)',
+    'rgba(254, 178, 76, 0.6)',
+    'rgba(253, 141, 60, 0.65)',
+    'rgba(227, 26, 28, 0.7)',
+    'rgba(128, 0, 38, 0.75)',
+  ],
+  hot: 'rgba(215, 48, 31, 0.7)',
+  cold: 'rgba(43, 140, 190, 0.7)',
+  cellStroke: 'rgba(80, 80, 80, 0.35)',
+} as const;

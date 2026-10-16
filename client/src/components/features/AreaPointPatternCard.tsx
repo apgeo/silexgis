@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMapDensity, useMapPointPattern } from '../../api/hooks.ts';
+import { DENSITY_CELL_MULTIPLES, densityCellMetres } from '../../map/densityCells.ts';
 import { EnvelopeChart } from '../statistics/DistributionCharts.tsx';
 import RoseDiagram from '../statistics/RoseDiagram.tsx';
 
@@ -58,7 +59,7 @@ export default function AreaPointPatternCard({
 
   const density = useMapDensity(
     bbox && floor && cellMultiple > 1
-      ? { bbox, areaId: featureId, cellMetres: floor * cellMultiple }
+      ? { bbox, areaId: featureId, cellMetres: densityCellMetres(floor, cellMultiple) }
       : undefined,
   );
   const grid = cellMultiple > 1 ? density.data : probe.data;
@@ -108,8 +109,8 @@ export default function AreaPointPatternCard({
             value={cellMultiple}
             onChange={(value) => setCellMultiple(Number(value))}
             data-testid="karst-density-cell"
-            options={[1, 2, 4, 8].map((multiple) => ({
-              label: `${round(grid.minimumCellMetres * multiple)} m`,
+            options={DENSITY_CELL_MULTIPLES.map((multiple) => ({
+              label: `${round(densityCellMetres(grid.minimumCellMetres, multiple))} m`,
               value: multiple,
             }))}
           />

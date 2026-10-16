@@ -10,6 +10,8 @@ const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
   surfaceFeaturesVisible: false,
   centerlinesVisible: true,
   heatmapVisible: true,
+  karstDensityVisible: true,
+  karstDensityMode: 'hotSpot',
   photosVisible: false,
   tripsVisible: true,
   tripsFrom: '2019-01-01',
@@ -218,5 +220,34 @@ describe('viewConfig trip overlay', () => {
     // documented default, and raising the number would make every view saved from that moment
     // unopenable by anything already deployed.
     expect(captureViewConfig(baseUi).configVersion).toBe(1);
+  });
+});
+
+describe('viewConfig cave-density grid', () => {
+  it('round-trips the grid and the reading its cells are filled by', () => {
+    const config = captureViewConfig(baseUi);
+    expect(config.karstDensityVisible).toBe(true);
+    expect(config.karstDensityMode).toBe('hotSpot');
+    expect(config.configVersion).toBe(1);
+    const restored = applyViewConfig(config);
+    expect(restored?.karstDensityVisible).toBe(true);
+    expect(restored?.karstDensityMode).toBe('hotSpot');
+  });
+
+  it('treats an older view as off with the plain reading, and an unknown reading as the plain one', () => {
+    const legacy = {
+      configVersion: 1,
+      center: [25.3, 45.7],
+      zoom: 10,
+      entrancesVisible: true,
+      surfaceFeaturesVisible: true,
+      geofileIds: [],
+      rasters: [],
+      tagFilter: null,
+    };
+    const restored = applyViewConfig(legacy);
+    expect(restored?.karstDensityVisible).toBe(false);
+    expect(restored?.karstDensityMode).toBe('density');
+    expect(applyViewConfig({ ...legacy, karstDensityMode: 'contours' })?.karstDensityMode).toBe('density');
   });
 });

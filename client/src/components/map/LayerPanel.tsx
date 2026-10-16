@@ -45,6 +45,8 @@ import {
 import { ENTRANCE_LAYER_ID } from '../../map/entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from '../../map/featureLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID } from '../../map/heatmapLayer.ts';
+import { KARST_DENSITY_LAYER_ID, type KarstDensityMode } from '../../map/karstDensityLayer.ts';
+import KarstDensityControls from './KarstDensityControls.tsx';
 import { PHOTO_LAYER_ID } from '../../map/photoLayer.ts';
 import {
   TRIP_LAYER_ID,
@@ -137,6 +139,10 @@ interface LayerPanelProps {
   centerlinesVisible: boolean;
   /** True while the trip overlay is on — its filters are hidden otherwise. */
   tripsVisible: boolean;
+  /** True while the cave-density grid is on — its reading and state are hidden otherwise. */
+  karstDensityVisible: boolean;
+  karstDensityMode: KarstDensityMode;
+  onKarstDensityModeChange: (mode: KarstDensityMode) => void;
   /** What the trip overlay is currently asking for. */
   tripFilter: TripLayerFilter;
   onTripFilterChange: (filter: TripLayerFilter) => void;
@@ -186,6 +192,9 @@ export default function LayerPanel({
   onTagFilterChange,
   centerlinesVisible,
   tripsVisible,
+  karstDensityVisible,
+  karstDensityMode,
+  onKarstDensityModeChange,
   tripFilter,
   onTripFilterChange,
   unappliedTripFilters,
@@ -358,6 +367,8 @@ export default function LayerPanel({
         return t('map.centerlines');
       case ENTRANCE_HEATMAP_LAYER_ID:
         return t('map.heatmap');
+      case KARST_DENSITY_LAYER_ID:
+        return t('map.karstDensity.layer');
       case PHOTO_LAYER_ID:
         return t('map.photos');
       case TRIP_LAYER_ID:
@@ -485,6 +496,9 @@ export default function LayerPanel({
         nodeTitleRenderer={nodeTitle}
         onLayerVisibilityChanged={onOverlayVisibilityChanged}
       />
+      {karstDensityVisible && (
+        <KarstDensityControls mode={karstDensityMode} onModeChange={onKarstDensityModeChange} />
+      )}
       {centerlinesVisible && (
         <div style={{ marginTop: 8 }}>
           {centerlineLoad.withheldCount > 0 && (
