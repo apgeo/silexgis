@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -78,6 +79,7 @@ public sealed class MapDensityTests : IAsyncLifetime, IDisposable, IClassFixture
         body["featureCount"]!.GetValue<int>().ShouldBe(3);
         body["cellMetres"]!.GetValue<double>().ShouldBe(GridMeters);
         body["minimumCellMetres"]!.GetValue<double>().ShouldBe(GridMeters);
+        body["maxCells"]!.GetValue<int>().ShouldBe(5_000);
         body["protectionGridMetres"]!.GetValue<double>().ShouldBe(GridMeters);
         body["studyAreaKm2"]!.ShouldBeNull();
 
@@ -239,6 +241,13 @@ public sealed class MapDensityTests : IAsyncLifetime, IDisposable, IClassFixture
         // the arithmetic, before a row is read.
         await ExpectAsync(owner, "?bbox=-180,-85,180,85&cellMetres=5000",
             HttpStatusCode.BadRequest, "density.too_many_cells");
+
+        // The refusal carries what a client needs to step to a cell that fits, since a first
+        // request over a wide window has no answer to learn the floor from.
+        var tooMany = JsonDocument.Parse(await (await owner.GetAsync(
+            "/api/v1/map/density?bbox=-180,-85,180,85")).Content.ReadAsStringAsync()).RootElement;
+        tooMany.GetProperty("minimumCellMetres").GetDouble().ShouldBe(GridMeters);
+        tooMany.GetProperty("maxCells").GetInt32().ShouldBe(5_000);
 
         // A cave is a point. A point encloses no ground, so it cannot be a denominator.
         await ExpectAsync(owner, $"?bbox=8.5,40.5,8.7,40.7&areaId={caveId}",

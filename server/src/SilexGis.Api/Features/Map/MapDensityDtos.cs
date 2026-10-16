@@ -153,9 +153,14 @@ public sealed record DensityAutocorrelationDto(
 /// recover detail the binning has already removed, so a finer kernel would only draw each cell as
 /// a separate blob and invite a reader to take the peaks for cave positions.
 /// </param>
+/// <param name="MaxCells">
+/// The most cells one answer holds, so a client stepping to a coarser multiple of the minimum cell
+/// can choose one that fits its window instead of discovering the limit by being refused.
+/// </param>
 public sealed record DensityGridDto(
     double CellMetres,
     double MinimumCellMetres,
+    int MaxCells,
     double ProtectionGridMetres,
     double BandwidthMetres,
     double MinimumBandwidthMetres,

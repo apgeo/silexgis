@@ -9092,6 +9092,8 @@ export interface components {
             cellMetres: number;
             /** Format: double */
             minimumCellMetres: number;
+            /** Format: int32 */
+            maxCells: number;
             /** Format: double */
             protectionGridMetres: number;
             /** Format: double */
