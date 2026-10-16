@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
+import { matchesCombination, useShortcutRegistry, type DescribedShortcut } from './shortcutRegistry.ts';
 
-export interface Shortcut {
-  /** `KeyboardEvent.key`, compared case-insensitively. */
-  key: string;
-  alt?: boolean;
-  ctrl?: boolean;
-  shift?: boolean;
+/**
+ * A document-level shortcut. What it does is described as well as done — `labelKey` is required —
+ * because the shortcut help is read from what this hook has bound: a binding cannot be added
+ * without also being written down.
+ */
+export interface Shortcut extends DescribedShortcut {
   run: () => void;
 }
 
@@ -19,6 +20,17 @@ export interface Shortcut {
  * cave eats the letter; one that fires while a dialog is up acts on the screen behind it.
  */
 export function useShortcuts(shortcuts: Shortcut[], enabled = true) {
+  const id = useId();
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    const { register, unregister } = useShortcutRegistry.getState();
+    register(id, shortcuts.map(({ run: _run, ...described }) => described));
+    return () => unregister(id);
+  }, [id, shortcuts, enabled]);
+
   useEffect(() => {
     if (!enabled) {
       return;
@@ -29,13 +41,7 @@ export function useShortcuts(shortcuts: Shortcut[], enabled = true) {
         return;
       }
 
-      const match = shortcuts.find(
-        (shortcut) =>
-          shortcut.key.toLowerCase() === event.key.toLowerCase() &&
-          Boolean(shortcut.alt) === event.altKey &&
-          Boolean(shortcut.ctrl) === (event.ctrlKey || event.metaKey) &&
-          Boolean(shortcut.shift) === event.shiftKey,
-      );
+      const match = shortcuts.find((shortcut) => matchesCombination(shortcut, event));
 
       if (match) {
         event.preventDefault();

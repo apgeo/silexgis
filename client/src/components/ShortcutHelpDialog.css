@@ -1,0 +1,28 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+.shortcut-help-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.shortcut-help-table caption {
+  text-align: start;
+  padding-bottom: 4px;
+}
+
+.shortcut-help-table th {
+  text-align: start;
+  font-weight: normal;
+  color: var(--ant-color-text-secondary);
+}
+
+.shortcut-help-table th,
+.shortcut-help-table td {
+  padding: 4px 8px 4px 0;
+  border-bottom: 1px solid var(--ant-color-split);
+  vertical-align: middle;
+}
+
+.shortcut-help-table td:first-child {
+  white-space: nowrap;
+  width: 40%;
+}

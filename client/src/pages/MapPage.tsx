@@ -17,6 +17,7 @@ import {
   EyeOutlined,
   GlobalOutlined,
   LeftOutlined,
+  QuestionCircleOutlined,
   RightOutlined,
   SelectOutlined,
 } from '@ant-design/icons';
@@ -144,6 +145,8 @@ import { attachContextMenu, type MapContextMenuTarget } from '../map/contextMenu
 import { MapEditController, type DrawShape } from '../map/mapEdit.ts';
 import { attachSelection } from '../map/selection.ts';
 import { useShortcuts } from '../hooks/useShortcuts.ts';
+import { MAP_WORKSPACE_SHORTCUTS } from '../hooks/shortcutRegistry.ts';
+import ShortcutHelpDialog from '../components/ShortcutHelpDialog.tsx';
 import { geometryFor, isGeographic } from '../viewlinks/geoTargets.ts';
 import { useViewControl } from '../viewlinks/useViewControl.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
@@ -176,6 +179,7 @@ export default function MapPage() {
   const rightPanelRef = usePanelRef();
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   // Below md the docks are drawers over the map instead of resizable panes; the same
   // dock-toggle buttons drive whichever one is mounted.
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
@@ -1144,19 +1148,23 @@ export default function MapPage() {
   useShortcuts(
     useMemo(
       () => [
+        { ...MAP_WORKSPACE_SHORTCUTS.help, run: () => setShortcutHelpOpen(true) },
         // Escape clears the selection — but only when nothing modal is open, which the hook
         // decides rather than each caller guessing.
         {
-          key: 'Escape',
+          ...MAP_WORKSPACE_SHORTCUTS.clearSelection,
           run: () => {
             setSelection(null);
             useWorkspaceStore.getState().clearSelectionSet();
           },
         },
-        { key: '[', run: () => toggleLeftDock() },
-        { key: ']', run: () => toggleRightDock() },
-        { key: 'ArrowLeft', alt: true, run: () => useWorkspaceStore.getState().goBackSelection() },
-        { key: 'ArrowRight', alt: true, run: () => useWorkspaceStore.getState().goForwardSelection() },
+        { ...MAP_WORKSPACE_SHORTCUTS.toggleLeftDock, run: () => toggleLeftDock() },
+        { ...MAP_WORKSPACE_SHORTCUTS.toggleRightDock, run: () => toggleRightDock() },
+        { ...MAP_WORKSPACE_SHORTCUTS.selectionBack, run: () => useWorkspaceStore.getState().goBackSelection() },
+        {
+          ...MAP_WORKSPACE_SHORTCUTS.selectionForward,
+          run: () => useWorkspaceStore.getState().goForwardSelection(),
+        },
       ],
       // The dock toggles read state that changes with the layout; rebuilding the list when it
       // does is what keeps a shortcut from acting on a stale idea of which host is mounted.
@@ -1204,7 +1212,18 @@ export default function MapPage() {
             isMobile ? 'map-canvas-wrap-mobile' : '',
           ].filter(Boolean).join(' ')}
         >
-          <div ref={mapTarget} className="map-canvas" data-testid="map-canvas" />
+          {/* Focusable, because OpenLayers listens for its keyboard pan and zoom on this element
+              and nowhere else: without a place in the tab order the map could only be moved with
+              a pointer. An application to assistive technology, so that a screen reader hands the
+              arrow keys to the map instead of using them to read the page. */}
+          <div
+            ref={mapTarget}
+            className="map-canvas"
+            data-testid="map-canvas"
+            tabIndex={0}
+            role="application"
+            aria-label={t('a11y.map')}
+          />
           {/* Search is the primary action on a phone: it gets the width the pop-out
               buttons no longer need. The selector sits beside it — search asks what mentions
               these words, the selector asks which of these things you mean — and stacks under
@@ -1264,7 +1283,7 @@ export default function MapPage() {
           {/* Jump-to-scale is niche clutter at phone size; OL's own scale line stays. */}
           {!isMobile && (
             <div className="map-scale-overlay map-chrome">
-              <ScaleCombo syncWithMap size="small" style={{ width: 128 }} />
+              <ScaleCombo syncWithMap size="small" style={{ width: 128 }} aria-label={t('a11y.mapScale')} />
             </div>
           )}
           {swipeActive && (
@@ -1282,6 +1301,8 @@ export default function MapPage() {
                   size="small"
                   type={swipeActive ? 'primary' : 'default'}
                   icon={<BorderVerticleOutlined />}
+                  aria-label={t('map.swipeCompare')}
+                  aria-pressed={swipeActive}
                   onClick={() => setSwipeActive((v) => !v)}
                   data-testid="raster-swipe-toggle"
                 />
@@ -1292,6 +1313,7 @@ export default function MapPage() {
               icon={<AimOutlined />}
               pressedIcon={<AimOutlined />}
               tooltip={t('map.locateMe')}
+              aria-label={t('map.locateMe')}
               showMarker
               follow
               enableTracking
@@ -1316,6 +1338,7 @@ export default function MapPage() {
                   <Button
                     size="small"
                     icon={<ExportOutlined />}
+                    aria-label={t('panel.popOut')}
                     onClick={() => window.open('/panel/registry', 'silexgis-registry', 'popup,width=900,height=700')}
                     data-testid="map-popout-registry"
                   />
@@ -1324,6 +1347,7 @@ export default function MapPage() {
                   <Button
                     size="small"
                     icon={<SelectOutlined />}
+                    aria-label={t('panel.popOutScene3d')}
                     onClick={() => window.open('/panel/scene3d', 'silexgis-scene3d', 'popup,width=1100,height=800')}
                     data-testid="map-popout-scene3d"
                   />
@@ -1332,6 +1356,7 @@ export default function MapPage() {
                   <Button
                     size="small"
                     icon={<ProfileOutlined />}
+                    aria-label={t('panel.popOutSelection')}
                     onClick={() =>
                       window.open('/panel/selection', 'silexgis-selection', 'popup,width=520,height=900')}
                     data-testid="map-popout-selection"
@@ -1341,8 +1366,18 @@ export default function MapPage() {
                   <Button
                     size="small"
                     icon={<CodeSandboxOutlined />}
+                    aria-label={t('panel.popOut3d')}
                     onClick={() => window.open('/panel/viewer3d', 'silexgis-viewer3d', 'popup,width=1000,height=750')}
                     data-testid="map-popout-viewer3d"
+                  />
+                </Tooltip>
+                <Tooltip title={t('shortcuts.open')}>
+                  <Button
+                    size="small"
+                    icon={<QuestionCircleOutlined />}
+                    aria-label={t('shortcuts.title')}
+                    onClick={() => setShortcutHelpOpen(true)}
+                    data-testid="map-shortcut-help"
                   />
                 </Tooltip>
               </>
@@ -1487,6 +1522,7 @@ export default function MapPage() {
     </Group>
     {/* The pane's model over the whole window. Mounted here rather than reached for on the cave
         page, because a reader who arrived at the map from a link has no cave page open. */}
+    <ShortcutHelpDialog open={shortcutHelpOpen} onClose={() => setShortcutHelpOpen(false)} />
     <Suspense fallback={null}>
       <SurveyModelViewerModal model={caveViewOverlay} onClose={() => setCaveViewOverlay(null)} />
     </Suspense>

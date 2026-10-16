@@ -6796,8 +6796,39 @@
       "doneMoreThanListed": "Links taken back: {{links}} · Trips: {{trips}} · Links this list showed: {{listed}}. The links of deleted trips, which the list leaves out, are taken back too."
     }
   },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "open": "Keyboard shortcuts (?)",
+    "keys": "Keys",
+    "does": "Action",
+    "context": {
+      "screen": "On this screen",
+      "map": "With the map focused",
+      "panelHandle": "With a panel section's handle focused",
+      "scene3dCallout": "In the 3D scene's selection card"
+    },
+    "action": {
+      "help": "Show this list of shortcuts",
+      "clearSelection": "Clear the selection",
+      "toggleLeftDock": "Show or hide the left panel",
+      "toggleRightDock": "Show or hide the right panel",
+      "selectionBack": "Previous selection",
+      "selectionForward": "Next selection",
+      "pan": "Move the map",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "moveSectionUp": "Move the section up",
+      "moveSectionDown": "Move the section down",
+      "dismissCallout": "Close the card"
+    }
+  },
   "a11y": {
     "skipToMain": "Skip to main content",
-    "mainNav": "Main navigation"
+    "mainNav": "Main navigation",
+    "mapScale": "Map scale",
+    "viewName": "Name of the view to save",
+    "shareView": "Copy a share link to {{name}}",
+    "deleteView": "Delete the view {{name}}",
+    "map": "Map. Arrow keys move it, plus and minus zoom; press ? for all shortcuts."
   }
 }
