@@ -42,7 +42,10 @@ public static class RegistryStatisticsEndpoints
 {
     public static RouteGroupBuilder MapRegistryStatisticsEndpoints(this RouteGroupBuilder api)
     {
-        var registry = api.MapGroup("/stats/registry").WithTags("Statistics");
+        // Every question here may be scoped by an area, and an area the caller may not use is
+        // answered as one that is not there, so each route can send that 404.
+        var registry = api.MapGroup("/stats/registry").WithTags("Statistics")
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
         registry.MapGet("/distribution", DistributionAsync)
             .WithValidation<RegistryDistributionRequest>()

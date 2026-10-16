@@ -53,6 +53,7 @@ public static class MapDensityEndpoints
         api.MapGet("/map/density", DensityAsync)
             .WithTags("Map")
             .WithValidation<MapDensityRequest>()
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(
                 "Cave-entrance counts and densities per grid cell over a bbox, optionally normalised "
                 + "by a study-area outline, with the hot and cold spots among those cells and "

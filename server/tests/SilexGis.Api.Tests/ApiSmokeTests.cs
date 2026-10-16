@@ -289,6 +289,40 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
     }
 
     /// <summary>
+    /// Every question that may be scoped by a study area declares the 404 the shared gate sends
+    /// for an area the caller may not use — the same refusal for one that is not there — and the
+    /// karst-index layer declares the 400 of a window it cannot read.
+    /// </summary>
+    [Fact]
+    public async Task OpenApi_document_declares_the_study_area_questions_and_karst_layers_own_refusals()
+    {
+        var operations = (await OperationsAsync()).ToDictionary(o => o.Id!);
+        var expected = new Dictionary<string, string[]>
+        {
+            ["mapKarstIndexKarstIndex"] = ["400", "401"],
+            ["mapDensityDensity"] = ["400", "401", "404"],
+            ["mapPointPatternPointPattern"] = ["400", "401", "404"],
+            ["areaKarstStatisticsAreaStatistics"] = ["401", "404"],
+            ["areaKarstStatisticsAreaStatisticsCsv"] = ["401", "404"],
+            ["registryStatisticsDistribution"] = ["400", "401", "404"],
+            ["registryStatisticsExportDistribution"] = ["400", "401", "404"],
+            ["registryStatisticsCorrelation"] = ["400", "401", "404"],
+            ["registryStatisticsExportCorrelation"] = ["400", "401", "404"],
+            ["registryStatisticsClustering"] = ["400", "401", "404"],
+            ["registryStatisticsCategories"] = ["400", "401", "404"],
+            ["registryStatisticsRegions"] = ["400", "401", "404"],
+            ["registryStatisticsExportRegions"] = ["400", "401", "404"],
+        };
+
+        foreach (var (id, statuses) in expected)
+        {
+            operations.ShouldContainKey(id);
+            Responses(operations[id].Value).Where(code => code[0] is '4' or '5')
+                .ShouldBe(statuses, ignoreOrder: true, customMessage: id);
+        }
+    }
+
+    /// <summary>
     /// An enumeration's own values never include null; a property that may be null says so itself.
     /// </summary>
     [Fact]

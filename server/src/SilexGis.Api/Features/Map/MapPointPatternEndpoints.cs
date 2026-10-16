@@ -41,6 +41,7 @@ public static class MapPointPatternEndpoints
         api.MapGet("/map/point-pattern", PointPatternAsync)
             .WithTags("Map")
             .WithValidation<MapPointPatternRequest>()
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(
                 "Clark-Evans nearest-neighbour index, Ripley's L with a seeded Monte-Carlo "
                 + "envelope, and the rose of bearings between pairs of entrances, over the cave "

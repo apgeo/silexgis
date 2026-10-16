@@ -32,6 +32,7 @@ public static class AreaKarstStatisticsEndpoints
         var features = api.MapGroup("/features").WithTags("Features");
 
         features.MapGet("/{id:guid}/karst-statistics", AreaStatisticsAsync)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(
                 "Counts, densities, totals, extremes, a rock-type breakdown and a classed "
                 + "karstification index for one area, over the caves declared to be in it.");
@@ -41,6 +42,7 @@ public static class AreaKarstStatisticsEndpoints
         // has to branch on a query string to know what it is holding is worse for every caller of
         // the JSON one.
         features.MapGet("/{id:guid}/karst-statistics.csv", AreaStatisticsCsvAsync)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("The same area statistics as a two-column CSV, for a spreadsheet.");
 
         return api;
