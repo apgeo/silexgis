@@ -4,8 +4,10 @@
   height: 100%;
 }
 
+/* The docks' own background, from the theme: a fixed white left the dark theme's light text on
+   white. */
 .map-workspace-panel {
-  background: #fff;
+  background: var(--ant-color-bg-container, #fff);
 }
 
 .map-workspace-handle {

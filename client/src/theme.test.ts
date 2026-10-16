@@ -258,3 +258,19 @@ describe.each(['light', 'dark'] as const)('rings and overrides drawn by the styl
     }
   });
 });
+
+describe('overrides the stylesheet draws for the dark theme only', () => {
+  const token = theme.getDesignToken(buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'dark' })) as unknown as Record<
+    string,
+    string
+  >;
+
+  it('the text shades it gives non-solid danger buttons read at 4.5:1, at rest, hovered and pressed', () => {
+    const properties = propertiesIn(indexCss, "html[data-theme='dark'] .ant-btn-color-dangerous:not(.ant-btn-variant-solid)");
+    expect(properties).toHaveLength(3);
+    for (const property of properties) {
+      expect(contrast(token[tokenOf(property)], token.colorBgContainer), property).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+

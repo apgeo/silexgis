@@ -86,7 +86,7 @@ export default function PanelSection({
                 onMove(by);
               }
             }}
-            style={{ cursor: 'grab', color: 'var(--silexgis-muted, #8c8c8c)', padding: '0 2px' }}
+            className="panel-section-handle"
           >
             <HolderOutlined />
           </span>

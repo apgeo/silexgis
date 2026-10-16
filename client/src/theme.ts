@@ -115,7 +115,11 @@ const darkContrast: ThemeConfig = {
     colorTextTertiary: 'rgba(255, 255, 255, 0.5)',
     colorTextPlaceholder: 'rgba(255, 255, 255, 0.5)',
     colorError: '#f04040',
+    // As text — a danger button that is not filled, under the pointer and pressed too (the
+    // stylesheet points those at these): the derived shades read at 3.8:1 and 2.7:1 on the page.
     colorErrorText: '#ff7875',
+    colorErrorTextHover: '#ffa39e',
+    colorErrorTextActive: '#e86060',
     colorInfoText: '#69b1ff',
     colorBorder: '#6b6b6b',
   },
