@@ -115,7 +115,7 @@ export default function CandidateMap({ candidates, selected, focused, onPick, he
     source.current.addFeatures(features);
 
     const extent = source.current.getExtent();
-    if (features.length > 0 && Number.isFinite(extent[0])) {
+    if (features.length > 0 && extent && Number.isFinite(extent[0])) {
       map.current?.getView().fit(extent, { padding: [32, 32, 32, 32], maxZoom: 15, duration: 200 });
     }
   }, [candidates, selected, focused]);

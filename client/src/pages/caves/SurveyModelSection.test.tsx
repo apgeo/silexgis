@@ -105,6 +105,8 @@ vi.mock('../../rastermap/useRasterMapLinks.ts', () => ({
 // The movie dialog brings a viewer and the encoders with it. What this list owes it is which
 // model it is opened on, and that no trip is chosen for it — so that is what the stand-in keeps.
 let movieDialog: TrackingMovieDialogProps | undefined;
+/** Read through a call: the stand-in assigns it from inside a render the compiler cannot follow. */
+const shownDialog = (): TrackingMovieDialogProps | undefined => movieDialog;
 vi.mock('../../components/caveview/movie/LazyTrackingMovieDialog.tsx', () => ({
   default: (props: TrackingMovieDialogProps) => {
     movieDialog = props;
@@ -434,16 +436,16 @@ describe('the survey model list', () => {
     const buttons = screen.getAllByLabelText('Make a movie');
     expect(buttons).toHaveLength(2);
     expect(screen.queryByTestId('survey-model-movie-mesh')).toBeNull();
-    expect(movieDialog?.surveyModelId).toBeNull();
+    expect(shownDialog()?.surveyModelId).toBeNull();
 
     fireEvent.click(screen.getByTestId('survey-model-movie-other'));
 
-    expect(movieDialog?.surveyModelId).toBe('other');
+    expect(shownDialog()?.surveyModelId).toBe('other');
     // Nothing on a cave page says which trip is meant, so none is ticked for the reader.
-    expect(movieDialog?.initialTripIds ?? []).toEqual([]);
+    expect(shownDialog()?.initialTripIds ?? []).toEqual([]);
 
     fireEvent.click(screen.getByTestId('fake-movie-dialog-close'));
-    expect(movieDialog?.surveyModelId).toBeNull();
+    expect(shownDialog()?.surveyModelId).toBeNull();
   });
 
   it('stops asking once nothing is left to wait for', () => {

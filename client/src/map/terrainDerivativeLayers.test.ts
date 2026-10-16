@@ -173,7 +173,7 @@ describe('computed terrain layers', () => {
       const style = terrainDerivativeStyle(kind);
       expect(style?.color).toBeDefined();
       const context = { ...newCompilationContext(), bandCount: 2 };
-      expect(typeof expressionToGlsl(context, style!.color, ColorType)).toBe('string');
+      expect(typeof expressionToGlsl(context, style!.color!, ColorType)).toBe('string');
     }
 
     // Shaded relief and coloured relief arrive as pictures and are drawn as they are.

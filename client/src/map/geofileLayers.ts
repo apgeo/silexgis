@@ -110,8 +110,10 @@ function layerStyle(
         : undefined;
     // Assigned rather than branching between two Style objects: setText(undefined) is how a style
     // stops carrying a label, and keeping one object means the layer is not rebuilt on every
-    // zoom step across the threshold.
-    base.setText(labelled);
+    // zoom step across the threshold. OpenLayers' declared parameter has no room for "no label",
+    // although its renderer draws nothing for a missing one (a style built without a text holds
+    // none at all), hence the cast.
+    base.setText(labelled as Text);
     return base;
   };
 }

@@ -66,7 +66,7 @@ function ListRoot<T>({
         // say "every row but the last"; its colour is the theme's, so it follows light/dark.
         style={{ '--silex-list-split': token.colorSplit } as CSSProperties}
       >
-        {dataSource.map((item, index) => (
+        {records.map((item, index) => (
           // Keyed by position: no caller passes a row identity, and every one of them renders
           // a whole list from a single query result, so a row's position is exactly as stable
           // as the list it came from.

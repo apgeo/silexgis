@@ -49,7 +49,7 @@ vi.mock('../../api/hooks.ts', () => ({
       ? {
           worlds: [{
             world: 'feature',
-            hits: (targetHits ?? []).map((hit: { id: string; title: string; subtitle?: string }) => ({
+            hits: (targetHits ?? []).map((hit) => ({
               world: 'feature',
               id: hit.id,
               title: hit.title,

@@ -157,7 +157,7 @@ export default function PhotoCandidateMap({
     source.current.addFeatures(drawn);
 
     const extent = source.current.getExtent();
-    if (drawn.length > 0 && Number.isFinite(extent[0])) {
+    if (drawn.length > 0 && extent && Number.isFinite(extent[0])) {
       map.current?.getView().fit(extent, { padding: [32, 32, 32, 32], maxZoom: 16, duration: 200 });
     }
   }, [candidates, selected, focused]);

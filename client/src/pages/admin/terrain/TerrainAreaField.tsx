@@ -100,7 +100,7 @@ export default function TerrainAreaField({ value, onChange, height = 320 }: Prop
     );
     const extent = source.current.getExtent();
     // An empty source reports an infinite extent, and fitting one throws.
-    if (Number.isFinite(extent[0])) {
+    if (extent && Number.isFinite(extent[0])) {
       map.current?.getView().fit(extent, { padding: [24, 24, 24, 24], maxZoom: 12 });
     }
   };

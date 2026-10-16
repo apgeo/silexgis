@@ -284,7 +284,7 @@ export const paintTripReportMap: ReportMapPainter = async (content, basemap, opt
     map.setSize([width, height]);
     const extent = shapes.getExtent();
     // An empty source reports an infinite extent, and fitting one throws.
-    if (Number.isFinite(extent[0])) {
+    if (extent && Number.isFinite(extent[0])) {
       view.fit(extent, { size: [width, height], padding: [MARGIN, MARGIN, MARGIN, MARGIN] });
     }
 

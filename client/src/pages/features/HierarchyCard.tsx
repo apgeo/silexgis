@@ -204,7 +204,7 @@ export default function HierarchyCard({ featureId, canEdit }: HierarchyCardProps
             },
           ]}
         />
-        <Select
+        <Select<string | null, { value: string; label: string }>
           style={{ width: '100%', marginTop: 12 }}
           showSearch
           filterOption={false}
@@ -213,7 +213,11 @@ export default function HierarchyCard({ featureId, canEdit }: HierarchyCardProps
           searchValue={parentQuery}
           // Selection appends a row; the select itself stays empty for the next add.
           value={null}
-          onSelect={(value: string) => addParent(value)}
+          onSelect={(value) => {
+            if (value !== null) {
+              addParent(value);
+            }
+          }}
           placeholder={t('features.addParent')}
           options={addOptions}
           notFoundContent={null}

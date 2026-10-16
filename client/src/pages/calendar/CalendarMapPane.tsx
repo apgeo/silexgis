@@ -188,7 +188,7 @@ export default function CalendarMapPane({ entries, from, to, active, height = 32
     if (!fitted.current && features.length > 0) {
       const extent = source.current.getExtent();
       // An empty source reports an infinite extent, and fitting one throws.
-      if (Number.isFinite(extent[0])) {
+      if (extent && Number.isFinite(extent[0])) {
         fitted.current = true;
         map.current?.getView().fit(extent, { padding: [24, 24, 24, 24], maxZoom: 14 });
       }

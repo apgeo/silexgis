@@ -108,7 +108,7 @@ export default function CataloguePlacementMap({
     }
 
     const extent = source.current.getExtent();
-    if (placed.length > 0 && Number.isFinite(extent[0])) {
+    if (placed.length > 0 && extent && Number.isFinite(extent[0])) {
       map.current?.getView().fit(extent, { padding: [40, 40, 40, 40], maxZoom: 14, duration: 200 });
     }
   }, [placed, placingId]);

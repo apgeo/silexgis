@@ -46,7 +46,9 @@ function harness() {
 
 /** The keys an invalidation spy was asked for, flattened so membership can be asserted. */
 function keysAskedFor(invalidate: ReturnType<typeof vi.spyOn>) {
-  return invalidate.mock.calls.map(([arg]) => JSON.stringify((arg as { queryKey: unknown }).queryKey));
+  return invalidate.mock.calls.map(([arg]: unknown[]) =>
+    JSON.stringify((arg as { queryKey: unknown }).queryKey),
+  );
 }
 
 describe("the figures computed from a cave's line work", () => {

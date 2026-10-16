@@ -870,7 +870,9 @@ class CesiumScene3D implements Scene3DCore {
 
   getOrthoHalfWidth(): number | undefined {
     const { frustum } = this.widget.scene.camera;
-    return frustum instanceof OrthographicFrustum ? frustum.width / 2 : undefined;
+    return frustum instanceof OrthographicFrustum && frustum.width !== undefined
+      ? frustum.width / 2
+      : undefined;
   }
 
   cameraHeightForZoom(zoom: number, latitude: number): number {
@@ -1412,13 +1414,16 @@ class CesiumScene3D implements Scene3DCore {
             enabled: cutaway,
           })
         : undefined;
-      scene.globe.clippingPolygons = this.clippingPolygons;
+      // No collection is how the globe is told to cut nothing; the engine's declared type has
+      // no room for that, although the globe reads a missing one exactly so.
+      scene.globe.clippingPolygons = this.clippingPolygons as ClippingPolygonCollection;
 
       if (usable) {
         // Only ever alongside a cut. On a browser that cannot cut the ground away this would be a
         // brown shaft standing on unbroken hillside.
-        this.cutawayFill = scene.primitives.add(this.buildCutawayFill(usable));
-        this.cutawayFill.show = cutaway;
+        const fill: Primitive = scene.primitives.add(this.buildCutawayFill(usable));
+        fill.show = cutaway;
+        this.cutawayFill = fill;
       }
     }
 
@@ -2181,7 +2186,7 @@ class CesiumScene3D implements Scene3DCore {
 
   private fieldOfViewRadians(): number {
     const { frustum } = this.widget.scene.camera;
-    return frustum instanceof PerspectiveFrustum && frustum.fovy > 0
+    return frustum instanceof PerspectiveFrustum && frustum.fovy !== undefined && frustum.fovy > 0
       ? frustum.fovy
       : DEFAULT_FOVY_RADIANS;
   }

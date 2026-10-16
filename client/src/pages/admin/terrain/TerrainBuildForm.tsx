@@ -277,14 +277,18 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
               placeholder={t('terrain.form.extendNone')}
               data-testid="terrain-extend-base"
               onChange={(id: string | undefined) => chooseBase(id)}
-              options={extendable.map((build) => ({
-                value: build.id,
-                label: t('terrain.form.extendOption', {
-                  id: build.id.slice(0, 8),
-                  depth: build.requestedMaxDepth,
-                  area: formatBbox(geometryBbox(build.extent)),
-                }),
-              }))}
+              options={extendable.map((build) => {
+                // A finished build always has an area; the type allows a build that has none yet.
+                const area = geometryBbox(build.extent);
+                return {
+                  value: build.id,
+                  label: t('terrain.form.extendOption', {
+                    id: build.id.slice(0, 8),
+                    depth: build.requestedMaxDepth,
+                    area: area ? formatBbox(area) : '',
+                  }),
+                };
+              })}
             />
           </Form.Item>
         )}

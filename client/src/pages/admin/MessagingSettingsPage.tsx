@@ -206,7 +206,7 @@ function MailForm({
           ...values,
           // Both blank and the placeholder mean "unchanged", so re-saving a form the operator
           // only glanced at cannot silently wipe the password.
-          password: !values.password || values.password === SECRET_KEPT ? undefined : values.password,
+          password: !values.password || values.password === SECRET_KEPT ? null : values.password,
         },
       });
       if (error !== undefined || !data) {
@@ -343,7 +343,7 @@ function SmsForm({ settings, onSaved }: SectionProps) {
           // Extra headers are not editable here yet; passing the stored set back keeps a save
           // from dropping ones an operator set through configuration.
           headers: settings.sms.headers,
-          authHeader: !values.authHeader || values.authHeader === SECRET_KEPT ? undefined : values.authHeader,
+          authHeader: !values.authHeader || values.authHeader === SECRET_KEPT ? null : values.authHeader,
         },
       });
       if (error !== undefined || !data) {

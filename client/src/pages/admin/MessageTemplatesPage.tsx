@@ -112,7 +112,7 @@ function TemplateEditor({ template, locale }: EditorProps) {
     try {
       const { error, response } = await api.PUT('/api/v1/admin/message-templates/{key}/{locale}', {
         params: { path: { key: template.key, locale } },
-        body: { subject: isEmail ? values.subject : undefined, body: values.body },
+        body: { subject: isEmail ? (values.subject ?? null) : null, body: values.body },
       });
       if (error !== undefined) {
         // The server refuses a placeholder the message will never be given a value for; its

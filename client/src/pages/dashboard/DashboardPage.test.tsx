@@ -40,7 +40,13 @@ const upcoming = {
 };
 
 const myTripsSpy = vi.fn();
-const upcomingQuery = vi.fn(() => ({ data: upcoming, isLoading: false, isError: false }));
+const upcomingQuery = vi.fn(
+  (): { data: typeof upcoming | undefined; isLoading: boolean; isError: boolean } => ({
+    data: upcoming,
+    isLoading: false,
+    isError: false,
+  }),
+);
 const canCreate = vi.fn(() => true);
 /**
  * The trip action's own answer, which is wider than a right held over trips as such: it also
@@ -49,7 +55,14 @@ const canCreate = vi.fn(() => true);
  */
 const tripDoor = vi.fn(() => ({ canCreate: canCreate(), unbound: canCreate(), cavingGroups: [] as { id: string; name: string }[] }));
 const refetch = vi.fn();
-const summaryQuery = vi.fn(() => ({ data: summary, isLoading: false, isError: false, refetch }));
+const summaryQuery = vi.fn(
+  (): { data: typeof summary | undefined; isLoading: boolean; isError: boolean; refetch: typeof refetch } => ({
+    data: summary,
+    isLoading: false,
+    isError: false,
+    refetch,
+  }),
+);
 
 /** The work areas the board offers as a way into a season; empty in most of these tests. */
 let workAreas: { id: string; name: string; description: null; parentId: null; childCount: number; geometry: null }[] = [];

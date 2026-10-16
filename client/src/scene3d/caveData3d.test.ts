@@ -109,7 +109,9 @@ function entranceCollection() {
   };
 }
 
-const responses = {
+// Loosely typed on purpose: tests replace an answer with one shaped as each case needs, or with
+// one that never settles.
+const responses: Record<'centerlines' | 'entrances' | 'features', () => Promise<unknown>> = {
   centerlines: () => Promise.resolve(centerlineCollection()),
   entrances: () => Promise.resolve(entranceCollection()),
   features: () => Promise.resolve({ type: 'FeatureCollection', features: [] }),
