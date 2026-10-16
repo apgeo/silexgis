@@ -3032,7 +3032,7 @@
     "exportUnreadableTry": "Alegeți un fundal permis în documente, de exemplu {{name}}, opriți celelalte straturi numite aici și exportați din nou.",
     "exportUnreadableNone": "Niciunul dintre fundalurile acestei instalări nu poate fi pus într-o imagine.",
     "shareTitle": "Partajează vederea {{name}}",
-    "shareExplain": "Oricine are acest link poate deschide vederea fără cont. Arată unde privește vederea, peste un fundal public — niciuna dintre datele clubului.",
+    "shareExplain": "Oricine are acest link poate deschide vederea fără cont. Arată zona spre care privește vederea, peste un fundal public, cu straturile pe care vederea le avea pornite — doar ce este public în sine, iar pozițiile protejate doar aproximativ.",
     "shareQr": "Linkul către vederea {{name}} ca cod QR"
   },
   "panel": {

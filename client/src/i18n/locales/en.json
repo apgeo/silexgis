@@ -3032,7 +3032,7 @@
     "exportUnreadableTry": "Switch the background to one allowed in documents, such as {{name}}, turn off any other layer named here, and export again.",
     "exportUnreadableNone": "None of this installation’s backgrounds may be put into an image.",
     "shareTitle": "Share the view {{name}}",
-    "shareExplain": "Anyone with this link can open the view without an account. It shows where the view looks, over a public background — none of the club’s data.",
+    "shareExplain": "Anyone with this link can open the view without an account. It shows the area the view looks at over a public background, with the layers the view had on — limited to what is public in its own right, and protected positions only approximately.",
     "shareQr": "The link to the view {{name}} as a QR code"
   },
   "panel": {
