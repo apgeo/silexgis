@@ -160,8 +160,8 @@ export const groups = {
   ],
   jobs: [
     'BulkImportTests', 'DocumentConversionTests', 'EventReminderSweepTests',
-    'NotificationDeliveryTests', 'SurveyModelReadingTests', 'TextExtractionPipelineTests',
-    'TripCalloutSweepTests',
+    'JobRetryAndProgressTests', 'NotificationDeliveryTests', 'SurveyModelReadingTests',
+    'TextExtractionPipelineTests', 'TripCalloutSweepTests',
   ],
   map: [
     'CaveMeshesInViewTests', 'ExpeditionMapTests', 'GeoJsonGeometryTests', 'PerformanceTests',

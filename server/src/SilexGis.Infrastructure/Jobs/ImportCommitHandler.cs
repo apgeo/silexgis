@@ -48,9 +48,13 @@ public sealed record ImportCommitPayload(
 public sealed class ImportCommitHandler(
     SilexGisDbContext db,
     ImportCommitService commitService,
-    TermRuleSetStore ruleSets) : IProcessingJobHandler
+    TermRuleSetStore ruleSets,
+    IJobProgress progress) : IProcessingJobHandler
 {
     public string Kind => ProcessingJobKinds.ImportCommit;
+
+    /// <summary>Safe to run again from the start: the confirmation is one transaction keyed on its batch id, and a run that finds the batch made stops there.</summary>
+    public bool RetriesPassingFailures => true;
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
@@ -74,6 +78,10 @@ public sealed class ImportCommitHandler(
         // reading the file and walking the selection again.
         if (await db.ImportBatches.AsNoTracking().AnyAsync(b => b.Id == payload.BatchId, ct))
         {
+            // The review may still be standing if the run that made the batch failed after its
+            // commit and before it cleared the review — and a standing review offers the same
+            // rows again, which confirmed a second time are made twice.
+            await ClearSpentReviewAsync(payload, ct);
             return;
         }
 
@@ -103,12 +111,19 @@ public sealed class ImportCommitHandler(
             ?? [];
 
         await commitService.CommitAsync(
-            geofile, ruleSet, options, payload.Selection, decisions, payload.Mode, ctx, payload.BatchId, ct);
+            geofile, ruleSet, options, payload.Selection, decisions, payload.Mode, ctx, payload.BatchId,
+            (done, total) => progress.ReportAsync(job.Id, done, total, ct),
+            ct);
 
-        // The review is spent: its decisions describe rows that are now objects, and leaving it
-        // would offer to create them a second time.
-        await db.GeofileImportSessions
+        await ClearSpentReviewAsync(payload, ct);
+    }
+
+    /// <summary>
+    /// The review is spent: its decisions describe rows that are now objects, and leaving it
+    /// would offer to create them a second time.
+    /// </summary>
+    private Task ClearSpentReviewAsync(ImportCommitPayload payload, CancellationToken ct) =>
+        db.GeofileImportSessions
             .Where(s => s.GeofileId == payload.GeofileId && s.UserId == payload.UserId)
             .ExecuteDeleteAsync(ct);
-    }
 }

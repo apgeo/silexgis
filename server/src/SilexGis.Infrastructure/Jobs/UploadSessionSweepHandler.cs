@@ -36,6 +36,9 @@ public sealed class UploadSessionSweepHandler(
 
     public string Kind => ProcessingJobKinds.UploadSessionSweep;
 
+    /// <summary>Safe to run again from the start: it removes only what has expired, and removing it twice is removing it once.</summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;

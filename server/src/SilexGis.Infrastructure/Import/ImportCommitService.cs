@@ -95,6 +95,7 @@ public sealed class ImportCommitService(
         ImportBatchMode mode,
         AccessContext ctx,
         Guid? batchId = null,
+        Func<int, int, Task>? progress = null,
         CancellationToken ct = default)
     {
         var maxCommitItems = limits.Value.MaxCommitItems;
@@ -145,8 +146,16 @@ public sealed class ImportCommitService(
         // selection — and only the final pass could be right in any case.
         writer.BeginDeferredDerivedState();
 
+        // How far the walk has got, told as each row is reached so a confirmation of thousands
+        // of rows is more than "running" on the page waiting for it.
+        var reached = 0;
         foreach (var sourceId in selection)
         {
+            if (progress is not null)
+            {
+                await progress(reached++, selection.Count);
+            }
+
             if (!byId.TryGetValue(sourceId, out var candidate))
             {
                 failures.Add(new ImportFailure(
@@ -188,6 +197,11 @@ public sealed class ImportCommitService(
             {
                 failures.Add(new ImportFailure(sourceId, candidate.SourceName, ex.Code, ex.Message));
             }
+        }
+
+        if (progress is not null)
+        {
+            await progress(selection.Count, selection.Count);
         }
 
         if (items.Count == 0 && failures.Count > 0)

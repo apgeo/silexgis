@@ -183,6 +183,56 @@ public sealed class JobQueueLaneTests : IDisposable, IClassFixture<PostgresFixtu
         }
     }
 
+    [Fact]
+    public async Task A_job_nobody_is_waiting_on_waits_behind_one_somebody_is()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await AloneInTheQueueAsync(db);
+
+        // The sweep over every stored file was queued first; the confirmation somebody is
+        // watching was queued after it, and is taken first.
+        var backfill = Queued(ProcessingJobKinds.TextExtractionBackfill);
+        db.ProcessingJobs.Add(backfill);
+        await db.SaveChangesAsync();
+        var confirmation = Queued(ProcessingJobKinds.ImportCommit);
+        db.ProcessingJobs.Add(confirmation);
+        await db.SaveChangesAsync();
+        backfill.Id.ShouldBeLessThan(confirmation.Id);
+
+        (await JobsSql.ClaimNextAsync(db, JobLane.General, CancellationToken.None)).ShouldBe(confirmation.Id);
+        // Behind, not dropped: it is the next one taken.
+        (await JobsSql.ClaimNextAsync(db, JobLane.General, CancellationToken.None)).ShouldBe(backfill.Id);
+    }
+
+    [Fact]
+    public async Task A_job_waiting_out_a_retry_delay_is_not_taken_until_it_is_due()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await AloneInTheQueueAsync(db);
+
+        var waiting = Queued(ProcessingJobKinds.SurveyMesh);
+        waiting.NotBefore = DateTimeOffset.UtcNow.AddHours(1);
+        var due = Queued(ProcessingJobKinds.SurveyMesh);
+        due.NotBefore = DateTimeOffset.UtcNow.AddMinutes(-1);
+        due.ProgressDone = 7;
+        due.ProgressTotal = 9;
+        db.ProcessingJobs.AddRange(waiting, due);
+        await db.SaveChangesAsync();
+
+        (await JobsSql.ClaimNextAsync(db, JobLane.General, CancellationToken.None)).ShouldBe(due.Id);
+        (await JobsSql.ClaimNextAsync(db, JobLane.General, CancellationToken.None)).ShouldBeNull();
+
+        // A claimed job starts afresh: no delay left on it and no progress from an earlier attempt.
+        await db.Entry(due).ReloadAsync();
+        due.NotBefore.ShouldBeNull();
+        due.ProgressDone.ShouldBeNull();
+        due.ProgressTotal.ShouldBeNull();
+    }
+
     /// <summary>
     /// Empties the queue inside the caller's transaction, which is rolled back at the end of the
     /// test. The claim takes the oldest row of its lane whoever wrote it, and this table is shared

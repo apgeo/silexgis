@@ -3,6 +3,7 @@ using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using NpgsqlTypes;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Jobs;
@@ -20,7 +21,11 @@ namespace SilexGis.Infrastructure.Jobs;
 /// </remarks>
 public static class JobsSql
 {
-    /// <summary>Atomically claims the oldest queued job of the lane; returns its id or null.</summary>
+    /// <summary>
+    /// Atomically claims the next ready job of the lane; returns its id or null. Ready means
+    /// queued and not waiting out a retry delay; next means the oldest, with the kinds nobody is
+    /// waiting on (<see cref="ProcessingJobKinds.Background"/>) behind every other kind.
+    /// </summary>
     public static async Task<long?> ClaimNextAsync(
         SilexGisDbContext db, JobLane lane, CancellationToken ct)
     {
@@ -30,17 +35,26 @@ public static class JobsSql
         // outer statement instead, the sub-select would still pick and lock the oldest queued row
         // whatever lane it belonged to, then match nothing — so this worker would be handed no id
         // while the row it had just locked stayed queued. An idle-looking queue that never drains.
+        // The retry delay is read against the database's clock, the same clock every claim uses.
+        // A claimed job starts its progress afresh: a second attempt counts from nothing.
         command.CommandText = $"""
-            UPDATE processing_jobs SET status = 1, started_at = now(), attempts = attempts + 1
+            UPDATE processing_jobs
+            SET status = 1, started_at = now(), attempts = attempts + 1, not_before = NULL,
+                progress_done = NULL, progress_total = NULL
             WHERE id = (
                 SELECT id FROM processing_jobs
                 WHERE status = 0 AND {LanePredicate(lane)}
-                ORDER BY id
+                  AND (not_before IS NULL OR not_before <= now())
+                ORDER BY (kind = ANY(@background)), id
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED)
             RETURNING id
             """;
         command.Parameters.Add(KindsParameter(lane));
+        command.Parameters.Add(new NpgsqlParameter("background", NpgsqlDbType.Array | NpgsqlDbType.Text)
+        {
+            Value = ProcessingJobKinds.Background.ToArray(),
+        });
 
         var result = await command.ExecuteScalarAsync(ct);
         return result is long id ? id : null;
@@ -65,6 +79,41 @@ public static class JobsSql
             WHERE status = 1 AND {LanePredicate(lane)}
             """;
         command.Parameters.Add(KindsParameter(lane));
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>
+    /// Puts a job that failed in passing back in the queue, to be taken again no sooner than
+    /// <paramref name="notBefore"/>, with the failure kept as its error meanwhile so a screen
+    /// waiting on it can say why it is not done yet. Only a job still running is put back.
+    /// </summary>
+    public static async Task PutBackAsync(
+        SilexGisDbContext db, long jobId, DateTimeOffset notBefore, string error, CancellationToken ct)
+    {
+        await using var command = await CommandAsync(db, ct);
+        command.CommandText = """
+            UPDATE processing_jobs
+            SET status = 0, started_at = NULL, not_before = @not_before, error = @error
+            WHERE id = @id AND status = 1
+            """;
+        command.Parameters.Add(new NpgsqlParameter("id", jobId));
+        command.Parameters.Add(new NpgsqlParameter("not_before", notBefore));
+        command.Parameters.Add(new NpgsqlParameter("error", error));
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>Records how far a running job has got. A job no longer running is left alone.</summary>
+    public static async Task ReportProgressAsync(
+        SilexGisDbContext db, long jobId, int done, int total, CancellationToken ct)
+    {
+        await using var command = await CommandAsync(db, ct);
+        command.CommandText = """
+            UPDATE processing_jobs SET progress_done = @done, progress_total = @total
+            WHERE id = @id AND status = 1
+            """;
+        command.Parameters.Add(new NpgsqlParameter("id", jobId));
+        command.Parameters.Add(new NpgsqlParameter("done", done));
+        command.Parameters.Add(new NpgsqlParameter("total", total));
         await command.ExecuteNonQueryAsync(ct);
     }
 

@@ -50,6 +50,9 @@ public sealed class TerrainDerivativeHandler(
 
     public string Kind => ProcessingJobKinds.TerrainDerivative;
 
+    /// <summary>Safe to run again from the start: each run writes a directory of its own version, and the version moves only on success.</summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(job);

@@ -61,6 +61,9 @@ public sealed class SurveyGraphHandler(
 
     public string Kind => ProcessingJobKinds.SurveyGraph;
 
+    /// <summary>Safe to run again from the start: the graph is deleted and written again in one transaction.</summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var payload = JsonSerializer.Deserialize<SurveyGraphPayload>(job.Payload, JsonSerializerOptions.Web)

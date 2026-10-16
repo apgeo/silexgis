@@ -31,6 +31,9 @@ public sealed class PhotoGeoBackfillHandler(
 
     public string Kind => ProcessingJobKinds.PhotoGeoBackfill;
 
+    /// <summary>Safe to run again from the start: it picks only photographs still without a position, and writes overwrite.</summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var candidateIds = await db.StoredFiles.AsNoTracking()

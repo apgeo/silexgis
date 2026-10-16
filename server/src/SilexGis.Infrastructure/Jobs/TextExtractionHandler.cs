@@ -44,6 +44,9 @@ public sealed class TextExtractionHandler(
 {
     public string Kind => ProcessingJobKinds.TextExtraction;
 
+    /// <summary>Safe to run again from the start: a file already read is skipped and pages are written by number.</summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(job);

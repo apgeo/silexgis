@@ -82,7 +82,12 @@ public abstract class ProcessingJobWorkerBase(
         }
     }
 
-    private async Task<bool> RunNextAsync(CancellationToken ct)
+    /// <summary>
+    /// Takes the next ready job of this worker's lane and runs it; false when none was ready. What
+    /// one turn of the poll does — open to a subclass so a test can drive a lane of its own a turn
+    /// at a time instead of waiting on the timer.
+    /// </summary>
+    protected async Task<bool> RunNextAsync(CancellationToken ct)
     {
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -116,8 +121,39 @@ public abstract class ProcessingJobWorkerBase(
             job.Status = ProcessingJobStatus.Succeeded;
             job.Error = null;
         }
+        catch (Exception e) when (!ct.IsCancellationRequested
+            && handler.RetriesPassingFailures
+            && JobRetry.MayRetry(job.Attempts, e))
+        {
+            // Put back through a context of its own: this one may hold the attempt's half-done
+            // changes, and they must not be saved on the way out. Nothing is told to the requester
+            // yet — the job has not finished, it is waiting for its next turn.
+            var notBefore = scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow()
+                + JobRetry.DelayAfter(job.Attempts);
+            logger.LogWarning(
+                e, "Job {JobId} ({Kind}) failed in passing on attempt {Attempt}; taken again from {NotBefore}",
+                job.Id, job.Kind, job.Attempts, notBefore);
+            using var putBack = scopeFactory.CreateScope();
+            await JobsSql.PutBackAsync(
+                putBack.ServiceProvider.GetRequiredService<SilexGisDbContext>(),
+                job.Id,
+                notBefore,
+                Truncated(e.Message),
+                ct);
+            return true;
+        }
         catch (Exception e)
         {
+            // Rows the failed attempt added and never committed are not saved by the failure's
+            // own record. Left in this context they would be inserted below, outside the
+            // transaction that should have held them and past whatever it would have computed
+            // over them — an import's features without the protection they inherit, for one.
+            // What a handler changed on rows that exist is kept: some record their failure so.
+            foreach (var added in db.ChangeTracker.Entries().Where(x => x.State == EntityState.Added).ToList())
+            {
+                added.State = EntityState.Detached;
+            }
+
             job.Status = ProcessingJobStatus.Failed;
             job.Error = e.Message;
             logger.LogError(e, "Job {JobId} ({Kind}) failed", job.Id, job.Kind);
@@ -139,6 +175,9 @@ public abstract class ProcessingJobWorkerBase(
     /// against giving every handler a second responsibility, and against a per-kind noun that
     /// would arrive in one language and be untranslatable.
     /// </remarks>
+    /// <summary>The error column's length, which a put-back writes without the model's help.</summary>
+    private static string Truncated(string message) => message.Length <= 4000 ? message : message[..4000];
+
     private static void NotifyRequester(SilexGisDbContext db, ProcessingJob job)
     {
         // Nothing enforces a requester (the column is nullable), so a job queued by the system

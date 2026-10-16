@@ -4541,12 +4541,24 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("kind");
 
+                    b.Property<DateTimeOffset?>("NotBefore")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("not_before");
+
                     b.Property<string>("Payload")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("jsonb")
                         .HasColumnName("payload")
                         .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<int?>("ProgressDone")
+                        .HasColumnType("integer")
+                        .HasColumnName("progress_done");
+
+                    b.Property<int?>("ProgressTotal")
+                        .HasColumnType("integer")
+                        .HasColumnName("progress_total");
 
                     b.Property<Guid?>("RequestedBy")
                         .HasColumnType("uuid")

@@ -20,6 +20,9 @@ public sealed class AccessHistoryPruneHandler(
 {
     public string Kind => ProcessingJobKinds.AccessHistoryPrune;
 
+    /// <summary>Safe to run again from the start: one delete by a cut-off.</summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var retention = options.Value.Retention;

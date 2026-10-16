@@ -40,6 +40,9 @@ public sealed class SurveyMeshHandler(
 {
     public string Kind => ProcessingJobKinds.SurveyMesh;
 
+    /// <summary>Safe to run again from the start: the mesh is replaced inside one transaction and a failed run leaves nothing behind.</summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var payload = JsonSerializer.Deserialize<SurveyMeshPayload>(job.Payload, JsonSerializerOptions.Web)

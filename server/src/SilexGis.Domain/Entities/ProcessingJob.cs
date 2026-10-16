@@ -37,6 +37,22 @@ public class ProcessingJob
     public DateTimeOffset? StartedAt { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }
+
+    /// <summary>
+    /// When a job put back after a passing failure may be taken again; null when it may be taken
+    /// as soon as its turn comes. Compared with the database's own clock by the claim.
+    /// </summary>
+    public DateTimeOffset? NotBefore { get; set; }
+
+    /// <summary>
+    /// How many of a running job's units of work are done — rows, files, documents — where its
+    /// kind can say; null where it cannot. Written while the job runs, so a long one is more than
+    /// "running" on the screen that waits for it.
+    /// </summary>
+    public int? ProgressDone { get; set; }
+
+    /// <summary>How many units of work the running job has in all, beside <see cref="ProgressDone"/>.</summary>
+    public int? ProgressTotal { get; set; }
 }
 
 /// <summary>Well-known job kinds (extensible — string column by design).</summary>
@@ -213,4 +229,24 @@ public static class ProcessingJobKinds
     /// </para>
     /// </remarks>
     public static readonly IReadOnlyList<string> TerrainLane = [TerrainBuild, TerrainDerivative];
+
+    /// <summary>
+    /// The kinds nobody is waiting on, which a worker takes only when no other job of its lane is
+    /// ready: sweeps, backfills, prunes, purges, the integrity check, and the reading and
+    /// converting of stored documents.
+    /// </summary>
+    /// <remarks>
+    /// A queue taken strictly oldest first put forty uploaded documents' text reading, or a
+    /// backfill over every stored file after an upgrade, in front of an import somebody had just
+    /// confirmed and was watching — and all the screen could say was that the import was queued.
+    /// Which kinds wait is a property of the queue, decided here, not something each place that
+    /// queues a job has to remember to say. A trip's callout sweep is deliberately not among them:
+    /// it is the job that notices a party is overdue.
+    /// </remarks>
+    public static readonly IReadOnlyList<string> Background =
+    [
+        PhotoGeoBackfill, SurveyReadingBackfill, TextExtraction, TextExtractionBackfill,
+        DocumentConversion, DocumentConversionBackfill, AccessHistoryPrune, FeatureIntegrityVerify,
+        UploadSessionSweep, DocumentPurge, TripPurge, TerrainUploadSweep,
+    ];
 }

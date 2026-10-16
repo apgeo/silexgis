@@ -54,6 +54,9 @@ public sealed class SurveyCompilationHandler(
 
     public string Kind => ProcessingJobKinds.SurveyCompilation;
 
+    /// <summary>Safe to run again from the start: the reading is deleted and written again in one transaction.</summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var payload = JsonSerializer.Deserialize<SurveyCompilationPayload>(job.Payload, JsonSerializerOptions.Web)

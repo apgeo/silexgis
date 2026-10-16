@@ -64,6 +64,9 @@ public sealed class TripPurgeHandler(
 
     public string Kind => ProcessingJobKinds.TripPurge;
 
+    /// <summary>Safe to run again from the start: each trip is claimed and purged in a transaction of its own.</summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         // No window, no pass: an installation that keeps deleted trips until somebody says

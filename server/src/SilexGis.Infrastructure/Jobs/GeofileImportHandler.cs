@@ -25,6 +25,9 @@ public sealed class GeofileImportHandler(
 {
     public string Kind => ProcessingJobKinds.GeofileImport;
 
+    /// <summary>Safe to run again from the start: the staged rows are deleted and copied in again whole, so a second run replaces the first.</summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var payload = JsonSerializer.Deserialize<GeofileImportPayload>(job.Payload, JsonSerializerOptions.Web)

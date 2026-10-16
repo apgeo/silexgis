@@ -408,6 +408,9 @@ public static class DependencyInjection
         // a directory nothing serves.
         services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainPublishPhase>();
 
+        // How a running job says how far it has got, and the clock its retry delays are set by.
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<IJobProgress, JobProgress>();
         services.AddHostedService<ProcessingJobWorker>();
 
         // Terrain builds are claimed by a worker of their own against the same table. A worker

@@ -44,6 +44,9 @@ public sealed class DocumentPurgeHandler(
 
     public string Kind => ProcessingJobKinds.DocumentPurge;
 
+    /// <summary>Safe to run again from the start: each document is purged in a transaction of its own and a purged one is not found again.</summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var retention = options.Value.Retention;

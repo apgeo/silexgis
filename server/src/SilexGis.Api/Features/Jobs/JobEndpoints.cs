@@ -8,6 +8,17 @@ using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Jobs;
 
+/// <summary>
+/// One job as the screen waiting on it sees it.
+/// </summary>
+/// <param name="Error">
+/// Why it failed — or, on a job queued again after a passing failure, why the last attempt did not
+/// finish, which a screen shows beside "trying again".
+/// </param>
+/// <param name="Attempts">How many times it has been taken, the one under way included.</param>
+/// <param name="NotBefore">When a job put back after a passing failure will be taken again.</param>
+/// <param name="ProgressDone">How many units of its work a running job has done, where its kind says.</param>
+/// <param name="ProgressTotal">How many it has in all.</param>
 public sealed record ProcessingJobDto(
     long Id,
     string Kind,
@@ -15,7 +26,20 @@ public sealed record ProcessingJobDto(
     string? Error,
     DateTimeOffset CreatedAt,
     DateTimeOffset? StartedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    int Attempts,
+    DateTimeOffset? NotBefore,
+    int? ProgressDone,
+    int? ProgressTotal)
+{
+    public static ProcessingJobDto From(ProcessingJob job)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        return new(
+            job.Id, job.Kind, job.Status, job.Error, job.CreatedAt, job.StartedAt, job.CompletedAt,
+            job.Attempts, job.NotBefore, job.ProgressDone, job.ProgressTotal);
+    }
+}
 
 public static class JobEndpoints
 {
@@ -92,8 +116,7 @@ public static class JobEndpoints
         db.ProcessingJobs.Add(job);
         await db.SaveChangesAsync(ct);
 
-        return TypedResults.Ok(new ProcessingJobDto(
-            job.Id, job.Kind, job.Status, job.Error, job.CreatedAt, job.StartedAt, job.CompletedAt));
+        return TypedResults.Ok(ProcessingJobDto.From(job));
     }
 
     private static async Task<Results<Ok<ProcessingJobDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
@@ -118,7 +141,6 @@ public static class JobEndpoints
             return ApiProblems.NotFound("job.not_found");
         }
 
-        return TypedResults.Ok(new ProcessingJobDto(
-            job.Id, job.Kind, job.Status, job.Error, job.CreatedAt, job.StartedAt, job.CompletedAt));
+        return TypedResults.Ok(ProcessingJobDto.From(job));
     }
 }

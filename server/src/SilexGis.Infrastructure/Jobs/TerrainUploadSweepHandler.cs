@@ -41,6 +41,9 @@ public sealed class TerrainUploadSweepHandler(
 {
     public string Kind => ProcessingJobKinds.TerrainUploadSweep;
 
+    /// <summary>Safe to run again from the start: it removes only files no build names, under a lock.</summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var cutoff = DateTimeOffset.UtcNow - Retention(options.Value);

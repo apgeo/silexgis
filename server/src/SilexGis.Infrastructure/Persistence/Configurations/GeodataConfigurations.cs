@@ -128,7 +128,8 @@ public sealed class ProcessingJobConfiguration : IEntityTypeConfiguration<Proces
         builder.Property(x => x.Status).HasConversion<short>();
         builder.Property(x => x.Error).HasMaxLength(4000);
 
-        // The worker polls for queued jobs ordered by id.
+        // The worker polls for queued jobs ordered by id (background kinds after the rest; the
+        // queued set is small, so that ordering needs no index of its own).
         builder.HasIndex(x => new { x.Status, x.Id });
 
         // Two questions asked per kind rather than across the whole table: is a pass of this kind
