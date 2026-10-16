@@ -370,6 +370,27 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable, IClassFixture
         length.ShouldBeInRange(225m, 240m);
     }
 
+    /// <summary>
+    /// An uploaded centerline is measured along its passage, rise included, as a compiled survey
+    /// is: the same cave must not publish one length when it arrives as a file and another when it
+    /// arrives as a survey.
+    /// </summary>
+    [Fact]
+    public async Task An_uploaded_centerline_is_measured_along_its_passage_with_its_rise()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        using var form = BuildForm("shaft.geojson", SteepTraverse(26.500, 46.100));
+        var created = await owner.PostAsync($"/api/v1/caves/{caveId}/centerlines", form);
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var length = JsonDocument.Parse(await created.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("lengthM").GetDecimal();
+
+        // Three legs of 0.001 degrees of longitude at 46.1 N, about 77.3 m each in plan, each
+        // dropping 100 m: about 126.4 m a leg along the passage, 379 m in all, against the 232 m
+        // the same legs cover in plan.
+        length.ShouldBeInRange(370m, 390m);
+    }
+
     [Fact]
     public async Task The_path_budget_withholds_whole_centerlines_and_says_how_many()
     {
@@ -730,6 +751,13 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable, IClassFixture
         }
 
         return Collection(shots);
+    }
+
+    /// <summary>A traverse of three legs with no wall shots, each dropping 100 m.</summary>
+    private static byte[] SteepTraverse(double lon0, double lat0)
+    {
+        string Station(int i) => FormattableString.Invariant($"[{lon0 + (0.001 * i):R},{lat0:R},{700 - (100 * i)}]");
+        return Collection([.. Enumerable.Range(0, 3).Select(i => LineFeature(Station(i), Station(i + 1)))]);
     }
 
     /// <summary>Separate short lines that share no station, so none of them can be pruned.</summary>

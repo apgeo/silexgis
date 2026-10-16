@@ -226,8 +226,10 @@ public static class CenterlineEndpoints
             // Measured over the inferred passage, not the uploaded geometry: an export is mostly
             // wall shots, and their length is not passage length — a Therion KML measured over
             // everything reports a cave around fifteen times as long as it is. The skeleton is
-            // the same passage the rest of the application measures.
-            LengthM = await CenterlineSql.GeodesicLengthMetersAsync(db, skeleton, ct),
+            // the same passage the rest of the application measures, and it is measured with the
+            // altitudes the file gave its stations, as a compiled survey's passage is: the stored
+            // skeleton is flat because the map draws it, not because the cave is.
+            LengthM = await CenterlineSql.GeodesicLengthMetersAsync(db, CenterlineSkeleton.Build3D(geom), ct),
         };
 
         try
