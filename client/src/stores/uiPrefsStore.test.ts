@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_APPEARANCE, useUiPrefsStore } from './uiPrefsStore.ts';
+import { DEFAULT_APPEARANCE, DEFAULT_DOCKS, useUiPrefsStore } from './uiPrefsStore.ts';
 
 afterEach(() => {
   useUiPrefsStore.setState({
@@ -17,6 +17,13 @@ afterEach(() => {
     meshesInViewMinZoom: undefined,
     meshesInViewMaxCaves: undefined,
     meshesInViewMaxBytes: undefined,
+    panels: {},
+    layouts: [],
+    selectors: {},
+    docks: DEFAULT_DOCKS,
+    coordinateFormat: 'dd',
+    overviewMap: false,
+    accountId: undefined,
   });
   localStorage.removeItem('silexgis.uiPrefs');
 });
@@ -49,7 +56,7 @@ describe('uiPrefsStore pinned types', () => {
     const raw = localStorage.getItem('silexgis.uiPrefs');
     expect(raw).not.toBeNull();
     const stored = JSON.parse(raw!) as { state: { pinnedTypeIds: number[]; mapChromeHidden: boolean }; version: number };
-    expect(stored.version).toBe(7);
+    expect(stored.version).toBe(8);
     expect(stored.state.pinnedTypeIds).toEqual([7]);
     expect(stored.state.mapChromeHidden).toBe(true);
   });
@@ -201,7 +208,7 @@ describe('uiPrefsStore appearance', () => {
       version: number;
       state: { movieGifCalibration?: unknown };
     };
-    expect(stored.version).toBe(7);
+    expect(stored.version).toBe(8);
     expect(stored.state.movieGifCalibration).toEqual({ turning: 0.03 });
 
     useUiPrefsStore.setState({ movieGifCalibration: undefined });
@@ -347,5 +354,65 @@ describe('uiPrefsStore dialog placement', () => {
       'cave-add': 'drawer',
       'feature-edit': 'modal',
     });
+  });
+});
+
+describe('uiPrefsStore account preferences', () => {
+  it('keeps a member’s arrangement from the next member who signs in on the same browser', () => {
+    const store = useUiPrefsStore.getState();
+    store.adoptAccount('account-a');
+    store.setCoordinateFormat('utm');
+    store.togglePinnedType(4);
+    store.setDocks({ leftHidden: true });
+    store.setPanelPrefs('main', { width: 30 });
+
+    expect(useUiPrefsStore.getState().adoptAccount('account-b')).toBe('reset');
+
+    const after = useUiPrefsStore.getState();
+    expect(after.accountId).toBe('account-b');
+    expect(after.coordinateFormat).toBe('dd');
+    expect(after.pinnedTypeIds).toEqual([]);
+    expect(after.docks).toEqual(DEFAULT_DOCKS);
+    expect(after.panels).toEqual({});
+  });
+
+  it('keeps them across a sign-in of the same account, and for the first account to claim them', () => {
+    const store = useUiPrefsStore.getState();
+    store.setCoordinateFormat('dms');
+
+    expect(store.adoptAccount('account-a')).toBe('claimed');
+    expect(useUiPrefsStore.getState().coordinateFormat).toBe('dms');
+    expect(useUiPrefsStore.getState().adoptAccount('account-a')).toBe('same');
+    expect(useUiPrefsStore.getState().coordinateFormat).toBe('dms');
+  });
+
+  it('gives them up on sign-out, and leaves the browser’s own settings alone', () => {
+    const store = useUiPrefsStore.getState();
+    store.adoptAccount('account-a');
+    store.setCoordinateFormat('utm');
+    store.setCenterlineLimits({ detailZoom: 14 });
+
+    useUiPrefsStore.getState().releaseAccount();
+
+    const after = useUiPrefsStore.getState();
+    expect(after.accountId).toBeUndefined();
+    expect(after.coordinateFormat).toBe('dd');
+    expect(after.centerlineDetailZoom).toBe(14);
+  });
+
+  it('starts a browser from before this version with the defaults for the new keys', () => {
+    localStorage.setItem(
+      'silexgis.uiPrefs',
+      JSON.stringify({ version: 7, state: { pinnedTypeIds: [2], panels: { main: { width: 25 } } } }),
+    );
+
+    useUiPrefsStore.persist.rehydrate();
+
+    const state = useUiPrefsStore.getState();
+    expect(state.pinnedTypeIds).toEqual([2]);
+    expect(state.panels.main?.width).toBe(25);
+    expect(state.docks).toEqual(DEFAULT_DOCKS);
+    expect(state.coordinateFormat).toBe('dd');
+    expect(state.accountId).toBeUndefined();
   });
 });

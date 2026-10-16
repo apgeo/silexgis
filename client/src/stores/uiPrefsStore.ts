@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 import type { MovieGifCalibration } from '../caveview/movie/movieOutput.ts';
 import type { MovieSettings } from '../caveview/movie/movieSettings.ts';
 import type { SelectorPrefs } from '../filters/selectorPrefs.ts';
+import { DEFAULT_COORDINATE_FORMAT, type CoordinateFormat } from '../geo/coordinateFormat.ts';
 import type { DensityPref, PanelLayout, PanelPrefs, PanelScope } from './panelPrefs.ts';
 
 export type { DensityPref };
@@ -38,6 +39,14 @@ export const DEFAULT_APPEARANCE: Appearance = {
   density: 'comfortable',
   reduceMotion: false,
 };
+
+/** Whether each of the map workspace's two docks is folded away. */
+export interface DockPrefs {
+  leftHidden: boolean;
+  rightHidden: boolean;
+}
+
+export const DEFAULT_DOCKS: DockPrefs = { leftHidden: false, rightHidden: false };
 
 interface UiPrefsState {
   /** Feature types pinned as one-click draw shortcuts on the edit toolbar, in pin order. */
@@ -138,6 +147,59 @@ interface UiPrefsState {
   saveLayout: (name: string, mapChromeHidden: boolean) => void;
   applyLayout: (id: string) => void;
   deleteLayout: (id: string) => void;
+  /** The map workspace's docks as they were last left, on a desktop layout. */
+  docks: DockPrefs;
+  setDocks: (patch: Partial<DockPrefs>) => void;
+  /** How positions are written wherever one is shown or copied. */
+  coordinateFormat: CoordinateFormat;
+  setCoordinateFormat: (format: CoordinateFormat) => void;
+  /** Whether the map's overview inset is open. */
+  overviewMap: boolean;
+  setOverviewMap: (open: boolean) => void;
+  /**
+   * Which account the account preferences held here belong to — the selection panels, layouts,
+   * selectors, docks, pinned types, coordinate format, overview and appearance. They are a cache
+   * of what that account has stored; undefined when no account has claimed them.
+   */
+  accountId?: string;
+  /**
+   * Makes the account preferences this account's: when they were another account's, they go back
+   * to their defaults first, so a second member signing in on this browser starts from nothing of
+   * the first one's. Says which of the three it was: already this account's, claimed from nobody,
+   * or reset from somebody else's.
+   */
+  adoptAccount: (accountId: string) => AccountClaim;
+  /** Puts the account preferences back to their defaults and leaves them unclaimed — on sign-out. */
+  releaseAccount: () => void;
+  /** Takes the account preferences an account has stored, over whatever is held here. */
+  applyAccountPrefs: (prefs: Partial<AccountPrefsState>) => void;
+}
+
+export type AccountClaim = 'same' | 'claimed' | 'reset';
+
+/** The part of the state that is the account's rather than the browser's. */
+export interface AccountPrefsState {
+  appearance: Appearance;
+  panels: Partial<Record<PanelScope, PanelPrefs>>;
+  layouts: PanelLayout[];
+  selectors: Record<string, SelectorPrefs>;
+  docks: DockPrefs;
+  pinnedTypeIds: number[];
+  coordinateFormat: CoordinateFormat;
+  overviewMap: boolean;
+}
+
+function accountPrefDefaults(): AccountPrefsState {
+  return {
+    appearance: DEFAULT_APPEARANCE,
+    panels: {},
+    layouts: [],
+    selectors: {},
+    docks: DEFAULT_DOCKS,
+    pinnedTypeIds: [],
+    coordinateFormat: DEFAULT_COORDINATE_FORMAT,
+    overviewMap: false,
+  };
 }
 
 /**
@@ -228,10 +290,33 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           };
         }),
       deleteLayout: (id) => set((state) => ({ layouts: state.layouts.filter((l) => l.id !== id) })),
+      docks: DEFAULT_DOCKS,
+      setDocks: (patch) => set((state) => ({ docks: { ...state.docks, ...patch } })),
+      coordinateFormat: DEFAULT_COORDINATE_FORMAT,
+      setCoordinateFormat: (format) => set({ coordinateFormat: format }),
+      overviewMap: false,
+      setOverviewMap: (open) => set({ overviewMap: open }),
+      accountId: undefined,
+      adoptAccount: (accountId) => {
+        let claim: AccountClaim = 'same';
+        set((state) => {
+          if (state.accountId === accountId) {
+            return {};
+          }
+          // A cache nobody had claimed yet is this browser's history from before preferences
+          // travelled with the account, or the defaults a sign-out left; it is kept for the first
+          // account to sign in. One another account claimed is never handed on.
+          claim = state.accountId === undefined ? 'claimed' : 'reset';
+          return claim === 'reset' ? { ...accountPrefDefaults(), accountId } : { accountId };
+        });
+        return claim;
+      },
+      releaseAccount: () => set({ ...accountPrefDefaults(), accountId: undefined }),
+      applyAccountPrefs: (prefs) => set(prefs),
     }),
     {
       name: 'silexgis.uiPrefs',
-      version: 7,
+      version: 8,
       // Without a migrate, raising the version makes zustand discard the whole stored blob —
       // wiping everyone's pinned types, landing page and centerline budgets to add one field.
       migrate: (persisted, from) => {
@@ -247,6 +332,10 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           meshesInViewMinZoom: from < 7 ? undefined : state.meshesInViewMinZoom,
           meshesInViewMaxCaves: from < 7 ? undefined : state.meshesInViewMaxCaves,
           meshesInViewMaxBytes: from < 7 ? undefined : state.meshesInViewMaxBytes,
+          docks: from < 8 ? DEFAULT_DOCKS : (state.docks ?? DEFAULT_DOCKS),
+          coordinateFormat: from < 8 ? DEFAULT_COORDINATE_FORMAT : (state.coordinateFormat ?? DEFAULT_COORDINATE_FORMAT),
+          overviewMap: from < 8 ? false : (state.overviewMap ?? false),
+          accountId: from < 8 ? undefined : state.accountId,
         };
       },
     },
