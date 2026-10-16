@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // The browser suite cannot quietly shrink: every spec file on disk must be claimed by at least
-// one Playwright project, and no spec may be claimed by two.
+// one Playwright project, and no spec may run on desktop as well as on a phone. (Two phone
+// projects may share a spec — the 3D scene runs on the same phone held both ways.)
 //
 // Why this exists. Each project used to pin its spec files by name in a regex alternation, and a
 // spec that nobody remembered to add ran nowhere — it passed the gate by never executing.
 // `photo-library-smoke.spec.ts` was in exactly that state: written, committed, and claimed by no
-// project. The desktop project now takes everything and the phone projects subtract their three,
-// so a new spec is covered by writing it; this test is what keeps that true, and what catches a
-// spec accidentally added to the ignore list or a phone spec renamed out of its project.
+// project. The desktop project now takes everything except the phone-only list and the phone
+// projects take that list, so a new spec is covered by writing it; this test is what keeps that
+// true, and what catches a spec accidentally added to the ignore list or a phone spec renamed out
+// of its project.
 //
 // It reads the config as text rather than importing it, because importing pulls in Playwright and
 // a whole toolchain to answer a question about file names. The parse is deliberately narrow: it

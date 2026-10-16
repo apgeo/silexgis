@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
 // Smoke flows against the dev stack: requires the dev database
 // (deploy/docker-compose.dev.yml) and the API on :5080; Vite is started automatically.
 //
-// All three projects run in the standard e2e gate, so the phone layout is regressed by every
+// Every project runs in the standard e2e gate, so the phone layout is regressed by every
 // later batch rather than rotting until someone remembers to check it. Pop-out and
 // multi-window flows are desktop-only by construction and stay in the desktop project.
 //
@@ -95,8 +95,8 @@ export default defineConfig({
       // what that costs: a new spec ran nowhere until somebody remembered to add it. That is a
       // fail-closed list, and a fail-closed list quietly shrinks — `photo-library-smoke.spec.ts`
       // sat on disk claimed by no project at all, passing by never running. So the rule is
-      // inverted: desktop takes every spec, and the phone projects below subtract the three that
-      // are theirs. A new spec is now covered by writing it, and `e2e-spec-coverage.test.mjs`
+      // inverted: desktop takes every spec, and the phone projects below take the ones listed in
+      // PHONE_ONLY_SPECS. A new spec is now covered by writing it, and `e2e-spec-coverage.test.mjs`
       // fails the gate if any spec ends up claimed by nobody.
       name: 'desktop',
       testMatch: /\.spec\.ts$/,
@@ -108,10 +108,14 @@ export default defineConfig({
       // The 3D scene has its own file here rather than sharing the flat map's: a scene is one
       // drawing context per window and the specs that drive it have to stand alone, and naming it
       // separately is also the only way to see at a glance that the phone layout of the 3D view is
-      // covered at all. Spelled out rather than left to `mobile\.spec\.ts` matching it by accident.
+      // covered at all.
+      //
+      // This project takes `mobile.spec.ts` and every `<name>-mobile.spec.ts`, anchored on the
+      // file name and said so. It used to list three names in an unanchored alternation, and the
+      // unanchored `mobile\.spec\.ts` was what quietly pulled in every later `-mobile` spec.
       name: 'mobile-android',
       use: { ...devices['Pixel 7'] },
-      testMatch: /(mobile|scene3d-mobile|rastermap-mobile)\.spec\.ts/,
+      testMatch: /(^|\/)([a-z0-9]+(-[a-z0-9]+)*-)?mobile\.spec\.ts$/,
     },
     {
       // The same phone turned sideways: 863x360 CSS px, touch enabled, coarse pointer.
