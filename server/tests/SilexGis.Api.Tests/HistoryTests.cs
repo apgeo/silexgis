@@ -387,9 +387,13 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         geom.GetProperty("geometryType").GetString().ShouldBe("LineString");
         geom.GetProperty("points").GetInt32().ShouldBe(1500);
         geom.GetProperty("sha256").GetString()!.Length.ShouldBe(64);
-        // No coordinate of the line anywhere in the timeline.
-        largeBody.ShouldNotContain("26.3");
-        largeBody.ShouldNotContain("46.2");
+        // No coordinate of the line anywhere in the timeline — looked for as the line's own WKT (in
+        // capitals, unlike the summary's "LineString"), a WKT vertex pair and a second-vertex
+        // ordinate, because a bare "26.3" is also what an event stamped at 08:48:26.355 carries.
+        largeBody.ShouldNotContain("LINESTRING", Case.Sensitive);
+        largeBody.ShouldNotContain("26.3 46.2");
+        largeBody.ShouldNotContain("26.3000137");
+        largeBody.ShouldNotContain("46.2000091");
 
         var (_, smallEvents) = await HistoryAsync(owner, "feature", smallId);
         smallEvents.Single(e => e.GetProperty("action").GetString() == "created")
