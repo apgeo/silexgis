@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { LockOutlined, UndoOutlined } from '@ant-design/icons';
 import { App, Button, Card, Empty, Spin, Table, Tag, Timeline, Tooltip, Typography } from 'antd';
 import dayjs from 'dayjs';
+import './HistoryPanel.css';
 import { useTranslation } from 'react-i18next';
 import { useHistory, type HistoryEvent } from '../../api/hooks.ts';
 import {
@@ -142,8 +143,17 @@ function HistoryEventItem({ event, restore }: { event: HistoryEvent; restore?: H
       )}
 
       {rows.length > 0 && (
+        // The changes scroll sideways when a value is long (a geometry's text, a description), and
+        // a region that scrolls has to be reachable from the keyboard to be read: the box that
+        // scrolls is this one, so it is the one that takes focus — the table inside is as wide as
+        // its widest row.
+        <div
+          className="history-fields-scroll"
+          tabIndex={0}
+          role="group"
+          aria-label={t('history.changesOf', { when: dayjs(event.at).format('YYYY-MM-DD HH:mm') })}
+        >
         <Table<HistoryFieldRow>
-          scroll={{ x: 'max-content' }}
           className="history-fields"
           size="small"
           pagination={false}
@@ -185,6 +195,7 @@ function HistoryEventItem({ event, restore }: { event: HistoryEvent; restore?: H
             },
           ]}
         />
+        </div>
       )}
 
       {restorable.length > 1 && (

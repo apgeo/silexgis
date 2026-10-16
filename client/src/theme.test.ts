@@ -194,6 +194,21 @@ describe.each(['light', 'dark'] as const)('contrast in the %s theme', (mode) => 
     expect(contrast(steps?.colorTextLightSolid ?? token.colorTextLightSolid, brandFor('Steps'))).toBeGreaterThanOrEqual(4.5);
   });
 
+  it.each(['red', 'volcano', 'orange', 'gold', 'yellow', 'lime', 'green', 'cyan', 'blue', 'geekblue', 'purple', 'magenta'])(
+    'a %s tag reads at 4.5:1 on its own background',
+    (colour) => {
+      const tag = (config.components?.Tag ?? {}) as Record<string, string | undefined>;
+      const palette = token as unknown as Record<string, string>;
+      expect(contrast(tag[`${colour}7`] ?? palette[`${colour}7`], palette[`${colour}1`])).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+
+  it.each(['Success', 'Warning', 'Error', 'Info'])('a %s status tag reads at 4.5:1 on its own background', (status) => {
+    const tag = (config.components?.Tag ?? {}) as Record<string, string | undefined>;
+    const palette = token as unknown as Record<string, string>;
+    expect(contrast(tag[`color${status}`] ?? palette[`color${status}`], palette[`color${status}Bg`])).toBeGreaterThanOrEqual(4.5);
+  });
+
   it("a default button's text under the pointer reads at 4.5:1", () => {
     const button = config.components?.Button;
     expect(contrast(button?.defaultHoverColor ?? token.colorPrimaryHover, surfaces.page)).toBeGreaterThanOrEqual(4.5);

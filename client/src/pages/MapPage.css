@@ -103,6 +103,18 @@
   right: 56px;
 }
 
+/* OpenLayers draws its control buttons 22 pixels square; 24 is the smallest target WCAG 2.2 asks
+   for (2.5.8), and their own focus mark is a 1-pixel grey line. */
+.map-canvas-wrap .ol-control button {
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.map-canvas-wrap .ol-control button:focus-visible {
+  outline: 2px solid var(--ant-color-primary-border);
+  outline-offset: 1px;
+}
+
 /* Phone: the zoom buttons step down out of the corner where that navigation tab sits. Left in
    OpenLayers' own corner, the tab covered "zoom out", and pressing it opened the menu instead. */
 .map-canvas-wrap-mobile .ol-zoom {

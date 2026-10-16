@@ -69,6 +69,7 @@ export default function CaveClosestApproachSection({ caveId }: CaveClosestApproa
         filterOption={false}
         style={{ width: '100%', maxWidth: 420 }}
         placeholder={t('closestApproach.pickOther')}
+        aria-label={t('closestApproach.pickOther')}
         value={other}
         options={options}
         loading={isFetching}

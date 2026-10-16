@@ -362,6 +362,7 @@ export default function CaveListPage() {
           showSearch
           optionFilterProp="label"
           placeholder={t('tags.filterPlaceholder')}
+          aria-label={t('tags.filterPlaceholder')}
           style={{ width: 200 }}
           value={controls.tag}
           data-testid="cave-registry-tag"

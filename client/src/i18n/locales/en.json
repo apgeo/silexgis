@@ -2541,7 +2541,8 @@
       "caveId": "Linked cave",
       "visibility": "Visibility",
       "caption": "Caption"
-    }
+    },
+    "changesOf": "Changes made {{when}}"
   },
   "cavingGroups": {
     "title": "Caving groups",

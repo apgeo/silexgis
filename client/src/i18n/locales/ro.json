@@ -2541,7 +2541,8 @@
       "caveId": "Peșteră asociată",
       "visibility": "Vizibilitate",
       "caption": "Legendă"
-    }
+    },
+    "changesOf": "Modificări făcute la {{when}}"
   },
   "cavingGroups": {
     "title": "Grupuri de speologie",

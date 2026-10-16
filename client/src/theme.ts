@@ -43,6 +43,34 @@ export const themeConfig: ThemeConfig = {
  * `theme.test.ts` recomputes every ratio from the tokens antd derives, so a change here that
  * drops a pair below its threshold fails there rather than on somebody's screen.
  */
+/**
+ * A coloured tag writes its words in the seventh step of its colour's palette on the first step;
+ * for the warm and green palettes that is under 4.5:1 on the light theme (green 3.4, gold 2.8,
+ * yellow 2.1), and for two cool ones on the dark theme. The words take the first darker (light
+ * theme) or lighter (dark theme) step that reads; the tag's background and outline keep antd's.
+ * The status tags (success, warning, info, error) write in the status colour itself, which is a
+ * fill colour; they take the status's text colour instead.
+ */
+const lightTagText = {
+  volcano7: '#ad2102',
+  orange7: '#ad4e00',
+  gold7: '#874d00',
+  yellow7: '#876800',
+  lime7: '#3f6600',
+  green7: '#237804',
+  cyan7: '#006d75',
+  colorSuccess: '#237804',
+  colorWarning: '#874d00',
+  colorInfo: '#0958d9',
+} satisfies NonNullable<ThemeConfig['components']>['Tag'];
+
+const darkTagText = {
+  geekblue7: '#7f9ef3',
+  purple7: '#ab7ae0',
+  colorError: '#ff7875',
+  colorInfo: '#69b1ff',
+} satisfies NonNullable<ThemeConfig['components']>['Tag'];
+
 const lightContrast: ThemeConfig = {
   token: {
     colorPrimaryBg: '#e3efee',
@@ -57,6 +85,7 @@ const lightContrast: ThemeConfig = {
     // The outline is all that marks out an empty field or a default button.
     colorBorder: '#8c8c8c',
   },
+  components: { Tag: lightTagText },
 };
 
 /**
@@ -119,6 +148,7 @@ const darkContrast: ThemeConfig = {
     // A default button's text turns brand-coloured under the pointer. The outlined and text-only
     // primary buttons cannot be reached from here — one token feeds both their text and the
     // solid primary button's fill — and are re-pointed in the stylesheet instead.
+    Tag: darkTagText,
     Button: {
       defaultHoverColor: DARK_PRIMARY_TEXT.hover,
       defaultHoverBorderColor: DARK_PRIMARY_TEXT.hover,
