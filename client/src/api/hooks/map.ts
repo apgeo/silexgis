@@ -116,9 +116,22 @@ export function useNominatim(q: string) {
   });
 }
 
+/**
+ * The filter a map layer draws through, as the map routes take it: a document's token or a saved
+ * filter's id, never both (the server refuses the pair as ambiguous).
+ */
+export interface MapFilterParams {
+  filter?: string;
+  savedFilterId?: string;
+}
+
 /** Imperative fetch used by the OpenLayers entrance-layer loader (not a hook). */
-export async function fetchEntranceFeatures(bbox: string, zoom: number, tag?: string): Promise<EntranceFeatureCollection> {
-  return unwrap(api.GET('/api/v1/map/cave-entrances', { params: { query: { bbox, zoom, tag } } }));
+export async function fetchEntranceFeatures(
+  bbox: string,
+  zoom: number,
+  filter: MapFilterParams = {},
+): Promise<EntranceFeatureCollection> {
+  return unwrap(api.GET('/api/v1/map/cave-entrances', { params: { query: { bbox, zoom, ...filter } } }));
 }
 
 /**
@@ -127,25 +140,31 @@ export async function fetchEntranceFeatures(bbox: string, zoom: number, tag?: st
  * Waits for that published zoom rather than guessing it — a guess below an installation's own
  * setting would come back as clusters again.
  */
-export function useClusterEntrances(cell: ClusterCell, tag?: string) {
+export function useClusterEntrances(cell: ClusterCell, filter: MapFilterParams = {}) {
   const bbox = clusterCellBbox(cell);
   const { data: config } = useMapConfig();
   const pointsZoom = config?.clusterMaxZoom;
   return useQuery({
-    queryKey: ['map', 'cluster-entrances', bbox, tag ?? null, pointsZoom ?? null] as const,
-    queryFn: () => fetchEntranceFeatures(bbox, pointsZoom!, tag),
+    queryKey: [
+      'map',
+      'cluster-entrances',
+      bbox,
+      filter.filter ?? null,
+      filter.savedFilterId ?? null,
+      pointsZoom ?? null,
+    ] as const,
+    queryFn: () => fetchEntranceFeatures(bbox, pointsZoom!, filter),
     enabled: pointsZoom !== undefined,
     staleTime: 30_000,
   });
 }
 
 /** Optional filters the map feature layer applies on top of the viewport bbox. */
-export interface MapFeatureFilters {
+export interface MapFeatureFilters extends MapFilterParams {
   /** Comma-separated FeatureKind names, e.g. "generic,cave". */
   kinds?: string;
   featureTypeId?: number;
   category?: FeatureCategory;
-  tag?: string;
 }
 
 /**

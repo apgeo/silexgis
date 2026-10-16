@@ -8,7 +8,7 @@ import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
 import { fetchEntranceFeatures } from '../api/hooks.ts';
 import { worldBbox } from '../geo/coords.ts';
-import { getMapTagFilter } from './mapFilters.ts';
+import { handleMapFilterError, mapFilterParams } from './mapFilters.ts';
 import { entrancePalette as palette } from './markerPalette.ts';
 import { declutterOption } from './declutter.ts';
 
@@ -55,14 +55,18 @@ export function attachEntranceLoader(map: Map): () => void {
     const zoom = Math.round(view.getZoom() ?? 8);
     const seq = ++requestSeq;
     try {
-      const collection = await fetchEntranceFeatures(bbox, zoom, getMapTagFilter() ?? undefined);
+      const collection = await fetchEntranceFeatures(bbox, zoom, mapFilterParams());
       if (seq !== requestSeq) {
         return; // a newer request superseded this one
       }
       source.clear(true);
       source.addFeatures(format.readFeatures(collection, { featureProjection: 'EPSG:3857' }));
-    } catch {
-      // Keep previous features on transient errors; next moveend retries.
+    } catch (error) {
+      // Keep previous features on transient errors; next moveend retries. A refused filter is
+      // not transient, and what was drawn before it was asked for is not what it selects.
+      if (seq === requestSeq) {
+        handleMapFilterError(error, () => source.clear(true));
+      }
     }
   };
 

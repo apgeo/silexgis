@@ -23,7 +23,7 @@ import {
 } from '../../api/hooks.ts';
 import { useFeatureRights } from '../../api/hooks/objectRights.ts';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
-import { getMapTagFilter } from '../../map/mapFilters.ts';
+import { mapFilterParams } from '../../map/mapFilters.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { viewFitGeometry, viewFlyTo } from '../../workspace/viewCamera.ts';
 import {
@@ -107,7 +107,7 @@ export default function SelectionPanel({ scope = 'main' }: { scope?: PanelScope 
 function ClusterCard({ selection }: { selection: ClusterSelection }) {
   const { t } = useTranslation();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
-  const { data, isPending } = useClusterEntrances(selection.cell, getMapTagFilter() ?? undefined);
+  const { data, isPending } = useClusterEntrances(selection.cell, mapFilterParams());
 
   const entrances = useMemo(() => {
     return (data?.features ?? [])

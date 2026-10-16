@@ -14,7 +14,7 @@ import {
   onFeatureTypeCatalogChanged,
   setFeatureTypeCatalog,
 } from './featureTypeCatalog.ts';
-import { getMapTagFilter } from './mapFilters.ts';
+import { handleMapFilterError, mapFilterParams } from './mapFilters.ts';
 import { featureSymbolUrl, surfaceFeaturePalette as palette } from './markerPalette.ts';
 import { declutterOption } from './declutter.ts';
 
@@ -77,7 +77,7 @@ export function attachSurfaceFeatureLoader(map: Map): () => void {
     const bbox = worldBbox(extent);
     const seq = ++requestSeq;
     try {
-      const collection = await fetchMapFeatures(bbox, { tag: getMapTagFilter() ?? undefined });
+      const collection = await fetchMapFeatures(bbox, mapFilterParams());
       if (seq !== requestSeq) {
         return; // a newer request superseded this one
       }
@@ -89,8 +89,12 @@ export function attachSurfaceFeatureLoader(map: Map): () => void {
           // readable row with a null geometry — nothing to draw, list or hit-test here.
           .filter((feature) => feature.getGeometry() !== undefined),
       );
-    } catch {
-      // Keep previous features on transient errors; next moveend retries.
+    } catch (error) {
+      // Keep previous features on transient errors; next moveend retries. A refused filter is
+      // not transient, and what was drawn before it was asked for is not what it selects.
+      if (seq === requestSeq) {
+        handleMapFilterError(error, () => source.clear(true));
+      }
     }
   };
 

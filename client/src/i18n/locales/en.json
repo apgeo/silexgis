@@ -7134,5 +7134,13 @@
     "dateTo": "To date",
     "baseLayerChooser": "Change the base layer",
     "search": "Search"
+  },
+  "mapFilter": {
+    "unreadableLink": "The filter in this link could not be read, so the map shows everything you can see. Ask whoever sent it for a fresh link.",
+    "refused": "The map's filter could not be run with your access — it may have been deleted or changed. Its layers show nothing until you clear it.",
+    "active": "Map filtered by {{name}}",
+    "activeUnnamed": "Map filtered by a filter from a link or a saved view",
+    "savedUnavailable": "a saved filter you cannot open",
+    "clear": "Clear the map's filter"
   }
 }

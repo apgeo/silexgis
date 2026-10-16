@@ -57,6 +57,7 @@ import { drawShapeForType } from '../components/map/featureTypeGroups.ts';
 import LayerPanel from '../components/map/LayerPanel.tsx';
 import MapContextMenu from '../components/map/MapContextMenu.tsx';
 import ViewsPanel from '../components/map/ViewsPanel.tsx';
+import MapFilterNotice from '../components/map/MapFilterNotice.tsx';
 import MapObjectSelector from '../components/map/MapObjectSelector.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
 import SelectionPanel from '../components/map/SelectionPanel.tsx';
@@ -135,7 +136,18 @@ import {
   setLibraryPhotoFeatureHandler,
   type LibraryPhotoFeatureTarget,
 } from '../map/libraryPhotoPopup.ts';
-import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
+import {
+  getMapFilter,
+  mapFilterAddressKey,
+  onMapFilterRefusal,
+  readMapFilterAddress,
+  sameMapFilter,
+  setMapFilter,
+  tagChipFilter,
+  tagOfMapFilter,
+  writeMapFilterAddress,
+  type MapFilter,
+} from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { attachViewSync2d, type ViewSync2dHandle } from '../map/viewSync2d.ts';
 import { openModelWindow } from '../caveview/openModelWindow.ts';
@@ -263,7 +275,6 @@ export default function MapPage() {
   const { data: featureTypes } = useFeatureTypes();
   const [activeBaseId, setActiveBaseId] = useState<number>();
   const [entrancesVisible, setEntrancesVisible] = useState(true);
-  const [tagFilter, setTagFilter] = useState<string | null>(getMapTagFilter());
   const [surfaceFeaturesVisible, setSurfaceFeaturesVisible] = useState(true);
   // Off by default: it is the heaviest overlay by a wide margin, and a cave's splay work is
   // invisible at the zooms most sessions spend their time at.
@@ -676,6 +687,56 @@ export default function MapPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applyView is stable for this use
   }, [savedViews, requestedViewId, setSearchParams]);
 
+  // The filter the map's layers draw through. Unlike the one-shot parameters around it, it is a
+  // description of the page and stays in the address — `filter` for a document, `saved` for a
+  // saved filter's id — so a link to a filtered map opens filtered, as the cave registry's does.
+  // The loaders read the module's copy; this state is what renders, and the two change together.
+  const [mapFilter, setMapFilterState] = useState<MapFilter | null>(() => {
+    const initial = readMapFilterAddress(searchParams).filter;
+    setMapFilter(initial);
+    return initial;
+  });
+  const [unreadableFilterLink, setUnreadableFilterLink] = useState(
+    () => readMapFilterAddress(searchParams).unreadableLink,
+  );
+  const [filterRefused, setFilterRefused] = useState(false);
+  const filterAddressKey = mapFilterAddressKey(searchParams);
+
+  const adoptMapFilter = (next: MapFilter | null) => {
+    setMapFilter(next);
+    setMapFilterState(next);
+    setFilterRefused(false);
+    reloadEntrances();
+    surfaceFeaturesChanged();
+  };
+
+  useEffect(() => onMapFilterRefusal(() => setFilterRefused(true)), []);
+
+  // The address changed under the page — a link followed inside the app, back or forward. Keyed
+  // on the two values alone, so the one-shot parameters being consumed never re-reads it.
+  useEffect(() => {
+    const reading = readMapFilterAddress(searchParams);
+    if (reading.unreadableLink) {
+      setUnreadableFilterLink(true);
+    } else if (!sameMapFilter(reading.filter, getMapFilter())) {
+      adoptMapFilter(reading.filter);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the filter's own two values; adoptMapFilter only sets state
+  }, [filterAddressKey]);
+
+  // The filter changed on the page — the tag chooser, a saved view — and is written into the
+  // address after the render that changed it. Written then rather than at the change because a
+  // view applied on arrival consumes `?view=` in the same breath, and two writes from one render
+  // both start from the same parameters: the second would put the first one's filter back out.
+  // An unreadable token is taken out too; the notice it raised stays until dismissed.
+  useEffect(() => {
+    const wanted = writeMapFilterAddress(searchParams, mapFilter);
+    if (mapFilterAddressKey(wanted) !== mapFilterAddressKey(searchParams)) {
+      setSearchParams((params) => writeMapFilterAddress(params, mapFilter), { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the filter changes, not on every address change
+  }, [mapFilter]);
+
   /**
    * The trip listing's "show on map" button (?trips=1, plus the narrowings it was showing).
    *
@@ -1059,7 +1120,7 @@ export default function MapPage() {
       libraryPhotoSources,
       geofileIds: visibleGeofileIds,
       rasters: visibleRasterIds.map((id) => ({ id, opacity: rasterOpacity[id] })),
-      tagFilter,
+      mapFilter,
       overlayOpacity,
       baseOpacity,
     });
@@ -1177,15 +1238,13 @@ export default function MapPage() {
     // earlier manual dim in place. Keys are catalog ids (JSON-serialized as strings), which
     // the numeric-id consumers coerce back on lookup.
     resetBaseOpacity(ui.baseOpacity);
-    setTagFilter(ui.tagFilter);
-    setMapTagFilter(ui.tagFilter);
     // A view saved from a session that had the scene open remembers where its camera stood. It
     // goes to whichever view is on screen, which is nothing at all when no scene is mounted — the
     // camera then stays in the document for the next time one is, rather than being staged for a
     // scene the viewer has not opened.
     applyViewCamera3d(ui.camera3d);
-    reloadEntrances();
-    surfaceFeaturesChanged();
+    // Reloads both data layers, which the view's visibility toggles above need as well.
+    adoptMapFilter(ui.mapFilter);
   };
 
   // Dock contents, hosted either by a resizable pane (desktop) or a drawer (phone).
@@ -1220,13 +1279,8 @@ export default function MapPage() {
       unconfiguredPhotoLibraries={unconfiguredPhotoLibraries}
       visibleLibraryPhotoSources={libraryPhotoSources}
       treeNonce={treeNonce}
-      tagFilter={tagFilter}
-      onTagFilterChange={(slug) => {
-        setTagFilter(slug);
-        setMapTagFilter(slug);
-        reloadEntrances();
-        surfaceFeaturesChanged();
-      }}
+      tagFilter={tagOfMapFilter(mapFilter)}
+      onTagFilterChange={(slug) => adoptMapFilter(tagChipFilter(slug))}
       centerlinesVisible={centerlinesVisible}
       tripsVisible={tripsVisible}
       karstDensityVisible={karstDensityVisible}
@@ -1357,6 +1411,13 @@ export default function MapPage() {
           <div className={`map-search-overlay map-chrome${isMobile ? ' map-search-overlay-mobile' : ''}`}>
             <MapSearch fullWidth={isMobile} />
             <MapObjectSelector fullWidth={isMobile} />
+            <MapFilterNotice
+              filter={mapFilter}
+              unreadableLink={unreadableFilterLink}
+              onDismissUnreadableLink={() => setUnreadableFilterLink(false)}
+              refused={filterRefused}
+              onClear={() => adoptMapFilter(null)}
+            />
           </div>
           <Tooltip title={mapChromeHidden ? t('map.showChrome') : t('map.hideChrome')} placement="left">
             <Button

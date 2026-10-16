@@ -7134,5 +7134,13 @@
     "dateTo": "Până la data",
     "baseLayerChooser": "Schimbă stratul de bază",
     "search": "Caută"
+  },
+  "mapFilter": {
+    "unreadableLink": "Filtrul din acest link nu a putut fi citit, așa că harta arată tot ce puteți vedea. Cereți celui care l-a trimis un link nou.",
+    "refused": "Filtrul hărții nu poate fi rulat cu drepturile dumneavoastră — poate a fost șters sau modificat. Straturile sale nu arată nimic până nu îl goliți.",
+    "active": "Hartă filtrată după {{name}}",
+    "activeUnnamed": "Hartă filtrată după un filtru dintr-un link sau dintr-o vedere salvată",
+    "savedUnavailable": "un filtru salvat pe care nu îl puteți deschide",
+    "clear": "Goliți filtrul hărții"
   }
 }

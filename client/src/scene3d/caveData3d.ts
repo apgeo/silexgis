@@ -5,7 +5,7 @@ import {
   fetchMapFeatures,
   type MapConfig,
 } from '../api/hooks.ts';
-import { getMapTagFilter } from '../map/mapFilters.ts';
+import { handleMapFilterError, mapFilterParams } from '../map/mapFilters.ts';
 import { ANCHORED_TO_SURFACE, samePlacement } from './altitude3d.ts';
 import type { Altitude3DPlacement } from './altitude3d.ts';
 import { entranceMarkers, surfaceFeatureLines, surfaceFeatureMarkers } from './caveMarkers3d.ts';
@@ -352,7 +352,7 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       return;
     }
     try {
-      const collection = await fetchEntranceFeatures(bbox, zoom, getMapTagFilter() ?? undefined);
+      const collection = await fetchEntranceFeatures(bbox, zoom, mapFilterParams());
       if (seq !== requestSeq || detached) {
         return;
       }
@@ -369,8 +369,15 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
           : answered.length;
         publishCaps();
       }
-    } catch {
-      // As above.
+    } catch (error) {
+      // As above — except a refused filter, which is not a hiccup: what was drawn before it was
+      // asked for is not what it selects.
+      if (seq === requestSeq && !detached) {
+        handleMapFilterError(error, () => {
+          drawnEntrances = [];
+          entrances.replace(drawnEntrances);
+        });
+      }
     }
   };
 
@@ -379,7 +386,7 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       return;
     }
     try {
-      const collection = await fetchMapFeatures(bbox, { tag: getMapTagFilter() ?? undefined });
+      const collection = await fetchMapFeatures(bbox, mapFilterParams());
       if (seq !== requestSeq || detached) {
         return;
       }
@@ -393,8 +400,15 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
         answeredFeatures = featuresOf(collection).length;
         publishCaps();
       }
-    } catch {
-      // As above.
+    } catch (error) {
+      if (seq === requestSeq && !detached) {
+        handleMapFilterError(error, () => {
+          drawnFeatures = [];
+          drawnFeatureLines = [];
+          features.replace(drawnFeatures);
+          featureLines.replace(drawnFeatureLines);
+        });
+      }
     }
   };
 

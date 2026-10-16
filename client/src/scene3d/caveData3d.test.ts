@@ -25,7 +25,7 @@ const {
   SURFACE_FEATURE_LINE_SOURCE_ID,
   SURFACE_FEATURE_SOURCE_ID,
 } = await import('./caveData3d.ts');
-const { setMapTagFilter } = await import('../map/mapFilters.ts');
+const { mapFilterParams, setMapFilter, tagChipFilter } = await import('../map/mapFilters.ts');
 type CaveData3DEngine = import('./caveData3d.ts').CaveData3DEngine;
 type Scene3DBounds = import('./scene3dEngine.ts').Scene3DBounds;
 type Scene3DCameraState = import('./scene3dEngine.ts').Scene3DCameraState;
@@ -220,7 +220,7 @@ beforeEach(() => {
   responses.centerlines = () => Promise.resolve(centerlineCollection());
   responses.entrances = () => Promise.resolve(entranceCollection());
   responses.features = () => Promise.resolve({ type: 'FeatureCollection', features: [] });
-  setMapTagFilter(null);
+  setMapFilter(null);
 });
 
 afterEach(() => {
@@ -383,14 +383,28 @@ describe('attachCaveData3d', () => {
     handle.detach();
   });
 
-  it('carries the map-wide tag filter, so a filtered view means the same thing in both views', async () => {
-    setMapTagFilter('winter-2026');
+  it('carries the map-wide filter, so a filtered view means the same thing in both views', async () => {
+    const filter = tagChipFilter('winter-2026');
+    setMapFilter(filter);
     const engine = new FakeEngine();
     const handle = attachCaveData3d(engine);
     await vi.waitFor(() => expect(calls.entrances).toHaveLength(1));
 
-    expect(calls.entrances[0][2]).toBe('winter-2026');
-    expect(calls.features[0][1]).toEqual({ tag: 'winter-2026' });
+    const sent = mapFilterParams(filter);
+    expect(sent.filter).toBeTruthy();
+    expect(calls.entrances[0][2]).toEqual(sent);
+    expect(calls.features[0][1]).toEqual(sent);
+    handle.detach();
+  });
+
+  it('carries a saved filter by its id', async () => {
+    setMapFilter({ kind: 'saved', savedFilterId: '0e6f2c4a-5b1d-4c39-9b7e-2f8a1d3c4e5f' });
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(calls.entrances).toHaveLength(1));
+
+    expect(calls.entrances[0][2]).toEqual({ savedFilterId: '0e6f2c4a-5b1d-4c39-9b7e-2f8a1d3c4e5f' });
+    expect(calls.features[0][1]).toEqual({ savedFilterId: '0e6f2c4a-5b1d-4c39-9b7e-2f8a1d3c4e5f' });
     handle.detach();
   });
 

@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Camera3DState } from '../scene3d/camera3d.ts';
 import { setActiveViewCamera } from '../workspace/viewCamera.ts';
+import { emptyDocument, withWhere } from '../filters/document.ts';
+import { tagChipFilter, type MapFilter } from './mapFilters.ts';
 import { applyViewConfig, captureViewConfig, type WorkspaceUiState } from './viewConfig.ts';
 
 const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
@@ -20,7 +22,7 @@ const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
   libraryPhotoSources: [],
   geofileIds: [],
   rasters: [],
-  tagFilter: null,
+  mapFilter: null,
   overlayOpacity: { entrances: 0.5 },
   baseOpacity: { 3: 0.6 },
 };
@@ -259,5 +261,84 @@ describe('viewConfig cave-density grid', () => {
     expect(restored?.karstDensityVisible).toBe(false);
     expect(restored?.karstDensityMode).toBe('density');
     expect(applyViewConfig({ ...legacy, karstDensityMode: 'contours' })?.karstDensityMode).toBe('density');
+  });
+});
+
+describe('the filter a saved view carries', () => {
+  const savedFilterId = '0e6f2c4a-5b1d-4c39-9b7e-2f8a1d3c4e5f';
+  const lengthDocument = withWhere(emptyDocument(['feature']), 'feature', {
+    node: 'condition',
+    field: 'surveyedLength',
+    op: 'greaterThan',
+    values: [{ type: 'number', value: 300 }],
+  });
+
+  const roundTrip = (mapFilter: MapFilter | null) => {
+    const config = captureViewConfig({ ...baseUi, mapFilter });
+    return { config, restored: applyViewConfig(JSON.parse(JSON.stringify(config)))?.mapFilter };
+  };
+
+  it('stores a saved filter by its id alone, and restores it', () => {
+    const { config, restored } = roundTrip({ kind: 'saved', savedFilterId });
+    expect(config.savedFilterId).toBe(savedFilterId);
+    expect(config.filterDocument).toBeUndefined();
+    // Null, because a shared link reads this key and no other: left with a tag in it, the link
+    // would draw that tag's caves for a view that showed something else.
+    expect(config.tagFilter).toBeNull();
+    expect(restored).toEqual({ kind: 'saved', savedFilterId });
+  });
+
+  it('stores a document whole when the filter is not a saved one, and restores it', () => {
+    const { config, restored } = roundTrip({ kind: 'document', document: lengthDocument });
+    expect(config.savedFilterId).toBeUndefined();
+    expect(config.filterDocument).toEqual(lengthDocument);
+    expect(config.tagFilter).toBeNull();
+    expect(restored).toEqual({ kind: 'document', document: lengthDocument });
+  });
+
+  it('stores the tag chooser in the old key, so a shared link keeps drawing it', () => {
+    const { config, restored } = roundTrip(tagChipFilter('winter-2026'));
+    expect(config.tagFilter).toBe('winter-2026');
+    expect(config.savedFilterId).toBeUndefined();
+    expect(config.filterDocument).toBeUndefined();
+    expect(restored).toEqual(tagChipFilter('winter-2026'));
+  });
+
+  it('stores no filter as none', () => {
+    const { config, restored } = roundTrip(null);
+    expect(config.tagFilter).toBeNull();
+    expect(config.savedFilterId).toBeUndefined();
+    expect(config.filterDocument).toBeUndefined();
+    expect(restored).toBeNull();
+  });
+
+  it('reads a view saved before filters had a document as its tag', () => {
+    const legacy = {
+      configVersion: 1,
+      center: [25.3, 45.7],
+      zoom: 10,
+      entrancesVisible: true,
+      surfaceFeaturesVisible: true,
+      geofileIds: [],
+      rasters: [],
+      tagFilter: 'leads',
+    };
+    expect(applyViewConfig(legacy)?.mapFilter).toEqual(tagChipFilter('leads'));
+  });
+
+  it('restores no filter from forms it cannot read rather than guessing', () => {
+    const view = {
+      configVersion: 1,
+      center: [25.3, 45.7],
+      zoom: 10,
+      entrancesVisible: true,
+      surfaceFeaturesVisible: true,
+      geofileIds: [],
+      rasters: [],
+      tagFilter: null,
+      savedFilterId: 'not-an-id',
+      filterDocument: { version: 99, scope: [], sort: 'updated', descending: true },
+    };
+    expect(applyViewConfig(view)?.mapFilter).toBeNull();
   });
 });

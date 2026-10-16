@@ -56,6 +56,14 @@ export function decodeFilter(token: string | null | undefined): FilterDocument |
 }
 
 /**
+ * A document held somewhere other than a link — a saved view, say — or null when it is not one
+ * this version can read. The same shape check a token gets, so both roads refuse the same things.
+ */
+export function readFilterDocument(value: unknown): FilterDocument | null {
+  return isReadable(value) ? value : null;
+}
+
+/**
  * Whether a parsed object is a filter this version understands.
  *
  * Shape only, and deliberately shallow: whether the fields and operators inside are ones this

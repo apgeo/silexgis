@@ -5,6 +5,9 @@ import { viewCamera3dState } from '../workspace/viewCamera.ts';
 import { unreadableTileLayers } from './baseLayers.ts';
 import { isKarstDensityMode, type KarstDensityMode } from './densityCells.ts';
 import { getOverlayOrder, getWorkspaceMap } from './mapContext.ts';
+import { readFilterDocument } from '../filters/url.ts';
+import type { FilterDocument } from '../filters/types.ts';
+import { isSavedFilterId, tagChipFilter, tagOfMapFilter, type MapFilter } from './mapFilters.ts';
 
 /**
  * The saved-view config document (client-owned, versioned). Everything needed to
@@ -64,7 +67,26 @@ export interface ViewConfig {
   libraryPhotoSources?: string[];
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
+  /**
+   * The tag the view was narrowed to, when its filter is exactly the layer panel's tag chooser.
+   *
+   * Still written in this form, and only in this form, for that one case: a shared link reads this
+   * key and no other, so a tag-only view keeps drawing through its link exactly as it always has.
+   * Any other filter goes in `savedFilterId` or `filterDocument` with this left null, and a link to
+   * such a view draws no data at all — narrower than the view, never wider.
+   */
   tagFilter: string | null;
+  /**
+   * The saved filter the view's layers were drawn through. Added after v1 shipped; older views
+   * omit it. Stored by id, never copied out, so reopening the view runs the filter as it now
+   * stands and as the person reopening it may read it.
+   */
+  savedFilterId?: string;
+  /**
+   * The filter document, when the view's filter was not a saved one and not a plain tag. Added
+   * after v1 shipped; older views omit it.
+   */
+  filterDocument?: FilterDocument;
   /** Added after v1 shipped; older saved views omit it (treated as fully opaque). */
   overlayOpacity?: Record<string, number>;
   /** Per-base-layer opacity keyed by catalog id. Older saved views omit it (opaque). */
@@ -102,7 +124,8 @@ export interface WorkspaceUiState {
   libraryPhotoSources: string[];
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
-  tagFilter: string | null;
+  /** The filter the map's layers draw through, or null for none. */
+  mapFilter: MapFilter | null;
   overlayOpacity: Record<string, number>;
   baseOpacity: Record<number, number>;
   overlayOrder: string[];
@@ -141,7 +164,7 @@ export function captureViewConfig(
     libraryPhotoSources: ui.libraryPhotoSources,
     geofileIds: ui.geofileIds,
     rasters: ui.rasters,
-    tagFilter: ui.tagFilter,
+    ...viewFilterFields(ui.mapFilter),
     overlayOpacity: ui.overlayOpacity,
     baseOpacity: ui.baseOpacity,
     overlayOrder: getOverlayOrder(),
@@ -174,7 +197,7 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     libraryPhotoSources: parsed.libraryPhotoSources ?? [],
     geofileIds: parsed.geofileIds ?? [],
     rasters: parsed.rasters ?? [],
-    tagFilter: parsed.tagFilter ?? null,
+    mapFilter: viewFilterOf(parsed),
     overlayOpacity: parsed.overlayOpacity ?? {},
     baseOpacity: parsed.baseOpacity ?? {},
     overlayOrder: parsed.overlayOrder ?? [],
@@ -183,6 +206,36 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     // as "this view says nothing about the scene" instead of taking a camera somewhere impossible.
     camera3d: normalizeCamera3DState(parsed.camera3d) ?? undefined,
   };
+}
+
+/** The filter as a view stores it: a tag in its old key, a saved filter by id, anything else whole. */
+function viewFilterFields(
+  filter: MapFilter | null,
+): Pick<ViewConfig, 'tagFilter' | 'savedFilterId' | 'filterDocument'> {
+  const tag = tagOfMapFilter(filter);
+  if (filter === null || tag !== null) {
+    return { tagFilter: tag };
+  }
+  return filter.kind === 'saved'
+    ? { tagFilter: null, savedFilterId: filter.savedFilterId }
+    : { tagFilter: null, filterDocument: filter.document };
+}
+
+/**
+ * The filter a stored view names. Each form is checked rather than trusted — the server stores the
+ * document without looking inside — and a saved filter outranks a document, which outranks a tag.
+ * A filter the view holds in a form this version cannot read restores no filter rather than a
+ * guess; the server, not this, is what refuses a saved filter the reader may no longer use.
+ */
+function viewFilterOf(parsed: Partial<ViewConfig>): MapFilter | null {
+  if (isSavedFilterId(parsed.savedFilterId)) {
+    return { kind: 'saved', savedFilterId: parsed.savedFilterId };
+  }
+  const document = readFilterDocument(parsed.filterDocument);
+  if (document !== null) {
+    return { kind: 'document', document };
+  }
+  return typeof parsed.tagFilter === 'string' ? tagChipFilter(parsed.tagFilter) : null;
 }
 
 /**
