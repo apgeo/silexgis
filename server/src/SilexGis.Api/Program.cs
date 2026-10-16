@@ -718,10 +718,11 @@ internal static class MapLayerStartup
         }
 
         Log.Information(
-            "Map layer catalogue read from {Path}: {Added} added, {Updated} updated, {Withheld} withheld for want of an access key",
+            "Map layer catalogue read from {Path}: {Added} added, {Updated} updated, {Withheld} withheld for want of an access key, {SwitchedOff} switched off because their entry is now refused",
             path,
             report.Added,
             report.Updated,
-            report.WithheldForMissingKey);
+            report.WithheldForMissingKey,
+            report.SwitchedOffAsRefused);
     }
 }

@@ -106,6 +106,36 @@ public sealed class MapLayerKindTests : IAsyncLifetime, IDisposable, IClassFixtu
         published.Keys.ShouldNotContain($"Hand bare wmts {suffix}");
     }
 
+    /// <summary>
+    /// An entry edited into a shape this version refuses switches off the source it seeded on an
+    /// earlier start, rather than leaving it drawing as it was while the report says "skipped";
+    /// putting the entry right switches it back on.
+    /// </summary>
+    [Fact]
+    public async Task A_source_whose_entry_is_now_refused_stops_drawing_until_it_is_put_right()
+    {
+        var name = $"Changed {suffix}";
+        var asTiles = $$"""<silexgis-map-layers version="1"><layer name="{{name}}" url="https://t.example/{z}/{x}/{y}.png" /></silexgis-map-layers>""";
+        var asVector = $$"""<silexgis-map-layers version="1"><layer name="{{name}}" kind="vector" url="https://t.example/{z}/{x}/{y}.pbf" /></silexgis-map-layers>""";
+
+        await SeedAsync(asTiles);
+        (await PublishedAsync()).Keys.ShouldContain(name);
+
+        var report = await SeedAsync(asVector);
+        (await PublishedAsync()).Keys.ShouldNotContain(name, "a source the catalogue now refuses went on drawing");
+        report.Problems.ShouldContain(p => p.Contains($"'{name}'") && p.Contains("switched off"));
+
+        await SeedAsync(asTiles);
+        (await PublishedAsync()).Keys.ShouldContain(name);
+    }
+
+    private async Task<MapLayerSeedReport> SeedAsync(string catalogue)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await MapLayerSeeder.SeedAsync(catalogue, new Dictionary<string, string>(), db);
+    }
+
     private async Task<Dictionary<string, JsonNode>> PublishedAsync()
     {
         var response = await reader.GetAsync("/api/v1/map-layers");

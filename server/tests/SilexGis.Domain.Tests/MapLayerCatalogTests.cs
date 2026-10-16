@@ -310,12 +310,47 @@ public class MapLayerCatalogTests
     [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/wmts" layer="a" />""", "matrixSet")]
     [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/{TileMatrix}/{TileCol}.png" layer="a" matrixSet="m" />""", "{TileRow}")]
     [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/wmts" layer="a" matrixSet="m" crs="EPSG:2056" />""", "EPSG:2056")]
+    // The access key's placeholder is no licence for another one beside it, in either kind.
+    [InlineData("""<layer name="Bad" kind="wms" apiKey="Agency" url="https://maps.example.gov/wms?key={apikey}&amp;x={z}" layers="a" />""", "{z}")]
+    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/wmts?TileMatrix={z}" layer="a" matrixSet="m" />""", "{z}")]
+    [InlineData("""<layer name="Bad" kind="wmts" apiKey="Agency" url="https://tiles.example.gov/wmts?key={apikey}&amp;level={level}" layer="a" matrixSet="m" />""", "{level}")]
+    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/{TileMatrix}/{TileRow}/{TileCol}.{format}" layer="a" matrixSet="m" />""", "{format}")]
     public void A_service_entry_that_cannot_be_drawn_is_skipped_and_says_why(string entry, string reason)
     {
         var result = MapLayerCatalog.Read(Doc(entry));
 
         Assert.Empty(result.Layers);
         Assert.Contains(reason, Assert.Single(result.Problems).Message, StringComparison.Ordinal);
+        Assert.Equal(["Bad"], result.RefusedNames);
+    }
+
+    [Fact]
+    public void A_wmts_template_may_name_the_matrix_set_the_style_and_the_layer_and_a_key()
+    {
+        var result = MapLayerCatalog.Read(Doc(
+            """
+            <layer name="Filled" kind="wmts" apiKey="Agency"
+                   url="https://tiles.example.gov/{layer}/{Style}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png?key={apikey}"
+                   layer="topo" matrixSet="google3857" />
+            """));
+
+        Assert.Empty(result.Problems);
+        Assert.Single(result.Layers);
+        Assert.Empty(result.RefusedNames);
+    }
+
+    [Fact]
+    public void A_name_refused_once_and_read_once_is_not_a_refused_name()
+    {
+        var result = MapLayerCatalog.Read(Doc(
+            """
+            <layer name="Twice" kind="vector" url="https://tiles.example/{z}/{x}/{y}.pbf" />
+            <layer name="Twice" url="https://tiles.example/{z}/{x}/{y}.png" />
+            <layer name="Once" kind="cog" url="https://data.example/dem.tif" />
+            """));
+
+        Assert.Equal("Twice", Assert.Single(result.Layers).Name);
+        Assert.Equal(["Once"], result.RefusedNames);
     }
 
     [Theory]

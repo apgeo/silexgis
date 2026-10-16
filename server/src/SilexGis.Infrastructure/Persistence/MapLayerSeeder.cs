@@ -12,11 +12,16 @@ namespace SilexGis.Infrastructure.Persistence;
 /// logs is the application, and a seeder that reaches for a logger is a seeder that cannot be
 /// tested without one.
 /// </remarks>
+/// <param name="SwitchedOffAsRefused">
+/// Stored sources switched off because the file still names them but now refuses every entry of
+/// that name — an entry edited to a kind this version cannot draw, say.
+/// </param>
 public sealed record MapLayerSeedReport(
     int Added,
     int Updated,
     int WithheldForMissingKey,
-    IReadOnlyList<string> Problems);
+    IReadOnlyList<string> Problems,
+    int SwitchedOffAsRefused = 0);
 
 /// <summary>
 /// Brings the stored layer catalogue into line with the tile sources this installation declares.
@@ -32,6 +37,12 @@ public sealed record MapLayerSeedReport(
 /// it: what an administrator of this installation decided about copying the source into
 /// documents (<see cref="MapLayer.InDocumentsChoice"/>). The file's own answer is written to its
 /// own column on every start; the decision beside it is never read or written here.
+/// </para>
+/// <para>
+/// A name the file still declares but refuses every entry of is the file's word too: the stored
+/// source of that name is switched off rather than left drawing as it was before the edit that
+/// made it unreadable. It is not deleted — the row is what the operator compares against the
+/// report line saying why — and correcting the entry and restarting switches it back on.
 /// </para>
 /// <para>
 /// Idempotent, and it has to be: this runs on every start, so applying it twice must equal
@@ -83,8 +94,19 @@ public static class MapLayerSeeder
             }
         }
 
+        var switchedOff = 0;
+        foreach (var name in catalog.RefusedNames)
+        {
+            if (stored.TryGetValue(name, out var row) && row.Enabled)
+            {
+                row.Enabled = false;
+                switchedOff++;
+                problems.Add($"'{row.Name}' was stored from an earlier start and is switched off until its entry can be read again");
+            }
+        }
+
         await db.SaveChangesAsync(ct);
-        return new MapLayerSeedReport(added, updated, withheld, problems);
+        return new MapLayerSeedReport(added, updated, withheld, problems, switchedOff);
     }
 
     private static MapLayer Apply(MapLayer row, MapLayerEntry entry, string? url, bool enabled)

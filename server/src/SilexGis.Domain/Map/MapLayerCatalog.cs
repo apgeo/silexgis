@@ -66,9 +66,16 @@ public sealed record MapLayerCatalogProblem(string Message);
 /// nobody ever finds out the source they added is not there. So the good ones are returned and the
 /// problems are returned beside them, for the caller to log.
 /// </remarks>
+/// <param name="RefusedNames">
+/// Names the file declares that it gives no usable entry for: every entry of that name was
+/// skipped. A source stored from an earlier start under one of these names is still in the table,
+/// so the seeder switches it off — otherwise an entry edited into a shape this version refuses
+/// would go on drawing as it was before the edit, with the report saying it had been skipped.
+/// </param>
 public sealed record MapLayerCatalogResult(
     IReadOnlyList<MapLayerEntry> Layers,
-    IReadOnlyList<MapLayerCatalogProblem> Problems);
+    IReadOnlyList<MapLayerCatalogProblem> Problems,
+    IReadOnlyList<string> RefusedNames);
 
 /// <summary>
 /// Reads the XML file in which an installation declares which tile sources it offers.
@@ -109,11 +116,12 @@ public static class MapLayerCatalog
         }
         catch (System.Xml.XmlException ex)
         {
-            return new MapLayerCatalogResult([], [new MapLayerCatalogProblem($"not valid XML: {ex.Message}")]);
+            return new MapLayerCatalogResult([], [new MapLayerCatalogProblem($"not valid XML: {ex.Message}")], []);
         }
 
         var layers = new List<MapLayerEntry>();
         var problems = new List<MapLayerCatalogProblem>();
+        var declaredNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // Position in the file is the order in the panel. It is the only ordering an operator can
         // express by editing the thing they are already editing, and an explicit sort attribute
         // that has to be renumbered to insert a row in the middle is the kind of chore that ends
@@ -131,6 +139,8 @@ public static class MapLayerCatalog
                 problems.Add(new MapLayerCatalogProblem($"entry {index / 10} has no name; skipped"));
                 continue;
             }
+
+            declaredNames.Add(name.Trim());
 
             if (string.IsNullOrWhiteSpace(url))
             {
@@ -278,7 +288,8 @@ public static class MapLayerCatalog
             deduped[layer.Name] = layer;
         }
 
-        return new MapLayerCatalogResult([.. deduped.Values], problems);
+        var refused = declaredNames.Where(n => !deduped.ContainsKey(n)).Order(StringComparer.OrdinalIgnoreCase);
+        return new MapLayerCatalogResult([.. deduped.Values], problems, [.. refused]);
     }
 
     /// <summary>
@@ -312,11 +323,12 @@ public static class MapLayerCatalog
             return null;
         }
 
-        if (url.Contains('{', StringComparison.Ordinal) && !url.Contains(ApiKeyPlaceholder, StringComparison.Ordinal))
+        if (StrayPlaceholder(url, []) is { } stray)
         {
-            // A WMS url is the service's address; the map adds the request itself.
+            // A WMS url is the service's address; the map adds the request itself, and a
+            // placeholder beside the key's would be sent to the service as it stands.
             problems.Add(new MapLayerCatalogProblem(
-                $"'{name}' is a wms layer whose url holds a {{placeholder}}; a wms url is the service address alone; skipped"));
+                $"'{name}' is a wms layer whose url holds {stray}; a wms url is the service address alone; skipped"));
             return null;
         }
 
@@ -367,6 +379,17 @@ public static class MapLayerCatalog
             return null;
         }
 
+        // Every placeholder has to be one both maps fill. The flat map and the 3D view each fill a
+        // REST template's tile coordinates, its matrix set, its style and its layer; anything else
+        // is sent to the service as it stands, and a key-value address is filled by neither.
+        if (StrayPlaceholder(url, rest ? WmtsRestPlaceholders : []) is { } stray)
+        {
+            problems.Add(new MapLayerCatalogProblem(rest
+                ? $"'{name}' is a wmts template holding {stray}, which the map does not fill (it fills {string.Join(", ", WmtsRestPlaceholders)}); skipped"
+                : $"'{name}' is a wmts key-value address holding {stray}; a key-value address is the service address alone; skipped"));
+            return null;
+        }
+
         var crs = Crs(element, name, "wmts", problems);
         if (crs is null)
         {
@@ -380,6 +403,33 @@ public static class MapLayerCatalog
             Trimmed(element.Attribute("style")) ?? "default",
             crs,
             Trimmed(element.Attribute("matrixIdPrefix")) ?? string.Empty);
+    }
+
+    /// <summary>
+    /// The placeholders both the flat map and the 3D view fill in a WMTS REST template. The tile
+    /// coordinates must be spelt as here; the 3D engine fills the matrix set in either case and the
+    /// style and layer in the spellings listed, which the flat map also fills.
+    /// </summary>
+    private static readonly string[] WmtsRestPlaceholders =
+        ["{TileMatrix}", "{TileRow}", "{TileCol}", "{TileMatrixSet}", "{Style}", "{style}", "{layer}"];
+
+    /// <summary>The first placeholder in a url that is neither the access key's nor one of <paramref name="allowed"/>, or null.</summary>
+    private static string? StrayPlaceholder(string url, IReadOnlyList<string> allowed)
+    {
+        var rest = url.Replace(ApiKeyPlaceholder, string.Empty, StringComparison.Ordinal);
+        foreach (var placeholder in allowed)
+        {
+            rest = rest.Replace(placeholder, string.Empty, StringComparison.Ordinal);
+        }
+
+        var open = rest.IndexOf('{', StringComparison.Ordinal);
+        if (open < 0)
+        {
+            return null;
+        }
+
+        var close = rest.IndexOf('}', open);
+        return close < 0 ? rest[open..] : rest[open..(close + 1)];
     }
 
     private static string? Crs(XElement element, string name, string kindName, List<MapLayerCatalogProblem> problems)
