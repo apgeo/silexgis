@@ -21,6 +21,20 @@ import { gotoRoute, login, mapAddress } from './helpers.ts';
  */
 
 /**
+ * Whether a cave-list request asks for this text. The registry sends its conditions as one filter
+ * token — base64url over the filter document — so the text is read out of the token rather than
+ * looked for in the address itself.
+ */
+function asksFor(url: string, text: string): boolean {
+  const token = new URL(url).searchParams.get('filter');
+  if (token === null) {
+    return url.includes(text);
+  }
+  const json = Buffer.from(token.replaceAll('-', '+').replaceAll('_', '/'), 'base64').toString('utf8');
+  return json.includes(text);
+}
+
+/**
  * Narrows the cave list to this run's caves and waits for the list to have answered about them.
  * By the run's stamp, which both caves carry and which is one unbroken word: what is waited for
  * is the request that names it, and a word has one spelling in an address where a name with
@@ -28,7 +42,7 @@ import { gotoRoute, login, mapAddress } from './helpers.ts';
  */
 async function searchCaves(page: Page, stamp: string) {
   const answered = page.waitForResponse(
-    (r) => r.url().includes('/api/v1/caves?') && r.url().includes(stamp) && r.ok(),
+    (r) => r.url().includes('/api/v1/caves?') && asksFor(r.url(), stamp) && r.ok(),
     { timeout: 30_000 },
   );
   await page.getByPlaceholder('Search name or toponym…').fill(stamp);

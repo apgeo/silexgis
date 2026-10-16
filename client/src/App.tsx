@@ -38,6 +38,7 @@ const TripImportPage = lazy(() => import('./pages/trips/TripImportPage.tsx'));
 const SpeleolocImportPage = lazy(() => import('./pages/trips/SpeleolocImportPage.tsx'));
 const TermRulesPage = lazy(() => import('./pages/admin/TermRulesPage.tsx'));
 const ChecklistsPage = lazy(() => import('./pages/checklists/ChecklistsPage.tsx'));
+const SavedFiltersPage = lazy(() => import('./pages/filters/SavedFiltersPage.tsx'));
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const MyTripsPage = lazy(() => import('./pages/trips/MyTripsPage.tsx'));
@@ -184,6 +185,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/catalogue/speologie/import', element: <Loadable><SpeologieImportPage /></Loadable> },
           { path: '/admin/term-rules', element: <Loadable><TermRulesPage /></Loadable> },
           { path: '/checklists', element: <Loadable><ChecklistsPage /></Loadable> },
+          { path: '/saved-filters', element: <Loadable><SavedFiltersPage /></Loadable> },
           { path: '/calendar', element: <Loadable><CalendarPage /></Loadable> },
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
           { path: '/trip-logs/mine', element: <Loadable><MyTripsPage /></Loadable> },

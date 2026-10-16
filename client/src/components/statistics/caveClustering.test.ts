@@ -75,6 +75,8 @@ describe('the grouping is asked the same question the points answer', () => {
     minLength: 100,
     bbox: '1,2,3,4',
     tag: 'survey',
+    filter: 'eyJ2ZXJzaW9uIjox',
+    savedFilterId: 'f-1',
   };
 
   /** These choose which of the narrowed caves are drawn, not which caves the narrowing holds. */

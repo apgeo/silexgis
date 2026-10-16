@@ -534,6 +534,62 @@
     "dockToSide": "Dock to the side of the map",
     "floatAsDialog": "Float as a dialog"
   },
+  "caveRegistry": {
+    "unreadableLink": "The filter in this link could not be read, so every cave is shown. Ask whoever sent it for a fresh link.",
+    "regionPlaceholder": "Region",
+    "minLengthPlaceholder": "Length at least (m)",
+    "filterRefused": "This filter could not be run with your access. Change or clear the controls above.",
+    "savedUnreadable": "That saved filter cannot be read with your access, so it was not applied.",
+    "savedNotAboutCaves": "That saved filter is not about caves.",
+    "saved": "Saved as “{{name}}”.",
+    "applySaved": "Apply a saved filter…",
+    "noSaved": "No saved filters yet",
+    "saveAs": "Save as filter…",
+    "manage": "Saved filters",
+    "forget": "Stop naming this saved filter",
+    "active": "Saved filter: {{name}}",
+    "activeUnavailable": "Saved filter not available to you",
+    "changed": "changed since",
+    "extra": "This filter also has conditions these controls do not show ({{count}}). They still narrow the list.",
+    "clearExtra": "Remove them",
+    "saveTitle": "Save these conditions as a filter"
+  },
+  "savedFilters": {
+    "title": "Saved filters",
+    "intro": "A saved filter is a question you keep. Sharing one with a caving group lets its members ask it; each of them is answered with what they themselves may see.",
+    "toRegistry": "Cave registry",
+    "empty": "No saved filters. Save one from the cave registry.",
+    "name": "Name",
+    "description": "Description",
+    "asks": "Asks for",
+    "cannotShow": "Cannot be shown",
+    "audience": "Who can use it",
+    "audienceHint": "Sharing gives the group the question only — never access to anything it finds.",
+    "private": "Only me",
+    "someGroup": "A caving group",
+    "sharedWith": "Members of {{name}}",
+    "state": "State",
+    "states": {
+      "ready": "Ready",
+      "stale": "Out of date",
+      "unreadable": "Cannot be read"
+    },
+    "staleHint": "A type or tag this filter names has since been removed, so that condition matches nothing.",
+    "unreadableHint": "This filter asks something you cannot ask with your access, or was written in a form this version cannot read.",
+    "open": "Open in the cave registry",
+    "edit": "Rename, describe or share",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this saved filter? Nobody it was shared with will be able to use it.",
+    "notAvailable": "not available to you",
+    "parts": {
+      "search": "Name contains “{{text}}”",
+      "region": "Region contains “{{text}}”",
+      "minLength": "At least {{length}} m long",
+      "caveType": "Type: {{name}}",
+      "tag": "Tag: {{name}}",
+      "more": "{{count}} more conditions"
+    }
+  },
   "caves": {
     "title": "Caves",
     "newCave": "New cave",
@@ -5055,7 +5111,9 @@
       "region": "Region",
       "rockType": "Rock type",
       "surveyedLength": "Surveyed length (m)",
-      "depth": "Depth (m)"
+      "depth": "Depth (m)",
+      "caveType": "Cave type",
+      "otherToponyms": "Other names"
     },
     "problems": {
       "noWorlds": "Choose at least one kind of object to search.",

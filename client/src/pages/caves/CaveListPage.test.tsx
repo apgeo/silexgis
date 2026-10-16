@@ -4,16 +4,50 @@ import { App as AntApp } from 'antd';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import i18n from '../../i18n';
+import { caveRegistryDocument, readCaveRegistryAddress } from '../../filters/caveRegistry.ts';
+import { encodeFilter } from '../../filters/url.ts';
 
-const { canSpy, doorSpy } = vi.hoisted(() => ({ canSpy: vi.fn(), doorSpy: vi.fn() }));
+const { canSpy, doorSpy, cavesSpy, downloadSpy, savedFilters } = vi.hoisted(() => ({
+  canSpy: vi.fn(),
+  doorSpy: vi.fn(),
+  cavesSpy: vi.fn(),
+  downloadSpy: vi.fn(),
+  savedFilters: { current: [] as unknown[] },
+}));
 
 vi.mock('../../api/hooks.ts', () => ({
   useCan: (domain: string, action: string) => canSpy(domain, action),
   useCreateDoor: (domain: string) => doorSpy(domain),
-  useCaves: () => ({ data: { items: [], page: 1, pageSize: 20, totalItems: 0 }, isFetching: false }),
-  useCaveTypes: () => ({ data: [] }),
-  useTags: () => ({ data: [] }),
+  useCaves: (params: unknown) => {
+    cavesSpy(params);
+    return { data: { items: [], page: 1, pageSize: 20, totalItems: 0 }, isFetching: false, error: null };
+  },
+  useCaveTypes: () => ({ data: [{ id: 3, name: 'Karst cave' }] }),
+  useTags: () => ({ data: [{ id: 1, slug: 'bats', name: 'Bats' }] }),
 }));
+
+vi.mock('../../api/hooks/savedFilters.ts', async () => {
+  const actual = await vi.importActual<typeof import('../../api/hooks/savedFilters.ts')>(
+    '../../api/hooks/savedFilters.ts',
+  );
+  return {
+    documentOf: actual.documentOf,
+    useSavedFilters: () => ({ data: savedFilters.current, isSuccess: true }),
+    useCreateSavedFilter: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  };
+});
+
+vi.mock('../../api/download.ts', async () => {
+  const actual = await vi.importActual<typeof import('../../api/download.ts')>('../../api/download.ts');
+  return {
+    ...actual,
+    downloadFile: (url: string) => {
+      downloadSpy(url);
+      return Promise.resolve();
+    },
+  };
+});
 
 // Neither is what this is about, and each reads the server on its own account.
 vi.mock('../../components/statistics/CaveDistributionPanel.tsx', () => ({ default: () => null }));
@@ -22,14 +56,19 @@ vi.mock('../../components/caves/KarstLinkExportModal.tsx', () => ({ default: () 
 const { default: CaveListPage } = await import('./CaveListPage.tsx');
 
 function Address() {
-  const { pathname } = useLocation();
-  return <span data-testid="address">{pathname}</span>;
+  const location = useLocation();
+  return (
+    <>
+      <span data-testid="address">{location.pathname}</span>
+      <span data-testid="search">{location.search}</span>
+    </>
+  );
 }
 
-function show() {
+function show(entry = '/caves') {
   return render(
     <AntApp>
-      <MemoryRouter initialEntries={['/caves']}>
+      <MemoryRouter initialEntries={[entry]}>
         <CaveListPage />
         <Address />
       </MemoryRouter>
@@ -40,9 +79,13 @@ function show() {
 const NO_DOOR = { canCreate: false, unbound: false, cavingGroups: [] };
 
 afterEach(cleanup);
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en');
   canSpy.mockReset().mockReturnValue(false);
   doorSpy.mockReset().mockReturnValue(NO_DOOR);
+  cavesSpy.mockReset();
+  downloadSpy.mockReset();
+  savedFilters.current = [];
 });
 
 /**
@@ -73,5 +116,85 @@ describe('the door from the cave list to the deleted caves and features', () => 
     show();
 
     expect(screen.getByTestId('cave-list-deleted')).toBeTruthy();
+  });
+});
+
+describe('the registry read from its address', () => {
+  it('fills the controls from a link and asks the list with that link’s filter', () => {
+    const token = encodeFilter(caveRegistryDocument({ region: 'Bihor', search: 'urs', tag: 'bats' })!);
+    show(`/caves?filter=${token}&page=2`);
+
+    expect(screen.getByTestId('cave-registry-region')).toHaveValue('Bihor');
+    expect(screen.getByDisplayValue('urs')).toBeInTheDocument();
+    expect(cavesSpy).toHaveBeenLastCalledWith(expect.objectContaining({ filter: token, page: 2 }));
+  });
+
+  it('opens unfiltered, with a notice, when the link’s filter cannot be read', () => {
+    show('/caves?filter=eyJ2ZXJzaW9uIjox');
+
+    expect(screen.getByTestId('cave-registry-unreadable-link')).toBeInTheDocument();
+    expect(cavesSpy).toHaveBeenLastCalledWith(expect.objectContaining({ filter: undefined }));
+  });
+
+  it('writes a changed control into the address, back on the first page', () => {
+    show('/caves?page=3');
+
+    const region = screen.getByTestId('cave-registry-region');
+    fireEvent.change(region, { target: { value: 'Alba' } });
+    fireEvent.blur(region);
+
+    const state = readCaveRegistryAddress(new URLSearchParams(screen.getByTestId('search').textContent!));
+    expect(state.controls).toEqual({ region: 'Alba' });
+    expect(state.page).toBe(1);
+  });
+
+  it('takes a minimum length when Enter is pressed in its field', () => {
+    show('/caves');
+
+    const length = screen.getByTestId('cave-registry-min-length');
+    fireEvent.change(length, { target: { value: '300' } });
+    fireEvent.keyDown(length, { key: 'Enter', code: 'Enter', keyCode: 13 });
+
+    const state = readCaveRegistryAddress(new URLSearchParams(screen.getByTestId('search').textContent!));
+    expect(state.controls).toEqual({ minLength: 300 });
+  });
+
+  it('exports with the list’s own filter, region, tag and length included', async () => {
+    const token = encodeFilter(caveRegistryDocument({ region: 'Bihor', tag: 'bats', minLength: 300 })!);
+    show(`/caves?filter=${token}`);
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: /export/i }));
+    fireEvent.click(await screen.findByText('CSV'));
+
+    expect(downloadSpy).toHaveBeenCalledTimes(1);
+    const url = new URL(downloadSpy.mock.calls[0]![0] as string, 'http://x');
+    expect(url.pathname).toBe('/api/v1/export/caves');
+    expect(url.searchParams.get('filter')).toBe(token);
+  });
+
+  it('marks the applied saved filter as changed once the controls move', () => {
+    const document = caveRegistryDocument({ region: 'Bihor' })!;
+    savedFilters.current = [{
+      id: 'f-1',
+      name: 'Bihor',
+      description: null,
+      document,
+      state: 'ready',
+      cavingGroupId: null,
+      visibility: 'private',
+      mine: true,
+      createdAt: '',
+      updatedAt: '',
+    }];
+
+    show(`/caves?filter=${encodeFilter(document)}&saved=f-1`);
+    expect(screen.getByTestId('cave-registry-active-filter')).toHaveTextContent('Saved filter: Bihor');
+    expect(screen.queryByTestId('cave-registry-active-changed')).toBeNull();
+
+    const region = screen.getByTestId('cave-registry-region');
+    fireEvent.change(region, { target: { value: 'Alba' } });
+    fireEvent.blur(region);
+
+    expect(screen.getByTestId('cave-registry-active-changed')).toBeInTheDocument();
   });
 });

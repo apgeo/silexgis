@@ -149,6 +149,10 @@ export interface CaveListParams {
   minLength?: number;
   bbox?: string;
   tag?: string;
+  /** A filter document as its link token — the registry's own controls compose one. */
+  filter?: string;
+  /** A saved filter, run under this account's access. */
+  savedFilterId?: string;
 }
 export type AuditEntry = components['schemas']['AuditEntryDto'];
 

@@ -55,6 +55,10 @@ const listNarrowings: Record<keyof CaveListParams, 'carried' | 'unaskable' | 'or
   tag: 'unaskable',
   minLength: 'unaskable',
   bbox: 'unaskable',
+  // A filter document says more than the grouping route can be asked; the registry passes its
+  // plain controls instead whenever they say everything the document does.
+  filter: 'unaskable',
+  savedFilterId: 'unaskable',
   page: 'ordering',
   pageSize: 'ordering',
   sort: 'ordering',

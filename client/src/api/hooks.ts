@@ -12,6 +12,7 @@ export * from './hooks/admin.ts';
 export * from './hooks/taxonomies.ts';
 export * from './hooks/map.ts';
 export * from './hooks/filters.ts';
+export * from './hooks/savedFilters.ts';
 export * from './hooks/mapViews.ts';
 export * from './hooks/caves.ts';
 export * from './hooks/surveys.ts';

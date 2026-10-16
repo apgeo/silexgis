@@ -147,7 +147,15 @@ function buildUrl(path: string, params: Record<string, string | number | undefin
 /** GET /api/v1/export/caves — caves (main entrance points) in the requested format. */
 export function caveExportUrl(
   format: string,
-  filters: { caveTypeId?: number; region?: string; search?: string; bbox?: string } = {},
+  filters: {
+    caveTypeId?: number;
+    region?: string;
+    search?: string;
+    bbox?: string;
+    /** The cave registry's filter document as its link token, so the file holds the listed caves. */
+    filter?: string;
+    savedFilterId?: string;
+  } = {},
 ): string {
   return buildUrl('/api/v1/export/caves', { format, ...filters });
 }

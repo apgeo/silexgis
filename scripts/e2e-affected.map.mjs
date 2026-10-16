@@ -40,7 +40,7 @@ export const specs = {
     'map-editing.spec.ts', 'cave-attachments.spec.ts', 'cave-grant-link.spec.ts', 'cave-levels.spec.ts', 'cave-morphometry.spec.ts',
     'cave-statistics.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
     'overburden-profile.spec.ts', 'survey-sources.spec.ts', 'qr-landing.spec.ts',
-    'feature-restore.spec.ts',
+    'feature-restore.spec.ts', 'cave-registry-filters.spec.ts',
   ],
   cavingGroups: [
     'announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts', 'caver-caving-groups.spec.ts',
@@ -55,11 +55,17 @@ export const specs = {
     'expeditions.spec.ts', 'expedition-sharing.spec.ts', 'calendar.spec.ts',
     'expedition-watch.spec.ts', 'expedition-watch-mobile.spec.ts',
   ],
-  exports: ['karstlink-export.spec.ts', 'registry-statistics.spec.ts', 'trip-list.spec.ts'],
+  exports: [
+    'karstlink-export.spec.ts', 'registry-statistics.spec.ts', 'trip-list.spec.ts',
+    'cave-registry-filters.spec.ts',
+  ],
   featureSets: ['doline-morphometry.spec.ts', 'vector-import.spec.ts'],
   featureShares: [],
   files: ['uploads.spec.ts', 'documents.spec.ts', 'gallery.spec.ts', 'cave-attachments.spec.ts'],
-  filters: ['trip-list.spec.ts', 'trip-map.spec.ts', 'registry-statistics.spec.ts'],
+  filters: [
+    'trip-list.spec.ts', 'trip-map.spec.ts', 'registry-statistics.spec.ts',
+    'cave-registry-filters.spec.ts',
+  ],
   geoFeatures: [
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
     'photo-import.spec.ts', 'feature-restore.spec.ts',
@@ -183,6 +189,7 @@ export const clientAreas = {
   'client/src/pages/events/': 'events',
   'client/src/pages/expeditions/': 'expeditions',
   'client/src/pages/features/': 'geoFeatures',
+  'client/src/pages/filters/': 'filters',
   'client/src/pages/gallery/': 'photos',
   'client/src/pages/geodata/': ['geofiles', 'georeferencedMaps', 'terrain'],
   'client/src/pages/links/': 'resLinks',

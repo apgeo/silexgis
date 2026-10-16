@@ -534,6 +534,62 @@
     "dockToSide": "Andochează lângă hartă",
     "floatAsDialog": "Afișează ca dialog"
   },
+  "caveRegistry": {
+    "unreadableLink": "Filtrul din acest link nu a putut fi citit, așa că sunt afișate toate peșterile. Cereți celui care l-a trimis un link nou.",
+    "regionPlaceholder": "Regiune",
+    "minLengthPlaceholder": "Lungime de cel puțin (m)",
+    "filterRefused": "Acest filtru nu poate fi rulat cu drepturile dumneavoastră. Modificați sau goliți câmpurile de mai sus.",
+    "savedUnreadable": "Filtrul salvat nu poate fi citit cu drepturile dumneavoastră, așa că nu a fost aplicat.",
+    "savedNotAboutCaves": "Filtrul salvat nu se referă la peșteri.",
+    "saved": "Salvat ca „{{name}}”.",
+    "applySaved": "Aplicați un filtru salvat…",
+    "noSaved": "Niciun filtru salvat încă",
+    "saveAs": "Salvați ca filtru…",
+    "manage": "Filtre salvate",
+    "forget": "Nu mai numiți acest filtru salvat",
+    "active": "Filtru salvat: {{name}}",
+    "activeUnavailable": "Filtru salvat indisponibil pentru dumneavoastră",
+    "changed": "modificat între timp",
+    "extra": "Acest filtru mai are condiții pe care aceste câmpuri nu le arată ({{count}}). Ele restrâng lista în continuare.",
+    "clearExtra": "Eliminați-le",
+    "saveTitle": "Salvați aceste condiții ca filtru"
+  },
+  "savedFilters": {
+    "title": "Filtre salvate",
+    "intro": "Un filtru salvat este o întrebare pe care o păstrați. Dacă îl partajați cu un grup de speologie, membrii lui o pot pune; fiecăruia i se răspunde cu ce are el însuși dreptul să vadă.",
+    "toRegistry": "Registrul peșterilor",
+    "empty": "Niciun filtru salvat. Salvați unul din registrul peșterilor.",
+    "name": "Nume",
+    "description": "Descriere",
+    "asks": "Caută",
+    "cannotShow": "Nu poate fi afișat",
+    "audience": "Cine îl poate folosi",
+    "audienceHint": "Partajarea dă grupului doar întrebarea — niciodată acces la ce găsește.",
+    "private": "Doar eu",
+    "someGroup": "Un grup de speologie",
+    "sharedWith": "Membrii {{name}}",
+    "state": "Stare",
+    "states": {
+      "ready": "Pregătit",
+      "stale": "Învechit",
+      "unreadable": "Nu poate fi citit"
+    },
+    "staleHint": "Un tip sau o etichetă numită de acest filtru a fost ștearsă între timp, așa că acea condiție nu mai găsește nimic.",
+    "unreadableHint": "Acest filtru întreabă ceva ce nu puteți întreba cu drepturile dumneavoastră sau a fost scris într-o formă pe care această versiune nu o poate citi.",
+    "open": "Deschideți în registrul peșterilor",
+    "edit": "Redenumiți, descrieți sau partajați",
+    "delete": "Ștergeți",
+    "deleteConfirm": "Ștergeți acest filtru salvat? Nimeni dintre cei cu care a fost partajat nu îl va mai putea folosi.",
+    "notAvailable": "indisponibil pentru dumneavoastră",
+    "parts": {
+      "search": "Numele conține „{{text}}”",
+      "region": "Regiunea conține „{{text}}”",
+      "minLength": "Cel puțin {{length}} m lungime",
+      "caveType": "Tip: {{name}}",
+      "tag": "Etichetă: {{name}}",
+      "more": "încă {{count}} condiții"
+    }
+  },
   "caves": {
     "title": "Peșteri",
     "newCave": "Peșteră nouă",
@@ -5055,7 +5111,9 @@
       "region": "Regiune",
       "rockType": "Tip de rocă",
       "surveyedLength": "Lungime cartată (m)",
-      "depth": "Denivelare (m)"
+      "depth": "Denivelare (m)",
+      "caveType": "Tip de peșteră",
+      "otherToponyms": "Alte denumiri"
     },
     "problems": {
       "noWorlds": "Alege cel puțin un fel de obiect de căutat.",

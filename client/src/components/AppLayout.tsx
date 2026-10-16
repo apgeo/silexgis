@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
+  FilterOutlined,
   LogoutOutlined,
   SettingOutlined,
   UserOutlined,
@@ -204,6 +205,14 @@ export default function AppLayout() {
                   label: t('nav.settings'),
                   // Straight to the first section, so the index redirect never shows.
                   onClick: () => navigate('/settings/profile'),
+                },
+                {
+                  // With the account rather than on the rail: a saved filter is somebody's own
+                  // object, made from a list screen and kept wherever they work.
+                  key: 'saved-filters',
+                  icon: <FilterOutlined />,
+                  label: t('savedFilters.title'),
+                  onClick: () => navigate('/saved-filters'),
                 },
                 {
                   key: 'signout',

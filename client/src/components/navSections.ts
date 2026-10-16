@@ -34,7 +34,8 @@ export const NAV_SECTIONS = [
   // The three the rail offers under configuration. Missing here, they matched nothing and
   // fell through to the map, so opening trip purposes lit the map item instead.
   'admin/trip-types', 'admin/participant-roles', 'admin/camp-roster-roles', 'admin/report-templates',
-  'settings', 'notifications',
+  // Reached from the account menu, like settings: nothing on the rail lights up while it is open.
+  'settings', 'notifications', 'saved-filters',
 ] as const;
 
 /**
