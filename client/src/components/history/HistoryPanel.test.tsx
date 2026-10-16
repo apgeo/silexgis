@@ -107,4 +107,41 @@ describe('HistoryPanel', () => {
       events = before;
     }
   });
+
+  it('says how large a geometry was when the trail recorded only a summary of it', () => {
+    const before = events;
+    const summary = (sha256: string, points: number) => ({
+      geometryType: 'MultiLineString',
+      points,
+      sha256,
+      omitted: true,
+    });
+    events = [
+      {
+        id: 4,
+        at: '2026-07-14T12:00:00Z',
+        userId: null,
+        userName: 'Ana',
+        action: 'updated',
+        entityType: 'Centerline',
+        entityId: 'l1',
+        changes: { Geom: { old: summary('aa', 48211), new: summary('bb', 48230) } } as unknown as HistoryEvent['changes'],
+        redactedProperties: [],
+      },
+    ];
+    try {
+      render(
+        <App>
+          <HistoryPanel entityType="centerline" entityId="l1" restore={{ entityType: 'Centerline', onRestore: vi.fn() }} />
+        </App>,
+      );
+
+      expect(screen.getByText('Geometry of 48211 points (too large to record in full)')).toBeInTheDocument();
+      expect(screen.getByText('Geometry of 48230 points (too large to record in full)')).toBeInTheDocument();
+      expect(screen.queryByText(/sha256/)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Restore this value')).not.toBeInTheDocument();
+    } finally {
+      events = before;
+    }
+  });
 });

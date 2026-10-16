@@ -2487,6 +2487,7 @@
     "title": "Istoric",
     "empty": "Nicio modificare înregistrată încă.",
     "hidden": "Valoare ascunsă (locație protejată)",
+    "geometrySummary": "Geometrie cu {{points}} puncte (prea mare pentru a fi înregistrată integral)",
     "systemUser": "Sistem",
     "restoreField": "Restaurează această valoare",
     "restoreAll": "Restaurează toate valorile dinaintea acestei modificări",

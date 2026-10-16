@@ -2487,6 +2487,7 @@
     "title": "History",
     "empty": "No changes recorded yet.",
     "hidden": "Value hidden (protected location)",
+    "geometrySummary": "Geometry of {{points}} points (too large to record in full)",
     "systemUser": "System",
     "restoreField": "Restore this value",
     "restoreAll": "Restore all values from before this change",

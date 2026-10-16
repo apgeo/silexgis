@@ -343,6 +343,60 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         ["Note"] = new JsonObject { ["old"] = null, ["new"] = "sump connection" },
     };
 
+    /// <summary>
+    /// A geometry too large to read in a history list is recorded as its shape, size and
+    /// fingerprint — and a small one stays readable, because that is where a moved point is read
+    /// and put back.
+    /// </summary>
+    [Fact]
+    public async Task A_large_geometry_is_recorded_as_a_summary_and_a_small_one_in_full()
+    {
+        long fractureTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            fractureTypeId = await db.FeatureTypes.Where(t => t.Code == "fracture_line").Select(t => t.Id).SingleAsync();
+        }
+
+        // 1,500 vertices written with full precision: tens of kilobytes of text.
+        var coordinates = Enumerable.Range(0, 1500)
+            .Select(i => new[] { 26.3 + (i * 0.0000137), 46.2 + (i * 0.0000091) })
+            .ToArray();
+        var largeId = await CreatedIdAsync(await owner.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name = $"History long line {Guid.NewGuid():N}"[..36],
+            featureTypeId = fractureTypeId,
+            geometry = new { type = "LineString", coordinates },
+            visibility = "authenticated",
+        }));
+        var smallId = await CreatedIdAsync(await owner.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name = $"History short line {Guid.NewGuid():N}"[..36],
+            featureTypeId = fractureTypeId,
+            geometry = new { type = "LineString", coordinates = new[] { new[] { 26.31, 46.21 }, new[] { 26.32, 46.22 } } },
+            visibility = "authenticated",
+        }));
+
+        var (largeBody, largeEvents) = await HistoryAsync(owner, "feature", largeId);
+        var created = largeEvents.Single(e => e.GetProperty("action").GetString() == "created");
+        var geom = created.GetProperty("changes").GetProperty("Geom").GetProperty("new");
+        geom.ValueKind.ShouldBe(JsonValueKind.Object);
+        geom.GetProperty("omitted").GetBoolean().ShouldBeTrue();
+        geom.GetProperty("geometryType").GetString().ShouldBe("LineString");
+        geom.GetProperty("points").GetInt32().ShouldBe(1500);
+        geom.GetProperty("sha256").GetString()!.Length.ShouldBe(64);
+        // No coordinate of the line anywhere in the timeline.
+        largeBody.ShouldNotContain("26.3");
+        largeBody.ShouldNotContain("46.2");
+
+        var (_, smallEvents) = await HistoryAsync(owner, "feature", smallId);
+        smallEvents.Single(e => e.GetProperty("action").GetString() == "created")
+            .GetProperty("changes").GetProperty("Geom").GetProperty("new").GetString()!
+            .ShouldStartWith("LINESTRING");
+    }
+
     // ---- API helpers
 
     private async Task<(string Body, List<JsonElement> Events)> HistoryAsync(

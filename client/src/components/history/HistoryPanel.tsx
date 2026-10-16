@@ -8,6 +8,7 @@ import { useHistory, type HistoryEvent } from '../../api/hooks.ts';
 import {
   changeRows,
   formatValue,
+  isGeometrySummary,
   restorableProps,
   rosterTimesAct,
   toWriteField,
@@ -112,6 +113,8 @@ function HistoryEventItem({ event, restore }: { event: HistoryEvent; restore?: H
 
   // Audit property names are PascalCase; the i18n field keys are camelCase (like the write
   // DTOs), so map before lookup, falling back to a humanized label.
+  const shown = (value: unknown) =>
+    isGeometrySummary(value) ? t('history.geometrySummary', { points: value.points }) : formatValue(value);
   const label = (prop: string) => t(`history.field.${toWriteField(prop)}`, { defaultValue: humanize(prop) });
 
   return (
@@ -158,9 +161,9 @@ function HistoryEventItem({ event, restore }: { event: HistoryEvent; restore?: H
                   </Typography.Text>
                 ) : (
                   <span>
-                    <Typography.Text delete type="secondary">{formatValue(r.old)}</Typography.Text>
+                    <Typography.Text delete type="secondary">{shown(r.old)}</Typography.Text>
                     {' → '}
-                    <Typography.Text>{formatValue(r.new)}</Typography.Text>
+                    <Typography.Text>{shown(r.new)}</Typography.Text>
                   </span>
                 ),
             },

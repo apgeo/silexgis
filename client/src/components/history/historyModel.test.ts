@@ -6,6 +6,7 @@ import {
   applyTripRestore,
   changeRows,
   formatValue,
+  isGeometrySummary,
   restorableProps,
   rosterTimesAct,
   toWriteField,
@@ -75,6 +76,17 @@ describe('historyModel', () => {
   it('restorableProps drops redacted rows and rows with no old value', () => {
     const rows = changeRows({ Name: { old: 'x', new: 'y' }, Created: { old: null, new: 'z' } }, ['Geom']);
     expect(restorableProps(rows)).toEqual(['Name', 'Created']);
+  });
+
+  it('recognises a summarised geometry and never offers it for restore', () => {
+    const summary = { geometryType: 'MultiLineString', points: 48211, sha256: 'ab12', omitted: true };
+    expect(isGeometrySummary(summary)).toBe(true);
+    expect(isGeometrySummary({ ...summary, omitted: false })).toBe(false);
+    expect(isGeometrySummary('POINT (1 2)')).toBe(false);
+    expect(isGeometrySummary(null)).toBe(false);
+
+    const rows = changeRows({ Geom: { old: summary, new: { ...summary, sha256: 'cd34' } }, Name: { old: 'a', new: 'b' } }, []);
+    expect(restorableProps(rows)).toEqual(['Name']);
   });
 
   it('applyRestore overlays old values (mapped + WKT→GeoJSON) and keeps other fields', () => {

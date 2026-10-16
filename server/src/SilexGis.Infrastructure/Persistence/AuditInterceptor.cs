@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 
 namespace SilexGis.Infrastructure.Persistence;
 
@@ -163,13 +164,14 @@ public sealed class AuditInterceptor(ICurrentUser currentUser, IRequestOrigin or
     private static Dictionary<string, object?> Pair(object? oldValue, object? newValue) =>
         new() { ["old"] = Plain(oldValue), ["new"] = Plain(newValue) };
 
-    // Geometry (and anything else STJ can't represent) is stored as text in the diff. Enums
+    // Geometry (and anything else STJ can't represent) is stored as text in the diff — or, past
+    // a few kilobytes of text, as a position-free summary (AuditGeometry says why). Enums
     // are stored as their camelCase name — matching how the API serializes them everywhere
     // else — so the history UI shows "private → public", not "0 → 3".
     private static object? Plain(object? value) => value switch
     {
         null => null,
-        NetTopologySuite.Geometries.Geometry geometry => geometry.AsText(),
+        NetTopologySuite.Geometries.Geometry geometry => AuditGeometry.Record(geometry),
         Enum e => JsonNamingPolicy.CamelCase.ConvertName(e.ToString()),
         Guid[] ids => string.Join(',', ids),
         string[] values => string.Join(',', values),

@@ -80,9 +80,39 @@ export function rosterTimesAct(changes: unknown): RosterTimesAct | null {
   };
 }
 
-/** Props of an updated event a user may restore: present, non-redacted, with a real old value. */
+/**
+ * A geometry the audit trail recorded as a summary rather than in full: a large line or survey
+ * is noted by its shape type, its point count and a digest of its bytes, so the trail says that
+ * it changed and whether two versions are the same without storing megabytes per row.
+ */
+export interface GeometrySummary {
+  geometryType: string;
+  points: number;
+  sha256: string;
+  omitted: true;
+}
+
+export function isGeometrySummary(value: unknown): value is GeometrySummary {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.omitted === true &&
+    typeof candidate.geometryType === 'string' &&
+    typeof candidate.points === 'number' &&
+    typeof candidate.sha256 === 'string'
+  );
+}
+
+/**
+ * Props of an updated event a user may restore: present, non-redacted, with a real old value.
+ * A summarised geometry is not a value — there is nothing in it to write back.
+ */
 export function restorableProps(rows: HistoryFieldRow[]): string[] {
-  return rows.filter((r) => !r.redacted && r.old !== undefined).map((r) => r.prop);
+  return rows
+    .filter((r) => !r.redacted && r.old !== undefined && !isGeometrySummary(r.old))
+    .map((r) => r.prop);
 }
 
 /** A short human label for a JSON value in the diff table. */
