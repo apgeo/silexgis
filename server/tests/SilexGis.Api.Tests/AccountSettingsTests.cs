@@ -458,6 +458,36 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     [Fact]
+    public async Task The_limit_counts_letters_as_letters_however_the_sender_escaped_them()
+    {
+        // 3,000 Romanian letters: well under the limit as written, but over it six times if every
+        // letter outside ASCII is counted as the six-character escape the default serializer
+        // writes — which is also how this test's client sends them.
+        var name = new string('ș', 3000);
+
+        var write = await PatchPreferencesAsync(new { layouts = new { name } });
+
+        write.StatusCode.ShouldBe(HttpStatusCode.OK, await write.Content.ReadAsStringAsync());
+        (await ReadPreferencesAsync()).GetProperty("layouts").GetProperty("name").GetString().ShouldBe(name);
+
+        // Sent the way a browser sends them, as the letters themselves: the request is small, and
+        // the merged document must not be counted escaped either.
+        using var asLetters = new StringContent(
+            "{\"preferences\":{\"layouts\":{\"other\":\"" + name + "\"}}}",
+            System.Text.Encoding.UTF8,
+            "application/json");
+        var second = await me.PatchAsync("/api/v1/me/preferences/", asLetters);
+        second.StatusCode.ShouldBe(HttpStatusCode.OK, await second.Content.ReadAsStringAsync());
+        (await ReadPreferencesAsync()).GetProperty("layouts").GetProperty("other").GetString().ShouldBe(name);
+
+        // The positive twin: the limit itself still holds over the same letters.
+        var tooMany = await PatchPreferencesAsync(new { more = new string('ă', 6000) });
+        tooMany.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonDocument.Parse(await tooMany.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("code").GetString().ShouldBe("preferences.too_large");
+    }
+
+    [Fact]
     public async Task A_member_named_twice_is_refused_rather_than_guessed_at()
     {
         using var body = new StringContent(

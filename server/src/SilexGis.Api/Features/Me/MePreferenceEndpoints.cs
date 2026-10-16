@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using FluentValidation;
@@ -24,13 +25,34 @@ public sealed class UiPreferencesWriteRequestValidator : AbstractValidator<UiPre
     /// <summary>Room for the appearance settings many times over, but not for using this as storage.</summary>
     public const int MaxRawLength = 8000;
 
+    /// <summary>
+    /// The written form the limit is counted in: compact, with only the escapes JSON itself needs
+    /// (quotes, backslashes, control characters). The serializer's default also writes every
+    /// character outside ASCII, and characters such as &lt; and +, as a six-character \u escape,
+    /// which counted a Romanian layout name six times over and refused it while the browser — which
+    /// counts what <c>JSON.stringify</c> writes — saw it well under the limit. Whether the sender
+    /// escaped a character is not the size of what is stored either, so a request's own text is
+    /// not counted as sent. Safe here because the text goes to a jsonb column and back out as
+    /// JSON, never into a page.
+    /// </summary>
+    private static readonly JsonSerializerOptions Counted = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    /// <summary>The length a preferences document is held to the limit by.</summary>
+    public static int LengthOf(JsonNode? document) => document?.ToJsonString(Counted).Length ?? 0;
+
+    /// <summary>The same count for a request's document, read without building it as an object.</summary>
+    public static int LengthOf(JsonElement document) => JsonSerializer.Serialize(document, Counted).Length;
+
+    /// <summary>The document as it is stored: the counted form, so what was measured is what is kept.</summary>
+    public static string Written(JsonNode document) => document.ToJsonString(Counted);
+
     public UiPreferencesWriteRequestValidator()
     {
         RuleFor(x => x.Preferences)
             .Must(p => p.ValueKind == JsonValueKind.Object)
             .WithMessage("Preferences must be a JSON object.");
         RuleFor(x => x.Preferences)
-            .Must(p => p.GetRawText().Length <= MaxRawLength)
+            .Must(p => LengthOf(p) <= MaxRawLength)
             .WithMessage("Preferences are too large.")
             .When(x => x.Preferences.ValueKind == JsonValueKind.Object);
     }
@@ -119,7 +141,8 @@ public static class MePreferenceEndpoints
             string merged;
             try
             {
-                merged = JsonMergePatch.Apply(JsonNode.Parse(account.UiPreferences), patch)!.ToJsonString();
+                merged = UiPreferencesWriteRequestValidator.Written(
+                    JsonMergePatch.Apply(JsonNode.Parse(account.UiPreferences), patch)!);
             }
             catch (Exception e) when (e is ArgumentException or InvalidOperationException)
             {
