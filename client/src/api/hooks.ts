@@ -14,6 +14,7 @@ export * from './hooks/map.ts';
 export * from './hooks/filters.ts';
 export * from './hooks/savedFilters.ts';
 export * from './hooks/mapViews.ts';
+export * from './hooks/sharedViews.ts';
 export * from './hooks/caves.ts';
 export * from './hooks/surveys.ts';
 export * from './hooks/features.ts';
