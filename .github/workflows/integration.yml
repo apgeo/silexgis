@@ -103,7 +103,7 @@ jobs:
         working-directory: server
       - name: Keep the per-test timings
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-trx-${{ matrix.index }}
           path: ${{ runner.temp }}/trx/*.trx
