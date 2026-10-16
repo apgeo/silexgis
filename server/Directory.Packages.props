@@ -1,0 +1,69 @@
+<Project>
+  <!--
+    Every package version of the solution, in one place. A project names a package and nothing
+    else; the version it gets is the one written here, so two projects can never settle on two
+    versions of the same package without anybody choosing that.
+
+    Why a version stands where it does is said beside the reference that needs it — the project
+    file is where somebody removing or upgrading a package looks — and the pins are named here as
+    well, so an upgrade pass reads the constraint before moving the number:
+
+      * NPOI stays on 2.7.x: 2.8.0 moved to a maintenance-fee licence this project cannot ship
+        under (see SilexGis.Infrastructure.csproj, and the advisories accepted by name in
+        Directory.Build.props).
+      * Microsoft.Data.Sqlite is ahead of the other Microsoft packages on purpose: 10.0.9 resolves
+        a SQLite binding with a high-severity advisory that the audit turns into a build error.
+      * System.Security.Cryptography.Xml and .Pkcs, and SSH.NET, are referenced only to lift a
+        transitive dependency past published advisories; nothing calls them.
+      * DocSharp.Binary and PdfPig are below 1.0 and on the text-extraction path; an upgrade is
+        a behaviour change to read the release notes for, not a patch bump.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Dapper" Version="2.1.79" />
+    <PackageVersion Include="DocSharp.Binary.Doc" Version="0.20.0" />
+    <PackageVersion Include="DocSharp.Binary.Ppt" Version="0.20.0" />
+    <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+    <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+    <PackageVersion Include="JsonSchema.Net" Version="9.4.0" />
+    <PackageVersion Include="Magick.NET-Q8-AnyCPU" Version="14.16.0" />
+    <PackageVersion Include="MailKit" Version="4.17.0" />
+    <PackageVersion Include="MaxRev.Gdal.Core" Version="3.13.1.534" />
+    <PackageVersion Include="MaxRev.Gdal.LinuxRuntime.Minimal" Version="3.13.1.534" />
+    <PackageVersion Include="MaxRev.Gdal.WindowsRuntime.Minimal" Version="3.13.1.534" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.10.0" />
+    <PackageVersion Include="NetTopologySuite" Version="2.6.0" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" Version="10.0.2" />
+    <PackageVersion Include="NPOI" Version="2.7.6" />
+    <PackageVersion Include="OpenIddict.AspNetCore" Version="7.5.0" />
+    <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
+    <PackageVersion Include="PdfPig" Version="0.1.15" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
+  </ItemGroup>
+  <!-- The test projects' own. -->
+  <ItemGroup>
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
+    <PackageVersion Include="Shouldly" Version="4.3.0" />
+    <PackageVersion Include="SSH.NET" Version="2026.0.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.14.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+</Project>
