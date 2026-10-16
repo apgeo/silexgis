@@ -116,9 +116,11 @@ public sealed record FilterDocument
         {
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             // A stored document comes back out of a jsonb column with its keys in the database's
-            // order, not the order they were written in — "of" before "node", "value" before
-            // "type". The discriminators are found wherever they sit, or every saved filter would
-            // read back as unreadable the moment it was stored.
+            // order, not the order they were written in: jsonb sorts an object's keys shortest
+            // first, so a node's "of" or "op" arrives before its "node" and an anchor's "id" before
+            // its "anchor" (a value's "type" happens to sort ahead of its "value"). The
+            // discriminators are found wherever they sit, or every saved filter would read back
+            // as unreadable the moment it was stored.
             AllowOutOfOrderMetadataProperties = true,
         };
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));

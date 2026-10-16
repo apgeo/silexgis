@@ -49,6 +49,10 @@ public sealed class SurfaceFilters(FilterWorldRegistry registry, SavedFilterRead
         CancellationToken ct)
         where TEntity : class
     {
+        // An empty or blank `filter=` is no filter at all, unlike a token that cannot be read. A
+        // link cut down to nothing lists everything the caller may see, which is what the same
+        // address without the parameter lists, so reading it that way widens nothing; refusing it
+        // would protect nothing either.
         var hasToken = !string.IsNullOrWhiteSpace(filter);
         if (!hasToken && savedFilterId is null)
         {
