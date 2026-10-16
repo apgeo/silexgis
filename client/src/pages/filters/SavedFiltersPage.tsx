@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
-import { App, Button, Flex, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { App, Flex, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useCaveTypes, useCavingGroups, useTags } from '../../api/hooks.ts';
