@@ -476,11 +476,11 @@ public static class MapEndpoints
         }
 
         var options = mapOptions.Value;
-        var effectiveZoom = Math.Clamp(zoom ?? options.CenterlineDetailZoom, 0, 24);
+        var effectiveZoom = Math.Clamp(zoom ?? options.CenterlineDetailZoom, 0, MapOptions.HighestZoom);
         // Per-user overrides: a caver on a fast machine can pull detail in earlier and raise the
         // budget, someone on a phone can push both the other way. Bounded so no request can ask
         // for more work than the installation allows.
-        var effectiveDetailZoom = Math.Clamp(detailZoom ?? options.CenterlineDetailZoom, 0, 24);
+        var effectiveDetailZoom = Math.Clamp(detailZoom ?? options.CenterlineDetailZoom, 0, MapOptions.HighestZoom);
         var effectiveMaxPaths = Math.Clamp(
             maxPaths ?? options.CenterlineMaxPaths, 0, options.CenterlineMaxPathsLimit);
 
@@ -1244,7 +1244,7 @@ public static class MapEndpoints
             return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
         }
 
-        var effectiveZoom = Math.Clamp(zoom ?? 14, 0, 24);
+        var effectiveZoom = Math.Clamp(zoom ?? 14, 0, MapOptions.HighestZoom);
         return effectiveZoom < mapOptions.Value.ClusterMaxZoom
             ? TypedResults.Ok(await MapSql.ClustersAsync(db, ctx, box, effectiveZoom, accessOptions.Value.LocationGridMeters, tag, ct))
             : TypedResults.Ok(await PointsAsync(
