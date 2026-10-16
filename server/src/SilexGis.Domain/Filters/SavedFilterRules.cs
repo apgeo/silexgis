@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
+
 namespace SilexGis.Domain.Filters;
 
 /// <summary>
@@ -32,6 +35,26 @@ public static class SavedFilterRules
     /// </summary>
     public static bool IsAllowedVisibility(Visibility visibility) =>
         visibility is Visibility.Private or Visibility.CavingGroup;
+
+    /// <summary>
+    /// Whether this caller may rewrite, re-share or delete this saved filter: its author, or a full
+    /// administrator — never somebody it was only shared with.
+    /// </summary>
+    /// <remarks>
+    /// Narrower than the access rules over saved workspace, and on purpose. A caving group made
+    /// through the application starts with rules that let its members write everything bound to the
+    /// group, which for a saved filter would let any member change what a question shared under
+    /// somebody else's name asks, or hand it on to another club they belong to. A member who may
+    /// read a shared filter may run it and save a copy of their own; the original stays its
+    /// author's. This is asked in addition to the access decision, never instead of it, so a rule
+    /// that denies the author still holds.
+    /// </remarks>
+    public static bool MayChange(AccessContext caller, SavedFilter filter)
+    {
+        ArgumentNullException.ThrowIfNull(caller);
+        ArgumentNullException.ThrowIfNull(filter);
+        return caller.IsFullAdmin || filter.OwnerUserId == caller.UserId;
+    }
 
     /// <summary>
     /// What stops this document being stored for its author. Empty means it may be saved.

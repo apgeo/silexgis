@@ -278,6 +278,72 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
         (await author.GetAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task Under_a_clubs_starter_rules_a_member_may_run_and_copy_anothers_filter_but_not_change_reshare_or_remove_it()
+    {
+        // The clubs are made through the application, so they carry the starter rules every club
+        // made that way carries — among them Write over saved workspace bound to the club. A club
+        // inserted straight into its table has none, which is how this stayed unseen.
+        var founderEmail = $"sf-founder-{tag}@t.local";
+        var ownerEmail = $"sf-owner-{tag}@t.local";
+        var memberEmail = $"sf-member-{tag}@t.local";
+        var adminEmail = $"sf-admin-{tag}@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Manager, founderEmail);
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, ownerEmail);
+        var memberId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, memberEmail);
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, adminEmail);
+        using var founder = await AuthHelper.BearerClientAsync(factory, founderEmail);
+        var club = await CreateClubThroughTheAppAsync(founder, $"Starter Club {tag}");
+        var otherClub = await CreateClubThroughTheAppAsync(founder, $"Second Club {tag}");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await RosterHelper.AddMemberAsync(db, club, ownerId);
+            await RosterHelper.AddMemberAsync(db, club, memberId);
+            await RosterHelper.AddMemberAsync(db, otherClub, memberId);
+        }
+
+        using var owner = await AuthHelper.BearerClientAsync(factory, ownerEmail);
+        using var member = await AuthHelper.BearerClientAsync(factory, memberEmail);
+        using var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+        var id = (await CreateAsync(owner, Body($"Club question {tag}", group: club))).GetProperty("id").GetGuid();
+
+        // The member reads it, runs it under their own access, and may keep a copy of their own.
+        var seen = await member.GetFromJsonAsync<JsonElement>($"{Url}/{id}");
+        seen.GetProperty("mine").GetBoolean().ShouldBeFalse();
+        (await member.GetAsync($"/api/v1/caves?savedFilterId={id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var copy = await CreateAsync(member, new
+        {
+            name = $"My copy {tag}",
+            document = JsonSerializer.Deserialize<FilterDocument>(seen.GetProperty("document").GetRawText(), Wire),
+            visibility = "private",
+        });
+        copy.GetProperty("mine").GetBoolean().ShouldBeTrue();
+
+        // But the original is not theirs to rewrite, to hand on to their other club, or to remove.
+        var rewritten = await member.PutAsJsonAsync($"{Url}/{id}", Body("Rewritten", Region("Alba"), group: club), Wire);
+        rewritten.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await rewritten.Content.ReadAsStringAsync());
+        var rebound = await member.PutAsJsonAsync($"{Url}/{id}", Body($"Club question {tag}", group: otherClub), Wire);
+        rebound.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await rebound.Content.ReadAsStringAsync());
+        (await member.DeleteAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var stored = await db.SavedFilters.AsNoTracking().SingleAsync(f => f.Id == id);
+            stored.Name.ShouldBe($"Club question {tag}");
+            stored.CavingGroupId.ShouldBe(club);
+            stored.Document.ShouldContain("Bihor");
+        }
+
+        // Its author may, and so may a full administrator.
+        (await owner.PutAsJsonAsync($"{Url}/{id}", Body($"Renamed {tag}", group: club), Wire))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await admin.PutAsJsonAsync($"{Url}/{id}", Body($"Tidied {tag}", group: club), Wire))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await admin.DeleteAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
     // ---------- running somebody else's ----------
 
     [Fact]
@@ -411,6 +477,19 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
         var response = await client.PostAsJsonAsync(Url, body, Wire);
         response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    private static async Task<Guid> CreateClubThroughTheAppAsync(HttpClient founder, string name)
+    {
+        var created = await founder.PostAsJsonAsync("/api/v1/caving-groups", new
+        {
+            name,
+            type = "cavingClub",
+            description = (string?)null,
+            website = (string?)null,
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        return (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 
     private static async Task<string?> CodeAsync(HttpResponseMessage response)

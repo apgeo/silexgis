@@ -96,9 +96,10 @@ public static class SavedFilterEndpoints
             .WithSummary("Saves a filter; the caller becomes owner. The document is checked against "
                 + "the caller's vocabulary and may not carry an anchor.");
         filters.MapPut("/{id:guid}", UpdateAsync).WithValidation<SavedFilterWriteRequest>()
-            .WithSummary("Renames, describes, shares or rewrites a saved filter (Write permission).");
+            .WithSummary("Renames, describes, shares or rewrites a saved filter (its author or a full "
+                + "administrator, holding Write permission).");
         filters.MapDelete("/{id:guid}", DeleteAsync)
-            .WithSummary("Deletes a saved filter (Delete permission).");
+            .WithSummary("Deletes a saved filter (its author or a full administrator, holding Delete permission).");
 
         return api;
     }
@@ -201,7 +202,8 @@ public static class SavedFilterEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (!(await access.DecideAsync(ctx, AccessAction.Write, row, ct)).Allowed)
+        if (!SavedFilterRules.MayChange(ctx, row)
+            || !(await access.DecideAsync(ctx, AccessAction.Write, row, ct)).Allowed)
         {
             // Somebody who may read it is told they may not change it; anybody else is told there
             // is nothing here, which is all a filter they cannot read should ever say to them.
@@ -210,8 +212,8 @@ public static class SavedFilterEndpoints
                 : ApiProblems.NotFound(NotFoundCode);
         }
 
-        // Re-binding moves who may read the question exactly as binding on create does; Write on
-        // the row is not consent to hand it to a club.
+        // Re-binding moves who may read the question exactly as binding on create does; being the
+        // author is not consent from the club it is handed to.
         if (request.CavingGroupId is { } requested
             && requested != row.CavingGroupId
             && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.MapViews, requested))
@@ -251,7 +253,8 @@ public static class SavedFilterEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (!(await access.DecideAsync(ctx, AccessAction.Delete, row, ct)).Allowed)
+        if (!SavedFilterRules.MayChange(ctx, row)
+            || !(await access.DecideAsync(ctx, AccessAction.Delete, row, ct)).Allowed)
         {
             return (await access.DecideAsync(ctx, AccessAction.Read, row, ct)).Allowed
                 ? ApiProblems.Forbidden()
