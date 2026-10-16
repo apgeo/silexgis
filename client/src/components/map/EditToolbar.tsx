@@ -44,13 +44,19 @@ import { drawShapeForType, drawShapesForType } from './featureTypeGroups.ts';
 
 interface EditToolbarProps {
   controller: MapEditController;
+  /**
+   * Whether the reshaping tools — modify and move — are offered. False while a feature this
+   * person may not change is selected: the tools act on what is on the map, and the panel beside
+   * them is already saying this one is not theirs to change. The server refuses the save either way.
+   */
+  mayModify?: boolean;
 }
 
 /** Pinned shortcuts beyond this many stay reachable through the palette only. */
 const MAX_PINNED_BUTTONS = 8;
 
 /** Dispatches edit intents to the MapEditController; owns no OL objects itself. */
-export default function EditToolbar({ controller }: EditToolbarProps) {
+export default function EditToolbar({ controller, mayModify = true }: EditToolbarProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const isMobile = useIsMobile();
@@ -81,6 +87,14 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
       }),
     [controller],
   );
+
+  // A feature this person may not change was selected while a reshaping tool was armed: the tool
+  // is put down rather than left working on it.
+  useEffect(() => {
+    if (!mayModify && (state.mode === 'modify' || state.mode === 'translate')) {
+      controller.setMode('none');
+    }
+  }, [mayModify, state.mode, controller]);
 
   useEffect(() => {
     controller.onDrawEnd = (feature) => setPendingFeature(feature);
@@ -286,23 +300,25 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           />
         </span>
       )}
-      <Tooltip title={t('mapEdit.modify')}>
+      <Tooltip title={mayModify ? t('mapEdit.modify') : t('mapEdit.selectionNotEditable')}>
         <Button
           size="small"
           type={state.mode === 'modify' ? 'primary' : 'default'}
           icon={<AimOutlined />}
           aria-label={t('mapEdit.modify')}
           aria-pressed={state.mode === 'modify'}
+          disabled={!mayModify}
           onClick={() => setMode('modify')}
         />
       </Tooltip>
-      <Tooltip title={t('mapEdit.translate')}>
+      <Tooltip title={mayModify ? t('mapEdit.translate') : t('mapEdit.selectionNotEditable')}>
         <Button
           size="small"
           type={state.mode === 'translate' ? 'primary' : 'default'}
           icon={<DragOutlined />}
           aria-label={t('mapEdit.translate')}
           aria-pressed={state.mode === 'translate'}
+          disabled={!mayModify}
           onClick={() => setMode('translate')}
         />
       </Tooltip>

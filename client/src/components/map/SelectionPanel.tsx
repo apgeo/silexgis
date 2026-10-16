@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AimOutlined, DeleteOutlined, EditOutlined, ExportOutlined } from '@ant-design/icons';
 import {
   Alert, App, ConfigProvider, Descriptions, Empty, Flex, Popconfirm, Spin, Tag, Typography,
@@ -16,12 +16,12 @@ import {
   useEntrances,
   useFeature,
   useFeatureTypes,
-  useCan,
   useTripLog,
   useTripTypes,
   useUpdateFeature,
   type FeatureUpdate,
 } from '../../api/hooks.ts';
+import { useFeatureRights } from '../../api/hooks/objectRights.ts';
 import { formatLonLat } from '../../geo/coords.ts';
 import { getMapTagFilter } from '../../map/mapFilters.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
@@ -345,10 +345,20 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
   const setSelection = useWorkspaceStore((s) => s.setSelection);
   const { data: envelope, isPending } = useFeature(selection.featureId);
   const { data: featureTypes } = useFeatureTypes();
-  const mayWriteFeatures = useCan('features', 'write');
+  // The rights held on this feature, not installation-wide: a member may write the one feature
+  // they were given and nothing else, or everything but a feature held back from them.
+  const rights = useFeatureRights(selection.featureId);
   const updateFeatureM = useUpdateFeature();
   const deleteFeatureM = useDeleteFeature();
   const [editing, setEditing] = useState(false);
+  // The editor is removed the moment it closes (see below), which takes antd's return of focus
+  // with it; the button that opened it is focused again by hand, so a keyboard user carries on
+  // from where they were rather than from the top of the page.
+  const editButton = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
+  const stopEditing = () => {
+    setEditing(false);
+    requestAnimationFrame(() => editButton.current?.focus());
+  };
 
   const feature = envelope?.feature;
   const featureType = featureTypes?.find((x) => x.code === feature?.featureTypeCode);
@@ -390,7 +400,8 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
     );
   }
 
-  const canEdit = envelope.kind === 'generic' && mayWriteFeatures;
+  const canEdit = envelope.kind === 'generic' && rights.canEdit;
+  const canDelete = envelope.kind === 'generic' && rights.canDelete;
   // A protected feature the viewer may not see exactly can arrive without geometry.
   // Multi* geometries (imported geodata) collapse to their base shape for display
   // and for constraining the edit modal's type options.
@@ -432,7 +443,7 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
         },
       });
       surfaceFeaturesChanged();
-      setEditing(false);
+      stopEditing();
       message.success(t('common.saved'));
     } catch {
       message.error(t('common.saveFailed'));
@@ -499,20 +510,20 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
           </Button>
         )}
         {canEdit && (
-          <>
-            <Button icon={<EditOutlined />} size="small" onClick={() => setEditing(true)}>
-              {t('features.edit')}
+          <Button ref={editButton} icon={<EditOutlined />} size="small" onClick={() => setEditing(true)}>
+            {t('features.edit')}
+          </Button>
+        )}
+        {canDelete && (
+          <Popconfirm
+            title={t('features.deleteConfirm')}
+            onConfirm={() => void onDelete()}
+            okButtonProps={{ danger: true, loading: deleteFeatureM.isPending }}
+          >
+            <Button icon={<DeleteOutlined />} size="small" danger>
+              {t('features.delete')}
             </Button>
-            <Popconfirm
-              title={t('features.deleteConfirm')}
-              onConfirm={() => void onDelete()}
-              okButtonProps={{ danger: true, loading: deleteFeatureM.isPending }}
-            >
-              <Button icon={<DeleteOutlined />} size="small" danger>
-                {t('features.delete')}
-              </Button>
-            </Popconfirm>
-          </>
+          </Popconfirm>
         )}
       </Flex>
     </>
@@ -569,7 +580,7 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
             properties: (feature.properties ?? {}) as Record<string, unknown>,
           }}
           busy={updateFeatureM.isPending}
-          onCancel={() => setEditing(false)}
+          onCancel={stopEditing}
           onSubmit={(values) => void onEditSubmit(values)}
         />
       )}

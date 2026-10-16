@@ -68,13 +68,13 @@ function fakeController(over: Partial<EditState> = {}): MapEditController {
 
 let controller: MapEditController;
 
-function renderToolbar(over: Partial<EditState> = {}) {
+function renderToolbar(over: Partial<EditState> = {}, mayModify = true) {
   const map = new OlMap({ view: new View({ center: [0, 0], zoom: 2 }) });
   controller = fakeController(over);
   return render(
     <MapContext.Provider value={map}>
       <App>
-        <EditToolbar controller={controller} />
+        <EditToolbar controller={controller} mayModify={mayModify} />
       </App>
     </MapContext.Provider>,
   );
@@ -196,5 +196,21 @@ describe('EditToolbar sketch actions', () => {
     fireEvent.click(screen.getByTestId('sketch-finish'));
 
     await waitFor(() => expect(screen.getByText(/Place more points/)).toBeInTheDocument());
+  });
+});
+
+describe('EditToolbar for a selected feature the person may not change', () => {
+  it('offers no reshaping tool, and keeps drawing new features', () => {
+    renderToolbar({}, false);
+
+    expect(screen.getByRole('button', { name: /^Modify/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move geometry' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Draw' })).toBeInTheDocument();
+  });
+
+  it('puts down a reshaping tool that was armed when such a feature is selected', () => {
+    renderToolbar({ mode: 'modify' }, false);
+
+    expect(controller.setMode).toHaveBeenCalledWith('none');
   });
 });

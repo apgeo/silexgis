@@ -1198,7 +1198,8 @@
       "Point": "Marcaj",
       "LineString": "Linie",
       "Polygon": "Contur"
-    }
+    },
+    "selectionNotEditable": "Nu aveți dreptul să modificați obiectul selectat"
   },
   "trips": {
     "title": "Jurnale de tură",

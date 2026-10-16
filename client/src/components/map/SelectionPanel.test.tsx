@@ -85,7 +85,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useFeatureTypes: () => ({
     data: [{ id: 1, code: 'fracture', name: 'Fracture', propertiesSchema: null }],
   }),
-  useCan: () => true,
+  useCan: () => installationWide,
   useDeleteFeature: () => ({ mutateAsync: deleteFeature, isPending: false }),
   useUpdateFeature: () => ({ mutateAsync: updateFeature, isPending: false }),
   // The panel's arrangement now merges an installation default over the person's own; with
@@ -94,14 +94,31 @@ vi.mock('../../api/hooks.ts', () => ({
   useFeatures: () => ({ data: { items: [] } }),
 }));
 
+// What the caller may do: installation-wide, and on the one selected object. Reassigned per test;
+// the default holds both, which is what the tests about other things assume.
+let installationWide = true;
+let objectActions: string | undefined = 'read, write, delete, share';
+vi.mock('../../api/hooks/access.ts', async () => {
+  const actual = await vi.importActual<typeof import('../../api/hooks/access.ts')>('../../api/hooks/access.ts');
+  return {
+    ...actual,
+    useCan: () => installationWide,
+    useEffectiveAccess: () => ({ data: objectActions === undefined ? undefined : { actions: objectActions } }),
+  };
+});
+
 // These pull in stacks of their own and none of them is what these tests are about. The panel
 // composes its sections from a registry now, so the sections it can draw are mocked at their own
 // modules rather than by mocking every hook they happen to call.
 vi.mock('../history/HistoryPanel.tsx', () => ({ default: () => null }));
 vi.mock('../features/FeatureEditModal.tsx', () => ({ default: () => null }));
-vi.mock('../tags/TagChips.tsx', () => ({ default: () => <div data-testid="tag-chips" /> }));
+vi.mock('../tags/TagChips.tsx', () => ({
+  default: (props: { canEdit: boolean }) => <div data-testid="tag-chips" data-can-edit={String(props.canEdit)} />,
+}));
 vi.mock('../attachments/AttachmentSection.tsx', () => ({
-  default: () => <div data-testid="attachment-section" />,
+  default: (props: { canEdit: boolean }) => (
+    <div data-testid="attachment-section" data-can-edit={String(props.canEdit)} />
+  ),
 }));
 
 /** The links panel is mounted, not rendered here: what it is mounted *for* is the point. */
@@ -137,6 +154,8 @@ beforeEach(() => {
   deleteFeature.mockClear();
   linksMounted.mockReset();
   caveSummary = { headlinePicture: null };
+  installationWide = true;
+  objectActions = 'read, write, delete, share';
 });
 
 afterEach(() => {
@@ -242,5 +261,53 @@ describe('the shared detail panel', () => {
       expect.objectContaining({ entityId: 'cave-1', entityTitle: 'Peștera de Test' }),
     );
     expect(screen.getByTestId('links-section')).toBeInTheDocument();
+  });
+});
+
+/**
+ * A right can be granted or withheld on one object, so what the panel offers for a selected
+ * feature follows the feature's own answer, not the installation-wide one.
+ */
+describe('the edit affordances of a selected feature', () => {
+  const editAffordances = () => ({
+    edit: screen.queryByRole('button', { name: 'Edit' }) !== null,
+    delete: screen.queryByRole('button', { name: 'Delete' }) !== null,
+    tags: screen.getByTestId('tag-chips').getAttribute('data-can-edit'),
+    attachments: screen.queryByTestId('attachment-section')?.getAttribute('data-can-edit') ?? 'closed',
+  });
+
+  it('offers them for a feature the member was given, with no installation-wide right', async () => {
+    installationWide = false;
+    objectActions = 'read, write, delete';
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    await screen.findByText('Fracture', { selector: 'h5' });
+    expect(editAffordances()).toMatchObject({ edit: true, delete: true, tags: 'true' });
+  });
+
+  it('withholds them for a feature held back, whatever the installation-wide right', async () => {
+    installationWide = true;
+    objectActions = 'read';
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    await screen.findByText('Fracture', { selector: 'h5' });
+    expect(editAffordances()).toMatchObject({ edit: false, delete: false, tags: 'false' });
+  });
+
+  it('offers editing without deleting where only writing was granted', async () => {
+    objectActions = 'read, write';
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    await screen.findByText('Fracture', { selector: 'h5' });
+    expect(editAffordances()).toMatchObject({ edit: true, delete: false });
+  });
+
+  it('stands in with the installation-wide right until the feature has answered', async () => {
+    installationWide = true;
+    objectActions = undefined;
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    await screen.findByText('Fracture', { selector: 'h5' });
+    expect(editAffordances()).toMatchObject({ edit: true });
   });
 });

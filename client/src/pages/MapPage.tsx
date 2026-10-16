@@ -6,6 +6,7 @@ import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContex
 import { App, Drawer, Flex, Spin, Tabs, Tooltip, Typography } from 'antd';
 import Button from '../components/Button.tsx';
 import BaseLayerChooser from '../components/map/BaseLayerChooser.tsx';
+import { useFeatureRights } from '../api/hooks/objectRights.ts';
 import {
   AimOutlined,
   BorderVerticleOutlined,
@@ -292,10 +293,14 @@ export default function MapPage() {
   const derivativeLayers = useMemo(() => terrainDerivatives ?? [], [terrainDerivatives]);
 
   // The toolbar mixes drawing new features with modifying existing ones, so either
-  // domain-level right shows it; per-feature answers stay with the server.
+  // domain-level right shows it — and so does the right to change the one feature selected, which
+  // a member can hold on that feature alone. Its reshaping tools follow the selected feature's own
+  // answer while one is selected; the server re-decides every save.
   const mayWriteFeatures = useCan('features', 'write');
   const mayCreateFeatures = useCan('features', 'create');
-  const canEdit = mayWriteFeatures || mayCreateFeatures;
+  const selectedFeatureId = selection?.kind === 'feature' ? selection.featureId : undefined;
+  const selectedRights = useFeatureRights(selectedFeatureId, { enabled: selectedFeatureId !== undefined });
+  const canEdit = mayWriteFeatures || mayCreateFeatures || selectedRights.canEdit;
   const mapChromeHidden = useUiPrefsStore((s) => s.mapChromeHidden);
   const setMapChromeHidden = useUiPrefsStore((s) => s.setMapChromeHidden);
   const setPanelPrefs = useUiPrefsStore((s) => s.setPanelPrefs);
@@ -1386,7 +1391,7 @@ export default function MapPage() {
           </div>
           {canEdit && editController && (
             <div className={`map-edit-overlay map-chrome${isMobile ? ' map-edit-overlay-mobile' : ''}`}>
-              <EditToolbar controller={editController} />
+              <EditToolbar controller={editController} mayModify={selectedRights.canEdit} />
             </div>
           )}
           <MapContextMenu

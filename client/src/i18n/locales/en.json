@@ -1198,7 +1198,8 @@
       "Point": "Marker",
       "LineString": "Line",
       "Polygon": "Outline"
-    }
+    },
+    "selectionNotEditable": "You may not change the selected feature"
   },
   "trips": {
     "title": "Trip logs",
