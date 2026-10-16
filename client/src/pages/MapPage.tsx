@@ -7,7 +7,6 @@ import Button from '../components/Button.tsx';
 import BaseLayerChooser from '../components/map/BaseLayerChooser.tsx';
 import ScaleBox from '../components/map/ScaleBox.tsx';
 import { useSelectionInUrl } from '../components/map/useSelectionInUrl.ts';
-import { attachOverviewMap } from '../map/overviewMap.ts';
 import { useFeatureRights } from '../api/hooks/objectRights.ts';
 import {
   AimOutlined,
@@ -52,6 +51,7 @@ import { extentOf } from '../workareas/tree.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import { useEditScope } from '../components/map/useEditScope.ts';
+import { useOverviewMap } from '../components/map/useOverviewMap.ts';
 import FeatureListPanel from '../components/map/FeatureListPanel.tsx';
 import { drawShapeForType } from '../components/map/featureTypeGroups.ts';
 import LayerPanel from '../components/map/LayerPanel.tsx';
@@ -814,18 +814,8 @@ export default function MapPage() {
   );
 
   // The overview inset, drawn from whichever base layer the map shows. Not on a phone, whose
-  // screen it would cover a good part of; open or shut as it was last left.
-  const setOverviewMap = useUiPrefsStore((s) => s.setOverviewMap);
-  useEffect(() => {
-    if (isMobile || baseOlLayers.length === 0) {
-      return undefined;
-    }
-    return attachOverviewMap(getWorkspaceMap(), baseOlLayers, {
-      open: useUiPrefsStore.getState().overviewMap,
-      label: t('map.overviewMap'),
-      onToggle: setOverviewMap,
-    });
-  }, [baseOlLayers, isMobile, t, setOverviewMap]);
+  // screen it would cover a good part of; open or shut as the account's preference says.
+  useOverviewMap(getWorkspaceMap(), baseOlLayers, !isMobile, t('map.overviewMap'));
 
   // What is selected travels in the address, and an address can say what to select.
   useSelectionInUrl();

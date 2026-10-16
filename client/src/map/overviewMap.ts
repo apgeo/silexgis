@@ -25,6 +25,13 @@ export interface OverviewMapOptions {
 
 const CLASS_NAME = 'ol-overviewmap map-overview';
 
+export interface OverviewMapHandle {
+  /** Opens or closes the inset, as though its button had been pressed, without reporting it. */
+  setOpen: (open: boolean) => void;
+  /** Takes the control off the map. */
+  detach: () => void;
+}
+
 /**
  * A small overview of the map's surroundings in the corner, drawn from the base layer the map is
  * showing.
@@ -39,14 +46,16 @@ const CLASS_NAME = 'ol-overviewmap map-overview';
  * everything a map is found by. The button is drawn with the library's classes, so closed and open
  * look like the one control.
  *
- * Returns a function that takes the control off again.
+ * Returns the control's handle: `setOpen` opens or closes it from outside — the account's own
+ * choice can arrive after the map is drawn — and `detach` takes it off the map again.
  */
 export function attachOverviewMap(
   map: Map,
   baseLayers: TileLayer<TileSource>[],
   { open, label, onToggle }: OverviewMapOptions,
-): () => void {
+): OverviewMapHandle {
   let current: Control | undefined;
+  let isOpen = open;
   let keys: EventsKey[] = [];
   let removeClick: (() => void) | undefined;
 
@@ -68,6 +77,7 @@ export function attachOverviewMap(
 
   const showClosed = (focus: boolean) => {
     take();
+    isOpen = false;
     const element = document.createElement('div');
     element.className = `${CLASS_NAME} ol-collapsed ol-unselectable ol-control`;
     const button = document.createElement('button');
@@ -95,6 +105,7 @@ export function attachOverviewMap(
 
   const showOpen = (focus: boolean) => {
     take();
+    isOpen = true;
     const mirrors = baseLayers.map(
       (base) => new TileLayer({ source: base.getSource() ?? undefined, visible: base.getVisible() }),
     );
@@ -133,5 +144,16 @@ export function attachOverviewMap(
   } else {
     showClosed(false);
   }
-  return take;
+  return {
+    setOpen: (wanted) => {
+      if (wanted !== isOpen) {
+        if (wanted) {
+          showOpen(false);
+        } else {
+          showClosed(false);
+        }
+      }
+    },
+    detach: take,
+  };
 }

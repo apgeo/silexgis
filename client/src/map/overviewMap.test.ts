@@ -12,11 +12,11 @@ function setUp(open: boolean) {
   const shown = new TileLayer({ source: new XYZ({ url: 'https://tiles.invalid/a/{z}/{x}/{y}.png' }), visible: true });
   const hidden = new TileLayer({ source: new XYZ({ url: 'https://tiles.invalid/b/{z}/{x}/{y}.png' }), visible: false });
   const onToggle = vi.fn();
-  const detach = attachOverviewMap(map, [shown, hidden], { open, label: 'Overview map', onToggle });
+  const handle = attachOverviewMap(map, [shown, hidden], { open, label: 'Overview map', onToggle });
   const overview = () => map.getControls().getArray().find((c): c is OverviewMap => c instanceof OverviewMap);
   // Found where the map put the control, since a control keeps its own element to itself.
   const button = () => map.getOverlayContainerStopEvent().querySelector<HTMLButtonElement>('.map-overview button')!;
-  return { map, shown, hidden, onToggle, detach, overview, button };
+  return { map, shown, hidden, onToggle, handle, overview, button };
 }
 
 describe('the overview inset', () => {
@@ -58,9 +58,24 @@ describe('the overview inset', () => {
     expect(onToggle).toHaveBeenLastCalledWith(false);
   });
 
+  it('opens and closes when told to from outside, without reporting it as a toggle', () => {
+    // The account's own choice arrives once its preferences have been read, after the map is drawn.
+    const { overview, handle, onToggle, button } = setUp(false);
+
+    handle.setOpen(true);
+    expect(overview()).toBeDefined();
+    expect(button().getAttribute('aria-expanded')).toBe('true');
+    handle.setOpen(true);
+    expect(overview()).toBeDefined();
+
+    handle.setOpen(false);
+    expect(overview()).toBeUndefined();
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
   it('comes off the map when detached', () => {
-    const { map, detach } = setUp(true);
-    detach();
+    const { map, handle } = setUp(true);
+    handle.detach();
     expect(map.getControls().getArray().some((c) => c instanceof OverviewMap)).toBe(false);
     expect(map.getOverlayContainerStopEvent().querySelector('.map-overview')).toBeNull();
   });
