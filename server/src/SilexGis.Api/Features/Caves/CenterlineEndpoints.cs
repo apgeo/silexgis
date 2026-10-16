@@ -223,7 +223,11 @@ public static class CenterlineEndpoints
             Skeleton = storeSkeleton ? skeleton : null,
             PathCount = pathCount,
             SkeletonPathCount = storeSkeleton ? CenterlineSkeleton.PathCount(skeleton) : pathCount,
-            LengthM = await CenterlineSql.GeodesicLengthMetersAsync(db, geom, ct),
+            // Measured over the inferred passage, not the uploaded geometry: an export is mostly
+            // wall shots, and their length is not passage length — a Therion KML measured over
+            // everything reports a cave around fifteen times as long as it is. The skeleton is
+            // the same passage the rest of the application measures.
+            LengthM = await CenterlineSql.GeodesicLengthMetersAsync(db, skeleton, ct),
         };
 
         try

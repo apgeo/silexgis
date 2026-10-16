@@ -349,6 +349,27 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable, IClassFixture
         stored[0].GetProperty("geom").GetProperty("coordinates").GetArrayLength().ShouldBe(20);
     }
 
+    /// <summary>
+    /// An uploaded centerline's length is the passage's, not the length of every shot in the
+    /// file: the wall shots of a survey export are most of its line work and none of its passage.
+    /// </summary>
+    [Fact]
+    public async Task An_uploaded_centerline_is_as_long_as_its_passage_and_not_its_wall_shots()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        using var form = BuildForm("splayed-length.geojson", SplayedSurvey(26.300, 46.100));
+        var created = await owner.PostAsync($"/api/v1/caves/{caveId}/centerlines", form);
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var length = JsonDocument.Parse(await created.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("lengthM").GetDecimal();
+
+        // The traverse is four legs of 0.001 degrees of longitude at 46.1 N, about 77.3 m each.
+        // The first leg ends at a station that also carries a fan of wall shots, so the inference
+        // takes it for one of them — the documented loss at a dead end — and three legs remain:
+        // about 232 m. The sixteen wall shots would add roughly another 970 m.
+        length.ShouldBeInRange(225m, 240m);
+    }
+
     [Fact]
     public async Task The_path_budget_withholds_whole_centerlines_and_says_how_many()
     {

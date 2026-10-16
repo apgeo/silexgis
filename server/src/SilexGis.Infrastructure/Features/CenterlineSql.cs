@@ -23,7 +23,10 @@ public static class CenterlineSql
     public static async Task<decimal> GeodesicLengthMetersAsync(
         SilexGisDbContext db, Geometry geometry, CancellationToken ct)
     {
-        var wkb = new WKBWriter(ByteOrder.LittleEndian, handleSRID: false, emitZ: true).Write(geometry);
+        // Written flat: the geography length is measured on the spheroid's surface and ignores
+        // altitude anyway, and a flat geometry (the display skeleton) written with a Z flag carries
+        // NaN altitudes, which turn the whole length into NaN.
+        var wkb = new WKBWriter(ByteOrder.LittleEndian, handleSRID: false, emitZ: false).Write(geometry);
         const string sql = "SELECT ST_Length(ST_SetSRID(ST_GeomFromWKB(@wkb), 4326)::geography)::numeric(12,2)";
         return await db.Database.GetDbConnection().QuerySingleAsync<decimal>(
             new CommandDefinition(sql, new { wkb }, cancellationToken: ct));
