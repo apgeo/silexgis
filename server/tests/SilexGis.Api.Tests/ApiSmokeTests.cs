@@ -263,6 +263,32 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
     }
 
     /// <summary>
+    /// The other lists that read a filter declare the same refusals the gallery does; the tag
+    /// catalogue, which a stored filter's tag condition is read back through, declares the 403 of
+    /// a catalogue an installation has closed; and the link-target feed declares the 400 it sends
+    /// for an unknown kind and for a kind that is now found through the filter query instead.
+    /// </summary>
+    [Fact]
+    public async Task OpenApi_document_declares_the_filtered_lists_and_their_lookups_own_refusals()
+    {
+        var operations = (await OperationsAsync()).ToDictionary(o => o.Id!);
+        var expected = new Dictionary<string, string[]>
+        {
+            ["geofileList"] = ["400", "401", "404"],
+            ["georeferencedMapList"] = ["400", "401", "404"],
+            ["tagListTags"] = ["401", "403"],
+            ["resLinkSearchTargets"] = ["400", "401"],
+        };
+
+        foreach (var (id, statuses) in expected)
+        {
+            operations.ShouldContainKey(id);
+            Responses(operations[id].Value).Where(code => code[0] is '4' or '5')
+                .ShouldBe(statuses, ignoreOrder: true, customMessage: id);
+        }
+    }
+
+    /// <summary>
     /// An enumeration's own values never include null; a property that may be null says so itself.
     /// </summary>
     [Fact]

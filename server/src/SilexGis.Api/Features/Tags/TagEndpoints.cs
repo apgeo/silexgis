@@ -43,6 +43,7 @@ public static class TagEndpoints
     {
         api.MapGet("/tags", ListTagsAsync)
             .WithTags("Tags")
+            .ProducesProblem(StatusCodes.Status403Forbidden)
             .WithSummary("Tag catalog with optional name search, or the tags of the slugs named.");
 
         var taggings = api.MapGroup("/taggings").WithTags("Tags");

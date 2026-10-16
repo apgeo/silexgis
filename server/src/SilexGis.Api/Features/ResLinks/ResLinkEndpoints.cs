@@ -82,6 +82,7 @@ public static class ResLinkEndpoints
         links.MapGet("/for-target", ForTargetAsync)
             .WithSummary("Links incident to one target, sibling members resolved, optionally narrowed to one relation code; the total doubles as the badge count.");
         links.MapGet("/targets/search", SearchTargetsAsync)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithSummary("Picker feed for cavers, caving groups and camps: readable targets of one type matching a query, as uniform rows. Every other kind is found through the filter query.");
         links.MapGet("/point-default", PointDefaultAsync)
             .WithSummary("The audience a new GPS point takes when the request names none, for this caller.");
