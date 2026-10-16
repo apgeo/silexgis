@@ -16,7 +16,8 @@ import {
   RedoOutlined,
   UndoOutlined,
 } from '@ant-design/icons';
-import { App, Badge, Button, Divider, Segmented, Space, Tooltip } from 'antd';
+import { App, Badge, Divider, Segmented, Space, Tooltip } from 'antd';
+import Button from '../Button.tsx';
 import type Feature from 'ol/Feature';
 import { useTranslation } from 'react-i18next';
 import {

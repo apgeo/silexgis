@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { DeleteOutlined, StarFilled, StarOutlined, UploadOutlined } from '@ant-design/icons';
-import { App, Button, Card, Popconfirm, Table, Tag, Tooltip, Upload } from 'antd';
+import { App, Card, Popconfirm, Table, Tag, Tooltip, Upload } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCenterlines,

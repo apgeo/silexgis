@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DeleteOutlined, DownloadOutlined, PlusOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Dropdown, Flex, Input, InputNumber, Select, Table, Tag, Typography } from 'antd';
+import { Alert, App, Dropdown, Flex, Input, InputNumber, Select, Table, Tag, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { TablePaginationConfig } from 'antd';
 import type { SorterResult } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';

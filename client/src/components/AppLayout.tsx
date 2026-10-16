@@ -6,7 +6,8 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
-import { Avatar, Button, Dropdown, Flex, Layout, Menu, Select, Typography, theme } from 'antd';
+import { Avatar, Dropdown, Flex, Layout, Menu, Select, Typography, theme } from 'antd';
+import Button from './Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useLanguageChoice } from '../i18n/languageChoice.ts';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';

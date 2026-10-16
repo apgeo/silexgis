@@ -10,7 +10,8 @@ import {
   UploadOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons';
-import { App, Button, Card, Flex, Popconfirm, Table, Tag, Tooltip, Typography } from 'antd';
+import { App, Card, Flex, Popconfirm, Table, Tag, Tooltip, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {

@@ -9,7 +9,8 @@ import {
   PlusOutlined,
   ScheduleOutlined,
 } from '@ant-design/icons';
-import { App, Button, Dropdown, Empty, Flex, Input, Space, Table, Tag, Typography } from 'antd';
+import { App, Dropdown, Empty, Flex, Input, Space, Table, Tag, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';

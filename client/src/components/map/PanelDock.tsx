@@ -10,7 +10,8 @@ import {
   PushpinOutlined,
   SaveOutlined,
 } from '@ant-design/icons';
-import { App, Button, Dropdown, Flex, Input, Segmented, Tooltip } from 'antd';
+import { App, Dropdown, Flex, Input, Segmented, Tooltip } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';

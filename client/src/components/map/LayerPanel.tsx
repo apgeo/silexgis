@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import LayerTree from '@terrestris/react-geo/dist/LayerTree/LayerTree';
 import LayerTransparencySlider from '@terrestris/react-geo/dist/Slider/LayerTransparencySlider/LayerTransparencySlider';
-import { Alert, Button, Checkbox, Collapse, Divider, Input, InputNumber, Radio, Select, Slider, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Checkbox, Collapse, Divider, Input, InputNumber, Radio, Select, Slider, Tag, Tooltip, Typography } from 'antd';
+import Button from '../Button.tsx';
 import type OlLayerBase from 'ol/layer/Base';
 import { useTranslation } from 'react-i18next';
 import {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { AimOutlined, ClearOutlined, TagsOutlined } from '@ant-design/icons';
-import { Button, Descriptions, Empty, Flex, Tag, Tooltip, Typography } from 'antd';
+import { Descriptions, Empty, Flex, Tag, Tooltip, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useFeatures, type FeatureListItem } from '../../api/hooks.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo } from 'react';
 import { ClearOutlined } from '@ant-design/icons';
-import { Button, DatePicker, Flex, Select, Space, Typography } from 'antd';
+import { DatePicker, Flex, Select, Space, Typography } from 'antd';
+import Button from '../Button.tsx';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';

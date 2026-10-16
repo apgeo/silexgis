@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { AppstoreOutlined, PushpinFilled, PushpinOutlined } from '@ant-design/icons';
-import { Button, Popover, Typography } from 'antd';
+import { Popover, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import type { FeatureType } from '../../api/hooks.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';

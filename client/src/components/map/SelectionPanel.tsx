@@ -2,8 +2,9 @@
 import { useMemo, useState } from 'react';
 import { AimOutlined, DeleteOutlined, EditOutlined, ExportOutlined } from '@ant-design/icons';
 import {
-  Alert, App, Button, ConfigProvider, Descriptions, Empty, Flex, Popconfirm, Spin, Tag, Typography,
+  Alert, App, ConfigProvider, Descriptions, Empty, Flex, Popconfirm, Spin, Tag, Typography,
 } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {

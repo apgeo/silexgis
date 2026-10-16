@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { CopyOutlined, LinkOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Checkbox, Flex, Input, Modal, Popconfirm, Select, Table, Tag, Typography } from 'antd';
+import { Alert, App, Checkbox, Flex, Input, Modal, Popconfirm, Select, Table, Tag, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCreateFeatureShare,

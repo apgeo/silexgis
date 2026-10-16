@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
 import { GithubOutlined, GoogleOutlined, InfoCircleOutlined, LoginOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Divider, Flex, Form, Input, Popover, Segmented, Typography } from 'antd';
+import { Alert, Card, Divider, Flex, Form, Input, Popover, Segmented, Typography } from 'antd';
+import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 

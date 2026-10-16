@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -138,6 +138,8 @@ function chooseFile(name: string) {
   fireEvent.change(input, { target: { files: [new File(['x'], name, { type: 'model/stl' })] } });
 }
 
+// The dialog's own submit button reads the same as the button that opened it, now that the
+// opener's icon is no longer part of its name, so the tests below find it inside the dialog.
 async function openUpload(fileName: string) {
   fireEvent.click(screen.getByRole('button', { name: /Upload model/ }));
   await screen.findByText('Choose a file, or drop it here');
@@ -546,7 +548,7 @@ describe('uploading a survey model', () => {
     fireEvent.change(screen.getByLabelText("Altitude of the file's zero level (m)"), {
       target: { value: '1200' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Upload model$/ }));
     await waitFor(() => expect(uploadMutate).toHaveBeenCalled());
     expect(uploadMutate.mock.calls[0][0].declaration).toEqual({
       originHeightM: 1200,
@@ -560,7 +562,7 @@ describe('uploading a survey model', () => {
     show();
     await openUpload('cave.lox');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Upload model$/ }));
 
     // Both halves of the position are named, because both are missing.
     expect(await screen.findAllByText(/needs the position its zero point sits at/)).toHaveLength(2);
@@ -578,7 +580,7 @@ describe('uploading a survey model', () => {
     expect(screen.getByText('Where this survey sits in the world')).toBeInTheDocument();
     expect(screen.getByLabelText('Longitude of the origin')).toHaveValue('');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Upload model$/ }));
     await waitFor(() => expect(uploadMutate).toHaveBeenCalled());
     expect(uploadMutate.mock.calls[0][0]).toMatchObject({ caveId: 'c1' });
   });
@@ -590,7 +592,7 @@ describe('uploading a survey model', () => {
       target: { value: '1100' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Upload model$/ }));
     await waitFor(() => expect(uploadMutate).toHaveBeenCalled());
     expect(uploadMutate.mock.calls[0][0].declaration).toEqual({
       originHeightM: 1100,
@@ -608,7 +610,7 @@ describe('uploading a survey model', () => {
       target: { value: '1100' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Upload model$/ }));
     await waitFor(() => expect(uploadMutate).toHaveBeenCalled());
     expect(uploadMutate.mock.calls[0][0].declaration).toEqual({
       originHeightM: 1100,
@@ -620,7 +622,7 @@ describe('uploading a survey model', () => {
     show();
     await openUpload('walls.stl');
     // Every field the server needs, minus the altitude nothing in the file can supply.
-    fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Upload model$/ }));
 
     expect(
       await screen.findByText(/Give the altitude, in metres, that the file's zero level sits at/),
@@ -644,7 +646,7 @@ describe('uploading a survey model', () => {
     show();
     await openUpload('cave.3d');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Upload model$/ }));
     expect(await screen.findByText(expected)).toBeInTheDocument();
   });
 
@@ -702,7 +704,7 @@ describe('uploading a survey model', () => {
     show();
     await openUpload('cave.3d');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Upload model$/ }));
     expect(await screen.findByText('Upload failed')).toBeInTheDocument();
   });
 });

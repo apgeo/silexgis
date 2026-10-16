@@ -4,7 +4,8 @@ import BackgroundLayerChooser from '@terrestris/react-geo/dist/BackgroundLayerCh
 import GeoLocationButton from '@terrestris/react-geo/dist/Button/GeoLocationButton/GeoLocationButton';
 import ScaleCombo from '@terrestris/react-geo/dist/Field/ScaleCombo/ScaleCombo';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
-import { App, Button, Drawer, Flex, Spin, Tabs, Tooltip, Typography } from 'antd';
+import { App, Drawer, Flex, Spin, Tabs, Tooltip, Typography } from 'antd';
+import Button from '../components/Button.tsx';
 import {
   AimOutlined,
   BorderVerticleOutlined,

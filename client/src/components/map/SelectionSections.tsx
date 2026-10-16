@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { ReactNode } from 'react';
-import { Button, Empty, Flex, Tooltip, Typography } from 'antd';
+import { Empty, Flex, Tooltip, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { SettingOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import AttachmentSection from '../attachments/AttachmentSection.tsx';

@@ -15,7 +15,6 @@ import {
   Alert,
   App,
   Breadcrumb,
-  Button,
   Card,
   Descriptions,
   Flex,
@@ -26,6 +25,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {

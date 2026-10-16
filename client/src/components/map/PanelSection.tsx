@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { ReactNode } from 'react';
 import { DownOutlined, EyeInvisibleOutlined, HolderOutlined, RightOutlined } from '@ant-design/icons';
-import { Button, Flex, Tooltip, Typography } from 'antd';
+import { Flex, Tooltip, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { matchesAny, PANEL_HANDLE_SHORTCUTS } from '../../hooks/shortcutRegistry.ts';
 import type { PanelSectionId } from './panelSections.ts';

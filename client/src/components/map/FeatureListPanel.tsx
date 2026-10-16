@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useState, type Key } from 'react';
 import FeatureGrid from '@terrestris/react-geo/dist/Grid/FeatureGrid/FeatureGrid';
 import { AimOutlined } from '@ant-design/icons';
-import { Alert, Button, Flex, Typography } from 'antd';
+import { Alert, Flex, Typography } from 'antd';
+import Button from '../Button.tsx';
 import type { ColumnsType } from 'antd/es/table';
 import type Feature from 'ol/Feature';
 import type Geometry from 'ol/geom/Geometry';
