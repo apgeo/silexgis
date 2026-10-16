@@ -609,6 +609,11 @@
 /* On-canvas background-layer chooser (react-geo). Our base layers are XYZ
    sources, which the chooser's collapsed overview mini-map cannot clone —
    collapse the empty 140px preview box into a compact title chip. */
+/* The host only names the chooser's button; it takes no part in placing the chooser. */
+.base-layer-chooser-host {
+  display: contents;
+}
+
 .map-canvas-wrap .bg-layer-chooser {
   bottom: 88px;
   right: 8px;

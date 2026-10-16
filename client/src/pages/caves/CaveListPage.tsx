@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { DeleteOutlined, DownloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { Alert, App, Dropdown, Flex, Input, InputNumber, Select, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import { labelledPaginationItems } from '../../components/paginationLabels.ts';
 import type { TablePaginationConfig } from 'antd';
 import type { SorterResult } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
@@ -399,6 +400,7 @@ export default function CaveListPage() {
           pageSize: data?.pageSize,
           total: data?.totalItems,
           showSizeChanger: true,
+          itemRender: labelledPaginationItems(t),
         }}
         columns={[
           { title: t('caves.name'), dataIndex: 'name', sorter: true, sortOrder: sortOrder('name') },

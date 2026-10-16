@@ -389,6 +389,7 @@ export default function LayerPanel({
           key={`${layer.get('id')}:${treeNonce}`}
           layer={layer}
           tooltip={{ formatter: (value) => `${100 - (value ?? 0)}%` }}
+          ariaLabelForHandle={t('a11y.layerTransparency', { name: overlayName(layer) })}
         />
       </div>
     </div>

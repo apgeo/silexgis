@@ -162,6 +162,7 @@ export default function ProfileSettingsPage() {
                 readOnly
                 value={me.phoneNumber ?? ''}
                 placeholder={t('settings.profile.phoneNone')}
+                aria-label={t('settings.profile.phone')}
               />
             </Form.Item>
             <Form.Item

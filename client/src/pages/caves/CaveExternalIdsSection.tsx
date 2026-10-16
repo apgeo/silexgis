@@ -79,6 +79,7 @@ export default function CaveExternalIdsSection({
                 key={valueOf(system)}
                 allowClear
                 placeholder={t('externalIds.placeholder')}
+                aria-label={t(`externalIds.systems.${system}`)}
                 onBlur={(e) => save(system, e.target.value)}
                 onPressEnter={(e) => save(system, e.currentTarget.value)}
               />

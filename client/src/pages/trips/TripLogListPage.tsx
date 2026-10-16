@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { App, Dropdown, Empty, Flex, Input, Space, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import { labelledPaginationItems } from '../../components/paginationLabels.ts';
 import type { SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -356,6 +357,7 @@ export default function TripLogListPage() {
           pageSize: data?.pageSize,
           total: data?.totalItems,
           showSizeChanger: true,
+          itemRender: labelledPaginationItems(t),
         }}
         columns={[
           {

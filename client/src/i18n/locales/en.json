@@ -6856,6 +6856,17 @@
     "viewName": "Name of the view to save",
     "shareView": "Copy a share link to {{name}}",
     "deleteView": "Delete the view {{name}}",
-    "map": "Map. Arrow keys move it, plus and minus zoom; press ? for all shortcuts."
+    "map": "Map. Arrow keys move it, plus and minus zoom; press ? for all shortcuts.",
+    "editEntrance": "Edit the entrance {{name}}",
+    "deleteEntrance": "Delete the entrance {{name}}",
+    "layerTransparency": "Transparency of {{name}}",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "previousPages": "Five pages back",
+    "nextPages": "Five pages on",
+    "dateFrom": "From date",
+    "dateTo": "To date",
+    "baseLayerChooser": "Change the base layer",
+    "search": "Search"
   }
 }

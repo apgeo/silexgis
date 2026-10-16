@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import BackgroundLayerChooser from '@terrestris/react-geo/dist/BackgroundLayerChooser/BackgroundLayerChooser';
 import GeoLocationButton from '@terrestris/react-geo/dist/Button/GeoLocationButton/GeoLocationButton';
 import ScaleCombo from '@terrestris/react-geo/dist/Field/ScaleCombo/ScaleCombo';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
 import { App, Drawer, Flex, Spin, Tabs, Tooltip, Typography } from 'antd';
 import Button from '../components/Button.tsx';
+import BaseLayerChooser from '../components/map/BaseLayerChooser.tsx';
 import {
   AimOutlined,
   BorderVerticleOutlined,
@@ -1275,7 +1275,7 @@ export default function MapPage() {
             />
           </Tooltip>
           {baseOlLayers.length > 0 && (
-            <BackgroundLayerChooser
+            <BaseLayerChooser
               layers={baseOlLayers}
               backgroundLayerFilter={(l) => getBaseLayerId(l as TileLayer) !== undefined}
               buttonTooltip={t('map.changeBaseLayer')}

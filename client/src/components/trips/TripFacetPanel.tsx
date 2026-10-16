@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import { ClearOutlined } from '@ant-design/icons';
 import { DatePicker, Flex, Select, Space, Typography } from 'antd';
 import Button from '../Button.tsx';
@@ -79,6 +79,7 @@ export default function TripFacetPanel({
   onReset,
 }: TripFacetPanelProps) {
   const { t } = useTranslation();
+  const datesId = useId();
 
   const typeOptions = useMemo(
     () =>
@@ -213,7 +214,17 @@ export default function TripFacetPanel({
       )}
       {/* The window is an overlap, not a start date: a trip running across the end of a month is
           found by that month and by the next one. Either bound stands alone, and both clear. */}
+      {/* The two dates are named by labels of their own: the picker hands every naming attribute
+          to both of its inputs alike, so a label given to it would name the start and the end the
+          same. Its inputs do take an id each. */}
+      <label htmlFor={`${datesId}-from`} className="visually-hidden">
+        {t('a11y.dateFrom')}
+      </label>
+      <label htmlFor={`${datesId}-to`} className="visually-hidden">
+        {t('a11y.dateTo')}
+      </label>
       <DatePicker.RangePicker
+        id={{ start: `${datesId}-from`, end: `${datesId}-to` }}
         data-testid="trip-facet-dates"
         allowEmpty={[true, true]}
         // Its own wording rather than the picker's default, because the trip form on this same

@@ -6856,6 +6856,17 @@
     "viewName": "Numele vederii de salvat",
     "shareView": "Copiază un link de partajare către {{name}}",
     "deleteView": "Șterge vederea {{name}}",
-    "map": "Hartă. Săgețile o mută, plus și minus schimbă scara; apăsați ? pentru toate scurtăturile."
+    "map": "Hartă. Săgețile o mută, plus și minus schimbă scara; apăsați ? pentru toate scurtăturile.",
+    "editEntrance": "Editează intrarea {{name}}",
+    "deleteEntrance": "Șterge intrarea {{name}}",
+    "layerTransparency": "Transparența stratului {{name}}",
+    "previousPage": "Pagina anterioară",
+    "nextPage": "Pagina următoare",
+    "previousPages": "Cinci pagini înapoi",
+    "nextPages": "Cinci pagini înainte",
+    "dateFrom": "De la data",
+    "dateTo": "Până la data",
+    "baseLayerChooser": "Schimbă stratul de bază",
+    "search": "Caută"
   }
 }

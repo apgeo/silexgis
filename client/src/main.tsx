@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { SearchOutlined } from '@ant-design/icons';
 import { App as AntApp, ConfigProvider } from 'antd';
 import enUS from 'antd/locale/en_US';
 import roRO from 'antd/locale/ro_RO';
@@ -29,7 +30,7 @@ if (import.meta.env.DEV) {
  * locale registration that supplies them lives beside the i18next setup.
  */
 function Root() {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const appearance = useUiPrefsStore((s) => s.appearance);
   const [, setSystemTick] = useState(0);
 
@@ -57,6 +58,9 @@ function Root() {
     <ConfigProvider
       theme={buildThemeConfig(appearance)}
       locale={i18n.resolvedLanguage === 'ro' ? roRO : enUS}
+      // A search field's button holds nothing but its icon, so it was named by the icon's English
+      // glyph name, "search", in either language. Named here once for every search field.
+      inputSearch={{ searchIcon: <SearchOutlined aria-label={t('a11y.search')} /> }}
     >
       {/* antd App provides the context consumed by App.useApp() (message/modal/notification). */}
       <AntApp style={{ height: '100%' }}>

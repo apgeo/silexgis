@@ -416,6 +416,7 @@ export default function CaveDetailPage() {
                           size="small"
                           type="text"
                           icon={<EditOutlined />}
+                          aria-label={t('a11y.editEntrance', { name: e.name ?? '' })}
                           onClick={() => {
                             setEditingEntrance(e);
                             setEditorOpen(true);
@@ -426,7 +427,13 @@ export default function CaveDetailPage() {
                           description={t('entrances.deleteRestorable')}
                           onConfirm={() => void deleteEntrance.mutateAsync(e.id)}
                         >
-                          <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                          <Button
+                            size="small"
+                            type="text"
+                            danger
+                            icon={<DeleteOutlined />}
+                            aria-label={t('a11y.deleteEntrance', { name: e.name ?? '' })}
+                          />
                         </Popconfirm>
                       </Flex>
                     ),
