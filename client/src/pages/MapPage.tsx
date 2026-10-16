@@ -714,8 +714,14 @@ export default function MapPage() {
   );
   const [filterRefused, setFilterRefused] = useState(false);
   const filterAddressKey = mapFilterAddressKey(searchParams);
+  // Whether the filter in force came in by the address — a link opened or followed — rather than
+  // from a chip, the tag chooser or a view picked on this page. A link's filter the recipient
+  // cannot run (a clubmate's private saved filter, one from another world) is a link that cannot
+  // be read: the map opens with nothing filtered and says so, rather than empty under a refusal.
+  const filterFromAddress = useRef(readMapFilterAddress(searchParams).filter !== null);
 
-  const adoptMapFilter = (next: MapFilter | null) => {
+  const adoptMapFilter = (next: MapFilter | null, fromAddress = false) => {
+    filterFromAddress.current = fromAddress && next !== null;
     setMapFilter(next);
     setMapFilterState(next);
     setFilterRefused(false);
@@ -723,7 +729,23 @@ export default function MapPage() {
     surfaceFeaturesChanged();
   };
 
-  useEffect(() => onMapFilterRefusal(() => setFilterRefused(true)), []);
+  useEffect(
+    () =>
+      onMapFilterRefusal(() => {
+        // Several layers ask under one filter, so the refusal can come more than once; once the
+        // filter has been dropped the later ones are about a filter no longer in force.
+        if (getMapFilter() === null) {
+          return;
+        }
+        if (filterFromAddress.current) {
+          adoptMapFilter(null);
+          setUnreadableFilterLink(true);
+        } else {
+          setFilterRefused(true);
+        }
+      }),
+    [],
+  );
 
   // The address changed under the page — a link followed inside the app, back or forward. Keyed
   // on the two values alone, so the one-shot parameters being consumed never re-reads it.
@@ -732,7 +754,7 @@ export default function MapPage() {
     if (reading.unreadableLink) {
       setUnreadableFilterLink(true);
     } else if (!sameMapFilter(reading.filter, getMapFilter())) {
-      adoptMapFilter(reading.filter);
+      adoptMapFilter(reading.filter, true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the filter's own two values; adoptMapFilter only sets state
   }, [filterAddressKey]);

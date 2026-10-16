@@ -6,6 +6,7 @@ import { api } from '../client.ts';
 import type { components, paths } from '../schema';
 import { unwrap } from './shared.ts';
 import { queryKeys } from './queryKeys.ts';
+import type { MapFilterParams } from './map.ts';
 
 export type SurveyModelInfo = components['schemas']['SurveyModelDto'];
 
@@ -762,9 +763,10 @@ export async function fetchCenterlineFeatures(
   detailZoom?: number,
   maxPaths?: number,
   z?: boolean,
+  filter: MapFilterParams = {},
 ): Promise<CenterlineFeatureCollection> {
   return unwrap(api.GET('/api/v1/map/cave-centerlines', {
-    params: { query: { bbox, zoom, detailZoom, maxPaths, z } },
+    params: { query: { bbox, zoom, detailZoom, maxPaths, z, ...filter } },
   }));
 }
 
@@ -786,6 +788,7 @@ export type CaveMeshInView = components['schemas']['CaveMeshInViewDto'];
 export async function fetchCaveMeshesInView(
   bbox: string,
   maxCaves?: number,
+  filter: MapFilterParams = {},
 ): Promise<CaveMeshesInView> {
-  return unwrap(api.GET('/api/v1/map/cave-meshes', { params: { query: { bbox, maxCaves } } }));
+  return unwrap(api.GET('/api/v1/map/cave-meshes', { params: { query: { bbox, maxCaves, ...filter } } }));
 }

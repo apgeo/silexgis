@@ -5,6 +5,7 @@ import {
   type CaveMeshInView,
   type MapConfig,
 } from '../api/hooks.ts';
+import { handleMapFilterError, mapFilterParams, onMapFilterChange } from '../map/mapFilters.ts';
 import { ANCHORED_TO_SURFACE, samePlacement, type Altitude3DPlacement } from './altitude3d.ts';
 import { mapZoomFor } from './pseudoZoom.ts';
 import type { Scene3DCamera, Scene3DModelAnchor, Scene3DModels } from './scene3dEngine.ts';
@@ -453,9 +454,15 @@ export function attachSurveyMeshesInView3d(
     try {
       // The count travels with the question, because the answer stops at it: asked without one,
       // a person who raised theirs would be told about the installation's default and no more.
-      answer = await fetchCaveMeshesInView(boundsToBbox(bounds), activeLimits.maxCaves);
-    } catch {
+      // Under the map's filter, so the walls drawn are those of the caves its entrances show.
+      answer = await fetchCaveMeshesInView(boundsToBbox(bounds), activeLimits.maxCaves, mapFilterParams());
+    } catch (error) {
       if (seq === requestSeq && !detached) {
+        // A refused filter is not a hiccup: the walls on screen were chosen without it.
+        handleMapFilterError(error, () => {
+          lastAnswer = undefined;
+          releaseAll();
+        });
         // Keep what is already drawn: a dropped request is usually a network hiccup, and it says
         // nothing about whether the walls on screen still belong there.
         publish(counted(lastAnswer ? 'ready' : 'failed', false));
@@ -479,6 +486,7 @@ export function attachSurveyMeshesInView3d(
   };
 
   const unsubscribeView = engine.onViewChanged(onViewChanged);
+  const unsubscribeFilter = onMapFilterChange(() => void load());
 
   return {
     setActive(next) {
@@ -593,6 +601,7 @@ export function attachSurveyMeshesInView3d(
       detached = true;
       window.clearTimeout(settleTimer);
       unsubscribeView();
+      unsubscribeFilter();
       listeners.clear();
       requestSeq += 1;
       releaseAll();

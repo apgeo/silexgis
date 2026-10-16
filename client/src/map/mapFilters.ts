@@ -5,8 +5,8 @@ import { decodeFilter, encodeFilter, FILTER_PARAM } from '../filters/url.ts';
 import type { FilterDocument, FilterNode } from '../filters/types.ts';
 
 /**
- * The filter the map's own layers draw through — the entrance layer, the surface features, the 3D
- * scene's copies of both and a clicked cluster's member list.
+ * The filter the map's own layers draw through — the entrance layer, the surface features, the
+ * survey lines, the 3D scene's copies of those and its walls, and a clicked cluster's member list.
  *
  * It is one filter in the language every other surface speaks: either a saved filter, named by its
  * id, or a document. A saved filter is sent by id rather than copied out, so the map follows the
@@ -36,13 +36,31 @@ export function isSavedFilterId(value: unknown): value is string {
 
 let current: MapFilter | null = null;
 const refusalListeners = new Set<(code: string) => void>();
+const changeListeners = new Set<() => void>();
 
 export function getMapFilter(): MapFilter | null {
   return current;
 }
 
 export function setMapFilter(filter: MapFilter | null): void {
+  const changed = !sameMapFilter(filter, current);
   current = filter;
+  if (changed) {
+    for (const listener of changeListeners) {
+      listener();
+    }
+  }
+}
+
+/**
+ * For loaders that are not reloaded by name when the filter changes — the survey lines on the flat
+ * map and the walls in the 3D scene — so they follow it too.
+ */
+export function onMapFilterChange(listener: () => void): () => void {
+  changeListeners.add(listener);
+  return () => {
+    changeListeners.delete(listener);
+  };
 }
 
 /** The query parameters a map route takes for this filter: one of the two, never both. */

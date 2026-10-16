@@ -35,3 +35,31 @@ it('stays shut while nothing is being shared', () => {
   );
   expect(screen.queryByRole('dialog')).toBeNull();
 });
+
+it('says a view narrowed beyond a tag is shared without its data layers', async () => {
+  render(
+    <App>
+      <ViewShareDialog
+        shared={{ name: 'Valea Demo', url, leavesOut: { dataLayers: true, filterLayers: true } }}
+        onClose={() => undefined}
+      />
+    </App>,
+  );
+  await screen.findByRole('dialog', { name: 'Share the view Valea Demo' });
+  expect(screen.getByTestId('view-share-without-data').textContent).toMatch(/without the caves and features/);
+  expect(screen.queryByTestId('view-share-without-filter-layers')).toBeNull();
+});
+
+it('says filter layers stay off a link when the rest of the view is shared', async () => {
+  render(
+    <App>
+      <ViewShareDialog
+        shared={{ name: 'Valea Demo', url, leavesOut: { dataLayers: false, filterLayers: true } }}
+        onClose={() => undefined}
+      />
+    </App>,
+  );
+  await screen.findByRole('dialog', { name: 'Share the view Valea Demo' });
+  expect(screen.queryByTestId('view-share-without-data')).toBeNull();
+  expect(screen.getByTestId('view-share-without-filter-layers')).toBeTruthy();
+});

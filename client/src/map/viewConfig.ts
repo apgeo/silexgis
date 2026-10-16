@@ -224,6 +224,21 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
   };
 }
 
+/**
+ * What a shared link to a stored view leaves out, for the share dialog to say so. A link runs no
+ * filter — nobody behind it has an account to run one as — so a view narrowed by anything more than
+ * a tag is shared with neither of its data layers (the server draws them for no such view), and a
+ * layer drawn from a saved filter is never drawn through a link at all.
+ */
+export function viewLinkLeavesOut(config: unknown): { dataLayers: boolean; filterLayers: boolean } {
+  const parsed = (config !== null && typeof config === 'object' ? config : {}) as Partial<ViewConfig>;
+  const present = (value: unknown) => value !== undefined && value !== null;
+  return {
+    dataLayers: present(parsed.savedFilterId) || present(parsed.filterDocument),
+    filterLayers: Array.isArray(parsed.filterLayers) && parsed.filterLayers.length > 0,
+  };
+}
+
 /** The filter as a view stores it: a tag in its old key, a saved filter by id, anything else whole. */
 function viewFilterFields(
   filter: MapFilter | null,

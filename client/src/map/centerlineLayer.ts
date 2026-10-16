@@ -7,6 +7,7 @@ import VectorSource from 'ol/source/Vector';
 import { Stroke, Style } from 'ol/style';
 import { fetchCenterlineFeatures, type MapConfig } from '../api/hooks.ts';
 import { centerlinePalette } from './markerPalette.ts';
+import { handleMapFilterError, mapFilterParams, onMapFilterChange } from './mapFilters.ts';
 
 export const CENTERLINE_LAYER_ID = 'centerlines';
 
@@ -143,6 +144,10 @@ export function attachCenterlineLoader(map: Map): () => void {
         zoom,
         overrides.detailZoom,
         overrides.maxPaths ?? effectiveMaxPaths(),
+        undefined,
+        // The survey lines follow the map's filter, so a filtered map does not draw the caves it
+        // has just taken off the entrance layer.
+        mapFilterParams(),
       );
       if (seq !== requestSeq) {
         return; // a newer request superseded this one
@@ -150,8 +155,15 @@ export function attachCenterlineLoader(map: Map): () => void {
       source.clear(true);
       source.addFeatures(format.readFeatures(collection, { featureProjection: 'EPSG:3857' }));
       publish({ withheldCount: collection.withheldCount, detail: collection.detail });
-    } catch {
-      // Keep previous features on transient errors; next moveend retries.
+    } catch (error) {
+      // Keep previous features on transient errors; next moveend retries. A refused filter is not
+      // transient: what was drawn before is not what it selects.
+      if (seq === requestSeq) {
+        handleMapFilterError(error, () => {
+          source.clear(true);
+          publish({ withheldCount: 0, detail: false });
+        });
+      }
     }
   };
 
@@ -162,7 +174,9 @@ export function attachCenterlineLoader(map: Map): () => void {
 
   map.on('moveend', onMoveEnd);
   activeReload = () => void load();
+  const unsubscribeFilter = onMapFilterChange(() => void load());
   return () => {
+    unsubscribeFilter();
     map.un('moveend', onMoveEnd);
     window.clearTimeout(timer);
     activeReload = undefined;

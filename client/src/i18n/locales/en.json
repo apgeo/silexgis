@@ -3107,6 +3107,8 @@
     "exportUnreadableNone": "None of this installation’s backgrounds may be put into an image.",
     "shareTitle": "Share the view {{name}}",
     "shareExplain": "Anyone with this link can open the view without an account. It shows the area the view looks at over a public background, with the layers the view had on — limited to what is public in its own right, and protected positions only approximately.",
+    "shareWithoutData": "This view is narrowed by a saved filter or by a filter from a link, which a link cannot run — so the link shows the area and its background without the caves and features. Layers drawn from saved filters are never shown through a link either.",
+    "shareWithoutFilterLayers": "Layers drawn from saved filters are never shown through a link; the link shows the view's other layers.",
     "shareQr": "The link to the view {{name}} as a QR code"
   },
   "panel": {

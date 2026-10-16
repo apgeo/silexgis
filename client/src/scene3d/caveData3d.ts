@@ -314,6 +314,9 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
         limits.detailZoom,
         limits.maxPaths,
         true,
+        // Under the map's filter, as the entrances beside them are: a filtered scene draws the
+        // surveys of the caves the filter keeps and no others.
+        mapFilterParams(),
       );
       // The layer can be turned off while its request is in the air, and turning it off clears
       // the notices about it on purpose. Answering afterwards would put them back over a view the
@@ -341,9 +344,16 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       const footprint = caveFootprint(nearestCaveCenterlines(polylines, center));
       engine.setCutawayFootprint(footprint);
       engine.setCameraFloorHeight(cameraFloorFor(footprint));
-    } catch {
+    } catch (error) {
       // Keep what is already drawn: a dropped request is usually a network hiccup, and blanking
       // the survey the viewer is reading would be a worse answer than showing it a moment stale.
+      // A refused filter is the exception, as it is for the entrances.
+      if (seq === requestSeq && !detached) {
+        handleMapFilterError(error, () => {
+          drawnCenterlines = [];
+          centerlines.replace(drawnCenterlines);
+        });
+      }
     }
   };
 

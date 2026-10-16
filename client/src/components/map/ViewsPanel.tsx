@@ -14,9 +14,9 @@ import {
   type MapViewInfo,
 } from '../../api/hooks.ts';
 import { documentBackgroundName } from '../../map/baseLayers.ts';
-import { exportMapImage } from '../../map/viewConfig.ts';
+import { exportMapImage, viewLinkLeavesOut } from '../../map/viewConfig.ts';
 import { saveBlob } from '../../api/download.ts';
-import ViewShareDialog from './ViewShareDialog.tsx';
+import ViewShareDialog, { type SharedViewLink } from './ViewShareDialog.tsx';
 
 interface ViewsPanelProps {
   onCapture: () => object;
@@ -33,7 +33,7 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
   const deleteView = useDeleteMapView();
   const shareView = useShareMapView();
   const [name, setName] = useState('');
-  const [shared, setShared] = useState<{ name: string; url: string } | null>(null);
+  const [shared, setShared] = useState<SharedViewLink | null>(null);
 
   const save = async (isHome: boolean) => {
     const trimmed = name.trim();
@@ -61,7 +61,11 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
   const share = async (view: MapViewInfo) => {
     try {
       const updated = await shareView.mutateAsync(view.id);
-      setShared({ name: view.name, url: `${window.location.origin}/shared/view/${updated.shareToken}` });
+      setShared({
+        name: view.name,
+        url: `${window.location.origin}/shared/view/${updated.shareToken}`,
+        leavesOut: viewLinkLeavesOut(view.config),
+      });
     } catch {
       message.error(t('common.saveFailed'));
     }

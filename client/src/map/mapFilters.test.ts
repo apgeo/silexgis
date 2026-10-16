@@ -5,8 +5,10 @@ import { decodeFilter, encodeFilter } from '../filters/url.ts';
 import {
   handleMapFilterError,
   mapFilterParams,
+  onMapFilterChange,
   onMapFilterRefusal,
   readMapFilterAddress,
+  setMapFilter,
   sameMapFilter,
   tagChipFilter,
   tagOfMapFilter,
@@ -131,5 +133,26 @@ describe('a refused filter', () => {
     detach();
     handleMapFilterError({ status: 400, code: 'filter.invalid' }, clear);
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('loaders following the filter', () => {
+  it('are told when the filter changes, and not when the same filter is set again', () => {
+    setMapFilter(null);
+    const listener = vi.fn();
+    const detach = onMapFilterChange(listener);
+
+    setMapFilter({ kind: 'saved', savedFilterId });
+    expect(listener).toHaveBeenCalledTimes(1);
+    setMapFilter({ kind: 'saved', savedFilterId });
+    expect(listener).toHaveBeenCalledTimes(1);
+    setMapFilter({ kind: 'document', document: lengthDocument });
+    setMapFilter(null);
+    expect(listener).toHaveBeenCalledTimes(3);
+
+    detach();
+    setMapFilter({ kind: 'saved', savedFilterId });
+    expect(listener).toHaveBeenCalledTimes(3);
+    setMapFilter(null);
   });
 });

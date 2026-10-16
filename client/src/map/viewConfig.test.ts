@@ -4,7 +4,7 @@ import type { Camera3DState } from '../scene3d/camera3d.ts';
 import { setActiveViewCamera } from '../workspace/viewCamera.ts';
 import { emptyDocument, withWhere } from '../filters/document.ts';
 import { tagChipFilter, type MapFilter } from './mapFilters.ts';
-import { applyViewConfig, captureViewConfig, type WorkspaceUiState } from './viewConfig.ts';
+import { applyViewConfig, captureViewConfig, viewLinkLeavesOut, type WorkspaceUiState } from './viewConfig.ts';
 
 const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
   baseLayerId: 3,
@@ -401,5 +401,20 @@ describe('the filter layers a saved view carries', () => {
     expect(restored?.filterLayers).toEqual([
       { savedFilterId: first, color: 'violet', symbol: 'circle', visible: true },
     ]);
+  });
+});
+
+describe('what a shared link to a view leaves out', () => {
+  it('drops the data layers of a view narrowed by a saved filter or a document, never of one narrowed by a tag', () => {
+    expect(viewLinkLeavesOut({ savedFilterId: '00000000-0000-4000-8000-000000000001' }).dataLayers).toBe(true);
+    expect(viewLinkLeavesOut({ filterDocument: { version: 1, scope: [] } }).dataLayers).toBe(true);
+    expect(viewLinkLeavesOut({ tagFilter: 'bats', savedFilterId: null }).dataLayers).toBe(false);
+    expect(viewLinkLeavesOut({}).dataLayers).toBe(false);
+    expect(viewLinkLeavesOut(null).dataLayers).toBe(false);
+  });
+
+  it('notes filter layers only when the view has some', () => {
+    expect(viewLinkLeavesOut({ filterLayers: [] }).filterLayers).toBe(false);
+    expect(viewLinkLeavesOut({ filterLayers: [{ savedFilterId: 'x' }] }).filterLayers).toBe(true);
   });
 });

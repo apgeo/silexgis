@@ -3,9 +3,21 @@ import { Modal, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import QrLink from '../qr/QrLink.tsx';
 
+/** The view being shared, by name, the address its link opens and what the link leaves out. */
+export interface SharedViewLink {
+  name: string;
+  url: string;
+  /**
+   * `dataLayers`: the view is narrowed by a saved filter or a filter document, which a link cannot
+   * run, so the link shows neither the caves nor the features. `filterLayers`: the view draws
+   * layers from saved filters, which a link never shows.
+   */
+  leavesOut?: { dataLayers: boolean; filterLayers: boolean };
+}
+
 interface ViewShareDialogProps {
-  /** The view being shared, by name, and the address its link opens; null keeps the dialog shut. */
-  shared: { name: string; url: string } | null;
+  /** Null keeps the dialog shut. */
+  shared: SharedViewLink | null;
   onClose: () => void;
 }
 
@@ -28,6 +40,16 @@ export default function ViewShareDialog({ shared, onClose }: ViewShareDialogProp
       {shared && (
         <>
           <Typography.Paragraph type="secondary">{t('views.shareExplain')}</Typography.Paragraph>
+          {shared.leavesOut?.dataLayers && (
+            <Typography.Paragraph type="warning" data-testid="view-share-without-data">
+              {t('views.shareWithoutData')}
+            </Typography.Paragraph>
+          )}
+          {shared.leavesOut?.filterLayers && !shared.leavesOut.dataLayers && (
+            <Typography.Paragraph type="secondary" data-testid="view-share-without-filter-layers">
+              {t('views.shareWithoutFilterLayers')}
+            </Typography.Paragraph>
+          )}
           <QrLink
             url={shared.url}
             copiedMessage={t('views.linkCopied')}

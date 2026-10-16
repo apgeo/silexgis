@@ -207,3 +207,38 @@ test('a pinned saved filter narrows the map, a filter layer and the filter come 
     }
   }
 });
+
+test('a link whose saved filter the recipient cannot run opens the map unfiltered and says so', async ({
+  page,
+  consoleErrors,
+}) => {
+  // The refusal this test drives on purpose: the map first asks under the link's filter and is
+  // answered 404, which the browser reports to its console as a failed resource.
+  consoleErrors.allow(
+    /Failed to load resource: .*404/,
+    'the saved filter named by the link does not exist for this reader, which the route answers 404',
+  );
+  await login(page);
+
+  // A saved filter id no reader has: what a clubmate's private filter looks like to a recipient.
+  const missing = '00000000-0000-4000-8000-000000000001';
+  const refused = page.waitForResponse(
+    (response) =>
+      response.status() === 404 &&
+      new URL(response.url()).pathname === '/api/v1/map/cave-entrances' &&
+      new URL(response.url()).searchParams.get('savedFilterId') === missing,
+    { timeout: 60_000 },
+  );
+  const everything = entrancesAnswered(page, unfilteredAddress);
+  const address = new URL(mapAddress(COUNTRY), 'http://placeholder');
+  address.searchParams.set('saved', missing);
+  await gotoRoute(page, `${address.pathname}${address.search}${address.hash}`);
+  await refused;
+
+  // The map draws everything the reader may see, the link's filter is gone from the address, and
+  // the notice is the unreadable link's — not the refusal's, which would leave the map empty.
+  expect(await everything).toBeGreaterThan(0);
+  await expect(page.getByTestId('map-filter-unreadable')).toBeVisible();
+  await expect(page.getByTestId('map-filter-refused')).toHaveCount(0);
+  await expect(page).not.toHaveURL(/[?&]saved=/);
+});
