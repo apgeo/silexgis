@@ -18,8 +18,9 @@ using Xunit.Abstractions;
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// How the centreline overlay behaves the first time it is asked for after the database has
-/// forgotten the line work — a measurement, opt-in, and not a gate.
+/// Opt-in, reports only: how the centreline overlay behaves the first time it is asked for after
+/// the database has forgotten the line work. A measurement, not a gate — without its variable it
+/// does nothing and passes, so a green result from it says nothing about the overlay.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -103,7 +104,7 @@ public sealed class CenterlineColdCacheMeasurementTests : IAsyncLifetime, IDispo
     }
 
     [Fact]
-    public async Task First_centerline_overlay_after_the_buffer_cache_is_emptied()
+    public async Task Opt_in_reports_only_first_centerline_overlay_after_the_buffer_cache_is_emptied()
     {
         if (!Requested)
         {
