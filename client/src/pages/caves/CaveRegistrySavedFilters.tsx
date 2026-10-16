@@ -102,6 +102,7 @@ export default function CaveRegistrySavedFilters({
         <Select
           style={{ width: 260 }}
           placeholder={t('caveRegistry.applySaved')}
+          aria-label={t('caveRegistry.applySaved')}
           value={null}
           data-testid="cave-registry-apply-saved"
           showSearch
