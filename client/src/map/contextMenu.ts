@@ -3,12 +3,18 @@ import type Map from 'ol/Map';
 import { unByKey } from 'ol/Observable';
 import { listenOnce, type EventsKey } from 'ol/events';
 import { toLonLat } from 'ol/proj';
+import { MAP_FOCUSED_SHORTCUTS, matchesAny } from '../hooks/shortcutRegistry.ts';
 
 export interface MapContextMenuTarget {
   /** Pixel position relative to the map viewport, for anchoring the menu. */
   pixel: [number, number];
   /** Click coordinate in EPSG:4326, rounded to ~0.1 m. */
   lonLat: [number, number];
+  /**
+   * Asked for from the keyboard on the focused map, at the middle of the view. The menu then takes
+   * focus so its items can be walked with the arrows, and hands it back to the map when it closes.
+   */
+  viaKeyboard?: boolean;
 }
 
 /** Roughly the browsers' own long-press threshold, so the two feel like one gesture. */
@@ -20,7 +26,8 @@ const NATIVE_DEDUPE_MS = 300;
 
 /**
  * Binds the "menu at this spot" gesture on the map viewport: right-click on desktop,
- * long-press on touch.
+ * long-press on touch, and Shift+F10 or the Menu key on the focused map — which has no spot to
+ * point at, so it opens at the middle of the view, the point the arrow keys steer.
  *
  * Long-press cannot be left to the browser. Android Chrome does synthesize a `contextmenu`
  * from it, but iOS Safari never does so over a canvas — no event of any kind arrives — so
@@ -45,6 +52,50 @@ export function attachContextMenu(
     const [x, y] = map.getEventPixel(event);
     const [lon, lat] = toLonLat(map.getEventCoordinate(event));
     onOpen({ pixel: [x, y], lonLat: [Number(lon.toFixed(6)), Number(lat.toFixed(6))] });
+  };
+
+  const openAtCentre = () => {
+    const size = map.getSize();
+    const centre = map.getView().getCenter();
+    if (!size || !centre) {
+      return;
+    }
+    const [lon, lat] = toLonLat(centre);
+    onOpen({
+      pixel: [size[0] / 2, size[1] / 2],
+      lonLat: [Number(lon.toFixed(6)), Number(lat.toFixed(6))],
+      viaKeyboard: true,
+    });
+  };
+
+  // The keyboard's menu is asked of the focused map's own element, which holds focus; a pointer's
+  // right-click lands on the viewport inside it and is handled above. Listened for on the document
+  // and checked against the element at the time, because the map is given its element after this
+  // is bound.
+  let keyboardOpenedAt = 0;
+  const onFocusedMap = (event: Event) => event.target !== null && event.target === map.getTargetElement();
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (!onFocusedMap(event) || !matchesAny(MAP_FOCUSED_SHORTCUTS.contextMenu, event)) {
+      return;
+    }
+    event.preventDefault();
+    keyboardOpenedAt = Date.now();
+    openAtCentre();
+  };
+
+  // Where the browser turns the key into a menu event of its own before any key event is seen,
+  // that event is taken instead — once: the key press that opened the menu may be followed by the
+  // browser's event for the same press.
+  const onKeyboardContextMenu = (event: MouseEvent) => {
+    if (!onFocusedMap(event)) {
+      return;
+    }
+    event.preventDefault();
+    if (Date.now() - keyboardOpenedAt < NATIVE_DEDUPE_MS) {
+      return;
+    }
+    openAtCentre();
   };
 
   const cancelPress = () => {
@@ -118,6 +169,8 @@ export function attachContextMenu(
   };
 
   viewport.addEventListener('contextmenu', onContextMenu);
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('contextmenu', onKeyboardContextMenu);
   viewport.addEventListener('pointerdown', onPointerDown);
   viewport.addEventListener('pointermove', onPointerMove);
   viewport.addEventListener('pointerup', cancelPress);
@@ -127,6 +180,8 @@ export function attachContextMenu(
     cancelPress();
     releaseClickSuppression();
     viewport.removeEventListener('contextmenu', onContextMenu);
+    document.removeEventListener('keydown', onKeyDown);
+    document.removeEventListener('contextmenu', onKeyboardContextMenu);
     viewport.removeEventListener('pointerdown', onPointerDown);
     viewport.removeEventListener('pointermove', onPointerMove);
     viewport.removeEventListener('pointerup', cancelPress);

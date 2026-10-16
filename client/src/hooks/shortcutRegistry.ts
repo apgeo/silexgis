@@ -24,9 +24,9 @@ export interface DescribedShortcut extends KeyCombination {
  * matches its keys against the declaration here (`matchesAny`), so the key the help lists and the
  * key that works are one value: changing either changes both.
  *
- * The map's keys are OpenLayers' own keyboard interactions, which listen on the map's element
- * and so act only while it has focus; they are the one group declared here without a handler of
- * ours, because the library binds them.
+ * The map's arrows and +/− are OpenLayers' own keyboard interactions, which listen on the map's
+ * element and so act only while it has focus; they are declared here without a handler of ours,
+ * because the library binds them. The menu keys are ours (the map's context menu module).
  */
 export const MAP_FOCUSED_SHORTCUTS = {
   pan: [
@@ -37,6 +37,10 @@ export const MAP_FOCUSED_SHORTCUTS = {
   ],
   zoomIn: [{ key: '+', labelKey: 'shortcuts.action.zoomIn' }],
   zoomOut: [{ key: '-', labelKey: 'shortcuts.action.zoomOut' }],
+  contextMenu: [
+    { key: 'F10', shift: true, labelKey: 'shortcuts.action.contextMenu' },
+    { key: 'ContextMenu', labelKey: 'shortcuts.action.contextMenu' },
+  ],
 } satisfies Record<string, DescribedShortcut[]>;
 
 /** A panel section's drag handle: the keyboard's way of doing what dragging it does. */
@@ -165,6 +169,7 @@ const KEY_SYMBOLS: Record<string, string> = {
 
 /** Keys printed as a word, which is the reader's language's word for it. */
 const KEY_WORDS: Record<string, string> = {
+  ContextMenu: 'shortcuts.keyCap.menu',
   Escape: 'shortcuts.keyCap.escape',
   Enter: 'shortcuts.keyCap.enter',
   ' ': 'shortcuts.keyCap.space',

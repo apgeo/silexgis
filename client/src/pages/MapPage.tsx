@@ -1393,7 +1393,14 @@ export default function MapPage() {
             target={contextTarget}
             featureTypes={featureTypes ?? []}
             canEdit={canEdit}
-            onClose={() => setContextTarget(null)}
+            onClose={() => {
+              // A menu the keyboard opened hands focus back to the map it was opened from; a
+              // dialog an item opens takes it from there, and gives it back to the map in turn.
+              if (contextTarget?.viaKeyboard) {
+                getWorkspaceMap().getTargetElement()?.focus();
+              }
+              setContextTarget(null);
+            }}
             onAddFeature={(typeId, lonLat) => {
               const picked = featureTypes?.find((ft) => Number(ft.id) === typeId);
               const shape: DrawShape = drawShapeForType(picked) ?? 'Point';

@@ -72,11 +72,16 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 /**
- * Whether a modal or drawer is open.
+ * Whether a modal, a drawer or a dropdown menu is open.
  *
- * Escape in particular belongs to whatever is on top: closing a dialog and deselecting the object
- * behind it with the same press is the kind of thing that loses somebody's work.
+ * Escape in particular belongs to whatever is on top: closing a dialog — or a menu — and
+ * deselecting the object behind it with the same press is the kind of thing that loses somebody's
+ * work.
  */
 function hasOpenDialog(): boolean {
-  return document.querySelector('.ant-modal-wrap:not([style*="display: none"]), .ant-drawer-open') !== null;
+  return (
+    document.querySelector(
+      '.ant-modal-wrap:not([style*="display: none"]), .ant-drawer-open, .ant-dropdown:not(.ant-dropdown-hidden)',
+    ) !== null
+  );
 }

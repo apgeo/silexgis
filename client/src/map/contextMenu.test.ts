@@ -188,3 +188,55 @@ describe('detach', () => {
     expect(opened).toHaveLength(0);
   });
 });
+
+describe('from the keyboard', () => {
+  let element: HTMLDivElement;
+
+  beforeEach(() => {
+    element = document.createElement('div');
+    element.tabIndex = 0;
+    document.body.appendChild(element);
+    map.setTarget(element);
+    map.setSize([800, 600]);
+    map.getView().setCenter(fromLonLat([24.75, 46.5]));
+  });
+
+  afterEach(() => {
+    map.setTarget(undefined);
+    element.remove();
+  });
+
+  const pressOnMap = (key: string, shiftKey = false) => {
+    const event = new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true });
+    element.dispatchEvent(event);
+    return event;
+  };
+
+  it('opens the menu at the middle of the view on Shift+F10 and on the Menu key', () => {
+    expect(pressOnMap('F10', true).defaultPrevented).toBe(true);
+    vi.advanceTimersByTime(1_000);
+    pressOnMap('ContextMenu');
+
+    expect(opened).toEqual([
+      { pixel: [400, 300], lonLat: [24.75, 46.5], viaKeyboard: true },
+      { pixel: [400, 300], lonLat: [24.75, 46.5], viaKeyboard: true },
+    ]);
+  });
+
+  it('takes the browser’s own menu event for the key press once, not twice', () => {
+    pressOnMap('ContextMenu');
+    element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+
+    expect(opened).toHaveLength(1);
+  });
+
+  it('leaves F10 alone, and the keys of anything other than the map itself', () => {
+    expect(pressOnMap('F10').defaultPrevented).toBe(false);
+    const elsewhere = document.createElement('input');
+    document.body.appendChild(elsewhere);
+    elsewhere.dispatchEvent(new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true }));
+    elsewhere.remove();
+
+    expect(opened).toHaveLength(0);
+  });
+});

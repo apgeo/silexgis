@@ -6836,7 +6836,8 @@
       "zoomInPhoto": "Zoom in on the photo",
       "zoomOutPhoto": "Zoom out of the photo",
       "resetPhoto": "Back to the whole photo",
-      "followPassage": "Follow the link"
+      "followPassage": "Follow the link",
+      "contextMenu": "Open the map menu at the middle of the view"
     },
     "keyCap": {
       "ctrl": "Ctrl",
@@ -6846,7 +6847,8 @@
       "shift": "Shift",
       "escape": "Esc",
       "enter": "Enter",
-      "space": "Space"
+      "space": "Space",
+      "menu": "Menu"
     }
   },
   "a11y": {

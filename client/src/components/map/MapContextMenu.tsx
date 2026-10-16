@@ -84,6 +84,8 @@ export default function MapContextMenu({
     <Dropdown
       open={target !== null}
       trigger={[]}
+      // Opened from the keyboard, the menu takes focus so the arrows walk its items.
+      autoFocus={target?.viaKeyboard === true}
       // Dropdown layers stack above modals; tear the whole tree down on close so a
       // lingering submenu popup can never sit over the dialog a pick just opened.
       destroyOnHidden

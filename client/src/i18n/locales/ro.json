@@ -6836,7 +6836,8 @@
       "zoomInPhoto": "Mărește fotografia",
       "zoomOutPhoto": "Micșorează fotografia",
       "resetPhoto": "Înapoi la fotografia întreagă",
-      "followPassage": "Urmează legătura"
+      "followPassage": "Urmează legătura",
+      "contextMenu": "Deschide meniul hărții în mijlocul vederii"
     },
     "keyCap": {
       "ctrl": "Ctrl",
@@ -6846,7 +6847,8 @@
       "shift": "Shift",
       "escape": "Esc",
       "enter": "Enter",
-      "space": "Spațiu"
+      "space": "Spațiu",
+      "menu": "Meniu"
     }
   },
   "a11y": {
