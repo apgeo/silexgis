@@ -337,10 +337,12 @@ function noteInForce(
       continue;
     }
     const note = noteAt(
-      replayNotes(trip.events, { from: Number.NEGATIVE_INFINITY, to: at }).filter((said) => quoted(trip, said.caverId)),
+      replayNotes(trip.events, { from: Number.NEGATIVE_INFINITY, to: at }).filter(
+        (said) => said.caverId !== null && quoted(trip, said.caverId),
+      ),
       at,
     );
-    if (note === null) {
+    if (note === null || note.caverId === null) {
       continue;
     }
     const age = at - note.at;

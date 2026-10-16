@@ -546,8 +546,9 @@ function MovieDialogBody({
   // ---- the photographs hung on the trips' moments ----
   // Read and loaded while the dialog is open and the setting asks for them, so that a frame —
   // composed in one task — never has to wait for one. Held as they were under an export, like the
-  // trips: the frames being recorded are of the movie as it was when the export began.
-  const photographs = useMoviePictures(chosenIds, open && settings.pictures.mode !== 'off');
+  // trips: the frames being recorded are of the movie as it was when the export began. This body
+  // exists only while the dialog is open, so the setting is the whole question.
+  const photographs = useMoviePictures(chosenIds, settings.pictures.mode !== 'off');
   const pictureSchedule = useMemo(
     () =>
       timeline === null || frames === null

@@ -127,7 +127,8 @@ export function movieSpansShowing(
     if (trip === undefined) {
       return span;
     }
-    const shown = trip.events.filter((event) => appears(trip.tripLogId, event.caverId));
+    // A report of nobody in particular is nobody's to leave out, and paces the movie as it did.
+    const shown = trip.events.filter((event) => event.caverId === null || appears(trip.tripLogId, event.caverId));
     return shown.length === trip.events.length
       ? span
       : { ...span, moments: reportMoments(shown, surveyModelId) };
