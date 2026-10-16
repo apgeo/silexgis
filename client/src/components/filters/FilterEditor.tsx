@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
-import { Alert, Button, Checkbox, Flex, Select, Space, Tooltip, Typography } from 'antd';
+import { Alert, Checkbox, Flex, Select, Space, Tooltip, Typography } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import { useFilterQuery, useFilterVocabulary, type FilterQueryBody } from '../../api/hooks.ts';
