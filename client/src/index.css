@@ -94,8 +94,11 @@ html[data-reduce-motion='true'] *::after {
 }
 
 /* A control that acts in place rather than navigating, drawn as a link: a button, so it is in
-   the tab order, without the button's own height and padding around the words. */
+   the tab order, without the button's own height and padding around the words — and wrapping
+   the way the link it replaced did, since a button keeps its label on one line. */
 .ant-btn.link-button {
   height: auto;
   padding: 0;
+  white-space: normal;
+  text-align: start;
 }
