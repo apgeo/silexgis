@@ -94,9 +94,10 @@ describe('uiPrefsStore appearance', () => {
     });
   });
 
-  it('keeps everything already stored when upgrading from the previous version', () => {
+  it('keeps the browser’s own settings when upgrading from an old version', () => {
     // The guard on the version bump: without a migration, zustand throws the whole stored blob
-    // away, quietly wiping every user's pinned types, landing page and centerline budgets.
+    // away, quietly wiping every user's landing page and centerline budgets. (Pinned types are the
+    // account's now, and a cache from before that says nothing about whose they were.)
     localStorage.setItem(
       'silexgis.uiPrefs',
       JSON.stringify({ version: 1, state: { pinnedTypeIds: [4, 9], landingPage: 'dashboard' } }),
@@ -104,14 +105,14 @@ describe('uiPrefsStore appearance', () => {
 
     useUiPrefsStore.persist.rehydrate();
 
-    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([4, 9]);
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([]);
     expect(useUiPrefsStore.getState().landingPage).toBe('dashboard');
     expect(useUiPrefsStore.getState().appearance).toEqual(DEFAULT_APPEARANCE);
   });
 
-  it('keeps an appearance chosen under the previous version when the panel keys arrive', () => {
-    // The same guard one version on. Somebody who picked a dark theme must not be handed the
-    // default one back because a panel arrangement was added beside it.
+  it('drops an appearance stored before preferences belonged to an account', () => {
+    // The account holds the appearance and hands it back at sign-in; a browser's old copy could be
+    // anybody's who used it.
     localStorage.setItem(
       'silexgis.uiPrefs',
       JSON.stringify({
@@ -125,15 +126,13 @@ describe('uiPrefsStore appearance', () => {
 
     useUiPrefsStore.persist.rehydrate();
 
-    expect(useUiPrefsStore.getState().appearance.theme).toBe('dark');
-    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([3]);
+    expect(useUiPrefsStore.getState().appearance).toEqual(DEFAULT_APPEARANCE);
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([]);
     expect(useUiPrefsStore.getState().panels).toEqual({});
     expect(useUiPrefsStore.getState().layouts).toEqual([]);
   });
 
-  it('keeps a panel arrangement when the selector memory arrives beside it', () => {
-    // The same guard again. Adding somewhere for the object selectors to remember themselves must
-    // not cost anybody the panel they had arranged.
+  it('drops a panel arrangement and layouts stored before they belonged to an account', () => {
     localStorage.setItem(
       'silexgis.uiPrefs',
       JSON.stringify({
@@ -148,16 +147,14 @@ describe('uiPrefsStore appearance', () => {
 
     useUiPrefsStore.persist.rehydrate();
 
-    expect(useUiPrefsStore.getState().panels.main?.width).toBe(420);
-    expect(useUiPrefsStore.getState().layouts).toHaveLength(1);
+    expect(useUiPrefsStore.getState().panels).toEqual({});
+    expect(useUiPrefsStore.getState().layouts).toEqual([]);
     expect(useUiPrefsStore.getState().selectors).toEqual({});
   });
 
-  it('keeps a selector memory when the remembered export answer arrives beside it', () => {
-    // The same guard again, for the field that remembers what somebody decided about protected
-    // positions in an interchange export. Adding it must not cost anybody what they already had,
-    // and somebody who has not decided must come back undecided rather than with a default
-    // treatment nobody chose.
+  it('comes back undecided about protected positions from a version that had not asked', () => {
+    // Somebody who has not decided must come back undecided rather than with a default treatment
+    // nobody chose; the selector memory, the account's now, is dropped with the rest of it.
     localStorage.setItem(
       'silexgis.uiPrefs',
       JSON.stringify({
@@ -171,8 +168,8 @@ describe('uiPrefsStore appearance', () => {
 
     useUiPrefsStore.persist.rehydrate();
 
-    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([6]);
-    expect(useUiPrefsStore.getState().selectors).toEqual({ caves: { width: 300 } });
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([]);
+    expect(useUiPrefsStore.getState().selectors).toEqual({});
     expect(useUiPrefsStore.getState().karstLinkTreatment).toBeUndefined();
   });
 
@@ -190,7 +187,7 @@ describe('uiPrefsStore appearance', () => {
 
     useUiPrefsStore.persist.rehydrate();
 
-    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([2]);
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([]);
     expect(useUiPrefsStore.getState().karstLinkTreatment).toBe('omit');
     expect(useUiPrefsStore.getState().movieSettings).toBeUndefined();
   });
@@ -200,7 +197,6 @@ describe('uiPrefsStore appearance', () => {
     // read as it is, with nothing learnt yet, and one written since comes back whole.
     localStorage.setItem('silexgis.uiPrefs', JSON.stringify({ version: 7, state: { pinnedTypeIds: [4] } }));
     useUiPrefsStore.persist.rehydrate();
-    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([4]);
     expect(useUiPrefsStore.getState().movieGifCalibration).toBeUndefined();
 
     useUiPrefsStore.getState().setMovieGifCalibration({ turning: 0.03 });
@@ -237,7 +233,6 @@ describe('uiPrefsStore appearance', () => {
 
     useUiPrefsStore.persist.rehydrate();
 
-    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([8]);
     expect(useUiPrefsStore.getState().centerlineDetailZoom).toBe(16);
     expect(useUiPrefsStore.getState().centerlineMaxPaths).toBe(40000);
     expect(useUiPrefsStore.getState().meshesInViewMinZoom).toBeUndefined();
@@ -376,14 +371,16 @@ describe('uiPrefsStore account preferences', () => {
     expect(after.panels).toEqual({});
   });
 
-  it('keeps them across a sign-in of the same account, and for the first account to claim them', () => {
+  it('keeps them across a sign-in of the same account, and hands an unclaimed cache to nobody', () => {
     const store = useUiPrefsStore.getState();
     store.setCoordinateFormat('dms');
 
-    expect(store.adoptAccount('account-a')).toBe('claimed');
-    expect(useUiPrefsStore.getState().coordinateFormat).toBe('dms');
+    // Whoever set this, no account claimed it: the first account to sign in starts from defaults.
+    expect(store.adoptAccount('account-a')).toBe('reset');
+    expect(useUiPrefsStore.getState().coordinateFormat).toBe('dd');
+    useUiPrefsStore.getState().setCoordinateFormat('utm');
     expect(useUiPrefsStore.getState().adoptAccount('account-a')).toBe('same');
-    expect(useUiPrefsStore.getState().coordinateFormat).toBe('dms');
+    expect(useUiPrefsStore.getState().coordinateFormat).toBe('utm');
   });
 
   it('gives them up on sign-out, and leaves the browser’s own settings alone', () => {
@@ -400,19 +397,26 @@ describe('uiPrefsStore account preferences', () => {
     expect(after.centerlineDetailZoom).toBe(14);
   });
 
-  it('starts a browser from before this version with the defaults for the new keys', () => {
+  it('does not hand a cache from before preferences belonged to an account to the first one to sign in', () => {
+    // A shared expedition laptop: whoever arranged this, the next member to sign in is not them.
     localStorage.setItem(
       'silexgis.uiPrefs',
-      JSON.stringify({ version: 7, state: { pinnedTypeIds: [2], panels: { main: { width: 25 } } } }),
+      JSON.stringify({
+        version: 7,
+        state: { pinnedTypeIds: [2], panels: { main: { width: 25 } }, landingPage: 'dashboard' },
+      }),
     );
 
     useUiPrefsStore.persist.rehydrate();
+    useUiPrefsStore.getState().adoptAccount('account-a');
 
     const state = useUiPrefsStore.getState();
-    expect(state.pinnedTypeIds).toEqual([2]);
-    expect(state.panels.main?.width).toBe(25);
+    expect(state.pinnedTypeIds).toEqual([]);
+    expect(state.panels).toEqual({});
     expect(state.docks).toEqual(DEFAULT_DOCKS);
     expect(state.coordinateFormat).toBe('dd');
-    expect(state.accountId).toBeUndefined();
+    expect(state.accountId).toBe('account-a');
+    // The browser's own settings are the browser's, and stay.
+    expect(state.landingPage).toBe('dashboard');
   });
 });

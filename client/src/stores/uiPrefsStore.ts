@@ -171,10 +171,9 @@ interface UiPrefsState {
    */
   accountPrefsBaseline?: Record<string, unknown>;
   /**
-   * Makes the account preferences this account's: when they were another account's, they go back
-   * to their defaults first, so a second member signing in on this browser starts from nothing of
-   * the first one's. Says which of the three it was: already this account's, claimed from nobody,
-   * or reset from somebody else's.
+   * Makes the account preferences this account's: unless they already were, they go back to their
+   * defaults first, so a member signing in on this browser starts from nothing of whoever used it
+   * before. Says which it was: already this account's, or reset.
    */
   adoptAccount: (accountId: string) => AccountClaim;
   /** Puts the account preferences back to their defaults and leaves them unclaimed — on sign-out. */
@@ -186,7 +185,7 @@ interface UiPrefsState {
   applyAccountPrefs: (prefs: Partial<AccountPrefsState>, baseline: Record<string, unknown>) => void;
 }
 
-export type AccountClaim = 'same' | 'claimed' | 'reset';
+export type AccountClaim = 'same' | 'reset';
 
 /** The part of the state that is the account's rather than the browser's. */
 export interface AccountPrefsState {
@@ -315,13 +314,11 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           if (state.accountId === accountId) {
             return {};
           }
-          // A cache nobody had claimed yet is this browser's history from before preferences
-          // travelled with the account, or the defaults a sign-out left; it is kept for the first
-          // account to sign in. One another account claimed is never handed on.
-          claim = state.accountId === undefined ? 'claimed' : 'reset';
-          return claim === 'reset'
-            ? { ...accountPrefDefaults(), accountId, accountPrefsBaseline: undefined }
-            : { accountId };
+          // Never handed on — not from another account, and not from nobody: a cache no account
+          // claimed is the defaults a sign-out left, or this browser's arrangement from before
+          // preferences belonged to an account, which on an expedition's shared laptop is anybody's.
+          claim = 'reset';
+          return { ...accountPrefDefaults(), accountId, accountPrefsBaseline: undefined };
         });
         return claim;
       },
@@ -335,23 +332,19 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       // wiping everyone's pinned types, landing page and centerline budgets to add one field.
       migrate: (persisted, from) => {
         const state = persisted as UiPrefsState;
-        return {
-          ...state,
-          appearance: from < 2 ? DEFAULT_APPEARANCE : state.appearance,
-          panels: from < 3 ? {} : (state.panels ?? {}),
-          layouts: from < 3 ? [] : (state.layouts ?? []),
-          selectors: from < 4 ? {} : (state.selectors ?? {}),
+        // The browser's own settings, kept across every version.
+        const browser = {
           karstLinkTreatment: from < 5 ? undefined : state.karstLinkTreatment,
           movieSettings: from < 6 ? undefined : state.movieSettings,
           meshesInViewMinZoom: from < 7 ? undefined : state.meshesInViewMinZoom,
           meshesInViewMaxCaves: from < 7 ? undefined : state.meshesInViewMaxCaves,
           meshesInViewMaxBytes: from < 7 ? undefined : state.meshesInViewMaxBytes,
-          docks: from < 8 ? DEFAULT_DOCKS : (state.docks ?? DEFAULT_DOCKS),
-          coordinateFormat: from < 8 ? DEFAULT_COORDINATE_FORMAT : (state.coordinateFormat ?? DEFAULT_COORDINATE_FORMAT),
-          overviewMap: from < 8 ? false : (state.overviewMap ?? false),
-          accountId: from < 8 ? undefined : state.accountId,
-          accountPrefsBaseline: from < 8 ? undefined : state.accountPrefsBaseline,
         };
+        // Every version before this one predates preferences belonging to an account: such a
+        // cache says nothing about whose they are, so its account preferences are dropped rather
+        // than handed to whoever signs in next, and the account's own come back at sign-in. (A
+        // later version keeps them when migrating from this one or after it.)
+        return { ...state, ...browser, ...accountPrefDefaults(), accountId: undefined, accountPrefsBaseline: undefined };
       },
     },
   ),
