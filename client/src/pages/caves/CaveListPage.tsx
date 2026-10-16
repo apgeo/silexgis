@@ -447,6 +447,7 @@ export default function CaveListPage() {
         onClearExtra={() => go(() => ({ extra: [], page: 1 }))}
         onEditExtra={(opener) => openAdvanced(opener)}
         onForget={() => go(() => ({ savedFilterId: undefined }))}
+        onRelease={() => go(() => ({ controls: {}, extra: [], savedFilterId: undefined, page: 1 }))}
       />
       {error && token !== undefined && (
         <Alert

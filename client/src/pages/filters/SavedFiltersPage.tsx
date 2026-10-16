@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, PushpinFilled, PushpinOutlined, SearchOutlined } from '@ant-design/icons';
 import { App, Flex, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,7 @@ import {
 } from '../../api/hooks/savedFilters.ts';
 import { readCaveRegistry, writeCaveRegistryAddress } from '../../filters/caveRegistry.ts';
 import { describeCaveRegistry, type ConditionPart } from '../../filters/describe.ts';
+import { MAX_PINNED_FILTERS, useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
 interface EditValues {
   name: string;
@@ -45,6 +46,9 @@ export default function SavedFiltersPage() {
   const remove = useDeleteSavedFilter();
   const [editing, setEditing] = useState<SavedFilter | null>(null);
   const [form] = Form.useForm<EditValues>();
+  const pinnedFilterIds = useUiPrefsStore((s) => s.pinnedFilterIds);
+  const togglePinnedFilter = useUiPrefsStore((s) => s.togglePinnedFilter);
+  const pinsFull = pinnedFilterIds.length >= MAX_PINNED_FILTERS;
 
   const groupName = (id: string | null | undefined) =>
     cavingGroups?.find((group) => group.id === id)?.name ?? t('savedFilters.someGroup');
@@ -189,47 +193,65 @@ export default function SavedFiltersPage() {
             title: '',
             key: 'actions',
             width: 200,
-            render: (_: unknown, filter) => (
-              <Space>
-                <Tooltip title={t('savedFilters.open')}>
-                  <Button
-                    size="small"
-                    icon={<SearchOutlined />}
-                    aria-label={t('savedFilters.open')}
-                    data-testid={`saved-filter-open-${filter.id}`}
-                    disabled={filter.state === 'unreadable'}
-                    onClick={() => open(filter)}
-                  />
-                </Tooltip>
-                {filter.mine && (
-                  <>
-                    <Tooltip title={t('savedFilters.edit')}>
-                      <Button
-                        size="small"
-                        icon={<EditOutlined />}
-                        aria-label={t('savedFilters.edit')}
-                        data-testid={`saved-filter-edit-${filter.id}`}
-                        onClick={() => startEdit(filter)}
-                      />
-                    </Tooltip>
-                    <Popconfirm
-                      title={t('savedFilters.deleteConfirm')}
-                      okText={t('savedFilters.delete')}
-                      onConfirm={() =>
-                        remove.mutateAsync(filter.id).catch(() => message.error(t('common.saveFailed')))}
-                    >
-                      <Button
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        aria-label={t('savedFilters.delete')}
-                        data-testid={`saved-filter-delete-${filter.id}`}
-                      />
-                    </Popconfirm>
-                  </>
-                )}
-              </Space>
-            ),
+            render: (_: unknown, filter) => {
+              const pinned = pinnedFilterIds.includes(filter.id.toLowerCase());
+              const pinLabel = pinned ? t('quickFilters.unpinRow') : t('quickFilters.pin');
+              return (
+                <Space>
+                  {/* Any filter this account can read can be pinned, its own or a group's: a pin
+                      is a shortcut kept with the account, and the chip runs the filter under the
+                      account's own access like every other use of it. */}
+                  <Tooltip title={!pinned && pinsFull ? t('quickFilters.full', { count: MAX_PINNED_FILTERS }) : pinLabel}>
+                    <Button
+                      size="small"
+                      icon={pinned ? <PushpinFilled /> : <PushpinOutlined />}
+                      aria-label={pinLabel}
+                      aria-pressed={pinned}
+                      disabled={!pinned && pinsFull}
+                      data-testid={`saved-filter-pin-${filter.id}`}
+                      onClick={() => togglePinnedFilter(filter.id)}
+                    />
+                  </Tooltip>
+                  <Tooltip title={t('savedFilters.open')}>
+                    <Button
+                      size="small"
+                      icon={<SearchOutlined />}
+                      aria-label={t('savedFilters.open')}
+                      data-testid={`saved-filter-open-${filter.id}`}
+                      disabled={filter.state === 'unreadable'}
+                      onClick={() => open(filter)}
+                    />
+                  </Tooltip>
+                  {filter.mine && (
+                    <>
+                      <Tooltip title={t('savedFilters.edit')}>
+                        <Button
+                          size="small"
+                          icon={<EditOutlined />}
+                          aria-label={t('savedFilters.edit')}
+                          data-testid={`saved-filter-edit-${filter.id}`}
+                          onClick={() => startEdit(filter)}
+                        />
+                      </Tooltip>
+                      <Popconfirm
+                        title={t('savedFilters.deleteConfirm')}
+                        okText={t('savedFilters.delete')}
+                        onConfirm={() =>
+                          remove.mutateAsync(filter.id).catch(() => message.error(t('common.saveFailed')))}
+                      >
+                        <Button
+                          size="small"
+                          danger
+                          icon={<DeleteOutlined />}
+                          aria-label={t('savedFilters.delete')}
+                          data-testid={`saved-filter-delete-${filter.id}`}
+                        />
+                      </Popconfirm>
+                    </>
+                  )}
+                </Space>
+              );
+            },
           },
         ]}
       />

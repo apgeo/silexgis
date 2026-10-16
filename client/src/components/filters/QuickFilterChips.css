@@ -1,0 +1,28 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+.quick-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+/* A chip and its unpin button read as one object. */
+.quick-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.quick-filter-chip-unpin {
+  min-width: 24px;
+}
+
+.quick-filter-chips-empty:focus-visible {
+  outline: 2px solid var(--ant-color-primary, currentColor);
+  outline-offset: 2px;
+}
+
+/* Under the cave registry's saved-filter toolbar, spaced like the toolbar's own rows. */
+.cave-registry-quick-filters {
+  margin-bottom: 12px;
+}

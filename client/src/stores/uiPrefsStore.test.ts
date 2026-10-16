@@ -1,10 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_APPEARANCE, DEFAULT_DOCKS, accountPrefDefaults, useUiPrefsStore } from './uiPrefsStore.ts';
+import {
+  DEFAULT_APPEARANCE,
+  DEFAULT_DOCKS,
+  MAX_PINNED_FILTERS,
+  accountPrefDefaults,
+  useUiPrefsStore,
+} from './uiPrefsStore.ts';
 
 afterEach(() => {
   useUiPrefsStore.setState({
     pinnedTypeIds: [],
+    pinnedFilterIds: [],
     dialogPlacement: {},
     mapChromeHidden: false,
     landingPage: 'map',
@@ -26,6 +33,37 @@ afterEach(() => {
     accountId: undefined,
   });
   localStorage.removeItem('silexgis.uiPrefs');
+});
+
+describe('uiPrefsStore pinned saved filters', () => {
+  const id = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
+
+  it('pins in click order, unpins on a repeat toggle, and treats two spellings of an id as one', () => {
+    const { togglePinnedFilter } = useUiPrefsStore.getState();
+    togglePinnedFilter(id(2));
+    togglePinnedFilter('AAAAAAAA-0000-0000-0000-000000000001');
+    expect(useUiPrefsStore.getState().pinnedFilterIds).toEqual([id(2), 'aaaaaaaa-0000-0000-0000-000000000001']);
+    togglePinnedFilter('aaaaaaaa-0000-0000-0000-000000000001');
+    expect(useUiPrefsStore.getState().pinnedFilterIds).toEqual([id(2)]);
+  });
+
+  it('pins no more than the row holds, and still unpins when it is full', () => {
+    const { togglePinnedFilter } = useUiPrefsStore.getState();
+    for (let n = 1; n <= MAX_PINNED_FILTERS + 1; n += 1) {
+      togglePinnedFilter(id(n));
+    }
+    expect(useUiPrefsStore.getState().pinnedFilterIds).toHaveLength(MAX_PINNED_FILTERS);
+    expect(useUiPrefsStore.getState().pinnedFilterIds).not.toContain(id(MAX_PINNED_FILTERS + 1));
+    togglePinnedFilter(id(1));
+    expect(useUiPrefsStore.getState().pinnedFilterIds).toHaveLength(MAX_PINNED_FILTERS - 1);
+  });
+
+  it('belongs to the account: a sign-out puts the chips back to none', () => {
+    useUiPrefsStore.getState().togglePinnedFilter(id(3));
+    useUiPrefsStore.getState().releaseAccount();
+    expect(useUiPrefsStore.getState().pinnedFilterIds).toEqual([]);
+    expect(accountPrefDefaults().pinnedFilterIds).toEqual([]);
+  });
 });
 
 describe('uiPrefsStore pinned types', () => {

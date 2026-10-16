@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { isCoordinateFormat } from '../geo/coordinateFormat.ts';
-import { accountPrefDefaults, type AccountPrefsState } from './uiPrefsStore.ts';
+import { accountPrefDefaults, MAX_PINNED_FILTERS, type AccountPrefsState } from './uiPrefsStore.ts';
+
+/** What a saved filter's id looks like; a pinned chip naming anything else is dropped on read. */
+const SAVED_FILTER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The preferences that belong to the ACCOUNT rather than to the browser: they are saved in the
@@ -153,8 +156,18 @@ export function readAccountPrefs(stored: unknown): AccountPrefs {
  */
 export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsState> {
   const out: Partial<AccountPrefsState> = {};
-  const { appearance, panels, layouts, selectors, docks, pinnedTypeIds, coordinateFormat, overviewMap, karstLinkTreatment } =
-    read;
+  const {
+    appearance,
+    panels,
+    layouts,
+    selectors,
+    docks,
+    pinnedTypeIds,
+    pinnedFilterIds,
+    coordinateFormat,
+    overviewMap,
+    karstLinkTreatment,
+  } = read;
   if (
     isPlainObject(appearance) &&
     ['system', 'light', 'dark'].includes(appearance.theme as string) &&
@@ -177,6 +190,11 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
   }
   if (Array.isArray(pinnedTypeIds) && pinnedTypeIds.every((id) => Number.isInteger(id))) {
     out.pinnedTypeIds = pinnedTypeIds as number[];
+  }
+  if (Array.isArray(pinnedFilterIds) && pinnedFilterIds.every((id) => typeof id === 'string' && SAVED_FILTER_ID.test(id))) {
+    // Lower-cased and capped as the store keeps them, so a document written elsewhere cannot hold
+    // more chips than the row draws or one filter twice in two spellings.
+    out.pinnedFilterIds = [...new Set(pinnedFilterIds.map((id: string) => id.toLowerCase()))].slice(0, MAX_PINNED_FILTERS);
   }
   if (isCoordinateFormat(coordinateFormat)) {
     out.coordinateFormat = coordinateFormat;

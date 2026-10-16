@@ -58,6 +58,7 @@ import LayerPanel from '../components/map/LayerPanel.tsx';
 import MapContextMenu from '../components/map/MapContextMenu.tsx';
 import ViewsPanel from '../components/map/ViewsPanel.tsx';
 import MapFilterNotice from '../components/map/MapFilterNotice.tsx';
+import QuickFilterChips from '../components/filters/QuickFilterChips.tsx';
 import MapObjectSelector from '../components/map/MapObjectSelector.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
 import SelectionPanel from '../components/map/SelectionPanel.tsx';
@@ -1490,6 +1491,15 @@ export default function MapPage() {
           <div className={`map-search-overlay map-chrome${isMobile ? ' map-search-overlay-mobile' : ''}`}>
             <MapSearch fullWidth={isMobile} />
             <MapObjectSelector fullWidth={isMobile} />
+            {/* The account's pinned saved filters: one click narrows the main entrance and
+                feature layers to one of them, a second click lifts it again. */}
+            <QuickFilterChips
+              className="map-quick-filters"
+              activeId={mapFilter?.kind === 'saved' ? mapFilter.savedFilterId : null}
+              onApply={(filter) => adoptMapFilter({ kind: 'saved', savedFilterId: filter.id })}
+              onRelease={() => adoptMapFilter(null)}
+              data-testid="map-quick-filters"
+            />
             <MapFilterNotice
               filter={mapFilter}
               unreadableLink={unreadableFilterLink}

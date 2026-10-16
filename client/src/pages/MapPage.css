@@ -105,6 +105,24 @@
   right: 56px;
 }
 
+/* The quick-filter chips take a row of their own under search and the selector. */
+.map-quick-filters {
+  flex-basis: 100%;
+  max-width: 640px;
+}
+
+/* Over the map the unpin button needs a ground of its own to be seen against the tiles. */
+.map-quick-filters .quick-filter-chip {
+  background: var(--ant-color-bg-container, #fff);
+  border-radius: 12px;
+}
+
+.map-quick-filters .quick-filter-chips-empty {
+  background: var(--ant-color-bg-container, #fff);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
 /* The map filter's notice takes a row of its own under search and the selector. */
 .map-filter-notice {
   flex-basis: 100%;
@@ -632,7 +650,9 @@
 .filter-layer-title {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
+  /* Room below the buttons, so the transparency slider's handle under them is a target apart. */
+  padding-bottom: 4px;
   min-width: 0;
 }
 
@@ -647,6 +667,13 @@
 
 .filter-layer-swatch {
   display: block;
+}
+
+/* 24 pixels square is the smallest target WCAG 2.2 asks for (2.5.8); the two style buttons sit
+   side by side, so neither may borrow its neighbour's space to reach it. */
+.filter-layer-title .ant-btn {
+  min-width: 24px;
+  min-height: 24px;
 }
 
 /* The slider sits under the layer name inside the (draggable) tree row. */

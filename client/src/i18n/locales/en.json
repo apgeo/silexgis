@@ -7143,6 +7143,16 @@
     "savedUnavailable": "a saved filter you cannot open",
     "clear": "Clear the map's filter"
   },
+  "quickFilters": {
+    "label": "Pinned saved filters",
+    "none": "No pinned filters — pin one from Saved filters",
+    "gone": "A pinned filter that is no longer there",
+    "unreadable": "{{name}} (cannot be run)",
+    "unpin": "Unpin {{name}}",
+    "pin": "Pin as a quick filter",
+    "unpinRow": "Unpin from the quick filters",
+    "full": "{{count}} filters are pinned already — unpin one to pin another"
+  },
   "filterLayers": {
     "add": "Add a layer from a saved filter…",
     "full": "The map holds {{count}} filter layers at most — remove one to add another",

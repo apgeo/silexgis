@@ -52,6 +52,13 @@ interface UiPrefsState {
   /** Feature types pinned as one-click draw shortcuts on the edit toolbar, in pin order. */
   pinnedTypeIds: number[];
   togglePinnedType: (id: number) => void;
+  /**
+   * Saved filters pinned as one-click chips on the map and the cave registry, in pin order, at
+   * most `MAX_PINNED_FILTERS`. Pinning one more than that does nothing: the screens offering a pin
+   * say the row is full first.
+   */
+  pinnedFilterIds: string[];
+  togglePinnedFilter: (id: string) => void;
   /** Per-dialog placement preference; a missing key means modal (the default). */
   dialogPlacement: Partial<Record<DialogKind, DialogPlacement>>;
   setDialogPlacement: (kind: DialogKind, placement: DialogPlacement) => void;
@@ -191,6 +198,12 @@ interface UiPrefsState {
 
 export type AccountClaim = 'same' | 'reset';
 
+/**
+ * How many saved filters one account may pin as quick chips. Few on purpose: a chip row is for the
+ * three or four filters used every day, and every pinned filter is one more name to read past.
+ */
+export const MAX_PINNED_FILTERS = 6;
+
 /** The part of the state that is the account's rather than the browser's. */
 export interface AccountPrefsState {
   appearance: Appearance;
@@ -199,6 +212,7 @@ export interface AccountPrefsState {
   selectors: Record<string, SelectorPrefs>;
   docks: DockPrefs;
   pinnedTypeIds: number[];
+  pinnedFilterIds: string[];
   coordinateFormat: CoordinateFormat;
   overviewMap: boolean;
   karstLinkTreatment: ProtectedPositionTreatment | undefined;
@@ -221,6 +235,7 @@ export function accountPrefDefaults(): AccountPrefsState {
     selectors: {},
     docks: DEFAULT_DOCKS,
     pinnedTypeIds: [],
+    pinnedFilterIds: [],
     coordinateFormat: DEFAULT_COORDINATE_FORMAT,
     overviewMap: false,
     karstLinkTreatment: undefined,
@@ -243,6 +258,16 @@ export const useUiPrefsStore = create<UiPrefsState>()(
             ? state.pinnedTypeIds.filter((x) => x !== id)
             : [...state.pinnedTypeIds, id],
         })),
+      togglePinnedFilter: (id) =>
+        set((state) => {
+          const key = id.toLowerCase();
+          if (state.pinnedFilterIds.includes(key)) {
+            return { pinnedFilterIds: state.pinnedFilterIds.filter((x) => x !== key) };
+          }
+          return state.pinnedFilterIds.length >= MAX_PINNED_FILTERS
+            ? {}
+            : { pinnedFilterIds: [...state.pinnedFilterIds, key] };
+        }),
       dialogPlacement: {},
       setDialogPlacement: (kind, placement) =>
         set((state) => ({ dialogPlacement: { ...state.dialogPlacement, [kind]: placement } })),

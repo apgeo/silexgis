@@ -7143,6 +7143,16 @@
     "savedUnavailable": "un filtru salvat pe care nu îl puteți deschide",
     "clear": "Goliți filtrul hărții"
   },
+  "quickFilters": {
+    "label": "Filtre salvate fixate",
+    "none": "Niciun filtru fixat — fixați unul din Filtre salvate",
+    "gone": "Un filtru fixat care nu mai există",
+    "unreadable": "{{name}} (nu poate fi rulat)",
+    "unpin": "Scoateți fixarea pentru {{name}}",
+    "pin": "Fixați ca filtru rapid",
+    "unpinRow": "Scoateți din filtrele rapide",
+    "full": "Sunt deja fixate {{count}} filtre — scoateți unul ca să fixați altul"
+  },
   "filterLayers": {
     "add": "Adaugă un strat dintr-un filtru salvat…",
     "full": "Harta ține cel mult {{count}} straturi din filtre — elimină unul ca să adaugi altul",

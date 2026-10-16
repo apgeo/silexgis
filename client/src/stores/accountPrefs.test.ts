@@ -279,6 +279,17 @@ describe('sanitizeAccountPrefs', () => {
       }),
     ).toEqual({ pinnedTypeIds: [1, 2], docks: { leftHidden: true, rightHidden: false } });
   });
+
+  it('keeps pinned saved filters only as ids, once each and no more than the chip row holds', () => {
+    const id = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
+    expect(sanitizeAccountPrefs({ pinnedFilterIds: [id(1), 'not-an-id'] })).toEqual({});
+    expect(sanitizeAccountPrefs({ pinnedFilterIds: 'everything' })).toEqual({});
+    expect(
+      sanitizeAccountPrefs({ pinnedFilterIds: [id(1), id(1).toUpperCase(), id(2), id(3), id(4), id(5), id(6), id(7)] }),
+    ).toEqual({ pinnedFilterIds: [id(1), id(2), id(3), id(4), id(5), id(6)] });
+    expect(accountPrefsIn({ pinnedFilterIds: [id(9)] })).toEqual({ pinnedFilterIds: [id(9)] });
+    expect(ACCOUNT_PREF_KEYS).toContain('pinnedFilterIds');
+  });
 });
 
 describe('mergeAccountPrefs', () => {

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { CloseOutlined, SaveOutlined, SettingOutlined } from '@ant-design/icons';
 import { Alert, App, Flex, Form, Input, Modal, Select, Space, Tag, Tooltip } from 'antd';
 import Button from '../../components/Button.tsx';
+import QuickFilterChips from '../../components/filters/QuickFilterChips.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -31,6 +32,8 @@ interface Props {
   onEditExtra?: (opener: HTMLElement) => void;
   /** Stops naming a saved filter, keeping the conditions as they are. */
   onForget: () => void;
+  /** Lifts the applied saved filter: no conditions, no saved filter named. */
+  onRelease: () => void;
 }
 
 /**
@@ -49,6 +52,7 @@ export default function CaveRegistrySavedFilters({
   onClearExtra,
   onEditExtra,
   onForget,
+  onRelease,
 }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -165,6 +169,13 @@ export default function CaveRegistrySavedFilters({
           </Tooltip>
         )}
       </Flex>
+      <QuickFilterChips
+        className="cave-registry-quick-filters"
+        activeId={changed ? null : savedFilterId}
+        onApply={(filter) => apply(filter.id)}
+        onRelease={onRelease}
+        data-testid="cave-registry-quick-filters"
+      />
       {reading.extra.length > 0 && (
         <Alert
           type="info"
