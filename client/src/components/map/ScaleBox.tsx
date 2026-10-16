@@ -1,26 +1,43 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { AutoComplete, Input } from 'antd';
 import MapUtil from '@terrestris/ol-util/dist/MapUtil/MapUtil';
 import type Map from 'ol/Map';
-import type { Units } from 'ol/proj/Units';
+import { getPointResolution } from 'ol/proj';
 import { useTranslation } from 'react-i18next';
 import { formatScale, parseScale } from '../../map/scale.ts';
 
-/** The map's scale as the standard pixel reckons it, rounded the way scale lists round. */
-function scaleOf(map: Map): number | undefined {
+/**
+ * Ground metres per metre of the map's projection at the middle of the view. In Web Mercator a
+ * projected metre is a ground metre only at the equator; at 45° it is about 0.71 of one, so the
+ * scale the projection's own units give — the nominal scale — is not the scale a measured distance
+ * on the screen has. The scale box works on the ground.
+ */
+function groundPerProjected(map: Map): number | undefined {
   const view = map.getView();
-  const resolution = view.getResolution();
-  if (resolution === undefined) {
+  const centre = view.getCenter();
+  return centre ? getPointResolution(view.getProjection(), 1, centre, 'm') : undefined;
+}
+
+/** The ground scale at a resolution, at the middle of the view, as the standard pixel reckons it. */
+function groundScaleAt(map: Map, resolution: number | undefined): number | undefined {
+  const ratio = groundPerProjected(map);
+  if (resolution === undefined || ratio === undefined) {
     return undefined;
   }
-  const scale = MapUtil.getScaleForResolution(resolution, view.getProjection().getUnits() as Units);
+  return MapUtil.getScaleForResolution(resolution * ratio, 'm');
+}
+
+/** The map's ground scale, rounded the way scale lists round. */
+function scaleOf(map: Map): number | undefined {
+  const scale = groundScaleAt(map, map.getView().getResolution());
   return scale === undefined ? undefined : MapUtil.roundScale(scale);
 }
 
 /**
- * The map's scale, which can be typed into: `1:25000`, `25000` or `25 000`, then Enter, and the
- * map goes to that scale. The scales of the map's zoom steps are offered as a list to pick from,
+ * The map's scale on the ground at the middle of the view, which can be typed into: `1:25000`,
+ * `25000` or `25 000`, then Enter, and the map goes to that scale — 1:25000 on the ground there,
+ * as a printed sheet of that scale would be. The scales of the map's zoom steps are offered as a list to pick from,
  * as the mapping library's own scale picker offered them — which stopped there: a scale not on
  * that list could not be had.
  *
@@ -51,22 +68,22 @@ export default function ScaleBox({ map }: { map: Map }) {
       }
     };
     follow();
-    view.on('change:resolution', follow);
-    return () => view.un('change:resolution', follow);
+    // The ground scale changes with the latitude, so panning north or south changes it too.
+    view.on(['change:resolution', 'change:center'], follow);
+    return () => view.un(['change:resolution', 'change:center'], follow);
   }, [map, editing, locale]);
 
-  const options = useMemo(() => {
-    const view = map.getView();
-    const units = view.getProjection().getUnits() as Units;
-    const scales = new Set<number>();
-    for (let zoom = Math.ceil(view.getMinZoom()); zoom <= Math.floor(view.getMaxZoom()); zoom++) {
-      const scale = MapUtil.getScaleForResolution(view.getResolutionForZoom(zoom), units);
-      if (scale !== undefined) {
-        scales.add(MapUtil.roundScale(scale));
-      }
+  // The zoom steps' scales on the ground where the view is now — worked out when the list is drawn,
+  // which is when somebody opens it.
+  const view = map.getView();
+  const scales = new Set<number>();
+  for (let zoom = Math.ceil(view.getMinZoom()); zoom <= Math.floor(view.getMaxZoom()); zoom++) {
+    const scale = groundScaleAt(map, view.getResolutionForZoom(zoom));
+    if (scale !== undefined) {
+      scales.add(MapUtil.roundScale(scale));
     }
-    return [...scales].map((scale) => ({ value: formatScale(scale, locale) }));
-  }, [map, locale]);
+  }
+  const options = [...scales].map((scale) => ({ value: formatScale(scale, locale) }));
 
   const commit = (value: string) => {
     const denominator = parseScale(value);
@@ -74,15 +91,15 @@ export default function ScaleBox({ map }: { map: Map }) {
       setInvalid(true);
       return;
     }
-    const view = map.getView();
-    const resolution = MapUtil.getResolutionForScale(denominator, view.getProjection().getUnits() as Units);
-    if (resolution === undefined) {
+    const ground = MapUtil.getResolutionForScale(denominator, 'm');
+    const ratio = groundPerProjected(map);
+    if (ground === undefined || ratio === undefined) {
       setInvalid(true);
       return;
     }
     setInvalid(false);
     setEditing(false);
-    view.setResolution(resolution);
+    map.getView().setResolution(ground / ratio);
     setText(formatScale(denominator, locale));
   };
 
