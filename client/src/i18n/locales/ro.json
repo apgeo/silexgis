@@ -505,6 +505,28 @@
     "contextCopyCoords": "Copiază coordonatele",
     "coordsCopied": "Coordonate copiate.",
     "heatmap": "Hartă de căldură (intrări)",
+    "karstIndex": {
+      "layer": "Indice de carstificare (zone)",
+      "loading": "Se citesc zonele din imagine…",
+      "shown": "Zone în imagine: {{count}}.",
+      "failed": "Indicele de carstificare nu a putut fi citit. Mutarea hărții întreabă din nou.",
+      "refused": {
+        "window": "Despre această imagine nu se poate întreba. Mutați harta pentru a întreba din nou.",
+        "other": "Indicele de carstificare a fost refuzat pentru această imagine."
+      }
+    },
+    "karstLegend": {
+      "band": "{{from}} – {{to}}",
+      "unit": {
+        "density": "Peșteri pe km²",
+        "kernel": "Peșteri pe km², netezit"
+      },
+      "hot": "Punct fierbinte (z ≥ {{z}})",
+      "cold": "Punct rece (z ≤ −{{z}})",
+      "noCaves": "Nu se numără nicio peșteră în această imagine.",
+      "noAreas": "Nicio zonă carstică sau masiv de arătat în această imagine.",
+      "truncated": "Unele zone din această imagine nu sunt arătate: o imagine cuprinde cel mult {{max}}. Măriți pentru a le vedea pe toate."
+    },
     "karstDensity": {
       "layer": "Densitatea peșterilor (grilă)",
       "reading": "Ce arată celulele",

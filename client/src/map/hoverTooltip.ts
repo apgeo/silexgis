@@ -8,6 +8,7 @@ import { SURFACE_FEATURE_LAYER_ID } from './featureLayer.ts';
 import { GEOFILE_LAYER_PREFIX } from './geofileLayers.ts';
 import { geofileLabel } from './geofileProperties.ts';
 import { isHitTestable } from './hitTesting.ts';
+import { KARST_INDEX_LAYER_ID, setKarstIndexHovered } from './karstIndexLayer.ts';
 
 /**
  * Name/type tooltip near the cursor for entrances and features,
@@ -22,11 +23,13 @@ export function attachHoverTooltip(map: Map): () => void {
   const handler = (event: MapBrowserEvent) => {
     if (event.dragging) {
       overlay.setPosition(undefined);
+      setKarstIndexHovered(null);
       return;
     }
 
     let label: string | undefined;
     let clickable = false;
+    let indexAreaId: string | null = null;
     map.forEachFeatureAtPixel(
       event.pixel,
       (feature, layer) => {
@@ -59,10 +62,19 @@ export function attachHoverTooltip(map: Map): () => void {
           label = geofileLabel(props);
           return true;
         }
+        // An area of the karstification index: outlined and named while the cursor is over it,
+        // and opened as the feature it is on a click.
+        if (layerId === KARST_INDEX_LAYER_ID && typeof props.id === 'string') {
+          clickable = true;
+          label = typeof props.label === 'string' ? props.label : undefined;
+          indexAreaId = props.id;
+          return true;
+        }
         return false;
       },
       { hitTolerance: 6, layerFilter: isHitTestable },
     );
+    setKarstIndexHovered(indexAreaId);
 
     map.getTargetElement().style.cursor = clickable ? 'pointer' : '';
     if (label) {
@@ -77,6 +89,7 @@ export function attachHoverTooltip(map: Map): () => void {
   return () => {
     map.un('pointermove', handler);
     map.removeOverlay(overlay);
+    setKarstIndexHovered(null);
     map.getTargetElement()?.style.removeProperty('cursor');
   };
 }

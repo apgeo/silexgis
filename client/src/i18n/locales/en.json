@@ -505,6 +505,28 @@
     "contextCopyCoords": "Copy coordinates",
     "coordsCopied": "Coordinates copied.",
     "heatmap": "Entrance heatmap",
+    "karstIndex": {
+      "layer": "Karstification index (areas)",
+      "loading": "Reading the areas in view…",
+      "shown": "Areas in view: {{count}}.",
+      "failed": "The karstification index could not be read. Moving the map asks again.",
+      "refused": {
+        "window": "This view cannot be asked about. Move the map to ask again.",
+        "other": "The karstification index was refused for this view."
+      }
+    },
+    "karstLegend": {
+      "band": "{{from}} – {{to}}",
+      "unit": {
+        "density": "Caves per km²",
+        "kernel": "Caves per km², smoothed"
+      },
+      "hot": "Hot spot (z ≥ {{z}})",
+      "cold": "Cold spot (z ≤ −{{z}})",
+      "noCaves": "No caves are counted in this view.",
+      "noAreas": "No karst areas or massifs to show in this view.",
+      "truncated": "Some areas in this view are not shown: one view carries at most {{max}}. Zoom in to see them all."
+    },
     "karstDensity": {
       "layer": "Cave density (grid)",
       "reading": "What the cells show",

@@ -135,6 +135,7 @@ function panel(overrides: PanelOverrides = {}) {
       karstDensityVisible={false}
       karstDensityMode="density"
       onKarstDensityModeChange={() => {}}
+      karstIndexVisible={false}
       tripFilter={{}}
       onTripFilterChange={vi.fn()}
       unappliedTripFilters={0}

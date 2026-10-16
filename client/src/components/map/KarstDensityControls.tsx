@@ -9,6 +9,7 @@ import {
   type KarstDensityLoadState,
   type KarstDensityMode,
 } from '../../map/karstDensityLayer.ts';
+import { KarstDensityLegend } from './KarstLegend.tsx';
 
 /** The refusals this row has words of its own for; anything else is said generically. */
 const REFUSAL_KEYS: Record<string, string> = {
@@ -68,6 +69,7 @@ export default function KarstDensityControls({
               : t('map.karstDensity.loading')}
           </Typography.Text>
         )}
+        <KarstDensityLegend state={load} />
       </div>
     </div>
   );

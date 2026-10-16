@@ -35,6 +35,11 @@ export interface ViewConfig {
    * surface) or `hotSpot`. Added after v1 shipped; omitted or unrecognised reads as `density`.
    */
   karstDensityMode?: KarstDensityMode;
+  /**
+   * The karstification-index choropleth over the areas in view. Added after v1 shipped; older
+   * saved views omit it (off).
+   */
+  karstIndexVisible?: boolean;
   /** Added after v1 shipped; older saved views omit it (treated as false — an opt-in overlay). */
   photosVisible?: boolean;
   /** Added after v1 shipped; older saved views omit it (treated as false — an opt-in overlay). */
@@ -89,6 +94,7 @@ export interface WorkspaceUiState {
   heatmapVisible: boolean;
   karstDensityVisible: boolean;
   karstDensityMode: KarstDensityMode;
+  karstIndexVisible: boolean;
   photosVisible: boolean;
   tripsVisible: boolean;
   tripsFrom?: string;
@@ -127,6 +133,7 @@ export function captureViewConfig(
     heatmapVisible: ui.heatmapVisible,
     karstDensityVisible: ui.karstDensityVisible,
     karstDensityMode: ui.karstDensityMode,
+    karstIndexVisible: ui.karstIndexVisible,
     photosVisible: ui.photosVisible,
     tripsVisible: ui.tripsVisible,
     tripsFrom: ui.tripsFrom,
@@ -159,6 +166,7 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     heatmapVisible: parsed.heatmapVisible ?? false,
     karstDensityVisible: parsed.karstDensityVisible ?? false,
     karstDensityMode: isKarstDensityMode(parsed.karstDensityMode) ? parsed.karstDensityMode : 'density',
+    karstIndexVisible: parsed.karstIndexVisible ?? false,
     photosVisible: parsed.photosVisible ?? false,
     tripsVisible: parsed.tripsVisible ?? false,
     tripsFrom: parsed.tripsFrom,

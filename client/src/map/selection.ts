@@ -8,6 +8,7 @@ import type { SelectedRef, WorkspaceSelection } from '../stores/workspaceStore.t
 import { ENTRANCE_LAYER_ID } from './entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from './featureLayer.ts';
 import { isHitTestable } from './hitTesting.ts';
+import { KARST_INDEX_LAYER_ID } from './karstIndexLayer.ts';
 import { TRIP_LAYER_ID } from './tripLayer.ts';
 import { coarsePointer } from './pointer.ts';
 
@@ -67,7 +68,12 @@ export function attachSelection(
           handled = true;
           return true;
         }
-        if (layerId === SURFACE_FEATURE_LAYER_ID && typeof props.id === 'string') {
+        // An area of the karstification index is the karst area or massif feature it was
+        // computed for, so a click opens that feature, whose page carries the full statistics.
+        if (
+          (layerId === SURFACE_FEATURE_LAYER_ID || layerId === KARST_INDEX_LAYER_ID) &&
+          typeof props.id === 'string'
+        ) {
           if (adding) {
             onAdd?.({ kind: 'feature', id: props.id });
           } else {

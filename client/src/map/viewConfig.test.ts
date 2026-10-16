@@ -12,6 +12,7 @@ const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
   heatmapVisible: true,
   karstDensityVisible: true,
   karstDensityMode: 'hotSpot',
+  karstIndexVisible: true,
   photosVisible: false,
   tripsVisible: true,
   tripsFrom: '2019-01-01',
@@ -234,6 +235,14 @@ describe('viewConfig cave-density grid', () => {
     expect(restored?.karstDensityMode).toBe('hotSpot');
   });
 
+  it('round-trips the karstification-index choropleth beside the grid, at version 1', () => {
+    const config = captureViewConfig(baseUi);
+    expect(config.karstIndexVisible).toBe(true);
+    expect(config.configVersion).toBe(1);
+    expect(applyViewConfig(config)?.karstIndexVisible).toBe(true);
+    expect(applyViewConfig(captureViewConfig({ ...baseUi, karstIndexVisible: false }))?.karstIndexVisible).toBe(false);
+  });
+
   it('treats an older view as off with the plain reading, and an unknown reading as the plain one', () => {
     const legacy = {
       configVersion: 1,
@@ -246,6 +255,7 @@ describe('viewConfig cave-density grid', () => {
       tagFilter: null,
     };
     const restored = applyViewConfig(legacy);
+    expect(restored?.karstIndexVisible).toBe(false);
     expect(restored?.karstDensityVisible).toBe(false);
     expect(restored?.karstDensityMode).toBe('density');
     expect(applyViewConfig({ ...legacy, karstDensityMode: 'contours' })?.karstDensityMode).toBe('density');

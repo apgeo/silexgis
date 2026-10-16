@@ -406,6 +406,31 @@ export async function fetchMapDensity(query: DensityQuery, signal?: AbortSignal)
   );
 }
 
+export type KarstIndexWindow = components['schemas']['KarstIndexWindowDto'];
+export type KarstIndexArea = components['schemas']['KarstIndexAreaDto'];
+export type KarstificationClass = components['schemas']['KarstificationClass'];
+
+export interface KarstIndexQuery {
+  /** The window, `west,south,east,north` in degrees. */
+  bbox: string;
+  /** The zoom the outlines will be drawn at; the server simplifies them to about one pixel. */
+  zoom: number;
+}
+
+/**
+ * Imperative fetch of the karstification index over the areas in a window, for the map's
+ * choropleth (not a hook, for the same reason as the density grid: it is asked again on every
+ * pan, and a superseded window is aborted rather than cached).
+ */
+export async function fetchMapKarstIndex(query: KarstIndexQuery, signal?: AbortSignal): Promise<KarstIndexWindow> {
+  return unwrap(
+    api.GET('/api/v1/map/karst-index', {
+      params: { query: { bbox: query.bbox, zoom: query.zoom } },
+      signal,
+    }),
+  );
+}
+
 export interface PointPatternQuery {
   bbox: string;
   simulations: number;

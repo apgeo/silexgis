@@ -155,6 +155,11 @@ export function featureSymbolUrl(symbolFile: string): string {
  * hot-spot reading in two hues far from that ramp so they are never taken for a density band.
  * Partly transparent on purpose: a cell is a statement about an area, and the ground under it is
  * what that statement is about.
+ *
+ * Fixed colours rather than theme tokens, like every other overlay in this file: the basemap they
+ * are laid over is the same in the light and the dark theme, so a ramp that followed the theme
+ * would change what a colour means on an unchanged map. Where the app's theme does matter — the
+ * legend's swatches on the panel — the legend frames them with the theme's own border colour.
  */
 export const karstDensityPalette = {
   ramp: [
@@ -167,4 +172,26 @@ export const karstDensityPalette = {
   hot: 'rgba(215, 48, 31, 0.7)',
   cold: 'rgba(43, 140, 190, 0.7)',
   cellStroke: 'rgba(80, 80, 80, 0.35)',
+} as const;
+
+/**
+ * The karstification-index choropleth's fills, one per class from very low to very high, plus
+ * a neutral for an area nothing could be measured in. Purples, so an area's class is never read
+ * as a density band (those are the yellow-to-red ramp above) when both overlays are on. The fill
+ * is translucent for the same reason the density cells are; the stroke is the class's own colour
+ * at full strength so the outline of a pale class still reads over a pale basemap, and the
+ * legend draws its swatches from the same pairs so the two always agree.
+ */
+export const karstIndexPalette = {
+  classes: {
+    veryLow: { fill: 'rgba(218, 218, 235, 0.5)', stroke: '#9e9ac8' },
+    low: { fill: 'rgba(188, 189, 220, 0.55)', stroke: '#807dba' },
+    moderate: { fill: 'rgba(158, 154, 200, 0.6)', stroke: '#6a51a3' },
+    high: { fill: 'rgba(117, 107, 177, 0.65)', stroke: '#54278f' },
+    veryHigh: { fill: 'rgba(84, 39, 143, 0.7)', stroke: '#3f007d' },
+    unknown: { fill: 'rgba(140, 140, 140, 0.2)', stroke: '#8c8c8c' },
+  },
+  /** Outline and label of the area under the cursor or selected. */
+  highlight: '#1f1f1f',
+  labelHalo: 'rgba(255, 255, 255, 0.9)',
 } as const;
