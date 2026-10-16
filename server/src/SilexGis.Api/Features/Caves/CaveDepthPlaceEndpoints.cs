@@ -77,18 +77,22 @@ public static class CaveDepthPlaceEndpoints
         var caves = api.MapGroup("/caves").WithTags("CaveDepthPlaces");
 
         caves.MapGet("/{caveId:guid}/depth-places", ListAsync)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(
                 "The places this cave has named: those with a depth shallowest first, then those "
                 + "named without one in the order they were declared.");
 
         caves.MapPut("/{caveId:guid}/depth-places", WriteAsync)
             .WithValidation<CaveDepthPlaceWriteRequest>()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithSummary(
                 "Declares one named place of this cave — what a depth means, or a name for a station "
                 + "without a depth — replacing the declaration for that depth, or for that station "
                 + "among the depthless ones, where there is one (Write on the cave).");
 
         caves.MapDelete("/{caveId:guid}/depth-places/{id:guid}", DeleteAsync)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Withdraws one declaration (Write on the cave).");
 
         return api;

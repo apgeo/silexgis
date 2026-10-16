@@ -21,6 +21,7 @@ public static class AboutEndpoints
                 return TypedResults.Ok(new AboutDto("SilexGIS", version, "AGPL-3.0-or-later", about.Value.SourceUrl));
             })
             .AllowAnonymous()
+            .WithName("aboutGet")
             .WithTags("About")
             .WithSummary("Application name, version, license and source-code location.");
 

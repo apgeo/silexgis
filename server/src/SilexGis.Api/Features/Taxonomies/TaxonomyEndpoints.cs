@@ -56,12 +56,15 @@ public static class TaxonomyEndpoints
     {
         api.MapGet("/cave-types", (SilexGisDbContext db, IAccessContextAccessor a, CancellationToken ct) =>
                 ListAsync(db.CaveTypes, a, ct))
+            .WithName("taxonomyCaveTypes")
             .WithTags("Taxonomies");
         api.MapGet("/entrance-types", (SilexGisDbContext db, IAccessContextAccessor a, CancellationToken ct) =>
                 ListAsync(db.EntranceTypes, a, ct))
+            .WithName("taxonomyEntranceTypes")
             .WithTags("Taxonomies");
         api.MapGet("/rock-types", (SilexGisDbContext db, IAccessContextAccessor a, CancellationToken ct) =>
                 ListAsync(db.RockTypes, a, ct))
+            .WithName("taxonomyRockTypes")
             .WithTags("Taxonomies");
         api.MapGet("/feature-types", FeatureTypesAsync).WithTags("Taxonomies");
         api.MapGet("/link-kinds", LinkKindsAsync).WithTags("Taxonomies");

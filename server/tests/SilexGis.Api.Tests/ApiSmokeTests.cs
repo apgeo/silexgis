@@ -123,17 +123,158 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
             }
         }
 
-        // The whole list, not a containment check. Naming the rest of this server's operations is
-        // a change of its own with its own consequences for every generated client; a name that
-        // appeared here without that decision having been taken is what this catches.
-        named.Select(x => x.Id).ShouldBe(
+        // The sync operations keep the names they were given by hand, which the application on the
+        // other side of that protocol is generated from: every other operation is named after its
+        // handler, and that derivation must never reach these.
+        named.Where(x => x.Path.StartsWith("/api/v1/sync", StringComparison.Ordinal)).Select(x => x.Id).ShouldBe(
             [
                 "syncCapabilities", "syncListSets", "syncCreateSet", "syncGetSet",
                 "syncReplaceSet", "syncDeleteSet", "syncDownload", "syncUpload",
             ],
             ignoreOrder: true);
-        named.ShouldAllBe(x => x.Path.StartsWith("/api/v1/sync", StringComparison.Ordinal));
     }
+
+    /// <summary>
+    /// Every operation in the served description has a name, no two share one, and each is a name
+    /// a generator can turn into a method as it stands.
+    /// </summary>
+    [Fact]
+    public async Task OpenApi_document_names_every_operation_once()
+    {
+        var operations = await OperationsAsync();
+
+        var unnamed = operations.Where(o => o.Id is null).Select(o => $"{o.Verb} {o.Path}").ToList();
+        unnamed.ShouldBeEmpty(
+            "every operation needs a name; a handler that cannot give one (a lambda) is named with WithName");
+
+        var shared = operations.GroupBy(o => o.Id).Where(g => g.Count() > 1)
+            .Select(g => $"{g.Key}: {string.Join(", ", g.Select(o => $"{o.Verb} {o.Path}"))}").ToList();
+        shared.ShouldBeEmpty("an operation name may be used once");
+
+        operations.Select(o => o.Id!).Where(id => !System.Text.RegularExpressions.Regex.IsMatch(id, "^[a-z][A-Za-z0-9]*$"))
+            .ShouldBeEmpty("an operation name is lower camel case, letters and digits only");
+    }
+
+    /// <summary>
+    /// The refusals every operation of a kind can send are in the description: a 401 wherever a
+    /// token is needed, a 400 wherever a body is validated, and the problem shape they share
+    /// carries the code a client branches on.
+    /// </summary>
+    [Fact]
+    public async Task OpenApi_document_declares_the_refusals_every_guarded_and_validated_operation_can_send()
+    {
+        var document = await DocumentAsync();
+        var operations = await OperationsAsync(document);
+
+        // A guarded operation inherits the document's requirement; an open one says it has none.
+        // Only the versioned API: the sign-in protocol's own routes beside it answer as that
+        // protocol says, not as this API does.
+        var guardedWithout401 = operations
+            .Where(o => o.Path.StartsWith("/api/v1/", StringComparison.Ordinal))
+            .Where(o => !o.Value.TryGetProperty("security", out var security) || security.GetArrayLength() > 0)
+            .Where(o => !Responses(o.Value).Contains("401"))
+            .Select(o => o.Id).ToList();
+        guardedWithout401.ShouldBeEmpty("a route that needs a token can answer 401");
+
+        // The cave write is validated, so it declares the validator's 400.
+        var create = operations.Single(o => o.Id == "caveCreate");
+        Responses(create.Value).ShouldContain("400");
+
+        var problem = document.GetProperty("components").GetProperty("schemas").GetProperty("ProblemDetails");
+        problem.GetProperty("properties").TryGetProperty("code", out _).ShouldBeTrue(
+            "the problem shape must publish the code; it is the one member a client branches on");
+    }
+
+    /// <summary>
+    /// The cave record's own operations declare each refusal their handlers send — the first slice
+    /// declared in full, pinned so that one quietly dropped is noticed.
+    /// </summary>
+    [Fact]
+    public async Task OpenApi_document_declares_the_cave_records_own_refusals()
+    {
+        var operations = (await OperationsAsync()).ToDictionary(o => o.Id!);
+        var expected = new Dictionary<string, string[]>
+        {
+            ["caveList"] = ["401"],
+            ["caveGet"] = ["401", "404"],
+            ["caveGetSummary"] = ["401", "404"],
+            ["caveCreate"] = ["400", "401", "403"],
+            ["caveUpdate"] = ["400", "401", "403", "404", "412", "428"],
+            ["caveDelete"] = ["401", "403", "404", "412"],
+            ["entranceList"] = ["401", "404"],
+            ["entranceCreate"] = ["400", "401", "403", "404"],
+            ["entranceUpdate"] = ["400", "401", "403", "404", "412"],
+            ["entranceDelete"] = ["401", "403", "404", "412"],
+            ["caveExternalIdList"] = ["401", "404"],
+            ["caveExternalIdWrite"] = ["400", "401", "403", "404"],
+            ["caveExternalIdLookup"] = ["400", "401", "403", "404"],
+            ["caveDepthPlaceList"] = ["401", "404"],
+            ["caveDepthPlaceWrite"] = ["400", "401", "404", "409"],
+            ["caveDepthPlaceDelete"] = ["401", "404"],
+        };
+
+        foreach (var (id, statuses) in expected)
+        {
+            operations.ShouldContainKey(id);
+            Responses(operations[id].Value).Where(code => code[0] is '4' or '5')
+                .ShouldBe(statuses, ignoreOrder: true, customMessage: id);
+        }
+    }
+
+    /// <summary>
+    /// An enumeration's own values never include null; a property that may be null says so itself.
+    /// </summary>
+    [Fact]
+    public async Task OpenApi_document_keeps_null_out_of_an_enumerations_values_and_on_the_property_that_takes_it()
+    {
+        var schemas = (await DocumentAsync()).GetProperty("components").GetProperty("schemas");
+
+        var kinds = schemas.GetProperty("EventKind").GetProperty("enum").EnumerateArray().ToList();
+        kinds.ShouldNotBeEmpty();
+        kinds.ShouldAllBe(value => value.ValueKind == JsonValueKind.String);
+
+        // The positive twin: where the kind may be absent, the property still says so.
+        var calendarKind = schemas.GetProperty("CalendarEntryDto").GetProperty("properties").GetProperty("kind");
+        calendarKind.GetRawText().ShouldContain("\"null\"");
+        calendarKind.GetRawText().ShouldContain("#/components/schemas/EventKind");
+    }
+
+    [Fact]
+    public async Task A_request_without_a_token_is_refused_with_a_code()
+    {
+        var response = await factory.CreateClient().GetAsync("/api/v1/caves");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        problem.GetProperty("code").GetString().ShouldBe("auth.unauthenticated");
+    }
+
+    private async Task<JsonElement> DocumentAsync()
+    {
+        var response = await factory.CreateClient().GetAsync("/openapi/v1.json");
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    private async Task<List<(string Path, string Verb, string? Id, JsonElement Value)>> OperationsAsync(
+        JsonElement? document = null)
+    {
+        var paths = (document ?? await DocumentAsync()).GetProperty("paths");
+        var operations = new List<(string, string, string?, JsonElement)>();
+        foreach (var path in paths.EnumerateObject())
+        {
+            foreach (var verb in path.Value.EnumerateObject().Where(v => v.Value.ValueKind == JsonValueKind.Object
+                && v.Name is "get" or "post" or "put" or "patch" or "delete"))
+            {
+                var id = verb.Value.TryGetProperty("operationId", out var name) ? name.GetString() : null;
+                operations.Add((path.Name, verb.Name, id, verb.Value));
+            }
+        }
+
+        return operations;
+    }
+
+    private static List<string> Responses(JsonElement operation) =>
+        operation.GetProperty("responses").EnumerateObject().Select(p => p.Name).ToList();
 
     /// <summary>
     /// The document-wide requirement is taken back off the routes that are deliberately open, and

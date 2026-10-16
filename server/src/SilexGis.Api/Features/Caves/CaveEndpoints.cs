@@ -32,15 +32,27 @@ public static class CaveEndpoints
             .WithSummary(
                 "Paged cave list with filters, including `unplaced` for caves that have no position "
                 + "at all; visibility-filtered, protected locations obfuscated.");
+        // Each route declares the refusals its handler sends; the 401 every guarded route can
+        // answer, and the 400 of a validated body, are declared for the whole API at once.
         caves.MapGet("/{id:guid}", GetAsync)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Single cave; protected location fields require ViewExactLocation.");
         caves.MapGet("/{id:guid}/summary", GetSummaryAsync)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Cave header data: related-record counts, main entrance, caller capabilities.");
         caves.MapPost("/", CreateAsync).WithValidation<CaveWriteRequest>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
             .WithSummary("Creates a cave (Create permission in the target context); the caller becomes owner.");
         caves.MapPut("/{id:guid}", UpdateAsync).WithValidation<CaveWriteRequest>()
-            .WithSummary("Full update (Write permission).");
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status412PreconditionFailed)
+            .ProducesProblem(StatusCodes.Status428PreconditionRequired)
+            .WithSummary("Full update (Write permission); needs the If-Match the read handed out.");
         caves.MapDelete("/{id:guid}", DeleteAsync)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status412PreconditionFailed)
             .WithSummary("Soft delete of the cave and its subtree (Delete permission).");
 
         return api;

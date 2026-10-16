@@ -146,11 +146,24 @@ try
     builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(
         options => options.MultipartBodyLengthLimit = multipartBodyLengthLimit);
 
-    builder.Services.AddProblemDetails();
+    // A refusal the framework writes on its own — the status-code pages filling in a 401 or a 429
+    // that was sent with no body — gets the same stable code every refusal of this API carries,
+    // so a client never has to tell a refusal apart by its status alone.
+    builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
+    {
+        if (!context.ProblemDetails.Extensions.ContainsKey("code")
+            && SilexGis.Api.Common.CommonFailures.CodeFor(context.HttpContext.Response.StatusCode) is { } code)
+        {
+            context.ProblemDetails.Extensions["code"] = code;
+        }
+    });
     builder.Services.AddOpenApi(options =>
     {
         options.AddDocumentTransformer<SilexGis.Api.Common.BearerSecurityDocumentTransformer>();
         options.AddOperationTransformer<SilexGis.Api.Common.AnonymousRouteSecurityOperationTransformer>();
+        options.AddOperationTransformer<SilexGis.Api.Common.OperationNameTransformer>();
+        options.AddSchemaTransformer<SilexGis.Api.Common.ProblemSchemaTransformer>();
+        options.AddDocumentTransformer<SilexGis.Api.Common.EnumSchemaTransformer>();
     });
     builder.Services.AddSilexGisPersistence(builder.Configuration);
     builder.Services.AddSilexGisGeodata(builder.Configuration);
@@ -393,6 +406,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // Default-deny: everything under /api/v1 requires a bearer token unless an endpoint is
     // explicitly on the anonymous allow-list.
     var api = app.MapGroup("/api/v1").RequireAuthorization();
+    ((IEndpointConventionBuilder)api).Finally(SilexGis.Api.Common.CommonFailures.Declare);
     api.MapAboutEndpoints();
     api.MapAuthEndpoints();
     api.MapTwoFactorChallengeEndpoints();

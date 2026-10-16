@@ -80,15 +80,21 @@ public static class CaveExternalIdEndpoints
         var caves = api.MapGroup("/caves").WithTags("CaveExternalIds");
 
         caves.MapGet("/{caveId:guid}/external-ids", ListAsync)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("The identifiers other registers know this cave by.");
 
         caves.MapPut("/{caveId:guid}/external-ids/{system}", WriteAsync)
             .WithValidation<CaveExternalIdWriteRequest>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(
                 "Records the identifier one register knows this cave by, or clears it when the "
                 + "value is empty (Write on the cave).");
 
         caves.MapPost("/{caveId:guid}/external-ids/grottocenter/lookup", LookupAsync)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(
                 "Asks grottocenter.org which of its caves match this cave's name. Sends the name "
                 + "and nothing else, stores nothing, and answers that it is not configured when "

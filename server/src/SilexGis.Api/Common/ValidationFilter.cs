@@ -38,6 +38,10 @@ public sealed class ValidationFilter<T> : IEndpointFilter
 
 public static class ValidationFilterExtensions
 {
+    /// <summary>
+    /// Runs the request's validator before the handler, and says in the served description that
+    /// the route can answer 400 with the validator's messages.
+    /// </summary>
     public static RouteHandlerBuilder WithValidation<T>(this RouteHandlerBuilder builder)
-        where T : class => builder.AddEndpointFilter<ValidationFilter<T>>();
+        where T : class => builder.AddEndpointFilter<ValidationFilter<T>>().ProducesValidationProblem();
 }

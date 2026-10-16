@@ -72,17 +72,26 @@ public static class EntranceEndpoints
     {
         api.MapGet("/caves/{caveId:guid}/entrances", ListAsync)
             .WithTags("CaveEntrances")
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Entrances of a cave; coordinates obfuscated without ViewExactLocation.");
         api.MapPost("/caves/{caveId:guid}/entrances", CreateAsync)
             .WithValidation<EntranceWriteRequest>()
             .WithTags("CaveEntrances")
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Adds an entrance (Write on the cave).");
         api.MapPut("/cave-entrances/{id:guid}", UpdateAsync)
             .WithValidation<EntranceWriteRequest>()
             .WithTags("CaveEntrances")
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status412PreconditionFailed)
             .WithSummary("Updates an entrance (Write on the cave).");
         api.MapDelete("/cave-entrances/{id:guid}", DeleteAsync)
             .WithTags("CaveEntrances")
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status412PreconditionFailed)
             .WithSummary("Deletes an entrance (Write on the cave).");
 
         return api;

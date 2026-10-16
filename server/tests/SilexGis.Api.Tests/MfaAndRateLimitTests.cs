@@ -126,18 +126,27 @@ public sealed class AuthRateLimitTests(PostgresFixture postgres) : IDisposable, 
     public async Task Auth_surface_rate_limits_per_ip()
     {
         using var client = factory.CreateClient();
-        var saw429 = false;
-        for (var i = 0; i < 12 && !saw429; i++)
+        HttpResponseMessage? refused = null;
+        for (var i = 0; i < 12 && refused is null; i++)
         {
             var response = await client.PostAsJsonAsync("/api/v1/auth/login", new
             {
                 email = "nobody@t.local",
                 password = "wrong-password-1",
             });
-            saw429 = response.StatusCode == HttpStatusCode.TooManyRequests;
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                refused = response;
+            }
         }
 
-        saw429.ShouldBeTrue("the limiter should trip within the configured window");
+        refused.ShouldNotBeNull("the limiter should trip within the configured window");
+
+        // The refusal says why in the same machine-readable way every other refusal does, though
+        // nothing but the framework wrote it.
+        var problem = JsonDocument.Parse(await refused.Content.ReadAsStringAsync()).RootElement;
+        problem.GetProperty("code").GetString().ShouldBe("rate.limited");
+        problem.GetProperty("status").GetInt32().ShouldBe(429);
     }
 
     public void Dispose() => factory.Dispose();
