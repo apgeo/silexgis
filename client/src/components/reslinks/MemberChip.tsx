@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { MouseEvent } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import { CloseOutlined, LockOutlined, StarFilled } from '@ant-design/icons';
 import { Flex, Popconfirm, Tag, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import type { ResLinkMember } from '../../api/hooks.ts';
 import { anchorStateNote, anchorSummary, memberRoute, targetTypeEntry } from './registry.ts';
+import './MemberChip.css';
 
 /**
  * One member of a link, as a chip: type icon, title, and the compact part label when the
@@ -42,54 +43,56 @@ export default function MemberChip({
   const entry = targetTypeEntry(member.targetType);
   const Icon = entry.icon;
 
-  // The chip may sit inside a link to its target, so the close click has to say it is not
-  // a navigation before anything else reads it as one — and it never removes anything by
-  // itself: striking a membership out is a hard delete of somebody's record of what was
-  // done, with no undo, on a target small enough to hit by accident while aiming at the
-  // chip. The confirmation is the same one the link's own page puts on the same act, so
-  // the two surfaces agree about how dangerous it is.
-  const closeProps = onRemove
-    ? {
-        closable: true,
-        closeIcon: (
-          // The refusal is here, on a wrapper the click passes through on its way out, rather
-          // than only on the tag's own close handler: the confirmation takes the click at the
-          // icon, so the tag never learns it was closed and never gets to refuse anything. Left
-          // to bubble, the click reaches the surrounding link and the reader is taken to the
-          // thing they were trying to unname — the membership goes, and the page they are then
-          // looking at is the target's, which is a bad place to be holding a delete button.
-          // Presentation: the wrapper only stops a click on its way out; the control is the icon
-          // inside it, which the confirmation makes operable.
-          <span
-            role="presentation"
-            onClick={(event: MouseEvent<HTMLElement>) => {
+  // The chip may sit inside a link to its target, so the remove click has to say it is not a
+  // navigation before anything else reads it as one — and it never removes anything by itself:
+  // striking a membership out is a hard delete of somebody's record of what was done, with no
+  // undo, on a target small enough to hit by accident while aiming at the chip. The confirmation
+  // is the same one the link's own page puts on the same act, so the two surfaces agree about how
+  // dangerous it is.
+  //
+  // The control is this chip's own rather than the tag's built-in close icon, because the
+  // confirmation has to wrap the element that takes focus: the tag rebuilds whatever close icon it
+  // is given into a focusable button of its own, so a confirmation placed on anything inside that
+  // button never hears the Enter its keyboard handler turns into a click on the button itself.
+  const removeControl = onRemove ? (
+    // Refused on a wrapper the click passes through on its way out, before it can reach the
+    // surrounding link: left to bubble, it takes the reader to the thing they were trying to
+    // unname, which is a bad place to be holding a delete button. A wrapper rather than the
+    // control itself because the confirmation's own buttons are drawn elsewhere on the page but
+    // bubble through the component tree from the confirmation — so its OK, too, would otherwise
+    // arrive at the link. Presentation: the wrapper only stops clicks; the control is inside it.
+    <span
+      role="presentation"
+      onClick={(event: MouseEvent<HTMLElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
+      <Popconfirm title={t('resLinks.removeMemberConfirm')} okButtonProps={{ danger: true }} onConfirm={onRemove}>
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={t('resLinks.removeMember')}
+          className="member-chip-remove"
+          onKeyDown={(event: KeyboardEvent<HTMLElement>) => {
+            if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
-              event.stopPropagation();
-            }}
-          >
-            <Popconfirm
-              title={t('resLinks.removeMemberConfirm')}
-              okButtonProps={{ danger: true }}
-              onConfirm={onRemove}
-            >
-              <CloseOutlined aria-label={t('resLinks.removeMember')} />
-            </Popconfirm>
-          </span>
-        ),
-        onClose: (event: MouseEvent<HTMLElement>) => {
-          // The tag would remove itself and follow any surrounding navigation; the
-          // confirmation inside the icon has already taken the click.
-          event.preventDefault();
-          event.stopPropagation();
-        },
-      }
-    : {};
+              event.currentTarget.click();
+            }
+          }}
+        >
+          <CloseOutlined aria-hidden />
+        </span>
+      </Popconfirm>
+    </span>
+  ) : null;
 
   if (!member.display) {
     return (
       <Tooltip title={t('resLinks.restrictedHint')}>
-        <Tag icon={<LockOutlined />} {...closeProps}>
+        <Tag icon={<LockOutlined />}>
           {t('resLinks.restricted')}
+          {removeControl}
         </Tag>
       </Tooltip>
     );
@@ -115,7 +118,6 @@ export default function MemberChip({
     <Tag
       icon={<Icon />}
       style={route ? { cursor: 'pointer', marginInlineEnd: 0 } : { marginInlineEnd: 0 }}
-      {...closeProps}
     >
       {member.isMain && (
         <StarFilled aria-label={t('resLinks.mainMember')} style={{ marginInlineEnd: 4 }} />
@@ -133,6 +135,7 @@ export default function MemberChip({
           {summary}
         </Typography.Text>
       )}
+      {removeControl}
     </Tag>
   );
 

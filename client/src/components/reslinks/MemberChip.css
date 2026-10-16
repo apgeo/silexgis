@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+
+/* The chip's remove control, sized and coloured as the tag's own close icon is, with a ring of
+   its own for keyboard focus — the tag draws none. */
+.member-chip-remove {
+  margin-inline-start: 4px;
+  font-size: 10px;
+  color: var(--ant-color-icon);
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.member-chip-remove:hover {
+  color: var(--ant-color-icon-hover);
+}
+
+.member-chip-remove:focus-visible {
+  outline: 2px solid var(--ant-color-primary-border);
+  outline-offset: 1px;
+}

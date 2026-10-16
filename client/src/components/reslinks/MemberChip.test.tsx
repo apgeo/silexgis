@@ -101,6 +101,20 @@ it('confirming removes the membership and still does not navigate', async () => 
   expect(screen.queryByText("the feature's own page")).toBeNull();
 });
 
+it('a keyboard user can strike a membership out: Enter on the control asks, and nothing navigates', async () => {
+  const onRemove = vi.fn();
+  renderChip(onRemove);
+
+  const control = screen.getByRole('button', { name: 'Remove from link' });
+  control.focus();
+  fireEvent.keyDown(control, { key: 'Enter' });
+
+  expect(await screen.findByText('Remove this item from the link?')).toBeTruthy();
+  fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+  expect(onRemove).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText("the feature's own page")).toBeNull();
+});
+
 it('a chip nobody may amend offers no close icon at all', () => {
   renderChip(undefined);
 
