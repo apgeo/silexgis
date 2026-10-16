@@ -162,8 +162,15 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
   };
 }
 
+/**
+ * What exporting the map came to: the picture, or why there is none. `unreadable` is a canvas the
+ * browser will not let be read back — a tile on it was drawn from a source that gave no
+ * cross-origin leave — which is a fact about the background chosen, not a failure to retry.
+ */
+export type MapImageExport = { image: Blob } | { refused: 'unreadable' | 'failed' };
+
 /** Renders the current map canvas composite to a PNG blob (attribution included). */
-export function exportMapImage(): Promise<Blob | null> {
+export function exportMapImage(): Promise<MapImageExport> {
   const map = getWorkspaceMap();
   return new Promise((resolve) => {
     map.once('rendercomplete', () => {
@@ -191,7 +198,14 @@ export function exportMapImage(): Promise<Blob | null> {
         });
       context.globalAlpha = 1;
       context.setTransform(1, 0, 0, 1, 0, 0);
-      target.toBlob(resolve, 'image/png');
+      try {
+        target.toBlob((blob) => resolve(blob ? { image: blob } : { refused: 'failed' }), 'image/png');
+      } catch (error) {
+        // Thrown, not reported through the callback, when the canvas holds a tile the browser
+        // treats as another site's: left uncaught, the export never answered and the error landed
+        // in the console instead of in front of the person who pressed the button.
+        resolve({ refused: error instanceof DOMException && error.name === 'SecurityError' ? 'unreadable' : 'failed' });
+      }
     });
     map.renderSync();
   });

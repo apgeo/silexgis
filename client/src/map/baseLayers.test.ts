@@ -4,7 +4,7 @@ import TileWMS from 'ol/source/TileWMS';
 import WMTS from 'ol/source/WMTS';
 import XYZ from 'ol/source/XYZ';
 import type { MapLayerInfo } from '../api/hooks.ts';
-import { isDrawable, tileSourceFor, wmtsMatrixIds, type DrawableLayer } from './baseLayers.ts';
+import { isDrawable, tileCrossOrigin, tileSourceFor, wmtsMatrixIds, type DrawableLayer } from './baseLayers.ts';
 
 function entry(overrides: Partial<MapLayerInfo>): DrawableLayer {
   return {
@@ -118,5 +118,28 @@ describe('the source each kind is drawn from', () => {
       'EPSG:4326:2',
       'EPSG:4326:3',
     ]);
+  });
+});
+
+describe('tileCrossOrigin', () => {
+  it('asks a source allowed into documents for its tiles with leave to read them back', () => {
+    // Without it, one of its tiles on the map makes the whole canvas unreadable, and exporting the
+    // map as an image fails with the browser's security error.
+    expect(tileCrossOrigin({ inDocuments: true })).toBe('anonymous');
+  });
+
+  it('asks any other source the ordinary way, so a server without cross-origin answers still draws', () => {
+    expect(tileCrossOrigin({ inDocuments: false })).toBeUndefined();
+    // A shared view's background carries no such flag, and is asked the ordinary way too.
+    expect(tileCrossOrigin({})).toBeUndefined();
+  });
+
+  it('applies the same rule to every kind of source, so a map service allowed into documents exports too', () => {
+    // The attribute is protected on the source; read it the way the tile loader does.
+    const crossOriginOf = (source: unknown) => (source as { crossOrigin: string | null }).crossOrigin;
+    for (const drawable of [entry({}), entry({ layerKind: 'wms', wms }), entry({ layerKind: 'wmts', wmts })]) {
+      expect(crossOriginOf(tileSourceFor({ ...drawable, inDocuments: true }))).toBe('anonymous');
+      expect(crossOriginOf(tileSourceFor({ ...drawable, inDocuments: false }))).toBeNull();
+    }
   });
 });

@@ -12,12 +12,14 @@ import type { MapLayerInfo } from '../api/hooks.ts';
 
 /**
  * What a source needs in order to be drawn: a catalogue entry, or the background a shared view
- * was saved with — the same fields, so both are drawn by the same code.
+ * was saved with — the same fields, so both are drawn by the same code. Only a catalogue entry
+ * says whether it is allowed into documents; a shared view's background never ends up in one.
  */
 export type DrawableLayer = Pick<
   MapLayerInfo,
   'layerKind' | 'urlTemplate' | 'wms' | 'wmts' | 'attribution' | 'minZoom' | 'maxZoom'
->;
+> &
+  Partial<Pick<MapLayerInfo, 'inDocuments'>>;
 
 /**
  * Whether this client can draw the entry: tiles on a z/x/y template, or a map service carrying
@@ -62,6 +64,20 @@ function wmtsTileGrid(crs: string, maxZoom: number, matrixIdPrefix: string): WMT
 }
 
 /**
+ * How a catalogue source's tiles are asked for. A source the catalogue lets into the pictures this
+ * application makes is asked for with leave to be read back out of the browser (CORS) — which is
+ * what lets "export map image" put it into a picture at all: a tile drawn without that leave makes
+ * the whole map's canvas unreadable. Those are the sources documents already ask for the same way,
+ * so they are known to answer it. Any other source is asked the ordinary way, so that a server that
+ * does not answer cross-origin requests still draws on screen; an export over it is refused with a
+ * reason instead. A map service is asked by the same rule as a tile template, so a WMS or WMTS
+ * background allowed into documents exports as well.
+ */
+export function tileCrossOrigin(entry: Pick<DrawableLayer, 'inDocuments'>): 'anonymous' | undefined {
+  return entry.inDocuments ? 'anonymous' : undefined;
+}
+
+/**
  * The OpenLayers source for an entry, by its kind.
  *
  * A Web Map Service is asked for one picture per tile, so it has no last zoom to respect and is
@@ -72,6 +88,7 @@ function wmtsTileGrid(crs: string, maxZoom: number, matrixIdPrefix: string): WMT
 export function tileSourceFor(entry: DrawableLayer): TileSource {
   const { max } = zoomBand(entry);
   const attributions = entry.attribution ?? undefined;
+  const crossOrigin = tileCrossOrigin(entry);
   if (entry.layerKind === 'wms' && entry.wms) {
     const wms = entry.wms;
     return new TileWMS({
@@ -85,6 +102,7 @@ export function tileSourceFor(entry: DrawableLayer): TileSource {
       },
       projection: wms.crs,
       attributions,
+      crossOrigin,
     });
   }
   if (entry.layerKind === 'wmts' && entry.wmts) {
@@ -101,10 +119,11 @@ export function tileSourceFor(entry: DrawableLayer): TileSource {
       // key-value endpoint.
       requestEncoding: entry.urlTemplate.includes('{TileMatrix}') ? 'REST' : 'KVP',
       attributions,
+      crossOrigin,
       wrapX: true,
     });
   }
-  return new XYZ({ url: entry.urlTemplate, attributions, maxZoom: max });
+  return new XYZ({ url: entry.urlTemplate, attributions, maxZoom: max, crossOrigin });
 }
 
 const BASE_ID_PROP = 'silexgis:baseLayerId';

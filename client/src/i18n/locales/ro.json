@@ -3024,7 +3024,8 @@
     "sharedClusterHint": "{{count}} intrări aici — apropie harta pentru a le vedea pe rând.",
     "sharedNoBackground": "Nicio hartă de fundal nu este disponibilă pentru vederile partajate în această instalare.",
     "sharedUnnamed": "Fără nume",
-    "sharedClose": "Închide"
+    "sharedClose": "Închide",
+    "exportUnreadable": "Acest fundal nu poate fi pus într-o imagine: furnizorul lui nu permite. Alegeți unul dintre fundalurile permise în documente (OpenStreetMap este unul) și exportați din nou."
   },
   "panel": {
     "unknown": "Panou necunoscut.",

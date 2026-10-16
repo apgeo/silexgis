@@ -63,12 +63,12 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
   };
 
   const exportImage = async () => {
-    const blob = await exportMapImage();
-    if (!blob) {
-      message.error(t('common.saveFailed'));
+    const result = await exportMapImage();
+    if ('refused' in result) {
+      message.error(result.refused === 'unreadable' ? t('views.exportUnreadable') : t('common.saveFailed'));
       return;
     }
-    saveBlob(blob, `silexgis-map-${new Date().toISOString().slice(0, 10)}.png`);
+    saveBlob(result.image, `silexgis-map-${new Date().toISOString().slice(0, 10)}.png`);
   };
 
   return (

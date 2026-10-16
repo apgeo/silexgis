@@ -3024,7 +3024,8 @@
     "sharedClusterHint": "{{count}} entrances here — zoom in to see them one by one.",
     "sharedNoBackground": "No background map is available for shared views on this installation.",
     "sharedUnnamed": "Unnamed",
-    "sharedClose": "Close"
+    "sharedClose": "Close",
+    "exportUnreadable": "This background cannot be put into an image: its provider does not allow it. Switch to one of the backgrounds allowed in documents (OpenStreetMap is one) and export again."
   },
   "panel": {
     "unknown": "Unknown panel.",
