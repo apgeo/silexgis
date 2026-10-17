@@ -64,6 +64,7 @@ describe('SettingsLayout', () => {
       'Security',
       'Accessibility',
       'Saved filters',
+      'Coordinates',
       'Sync',
       'Advanced',
     ]);

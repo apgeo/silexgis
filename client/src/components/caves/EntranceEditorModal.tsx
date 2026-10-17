@@ -21,6 +21,7 @@ import {
 } from '../../api/hooks.ts';
 import { clampLonLat } from '../../geo/coords.ts';
 import DialogHost from '../DialogHost.tsx';
+import PositionTextInput from '../coordinates/PositionTextInput.tsx';
 
 interface EntranceEditorModalProps {
   caveId: string;
@@ -233,6 +234,18 @@ export default function EntranceEditorModal({
             <Checkbox />
           </Form.Item>
         </Flex>
+        {/* Typed or pasted in any format; it fills the two fields below, which are what is saved —
+            and is disabled with them, never showing a blurred position back. */}
+        <div style={{ marginBottom: 12 }}>
+          <PositionTextInput
+            disabled={positionIsBlurred}
+            onPosition={([lon, lat]) => {
+              const [clampedLon, clampedLat] = clampLonLat(Number(lon.toFixed(7)), Number(lat.toFixed(7)));
+              form.setFieldsValue({ lon: clampedLon, lat: clampedLat });
+              placeMarker(clampedLon, clampedLat, true);
+            }}
+          />
+        </div>
         <Flex gap={12} wrap>
           {/* Disabled together, and exactly the four the update handler declines to take from a
               caller without exact view. Leaving them editable makes a save look like it moved an

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
   BellOutlined,
+  EnvironmentOutlined,
   EyeOutlined,
   FilterOutlined,
   IdcardOutlined,
@@ -25,6 +26,7 @@ const SECTION_ICONS: Record<SettingsSection, ReactNode> = {
   security: <SafetyOutlined />,
   accessibility: <EyeOutlined />,
   filters: <FilterOutlined />,
+  coordinates: <EnvironmentOutlined />,
   sync: <MobileOutlined />,
   advanced: <SlidersOutlined />,
 };

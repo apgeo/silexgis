@@ -32,7 +32,7 @@ test('workspace preferences follow the account, and stay with it', async ({ page
   const second = await registerAccount(page.request, 'prefs-b');
 
   await login(page, first.email, first.password);
-  await gotoRoute(page, '/settings/accessibility');
+  await gotoRoute(page, '/settings/coordinates');
   const written = page.waitForResponse(
     (response) => response.url().endsWith('/api/v1/me/preferences') && response.request().method() === 'PATCH',
   );
@@ -42,7 +42,7 @@ test('workspace preferences follow the account, and stay with it', async ({ page
 
   // Another browser, the same member: the choice is there, from the account.
   const elsewhere = await signedInElsewhere(browser, first);
-  await gotoRoute(elsewhere.page, '/settings/accessibility');
+  await gotoRoute(elsewhere.page, '/settings/coordinates');
   await expect(shownFormat(elsewhere.page)).toContainText('UTM, with zone', { timeout: 15_000 });
   await elsewhere.context.close();
 
@@ -51,7 +51,7 @@ test('workspace preferences follow the account, and stay with it', async ({ page
   // member's arrangement is still there when the second signs in — the case that has to hold.
   await page.context().clearCookies();
   await login(page, second.email, second.password);
-  await gotoRoute(page, '/settings/accessibility');
+  await gotoRoute(page, '/settings/coordinates');
   await expect(shownFormat(page)).toContainText('Decimal degrees', { timeout: 15_000 });
 });
 

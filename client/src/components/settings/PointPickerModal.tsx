@@ -13,6 +13,7 @@ import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
 import { clampLonLat } from '../../geo/coords.ts';
+import PositionTextInput from '../coordinates/PositionTextInput.tsx';
 
 /** Braşov: the middle of the karst this application was written for. */
 const DEFAULT_CENTER: [number, number] = [25.6, 45.65];
@@ -125,6 +126,14 @@ export default function PointPickerModal({ open, value, onCancel, onPick }: Prop
       <Flex vertical gap={12}>
         <Typography.Text type="secondary">{t('settings.pointPicker.hint')}</Typography.Text>
         <div ref={onMapTargetRef} style={{ height: 360, width: '100%' }} data-testid="point-picker-map" />
+        <PositionTextInput
+          onPosition={([typedLon, typedLat]) => {
+            const [nextLon, nextLat] = clampLonLat(Number(typedLon.toFixed(7)), Number(typedLat.toFixed(7)));
+            setLon(nextLon);
+            setLat(nextLat);
+            placeMarker(nextLon, nextLat, true);
+          }}
+        />
         <Flex gap={12} wrap>
           <label>
             {t('entrances.longitude')}

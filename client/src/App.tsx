@@ -103,6 +103,7 @@ const NotificationSettingsPage = lazy(() => import('./pages/settings/Notificatio
 const SecuritySettingsPage = lazy(() => import('./pages/settings/SecuritySettingsPage.tsx'));
 const AccessibilitySettingsPage = lazy(() => import('./pages/settings/AccessibilitySettingsPage.tsx'));
 const SavedFilterSettingsPage = lazy(() => import('./pages/settings/SavedFilterSettingsPage.tsx'));
+const CoordinateSettingsPage = lazy(() => import('./pages/settings/CoordinateSettingsPage.tsx'));
 const CoordinateConverterPage = lazy(() => import('./pages/tools/CoordinateConverterPage.tsx'));
 const SyncSettingsPage = lazy(() => import('./pages/settings/SyncSettingsPage.tsx'));
 const AdvancedSettingsPage = lazy(() => import('./pages/settings/AdvancedSettingsPage.tsx'));
@@ -255,6 +256,7 @@ export const routes: RouteObject[] = guarded([
               { path: 'security', element: <Loadable><SecuritySettingsPage /></Loadable> },
               { path: 'accessibility', element: <Loadable><AccessibilitySettingsPage /></Loadable> },
               { path: 'filters', element: <Loadable><SavedFilterSettingsPage /></Loadable> },
+              { path: 'coordinates', element: <Loadable><CoordinateSettingsPage /></Loadable> },
               { path: 'sync', element: <Loadable><SyncSettingsPage /></Loadable> },
               { path: 'advanced', element: <Loadable><AdvancedSettingsPage /></Loadable> },
             ],

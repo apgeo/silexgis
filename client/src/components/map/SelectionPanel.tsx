@@ -23,6 +23,7 @@ import {
 } from '../../api/hooks.ts';
 import { useFeatureRights } from '../../api/hooks/objectRights.ts';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
+import OtherFormats from '../coordinates/OtherFormats.tsx';
 import { mapFilterParams } from '../../map/mapFilters.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { viewFitGeometry, viewFlyTo } from '../../workspace/viewCamera.ts';
@@ -294,6 +295,7 @@ function CaveCard({
               entrance.geom.coordinates[1],
               entrance.approximateLocation ? 'approximate' : undefined,
             )}
+            <OtherFormats lon={entrance.geom.coordinates[0]} lat={entrance.geom.coordinates[1]} approximate={entrance.approximateLocation} />
           </Descriptions.Item>
         )}
         <Descriptions.Item label={t('caves.visibility')}>

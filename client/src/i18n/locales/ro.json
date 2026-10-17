@@ -45,9 +45,11 @@
       "activity": "Activitate",
       "people": "Persoane",
       "admin": "Administrare",
-      "config": "Configurare"
+      "config": "Configurare",
+      "tools": "Unelte"
     },
     "workAreas": "Zone de lucru",
+    "coordinateConverter": "Convertor de coordonate",
     "speologie": "Catalogul peșterilor",
     "registryDistribution": "Distribuții",
     "registryCorrelation": "Corelații",
@@ -3768,6 +3770,7 @@
       "security": "Securitate",
       "accessibility": "Accesibilitate",
       "filters": "Filtre salvate",
+      "coordinates": "Coordonate",
       "sync": "Sincronizare",
       "advanced": "Avansat"
     },
@@ -3973,12 +3976,6 @@
       "mapChrome": "Ascunde controalele de pe hartă",
       "reset": "Resetează",
       "resetDone": "Resetat.",
-      "coordinateFormat": "Coordonate afișate ca",
-      "coordinateFormatValues": {
-        "dd": "Grade zecimale",
-        "dms": "Grade, minute, secunde",
-        "utm": "UTM, cu zonă"
-      },
       "overviewMap": "Hartă de ansamblu pe hartă"
     },
     "advanced": {
@@ -7344,6 +7341,163 @@
       "square": "pătrat",
       "triangle": "triunghi",
       "diamond": "romb"
+    }
+  },
+  "coordinates": {
+    "formats": {
+      "dd": "Grade zecimale",
+      "ddm": "Grade, minute zecimale",
+      "dms": "Grade, minute, secunde",
+      "utm": "UTM, cu zonă",
+      "mgrs": "MGRS (caroiaj militar)",
+      "stereo70": "Stereo 70 (România)",
+      "lv95": "Caroiajul elvețian LV95",
+      "lv03": "Caroiajul elvețian LV03 (vechi)",
+      "pluscode": "Plus Code"
+    },
+    "settingLabels": {
+      "decimals": "Zecimale",
+      "style": "Scrise",
+      "minutesDecimals": "Zecimale la minute",
+      "secondsDecimals": "Zecimale la secunde",
+      "zone": "Zonă",
+      "precisionMetres": "Precizie",
+      "spacing": "Spațiere",
+      "axes": "Axe",
+      "length": "Lungimea codului"
+    },
+    "choices": {
+      "style": {
+        "letters": "Cu N, S, E, W",
+        "signed": "Cu semn, latitudinea întâi"
+      },
+      "zone": {
+        "auto": "Fiecare poziție în zona ei",
+        "forced": "Mereu zona {{zone}}"
+      },
+      "metres": "{{value}} m",
+      "kilometres": "{{value}} km",
+      "spacing": {
+        "spaced": "Cu spații",
+        "compact": "Fără spații"
+      },
+      "axes": {
+        "en": "E … N …",
+        "xy": "X (nord) … Y (est) …"
+      },
+      "length": {
+        "8": "8 — circa 275 m",
+        "10": "10 — circa 14 m",
+        "11": "11 — circa 3,5 m",
+        "12": "12 — circa 1 m",
+        "13": "13 — circa 25 cm"
+      },
+      "places": "{{count}} zecimale"
+    },
+    "settings": {
+      "title": "Coordonate",
+      "intro": "Cum sunt scrise pozițiile oriunde sunt afișate sau copiate și în ce alte formate este listată o poziție afișată în detaliu. Aceste setări vă urmează contul.",
+      "shownAs": "Coordonate afișate ca",
+      "listed": "Listate și la „Alte formate”",
+      "listedHint": "O poziție afișată în detaliu — o intrare selectată, intrările unei peșteri — poate fi deschisă și în aceste formate, fiecare cu butonul ei de copiere. Un format care nu are referință pentru o poziție (un caroiaj național în afara țării lui) este omis acolo.",
+      "perFormat": "Setările fiecărui format",
+      "sample": "Punct de exemplu: vârful Moldoveanu",
+      "notAvailable": "Nu este disponibil aici",
+      "notes": {
+        "utm": "O zonă aleasă aici este păstrată pentru pozițiile de lângă marginea ei, ca o echipă care lucrează peste margine să citească un singur caroiaj; departe de zonă se folosește zona proprie a poziției.",
+        "stereo70": "Convertit din WGS84 cu transformarea uzuală în șapte parametri: precisă la câțiva metri, potrivită pentru a găsi o peșteră, nu pentru o ridicare topografică. Oferit doar în România.",
+        "lv95": "Precis la circa un metru. Oferit doar în Elveția și Liechtenstein.",
+        "lv03": "Precis la circa un metru. Oferit doar în Elveția și Liechtenstein.",
+        "mgrs": "O poziție protejată este numită mereu prin pătratul ei de 10 km.",
+        "pluscode": "Doar coduri globale: un cod scurt are nevoie de un oraș apropiat pentru a fi citit înapoi."
+      }
+    },
+    "others": {
+      "show": "Alte formate",
+      "hide": "Ascunde celelalte formate",
+      "approximate": "Poziție aproximativă: fiecare format este scris nu mai fin decât caroiajul de protecție.",
+      "openConverter": "Deschide în convertorul de coordonate"
+    },
+    "input": {
+      "label": "Scrieți sau lipiți o poziție",
+      "placeholder": "45.59944, 24.73617 · 45°35′58″N 24°44′10″E · 35T 401234 5049876",
+      "anyFormat": "Orice format",
+      "readAs": "Citită ca {{format}}: {{position}}",
+      "pick": "Textul poate fi citit în mai multe feluri — alegeți unul:",
+      "use": "Folosește",
+      "openConverter": "Convertor de coordonate"
+    },
+    "errors": {
+      "unrecognised": "Nu este o poziție în niciun format pe care aplicația îl citește.",
+      "latitudeRange": "Latitudinea este în afara intervalului −90…90.",
+      "longitudeRange": "Longitudinea este în afara intervalului −180…180.",
+      "minutesRange": "Minutele trebuie să fie sub 60.",
+      "secondsRange": "Secundele trebuie să fie sub 60.",
+      "fractionNotLast": "Doar ultima parte a unui unghi poate avea zecimale.",
+      "unitOrder": "Gradele, minutele și secundele sunt în ordinea greșită.",
+      "hemisphereConflict": "Ambele valori numesc aceeași direcție (două latitudini sau două longitudini).",
+      "componentCount": "O poziție are nevoie de exact două valori.",
+      "utmZoneRange": "O zonă UTM este între 1 și 60.",
+      "utmBandUnknown": "Aceasta nu este literă de bandă de latitudine UTM.",
+      "utmBandMismatch": "Poziția nu se află în banda numită de literă.",
+      "utmEastingRange": "Valoarea est este în afara unei zone UTM.",
+      "utmNorthingRange": "Valoarea nord este în afara unei zone UTM.",
+      "plusCodeShort": "Un Plus Code scurt are nevoie de un oraș apropiat; scrieți codul complet.",
+      "plusCodeInvalid": "Nu este un Plus Code valid.",
+      "mgrsInvalid": "Nu este o referință MGRS validă.",
+      "gridOutsideArea": "Poziția se află în afara zonei în care este folosit acest caroiaj."
+    },
+    "assumptions": {
+      "latLonOrder": "Două numere fără litere au fost citite ca latitudine, apoi longitudine.",
+      "northernHemisphere": "Nu s-a dat emisfera: s-a presupus cea nordică.",
+      "utmLetterAsBand": "Litera a fost citită ca bandă de latitudine.",
+      "utmLetterAsHemisphere": "Litera a fost citită ca emisferă.",
+      "gridAxisOrder": "Primul număr a fost citit ca valoarea est."
+    },
+    "converter": {
+      "title": "Convertor de coordonate",
+      "intro": "Scrieți sau lipiți o poziție în orice format pe care aplicația îl citește și vedeți-o în toate formatele deodată. Totul se convertește în acest browser, iar nimic din ce scrieți sau lipiți aici nu este salvat și nu este trimis serverului aplicației. Singura excepție este afișarea poziției pe hartă: harta își încarcă imaginile de fundal pentru zona din jurul poziției de la OpenStreetMap. Pozițiile sunt scrise cu setările dumneavoastră pentru fiecare format (Setări › Coordonate).",
+      "single": "O poziție",
+      "readAsFormat": "Citit ca",
+      "copy": "Copiază",
+      "copied": "Copiat",
+      "showOnMap": "Arată pe o hartă",
+      "hideMap": "Ascunde harta",
+      "openMainMap": "Deschide locul pe harta principală",
+      "mapHint": "Un marcaj temporar, pe o hartă separată: nu se adaugă nimic pe harta dumneavoastră și nu se salvează nimic. Imaginile de fundal pentru această zonă sunt încărcate de la OpenStreetMap.",
+      "batch": "Mai multe poziții",
+      "batchHint": "Lipiți câte o poziție pe linie, sau un tabel (CSV) și alegeți coloana care conține poziția — sau două, latitudinea și longitudinea. Fiecare linie se convertește separat; o linie care nu poate fi citită spune de ce.",
+      "mode": "Lipit ca",
+      "modeLines": "Câte una pe linie",
+      "modeCsv": "Un tabel (CSV)",
+      "separator": "Separatorul coloanelor",
+      "separators": {
+        "auto": "Separator: ghicit",
+        "comma": "Virgulă",
+        "semicolon": "Punct și virgulă",
+        "tab": "Tab"
+      },
+      "header": "Prima linie conține numele coloanelor",
+      "positionColumns": "Coloana (coloanele) cu poziția",
+      "columnN": "Coloana {{n}}",
+      "batchInput": "Pozițiile de convertit",
+      "batchPlaceholder": "45°35′58″N 24°44′10″E\n35T 401234 5049876\nE 535046 N 448044",
+      "csvPlaceholder": "nume;latitudine;longitudine\nintrarea 1;45.59944;24.73617",
+      "convert": "Convertește",
+      "download": "Descarcă CSV",
+      "summary": "Linii citite: {{count}}; neconvertite: {{failed}}.",
+      "leftOut": "Linii rămase necitite: {{count}} — se convertesc cel mult 5000 deodată.",
+      "columns": {
+        "line": "Linia",
+        "input": "Textul citit",
+        "result": "Poziția",
+        "error": "Neconvertit deoarece"
+      },
+      "batchErrors": {
+        "ambiguous": "Textul poate fi citit ca mai multe poziții: alegeți formatul în care este scris.",
+        "missingColumn": "Coloana aleasă este goală pe această linie.",
+        "empty": "Nu este nimic de citit."
+      }
     }
   }
 }

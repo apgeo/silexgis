@@ -12,6 +12,7 @@ export const SETTINGS_SECTIONS = [
   'security',
   'accessibility',
   'filters',
+  'coordinates',
   'sync',
   'advanced',
 ] as const;

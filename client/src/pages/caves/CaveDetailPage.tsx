@@ -45,6 +45,7 @@ import {
   type EntranceWrite,
 } from '../../api/hooks.ts';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
+import OtherFormats from '../../components/coordinates/OtherFormats.tsx';
 import { APPROXIMATE_MAX_ZOOM, fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { requestReveal3d } from '../../scene3d/pendingReveal3d.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
@@ -363,40 +364,47 @@ export default function CaveDetailPage() {
               title: t('entrances.coordinates'),
               key: 'coords',
               render: (_, e) => (
-                <Flex align="center" gap={4}>
-                  <EnvironmentOutlined />
-                  <span>
-                    {formatPosition(
-                      e.geom.coordinates[0],
-                      e.geom.coordinates[1],
-                      e.approximateLocation ? 'approximate' : undefined,
+                <Flex vertical>
+                  <Flex align="center" gap={4}>
+                    <EnvironmentOutlined />
+                    <span>
+                      {formatPosition(
+                        e.geom.coordinates[0],
+                        e.geom.coordinates[1],
+                        e.approximateLocation ? 'approximate' : undefined,
+                      )}
+                    </span>
+                    {/* This table printed five decimals for every row, including the ones the server
+                        had snapped to a 5 km grid before sending. Five decimals reads as one metre
+                        whatever the provenance, so a snapped row is written no finer than the grid
+                        and says so itself — the card-level warning above is about the cave, not
+                        about which entrance. */}
+                    {e.approximateLocation && (
+                      <Tag color="orange" style={{ marginInlineEnd: 0 }}>
+                        {t('map.approximateShort')}
+                      </Tag>
                     )}
-                  </span>
-                  {/* This table printed five decimals for every row, including the ones the server
-                      had snapped to a 5 km grid before sending. Five decimals reads as one metre
-                      whatever the provenance, so a snapped row is written no finer than the grid
-                      and says so itself — the card-level warning above is about the cave, not
-                      about which entrance. */}
-                  {e.approximateLocation && (
-                    <Tag color="orange" style={{ marginInlineEnd: 0 }}>
-                      {t('map.approximateShort')}
-                    </Tag>
-                  )}
-                  <Tooltip
-                    title={
-                      e.approximateLocation
-                        ? t('entrances.showOnMapApproximate')
-                        : t('entrances.showOnMap')
-                    }
-                  >
-                    <Button
-                      size="small"
-                      type="text"
-                      icon={<AimOutlined />}
-                      aria-label={t('entrances.showOnMap')}
-                      onClick={() => showEntranceOnMap(e)}
-                    />
-                  </Tooltip>
+                    <Tooltip
+                      title={
+                        e.approximateLocation
+                          ? t('entrances.showOnMapApproximate')
+                          : t('entrances.showOnMap')
+                      }
+                    >
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<AimOutlined />}
+                        aria-label={t('entrances.showOnMap')}
+                        onClick={() => showEntranceOnMap(e)}
+                      />
+                    </Tooltip>
+                  </Flex>
+                  <OtherFormats
+                    lon={e.geom.coordinates[0]}
+                    lat={e.geom.coordinates[1]}
+                    approximate={e.approximateLocation}
+                  />
                 </Flex>
               ),
             },

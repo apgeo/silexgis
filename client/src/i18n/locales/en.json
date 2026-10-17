@@ -45,9 +45,11 @@
       "activity": "Activity",
       "people": "People",
       "admin": "Administration",
-      "config": "Configuration"
+      "config": "Configuration",
+      "tools": "Tools"
     },
     "workAreas": "Work areas",
+    "coordinateConverter": "Coordinate converter",
     "speologie": "Cave catalogue",
     "registryDistribution": "Distributions",
     "registryCorrelation": "Correlations",
@@ -3768,6 +3770,7 @@
       "security": "Security",
       "accessibility": "Accessibility",
       "filters": "Saved filters",
+      "coordinates": "Coordinates",
       "sync": "Sync",
       "advanced": "Advanced"
     },
@@ -3973,12 +3976,6 @@
       "mapChrome": "Hide the on-map controls",
       "reset": "Reset these",
       "resetDone": "Reset.",
-      "coordinateFormat": "Coordinates shown as",
-      "coordinateFormatValues": {
-        "dd": "Decimal degrees",
-        "dms": "Degrees, minutes, seconds",
-        "utm": "UTM, with zone"
-      },
       "overviewMap": "Overview map on the map"
     },
     "advanced": {
@@ -7344,6 +7341,163 @@
       "square": "square",
       "triangle": "triangle",
       "diamond": "diamond"
+    }
+  },
+  "coordinates": {
+    "formats": {
+      "dd": "Decimal degrees",
+      "ddm": "Degrees, decimal minutes",
+      "dms": "Degrees, minutes, seconds",
+      "utm": "UTM, with zone",
+      "mgrs": "MGRS (military grid)",
+      "stereo70": "Stereo 70 (Romania)",
+      "lv95": "Swiss grid LV95",
+      "lv03": "Swiss grid LV03 (former)",
+      "pluscode": "Plus Code"
+    },
+    "settingLabels": {
+      "decimals": "Decimal places",
+      "style": "Written as",
+      "minutesDecimals": "Places of the minutes",
+      "secondsDecimals": "Places of the seconds",
+      "zone": "Zone",
+      "precisionMetres": "Precision",
+      "spacing": "Spacing",
+      "axes": "Axes",
+      "length": "Code length"
+    },
+    "choices": {
+      "style": {
+        "letters": "With N, S, E, W",
+        "signed": "Signed, latitude first"
+      },
+      "zone": {
+        "auto": "Each position in its own zone",
+        "forced": "Always zone {{zone}}"
+      },
+      "metres": "{{value}} m",
+      "kilometres": "{{value}} km",
+      "spacing": {
+        "spaced": "With spaces",
+        "compact": "Without spaces"
+      },
+      "axes": {
+        "en": "E … N …",
+        "xy": "X (north) … Y (east) …"
+      },
+      "length": {
+        "8": "8 — about 275 m",
+        "10": "10 — about 14 m",
+        "11": "11 — about 3.5 m",
+        "12": "12 — about 1 m",
+        "13": "13 — about 25 cm"
+      },
+      "places": "{{count}} places"
+    },
+    "settings": {
+      "title": "Coordinates",
+      "intro": "How positions are written wherever one is shown or copied, and the other formats a position shown in detail is listed in. These settings follow your account.",
+      "shownAs": "Coordinates shown as",
+      "listed": "Also listed under “Other formats”",
+      "listedHint": "A position shown in detail — a selected entrance, a cave's entrances — can be opened in these formats too, each with its own copy button. A format with no reference for a position (a national grid outside its country) is left out there.",
+      "perFormat": "Settings of each format",
+      "sample": "Sample point: the summit of Moldoveanu",
+      "notAvailable": "Not available here",
+      "notes": {
+        "utm": "A zone chosen here is kept for positions near the zone's edge, so that a team working across it reads one grid; far from that zone, the position's own zone is used.",
+        "stereo70": "Converted from WGS84 with the usual seven-parameter datum shift: good to a few metres, which suits finding a cave and not a survey. Offered only inside Romania.",
+        "lv95": "Good to about a metre. Offered only in Switzerland and Liechtenstein.",
+        "lv03": "Good to about a metre. Offered only in Switzerland and Liechtenstein.",
+        "mgrs": "A protected position is always named by its 10 km square.",
+        "pluscode": "Global codes only: a short code needs a nearby town to be read back."
+      }
+    },
+    "others": {
+      "show": "Other formats",
+      "hide": "Hide other formats",
+      "approximate": "Approximate position: every format is written no finer than the protection grid.",
+      "openConverter": "Open in the coordinate converter"
+    },
+    "input": {
+      "label": "Type or paste a position",
+      "placeholder": "45.59944, 24.73617 · 45°35′58″N 24°44′10″E · 35T 401234 5049876",
+      "anyFormat": "Any format",
+      "readAs": "Read as {{format}}: {{position}}",
+      "pick": "This can be read more than one way — choose one:",
+      "use": "Use",
+      "openConverter": "Coordinate converter"
+    },
+    "errors": {
+      "unrecognised": "Not a position in any format this application reads.",
+      "latitudeRange": "The latitude is outside −90…90.",
+      "longitudeRange": "The longitude is outside −180…180.",
+      "minutesRange": "Minutes must be below 60.",
+      "secondsRange": "Seconds must be below 60.",
+      "fractionNotLast": "Only the last part of an angle may have decimals.",
+      "unitOrder": "Degrees, minutes and seconds are in the wrong order.",
+      "hemisphereConflict": "Both values name the same direction (two latitudes or two longitudes).",
+      "componentCount": "A position needs exactly two values.",
+      "utmZoneRange": "A UTM zone is 1 to 60.",
+      "utmBandUnknown": "That is not a UTM latitude band letter.",
+      "utmBandMismatch": "The position does not lie in the band its letter names.",
+      "utmEastingRange": "The easting is outside what a UTM zone holds.",
+      "utmNorthingRange": "The northing is outside what a UTM zone holds.",
+      "plusCodeShort": "A short Plus Code needs a nearby town; type the full code.",
+      "plusCodeInvalid": "Not a valid Plus Code.",
+      "mgrsInvalid": "Not a valid MGRS reference.",
+      "gridOutsideArea": "The position lies outside the area this grid is used in."
+    },
+    "assumptions": {
+      "latLonOrder": "Two bare numbers were read as latitude, then longitude.",
+      "northernHemisphere": "No hemisphere was given: the northern one was assumed.",
+      "utmLetterAsBand": "The letter was read as a latitude band.",
+      "utmLetterAsHemisphere": "The letter was read as a hemisphere.",
+      "gridAxisOrder": "The first number was read as the easting."
+    },
+    "converter": {
+      "title": "Coordinate converter",
+      "intro": "Type or paste a position in any format this application reads and see it in every format at once. Everything is converted in this browser, and nothing typed or pasted here is saved or sent to this application's server. Showing a position on the map is the one exception to keeping it in the browser: the map fetches its background tiles for the area around the position from OpenStreetMap. Positions are written with your own settings for each format (Settings › Coordinates).",
+      "single": "One position",
+      "readAsFormat": "Read as",
+      "copy": "Copy",
+      "copied": "Copied",
+      "showOnMap": "Show on a map",
+      "hideMap": "Hide the map",
+      "openMainMap": "Open this place on the main map",
+      "mapHint": "A temporary marker, on a map of its own: nothing is added to your map or saved. The background tiles for this area are fetched from OpenStreetMap.",
+      "batch": "Many positions",
+      "batchHint": "Paste one position per line, or a table (CSV) and choose the column that holds the position — or two, latitude and longitude. Each line is converted on its own; a line that cannot be read says why.",
+      "mode": "Pasted as",
+      "modeLines": "One per line",
+      "modeCsv": "A table (CSV)",
+      "separator": "Column separator",
+      "separators": {
+        "auto": "Separator: guess",
+        "comma": "Comma",
+        "semicolon": "Semicolon",
+        "tab": "Tab"
+      },
+      "header": "The first line names the columns",
+      "positionColumns": "Column(s) holding the position",
+      "columnN": "Column {{n}}",
+      "batchInput": "Positions to convert",
+      "batchPlaceholder": "45°35′58″N 24°44′10″E\n35T 401234 5049876\nE 535046 N 448044",
+      "csvPlaceholder": "name;latitude;longitude\nentrance 1;45.59944;24.73617",
+      "convert": "Convert",
+      "download": "Download CSV",
+      "summary": "Lines read: {{count}}; not converted: {{failed}}.",
+      "leftOut": "Lines left unread: {{count}} — at most 5000 are converted at once.",
+      "columns": {
+        "line": "Line",
+        "input": "Text read",
+        "result": "Position",
+        "error": "Not converted because"
+      },
+      "batchErrors": {
+        "ambiguous": "This can be read as more than one position: choose the format it is written in.",
+        "missingColumn": "The chosen column is empty on this line.",
+        "empty": "Nothing to read."
+      }
     }
   }
 }
