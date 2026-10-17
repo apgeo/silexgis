@@ -6,9 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Button from '../Button.tsx';
 import { fetchWorkingSetRows, type WorkingSetList, type WorkingSetQuery } from '../../api/hooks/workingSet.ts';
-import { decodeFilter } from '../../filters/url.ts';
 import { mapAddressForList } from '../../filters/tableMapHandoff.ts';
-import { takeIntoWorkingSet } from '../../filters/workingSet.ts';
+import { resultQuestion, takeIntoWorkingSet } from '../../filters/workingSet.ts';
 import { MAX_SELECTION_SET, useWorkspaceStore } from '../../stores/workspaceStore.ts';
 
 interface SelectResultButtonProps {
@@ -48,8 +47,13 @@ export default function SelectResultButton({
       const result = takeIntoWorkingSet(rows, found, MAX_SELECTION_SET);
       // A result cut to the map's window cannot be saved as a filter: a saved filter keeps the
       // question and never a place, so the window would fall away and the filter would find more.
-      const document = query.bbox === undefined ? decodeFilter(query.filter) : null;
-      useWorkspaceStore.getState().setSelectionSetFromResult(result.refs, { document, total: result.total });
+      // Nor can one whose question names a point or an outline, and the place a nearest-first
+      // list was measured from goes with neither the saved question nor the map's.
+      const question = resultQuestion(query.filter, query.bbox !== undefined);
+      useWorkspaceStore.getState().setSelectionSetFromResult(result.refs, {
+        document: question.savable,
+        total: result.total,
+      });
       message.info(
         result.truncated
           ? t('workingSet.tookFirst', {
@@ -58,7 +62,7 @@ export default function SelectResultButton({
             })
           : t('workingSet.tookAll', { count: result.taken }),
       );
-      navigate(mapAddressForList(query.filter));
+      navigate(mapAddressForList(question.mapToken));
     } catch {
       message.error(t('workingSet.failed'));
     } finally {

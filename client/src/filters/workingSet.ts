@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { SelectedRef } from '../stores/workspaceStore.ts';
+import { holdsPosition, withoutAnchor } from './spatial.ts';
+import type { FilterDocument } from './types.ts';
+import { decodeFilter, encodeFilter } from './url.ts';
 
 /**
  * Putting a list's result into the session's working set.
@@ -45,4 +48,35 @@ export function takeIntoWorkingSet(
   const refs = rows.slice(0, cap).map((row) => workingSetRef(row.id, row.kind));
   const whole = Math.max(total, refs.length);
   return { refs, taken: refs.length, total: whole, truncated: refs.length < whole };
+}
+
+/** What a result taken into the working set keeps of the question that found it. */
+export interface ResultQuestion {
+  /** The document the set may be saved as a filter under, or null when no saved filter can hold it. */
+  savable: FilterDocument | null;
+  /** The filter the map opens on with the set. */
+  mapToken: string | undefined;
+}
+
+/**
+ * The question behind a list's result, as the working set keeps it.
+ *
+ * The list may have been asked nearest first, and then its request carries the place the order is
+ * measured from, so that "the first N" are the first N the list shows. That place orders one
+ * request and belongs to no question that outlives it: neither the filter the map opens on nor the
+ * one the set can be saved as keeps it. The set is savable only when a saved filter can hold its
+ * question at all — not cut to the map's window, and naming no point or outline of its own, both
+ * of which a saved filter refuses to store — since saving a nearby question would keep a different
+ * one under a name that claims this one.
+ */
+export function resultQuestion(token: string | undefined, windowed: boolean): ResultQuestion {
+  const decoded = decodeFilter(token);
+  if (decoded === null) {
+    return { savable: null, mapToken: token };
+  }
+  const question = withoutAnchor(decoded);
+  return {
+    savable: windowed || holdsPosition(question) ? null : question,
+    mapToken: question === decoded ? token : encodeFilter(question),
+  };
 }

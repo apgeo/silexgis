@@ -13,10 +13,11 @@ import {
 } from '../../filters/caveRegistry.ts';
 import { whereOf, withWhere } from '../../filters/document.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
-import { encodeFilter } from '../../filters/url.ts';
+import { decodeFilter, encodeFilter } from '../../filters/url.ts';
 
-const { canSpy, doorSpy, cavesSpy, downloadSpy, savedFilters, editorSpy } = vi.hoisted(() => ({
+const { canSpy, doorSpy, cavesSpy, downloadSpy, savedFilters, editorSpy, selectAllSpy } = vi.hoisted(() => ({
   editorSpy: vi.fn(),
+  selectAllSpy: vi.fn(),
   canSpy: vi.fn(),
   doorSpy: vi.fn(),
   cavesSpy: vi.fn(),
@@ -60,6 +61,14 @@ vi.mock('../../api/download.ts', async () => {
 // Neither is what this is about, and each reads the server on its own account.
 vi.mock('../../components/statistics/CaveDistributionPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/caves/KarstLinkExportModal.tsx', () => ({ default: () => null }));
+
+// The working-set fill is proved on its own; here what matters is which question it is handed.
+vi.mock('../../components/filters/SelectResultButton.tsx', () => ({
+  default: (props: { query: unknown }) => {
+    selectAllSpy(props.query);
+    return null;
+  },
+}));
 
 // The editor is proved on its own; here it stands for "somebody wrote this and pressed Apply", so
 // what is proved is the road between the page's address and the editor, both ways.
@@ -128,6 +137,7 @@ beforeEach(async () => {
   downloadSpy.mockReset();
   savedFilters.current = [];
   editorSpy.mockReset();
+  selectAllSpy.mockReset();
 });
 
 /**
@@ -354,5 +364,16 @@ describe('the advanced filter on the cave registry', () => {
     fireEvent.click(await screen.findByTestId('stub-cancel'));
 
     expect(screen.getByTestId('search').textContent).toBe(before);
+  });
+});
+
+describe('the working set filled from a registry ordered nearest first', () => {
+  it('is asked the list’s own request, with the place the order is measured from', () => {
+    show('/caves?sort=proximity&near=22.5,46.25');
+    const listed = cavesSpy.mock.calls.at(-1)?.[0] as { filter?: string; sort?: string };
+    const asked = selectAllSpy.mock.calls.at(-1)?.[0] as { filter?: string; sort?: string };
+    expect(listed.sort).toBe('proximity');
+    expect(decodeFilter(listed.filter)?.anchor).toEqual({ anchor: 'point', longitude: 22.5, latitude: 46.25 });
+    expect(asked).toMatchObject({ filter: listed.filter, sort: 'proximity' });
   });
 });

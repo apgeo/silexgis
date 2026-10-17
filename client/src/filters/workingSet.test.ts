@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { takeIntoWorkingSet, workingSetRef } from './workingSet.ts';
+import { emptyDocument, withSort, withWhere } from './document.ts';
+import type { FilterDocument, FilterNode } from './types.ts';
+import { decodeFilter, encodeFilter } from './url.ts';
+import { resultQuestion, takeIntoWorkingSet, workingSetRef } from './workingSet.ts';
 
 describe('a list result as the working set', () => {
   it('names each row by what it is, so the map panel reads it as the right thing', () => {
@@ -25,5 +28,49 @@ describe('a list result as the working set', () => {
     // A count read a moment before rows were added cannot make "first 6 of 5" appear.
     const rows = Array.from({ length: 6 }, (_, i) => ({ id: `r${i}` }));
     expect(takeIntoWorkingSet(rows, 5, 200)).toMatchObject({ taken: 6, total: 6, truncated: false });
+  });
+});
+
+describe('the question a working set keeps of the list that filled it', () => {
+  const deep: FilterNode = {
+    node: 'condition', field: 'depth', op: 'greaterOrEqual', values: [{ type: 'number', value: 100 }],
+  };
+  const near: FilterNode = {
+    node: 'condition',
+    field: 'position',
+    op: 'within',
+    values: [{ type: 'number', value: 500 }, { type: 'point', longitude: 23.5, latitude: 45.25 }],
+  };
+  const question = withWhere(emptyDocument(['feature']), 'feature', deep);
+  const nearestFirst: FilterDocument = {
+    ...withSort(question, 'proximity', true),
+    anchor: { anchor: 'point', longitude: 22.5, latitude: 46.25 },
+  };
+
+  it('keeps a plain question whole, for the map and for saving', () => {
+    const token = encodeFilter(question);
+    expect(resultQuestion(token, false)).toEqual({ savable: question, mapToken: token });
+  });
+
+  it('drops the place a nearest-first list was measured from, from both', () => {
+    const { savable, mapToken } = resultQuestion(encodeFilter(nearestFirst), false);
+    expect(savable?.anchor).toBeUndefined();
+    expect(savable?.sort).toBe('proximity');
+    expect(decodeFilter(mapToken)?.anchor).toBeUndefined();
+    expect(decodeFilter(mapToken)?.scope).toEqual(question.scope);
+  });
+
+  it('offers no saving for a question naming a point of its own, and still opens the map on it', () => {
+    const typed = withWhere(emptyDocument(['feature']), 'feature', near);
+    const token = encodeFilter(typed);
+    expect(resultQuestion(token, false)).toEqual({ savable: null, mapToken: token });
+  });
+
+  it('offers no saving for a result cut to the map’s window', () => {
+    expect(resultQuestion(encodeFilter(question), true).savable).toBeNull();
+  });
+
+  it('has nothing to save and opens the map unfiltered without a filter', () => {
+    expect(resultQuestion(undefined, false)).toEqual({ savable: null, mapToken: undefined });
   });
 });

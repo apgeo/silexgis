@@ -334,7 +334,9 @@ export default function CaveListPage() {
           </Button>
           <SelectResultButton
             list="caves"
-            query={{ filter: token, sort: address.sort, bbox: address.bbox }}
+            // The list's own request, nearest first's place included, so the set holds the
+            // first rows this list shows in the order it shows them.
+            query={{ filter: listToken, sort: address.sort, bbox: address.bbox }}
             total={data?.totalItems}
             data-testid="cave-registry-select-all"
           />
