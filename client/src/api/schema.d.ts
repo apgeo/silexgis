@@ -2504,7 +2504,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Paged cave list with filters, including `unplaced` for caves that have no position at all; visibility-filtered, protected locations obfuscated. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the feature world's conditions, applied after visibility and counted over the narrowed set. */
+        /** Paged cave list with filters, including `unplaced` for caves that have no position at all; visibility-filtered, protected locations obfuscated. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the feature world's conditions, applied after visibility and counted over the narrowed set. `sort=proximity` ranks the caves the caller may place exactly nearest first from the place the `filter` document names as its anchor, every other cave after them. */
         get: operations["caveList"];
         put?: never;
         /** Creates a cave (Create permission in the target context); the caller becomes owner. */

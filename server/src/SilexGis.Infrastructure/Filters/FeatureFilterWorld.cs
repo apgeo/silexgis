@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
+using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -13,7 +15,8 @@ namespace SilexGis.Infrastructure.Filters;
 /// <summary>
 /// Caves, entrances, centrelines and everything else on the map, as a filterable world.
 /// </summary>
-public sealed class FeatureFilterWorld(SilexGisDbContext db, FeatureProtection protection)
+public sealed class FeatureFilterWorld(
+    SilexGisDbContext db, FeatureProtection protection, LocationProtectionGrid grid)
     : FilterWorld<Feature>
 {
     public const string Key = "feature";
@@ -85,9 +88,285 @@ public sealed class FeatureFilterWorld(SilexGisDbContext db, FeatureProtection p
     protected override Expression<Func<Feature, bool>> HasId(IReadOnlyCollection<Guid> ids) =>
         f => ids.Contains(f.Id);
 
-    protected override ValueTask<Expression<Func<Feature, bool>>> CompileAsync(
+    protected override async ValueTask<Expression<Func<Feature, bool>>> CompileAsync(
         WorldQuery query, CancellationToken ct) =>
-        ValueTask.FromResult(new FeatureFilterCompiler(db).Compile(query.Where));
+        new FeatureFilterCompiler(db).Compile(
+            query.Where, await ResolveSpatialAsync(query.Caller, query.Where, mayNest: true, ct));
+
+    // ---------- spatial conditions ----------
+
+    /// <summary>
+    /// Every spatial condition in the tree, resolved to the ids of the rows that answer it for this
+    /// caller. The anchor of each is gated here — readable and exactly placeable, or refused — and
+    /// membership is decided on shown positions by <see cref="SpatialConditionSql"/>.
+    /// </summary>
+    /// <param name="mayNest">
+    /// False inside another saved filter measured from: that one may not measure from a third, so a
+    /// chain of filters cannot be made into a loop or a cost nobody can see the end of.
+    /// </param>
+    private async Task<Dictionary<ConditionNode, ResolvedSpatial>?> ResolveSpatialAsync(
+        AccessContext caller, FilterNode? where, bool mayNest, CancellationToken ct)
+    {
+        Dictionary<ConditionNode, ResolvedSpatial>? resolved = null;
+        foreach (var condition in SpatialConditionsOf(where))
+        {
+            resolved ??= [];
+            if (resolved.ContainsKey(condition))
+            {
+                continue;
+            }
+
+            var ask = await AskAsync(caller, condition, mayNest, ct);
+            resolved[condition] = new ResolvedSpatial(
+                ask is null ? [] : await SpatialConditionSql.MatchingAsync(db, caller, ask, grid.Meters, ct));
+        }
+
+        return resolved;
+    }
+
+    private static IEnumerable<ConditionNode> SpatialConditionsOf(FilterNode? node)
+    {
+        if (node is ConditionNode { Field: FeatureFilterFields.Position } condition)
+        {
+            yield return condition;
+            yield break;
+        }
+
+        if (node is null)
+        {
+            yield break;
+        }
+
+        foreach (var child in node.Children)
+        {
+            foreach (var found in SpatialConditionsOf(child))
+            {
+                yield return found;
+            }
+        }
+    }
+
+    /// <summary>The question with its anchor resolved, or null when it can match no row at all.</summary>
+    private async Task<SpatialAsk?> AskAsync(
+        AccessContext caller, ConditionNode condition, bool mayNest, CancellationToken ct)
+    {
+        switch (condition.Op, condition.Values)
+        {
+            case (FilterOp.Within, [NumberValue radius, PointValue point]):
+                return new WithinGeometry(
+                    new Point(point.Longitude, point.Latitude) { SRID = 4326 }, radius.Value);
+
+            case (FilterOp.Within, [NumberValue radius, ObjectValue target]):
+            {
+                var scoped = await ScopedAnchorAsync(caller, target.Id, ct);
+                if (scoped.Kind == FeatureKind.Cave)
+                {
+                    var entrances = await PlaceableEntrancesAsync(caller, [target.Id], ct);
+                    return entrances.Count == 0 ? null : await WithinRowsAsync(entrances, radius.Value, ct);
+                }
+
+                return scoped.Geometry is { } anchor
+                    ? new WithinGeometry(anchor, radius.Value)
+                    : throw AnchorNotFound();
+            }
+
+            case (FilterOp.Within, [NumberValue radius, SavedFilterValue saved]):
+            {
+                if (!mayNest)
+                {
+                    throw new FilterRefusedException(
+                        SpatialConditions.AnchorNestedCode,
+                        "A saved filter measured from may not itself measure from a saved filter.");
+                }
+
+                var rows = await SavedFilterAnchorRowsAsync(caller, saved.Id, ct);
+                return rows.Count == 0 ? null : await WithinRowsAsync(rows, radius.Value, ct);
+            }
+
+            case (FilterOp.Inside, [PolygonValue polygon]):
+                // Validation has already proved the outline builds.
+                return new InsideOutline(SpatialConditions.ToPolygon(polygon)!);
+
+            case (FilterOp.Inside, [ObjectValue area]):
+            {
+                // The study-area ladder: placement first, in the words of a missing object, and
+                // only then whether it encloses any ground.
+                var scoped = await protection.ScopeOutlineAsync(caller, area.Id, ct) ?? throw AnchorNotFound();
+                return scoped.Outline is { } outline
+                    ? new InsideOutline(outline)
+                    : throw new FilterRefusedException(
+                        SpatialConditions.AnchorNotAnAreaCode,
+                        "Only an outline encloses anything; that object is not one.");
+            }
+
+            default:
+                throw new InvalidOperationException(
+                    $"No spatial arm for {condition.Op} over {condition.Values.Count} value(s). A "
+                    + "condition the validator admits must have one here.");
+        }
+    }
+
+    // The placement gate for an object anchor is the one every place-scoped question uses: a
+    // missing object, one the caller cannot read and one they cannot place exactly are one refusal.
+    private async Task<ScopedFeature> ScopedAnchorAsync(AccessContext caller, Guid id, CancellationToken ct) =>
+        await protection.ScopeFeatureAsync(caller, id, ct) ?? throw AnchorNotFound();
+
+    private static FilterRefusedException AnchorNotFound() =>
+        new(SpatialConditions.AnchorNotFoundCode, SpatialConditions.AnchorNotFoundDetail);
+
+    /// <summary>
+    /// The rows of another saved filter's result that a distance may be measured from: run under
+    /// this caller's own access, as if they had run it themselves, and narrowed to the rows they may
+    /// place exactly — a cave by its entrances. A filter they cannot see or cannot read is refused in
+    /// the same words as a missing object.
+    /// </summary>
+    private async Task<IReadOnlyCollection<Guid>> SavedFilterAnchorRowsAsync(
+        AccessContext caller, Guid savedFilterId, CancellationToken ct)
+    {
+        var row = await SavedFilterReader.VisibleRows(db, caller)
+            .FirstOrDefaultAsync(f => f.Id == savedFilterId, ct);
+        var scope = row is null ? null
+            : FilterDocument.Deserialize(row.Document) is { } document ? SavedFilterRules.ScopeFor(document, Key)
+            : null;
+        if (scope is null)
+        {
+            throw AnchorNotFound();
+        }
+
+        var vocabulary = await VocabularyAsync(caller, ct);
+        var inner = new FilterDocument { Scope = [scope] };
+        if (!SavedFilterRules.IsReadableBy(inner, new Dictionary<string, WorldVocabulary> { [Key] = vocabulary }))
+        {
+            throw AnchorNotFound();
+        }
+
+        if (SpatialConditions.MeasuresFromSavedFilter(scope.Where))
+        {
+            throw new FilterRefusedException(
+                SpatialConditions.AnchorNestedCode,
+                "A saved filter measured from may not itself measure from a saved filter.");
+        }
+
+        var predicate = new FeatureFilterCompiler(db).Compile(
+            scope.Where, await ResolveSpatialAsync(caller, scope.Where, mayNest: false, ct));
+        var matching = (await VisibleAsync(caller, ct)).Where(predicate);
+
+        var placed = await matching.Where(f => f.Geom != null).Select(f => f.Id).ToListAsync(ct);
+        var caves = await matching.Where(f => f.Kind == FeatureKind.Cave).Select(f => f.Id).ToListAsync(ct);
+
+        var anchors = new HashSet<Guid>(await protection.ExactViewIdsAsync(caller, placed, ct));
+        if (caves.Count > 0)
+        {
+            anchors.UnionWith(await PlaceableEntrancesAsync(caller, caves, ct));
+        }
+
+        if (anchors.Count > SpatialConditions.MaxAnchorRows)
+        {
+            throw new FilterRefusedException(
+                SpatialConditions.AnchorTooLargeCode,
+                $"A distance can be measured from at most {SpatialConditions.MaxAnchorRows} objects.");
+        }
+
+        return anchors;
+    }
+
+    /// <summary>The live entrances of these caves that the caller may read and place exactly.</summary>
+    private async Task<IReadOnlyCollection<Guid>> PlaceableEntrancesAsync(
+        AccessContext caller, IReadOnlyCollection<Guid> caveIds, CancellationToken ct)
+    {
+        var visible = await VisibleAsync(caller, ct);
+        var entrances = await db.CaveEntrances.AsNoTracking()
+            .Where(e => caveIds.Contains(e.CaveFeatureId))
+            .Select(e => e.Id)
+            .Where(id => visible.Any(f => f.Id == id && f.Geom != null))
+            .ToListAsync(ct);
+        return entrances.Count == 0 ? [] : await protection.ExactViewIdsAsync(caller, entrances, ct);
+    }
+
+    private async Task<WithinRows> WithinRowsAsync(
+        IReadOnlyCollection<Guid> anchors, double radiusMeters, CancellationToken ct)
+    {
+        var geometries = await db.Features.AsNoTracking()
+            .Where(f => anchors.Contains(f.Id) && f.Geom != null)
+            .Select(f => f.Geom!)
+            .ToListAsync(ct);
+        var extent = new Envelope();
+        foreach (var geometry in geometries)
+        {
+            extent.ExpandToInclude(geometry.EnvelopeInternal);
+        }
+
+        return new WithinRows(anchors, extent, radiusMeters);
+    }
+
+    // ---------- the proximity sort ----------
+
+    /// <summary>
+    /// Nearest the anchor first, over the rows this caller may place exactly; every other row
+    /// after them, newest first. Without an anchor — only an internal caller can ask that, since a
+    /// request is refused first — the fallback order alone.
+    /// </summary>
+    /// <remarks>
+    /// The anchor is resolved here, under the caller's own access, through the gate a spatial
+    /// condition's object anchor goes through, so "nearest to that cave" and "within 500 m of that
+    /// cave" cannot disagree about whether the caller may measure from it.
+    /// </remarks>
+    protected override async ValueTask<IQueryable<Feature>> OrderAsync(
+        IQueryable<Feature> rows, WorldQuery query, CancellationToken ct)
+    {
+        if (query.Sort != SortKey.Proximity || query.Anchor is null)
+        {
+            return Order(rows, query);
+        }
+
+        var anchor = await ProximityAnchorAsync(query.Caller, query.Anchor, ct);
+        var ranks = ProximityOrderSql.Ranks(db, query.Caller, anchor);
+
+        // Ranked rows by distance, the rest after them in the fallback order; ties broken by the
+        // fallback and then the id in every arm, so a page boundary never splits an equal pair
+        // differently on two requests.
+        return
+            from f in rows
+            join r in ranks on f.Id equals r.Id into ranked
+            from r in ranked.DefaultIfEmpty()
+            let distance = (double?)r.Distance
+            orderby distance == null, distance, f.UpdatedAt descending, f.Id descending
+            select f;
+    }
+
+    private async Task<Geometry> ProximityAnchorAsync(AccessContext caller, FilterAnchor anchor, CancellationToken ct)
+    {
+        switch (anchor)
+        {
+            case PointAnchor point:
+                return new Point(point.Longitude, point.Latitude) { SRID = 4326 };
+
+            case ObjectAnchor { World: Key } target:
+            {
+                var scoped = await ScopedAnchorAsync(caller, target.Id, ct);
+                if (scoped.Kind != FeatureKind.Cave)
+                {
+                    return scoped.Geometry ?? throw AnchorNotFound();
+                }
+
+                // A cave is measured from by its entrances the caller may read and place exactly;
+                // one with none is nothing to measure from, in the same words as a missing one.
+                var entrances = await PlaceableEntrancesAsync(caller, [target.Id], ct);
+                var points = (await db.Features.AsNoTracking()
+                        .Where(f => entrances.Contains(f.Id) && f.Geom != null)
+                        .Select(f => f.Geom!)
+                        .ToListAsync(ct))
+                    .OfType<Point>()
+                    .ToArray();
+                return points.Length == 0
+                    ? throw AnchorNotFound()
+                    : new MultiPoint(points) { SRID = 4326 };
+            }
+
+            default:
+                throw AnchorNotFound();
+        }
+    }
 
     protected override IQueryable<Feature> Order(IQueryable<Feature> rows, WorldQuery query)
     {

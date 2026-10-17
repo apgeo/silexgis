@@ -7,9 +7,10 @@ namespace SilexGis.Api.Features.Filters;
 /// What a person asked.
 /// </summary>
 /// <remarks>
-/// No anchor. When proximity is served, the place a filter is measured from will arrive here with
-/// the request rather than inside the document — a saved filter that stored where somebody was
-/// looking would be a stored, shareable, negatable statement about a position.
+/// What the proximity sort measures from travels in the request's own document, as its
+/// <c>anchor</c>, and only there: a saved filter never stores one, because a stored anchor would be
+/// a shareable, negatable statement about where somebody was looking. A request that sorts nearest
+/// first without one is refused rather than answered in another order.
 /// </remarks>
 /// <param name="Count">
 /// Whether a total is wanted. It can only ever say "do not bother" — the ceiling on how many

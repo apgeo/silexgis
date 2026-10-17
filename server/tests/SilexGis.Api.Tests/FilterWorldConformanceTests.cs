@@ -85,6 +85,20 @@ public abstract class WorldFixture
     public virtual Task<FilterNode?> SeedWithheldTwinAsync(SilexGisDbContext db, Guid ownerId, string tag) =>
         Task.FromResult<FilterNode?>(null);
 
+    /// <summary>
+    /// For a world that declares a position: spatial conditions that each match the row seeded by
+    /// <see cref="SeedHiddenAsync"/> — or, with <paramref name="withheld"/>, by
+    /// <see cref="SeedWithheldAsync"/> — already narrowed by the filter that seed returned.
+    /// </summary>
+    /// <remarks>
+    /// A spatial condition is answered by a statement of its own before the visibility walk ever
+    /// composes with it, so it is a second road to the same rows; asked around the seeded row's own
+    /// position, it is the road that would carry that row back if the walk or the list's own
+    /// withholding were not applied to it. The negated form is among them, since "not within" is
+    /// the one that matches everything a positive test leaves out.
+    /// </remarks>
+    public virtual IEnumerable<FilterNode> SpatialProbes(FilterNode matching, bool withheld) => [];
+
     /// <summary>A value of the right shape for one of this world's declared fields.</summary>
     public virtual FilterValue[] ValuesFor(FieldDescriptor field, FilterOp op) =>
         ConformanceValues.Default(field, op);
@@ -93,8 +107,21 @@ public abstract class WorldFixture
 /// <summary>Plausible values by field kind, so the suite can exercise an operator it has never seen.</summary>
 public static class ConformanceValues
 {
+    /// <summary>A place to rank from that needs nothing seeded to resolve.</summary>
+    public static FilterAnchor Anchor { get; } = new PointAnchor(22.5, 46.5);
+
     public static FilterValue[] Default(FieldDescriptor field, FilterOp op)
     {
+        // A spatial condition's values are not a list of one kind: a radius and what it is
+        // measured from, or an outline. A point and an outline are the anchors that need nothing
+        // seeded to resolve.
+        if (field.Kind == FieldKind.Spatial)
+        {
+            return op == FilterOp.Within
+                ? [new NumberValue(500), new PointValue(23.5, 46.5)]
+                : [new PolygonValue([[[23.4, 46.4], [23.6, 46.4], [23.6, 46.6], [23.4, 46.6], [23.4, 46.4]]])];
+        }
+
         var count = FilterOps.Arity(op) ?? 2;
         if (count == 0)
         {
@@ -120,10 +147,18 @@ public sealed class FeatureWorldFixture : WorldFixture
 {
     public override string World => FeatureFilterWorld.Key;
 
+    // Where the hidden row stands, and a point of the withheld centreline's course.
+    private const double HiddenLon = 24.25;
+    private const double HiddenLat = 46.25;
+    private const double CourseLon = 22.505;
+    private const double CourseLat = 46.505;
+
     public override async Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
     {
         var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
-        Add(db, Rootless(typeId, ownerId, $"Conformance {tag}", Visibility.Private));
+        var row = Rootless(typeId, ownerId, $"Conformance {tag}", Visibility.Private);
+        row.Geom = new NetTopologySuite.Geometries.Point(HiddenLon, HiddenLat) { SRID = 4326 };
+        Add(db, row);
         await db.SaveChangesAsync();
 
         return new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
@@ -169,6 +204,27 @@ public sealed class FeatureWorldFixture : WorldFixture
     {
         await CentrelineAsync(db, ownerId, tag, locationProtected: false);
         return new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+    }
+
+    public override IEnumerable<FilterNode> SpatialProbes(FilterNode matching, bool withheld)
+    {
+        var (lon, lat) = withheld ? (CourseLon, CourseLat) : (HiddenLon, HiddenLat);
+        const double half = 0.05;
+        FilterNode[] conditions =
+        [
+            new ConditionNode(FeatureFilterFields.Position, FilterOp.Within, [new NumberValue(2_000), new PointValue(lon, lat)]),
+            new ConditionNode(FeatureFilterFields.Position, FilterOp.Inside,
+            [
+                new PolygonValue(
+                [[
+                    [lon - half, lat - half], [lon + half, lat - half], [lon + half, lat + half],
+                    [lon - half, lat + half], [lon - half, lat - half],
+                ]]),
+            ]),
+            new NotNode(new ConditionNode(
+                FeatureFilterFields.Position, FilterOp.Within, [new NumberValue(2_000), new PointValue(0, 0)])),
+        ];
+        return conditions.Select(c => (FilterNode)new AllOfNode([matching, c]));
     }
 
     private static async Task CentrelineAsync(SilexGisDbContext db, Guid ownerId, string tag, bool locationProtected)
@@ -1039,10 +1095,16 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
             {
                 foreach (var descending in new[] { true, false })
                 {
-                    var query = new WorldQuery(caller, null, sort, descending, null, 0, 5, false);
-                    await Should.NotThrowAsync(
-                        async () => await world.QueryAsync(query, default),
-                        $"{world.World} declares the {sort} sort but cannot answer it.");
+                    // Nearest first is asked both with a place to measure from, as a request
+                    // always has one, and without — what an internal caller may hand a world.
+                    FilterAnchor?[] anchors = sort == SortKey.Proximity ? [ConformanceValues.Anchor, null] : [null];
+                    foreach (var anchor in anchors)
+                    {
+                        var query = new WorldQuery(caller, null, sort, descending, anchor, 0, 5, false);
+                        await Should.NotThrowAsync(
+                            async () => await world.QueryAsync(query, default),
+                            $"{world.World} declares the {sort} sort but cannot answer it.");
+                    }
                 }
             }
         }
@@ -1088,6 +1150,9 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
             // The count is the quieter half. A total taken before the visibility walk would report
             // the row without listing it — which is a disclosure with nothing on screen to show it.
             toOutsider.Total.ShouldBe(0, $"{world.World} counted a row it did not return.");
+
+            await AssertNearestFirstAgreesAsync(world, owner, outsider, matching, toOwner.Hits.Count);
+            await AssertSpatialProbesAgreeAsync(world, fixture, owner, outsider, matching, withheld: false, toOwner.Hits.Count);
         }
 
         exercised.ShouldBeGreaterThan(0, "No world exercised the private-row case.");
@@ -1115,6 +1180,55 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
 
         answer.Hits.Count.ShouldBe(1, $"{world.World} says every row is shared but kept one back.");
         answer.Total.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// For a world that ranks by distance, the same question asked nearest first: the ranking joins
+    /// rows of its own, and a join is exactly where a row the caller may not see could come back in.
+    /// </summary>
+    private static async Task AssertNearestFirstAgreesAsync(
+        IFilterWorld world, AccessContext owner, AccessContext outsider, FilterNode matching, int ownerSees)
+    {
+        if (!(await world.VocabularyAsync(outsider, default)).Supports(SortKey.Proximity))
+        {
+            return;
+        }
+
+        var toOwner = await world.QueryAsync(
+            new WorldQuery(owner, matching, SortKey.Proximity, true, ConformanceValues.Anchor, 0, 20, true), default);
+        var toOutsider = await world.QueryAsync(
+            new WorldQuery(outsider, matching, SortKey.Proximity, true, ConformanceValues.Anchor, 0, 20, true), default);
+
+        toOwner.Hits.Count.ShouldBe(ownerSees, $"{world.World} lists its owner's rows differently nearest first.");
+        toOutsider.Hits.ShouldBeEmpty($"{world.World} returned, nearest first, a row its caller may not see.");
+        toOutsider.Total.ShouldBe(0);
+    }
+
+    /// <summary>
+    /// The same question asked through the world's spatial conditions, around the seeded row's own
+    /// position: the owner is answered with the row, the outsider with nothing and a total of none.
+    /// </summary>
+    private static async Task AssertSpatialProbesAgreeAsync(
+        IFilterWorld world,
+        WorldFixture fixture,
+        AccessContext owner,
+        AccessContext outsider,
+        FilterNode matching,
+        bool withheld,
+        int ownerSees)
+    {
+        foreach (var probe in fixture.SpatialProbes(matching, withheld))
+        {
+            var toOwner = await world.QueryAsync(
+                new WorldQuery(owner, probe, SortKey.Updated, true, null, 0, 20, true), default);
+            var toOutsider = await world.QueryAsync(
+                new WorldQuery(outsider, probe, SortKey.Updated, true, null, 0, 20, true), default);
+
+            // Without the owner's answer the probe could simply be missing the row.
+            toOwner.Hits.Count.ShouldBe(ownerSees, $"{world.World}'s spatial probe does not reach its own row.");
+            toOutsider.Hits.ShouldBeEmpty($"{world.World} returned, by position, a row its caller may not see.");
+            toOutsider.Total.ShouldBe(0, $"{world.World} counted, by position, a row it did not return.");
+        }
     }
 
     private static Type EntityOf(IFilterWorld world)
@@ -1165,6 +1279,8 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
 
             answer.Hits.ShouldBeEmpty($"{world.World} returned a row its own list withholds.");
             answer.Total.ShouldBe(0, $"{world.World} counted a row its own list withholds.");
+            await AssertNearestFirstAgreesAsync(world, owner, outsider, matching, 1);
+            await AssertSpatialProbesAgreeAsync(world, fixture, owner, outsider, matching, withheld: true, 1);
 
             // A tag of its own, so the withheld row's filter and the twin's never match each other.
             var twinTag = Guid.NewGuid().ToString("N")[..8];

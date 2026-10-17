@@ -53,8 +53,9 @@ public sealed record FilterDocument
     public bool Descending { get; init; } = true;
 
     /// <summary>
-    /// What proximity is measured from, when the sort is proximity. Null means the caller supplies
-    /// an anchor with the request — the selected object, or the middle of the view.
+    /// What proximity is measured from, when the sort is proximity: a point, or an object the
+    /// runner may place exactly. A request carries it; a saved document never does, and is given
+    /// one by whoever runs it — the selected object, or the middle of the view.
     /// </summary>
     public FilterAnchor? Anchor { get; init; }
 

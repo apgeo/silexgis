@@ -281,7 +281,9 @@ public static class SavedFilterEndpoints
             return ApiProblems.BadRequest(SurfaceFilters.MalformedCode, "This filter could not be read.");
         }
 
-        if (document.Anchor is not null)
+        // A point or an outline inside a condition is refused like an anchor on the document: both
+        // are a position the stored filter would hand to everybody it is shared with.
+        if (document.Anchor is not null || SpatialConditions.HoldsPosition(document))
         {
             return ApiProblems.BadRequest(
                 SavedFilterRules.AnchorRefusedCode, "A saved filter never stores a place to measure from.");

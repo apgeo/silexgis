@@ -40,6 +40,47 @@ public class FilterWireContractTests
         {"version":1,"scope":[{"world":"feature","where":{"node":"allOf","of":[{"node":"condition","field":"surveyedLength","op":"greaterOrEqual","values":[{"type":"number","value":300}]},{"node":"condition","field":"updatedAt","op":"lessOrEqual","values":[{"type":"instant","value":"2026-01-01T00:00:00+00:00"}]}]}}],"sort":"updated","descending":true}
         """;
 
+    /// <summary>
+    /// Every spatial value and the nearest-first anchor, as the client writes them: a radius and a
+    /// point, an object, another saved filter; a pasted outline and an area object; and the point
+    /// nearest first is measured from. Pinned on its own because each value names its kind by a
+    /// discriminator the generated contract cannot see.
+    /// </summary>
+    private const string SpatialValues =
+        """
+        {"version":1,"scope":[{"world":"feature","where":{"node":"anyOf","of":[{"node":"condition","field":"position","op":"within","values":[{"type":"number","value":500},{"type":"point","longitude":23.5,"latitude":45.25}]},{"node":"condition","field":"position","op":"within","values":[{"type":"number","value":200},{"type":"object","world":"feature","id":"0b3f6a52-1d7e-4c5a-9a61-3f2d9c4e8b10"}]},{"node":"condition","field":"position","op":"within","values":[{"type":"number","value":1000},{"type":"savedFilter","id":"5c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"}]},{"node":"condition","field":"position","op":"inside","values":[{"type":"polygon","coordinates":[[[23,45],[23.01,45],[23.01,45.01],[23,45]]]}]},{"node":"condition","field":"position","op":"inside","values":[{"type":"object","world":"feature","id":"7d2c9e14-6b3a-4f58-a1c2-0e9d8b7a6f54"}]}]}}],"sort":"proximity","descending":false,"anchor":{"anchor":"point","longitude":23.5,"latitude":45.25}}
+        """;
+
+    [Fact]
+    public void The_spatial_values_and_the_anchor_read_and_write_back_as_the_client_spells_them()
+    {
+        var document = FilterDocument.Deserialize(SpatialValues);
+
+        document.ShouldNotBeNull("The client's spelling of a spatial condition is not one this can read.");
+        document.Sort.ShouldBe(SortKey.Proximity);
+        var anchor = document.Anchor.ShouldBeOfType<PointAnchor>();
+        anchor.Longitude.ShouldBe(23.5);
+        anchor.Latitude.ShouldBe(45.25);
+
+        var rows = document.Scope.ShouldHaveSingleItem().Where.ShouldBeOfType<AnyOfNode>().Of
+            .Select(n => n.ShouldBeOfType<ConditionNode>()).ToList();
+        rows.ShouldAllBe(r => r.Field == FeatureFilterFields.Position);
+
+        rows[0].Op.ShouldBe(FilterOp.Within);
+        rows[0].Values[0].ShouldBeOfType<NumberValue>().Value.ShouldBe(500);
+        rows[0].Values[1].ShouldBe(new PointValue(23.5, 45.25));
+        rows[1].Values[1].ShouldBe(new ObjectValue("feature", Guid.Parse("0b3f6a52-1d7e-4c5a-9a61-3f2d9c4e8b10")));
+        rows[2].Values[1].ShouldBe(new SavedFilterValue(Guid.Parse("5c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f")));
+        rows[3].Op.ShouldBe(FilterOp.Inside);
+        var ring = rows[3].Values.ShouldHaveSingleItem().ShouldBeOfType<PolygonValue>().Coordinates.ShouldHaveSingleItem();
+        ring.Length.ShouldBe(4);
+        ring[1].ShouldBe([23.01, 45]);
+        rows[4].Values.ShouldHaveSingleItem()
+            .ShouldBe(new ObjectValue("feature", Guid.Parse("7d2c9e14-6b3a-4f58-a1c2-0e9d8b7a6f54")));
+
+        FilterDocument.Serialize(document).ShouldBe(SpatialValues);
+    }
+
     [Fact]
     public void The_inclusive_comparisons_read_and_write_back_as_the_client_spells_them()
     {

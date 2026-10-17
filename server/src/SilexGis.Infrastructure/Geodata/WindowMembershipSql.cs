@@ -120,8 +120,11 @@ public static class WindowMembershipSql
             ? "\n  AND false"
             : $"\n  AND f.kind IN ({string.Join(", ", kinds.Select(k => ((short)k).ToString(CultureInfo.InvariantCulture)))})";
 
-        var snappedX = SpatialSql.SnapToGrid("ST_X(f.geom)", "wm_cell");
-        var snappedY = SpatialSql.SnapToGrid("ST_Y(f.geom)", "wm_cell");
+        var membership = ShownPositionTest(
+            "f",
+            exactSql,
+            "wm_cell",
+            g => $"ST_Intersects({g}, ST_MakeEnvelope(@wm_west, @wm_south, @wm_east, @wm_north, 4326))");
         var sql = $"""
             SELECT f.id
             FROM features f
@@ -131,16 +134,41 @@ public static class WindowMembershipSql
               AND f.geom && ST_Expand(
                     ST_MakeEnvelope(@wm_west, @wm_south, @wm_east, @wm_north, 4326), @wm_cell)
               AND {visibleSql}
-              AND CASE
-                    WHEN {exactSql}
-                        THEN ST_Intersects(
-                            f.geom, ST_MakeEnvelope(@wm_west, @wm_south, @wm_east, @wm_north, 4326))
-                    WHEN ST_GeometryType(f.geom) = 'ST_Point'
-                        THEN {snappedX} BETWEEN @wm_west AND @wm_east
-                         AND {snappedY} BETWEEN @wm_south AND @wm_north
-                    ELSE false
-                  END
+              AND {membership}
             """;
         return (sql, parameters);
+    }
+
+    /// <summary>
+    /// The rule above as one SQL expression over a feature row, for any spatial test — inside a
+    /// window, within a distance, inside an outline. The single statement of it: every caller that
+    /// asks a spatial question of feature rows splices this in rather than writing its own.
+    /// </summary>
+    /// <param name="alias">The feature row's alias.</param>
+    /// <param name="exactSql">The caller's exact-view fragment over that alias.</param>
+    /// <param name="cellParameter">
+    /// The parameter carrying one protection cell in degrees
+    /// (<see cref="LocationProtection.CellDegrees"/>), without the marker.
+    /// </param>
+    /// <param name="test">
+    /// The test, given an expression for the geometry to test: the stored geometry for a row the
+    /// caller may place exactly, the snapped point for a protected point they may not. A protected
+    /// line or polygon they may not place is never handed to it — it answers false.
+    /// </param>
+    public static string ShownPositionTest(
+        string alias, string exactSql, string cellParameter, Func<string, string> test)
+    {
+        ArgumentNullException.ThrowIfNull(test);
+        var snappedX = SpatialSql.SnapToGrid($"ST_X({alias}.geom)", cellParameter);
+        var snappedY = SpatialSql.SnapToGrid($"ST_Y({alias}.geom)", cellParameter);
+        return $"""
+            CASE
+                WHEN {exactSql}
+                    THEN {test($"{alias}.geom")}
+                WHEN ST_GeometryType({alias}.geom) = 'ST_Point'
+                    THEN {test($"ST_SetSRID(ST_MakePoint({snappedX}, {snappedY}), 4326)")}
+                ELSE false
+            END
+            """;
     }
 }

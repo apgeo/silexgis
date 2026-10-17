@@ -112,9 +112,11 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         body.Limits.MaxDepth.ShouldBe(FilterValidation.MaxDepth);
 
         // Nothing offers a sort or a field it cannot serve, which is what stops a person saving a
-        // filter that quietly returns nothing and looks like a filter with no matches.
-        features.Sorts.ShouldNotContain(SortKey.Proximity);
-        features.Fields.Select(f => f.Kind).ShouldNotContain(FieldKind.Spatial);
+        // filter that quietly returns nothing and looks like a filter with no matches. The spatial
+        // field and the proximity sort are both served — every condition is answered on shown
+        // positions, and only exactly placed rows are ranked — so both are offered.
+        features.Sorts.Last().ShouldBe(SortKey.Proximity);
+        features.Fields.Single(f => f.Kind == FieldKind.Spatial).Key.ShouldBe(FeatureFilterFields.Position);
 
         // Each field carries the operators it admits, so the builder never keeps its own copy of
         // that table and cannot drift into offering something the server refuses.

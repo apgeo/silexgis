@@ -47,13 +47,17 @@ public enum FilterOp
     IsNotEmpty = 8,
 
     /// <summary>
-    /// Within a distance of an anchor. The values carry the anchor and the radius, and the anchor
-    /// is resolved before compilation — see <see cref="NotNode"/> for why that resolution is what
+    /// Within a distance of an anchor. Takes exactly two values: the radius in metres, then the
+    /// anchor (a point, an object or another saved filter). The anchor is resolved before
+    /// compilation — see <see cref="NotNode"/> for why that resolution is what
     /// makes the whole spatial family safe to negate.
     /// </summary>
     Within = 9,
 
-    /// <summary>Inside a shape. Resolved the same way, and safe for the same reason.</summary>
+    /// <summary>
+    /// Inside a shape: one value, an outline sent with the request or an area object. Resolved the
+    /// same way, and safe for the same reason.
+    /// </summary>
     Inside = 10,
 
     /// <summary>
@@ -110,7 +114,8 @@ public static class FilterOps
     public static int? Arity(FilterOp op) => op switch
     {
         FilterOp.IsEmpty or FilterOp.IsNotEmpty => 0,
-        FilterOp.Between => 2,
+        // A distance and what it is measured from — radius first, then the anchor.
+        FilterOp.Between or FilterOp.Within => 2,
         FilterOp.In => null,
         _ => 1,
     };

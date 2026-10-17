@@ -39,7 +39,9 @@ public static class CaveEndpoints
                 "Paged cave list with filters, including `unplaced` for caves that have no position "
                 + "at all; visibility-filtered, protected locations obfuscated. `filter` (a filter "
                 + "document as a link token) or `savedFilterId` narrows it by the feature world's "
-                + "conditions, applied after visibility and counted over the narrowed set.");
+                + "conditions, applied after visibility and counted over the narrowed set. "
+                + "`sort=proximity` ranks the caves the caller may place exactly nearest first from "
+                + "the place the `filter` document names as its anchor, every other cave after them.");
         caves.MapGet("/{id:guid}", GetAsync)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Single cave; protected location fields require ViewExactLocation.");
@@ -178,7 +180,23 @@ public static class CaveEndpoints
         var subtypelessQuery = query.Where(f => f.Cave == null)
             .Select(f => f.Id).Take(SubtypelessReportLimit);
 
-        query = ApplySort(query, sort);
+        if (sort == ProximitySort)
+        {
+            // Ranked by the feature world itself, through the anchor gate the filter's own query
+            // uses, so the registry and the selector cannot order the same caves differently.
+            var (ranked, refused) = await surfaceFilters.NearestFirstAsync(
+                ctx, FeatureFilterWorld.Key, query, narrowing.NearestFrom, ct);
+            if (refused is not null)
+            {
+                return refused.ToProblem();
+            }
+
+            query = ranked!;
+        }
+        else
+        {
+            query = ApplySort(query, sort);
+        }
 
         var (p, size) = Paging.Normalize(page, pageSize);
 
@@ -655,6 +673,8 @@ public static class CaveEndpoints
 
         return CavingGroupBindingRules.MayBind(ctx, AccessDomain.Features, cavingGroupId.Value);
     }
+
+    private const string ProximitySort = "proximity";
 
     // Every arm carries a secondary key on the id. None of the sortable columns is unique, and
     // PostgreSQL is free to return tied rows in any order it likes between one query and the next,

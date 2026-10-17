@@ -99,7 +99,11 @@ public static class FilterEndpoints
         var vocabularies = (await registry.VocabulariesAsync(ctx, ct))
             .ToDictionary(v => v.World, StringComparer.Ordinal);
 
-        var errors = FilterValidation.Validate(document, vocabularies);
+        // The proximity anchor is the request's own and is checked here, not with the document:
+        // a saved document never holds one and is given one by whoever runs it.
+        var errors = FilterValidation.Validate(document, vocabularies)
+            .Concat(SpatialConditions.ProximityProblems(document, vocabularies))
+            .ToList();
         if (errors.Count > 0)
         {
             return ApiProblems.BadRequest("filter.invalid", string.Join(" ", errors));
@@ -111,26 +115,39 @@ public static class FilterEndpoints
         var counted = request.Count && document.Scope.Count <= CountingWorldLimit;
 
         var results = new List<FilterWorldResultDto>(document.Scope.Count);
-        foreach (var scope in document.Scope)
+        try
         {
-            // Present: validation refused any world this caller cannot ask about.
-            var world = registry.Find(scope.World)!;
-            var answer = await world.QueryAsync(
-                new WorldQuery(
-                    ctx,
-                    scope.Where,
-                    document.Sort,
-                    document.Descending,
-                    Anchor: null,
-                    (page - 1) * pageSize,
-                    pageSize,
-                    counted),
-                ct);
+            foreach (var scope in document.Scope)
+            {
+                // Present: validation refused any world this caller cannot ask about.
+                var world = registry.Find(scope.World)!;
+                // Only a world that ranks by distance is handed what to rank from; the others
+                // answer in their own order, as they would for any sort they do not declare.
+                var ranks = document.Sort == SortKey.Proximity
+                    && vocabularies[scope.World].Supports(SortKey.Proximity);
+                var answer = await world.QueryAsync(
+                    new WorldQuery(
+                        ctx,
+                        scope.Where,
+                        document.Sort,
+                        document.Descending,
+                        ranks ? document.Anchor : null,
+                        (page - 1) * pageSize,
+                        pageSize,
+                        counted),
+                    ct);
 
-            results.Add(new FilterWorldResultDto(
-                scope.World,
-                [.. answer.Hits.Select(ToDto)],
-                answer.Total));
+                results.Add(new FilterWorldResultDto(
+                    scope.World,
+                    [.. answer.Hits.Select(ToDto)],
+                    answer.Total));
+            }
+        }
+        catch (FilterRefusedException refused)
+        {
+            // A spatial condition whose anchor this caller cannot use: refused as a whole, never
+            // answered with the condition left out.
+            return ApiProblems.BadRequest(refused.Code, refused.Detail);
         }
 
         return TypedResults.Ok(new FilterQueryResponse(results, page, pageSize, counted));

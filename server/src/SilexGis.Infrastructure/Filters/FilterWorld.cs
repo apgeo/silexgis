@@ -93,6 +93,15 @@ public abstract class FilterWorld<TEntity> : IFilterWorld
     /// </summary>
     protected abstract IQueryable<TEntity> Order(IQueryable<TEntity> rows, WorldQuery query);
 
+    /// <summary>
+    /// The rows in the asked-for order, for a sort that needs a lookup first — what a proximity
+    /// anchor names has to be found, and permitted, before anything is ranked by it. Every other
+    /// sort is <see cref="Order"/>.
+    /// </summary>
+    protected virtual ValueTask<IQueryable<TEntity>> OrderAsync(
+        IQueryable<TEntity> rows, WorldQuery query, CancellationToken ct) =>
+        ValueTask.FromResult(Order(rows, query));
+
     /// <summary>These rows, by id.</summary>
     protected abstract Expression<Func<TEntity, bool>> HasId(IReadOnlyCollection<Guid> ids);
 
@@ -135,7 +144,7 @@ public abstract class FilterWorld<TEntity> : IFilterWorld
         // they were not shown, which is the sort of arithmetic this whole design exists to prevent.
         var total = query.WantTotal ? await matching.CountAsync(ct) : (int?)null;
 
-        var page = await Order(matching, query)
+        var page = await (await OrderAsync(matching, query, ct))
             .Skip(query.Skip)
             .Take(query.Take)
             .ToListAsync(ct);
@@ -180,6 +189,26 @@ public abstract class FilterWorld<TEntity> : IFilterWorld
             new WorldQuery(caller, where, SortKey.Updated, Descending: true, Anchor: null, 0, 0, false),
             ct);
         return new FilterNarrowing<TEntity>(predicate);
+    }
+
+    /// <summary>
+    /// A surface's rows, already composed with what the caller may see, in nearest-first order
+    /// from an anchor — for a world whose vocabulary declares that sort.
+    /// </summary>
+    /// <remarks>
+    /// The world's own ordering, so a list and the selector rank alike and resolve the anchor
+    /// through one gate. Like the narrowing it only reorders what the surface already holds.
+    /// </remarks>
+    public async ValueTask<IQueryable<TEntity>> NearestFirstAsync(
+        AccessContext caller, IQueryable<TEntity> rows, FilterAnchor anchor, CancellationToken ct)
+    {
+        if (!(await VocabularyAsync(caller, ct)).Supports(SortKey.Proximity))
+        {
+            throw new InvalidOperationException($"The {World} world does not rank by distance.");
+        }
+
+        return await OrderAsync(
+            rows, new WorldQuery(caller, null, SortKey.Proximity, Descending: true, anchor, 0, 0, false), ct);
     }
 }
 

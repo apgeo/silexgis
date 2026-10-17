@@ -196,6 +196,10 @@ try
         .BindConfiguration(AboutOptions.SectionName);
     builder.Services.AddOptions<AccessOptions>()
         .BindConfiguration(AccessOptions.SectionName);
+    // The grid, for the services below the endpoint layer that decide spatial questions (the
+    // filter's spatial conditions); read from the same option every endpoint snaps with.
+    builder.Services.AddSingleton(sp => new SilexGis.Domain.Geo.LocationProtectionGrid(
+        sp.GetRequiredService<IOptions<AccessOptions>>().Value.LocationGridMeters));
     builder.Services.AddOptions<MapOptions>()
         .BindConfiguration(MapOptions.SectionName)
         .Validate(

@@ -103,6 +103,10 @@ public sealed record ConditionNode(string Field, FilterOp Op, IReadOnlyList<Filt
 [JsonDerivedType(typeof(BooleanValue), "boolean")]
 [JsonDerivedType(typeof(InstantValue), "instant")]
 [JsonDerivedType(typeof(IdValue), "id")]
+[JsonDerivedType(typeof(PointValue), "point")]
+[JsonDerivedType(typeof(PolygonValue), "polygon")]
+[JsonDerivedType(typeof(ObjectValue), "object")]
+[JsonDerivedType(typeof(SavedFilterValue), "savedFilter")]
 public abstract record FilterValue;
 
 public sealed record TextValue(string Value) : FilterValue;
@@ -116,3 +120,34 @@ public sealed record InstantValue(DateTimeOffset Value) : FilterValue;
 
 /// <summary>An identity — a tag, a type, an owner, a group, an object.</summary>
 public sealed record IdValue(string Value) : FilterValue;
+
+/// <summary>
+/// A place given as longitude and latitude (WGS 84, degrees) — what a spatial condition measures
+/// from when the person typed or clicked a point.
+/// </summary>
+/// <remarks>
+/// A request may carry one; a saved filter never does. A stored point is a statement about a
+/// position that outlives the request and is handed to whoever the filter is shared with, which is
+/// not what anybody asked for when they measured from a spot on the map.
+/// </remarks>
+public sealed record PointValue(double Longitude, double Latitude) : FilterValue;
+
+/// <summary>
+/// An outline sent with the request, as the coordinates of a GeoJSON polygon: the outer ring first,
+/// then any holes, each ring a closed list of <c>[longitude, latitude]</c> positions.
+/// </summary>
+/// <remarks>Request-only for the same reason as <see cref="PointValue"/>.</remarks>
+public sealed record PolygonValue(double[][][] Coordinates) : FilterValue;
+
+/// <summary>
+/// An object somebody picked — a cave entrance, an area — named by its world and identity. Its
+/// geometry is looked up afresh on every run, under the access of whoever runs the filter, so a
+/// saved filter may hold one without holding a position.
+/// </summary>
+public sealed record ObjectValue(string World, Guid Id) : FilterValue;
+
+/// <summary>
+/// Another saved filter, whose result is what a distance is measured from. Run under the access of
+/// whoever runs the outer filter, every time, and never nested further.
+/// </summary>
+public sealed record SavedFilterValue(Guid Id) : FilterValue;

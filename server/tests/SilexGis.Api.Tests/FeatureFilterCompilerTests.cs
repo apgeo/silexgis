@@ -350,7 +350,7 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
         var compiler = new FeatureFilterCompiler(db);
 
         var condition = new ConditionNode(
-            FeatureFilterFields.Position, FilterOp.Within, [new NumberValue(200)]);
+            FeatureFilterFields.Position, FilterOp.Within, [new NumberValue(200), new PointValue(23.5, 46.5)]);
 
         var count = await db.Features.AsNoTracking().Where(compiler.Compile(condition)).CountAsync();
 

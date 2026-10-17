@@ -98,8 +98,8 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, email);
         // The plan pins run as somebody who owns none of the rows: that is the caller for
         // whom the guards actually do work (the owner arm of both fragments short-circuits).
-        var strangerId = await AuthHelper.CreateUserAsync(
-            factory, GlobalRoles.Viewer, $"perf-view-{Guid.NewGuid():N}@t.local");
+        var strangerEmail = $"perf-view-{Guid.NewGuid():N}@t.local";
+        var strangerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, strangerEmail);
         await SeedSyntheticAsync(ownerId);
         using var client = await AuthHelper.BearerClientAsync(factory, email);
         var settled = await SettleAsync();
@@ -139,6 +139,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         await AssertSurveySubstratePlansAsync(strangerId);
         await AssertProximityPlanAsync(strangerId);
         await AssertSharedLinkAsync(client, ownerId, settled);
+        await AssertSpatialFilterStaysResponsiveAsync(strangerEmail, strangerId);
     }
 
     /// <summary>
@@ -331,6 +332,61 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             .ShouldBeTrue(
                 $"{label}: the entrance's subtype row must be reached through an id-keyed index — and if "
                 + "neither appears, the public narrowing never ran");
+    }
+
+    /// <summary>
+    /// The filter's spatial condition and its nearest-first order, asked by somebody who owns none
+    /// of the rows. The condition is one statement that prefilters on the geometry index over the
+    /// question's reach — a sequential scan of a hundred thousand features to answer "within two
+    /// kilometres of here" is the regression the plan pin catches. The order ranks the rows the
+    /// filter kept, joined by id, so it has no index of its own to ride; its budget is the
+    /// wall-clock one.
+    /// </summary>
+    private async Task AssertSpatialFilterStaysResponsiveAsync(string strangerEmail, Guid strangerId)
+    {
+        using var stranger = await AuthHelper.BearerClientAsync(factory, strangerEmail);
+        var centreLon = (West + East) / 2;
+        var centreLat = (South + North) / 2;
+        var within = new ConditionNode(
+            FeatureFilterFields.Position,
+            FilterOp.Within,
+            [new NumberValue(2000), new PointValue(centreLon, centreLat)]);
+        var document = new FilterDocument { Scope = [new WorldScope("feature", within)] };
+        var requests = new (string Name, FilterDocument Document, bool Count)[]
+        {
+            ("filter: within 2 km", document, true),
+            ("filter: within 2 km, nearest first",
+                document with { Sort = SortKey.Proximity, Anchor = new PointAnchor(centreLon, centreLat) }, true),
+            ("filter: within 2 km, nearest first, uncounted",
+                document with { Sort = SortKey.Proximity, Anchor = new PointAnchor(centreLon, centreLat) }, false),
+        };
+
+        foreach (var (name, asked, count) in requests)
+        {
+            var json = $$"""{"document":{{FilterDocument.Serialize(asked)}},"pageSize":25,"count":{{(count ? "true" : "false")}}}""";
+            using var body = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            (await stranger.PostAsync("/api/v1/filters/query", body)).StatusCode.ShouldBe(HttpStatusCode.OK, name);
+            using var again = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            var stopwatch = Stopwatch.StartNew();
+            var response = await stranger.PostAsync("/api/v1/filters/query", again);
+            stopwatch.Stop();
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, name);
+            output.WriteLine($"{name}: {stopwatch.ElapsedMilliseconds} ms");
+            stopwatch.ElapsedMilliseconds.ShouldBeLessThan(BudgetMs, $"{name} exceeded {BudgetMs}ms");
+        }
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var ctx = new AccessContext(strangerId, false, [], []);
+        var (sql, parameters) = SpatialConditionSql.Build(
+            ctx,
+            new WithinGeometry(new NetTopologySuite.Geometries.Point(centreLon, centreLat) { SRID = 4326 }, 2000),
+            protectionGridMeters: 5000);
+        var plan = await ExplainAsync(db.Database.GetDbConnection(), parameters, "spatial condition (guarded)", sql);
+        plan.ShouldContain("ix_features_geom", Case.Insensitive,
+            "the spatial condition must prefilter on a geometry index over the question's reach");
+        plan.ShouldNotContain("Seq Scan on features", Case.Insensitive,
+            "no path in the spatial condition may sequentially scan the feature table");
     }
 
     /// <summary>

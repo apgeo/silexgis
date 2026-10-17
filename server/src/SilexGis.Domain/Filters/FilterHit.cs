@@ -48,24 +48,16 @@ public sealed record FilterHit
 }
 
 /// <summary>
-/// What proximity is measured from, after the anchor has been resolved and permitted.
-/// </summary>
-/// <remarks>
-/// The type exists so that nothing downstream can be handed an unresolved anchor by accident: an
-/// <see cref="ObjectAnchor"/> naming a cave the caller may read but may not place is refused during
-/// resolution, so by the time a coordinate has this type somebody has already established the
-/// caller was entitled to measure from it.
-/// </remarks>
-public sealed record ResolvedAnchor(double Longitude, double Latitude);
-
-/// <summary>
 /// What one world is being asked, for one page.
 /// </summary>
 /// <param name="Caller">Who is asking. Every world composes its own visibility from this.</param>
 /// <param name="Where">The condition tree, or null for everything this world holds.</param>
 /// <param name="Anchor">
-/// Present only when the sort is proximity, and only after resolution. A world that does not
-/// declare the proximity sort in its vocabulary never receives one.
+/// What the proximity sort measures from, as the request named it. Present only when the sort is
+/// proximity and this world declares that sort; every other world is never handed one. The world
+/// resolves it under <paramref name="Caller"/>'s own access, through the same gate a spatial
+/// condition's anchor goes through: an object the caller cannot read or cannot place exactly is
+/// refused in the same words as one that does not exist, before any row is ordered by it.
 /// </param>
 /// <param name="Ids">
 /// When present, only these rows — for a control describing a choice somebody already made.
@@ -83,7 +75,7 @@ public sealed record WorldQuery(
     FilterNode? Where,
     SortKey Sort,
     bool Descending,
-    ResolvedAnchor? Anchor,
+    FilterAnchor? Anchor,
     int Skip,
     int Take,
     bool WantTotal,

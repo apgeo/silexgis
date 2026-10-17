@@ -83,3 +83,10 @@ public static class LocationProtection
 /// <summary>One protected root above a row plus whether the access walk grants the
 /// caller ViewExactLocation on it.</summary>
 public readonly record struct ProtectionRootGrant(Feature Root, bool ViewExactLocationGranted);
+
+/// <summary>
+/// The installation's location-protection grid, in metres, handed to the services that decide
+/// spatial questions below the endpoint layer — the same number every endpoint snaps with, so a
+/// filter cannot measure on a lattice different from the one the map draws.
+/// </summary>
+public sealed record LocationProtectionGrid(double Meters);

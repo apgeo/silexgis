@@ -125,13 +125,17 @@ public enum SortKey
     Occurred = 5,
 
     /// <summary>
-    /// Nearest an anchor first — the selected object, or the middle of the view when nothing is
-    /// selected.
+    /// Nearest an anchor first — a point sent with the request, or an object the caller may place
+    /// exactly. Always nearest first: the direction flag does not turn it round, because "farthest
+    /// first" is not a question anybody asks of a list and a flag that silently meant it would be.
     /// <para>
-    /// A rank is a position. A row this caller may not place exactly is never ranked by distance;
-    /// it keeps the order the fallback sort gives it. Not excluded, which would show as a gap, and
-    /// not pushed to the end, which is still an answer — simply sorted as though proximity had not
-    /// been asked for.
+    /// A rank is a position. Only the rows this caller may place exactly are ranked, by their true
+    /// distance. Every other row — a protected point they are shown snapped, a row with no
+    /// position — follows all of them, newest first, exactly as though proximity had not been asked
+    /// for. Not ranked by its snapped point either: a distance to a lattice point is still a
+    /// measurement, and the same rows ranked from two anchors would triangulate the snapping away.
+    /// Not excluded, which would show as a gap. Putting them after the ranked rows tells nobody
+    /// anything new, because every row already says whether its caller may place it.
     /// </para>
     /// </summary>
     Proximity = 4,

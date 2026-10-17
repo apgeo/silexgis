@@ -166,6 +166,15 @@ public sealed class FeatureProtection(SilexGisDbContext db, IAccessService acces
     /// </para>
     /// </summary>
     public async Task<Geometry?> ScopeGeometryAsync(
+        AccessContext ctx, Guid featureId, CancellationToken ct = default) =>
+        (await ScopeFeatureAsync(ctx, featureId, ct))?.Geometry;
+
+    /// <summary>
+    /// The same gate as <see cref="ScopeGeometryAsync"/>, answering with the feature's kind as well
+    /// as its geometry — for a caller that treats a cave, which has no geometry of its own and is
+    /// placed by its entrances, differently from an outline. Null in exactly the same cases.
+    /// </summary>
+    public async Task<ScopedFeature?> ScopeFeatureAsync(
         AccessContext ctx, Guid featureId, CancellationToken ct = default)
     {
         // Projected rather than selected bare so that a readable outline carrying no geometry is
@@ -174,7 +183,7 @@ public sealed class FeatureProtection(SilexGisDbContext db, IAccessService acces
         var found = await db.Features.AsNoTracking()
             .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => f.Id == featureId)
-            .Select(f => new { f.Geom })
+            .Select(f => new { f.Kind, f.Geom })
             .FirstOrDefaultAsync(ct);
 
         if (found is null)
@@ -183,9 +192,22 @@ public sealed class FeatureProtection(SilexGisDbContext db, IAccessService acces
         }
 
         return (await ExactViewIdsAsync(ctx, [featureId], ct)).Contains(featureId)
-            ? found.Geom
+            ? new ScopedFeature(found.Kind, found.Geom)
             : null;
     }
+
+    /// <summary>
+    /// The study-area ladder in one place for a caller below the API: the gate of
+    /// <see cref="ScopeFeatureAsync"/> first — null for a feature that does not exist, one the caller
+    /// cannot read and one they cannot place exactly — and only then the shape, so a usable feature
+    /// that encloses no ground answers with no outline. Never the other way round: asked first, the
+    /// shape of a feature the caller may not place would be what answered.
+    /// </summary>
+    public async Task<OutlineScope?> ScopeOutlineAsync(
+        AccessContext ctx, Guid featureId, CancellationToken ct = default) =>
+        await ScopeFeatureAsync(ctx, featureId, ct) is { } scoped
+            ? new OutlineScope(StudyArea.IsOutline(scoped.Geometry) ? scoped.Geometry : null)
+            : null;
 
     public async Task<HashSet<Guid>> UnprotectedByAncestryIdsAsync(
         IReadOnlyCollection<Guid> featureIds, CancellationToken ct = default)
@@ -252,3 +274,9 @@ public sealed class FeatureProtection(SilexGisDbContext db, IAccessService acces
         return redacted.Count > 0;
     }
 }
+
+/// <summary>A feature a caller may read and place exactly: its kind, and its geometry if it has one.</summary>
+public sealed record ScopedFeature(FeatureKind Kind, Geometry? Geometry);
+
+/// <summary>A usable study area: its outline, or null when it is a point or a line.</summary>
+public sealed record OutlineScope(Geometry? Outline);

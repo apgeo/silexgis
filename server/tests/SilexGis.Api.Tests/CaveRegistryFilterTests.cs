@@ -147,9 +147,11 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
     [Fact]
     public async Task A_filter_naming_a_position_or_an_altitude_is_refused_not_ignored()
     {
-        // Neither is in the vocabulary, and a condition on one must not be dropped quietly: dropped,
-        // it would answer a wider question than the one asked; obeyed, it would be a way to ask
-        // where a protected cave is.
+        // Altitude and a raw geometry are not in the vocabulary; position is, but only with its own
+        // operators — within a distance, inside an outline — so a comparison on it is refused like
+        // the others. None may be dropped quietly: dropped, the condition would answer a wider
+        // question than the one asked; obeyed as a comparison, it would be a way to ask where a
+        // protected cave is.
         foreach (var field in new[] { FeatureFilterFields.Position, "altitude", "geom" })
         {
             var document = new FilterDocument

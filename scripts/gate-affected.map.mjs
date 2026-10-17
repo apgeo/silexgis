@@ -148,6 +148,8 @@ export const groups = {
     'DocumentFilterWorldTests', 'FeatureFilterCompilerTests', 'FilterEndpointTests',
     'FilterParityTests', 'FilterSpikeTests', 'FilterWorldConformanceTests',
     'FilterWorldListParityTests',
+    // Spatial conditions, decided on the positions each caller is shown.
+    'FilterSpatialConditionTests',
     // Saved filters, and the surfaces that read a filter document through the narrowing seam.
     'SavedFilterTests', 'CaveRegistryFilterTests', 'MapFilterTests', 'FeatureListFilterTests',
   ],
@@ -503,9 +505,9 @@ export const crossCutting = {
     'ExpeditionSurfaceLogTests', 'FeatureFilterCompilerTests', 'FeatureHierarchyTests',
     'FeatureLinkTests', 'FeatureListFilterTests', 'FeatureRestoreTests', 'FeatureShareTests',
     'FeatureTests', 'FileAccessBatchParityTests', 'FileAttachmentTests', 'FilterEndpointTests',
-    'FilterParityTests', 'FilterWorldConformanceTests', 'FilterWorldListParityTests',
-    'GeofileTests', 'GeoreferencedMapTests', 'HiddenRowCapTests', 'HistoryTests',
-    'HypsometryTests', 'KarstLinkExportTests', 'MapClusterConfigurationTests',
+    'FilterParityTests', 'FilterSpatialConditionTests', 'FilterWorldConformanceTests',
+    'FilterWorldListParityTests', 'GeofileTests', 'GeoreferencedMapTests', 'HiddenRowCapTests',
+    'HistoryTests', 'HypsometryTests', 'KarstLinkExportTests', 'MapClusterConfigurationTests',
     'MapDensityTests', 'MapFilterTests', 'MapKarstIndexTests', 'MapPointPatternTests',
     'MapWindowMembershipTests', 'PhotoBytesProtectionTests', 'PhotoImportTests',
     'PolygonMorphometryTests', 'ProtectionDepthTests', 'PublicTripCachingTests',

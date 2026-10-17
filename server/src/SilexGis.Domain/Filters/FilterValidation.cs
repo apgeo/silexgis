@@ -225,7 +225,11 @@ public static class FilterValidation
     {
         TextValue text => text.Value is not null,
         IdValue id => id.Value is not null,
-        NumberValue or BooleanValue or InstantValue => true,
+        NumberValue or BooleanValue or InstantValue or SavedFilterValue => true,
+        PointValue => true,
+        PolygonValue polygon => polygon.Coordinates is { } rings
+            && rings.All(ring => ring is not null && ring.All(position => position is not null)),
+        ObjectValue target => target.World is not null,
         _ => false,
     };
 
@@ -320,6 +324,13 @@ public static class FilterValidation
             }
         }
 
+        if (field.Kind == FieldKind.Spatial
+            && SpatialConditions.Problems(condition, vocabulary.World) is { Count: > 0 } spatial)
+        {
+            errors.AddRange(spatial);
+            return;
+        }
+
         if (condition.Op == FilterOp.Between
             && condition.Values is [NumberValue low, NumberValue high] && low.Value > high.Value)
         {
@@ -349,9 +360,9 @@ public static class FilterValidation
         (FieldKind.Boolean, BooleanValue) => true,
         (FieldKind.Instant, InstantValue) => true,
         (FieldKind.Id, IdValue) => true,
-        // A spatial condition's values are the anchor and the radius, and both are resolved before
-        // compilation; what arrives here is a number (metres) or an identity (the anchor object).
-        (FieldKind.Spatial, NumberValue or IdValue) => true,
+        // A spatial condition's values are a radius and what it is measured from, or an outline;
+        // which of them may stand in which place is checked with the condition as a whole.
+        (FieldKind.Spatial, var spatial) => SpatialConditions.IsSpatialValue(spatial),
         _ => false,
     };
 }

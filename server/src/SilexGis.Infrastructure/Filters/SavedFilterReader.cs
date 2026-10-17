@@ -37,7 +37,13 @@ public sealed record SavedFilterReading(
 public sealed class SavedFilterReader(SilexGisDbContext db, FilterWorldRegistry registry)
 {
     /// <summary>The saved filters this caller may read, before any ordering.</summary>
-    public IQueryable<SavedFilter> Visible(AccessContext caller) =>
+    public IQueryable<SavedFilter> Visible(AccessContext caller) => VisibleRows(db, caller);
+
+    /// <summary>
+    /// The saved filters a caller may see, for a reader that cannot take this service — a filter
+    /// world measuring from another saved filter, which this reader's own vocabularies depend on.
+    /// </summary>
+    public static IQueryable<SavedFilter> VisibleRows(SilexGisDbContext db, AccessContext caller) =>
         db.SavedFilters.AsNoTracking().VisibleTo(caller, AccessDomain.MapViews);
 
     /// <summary>One saved filter as this reader sees it, or null when they may not read it.</summary>

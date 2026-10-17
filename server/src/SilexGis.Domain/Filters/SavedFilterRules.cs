@@ -68,7 +68,11 @@ public static class SavedFilterRules
         FilterDocument document, IReadOnlyDictionary<string, WorldVocabulary> authorVocabularies)
     {
         ArgumentNullException.ThrowIfNull(document);
-        if (document.Anchor is not null)
+        // A point or an outline written into a condition is the same stored statement about a
+        // position as an anchor on the document, and is refused in the same words. An object, an
+        // area or another saved filter is kept: it names something looked up afresh, under the
+        // runner's access, every time the filter runs.
+        if (document.Anchor is not null || SpatialConditions.HoldsPosition(document))
         {
             return ["A saved filter never stores a place to measure from."];
         }
@@ -87,6 +91,7 @@ public static class SavedFilterRules
         FilterDocument? document, IReadOnlyDictionary<string, WorldVocabulary> readerVocabularies) =>
         document is not null
         && document.Anchor is null
+        && !SpatialConditions.HoldsPosition(document)
         && FilterValidation.Validate(document, readerVocabularies).Count == 0;
 
     /// <summary>

@@ -103,8 +103,10 @@ public static class FeatureFilterFields
 
     /// <summary>
     /// Where the object is, reachable only through the spatial operators. The values are resolved
-    /// to a set of ids before compilation, over rows the caller may place exactly — which is what
-    /// makes the condition safe to negate.
+    /// to a set of ids before compilation, each row decided on the position the caller is shown —
+    /// its stored geometry when they may place it exactly, its snapped point when it is a protected
+    /// point they may not, and never at all when it is a protected line or outline they may not —
+    /// which is what makes the condition safe to bisect and to negate.
     /// </summary>
     public const string Position = "position";
 
@@ -131,13 +133,13 @@ public static class FeatureFilterFields
             new FieldDescriptor(OtherToponyms, "filters.fields.otherToponyms", FieldKind.Text),
             new FieldDescriptor(SurveyedLength, "filters.fields.surveyedLength", FieldKind.Number),
             new FieldDescriptor(Depth, "filters.fields.depth", FieldKind.Number),
+            // Declared last, once every condition it admits is answered on shown positions.
+            new FieldDescriptor(Position, "filters.fields.position", FieldKind.Spatial),
         ],
-        // Neither the spatial field nor the proximity sort is declared, because neither is served
-        // yet. A vocabulary is an offer: a field listed here is one the builder shows, somebody
-        // saves a filter using, and expects to keep meaning what it meant. Offering one that
-        // currently matches nothing would be worse than not offering it, since a filter that
-        // quietly returns nothing looks exactly like a filter with no matches.
-        Sorts: [SortKey.Created, SortKey.Updated, SortKey.Title, SortKey.Owner]);
+        // The proximity sort last, declared once it is served: it ranks only what the caller may
+        // place exactly. A vocabulary is an offer, and a sort quietly ignored would look exactly
+        // like the order that was asked for.
+        Sorts: [SortKey.Created, SortKey.Updated, SortKey.Title, SortKey.Owner, SortKey.Proximity]);
 
     /// <summary>
     /// Whether a field key names a typed property, and which type and key it names.
