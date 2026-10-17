@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { ownContext, test } from './consoleGuard.ts';
 import {
   countScene3dDrawCalls,
@@ -19,6 +19,9 @@ import { tintedPng } from './png.ts';
 // correctly. Here the real library runs, draws a real globe and fetches its real runtime files, so
 // an outbound request to the vendor would actually happen if the configuration were wrong.
 const VENDOR_HOST = /(^|\/\/|\.)cesium\.com/;
+
+/** How many times slower than this machine the starved-processor test runs the page. */
+const SLOW_PROCESSOR_FACTOR = 4;
 
 test('the 3D view opens on our own basemap and talks to nobody else', async ({ page }) => {
   const requested: string[] = [];
@@ -81,35 +84,97 @@ test('the 3D view loads the caves in front of it, asking for surveyed depths', a
   await expect(page.getByText('Click a feature on the map to see details.')).toBeVisible();
 });
 
-test('a place in the scene is bookmarkable, and reopens where it was left', async ({ page }) => {
-  await login(page);
-  await page.goto('/map3d');
-  await expect(page.getByTestId('scene3d-container').locator('canvas').first()).toBeAttached({
-    timeout: 30_000,
-  });
+/** The camera the address bar names, as `[lat, lon, height, heading, pitch]`. */
+function cameraInAddress(url: string): number[] {
+  return new URL(url).hash.split('/').slice(1).map(Number);
+}
 
-  // A preset is a camera move, which is what puts a position in the address bar.
-  await page.getByTestId('scene3d-preset-north').click();
-  await expect.poll(() => page.url(), { timeout: 30_000 }).toMatch(/#3d\//);
+/**
+ * True once the address names the camera the north preset turns to: looking south from the north
+ * side of what it was looking at, ten degrees below the horizon.
+ */
+function addressShowsNorthPreset(url: string): boolean {
+  const [, , , heading, pitch] = cameraInAddress(url);
+  return Math.abs(heading - 180) < 0.5 && Math.abs(pitch + 10) < 0.5;
+}
 
+/**
+ * Takes a bookmark of the north preset, reopens it as a new page and proves the camera is back.
+ *
+ * Two waits here are the whole of what the test is about, and each was once missing:
+ *
+ *   * The bookmark is read only once the address describes the preset. The preset is a half-second
+ *     flight, and the address is rewritten only after the camera has been still for a moment, so
+ *     an address read as soon as it holds any position can still name the opening view — whose own
+ *     settle writes one too — or a point the flight was passing through.
+ *   * Reopening goes through a blank page. Going straight to an address that differs from the open
+ *     one only in its hash is a navigation within the same document: nothing is rebuilt, nothing is
+ *     restored, and the comparison measures a camera that was never put back.
+ *
+ * Whether the camera stays put after the restore is then asked of a scene that has stopped
+ * drawing: anything that moved it would have raised the settled event, and the settled camera
+ * would have been written back into the address before the scene went quiet.
+ */
+async function bookmarkRoundTrip(page: Page, patience = 60_000) {
+  const north = page.getByTestId('scene3d-preset-north');
+  await north.click();
+  await expect(north).toHaveAttribute('aria-pressed', 'true', { timeout: patience });
+  await expect.poll(() => addressShowsNorthPreset(page.url()), { timeout: patience }).toBe(true);
   const shared = page.url();
-  await page.goto(shared);
-  await expect(page.getByTestId('scene3d-container').locator('canvas').first()).toBeAttached({
-    timeout: 30_000,
-  });
 
-  // Reopening a shared link puts the camera back rather than at the opening view, and the
-  // position written for it survives the round trip to about a metre.
-  const before = new URL(shared).hash.split('/').slice(1, 3).map(Number);
-  await expect
-    .poll(
-      () => {
-        const after = new URL(page.url()).hash.split('/').slice(1, 3).map(Number);
-        return Math.max(Math.abs(after[0] - before[0]), Math.abs(after[1] - before[1]));
-      },
-      { timeout: 30_000 },
-    )
-    .toBeLessThan(0.001);
+  const firstDocument = await page.evaluate(() => performance.timeOrigin);
+  await page.goto('about:blank');
+  await page.goto(shared);
+  // The new page signs in again on its way, through redirects of its own, so the document is asked
+  // for its age only once the scene stands in it.
+  await waitForScene3dReady(page, patience);
+  expect(await page.evaluate(() => performance.timeOrigin)).not.toBe(firstDocument);
+
+  // Put back rather than left at the opening view, which looks straight down.
+  await expect(north).toHaveAttribute('aria-pressed', 'true', { timeout: patience });
+  await waitForScene3dQuiet(page, 2 * patience);
+
+  // And to about a metre: the precision the address is written with.
+  const [lat, lon] = cameraInAddress(page.url());
+  const [sharedLat, sharedLon] = cameraInAddress(shared);
+  expect(Math.max(Math.abs(lat - sharedLat), Math.abs(lon - sharedLon))).toBeLessThan(0.001);
+}
+
+test('a place in the scene is bookmarkable, and reopens where it was left', async ({ page }) => {
+  await watchScene3dDrawing(page);
+  await login(page);
+  await openScene3d(page);
+  await bookmarkRoundTrip(page);
+});
+
+test('a bookmark reopens where it was left on a starved processor too', async ({
+  page,
+  browserName,
+}) => {
+  // The engine's frames, its settled event and the address bar's write-back all run late when the
+  // processor is shared with a whole browser suite, which is where the waits above were found
+  // missing: the test failed only in whole runs, never alone, by exactly the distance between the
+  // opening view and the preset. Throttling this page's processor puts it there on purpose.
+  test.skip(browserName !== 'chromium', 'processor throttling is a Chromium facility');
+  test.slow();
+  await watchScene3dDrawing(page);
+  await login(page);
+  const devtools = await page.context().newCDPSession(page);
+  await devtools.send('Emulation.setCPUThrottlingRate', { rate: SLOW_PROCESSOR_FACTOR });
+  await page.goto('/map3d');
+  await waitForScene3dReady(page, 120_000);
+
+  // Whether the opening view writes the address depends on whether anything settles its camera
+  // after the address writer is listening. A layout change that resizes the drawing surface does,
+  // and in a loaded run one can land late; resizing here makes it land every time, so the address
+  // already names somewhere before the preset is pressed — the position the old wait took for the
+  // bookmark.
+  const size = page.viewportSize()!;
+  await page.setViewportSize({ width: size.width - 40, height: size.height });
+  await expect.poll(() => page.url(), { timeout: 120_000 }).toMatch(/#3d\//);
+  expect(addressShowsNorthPreset(page.url())).toBe(false);
+
+  await bookmarkRoundTrip(page, 120_000);
 });
 
 test('the scene opens beside the flat map, sharing the one scene this window has', async ({

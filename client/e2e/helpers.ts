@@ -166,15 +166,18 @@ export async function longPressMap(page: Page, x: number, y: number) {
   await viewport.dispatchEvent('pointerup', at);
 }
 
-/** Waits until the scene is drawing and its current load has answered. */
-export async function waitForScene3dReady(page: Page) {
+/**
+ * Waits until the scene is drawing and its current load has answered. A test that slows the page
+ * on purpose passes a longer patience; the default is for a page running at the machine's speed.
+ */
+export async function waitForScene3dReady(page: Page, timeout = 30_000) {
   // The engine owns the canvas inside our element; its presence is the scene having started.
   await expect(page.getByTestId('scene3d-container').locator('canvas').first()).toBeAttached({
-    timeout: 30_000,
+    timeout,
   });
   await expect(page.getByText('The 3D view could not be started')).toHaveCount(0);
   await expect(page.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false', {
-    timeout: 30_000,
+    timeout,
   });
 }
 
