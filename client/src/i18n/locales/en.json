@@ -676,6 +676,9 @@
     "audienceHint": "Sharing gives the group the question only — never access to anything it finds.",
     "private": "Only me",
     "someGroup": "A caving group",
+    "author": "Saved by",
+    "byYou": "You",
+    "someMember": "A club member",
     "sharedWith": "Members of {{name}}",
     "state": "State",
     "states": {

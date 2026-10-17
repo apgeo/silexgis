@@ -7,6 +7,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
+using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Persistence;
 
@@ -22,6 +23,17 @@ namespace SilexGis.Api.Features.SavedFilters;
 /// </param>
 /// <param name="State">What it reads as to this reader — runnable, unreadable for them, or stale.</param>
 /// <param name="Mine">Whether the reader wrote it.</param>
+/// <param name="AuthorName">
+/// Who wrote it, as the reader may be shown that member — the same attribution label every other
+/// screen shows, never an address — or null when the account is gone.
+/// </param>
+/// <param name="MayEdit">
+/// The server's own answer to "may this reader rename, re-share or rewrite it": its author or a
+/// full administrator, holding Write permission over it. A screen offers the change from this
+/// rather than from <paramref name="Mine"/>, so an administrator is offered what the server would
+/// accept and nobody is offered what it would refuse.
+/// </param>
+/// <param name="MayDelete">The same answer for deleting it, under Delete permission.</param>
 public sealed record SavedFilterDto(
     Guid Id,
     string Name,
@@ -31,6 +43,9 @@ public sealed record SavedFilterDto(
     Guid? CavingGroupId,
     Visibility Visibility,
     bool Mine,
+    string? AuthorName,
+    bool MayEdit,
+    bool MayDelete,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -111,12 +126,16 @@ public static class SavedFilterEndpoints
     }
 
     private static async Task<Results<Ok<List<SavedFilterDto>>, UnauthorizedHttpResult>> ListAsync(
+        SilexGisDbContext db,
         SavedFilterReader reader,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
-        if (ctx is null)
+        var user = await userAccessor.GetAsync(ct);
+        if (ctx is null || user is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -125,34 +144,43 @@ public static class SavedFilterEndpoints
             .OrderBy(x => x.Name).ThenBy(x => x.Id)
             .ToListAsync(ct);
         var readings = await reader.DescribeAsync(ctx, rows, ct);
-        return TypedResults.Ok(readings.Select(r => ToDto(r, ctx)).ToList());
+        return TypedResults.Ok(await ToDtosAsync(readings, ctx, user, db, access, ct));
     }
 
     private static async Task<Results<Ok<SavedFilterDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
         Guid id,
+        SilexGisDbContext db,
         SavedFilterReader reader,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
-        if (ctx is null)
+        var user = await userAccessor.GetAsync(ct);
+        if (ctx is null || user is null)
         {
             return TypedResults.Unauthorized();
         }
 
         var reading = await reader.ReadAsync(ctx, id, ct);
-        return reading is null ? ApiProblems.NotFound(NotFoundCode) : TypedResults.Ok(ToDto(reading, ctx));
+        return reading is null
+            ? ApiProblems.NotFound(NotFoundCode)
+            : TypedResults.Ok((await ToDtosAsync([reading], ctx, user, db, access, ct))[0]);
     }
 
     private static async Task<Results<Created<SavedFilterDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
         SavedFilterWriteRequest request,
         SilexGisDbContext db,
         SavedFilterReader reader,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
-        if (ctx is null)
+        var user = await userAccessor.GetAsync(ct);
+        if (ctx is null || user is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -184,7 +212,8 @@ public static class SavedFilterEndpoints
         await db.SaveChangesAsync(ct);
 
         var reading = (await reader.DescribeAsync(ctx, [row], ct))[0];
-        return TypedResults.Created($"/api/v1/saved-filters/{row.Id}", ToDto(reading, ctx));
+        return TypedResults.Created(
+            $"/api/v1/saved-filters/{row.Id}", (await ToDtosAsync([reading], ctx, user, db, access, ct))[0]);
     }
 
     private static async Task<Results<Ok<SavedFilterDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -194,10 +223,12 @@ public static class SavedFilterEndpoints
         SavedFilterReader reader,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
-        if (ctx is null)
+        var user = await userAccessor.GetAsync(ct);
+        if (ctx is null || user is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -237,7 +268,7 @@ public static class SavedFilterEndpoints
         await db.SaveChangesAsync(ct);
 
         var reading = (await reader.DescribeAsync(ctx, [row], ct))[0];
-        return TypedResults.Ok(ToDto(reading, ctx));
+        return TypedResults.Ok((await ToDtosAsync([reading], ctx, user, db, access, ct))[0]);
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
@@ -307,7 +338,43 @@ public static class SavedFilterEndpoints
         }
     }
 
-    private static SavedFilterDto ToDto(SavedFilterReading reading, AccessContext ctx) => new(
+    /// <summary>
+    /// Each reading as this reader sees it: the author named through the profile directory's
+    /// attribution rule, and the changes they may make decided by the same two checks the write
+    /// routes apply, so the screen and the server never disagree.
+    /// </summary>
+    private static async Task<List<SavedFilterDto>> ToDtosAsync(
+        IReadOnlyList<SavedFilterReading> readings,
+        AccessContext ctx,
+        UserContext user,
+        SilexGisDbContext db,
+        IAccessService access,
+        CancellationToken ct)
+    {
+        var labels = await ProfileDirectory.ResolveLabelsAsync(
+            db, user, readings.Select(r => r.Row.OwnerUserId), ct);
+
+        var dtos = new List<SavedFilterDto>(readings.Count);
+        foreach (var reading in readings)
+        {
+            // Only a row the author rule already admits pays for the permission read; everybody
+            // else's answer is "no" without one.
+            var effective = SavedFilterRules.MayChange(ctx, reading.Row)
+                ? await access.EffectiveAsync(ctx, reading.Row, ct)
+                : AccessAction.None;
+            dtos.Add(ToDto(
+                reading,
+                ctx,
+                labels.GetValueOrDefault(reading.Row.OwnerUserId),
+                effective.HasFlag(AccessAction.Write),
+                effective.HasFlag(AccessAction.Delete)));
+        }
+
+        return dtos;
+    }
+
+    private static SavedFilterDto ToDto(
+        SavedFilterReading reading, AccessContext ctx, string? authorName, bool mayEdit, bool mayDelete) => new(
         reading.Row.Id,
         reading.Row.Name,
         reading.Row.Description,
@@ -319,6 +386,9 @@ public static class SavedFilterEndpoints
         reading.Row.CavingGroupId,
         reading.Row.Visibility,
         reading.Row.OwnerUserId == ctx.UserId,
+        authorName,
+        mayEdit,
+        mayDelete,
         reading.Row.CreatedAt,
         reading.Row.UpdatedAt);
 }

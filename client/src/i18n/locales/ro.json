@@ -676,6 +676,9 @@
     "audienceHint": "Partajarea dă grupului doar întrebarea — niciodată acces la ce găsește.",
     "private": "Doar eu",
     "someGroup": "Un grup de speologie",
+    "author": "Salvat de",
+    "byYou": "Dumneavoastră",
+    "someMember": "Un membru al clubului",
     "sharedWith": "Membrii {{name}}",
     "state": "Stare",
     "states": {

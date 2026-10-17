@@ -33,6 +33,11 @@ const PRIVATE = 'private';
  * — saved from the cave registry today, and later the thing a map layer or a quick chip is made of.
  * What a filter says is shown by name only through lists this account may already read (the cave
  * types, the tags): a value it cannot resolve is shown as not available to it, never as an id.
+ *
+ * A shared filter names who saved it as the server names that member to this reader — never an
+ * address — or as "a club member" when the account is gone. Rename and delete are offered where
+ * the server says this reader may make them (its author, or a full administrator on any filter),
+ * not from whether the reader wrote it.
  */
 export default function SavedFiltersPage() {
   const { t } = useTranslation();
@@ -164,6 +169,16 @@ export default function SavedFiltersPage() {
             },
           },
           {
+            title: t('savedFilters.author'),
+            key: 'author',
+            width: 180,
+            render: (_: unknown, filter) => (
+              <Typography.Text data-testid={`saved-filter-author-${filter.id}`}>
+                {filter.mine ? t('savedFilters.byYou') : filter.authorName ?? t('savedFilters.someMember')}
+              </Typography.Text>
+            ),
+          },
+          {
             title: t('savedFilters.audience'),
             key: 'audience',
             width: 200,
@@ -222,32 +237,32 @@ export default function SavedFiltersPage() {
                       onClick={() => open(filter)}
                     />
                   </Tooltip>
-                  {filter.mine && (
-                    <>
-                      <Tooltip title={t('savedFilters.edit')}>
-                        <Button
-                          size="small"
-                          icon={<EditOutlined />}
-                          aria-label={t('savedFilters.edit')}
-                          data-testid={`saved-filter-edit-${filter.id}`}
-                          onClick={() => startEdit(filter)}
-                        />
-                      </Tooltip>
-                      <Popconfirm
-                        title={t('savedFilters.deleteConfirm')}
-                        okText={t('savedFilters.delete')}
-                        onConfirm={() =>
-                          remove.mutateAsync(filter.id).catch(() => message.error(t('common.saveFailed')))}
-                      >
-                        <Button
-                          size="small"
-                          danger
-                          icon={<DeleteOutlined />}
-                          aria-label={t('savedFilters.delete')}
-                          data-testid={`saved-filter-delete-${filter.id}`}
-                        />
-                      </Popconfirm>
-                    </>
+                  {filter.mayEdit && (
+                    <Tooltip title={t('savedFilters.edit')}>
+                      <Button
+                        size="small"
+                        icon={<EditOutlined />}
+                        aria-label={t('savedFilters.edit')}
+                        data-testid={`saved-filter-edit-${filter.id}`}
+                        onClick={() => startEdit(filter)}
+                      />
+                    </Tooltip>
+                  )}
+                  {filter.mayDelete && (
+                    <Popconfirm
+                      title={t('savedFilters.deleteConfirm')}
+                      okText={t('savedFilters.delete')}
+                      onConfirm={() =>
+                        remove.mutateAsync(filter.id).catch(() => message.error(t('common.saveFailed')))}
+                    >
+                      <Button
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        aria-label={t('savedFilters.delete')}
+                        data-testid={`saved-filter-delete-${filter.id}`}
+                      />
+                    </Popconfirm>
                   )}
                 </Space>
               );
@@ -284,6 +299,11 @@ export default function SavedFiltersPage() {
                   value: group.id,
                   label: t('savedFilters.sharedWith', { name: group.name }),
                 })),
+                // An administrator tidying another member's filter may not be in the group it is
+                // shared with; keeping that group on offer lets them rename it without moving it.
+                ...(editing?.cavingGroupId && !(cavingGroups ?? []).some((group) => group.id === editing.cavingGroupId)
+                  ? [{ value: editing.cavingGroupId, label: groupName(editing.cavingGroupId) }]
+                  : []),
               ]}
             />
           </Form.Item>

@@ -12917,6 +12917,9 @@ export interface components {
             cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
             mine: boolean;
+            authorName: null | string;
+            mayEdit: boolean;
+            mayDelete: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */

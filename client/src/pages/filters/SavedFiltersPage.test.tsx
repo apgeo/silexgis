@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { App as AntApp } from 'antd';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -60,6 +60,9 @@ function filter(over: Partial<SavedFilter>): SavedFilter {
     cavingGroupId: null,
     visibility: 'private',
     mine: true,
+    authorName: 'Ana Pop',
+    mayEdit: true,
+    mayDelete: true,
     createdAt: '2026-10-16T00:00:00Z',
     updatedAt: '2026-10-16T00:00:00Z',
     ...over,
@@ -102,14 +105,58 @@ describe('the saved filters screen', () => {
     expect(within(theirs).getByText('Speo Club')).toBeInTheDocument();
   });
 
-  it('offers changes only on the reader’s own filters', () => {
-    filters.current = [filter({}), filter({ id: 'f-2', name: 'Shared with me', mine: false })];
+  it('offers the changes the server says the reader may make, and no others', () => {
+    filters.current = [
+      filter({}),
+      filter({ id: 'f-2', name: 'Shared with me', mine: false, mayEdit: false, mayDelete: false }),
+      // What a full administrator is sent for a filter somebody else wrote.
+      filter({ id: 'f-3', name: 'Tidied by an administrator', mine: false, mayEdit: true, mayDelete: true }),
+    ];
     show();
 
     expect(screen.getByTestId('saved-filter-edit-f-1')).toBeInTheDocument();
     expect(screen.getByTestId('saved-filter-delete-f-1')).toBeInTheDocument();
     expect(screen.queryByTestId('saved-filter-edit-f-2')).toBeNull();
     expect(screen.queryByTestId('saved-filter-delete-f-2')).toBeNull();
+    expect(screen.getByTestId('saved-filter-edit-f-3')).toBeInTheDocument();
+    expect(screen.getByTestId('saved-filter-delete-f-3')).toBeInTheDocument();
+  });
+
+  it('keeps the group an administrator is not in on offer when they rename a filter shared with it', async () => {
+    filters.current = [filter({
+      id: 'f-3', mine: false, visibility: 'cavingGroup', cavingGroupId: 'g-elsewhere',
+    })];
+    show();
+
+    fireEvent.click(screen.getByTestId('saved-filter-edit-f-3'));
+    // The audience reads as a group, not as an id nobody can recognise.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('A caving group')).toBeInTheDocument();
+    expect(within(dialog).queryByText('g-elsewhere')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalled());
+    const sent = updateSpy.mock.calls[0]![0] as { write: { cavingGroupId: string | null; visibility: string } };
+    expect(sent.write.cavingGroupId).toBe('g-elsewhere');
+    expect(sent.write.visibility).toBe('cavingGroup');
+  });
+
+  it.each([
+    ['en', 'You', 'A club member'],
+    ['ro', 'Dumneavoastră', 'Un membru al clubului'],
+  ])('names who saved each filter, in %s', async (language, you, someone) => {
+    await i18n.changeLanguage(language);
+    filters.current = [
+      filter({}),
+      filter({ id: 'f-2', mine: false, authorName: 'Ana Pop' }),
+      // An account that is gone: no name to show, and no id either.
+      filter({ id: 'f-3', mine: false, authorName: null }),
+    ];
+    show();
+
+    expect(screen.getByTestId('saved-filter-author-f-1')).toHaveTextContent(you);
+    expect(screen.getByTestId('saved-filter-author-f-2')).toHaveTextContent('Ana Pop');
+    expect(screen.getByTestId('saved-filter-author-f-3')).toHaveTextContent(someone);
   });
 
   it('shows a filter that has stopped meaning anything as such, and will not open one it cannot read', () => {

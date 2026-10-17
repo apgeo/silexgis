@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -9,7 +10,9 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
+using SilexGis.Domain.Profiles;
 using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -380,6 +383,10 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
         // The member reads it, runs it under their own access, and may keep a copy of their own.
         var seen = await member.GetFromJsonAsync<JsonElement>($"{Url}/{id}");
         seen.GetProperty("mine").GetBoolean().ShouldBeFalse();
+        // The screen is offered no change the server below refuses, though the club's starter
+        // rules give the member Write over the row.
+        seen.GetProperty("mayEdit").GetBoolean().ShouldBeFalse();
+        seen.GetProperty("mayDelete").GetBoolean().ShouldBeFalse();
         (await member.GetAsync($"/api/v1/caves?savedFilterId={id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         var copy = await CreateAsync(member, new
         {
@@ -405,12 +412,55 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
             stored.Document.ShouldContain("Bihor");
         }
 
-        // Its author may, and so may a full administrator.
+        // Its author may, and so may a full administrator — and both are told so up front.
+        var asOwner = await owner.GetFromJsonAsync<JsonElement>($"{Url}/{id}");
+        asOwner.GetProperty("mayEdit").GetBoolean().ShouldBeTrue();
+        asOwner.GetProperty("mayDelete").GetBoolean().ShouldBeTrue();
+        var asAdmin = (await admin.GetFromJsonAsync<JsonElement>(Url)).EnumerateArray()
+            .Single(f => f.GetProperty("id").GetGuid() == id);
+        asAdmin.GetProperty("mine").GetBoolean().ShouldBeFalse();
+        asAdmin.GetProperty("mayEdit").GetBoolean().ShouldBeTrue();
+        asAdmin.GetProperty("mayDelete").GetBoolean().ShouldBeTrue();
         (await owner.PutAsJsonAsync($"{Url}/{id}", Body($"Renamed {tag}", group: club), Wire))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         (await admin.PutAsJsonAsync($"{Url}/{id}", Body($"Tidied {tag}", group: club), Wire))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         (await admin.DeleteAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    // ---------- who wrote it ----------
+
+    [Fact]
+    public async Task A_shared_filter_names_its_author_by_their_attribution_label_and_never_by_their_address()
+    {
+        var id = (await CreateAsync(author, Body($"Whose {tag}", group: cavingGroupId)))
+            .GetProperty("id").GetGuid();
+
+        // An account nobody has named was made with its address as its user name; the label that
+        // reaches a clubmate is the generated one, not the address.
+        var unnamed = await clubmate.GetFromJsonAsync<JsonElement>($"{Url}/{id}");
+        var label = unnamed.GetProperty("authorName").GetString().ShouldNotBeNull();
+        label.ShouldStartWith(ProfileProtection.AnonymousLabelPrefix);
+        label.ShouldNotContain("@");
+        label.ShouldNotContain($"sf-author-{tag}");
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+            var account = (await users.FindByIdAsync(authorId.ToString())).ShouldNotBeNull();
+            account.DisplayName = $"Ana {tag}";
+            (await users.UpdateAsync(account)).Succeeded.ShouldBeTrue();
+        }
+
+        // Once they have said what they are called, that is what every reader is shown — on the
+        // list as on the single filter, and to the author themselves.
+        var listed = (await clubmate.GetFromJsonAsync<JsonElement>(Url)).EnumerateArray()
+            .Single(f => f.GetProperty("id").GetGuid() == id);
+        listed.GetProperty("authorName").GetString().ShouldBe($"Ana {tag}");
+        listed.GetProperty("mine").GetBoolean().ShouldBeFalse();
+        var own = await author.GetFromJsonAsync<JsonElement>($"{Url}/{id}");
+        own.GetProperty("authorName").GetString().ShouldBe($"Ana {tag}");
+        own.GetProperty("mine").GetBoolean().ShouldBeTrue();
     }
 
     // ---------- running somebody else's ----------
