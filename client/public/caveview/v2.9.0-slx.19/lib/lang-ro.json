@@ -1,0 +1,302 @@
+{
+	"settings": {
+		"survey": {
+			"header": "Topografie",
+			"caption": "Fișier"
+		},
+		"view": {
+			"header": "Vizualizare",
+			"camera": {
+				"caption": "Tip cameră",
+				"orthographic": "Ortografic",
+				"perspective": "Perspectivă",
+				"anaglyph": "Anaglifă(stereoscopic)",
+				"stereo": "Stereo"
+			},
+			"viewpoints": {
+				"caption": "Punct de vizualizare",
+				"none": "<selectează>",
+				"plan": "Plan",
+				"elevation_n": "N - Profil",
+				"elevation_s": "S - Profil",
+				"elevation_e": "E - Profil",
+				"elevation_w": "W - Profil"
+			},
+			"eye_separation": "Separație ochi",
+			"vertical_scaling": "Scalare verticală",
+			"autorotate": "Auto rotație",
+			"rotation_speed": "Viteză de rotație",
+			"linewidth": "Grosime linie"
+		},
+		"shading": {
+			"header": "Umbrire",
+			"caption": "Vize subterane",
+			"height": "după adâncime",
+			"length": "după lungimea vizei",
+			"inclination": "după înclinarea vizei",
+			"height_cursor": "cotă cursor",
+			"fixed": "fix",
+			"survey": "după sector",
+			"route": "rută",
+			"depth": "adâncime",
+			"depth_cursor": "adâncime cursor",
+			"distance": "distanță",
+			"beck": "beck?"
+		},
+		"selected_route": "Ruta selectată",
+		"no_routes": "nu sunt rute definite",
+		"visibility": {
+			"header": "Vizibiltate",
+			"entrances": "Intrări",
+			"stations": "Stații",
+			"labels": "Etichete stații",
+			"comments": "Comentarii stații",
+			"walls": "Pereți (LRUD)",
+			"scraps": "Schițe",
+			"splays": "Radieri",
+			"traces": "Trasări hidrogeologice",
+			"warnings": "Avertismente",
+			"box": "Casetă de încadrare",
+			"hud": "Indicatori",
+			"fog": "Ceață",
+			"legs": "Vize centrale",
+			"entrance_dots": "Puncte intrări",
+			"model": "Model",
+			"duplicates": "Vize duplicate",
+			"grid": "Grilă"
+		},
+		"title": "Setări",
+		"controls": {
+			"header": "Comenzi",
+			"svx_control_mode": "Comenzi „Aven”",
+			"zoom_to_cursor": "Mărire către cursor",
+			"wheel_tilt": "Rotiță mouse – înclinare"
+		},
+		"ui": {
+			"selection_tree": "Selecție arborescentă"
+		},
+		"default": {
+			"header": "Valori implicite",
+			"save": "Salvează setările implicite",
+			"reset": "Resetează setările implicite"
+		},
+		"colors": {
+			"header": "Culori",
+			"background_color": "Fundal",
+			"entrance_text": "Text intrări",
+			"entrance_background": "Fundal intrări",
+			"entrance_marker": "Marcaj intrări",
+			"bounding_box": "Casetă de încadrare",
+			"legs_fixed": "Linii galerii (fix)",
+			"surface_fixed": "Linii suprafață (fix)",
+			"duplicate_fixed": "Linii duplicate (fix)",
+			"hud_text": "Text scară",
+			"defaults": "Restaurează culorile implicite"
+		}
+	},
+	"surface": {
+		"surface": {
+			"header": "Caracteristici de Suprafață",
+			"legs": "Vize de Suprafață",
+			"shading": {
+				"caption": "Umbrire",
+				"height": "după înălțime/alt.",
+				"inclination": "după înclinație",
+				"height_cursor": "după cotă cursor",
+				"fixed": "fix"
+			}
+		},
+		"terrain": {
+			"header": "Suprafață",
+			"terrain": "Suprafață vizibilă",
+			"shading": {
+				"caption": "Umbrire",
+				"relief": "umbrire relief",
+				"height": "după înalțime/alt.",
+				"overlay": "suprapunere hartă",
+				"contours": "curbe de nivel"
+			},
+			"through": {
+				"caption": "Transparent/prin",
+				"basic": "de bază",
+				"stencil": "tipar/matriță",
+				"blend": "mix"
+			},
+			"overlay": {
+				"caption": "Suprapunere"
+			},
+			"opacity": "Opacitate",
+			"datum_shift": "Culisare model pe verticală",
+			"lighting": "Iluminare direcțională",
+			"downloadTileSet": "descărcare spec. tile set",
+			"datum_shift_value": "Culisare verticală",
+			"lightingmode": "Iluminare",
+			"lightingmodes": {
+				"none": "plată",
+				"single": "direcțională",
+				"multiple": "multi-direcțională"
+			}
+		},
+		"title": "Suprafață"
+	},
+	"edit": {
+		"header": "Editare",
+		"mode": "mod editare",
+		"modes": {
+			"none": "- lipsă -",
+			"route": "Rute",
+			"trace": "Trasee",
+			"entrances": "Intrări",
+			"annotate": "Adnotări"
+		},
+		"entrance": {
+			"header": "Intrări"
+		},
+		"annotate": {
+			"header": "Adnotări"
+		},
+		"route": {
+			"header": "Rute",
+			"current": "Rută curentă",
+			"save": "Salvează",
+			"new": "Rută nouă",
+			"add": "Adaugă",
+			"download": "Descarcă"
+		},
+		"trace": {
+			"header": "Traces",
+			"start": "Început",
+			"end": "Sfârșit"
+		},
+		"title": "Editare",
+		"intro": "alege modul de editare"
+	},
+	"info": {
+		"header": "Informații",
+		"stats": {
+			"header": "Statistici Cartare",
+			"legs": "Nr. vize",
+			"totalLength": "Lungime totală",
+			"minLength": "Cea mai scurtă viză",
+			"maxLength": "Cea mai lungă viză",
+			"splayCount": "Nr. radieri",
+			"surfaceCount": "Nr. vize de suprafață",
+			"duplicateCount": "Nr. vize duplicate",
+			"otherLegs": "Alte vize"
+		},
+		"title": "Informații",
+		"file": "fișier",
+		"more": "Pentru mai multe informații vezi",
+		"summary": "Un vizualizator 3D WebGL pentru modele Survex (.3d), Therion (.lox) și Compass (.plt).",
+		"github": "CaveView pe GitHub"
+	},
+	"help": {
+		"header": "Ajutor - comenzi/scurtături taste",
+		"shading": {
+			"header": "Umbrire",
+			"height": "cotă",
+			"inclination": "înclinare viză",
+			"length": "lungime viză",
+			"height_cursor": "cotă cursor",
+			"single": "monocolor",
+			"survey": "secțiune cartare",
+			"route": "rută",
+			"depth": "adâncime sub suprafață",
+			"depth_cursor": "cursor adâncime",
+			"cursor_up": "mută cursor sus",
+			"cursor_down": "mută cursor jos",
+			"distance": "distanță",
+			"flat": "umbrire plată"
+		},
+		"view": {
+			"header": "Vizualizare",
+			"full_screen": "comută ecran complet",
+			"orthogonal": "vizualizare ortognală",
+			"perspective": "vizualizare perspectivă",
+			"reset": "resetează la vizualizarea inițială",
+			"center": "centrează pe punctul selectat",
+			"next": "următoarea peșsteră",
+			"plan": "plan",
+			"elevation": "elevație",
+			"north": "fața nordică",
+			"east": "fața estică",
+			"south": "fața sudică",
+			"west": "fața vestică",
+			"rotate_clockwise": "rotație sens orar",
+			"rotate_anticlockwise": "rotație sens invers-orar",
+			"zoom_in": "apropie",
+			"zoom_out": "depărtează",
+			"auto_rotate": "rotește continuu",
+			"rotate_speed_up": "mărește viteza de rotație",
+			"rotate_speed_down": "micșoreză viteza de rotație",
+			"reverse_rotation": "invereză direcția de rotație",
+			"zoom_to_cursor": "comută mărirea către cursor",
+			"control_mode": "comută modul de comandă",
+			"decrease_focal_length": "micșorează distanța focală",
+			"increase_focal_length": "mărește distanța focală",
+			"show_labels": "arată numele stației de sub cursor"
+		},
+		"visibility": {
+			"header": "Vizibilitate",
+			"scraps": "schițe  vizbile/ascunse [doar lox]",
+			"station_labels": "etichete stații  vizbile/ascunse",
+			"entrance_labels": "etichete intrări  vizbile/ascunse",
+			"splays": "radieri  vizbile/ascunse",
+			"survey": "vize subterane  vizbile/ascunse",
+			"surface": "vize suprafață  vizbile/ascunse",
+			"terrain": "teren suprafață   vizbil/ascuns",
+			"walls": "pereți LRUD  vizbili/ascunși",
+			"stations": "indicatori stații  vizbili/ascunși",
+			"opacity_down": "micșoreză opacitatea terenului",
+			"opacity_up": "mărește opacitatea terenului",
+			"bounding_box": "casetă de încadrare pornit/oprit"
+		},
+		"selection": {
+			"header": "Selecție",
+			"remove": "schimbă toate în afara stației selectate"
+		},
+		"title": "Ajutor",
+		"header_svx": "Comenzi taste (survex)",
+		"header_native": "Comenzi taste (native)",
+		"version": "CaveView %{version}"
+	},
+	"hud": {
+		"height": "înalțime",
+		"leg_length": "lungime viză",
+		"depth": "adâncime",
+		"inclination": "înclinare"
+	},
+	"selection": {
+		"title": "Selecție",
+		"header": "Selecție"
+	},
+	"exports": {
+		"title": "Exporturi",
+		"gltf_export": {
+			"header": "Export glTF",
+			"walls": "include pereți (LRUD)",
+			"scraps": "include schițe",
+			"legs": "include vize centrale",
+			"rotate_axes": "rotește axele",
+			"export": "Descarcă",
+			"binary_format": "Exportă ca .glb"
+		},
+		"png_export": {
+			"header": "Export imagine (PNG)",
+			"export": "Instantaneu",
+			"size": "Dimensiune (px)",
+			"line_scale": "Scară linii"
+		}
+	},
+	"dnd": {
+		"splash_text": "Trage&nbsp;și&nbsp;lasă aici un model .3d sau .lox pentru&nbsp;a-l&nbsp;încărca"
+	},
+	"popup": {
+		"leg_length": "Lungime viză",
+		"segment_length": "Lungime segment",
+		"direct_length": "Lungime directă",
+		"depth_from_surface": "adâncime față de suprafață",
+		"adjusted_depth": "adâncime ajustată",
+		"distance": "distanță"
+	}
+}

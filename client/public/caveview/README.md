@@ -3,8 +3,8 @@
 Source: https://github.com/apgeo/CaveView.js — this project's fork of
 https://github.com/aardgoose/CaveView.js (MIT license, see `LICENSE` in this directory).
 
-Vendored build: distribution version **2.9.0-slx.18**, built from the fork's `silexgis`
-branch at commit `6b3ef586` — the upstream **2.9.0 release tag** plus the fork's changes
+Vendored build: distribution version **2.9.0-slx.19**, built from the fork's `silexgis`
+branch at commit `9baecd09` — the upstream **2.9.0 release tag** plus the fork's changes
 (each also kept on its own dev-based `feature/*` branch so upstream can take them): the
 dispose-handler typo fix, the `crsLookup` configuration option the app uses to resolve
 coordinate systems locally instead of via epsg.io, a navigation and hover API
@@ -279,6 +279,17 @@ The fork's test went from 71 assertions to 86, all passing against this bundle f
 Besides the bundle only the stylesheet differs from slx.16's; the four workers, the logo and the
 catalogue are byte-identical.
 
+**What slx.19 changes over slx.18** — one defect. A window resized while the viewer's container
+was not displayed (an inactive tab, a collapsed pane) measured the container at nothing and fitted
+the renderer and the cameras to it, which left an orthographic camera with a zoom of 0; the next
+resize at a real size turned that into NaN, and the viewer came back with nothing drawn and stayed
+so. A resize that measures nothing is now ignored and the last real size kept. This application
+already hid its own viewer by `visibility` where it compares two surveys, which keeps the size, so
+that path was never affected; a viewer in a tab that is not shown was. The fork's test went from 86
+assertions to 87, the new one failing against slx.18's bundle and passing against this one. Only the
+bundle differs from slx.18's; the stylesheet, the four workers, the logo and the catalogue are
+byte-identical.
+
 Not taken: moving the `.3d` and `.lox` readers onto the worker path the `.ply` reader uses. They
 write into a shared survey graph (stations shared by identity between legs, a tree with methods,
 CRS resolution through the host's `crsLookup` during the parse), so a worker would need a flat
@@ -296,11 +307,11 @@ CaveView.js is not published on npm; it ships as a prebuilt browser bundle. This
 directory contains the runtime subset the app needs, under a directory named by the
 distribution version:
 
-- `v2.9.0-slx.18/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
-- `v2.9.0-slx.18/js/workers/` — web workers the bundle spawns at runtime (paths resolved
+- `v2.9.0-slx.19/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
+- `v2.9.0-slx.19/js/workers/` — web workers the bundle spawns at runtime (paths resolved
   against the viewer's `home` option, which the app points at this directory)
-- `v2.9.0-slx.18/css/caveview.css`, `v2.9.0-slx.18/images/logo.svg` — runtime assets
-- `v2.9.0-slx.18/lib/lang-ro.json` — the Romanian catalogue, fetched when the interface is Romanian
+- `v2.9.0-slx.19/css/caveview.css`, `v2.9.0-slx.19/images/logo.svg` — runtime assets
+- `v2.9.0-slx.19/lib/lang-ro.json` — the Romanian catalogue, fetched when the interface is Romanian
 
 The version directory exists for cache correctness: these URLs are fetched outside the
 app bundle's hashed-asset pipeline, so a new build must arrive under new URLs or
@@ -320,8 +331,11 @@ turns that into a load failure until a full reload — then delete it in the rel
 after. (Earlier `2.9.0-slx.*` directories were removed rather than kept: none reached a release, so no
 browser can be holding it.) Do not edit the vendored files in place.
 
-`v2.9.0-slx.12/` is kept beside the current one under that rule: it is the build the last release
-loads, so it is the one a browser can still be holding. `v2.9.0-slx.16/` went with slx.18 without
+`v2.9.0-slx.18/` is kept beside the current one under that rule: it is the build the installations
+running now load — the demonstration server and the club's expedition instance were both updated to
+a `master` that vendors it — so it is the one a browser can still be holding when they are updated
+again. `v2.9.0-slx.12/` went with slx.19: it was kept while it was the build the last release
+loaded, and no running installation loads it any more. `v2.9.0-slx.16/` went with slx.18 without
 being kept, and `v2.9.0-slx.15/` with slx.16, because neither reached a release; `v2.9.0-slx.13/` went with slx.14 without
 being kept, because it never reached an installation, and `v2.9.0-slx.14/` went with slx.15 the
 same way, replaced on the branch it was vendored on before that branch was merged;
@@ -333,12 +347,13 @@ any further change to the fork — a fix found while vendoring included — is a
 version and a new directory. slx.12 was rebuilt in its own directory once, from `563b763b` to
 `5f14d910`, before it reached a release; that was the last time.
 
-**This build was verified to reproduce.** `v2.9.0-slx.18/js/CaveView2.min.js` (SHA-256
-`c38f5f5157669cb82a3d6093cab0a8431bc09d844c53b521eccfd1c2d16d7382`) is byte-identical to a
-fresh `npm ci && npm run build` of commit `02abcae5` in a clean clone of the fork, made
+**This build was verified to reproduce.** `v2.9.0-slx.19/js/CaveView2.min.js` (SHA-256
+`64f683e28e6dab77f274e8eaee344d478a36ffe222f4c15286b4771d58a95488`) is byte-identical to a
+fresh `npm ci && npm run build` of commit `9baecd09` in a clean clone of the fork, made
 separately from the build it was copied from — as is every other file vendored here: the four
 workers, the stylesheet and the logo, and the catalogue, which is the fork's tracked file
-(slx.15's bundle, `0baf1d80…`, reproduced the same way from `5647a5fd`, slx.14's, `7b6b4024…`,
+(slx.18's bundle, `ca377414…`, reproduced the same way from `6b3ef586`, slx.16's, `c38f5f51…`,
+from `02abcae5`, slx.15's, `0baf1d80…`, reproduced the same way from `5647a5fd`, slx.14's, `7b6b4024…`,
 from `4ff3ecbd`, slx.13's, `31a2d6cd…`, from `f4c94bb2`, and slx.12's, `b12cb7da…`, from
 `5f14d910`). (An earlier build, from `ed0322e5`, was checked the same way against the bundle
 serving the club's public pages.) That is worth re-checking on the next upgrade: it is the
