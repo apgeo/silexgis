@@ -46,6 +46,7 @@ export const specs = {
     'public-trip-as-installed.spec.ts',
     'table-map.spec.ts',
     'filter-spatial.spec.ts',
+    'object-selector-pickers.spec.ts',
   ],
   cavingGroups: [
     'announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts', 'caver-caving-groups.spec.ts',
@@ -73,6 +74,7 @@ export const specs = {
     'trip-list.spec.ts', 'trip-map.spec.ts', 'registry-statistics.spec.ts',
     'cave-registry-filters.spec.ts', 'gallery-filters.spec.ts', 'reslinks.spec.ts',
     'map-filters.spec.ts', 'table-map.spec.ts', 'filter-spatial.spec.ts',
+    'object-selector-pickers.spec.ts',
   ],
   geoFeatures: [
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
