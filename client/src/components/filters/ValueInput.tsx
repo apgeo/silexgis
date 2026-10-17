@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { DatePicker, Input, InputNumber, Select, Space } from 'antd';
-import dayjs, { type Dayjs } from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { dayBound, pickedDay } from '../../filters/dayBounds.ts';
 import type { FilterField, FilterOp, FilterValue } from '../../filters/types.ts';
 import IdPicker from './IdPicker.tsx';
 import SpatialValueInput from './SpatialValueInput.tsx';
@@ -37,17 +38,7 @@ function numberAt(values: FilterValue[], index: number): number | null {
 
 function instantAt(values: FilterValue[], index: number): Dayjs | null {
   const v = values[index];
-  return v?.type === 'instant' && typeof v.value === 'string' ? dayjs(v.value) : null;
-}
-
-/**
- * Which moment of a chosen day a comparison means. "After the 3rd" is after the 3rd has ended and
- * "before the 3rd" is before it began, while "at least the 3rd" takes the whole of the 3rd in and
- * "at most the 3rd" does too — so a day picked here means the day, under every operator.
- */
-function instantFor(op: FilterOp, day: Dayjs, end: 'low' | 'high'): string {
-  const late = op === 'greaterThan' || op === 'lessOrEqual' || (op === 'between' && end === 'high');
-  return (late ? day.endOf('day') : day.startOf('day')).toISOString();
+  return v?.type === 'instant' && typeof v.value === 'string' ? pickedDay(v.value) : null;
 }
 
 export default function ValueInput({ world, field, op, values, onChange, testId }: ValueInputProps) {
@@ -120,8 +111,8 @@ export default function ValueInput({ world, field, op, values, onChange, testId 
             value={[instantAt(values, 0), instantAt(values, 1)]}
             allowEmpty={[true, true]}
             onChange={(range) => onChange([
-              range?.[0] ? { type: 'instant', value: instantFor(op, range[0], 'low') } : blank('instant'),
-              range?.[1] ? { type: 'instant', value: instantFor(op, range[1], 'high') } : blank('instant'),
+              range?.[0] ? { type: 'instant', value: dayBound(op, range[0], 'low') } : blank('instant'),
+              range?.[1] ? { type: 'instant', value: dayBound(op, range[1], 'high') } : blank('instant'),
             ])}
           />
         );
@@ -132,7 +123,7 @@ export default function ValueInput({ world, field, op, values, onChange, testId 
           data-testid={testId}
           value={instantAt(values, 0)}
           onChange={(day: Dayjs | null) =>
-            onChange(day ? [{ type: 'instant', value: instantFor(op, day, 'low') }] : [])}
+            onChange(day ? [{ type: 'instant', value: dayBound(op, day, 'low') }] : [])}
         />
       );
 

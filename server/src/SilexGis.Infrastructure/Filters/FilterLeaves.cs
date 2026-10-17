@@ -138,6 +138,15 @@ internal static class FilterLeaves
     /// third of May happened on the third of May in the valley it happened in; reading it as an
     /// instant would put an evening trip on the fourth for anybody east of here, and a filter for
     /// "trips in May" would quietly lose the last one.
+    /// <para>
+    /// The same holds for the bound. A day picked in a browser arrives as a moment of that day in
+    /// the picker's own time zone — "on or after the 5th" from Bucharest is midnight of the 5th at
+    /// +03:00, "on or before the 5th" from Lima is the last moment of the 5th at -05:00. The day it
+    /// means is the calendar day it names at the offset it was written with; reading it at UTC
+    /// instead would turn the first into the 4th and the second into the 6th, taking in a day
+    /// nobody chose. A bound written at UTC (midnight UTC, as the gallery's date controls write a
+    /// plain day) names its UTC day, which is the same rule.
+    /// </para>
     /// </remarks>
     public static Expression<Func<T, bool>> Date<T>(
         ConditionNode condition, Expression<Func<T, DateOnly>> selector)
@@ -153,7 +162,7 @@ internal static class FilterLeaves
         }
 
         var days = condition.Values.OfType<InstantValue>()
-            .Select(v => DateOnly.FromDateTime(v.Value.UtcDateTime))
+            .Select(v => DateOnly.FromDateTime(v.Value.DateTime))
             .ToList();
 
         var body = condition.Op switch
@@ -237,6 +246,11 @@ internal static class FilterLeaves
     }
 
     /// <summary>A timestamp column that is never null.</summary>
+    /// <remarks>
+    /// A bound is compared as the moment it names, whatever offset it was written at: it is turned
+    /// to UTC first because the database driver writes only a zero offset into a timestamp column,
+    /// and a bound sent from a browser east or west of UTC would otherwise fail the whole request.
+    /// </remarks>
     public static Expression<Func<T, bool>> Instant<T>(
         ConditionNode condition, Expression<Func<T, DateTimeOffset>> selector)
     {
@@ -252,7 +266,7 @@ internal static class FilterLeaves
             return _ => true;
         }
 
-        var values = condition.Values.OfType<InstantValue>().Select(v => v.Value).ToList();
+        var values = condition.Values.OfType<InstantValue>().Select(v => v.Value.ToUniversalTime()).ToList();
         var body = condition.Op switch
         {
             FilterOp.LessThan => Expression.LessThan(selector.Body, Expression.Constant(values[0])),
@@ -270,7 +284,7 @@ internal static class FilterLeaves
         return Expression.Lambda<Func<T, bool>>(body, selector.Parameters);
     }
 
-    /// <summary>A timestamp column that may be null — a trip's date, a survey's.</summary>
+    /// <summary>A timestamp column that may be null; bounds are turned to UTC as in <see cref="Instant{T}"/>.</summary>
     public static Expression<Func<T, bool>> NullableInstant<T>(
         ConditionNode condition, Expression<Func<T, DateTimeOffset?>> selector)
     {
@@ -279,7 +293,7 @@ internal static class FilterLeaves
             return NullCheck(selector, condition.Op == FilterOp.IsNotEmpty);
         }
 
-        var values = condition.Values.OfType<InstantValue>().Select(v => v.Value).ToList();
+        var values = condition.Values.OfType<InstantValue>().Select(v => v.Value.ToUniversalTime()).ToList();
         var column = Expression.Convert(selector.Body, typeof(DateTimeOffset));
         var present = Expression.NotEqual(
             selector.Body, Expression.Constant(null, typeof(DateTimeOffset?)));

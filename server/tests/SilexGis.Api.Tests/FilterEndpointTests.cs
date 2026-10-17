@@ -651,6 +651,74 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         all.Worlds[0].Total.ShouldBe(6);
     }
 
+    [Theory]
+    // East of UTC, where "on or after the 5th" used to arrive as the 4th at UTC.
+    [InlineData(3)]
+    // West of UTC, where "on or before the 5th" used to arrive as the 6th at UTC.
+    [InlineData(-5)]
+    // UTC itself, and the plain midnight-UTC day the gallery's date controls write.
+    [InlineData(0)]
+    public async Task A_trip_date_bound_means_the_day_the_reader_picked_on_both_sides_of_their_midnight(int offsetHours)
+    {
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
+        // One trip on each of three consecutive days; every bound below is about the middle one.
+        await SeedTripsAsync(ownerId, Visibility.Public, 1, ActivityState.Published, tripDate: new DateOnly(2026, 10, 4));
+        await SeedTripsAsync(ownerId, Visibility.Public, 1, ActivityState.Published, tripDate: new DateOnly(2026, 10, 5));
+        await SeedTripsAsync(ownerId, Visibility.Public, 1, ActivityState.Published, tripDate: new DateOnly(2026, 10, 6));
+        using var client = await ClientAsync(GlobalRoles.Viewer, $"fe-tripday{offsetHours + 10}");
+
+        // What the condition editor sends for a picked day: its first or its last moment in the
+        // picker's own time zone, written with that zone's offset.
+        var offset = TimeSpan.FromHours(offsetHours);
+        var startOfFifth = new DateTimeOffset(2026, 10, 5, 0, 0, 0, offset);
+        var endOfFifth = new DateTimeOffset(2026, 10, 5, 23, 59, 59, 999, offset);
+
+        async Task<int> CountAsync(FilterOp op, params DateTimeOffset[] bounds)
+        {
+            var body = await QueryAsync(client, About("tripLog", new AllOfNode(
+            [
+                new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]),
+                new ConditionNode(TripLogFilterFields.TripDate, op, [.. bounds.Select(b => (FilterValue)new InstantValue(b))]),
+            ])));
+            return body.Worlds[0].Total.ShouldNotBeNull();
+        }
+
+        (await CountAsync(FilterOp.GreaterOrEqual, startOfFifth)).ShouldBe(2, "on or after the 5th: the 5th and the 6th");
+        (await CountAsync(FilterOp.LessOrEqual, endOfFifth)).ShouldBe(2, "on or before the 5th: the 4th and the 5th");
+        (await CountAsync(FilterOp.GreaterThan, endOfFifth)).ShouldBe(1, "after the 5th: the 6th alone");
+        (await CountAsync(FilterOp.LessThan, startOfFifth)).ShouldBe(1, "before the 5th: the 4th alone");
+        (await CountAsync(FilterOp.Between, startOfFifth, endOfFifth)).ShouldBe(1, "the 5th alone");
+        // All three are there, so the counts above are about the bound and not a world that lost a trip.
+        (await CountAsync(FilterOp.IsNotEmpty)).ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task A_timestamp_bound_written_east_or_west_of_utc_is_the_moment_it_names()
+    {
+        // A creation time compared against a bound with a non-zero offset: the same moment as its
+        // UTC spelling, and an answer rather than a failure.
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
+        await SeedTripsAsync(ownerId, Visibility.Public, 2, ActivityState.Published);
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-instant-offset");
+
+        var mine = new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]);
+        var longAgo = new DateTimeOffset(2000, 1, 1, 3, 0, 0, TimeSpan.FromHours(3));
+        var farAhead = new DateTimeOffset(2999, 1, 1, 0, 0, 0, TimeSpan.FromHours(-5));
+
+        var after = await QueryAsync(client, About("tripLog", new AllOfNode(
+        [
+            mine,
+            new ConditionNode(TripLogFilterFields.CreatedAt, FilterOp.GreaterOrEqual, [new InstantValue(longAgo)]),
+        ])));
+        after.Worlds[0].Total.ShouldBe(2);
+        var before = await QueryAsync(client, About("tripLog", new AllOfNode(
+        [
+            mine,
+            new ConditionNode(TripLogFilterFields.CreatedAt, FilterOp.GreaterOrEqual, [new InstantValue(farAhead)]),
+        ])));
+        before.Worlds[0].Total.ShouldBe(0);
+    }
+
     [Fact]
     public async Task A_world_offers_only_sorts_it_can_actually_deliver()
     {
@@ -898,7 +966,8 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         Visibility visibility,
         int count,
         ActivityState state = ActivityState.Draft,
-        bool hadIncident = false)
+        bool hadIncident = false,
+        DateOnly? tripDate = null)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -907,8 +976,8 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         {
             db.TripLogs.Add(new TripLog
             {
-                Title = $"Trip {i} {state} {hadIncident} {tag}",
-                TripDate = new DateOnly(2026, 5, 3),
+                Title = $"Trip {i} {state} {hadIncident} {tripDate} {tag}",
+                TripDate = tripDate ?? new DateOnly(2026, 5, 3),
                 OwnerUserId = ownerId,
                 Visibility = visibility,
                 State = state,
