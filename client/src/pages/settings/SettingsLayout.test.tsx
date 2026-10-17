@@ -63,6 +63,7 @@ describe('SettingsLayout', () => {
       'Notifications',
       'Security',
       'Accessibility',
+      'Saved filters',
       'Sync',
       'Advanced',
     ]);

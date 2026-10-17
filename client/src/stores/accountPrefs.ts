@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { isSavedFilterAudience } from '../filters/savedFilterAudience.ts';
 import { isCoordinateFormat } from '../geo/coordinateFormat.ts';
 import { accountPrefDefaults, MAX_PINNED_FILTERS, type AccountPrefsState } from './uiPrefsStore.ts';
 
@@ -167,6 +168,7 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
     coordinateFormat,
     overviewMap,
     karstLinkTreatment,
+    savedFilterAudience,
   } = read;
   if (
     isPlainObject(appearance) &&
@@ -204,6 +206,9 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
   }
   if (karstLinkTreatment === 'no_position' || karstLinkTreatment === 'omit' || karstLinkTreatment === 'grid_position') {
     out.karstLinkTreatment = karstLinkTreatment;
+  }
+  if (isSavedFilterAudience(savedFilterAudience)) {
+    out.savedFilterAudience = savedFilterAudience;
   }
   return out;
 }

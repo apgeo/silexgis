@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { MovieGifCalibration } from '../caveview/movie/movieOutput.ts';
 import type { MovieSettings } from '../caveview/movie/movieSettings.ts';
+import { DEFAULT_SAVED_FILTER_AUDIENCE, type SavedFilterAudience } from '../filters/savedFilterAudience.ts';
 import type { SelectorPrefs } from '../filters/selectorPrefs.ts';
 import { DEFAULT_COORDINATE_FORMAT, type CoordinateFormat } from '../geo/coordinateFormat.ts';
 import type { DensityPref, PanelLayout, PanelPrefs, PanelScope } from './panelPrefs.ts';
@@ -107,6 +108,14 @@ interface UiPrefsState {
    */
   karstLinkTreatment?: ProtectedPositionTreatment;
   setKarstLinkTreatment: (treatment: ProtectedPositionTreatment | undefined) => void;
+  /**
+   * Who a filter this person saves is shared with unless they choose otherwise at the save — only
+   * themselves until they pick something else in Settings. The account's, not the browser's: on a
+   * shared laptop the next member must not start out sharing with the last one's club.
+   * A default only: every save dialog shows the choice, and the server stores what is sent.
+   */
+  savedFilterAudience: SavedFilterAudience;
+  setSavedFilterAudience: (audience: SavedFilterAudience) => void;
   /**
    * How this person last set up a tracking movie — format, size, motion, labels, layers,
    * captions — so the next movie starts from it. Undefined until one has been set up.
@@ -224,6 +233,7 @@ export interface AccountPrefsState {
   coordinateFormat: CoordinateFormat;
   overviewMap: boolean;
   karstLinkTreatment: ProtectedPositionTreatment | undefined;
+  savedFilterAudience: SavedFilterAudience;
 }
 
 /**
@@ -247,6 +257,7 @@ export function accountPrefDefaults(): AccountPrefsState {
     coordinateFormat: DEFAULT_COORDINATE_FORMAT,
     overviewMap: false,
     karstLinkTreatment: undefined,
+    savedFilterAudience: DEFAULT_SAVED_FILTER_AUDIENCE,
   };
 }
 
@@ -298,6 +309,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
         }),
       setAppearance: (patch) => set((state) => ({ appearance: { ...state.appearance, ...patch } })),
       setKarstLinkTreatment: (treatment) => set({ karstLinkTreatment: treatment }),
+      setSavedFilterAudience: (audience) => set({ savedFilterAudience: audience }),
       movieSettings: undefined,
       setMovieSettings: (settings) => set({ movieSettings: settings }),
       movieGifCalibration: undefined,

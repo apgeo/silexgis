@@ -261,6 +261,30 @@ describe('the account preference list', () => {
     // Only one of the three words: anything else is an answer this client cannot honour.
     expect(accountPrefsIn({ karstLinkTreatment: 'surveyed' })).toEqual({});
   });
+
+  it('keeps a new account sharing filters with nobody, and writes nothing for that default', () => {
+    expect(ACCOUNT_PREF_DEFAULTS.savedFilterAudience).toEqual({ visibility: 'private' });
+    expect(pickAccountPrefs({ ...ACCOUNT_PREF_DEFAULTS })).not.toHaveProperty('savedFilterAudience');
+    expect(accountPrefsIn({})).not.toHaveProperty('savedFilterAudience');
+  });
+
+  it('writes a chosen default audience for saved filters to the account, and reads it back', () => {
+    const club = { visibility: 'cavingGroup', cavingGroupId: 'g-2' } as const;
+    expect(pickAccountPrefs({ ...ACCOUNT_PREF_DEFAULTS, savedFilterAudience: club })).toEqual({ savedFilterAudience: club });
+    expect(accountPrefsIn({ savedFilterAudience: club })).toEqual({ savedFilterAudience: club });
+    expect(accountPrefsIn({ savedFilterAudience: { visibility: 'authenticated' } })).toEqual({
+      savedFilterAudience: { visibility: 'authenticated' },
+    });
+  });
+
+  it('never takes a stored audience it cannot honour as the default', () => {
+    // `public` is refused by the server for a saved filter; a group with no id names nobody; a
+    // private audience naming a group is the very shape the server refuses on save.
+    expect(accountPrefsIn({ savedFilterAudience: { visibility: 'public' } })).toEqual({});
+    expect(accountPrefsIn({ savedFilterAudience: { visibility: 'cavingGroup' } })).toEqual({});
+    expect(accountPrefsIn({ savedFilterAudience: { visibility: 'private', cavingGroupId: 'g-2' } })).toEqual({});
+    expect(accountPrefsIn({ savedFilterAudience: 'authenticated' })).toEqual({});
+  });
 });
 
 describe('readAccountPrefs', () => {

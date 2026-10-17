@@ -102,6 +102,7 @@ const EmailSettingsPage = lazy(() => import('./pages/settings/EmailSettingsPage.
 const NotificationSettingsPage = lazy(() => import('./pages/settings/NotificationSettingsPage.tsx'));
 const SecuritySettingsPage = lazy(() => import('./pages/settings/SecuritySettingsPage.tsx'));
 const AccessibilitySettingsPage = lazy(() => import('./pages/settings/AccessibilitySettingsPage.tsx'));
+const SavedFilterSettingsPage = lazy(() => import('./pages/settings/SavedFilterSettingsPage.tsx'));
 const SyncSettingsPage = lazy(() => import('./pages/settings/SyncSettingsPage.tsx'));
 const AdvancedSettingsPage = lazy(() => import('./pages/settings/AdvancedSettingsPage.tsx'));
 
@@ -251,6 +252,7 @@ export const routes: RouteObject[] = guarded([
               { path: 'notifications', element: <Loadable><NotificationSettingsPage /></Loadable> },
               { path: 'security', element: <Loadable><SecuritySettingsPage /></Loadable> },
               { path: 'accessibility', element: <Loadable><AccessibilitySettingsPage /></Loadable> },
+              { path: 'filters', element: <Loadable><SavedFilterSettingsPage /></Loadable> },
               { path: 'sync', element: <Loadable><SyncSettingsPage /></Loadable> },
               { path: 'advanced', element: <Loadable><AdvancedSettingsPage /></Loadable> },
             ],

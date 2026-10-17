@@ -11,6 +11,7 @@ export const SETTINGS_SECTIONS = [
   'notifications',
   'security',
   'accessibility',
+  'filters',
   'sync',
   'advanced',
 ] as const;

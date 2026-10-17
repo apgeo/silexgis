@@ -17,6 +17,7 @@ afterEach(() => {
     landingPage: 'map',
     appearance: DEFAULT_APPEARANCE,
     karstLinkTreatment: undefined,
+    savedFilterAudience: { visibility: 'private' },
     movieSettings: undefined,
     movieGifCalibration: undefined,
     centerlineDetailZoom: undefined,
@@ -429,6 +430,18 @@ describe('uiPrefsStore account preferences', () => {
     useUiPrefsStore.getState().adoptAccount('account-b');
 
     expect(useUiPrefsStore.getState().karstLinkTreatment).toBeUndefined();
+  });
+
+  it('keeps each account its own default audience for saved filters, private for the next member', () => {
+    useUiPrefsStore.getState().adoptAccount('account-a');
+    useUiPrefsStore.getState().setSavedFilterAudience({ visibility: 'cavingGroup', cavingGroupId: 'club-a' });
+
+    // A member signing in after them on the same browser must not start out sharing with their club.
+    useUiPrefsStore.getState().adoptAccount('account-b');
+    expect(useUiPrefsStore.getState().savedFilterAudience).toEqual({ visibility: 'private' });
+
+    useUiPrefsStore.getState().releaseAccount();
+    expect(useUiPrefsStore.getState().savedFilterAudience).toEqual({ visibility: 'private' });
   });
 
   it('puts back every account preference the one list names, and starts the store from it', () => {

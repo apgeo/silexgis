@@ -2,6 +2,7 @@
 import {
   BellOutlined,
   EyeOutlined,
+  FilterOutlined,
   IdcardOutlined,
   MailOutlined,
   MobileOutlined,
@@ -23,6 +24,7 @@ const SECTION_ICONS: Record<SettingsSection, ReactNode> = {
   notifications: <BellOutlined />,
   security: <SafetyOutlined />,
   accessibility: <EyeOutlined />,
+  filters: <FilterOutlined />,
   sync: <MobileOutlined />,
   advanced: <SlidersOutlined />,
 };

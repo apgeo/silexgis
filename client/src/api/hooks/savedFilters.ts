@@ -3,10 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client.ts';
 import { unwrap, unwrapVoid } from './shared.ts';
 import type { components } from '../schema';
+import type { SavedFilterAudience } from '../../filters/savedFilterAudience.ts';
 import type { FilterDocument } from '../../filters/types.ts';
 
 /**
- * Saved filters: named questions somebody keeps, privately or shared with a caving group.
+ * Saved filters: named questions somebody keeps, privately, shared with a caving group or shared
+ * with everyone signed in.
  *
  * A saved filter describes a question and grants nothing — whoever runs one is answered under
  * their own access — so nothing here caches rows. What is cached is the list of questions, which
@@ -29,7 +31,8 @@ export interface SavedFilterWrite {
   /** Null on an update keeps the stored question; required when creating. */
   document: FilterDocument | null;
   cavingGroupId?: string | null;
-  visibility: 'private' | 'cavingGroup';
+  /** Never `public`: the server refuses it for a saved filter. */
+  visibility: SavedFilterAudience['visibility'];
 }
 
 const savedFilterKeys = {
