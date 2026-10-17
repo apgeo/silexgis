@@ -4,8 +4,12 @@ import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 
 const order: string[] = [];
 
-vi.mock('./auth.tsx', () => ({
-  userManager: { stopSilentRenew: () => order.push('stop renewal') },
+vi.mock('./auth.tsx', () => ({ userManager: {} }));
+vi.mock('./endSession.ts', () => ({
+  endSession: (_manager: unknown, destination: string) => {
+    order.push(`end the session, held by ${useUiPrefsStore.getState().accountId ?? 'nobody'}, for ${destination}`);
+    return Promise.resolve();
+  },
 }));
 vi.mock('../api/hooks/accountPrefs.ts', () => ({
   flushAccountPreferences: () => {
@@ -17,24 +21,22 @@ vi.mock('../api/hooks/accountPrefs.ts', () => ({
 const { signOutAfterPasswordChange } = await import('./signOutAfterPasswordChange.ts');
 
 afterEach(() => {
-  vi.unstubAllGlobals();
   useUiPrefsStore.getState().releaseAccount();
   order.length = 0;
 });
 
 describe('signOutAfterPasswordChange', () => {
   it('writes what is waiting, then releases this browser’s copy of the account’s preferences', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response())));
-    const replace = vi.fn();
-    vi.stubGlobal('location', { replace });
     useUiPrefsStore.getState().adoptAccount('account-a');
     useUiPrefsStore.getState().setCoordinateFormat('utm');
 
     await signOutAfterPasswordChange();
 
-    expect(order).toEqual(['flush while held by account-a', 'stop renewal']);
+    expect(order).toEqual([
+      'flush while held by account-a',
+      'end the session, held by nobody, for /login?passwordChanged=1',
+    ]);
     expect(useUiPrefsStore.getState().accountId).toBeUndefined();
     expect(useUiPrefsStore.getState().coordinateFormat).toBe('dd');
-    expect(replace).toHaveBeenCalledWith('/login?passwordChanged=1');
   });
 });

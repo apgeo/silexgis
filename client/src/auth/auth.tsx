@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { InMemoryWebStorage, UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
+import { endSession } from './endSession.ts';
 
 // Authorization Code + PKCE against the embedded OpenIddict server (same origin).
 // Tokens live in memory only (never persisted to storage); refresh tokens drive renewal.
@@ -58,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       signIn: (returnTo) => userManager.signinRedirect({ state: returnTo ?? '/' }),
-      signOut: () => userManager.signoutRedirect(),
+      signOut: () => endSession(userManager, '/'),
       refreshSession: async () => {
         // Best effort: a failure here only means the header shows the previous name until the
         // next automatic renewal, which is not worth interrupting the user for.

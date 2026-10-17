@@ -2,6 +2,7 @@
 import { flushAccountPreferences } from '../api/hooks/accountPrefs.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { userManager } from './auth.tsx';
+import { endSession } from './endSession.ts';
 
 /** The address the sign-in page reads to say why the reader is there. */
 export const PASSWORD_CHANGED_LOGIN = '/login?passwordChanged=1';
@@ -22,7 +23,7 @@ export const PASSWORD_CHANGED_LOGIN = '/login?passwordChanged=1';
  * <b>Why a full navigation.</b> The tokens live in memory only, so loading the sign-in page as a
  * new document is what discards them, together with every cached answer about the account. Clearing
  * them first, in place, would let the guard on the page still open notice the missing session and
- * start a sign-in redirect of its own before the navigation below had happened.
+ * start a sign-in redirect of its own before the navigation had happened.
  */
 export async function signOutAfterPasswordChange(): Promise<void> {
   // A sign-out like any other for the preferences this browser holds for the account: what is
@@ -30,12 +31,5 @@ export async function signOutAfterPasswordChange(): Promise<void> {
   // the sign-in page — and whoever signs in next — starts from the defaults.
   await flushAccountPreferences();
   useUiPrefsStore.getState().releaseAccount();
-  userManager.stopSilentRenew();
-  try {
-    await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin' });
-  } catch {
-    // The server has already ended every renewable session; a cookie that outlives this only
-    // means the next sign-in is answered without the form, which the reader can still sign out of.
-  }
-  window.location.replace(PASSWORD_CHANGED_LOGIN);
+  await endSession(userManager, PASSWORD_CHANGED_LOGIN);
 }
