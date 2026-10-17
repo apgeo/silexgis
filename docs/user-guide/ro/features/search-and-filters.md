@@ -80,6 +80,18 @@ Acolo unde alegeți valori, selectorul spune ce face:
 Unele valori sunt **localizabile** — *„Vi se poate arăta unde este"* — și oferă un *Mergi la…*
 care mută harta acolo.
 
+Același selector este folosit oriunde alegeți un element, o peșteră sau o tură dintr-o căutare:
+părintele unui element, *Adaugă părinte*, ținta unei legături, membrii unui set de elemente,
+elementul unei reguli de permisiune, cealaltă peșteră din *Cea mai mică distanță*, peștera unei
+intrări noi, a unei fotografii din bibliotecă sau a unei hărți georeferențiate, tura și peștera
+unui import de înregistrare și peșterile pe care le poartă un telefon. Peșterile se găsesc după
+orice parte a numelui, fără a ține seama de diacritice. Doar lista de ture a importului de
+înregistrare arată cele mai noi ture înainte să tastați.
+
+De la tastatură: **Jos** din caseta de căutare ajunge la primul rezultat, **Sus / Jos** trec de
+la un rezultat la altul, **Enter** sau **Spațiu** alege. Acolo unde o alegere poate fi retrasă,
+*Renunță la alegere* apare după ce ați ales ceva.
+
 ---
 
 ## Filtre pe hartă

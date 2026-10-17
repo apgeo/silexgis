@@ -80,6 +80,17 @@ Where you pick values, the selector says what it is doing:
 Some values are **placeable** — *"You can be shown where this is"* — and offer a *Go to…*
 that moves the map to them.
 
+The same selector is used wherever you choose one feature, cave or trip from a search: a
+feature's parent, *Add parent*, a link's target, feature-set members, a permission rule's
+feature, the other cave of a closest approach, the cave of a new entrance, of a library
+photograph or of a georeferenced map, a recording import's trip and cave, and the caves a
+phone carries. Caves are found by any part of their name, accents ignored. Only the recording
+import's trip list shows your newest trips before you type.
+
+From the keyboard: **Down** from the search box reaches the first result, **Up / Down** move
+between results, **Enter** or **Space** chooses. Where a choice can be withdrawn, *Clear the
+choice* appears once something is chosen.
+
 ---
 
 ## Filters on the map
