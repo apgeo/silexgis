@@ -1,6 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo, useState, type CSSProperties } from 'react';
-import { Button, Checkbox, Empty, Flex, Input, Popover, Space, Tag, theme, Tooltip, Typography } from 'antd';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import {
+  Checkbox,
+  Empty,
+  Flex,
+  Input,
+  Popover,
+  Space,
+  Tag,
+  theme,
+  Tooltip,
+  Typography,
+  type InputRef,
+} from 'antd';
 import {
   ArrowDownOutlined,
   ArrowUpOutlined,
@@ -10,6 +22,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { choose, pressSort, toggleScope, type SelectorScope } from '../../filters/selection.ts';
 import type { FilterHit, SortKey } from '../../filters/types.ts';
+import Button from '../Button.tsx';
 import List from '../List.tsx';
 import { useObjectSelector } from './useObjectSelector.ts';
 
@@ -43,6 +56,12 @@ export interface ObjectSelectorProps {
   onPick?: (hit: FilterHit | null) => void;
 
   multiple?: boolean;
+
+  /**
+   * Offers a way back to "nothing chosen" once something is. For an optional field: without it a
+   * single choice, once made, could only be swapped for another, never withdrawn.
+   */
+  allowClear?: boolean;
 
   /** Ids never offered: the row being edited, or ones already added somewhere else on screen. */
   exclude?: readonly string[];
@@ -87,6 +106,7 @@ export default function ObjectSelector({
   onChange,
   onPick,
   multiple = false,
+  allowClear = false,
   exclude = [],
   rememberAs,
   presentation = 'inline',
@@ -104,6 +124,34 @@ export default function ObjectSelector({
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<InputRef>(null);
+  const triggerRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
+  const wasOpen = useRef(false);
+
+  // Behind a trigger, opening has to carry the keyboard into the panel: the panel is drawn in a
+  // layer at the end of the page, so without this the box is reached only by tabbing past
+  // everything else — and inside a dialog, which keeps Tab within itself, never. Closing (Escape,
+  // a click outside, or a single choice made) hands focus back to the trigger, unless it has
+  // already moved on somewhere else on purpose.
+  useEffect(() => {
+    if (presentation !== 'dropdown') {
+      return;
+    }
+    if (open) {
+      wasOpen.current = true;
+      // The panel's layer is mounted by the same render that opened it; a tick later it is there.
+      const id = window.setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 0);
+      return () => window.clearTimeout(id);
+    }
+    if (!open && wasOpen.current) {
+      wasOpen.current = false;
+      const active = document.activeElement;
+      if (!active || active === document.body || panelRef.current?.contains(active)) {
+        triggerRef.current?.focus({ preventScroll: true });
+      }
+    }
+  }, [open, presentation]);
 
   const chosenIds = useMemo(
     () => (value === null || value === undefined ? [] : Array.isArray(value) ? value : [value]),
@@ -135,9 +183,41 @@ export default function ObjectSelector({
     emit(next.chosen, multiple ? hit : (next.chosen.length > 0 ? hit : null));
   };
 
+  // The rows are reached from the box with the down arrow and walked with both arrows; Enter or
+  // Space chooses the focused one. Tab still reaches each row too, so nothing depends on knowing
+  // the arrows are there.
+  const rowElements = () =>
+    Array.from(panelRef.current?.querySelectorAll<HTMLElement>('[data-selector-option]') ?? []);
+
+  const onInputKey = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      const first = rowElements()[0];
+      if (first) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  };
+
+  const onRowKey = (event: KeyboardEvent<HTMLDivElement>, hit: FilterHit) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onRow(hit);
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const all = rowElements();
+      const at = all.indexOf(event.currentTarget);
+      const next = event.key === 'ArrowDown' ? all[at + 1] : all[at - 1];
+      next?.focus();
+    }
+  };
+
   const panel = (
-    <Flex vertical gap={8} style={{ width: presentation === 'dropdown' ? 380 : '100%' }}>
+    <Flex ref={panelRef} vertical gap={8} style={{ width: presentation === 'dropdown' ? 380 : '100%' }}>
       <Input
+        ref={inputRef}
         allowClear
         autoFocus={autoFocus}
         size={size}
@@ -148,6 +228,7 @@ export default function ObjectSelector({
         disabled={disabled}
         onChange={(event) =>
           selector.setState((s) => ({ ...s, query: event.target.value }))}
+        onKeyDown={onInputKey}
         data-testid={testId ? `${testId}-input` : undefined}
       />
 
@@ -237,18 +318,46 @@ export default function ObjectSelector({
                     : undefined
                 }
               >
-                <Flex align="center" gap={8} style={{ minWidth: 0 }}>
-                  {multiple && <Checkbox checked={picked} />}
-                  <List.Item.Meta
-                    title={<Typography.Text strong={picked}>{hit.title}</Typography.Text>}
-                    description={hit.subtitle ?? undefined}
-                  />
-                </Flex>
+                {/* The focusable part sits inside the row rather than being the row, so the list
+                    stays a list of items to assistive technology; a click anywhere on the row
+                    reaches the row's own handler, a key press reaches this one. */}
+                <div
+                  role="button"
+                  tabIndex={disabled ? -1 : 0}
+                  aria-pressed={picked}
+                  aria-disabled={disabled || undefined}
+                  data-selector-option
+                  onKeyDown={(event) => {
+                    if (!disabled) {
+                      onRowKey(event, hit);
+                    }
+                  }}
+                >
+                  <Flex align="center" gap={8} style={{ minWidth: 0 }}>
+                    {multiple && <Checkbox checked={picked} tabIndex={-1} aria-hidden />}
+                    <List.Item.Meta
+                      title={<Typography.Text strong={picked}>{hit.title}</Typography.Text>}
+                      description={hit.subtitle ?? undefined}
+                    />
+                  </Flex>
+                </div>
               </List.Item>
             );
           }}
         />
       </div>
+
+      {allowClear && chosenIds.length > 0 && !disabled && (
+        <Button
+          size="small"
+          type="link"
+          style={{ alignSelf: 'flex-start', paddingInline: 0 }}
+          onClick={() => emit([], null)}
+          data-testid={testId ? `${testId}-clear` : undefined}
+        >
+          {t('filters.selector.clear')}
+        </Button>
+      )}
 
       {selector.restricted.length > 0 && (
         // Said once, without saying which. An id that resolves to nothing is one this caller may
@@ -280,6 +389,7 @@ export default function ObjectSelector({
       styles={{ content: { padding: 12 } as CSSProperties }}
     >
       <Button
+        ref={triggerRef}
         block
         size={size}
         disabled={disabled}

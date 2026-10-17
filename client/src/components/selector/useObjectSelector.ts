@@ -108,9 +108,26 @@ export function useObjectSelector(options: UseObjectSelectorOptions) {
     [options.scopes, askedEffective],
   );
 
+  // Held across renders: built afresh on every one, it made the sorts below recompute every time.
+  const vocabularies = useMemo(
+    () => (vocabulary.data?.worlds ?? []) as unknown as WorldVocabulary[],
+    [vocabulary.data],
+  );
+  const availableSorts = useMemo(() => {
+    const shared = sortsOffered(vocabularies, worlds);
+    return options.sorts ? shared.filter((s) => options.sorts!.includes(s)) : shared;
+  }, [vocabularies, worlds, options.sorts]);
+
+  // Asked with the order the buttons show. A starting or remembered order this control does not
+  // offer is replaced by the first it does, and the request has to follow that replacement —
+  // otherwise the button reads "by date" while the rows come back in another order.
   const document = useMemo(
-    () => documentFor(options.scopes, askedEffective, textFieldOf),
-    [options.scopes, askedEffective],
+    () => documentFor(
+      options.scopes,
+      effectiveState(askedEffective, offeredScopeIds, availableSorts),
+      textFieldOf,
+    ),
+    [options.scopes, askedEffective, offeredScopeIds, availableSorts],
   );
 
   const enabled = shouldAsk(options.scopes, asked, {
@@ -151,16 +168,6 @@ export function useObjectSelector(options: UseObjectSelectorOptions) {
     () => rowsToShow(found, describedChoices, current),
     [found, describedChoices, current],
   );
-
-  // Held across renders: built afresh on every one, it made the sorts below recompute every time.
-  const vocabularies = useMemo(
-    () => (vocabulary.data?.worlds ?? []) as unknown as WorldVocabulary[],
-    [vocabulary.data],
-  );
-  const availableSorts = useMemo(() => {
-    const shared = sortsOffered(vocabularies, worlds);
-    return options.sorts ? shared.filter((s) => options.sorts!.includes(s)) : shared;
-  }, [vocabularies, worlds, options.sorts]);
 
   // Written back as it changes rather than on unmount: a picker inside a dialog is often closed
   // by navigating away, and an unmount hook does not reliably run for that.

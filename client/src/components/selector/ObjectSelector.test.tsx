@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Modal } from 'antd';
 import type { SelectorScope } from '../../filters/selection.ts';
 import ObjectSelector from './ObjectSelector.tsx';
 
@@ -158,6 +159,108 @@ describe('the object selector', () => {
     expect(screen.getByTestId('picker-sort-created')).toBeInTheDocument();
     expect(screen.getByTestId('picker-sort-updated')).toBeInTheDocument();
     expect(screen.queryByTestId('picker-sort-title')).not.toBeInTheDocument();
+  });
+});
+
+describe('the control without a mouse', () => {
+  it('reaches the rows from the box with the down arrow and chooses with Enter', async () => {
+    const onChange = vi.fn();
+    renderControl({ onChange });
+
+    type('urs');
+    await screen.findByText('Peștera Urșilor');
+    fireEvent.keyDown(screen.getByTestId('picker-input'), { key: 'ArrowDown' });
+
+    const row = screen.getByRole('button', { name: /Peștera Urșilor/ });
+    expect(row).toHaveFocus();
+    fireEvent.keyDown(row, { key: 'Enter' });
+
+    expect(onChange).toHaveBeenCalledWith('f1');
+  });
+
+  it('chooses with Space as well, and says which row is chosen', async () => {
+    const onChange = vi.fn();
+    renderControl({ multiple: true, onChange });
+
+    type('urs');
+    const row = await screen.findByRole('button', { name: /Peștera Urșilor/ });
+    expect(row).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.keyDown(row, { key: ' ' });
+
+    expect(onChange).toHaveBeenCalledWith(['f1']);
+  });
+
+  it('names each row by what it is and the context the world gives it', async () => {
+    renderControl();
+    type('urs');
+
+    // Title and subtitle together, so a row is told apart from a namesake of another type.
+    expect(await screen.findByRole('button', { name: 'Peștera Urșilor Cave' })).toBeInTheDocument();
+  });
+});
+
+describe('the dropdown without a mouse', () => {
+  const openFromKeyboard = async () => {
+    const trigger = screen.getByTestId('picker');
+    trigger.focus();
+    // A button's Enter is its click; that is what the keyboard user's press arrives as.
+    fireEvent.click(trigger);
+    const box = await screen.findByTestId('picker-input');
+    await waitFor(() => expect(box).toHaveFocus());
+    return { trigger, box };
+  };
+
+  it('carries focus into the search box when it opens, and back to the trigger on Escape', async () => {
+    renderControl({ presentation: 'dropdown' });
+    const { trigger, box } = await openFromKeyboard();
+
+    fireEvent.keyDown(box, { key: 'Escape' });
+
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it('is reached and worked inside a dialog that keeps focus within itself', async () => {
+    const onChange = vi.fn();
+    render(
+      <Modal open title="Dialog">
+        <ObjectSelector scopes={SCOPES} presentation="dropdown" onChange={onChange} data-testid="picker" />
+      </Modal>,
+    );
+    const { trigger, box } = await openFromKeyboard();
+
+    fireEvent.change(box, { target: { value: 'urs' } });
+    await screen.findByText('Peștera Urșilor');
+    fireEvent.keyDown(box, { key: 'ArrowDown' });
+    const row = screen.getByRole('button', { name: /Peștera Urșilor/ });
+    expect(row).toHaveFocus();
+    fireEvent.keyDown(row, { key: 'Enter' });
+
+    // A single choice closes the panel and the keyboard is back where it started.
+    expect(onChange).toHaveBeenCalledWith('f1');
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+});
+
+describe('withdrawing a choice', () => {
+  it('offers a way back to nothing chosen only where the caller asked for one', () => {
+    resolveResult.data = [{
+      world: 'feature', id: 'f1', title: 'Peștera Urșilor', subtitle: null, symbol: null, placeable: false,
+    }];
+    const onChange = vi.fn();
+    const { unmount } = renderControl({ value: 'f1', onChange });
+    expect(screen.queryByTestId('picker-clear')).not.toBeInTheDocument();
+    unmount();
+
+    renderControl({ value: 'f1', onChange, allowClear: true });
+    fireEvent.click(screen.getByTestId('picker-clear'));
+
+    expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  it('has nothing to withdraw before something is chosen', () => {
+    renderControl({ allowClear: true });
+
+    expect(screen.queryByTestId('picker-clear')).not.toBeInTheDocument();
   });
 });
 
