@@ -197,6 +197,7 @@ public static class DependencyInjection
         services.AddScoped<Filters.IFilterWorld, Filters.SurveyModelFilterWorld>();
         services.AddScoped<Filters.IFilterWorld, Filters.PhotographFilterWorld>();
         services.AddScoped<Filters.IFilterWorld, Filters.GeofileFilterWorld>();
+        services.AddScoped<Filters.IFilterWorld, Filters.SavedFilterFilterWorld>();
         services.AddScoped<Filters.FilterWorldRegistry>();
         services.AddScoped<Filters.SavedFilterReader>();
         services.AddScoped<Filters.SurfaceFilters>();

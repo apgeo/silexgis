@@ -430,6 +430,49 @@ public sealed class MapViewWorldFixture : WorldFixture
     }
 }
 
+/// <summary>A saved filter nobody but its author may see.</summary>
+/// <remarks>
+/// The document is the empty one on purpose: the world never reads it, and a fixture that needed a
+/// runnable document would be testing the filter's wording rather than who may see the row.
+/// </remarks>
+public sealed class SavedFilterWorldFixture : WorldFixture
+{
+    public override string World => SavedFilterFilterWorld.Key;
+
+    public override async Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        db.SavedFilters.Add(new SavedFilter
+        {
+            Name = $"Conformance {tag}",
+            OwnerUserId = ownerId,
+            Visibility = Visibility.Private,
+        });
+        await db.SaveChangesAsync();
+
+        return new ConditionNode(CommonFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+    }
+
+    public override async Task<FilterNode> SeedIndistinguishableAsync(
+        SilexGisDbContext db, Guid ownerId, string tag, int count)
+    {
+        var stamp = DateTimeOffset.UtcNow;
+        for (var i = 0; i < count; i++)
+        {
+            db.SavedFilters.Add(new SavedFilter
+            {
+                Name = $"Paged {tag}",
+                OwnerUserId = ownerId,
+                Visibility = Visibility.Public,
+                CreatedAt = stamp,
+                UpdatedAt = stamp,
+            });
+        }
+
+        await db.SaveChangesAsync();
+        return new ConditionNode(CommonFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+    }
+}
+
 /// <summary>
 /// Rows several fixtures need underneath their own: the stored file a raster or a model points at,
 /// and a cave for something to belong to.
@@ -861,6 +904,7 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
         new SurveyModelWorldFixture(),
         new PhotographWorldFixture(),
         new GeofileWorldFixture(),
+        new SavedFilterWorldFixture(),
     ];
 
     private readonly SilexGisApiFactory factory;
