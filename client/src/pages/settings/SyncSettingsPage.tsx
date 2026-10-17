@@ -20,19 +20,24 @@ import {
 import { useTranslation } from 'react-i18next';
 import List from '../../components/List.tsx';
 import { ApiError } from '../../api/client.ts';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
+import type { SelectorScope } from '../../filters/selection.ts';
 import {
-  useCaveNames,
-  useCaves,
   useCavingGroups,
   useCreateSyncSet,
   useDeleteSyncSet,
+  useFilterResolve,
   useSyncCapabilities,
   useSyncSets,
   useUpdateSyncSet,
   type SyncSet,
   type Visibility,
 } from '../../api/hooks.ts';
+
+/** A set's roots are caves, and only caves: the server refuses any other kind of feature. */
+const CAVE_SCOPES: readonly SelectorScope[] = [
+  { id: 'caves', labelKey: 'filters.scopes.caves', world: 'feature', where: { field: 'kind', value: 'cave' } },
+];
 
 interface FormValues {
   name: string;
@@ -63,24 +68,11 @@ export default function SyncSettingsPage() {
   const { data: sets, isPending } = useSyncSets();
   const { data: groups } = useCavingGroups();
 
-  // Searched on the server, not filtered in the browser. A page of caves is a page, and an
-  // installation with more caves than that would otherwise have some that simply cannot be put
-  // on a phone — invisible to the picker and unreachable by typing, because the filter only ever
-  // sees what was fetched.
-  const [caveQuery, setCaveQuery] = useState('');
-  const debouncedCaveQuery = useDebouncedValue(caveQuery);
-  const { data: caves } = useCaves({
-    pageSize: 50,
-    sort: 'name',
-    search: debouncedCaveQuery || undefined,
-  });
-
   const create = useCreateSyncSet();
   const update = useUpdateSyncSet();
   const remove = useDeleteSyncSet();
 
   const uploadVisibility = Form.useWatch('uploadVisibility', form);
-  const chosenRootIds = Form.useWatch('rootFeatureIds', form);
 
   useEffect(() => {
     if (!open) {
@@ -97,44 +89,23 @@ export default function SyncSettingsPage() {
     });
   }, [open, editing, form]);
 
-  const caveOptions = useMemo(
-    () => (caves?.items ?? []).map((cave) => ({ value: cave.id, label: cave.name })),
-    [caves],
+  // Every stored root is named by id, under the caver's own visibility, in one question — never
+  // from whatever a search last answered. Only a cave the server will not describe to them is
+  // called one they can no longer read; a readable cave that matched no recent search is still
+  // named, because this list is the one surface that exists to tell them the truth about it.
+  const rootIds = useMemo(
+    () => [...new Set((sets ?? []).flatMap((set) => set.rootFeatureIds))].sort(),
+    [sets],
   );
-
-  // Names for the caves a stored selection points at that this page of results does not carry.
-  // Without this the review list would call a cave the caver reads perfectly well "one you can no
-  // longer read", purely because it did not match the current search — a false statement about
-  // their own data, on the one surface that exists to tell them the truth about it.
-  const unnamedRootIds = useMemo(() => {
-    const named = new Set(caveOptions.map((option) => option.value));
-    return [...new Set((sets ?? []).flatMap((set) => set.rootFeatureIds))].filter(
-      (id) => !named.has(id),
-    );
-  }, [sets, caveOptions]);
-  const fetchedNames = useCaveNames(unnamedRootIds);
-
-  const caveNames = useMemo(() => {
-    const names = new Map(caveOptions.map((option) => [option.value, option.label]));
-    for (const [id, name] of fetchedNames) {
-      names.set(id, name);
-    }
-    return names;
-  }, [caveOptions, fetchedNames]);
+  const { data: resolvedRoots } = useFilterResolve('feature', rootIds);
+  const caveNames = useMemo(
+    () => new Map((resolvedRoots ?? []).map((hit) => [hit.id, hit.title] as [string, string])),
+    [resolvedRoots],
+  );
 
   if (isPending) {
     return <Spin />;
   }
-
-  // A chosen cave keeps its name in the box even once the search has moved on to other results,
-  // so narrowing the search never turns a choice already made into a bare identifier.
-  const offered = new Set(caveOptions.map((option) => option.value));
-  const pickerOptions = [
-    ...caveOptions,
-    ...(chosenRootIds ?? [])
-      .filter((id) => !offered.has(id))
-      .map((id) => ({ value: id, label: caveNames.get(id) ?? t('settings.sync.unnamedCave') })),
-  ];
 
   const openFor = (set: SyncSet | null) => {
     setEditing(set);
@@ -296,16 +267,16 @@ export default function SyncSettingsPage() {
           </Form.Item>
 
           <Form.Item name="rootFeatureIds" label={t('settings.sync.caves')}>
-            <Select
-              mode="multiple"
-              // The list is what the server answered for what was typed, so the browser must not
-              // filter it again: a cave whose name the search matched on some other field would
-              // be fetched and then hidden.
-              filterOption={false}
-              options={pickerOptions}
-              onSearch={setCaveQuery}
-              onBlur={() => setCaveQuery('')}
+            {/* Searched on the server, so a cave beyond any first page is reached by typing. The
+                caves already chosen stay listed, ticked, above whatever the search found, so
+                one is taken off the phone by unticking it. */}
+            <ObjectSelector
+              scopes={CAVE_SCOPES}
+              multiple
+              pageSize={8}
+              sorts={[]}
               placeholder={t('settings.sync.cavesPlaceholder')}
+              aria-label={t('settings.sync.cavesPlaceholder')}
               data-testid="sync-set-caves"
             />
           </Form.Item>

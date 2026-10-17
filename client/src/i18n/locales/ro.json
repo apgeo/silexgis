@@ -5506,7 +5506,8 @@
       "placeable": "Ți se poate arăta unde este",
       "mapPlaceholder": "Mergi la…",
       "noDestination": "Încă nu se poate deschide nimic pentru asta.",
-      "savedFilterNotForMap": "Filtrul salvat nu se referă la obiective sau nu poate fi rulat cu accesul tău, așa că nu a fost aplicat hărții."
+      "savedFilterNotForMap": "Filtrul salvat nu se referă la obiective sau nu poate fi rulat cu accesul tău, așa că nu a fost aplicat hărții.",
+      "clear": "Renunță la alegere"
     },
     "sorts": {
       "created": "Adăugat",
@@ -6498,7 +6499,6 @@
     "surveyHint": "O poziție este aici o stație a unui model topografic, deci un model trebuie numit înainte să se poată propune ceva pornind de la o adâncime. Modelele sunt listate per peșteră, iar o peșteră a cărei poziție exactă nu îți poate fi spusă nu listează niciunul.",
     "cave": "Peștera",
     "cavePlaceholder": "Caută în registru",
-    "chosenCave": "Peștera căreia îi aparține modelul acestei recenzii",
     "surveyModel": "Model topografic",
     "surveyModelPlaceholder": "Alege un model al acelei peșteri",
     "candidateCount": "Stații oferite per scanare",
@@ -6910,7 +6910,6 @@
     "kindOther": "Alt tip",
     "featureType": "Tip",
     "cave": "Peștera de care aparține",
-    "pickCave": "Caută după nume sau toponim…",
     "name": "Nume",
     "created": "{{name}} a fost creat la poziția înregistrată de această fotografie.",
     "openCreated": "Deschide-l",

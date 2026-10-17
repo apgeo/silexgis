@@ -211,22 +211,19 @@ test.describe('settings', () => {
 
     // One real cave, chosen from the list the server answered — the server refuses a root the
     // caller cannot read, so a made-up id would fail the write rather than the selection.
-    await dialog.getByTestId('sync-set-caves').click();
-    const option = page.locator('.ant-select-dropdown:visible .ant-select-item-option').first();
-    await expect(option).toBeVisible({ timeout: 15_000 });
-    const caveName = (await option.textContent())?.trim() ?? '';
+    // Every demonstration cave carries "Demo" in its name, so the search answers.
+    await dialog.getByTestId('sync-set-caves-input').fill('Demo');
+    const rows = dialog.getByTestId('sync-set-caves-row');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    const caveName = (await rows.first().locator('.ant-typography').first().innerText()).trim();
 
-    // Chosen by typing the name and pressing Enter rather than by clicking the row. The menu
-    // re-renders its rows as it finishes measuring itself, and a click dispatched in that window
-    // lands on a row that no longer exists, so the choice is silently dropped; the keyboard path
-    // goes through the same selection handler without depending on a row surviving the click.
-    await page.keyboard.type(caveName);
-    await expect(page.locator('.ant-select-dropdown:visible .ant-select-item-option')).toHaveCount(1);
+    // Chosen from the keyboard: the down arrow reaches the first row from the box and Enter ticks
+    // it. A multiple choice stays open, so the row says it is chosen rather than the list closing.
+    await dialog.getByTestId('sync-set-caves-input').press('ArrowDown');
     await page.keyboard.press('Enter');
     // The selection has to be real before the form is submitted, so a dropped choice fails here
     // rather than as an empty selection several steps later.
-    await expect(dialog.locator('.ant-select-selection-item')).toHaveCount(1);
-    await page.keyboard.press('Escape');
+    await expect(dialog.locator('[data-picked="true"]')).toHaveCount(1);
 
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });

@@ -5506,7 +5506,8 @@
       "placeable": "You can be shown where this is",
       "mapPlaceholder": "Go to…",
       "noDestination": "Nothing to open for that yet.",
-      "savedFilterNotForMap": "That saved filter does not ask about features, or cannot be run with your access, so it was not applied to the map."
+      "savedFilterNotForMap": "That saved filter does not ask about features, or cannot be run with your access, so it was not applied to the map.",
+      "clear": "Clear the choice"
     },
     "sorts": {
       "created": "Added",
@@ -6498,7 +6499,6 @@
     "surveyHint": "A position here is a station of a survey model, so a model has to be named before anything can be proposed from a depth. Models are listed per cave, and a cave whose exact position you may not be told lists none.",
     "cave": "Cave",
     "cavePlaceholder": "Search the register",
-    "chosenCave": "The cave this review's model belongs to",
     "surveyModel": "Survey model",
     "surveyModelPlaceholder": "Choose a model of that cave",
     "candidateCount": "Stations offered per scan",
@@ -6910,7 +6910,6 @@
     "kindOther": "Another kind",
     "featureType": "Kind",
     "cave": "Cave it belongs to",
-    "pickCave": "Search name or toponym…",
     "name": "Name",
     "created": "{{name}} was created at the position this photograph records.",
     "openCreated": "Open it",
