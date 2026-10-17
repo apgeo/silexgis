@@ -14,21 +14,28 @@ import {
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
-  useCaves,
   useCavingGroups,
   useSurveyModel,
   useSurveyModels,
-  useTripLog,
-  useTripLogs,
   type SpeleolocImportOptions,
   type SpeleolocRecording,
 } from '../../api/hooks.ts';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import type { SelectorScope } from '../../filters/selection.ts';
+import ObjectSelector from '../selector/ObjectSelector.tsx';
 import {
   clampCandidateCount,
   MAX_STATION_CANDIDATES,
   MIN_STATION_CANDIDATES,
 } from './speleolocSelection.ts';
+
+const TRIP_SCOPES: readonly SelectorScope[] = [
+  { id: 'trips', labelKey: 'filters.scopes.trips', world: 'tripLog', where: null },
+];
+
+/** A survey model belongs to a cave, so the cave is the only kind of feature worth offering. */
+const CAVE_SCOPES: readonly SelectorScope[] = [
+  { id: 'caves', labelKey: 'filters.scopes.caves', world: 'feature', where: { field: 'kind', value: 'cave' } },
+];
 
 interface Props {
   options: SpeleolocImportOptions;
@@ -61,28 +68,11 @@ export default function SpeleolocImportOptionsPanel({
   const { t, i18n } = useTranslation();
   const cavingGroups = useCavingGroups();
 
-  const [tripSearch, setTripSearch] = useState('');
-  const [caveSearch, setCaveSearch] = useState('');
-  const debouncedTripSearch = useDebouncedValue(tripSearch);
-  const debouncedCaveSearch = useDebouncedValue(caveSearch);
-
-  const trips = useTripLogs({
-    search: debouncedTripSearch || undefined,
-    page: 1,
-    pageSize: 25,
-    sort: '-date',
-  });
-  // The trip a stored review already names, asked for by name. Without it a review resumed
-  // tomorrow shows its own destination as a bare identifier, because a searched page of
-  // twenty-five recent trips need not contain the one that was chosen a week ago.
-  const chosenTrip = useTripLog(options.tripLogId ?? undefined);
-
   // The cave is not one of the stored choices — the model is — so a resumed review learns its cave
   // from the model it already names rather than asking the reviewer to find it again.
   const chosenModel = useSurveyModel(options.surveyModelId ?? undefined);
   const [caveId, setCaveId] = useState<string | undefined>(undefined);
   const effectiveCaveId = caveId ?? chosenModel.data?.caveId;
-  const caves = useCaves({ search: debouncedCaveSearch || undefined, page: 1, pageSize: 25 });
   const models = useSurveyModels(effectiveCaveId);
 
   const set = <K extends keyof SpeleolocImportOptions>(key: K, value: SpeleolocImportOptions[K]) =>
@@ -95,27 +85,6 @@ export default function SpeleolocImportOptionsPanel({
     value: recording.id,
     label: `${recording.title} · ${when(recording.startedAt)} · ${t('speleolocImport.scanCount', { count: recording.pointCount })}`,
   }));
-
-  const tripOptions = [
-    ...(trips.data?.items ?? []).map((trip) => ({
-      value: trip.id,
-      label: `${trip.tripDate} · ${trip.title}`,
-    })),
-    // The stored destination, when the searched page did not happen to carry it.
-    ...(chosenTrip.data && !(trips.data?.items ?? []).some((trip) => trip.id === chosenTrip.data.id)
-      ? [{ value: chosenTrip.data.id, label: `${chosenTrip.data.tripDate} · ${chosenTrip.data.title}` }]
-      : []),
-  ];
-
-  const caveOptions = [
-    ...(caves.data?.items ?? []).map((cave) => ({ value: cave.id, label: cave.name })),
-    // Same as the trip above: the cave a resumed review's model belongs to, which a searched page
-    // of twenty-five need not contain.
-    ...(chosenModel.data
-      && !(caves.data?.items ?? []).some((cave) => cave.id === chosenModel.data.caveId)
-      ? [{ value: chosenModel.data.caveId, label: t('speleolocImport.chosenCave') }]
-      : []),
-  ];
 
   const chosenRecording = recordings.find((recording) => recording.id === options.tripUuid);
 
@@ -195,19 +164,24 @@ export default function SpeleolocImportOptionsPanel({
                 {!options.createTrip && (
                   <Col xs={24}>
                     <Form.Item label={t('speleolocImport.trip')} style={{ marginBottom: 8 }}>
-                      <Select
+                      {/* Opened empty, it lists the most recent trips first: the trip a recording
+                          belongs to is nearly always one just walked, and this list is no more than
+                          the trip register already shows the same account. A stored destination is
+                          named by the filter model's resolve, so a review resumed a week later
+                          still shows its trip rather than an identifier. Whether this account may
+                          put a history onto the trip is the server's decision on import. */}
+                      <ObjectSelector
+                        scopes={TRIP_SCOPES}
+                        presentation="dropdown"
                         allowClear
-                        showSearch
-                        // Searched on the server, so the box is not filtered twice against a page
-                        // it has already narrowed.
-                        filterOption={false}
-                        loading={trips.isFetching}
+                        browseOnEmpty
+                        pageSize={10}
+                        sorts={['occurred']}
                         placeholder={t('speleolocImport.tripPlaceholder')}
-                        value={options.tripLogId ?? undefined}
-                        onSearch={setTripSearch}
-                        onChange={(value?: string) => set('tripLogId', value ?? null)}
+                        aria-label={t('speleolocImport.trip')}
+                        value={options.tripLogId ?? null}
+                        onChange={(value) => set('tripLogId', typeof value === 'string' ? value : null)}
                         data-testid="speleoloc-import-trip"
-                        options={tripOptions}
                       />
                     </Form.Item>
                     <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
@@ -268,28 +242,35 @@ export default function SpeleolocImportOptionsPanel({
                 </Col>
                 <Col xs={24} md={12}>
                   <Form.Item label={t('speleolocImport.cave')} style={{ marginBottom: 8 }}>
-                    <Select
+                    {/* A resumed review's cave comes from the model it names and is named by the
+                        filter model's resolve, so it shows without being searched for again. */}
+                    <ObjectSelector
+                      scopes={CAVE_SCOPES}
+                      presentation="dropdown"
                       allowClear
-                      showSearch
-                      filterOption={false}
-                      loading={caves.isFetching}
+                      pageSize={10}
+                      sorts={[]}
                       placeholder={t('speleolocImport.cavePlaceholder')}
-                      value={effectiveCaveId}
-                      onSearch={setCaveSearch}
-                      onChange={(value?: string) => {
-                        setCaveId(value);
+                      aria-label={t('speleolocImport.cave')}
+                      value={effectiveCaveId ?? null}
+                      onChange={(value) => {
+                        setCaveId(typeof value === 'string' ? value : undefined);
                         // A model belongs to one cave, so a model chosen under the old one is not
                         // a model of the new one — left standing it would be a choice the reviewer
                         // can no longer see, deciding where every scan lands.
                         set('surveyModelId', null);
                       }}
                       data-testid="speleoloc-import-cave"
-                      options={caveOptions}
                     />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={12}>
                   <Form.Item label={t('speleolocImport.surveyModel')} style={{ marginBottom: 8 }}>
+                    {/* Stays a plain list of the chosen cave's models rather than a search over
+                        the survey-model filter world: that world deliberately has no "models of
+                        cave X" field, so it cannot narrow to one cave, and the server's per-cave
+                        listing is the read that also withholds the models of a cave whose exact
+                        position this account may not be told. */}
                     <Select
                       allowClear
                       showSearch

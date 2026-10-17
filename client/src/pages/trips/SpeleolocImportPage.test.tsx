@@ -174,7 +174,6 @@ vi.mock('../../api/hooks.ts', () => ({
   useDocument: () => ({ data: document_ }),
   useCavers: () => ({ data: cavers, isFetching: false }),
   useCavingGroups: () => ({ data: [], isLoading: false }),
-  useCaves: () => ({ data: { items: [{ id: CAVE, name: 'pestera 1' }] }, isFetching: false }),
   useSurveyModel: () => ({ data: { id: MODEL, caveId: CAVE, name: 'ridicare inventata' } }),
   useSurveyModels: () => ({
     data: [
@@ -183,8 +182,20 @@ vi.mock('../../api/hooks.ts', () => ({
     ],
     isFetching: false,
   }),
-  useTripLog: () => ({ data: { id: TRIP, title: 'tura inventata', tripDate: '2024-05-04' } }),
-  useTripLogs: () => ({ data: { items: [] }, isFetching: false }),
+  // The trip and cave pickers are object selectors: they search the filter route and name a stored
+  // choice through its resolve.
+  useFilterVocabulary: () => ({ data: { worlds: [] } }),
+  useFilterQuery: () => ({ data: undefined, isFetching: false }),
+  useFilterResolve: (world: string, ids: readonly string[]) => ({
+    data: ids.map((id) => ({
+      world,
+      id,
+      title: world === 'tripLog' ? 'tura inventata' : 'pestera 1',
+      subtitle: null,
+      symbol: null,
+      placeable: false,
+    })),
+  }),
 }));
 
 vi.mock('react-router-dom', async () => {
