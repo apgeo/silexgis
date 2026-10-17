@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AimOutlined, DeleteOutlined, DownloadOutlined, EyeOutlined } from '@ant-design/icons';
-import { App, Button, Dropdown, Flex, Input, Popconfirm, Select, Table, Tag, Tooltip, Typography } from 'antd';
+import { Alert, App, Dropdown, Flex, Input, Popconfirm, Select, Table, Tag, Tooltip, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { downloadFile } from '../../api/download.ts';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { downloadFile, featureExportUrl } from '../../api/download.ts';
 import {
   useCan,
   useCreateDoor,
@@ -16,30 +17,117 @@ import {
   type FeatureCategory,
   type FeatureKind,
   type FeatureListItem,
-  type FeatureListParams,
 } from '../../api/hooks.ts';
 import ConfigureLink from '../../components/ConfigureLink.tsx';
+import ListSavedFilters from '../../components/filters/ListSavedFilters.tsx';
+import SelectResultButton from '../../components/filters/SelectResultButton.tsx';
+import {
+  featureListDocument,
+  featureListToken,
+  readFeatureList,
+  readFeatureListAddress,
+  sameFeatureQuestion,
+  writeFeatureListAddress,
+  type FeatureListAddress,
+  type FeatureListControls,
+} from '../../filters/featureList.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
+import { useTableMapLink } from '../../workspace/tableMapLink.ts';
+import { mapAddressForList } from '../../filters/tableMapHandoff.ts';
 
 const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
 const featureKinds: FeatureKind[] = ['generic', 'cave', 'caveEntrance', 'centerline'];
 const featureCategories: FeatureCategory[] = ['surface', 'underground', 'area', 'structure'];
 
+type AddressState = Omit<FeatureListAddress, 'unreadableLink'>;
+
+/**
+ * The feature list.
+ *
+ * Its whole state lives in the address: the controls compose one filter document, carried as a
+ * token, beside the table's page. So a pasted link, a reload, the back button and a saved filter
+ * all reproduce the same list by the same road, and the export is asked with the very token the
+ * list was — the file holds the rows on the screen.
+ */
 export default function FeatureListPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { message } = App.useApp();
-  const [params, setParams] = useState<FeatureListParams>({ page: 1, pageSize: 20 });
-  const [searchInput, setSearchInput] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const address = useMemo(() => readFeatureListAddress(searchParams), [searchParams]);
+  const { controls, extra } = address;
+  const token = featureListToken(address);
+
+  // What this page has written to its address and not yet seen arrive, newest last. The router
+  // applies a write a moment after it is asked for, so two writes close together — a choice made
+  // while the search box's pause runs out — would otherwise each start from the address as it was
+  // before either, and the second would quietly undo the first.
+  const written = useRef<string[]>([]);
+  const arrivedByOwnWrite = useRef(false);
+  useEffect(() => {
+    const arrived = written.current.indexOf(searchParams.toString());
+    written.current = arrived === -1 ? [] : written.current.slice(arrived);
+    arrivedByOwnWrite.current = arrived !== -1;
+  }, [searchParams]);
+
+  /** A new state written to the address. Typing replaces the entry; anything chosen adds one. */
+  const go = (update: (current: AddressState) => Partial<AddressState>, replace = false) => {
+    const newest = written.current.at(-1);
+    const base = newest === undefined ? address : readFeatureListAddress(new URLSearchParams(newest));
+    const current: AddressState = {
+      controls: base.controls,
+      extra: base.extra,
+      savedFilterId: base.savedFilterId,
+      page: base.page,
+      pageSize: base.pageSize,
+    };
+    const params = writeFeatureListAddress({ ...current, ...update(current) });
+    written.current = [...written.current, params.toString()];
+    setSearchParams(params, { replace });
+  };
+
+  /** One control changed: back to the first page, the saved filter kept so the change shows. */
+  const setControl = (patch: FeatureListControls, replace = false) =>
+    go((current) => ({ controls: { ...current.controls, ...patch }, page: 1 }), replace);
+
+  // The search box is typed into, so it holds its own text and reaches the address only once the
+  // typing pauses. The address is still the truth: when it changes under the box — back, forward,
+  // a saved filter applied — the box follows it.
+  const [searchInput, setSearchInput] = useState(controls.search ?? '');
   const search = useDebouncedValue(searchInput);
-  const { data, isFetching } = useFeatures({ ...params, search: search || undefined });
+  const latest = useRef({ controls, setControl });
+  useEffect(() => {
+    latest.current = { controls, setControl };
+  });
+  useEffect(() => {
+    const arrived = controls.search ?? '';
+    // The address gives the text back trimmed; putting that over the box would take away the
+    // space somebody has just typed before their next word.
+    const ownWrite = arrivedByOwnWrite.current;
+    setSearchInput((typed) => (ownWrite && typed.trim() === arrived.trim() ? typed : arrived));
+  }, [controls.search]);
+  useEffect(() => {
+    const { controls: now, setControl: write } = latest.current;
+    if ((search.trim() || undefined) !== (now.search?.trim() || undefined)) {
+      write({ search: search.trim() || undefined }, true);
+    }
+    // Only a settled change of what was typed writes; reacting to the address as well would type
+    // the old text back over a step somebody just went back from.
+  }, [search]);
+
+  const { data, isFetching, error } = useFeatures({
+    page: address.page,
+    pageSize: address.pageSize,
+    filter: token,
+  });
   const { data: featureTypes } = useFeatureTypes();
   const { data: tags } = useTags('');
   const setSelection = useWorkspaceStore((s) => s.setSelection);
   const deleteFeature = useDeleteFeature();
+  const tableMap = useTableMapLink<FeatureListItem>();
 
   const canEdit = useCan('features', 'write');
   const canReadFeatureSets = useCan('featureSets', 'read');
@@ -75,22 +163,13 @@ export default function FeatureListPage() {
   };
 
   const onTableChange = (pagination: TablePaginationConfig) => {
-    setParams((p) => ({ ...p, page: pagination.current, pageSize: pagination.pageSize }));
+    go(() => ({ page: pagination.current ?? 1, pageSize: pagination.pageSize ?? address.pageSize }));
   };
 
-  // Exports honor the current filters (not the current page — the server streams all rows).
+  // The export carries the list's own filter token (not the current page — the server streams all
+  // rows), so the file holds exactly what the list shows that can be written with a position.
   const onExport = (format: string) => {
-    const query = new URLSearchParams({ format });
-    if (search) {
-      query.set('search', search);
-    }
-    if (params.kind !== undefined) {
-      query.set('kind', params.kind);
-    }
-    if (params.featureTypeId !== undefined) {
-      query.set('featureTypeId', String(params.featureTypeId));
-    }
-    downloadFile(`/api/v1/export/features?${query}`).catch(() =>
+    downloadFile(featureExportUrl(format, { filter: token })).catch(() =>
       message.error(t('common.saveFailed')),
     );
   };
@@ -109,6 +188,21 @@ export default function FeatureListPage() {
               ...(canReadFeatureSets ? [{ key: 'admin/feature-sets', label: t('nav.featureSets') }] : []),
               ...(canCreateFeatures ? [{ key: 'admin/term-rules', label: t('nav.termRules') }] : []),
             ]}
+          />
+          {/* The map is opened with this list's own document as its filter, so it draws the rows
+              listed here — the same question, run by the map's routes. */}
+          <Button
+            icon={<AimOutlined />}
+            data-testid="feature-list-show-on-map"
+            onClick={() => navigate(mapAddressForList(token))}
+          >
+            {t('tableMap.showOnMap')}
+          </Button>
+          <SelectResultButton
+            list="features"
+            query={{ filter: token }}
+            total={data?.totalItems}
+            data-testid="feature-list-select-all"
           />
           {canRestore && (
             <Button
@@ -132,44 +226,94 @@ export default function FeatureListPage() {
           </Dropdown>
         </Flex>
       </Flex>
+      {address.unreadableLink && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="feature-list-unreadable-link"
+          title={t('featureList.unreadableLink')}
+        />
+      )}
       <Flex gap={8} wrap style={{ marginBottom: 12 }}>
         <Input.Search
           placeholder={t('features.searchPlaceholder')}
+          aria-label={t('featureList.searchLabel')}
+          data-testid="feature-list-search"
           allowClear
           style={{ maxWidth: 320 }}
+          value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
         />
         <Select
           allowClear
           placeholder={t('features.allKinds')}
+          aria-label={t('featureList.kindLabel')}
+          data-testid="feature-list-kind"
           style={{ width: 170 }}
+          value={controls.kind ?? null}
           options={featureKinds.map((k) => ({ value: k, label: t(`features.kinds.${k}`) }))}
-          onChange={(value?: FeatureKind) => setParams((p) => ({ ...p, page: 1, kind: value }))}
+          onChange={(value?: FeatureKind | null) => setControl({ kind: value ?? undefined })}
         />
         <Select
           allowClear
+          showSearch
+          optionFilterProp="label"
           placeholder={t('features.allTypes')}
+          aria-label={t('featureList.typeLabel')}
+          data-testid="feature-list-type"
           style={{ width: 220 }}
+          value={controls.featureTypeId ?? null}
           options={featureTypes?.map((x) => ({ value: Number(x.id), label: x.name }))}
-          onChange={(value?: number) => setParams((p) => ({ ...p, page: 1, featureTypeId: value }))}
+          onChange={(value?: number | null) => setControl({ featureTypeId: value ?? undefined })}
         />
         <Select
           allowClear
           placeholder={t('features.allCategories')}
+          aria-label={t('featureList.categoryLabel')}
+          data-testid="feature-list-category"
           style={{ width: 170 }}
+          value={controls.category ?? null}
           options={featureCategories.map((c) => ({ value: c, label: t(`features.categories.${c}`) }))}
-          onChange={(value?: FeatureCategory) => setParams((p) => ({ ...p, page: 1, category: value }))}
+          onChange={(value?: FeatureCategory | null) => setControl({ category: value ?? undefined })}
         />
         <Select
           allowClear
           showSearch
           optionFilterProp="label"
           placeholder={t('tags.filterPlaceholder')}
+          aria-label={t('featureList.tagLabel')}
+          data-testid="feature-list-tag"
           style={{ width: 200 }}
+          value={controls.tag ?? null}
           options={tags?.map((x) => ({ value: x.slug, label: x.name }))}
-          onChange={(value?: string) => setParams((p) => ({ ...p, page: 1, tag: value }))}
+          onChange={(value?: string | null) => setControl({ tag: value ?? undefined })}
         />
       </Flex>
+      <ListSavedFilters
+        reading={address}
+        document={featureListDocument(controls, extra)}
+        read={readFeatureList}
+        same={sameFeatureQuestion}
+        savedFilterId={address.savedFilterId}
+        testIdPrefix="feature-list"
+        notAboutThisListKey="featureList.savedNotAboutFeatures"
+        onApply={(reading, savedFilterId) =>
+          go(() => ({ controls: reading.controls, extra: reading.extra, savedFilterId, page: 1 }))}
+        onSaved={(savedFilterId) => go(() => ({ savedFilterId }))}
+        onClearExtra={() => go(() => ({ extra: [], page: 1 }))}
+        onForget={() => go(() => ({ savedFilterId: undefined }))}
+        onRelease={() => go(() => ({ controls: {}, extra: [], savedFilterId: undefined, page: 1 }))}
+      />
+      {error && token !== undefined && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="feature-list-filter-refused"
+          title={t('featureList.filterRefused')}
+        />
+      )}
       <Table<FeatureListItem>
         scroll={{ x: 'max-content' }}
         rowKey="id"
@@ -177,9 +321,11 @@ export default function FeatureListPage() {
         loading={isFetching}
         dataSource={data?.items}
         onChange={onTableChange}
+        rowClassName={tableMap.rowClassName}
         onRow={(record) => ({
           onClick: () => navigate(`/features/${record.id}`),
           style: { cursor: 'pointer' },
+          ...tableMap.rowHover(record),
         })}
         pagination={{
           current: data?.page,

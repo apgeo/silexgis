@@ -163,7 +163,13 @@ export function caveExportUrl(
 /** GET /api/v1/export/features — features of any kind in the requested format. */
 export function featureExportUrl(
   format: string,
-  filters: { kind?: string; featureTypeId?: number; search?: string; bbox?: string } = {},
+  filters: {
+    search?: string;
+    bbox?: string;
+    /** The feature list's filter document as its link token, so the file holds the listed rows. */
+    filter?: string;
+    savedFilterId?: string;
+  } = {},
 ): string {
   return buildUrl('/api/v1/export/features', { format, ...filters });
 }

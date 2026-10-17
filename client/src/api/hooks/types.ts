@@ -197,11 +197,13 @@ export type FeatureCategory = components['schemas']['FeatureCategory'];
 export interface FeatureListParams {
   page?: number;
   pageSize?: number;
-  kind?: FeatureKind;
-  featureTypeId?: number;
-  category?: FeatureCategory;
+  /**
+   * A filter document as a link token. Kind, type, category and tag are conditions of it, not
+   * parameters of their own, so the list, its export and a saved filter read one spelling.
+   */
+  filter?: string;
+  savedFilterId?: string;
   bbox?: string;
-  tag?: string;
   search?: string;
   /** A named set of objects — what a multi-selection asks about. Bounded by the server. */
   ids?: string[];
