@@ -275,7 +275,7 @@ export const groups = {
   // named here with it: the landing page is the one route where getting the protection wrong
   // is visible to a stranger.
   qr: ['AnonymousSurfaceTests', 'CaveQrPublicationTests', 'PublicQrLandingTests'],
-  metadata: ['ContentMetadataTests', 'DocumentMetadataTests'],
+  metadata: ['ContentMetadataTests', 'DocumentMetadataTests', 'JsonSchemaPropertiesValidatorTests'],
   workAreas: ['WorkAreaTests'],
   // The external cave register this installation reads from and imports out of.
   catalogue: ['SpeologieCatalogueTests'],

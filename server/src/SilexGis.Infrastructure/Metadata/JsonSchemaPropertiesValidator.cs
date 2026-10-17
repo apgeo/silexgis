@@ -22,7 +22,10 @@ public sealed class JsonSchemaPropertiesValidator : ITypedPropertiesValidator
         {
             schema = JsonSchema.FromText(schemaJson);
         }
-        catch (Exception e) when (e is JsonException or ArgumentException)
+        // The library refuses a keyword whose value it cannot build with an exception of its own,
+        // not with a JSON or argument error, so it is named here too: missing it turned a stored or
+        // submitted schema like {"type":"nonsense"} into a server error instead of an answer.
+        catch (Exception e) when (e is JsonException or ArgumentException or JsonSchemaException)
         {
             return [$"schema: the kind's properties schema is not valid JSON Schema ({e.Message})"];
         }
@@ -61,7 +64,7 @@ public sealed class JsonSchemaPropertiesValidator : ITypedPropertiesValidator
         {
             schema = JsonSchema.FromText(schemaJson);
         }
-        catch (Exception e) when (e is JsonException or ArgumentException)
+        catch (Exception e) when (e is JsonException or ArgumentException or JsonSchemaException)
         {
             return [$"schema: not valid JSON Schema ({e.Message})"];
         }
@@ -75,7 +78,7 @@ public sealed class JsonSchemaPropertiesValidator : ITypedPropertiesValidator
             using var probe = JsonDocument.Parse("{}");
             schema.Evaluate(probe.RootElement, Options);
         }
-        catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException)
+        catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException or JsonSchemaException)
         {
             return [$"schema: cannot be evaluated ({e.Message})"];
         }
