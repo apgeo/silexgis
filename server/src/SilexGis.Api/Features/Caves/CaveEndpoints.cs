@@ -98,6 +98,14 @@ public static class CaveEndpoints
             return refusal.ToProblem();
         }
 
+        // A window that is not a box is refused rather than read as no window: the list it was
+        // meant to narrow would otherwise come back as every cave the reader may read, under a
+        // page that says it shows only those in the map's view.
+        if (!string.IsNullOrWhiteSpace(bbox) && (!Bbox.TryParse(bbox, out var window) || !window.IsWithinWorld))
+        {
+            return ApiProblems.BadRequest("cave.invalid_bbox", "bbox must be 'west,south,east,north'.");
+        }
+
         // The filter's conditions narrow the rows this caller may already see, and nothing else:
         // the count, the page window and the broken-row report below are all taken over the
         // composed set, so a filter changes which caves are listed and never what a total says

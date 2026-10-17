@@ -379,6 +379,116 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
         (await CountAsync(reader, open, aroundTheSurvey)).ShouldBe(1);
     }
 
+    [Fact]
+    public async Task Listing_what_is_in_the_maps_view_places_a_protected_cave_by_its_published_point_however_the_view_is_cut()
+    {
+        // "List what is in view" sends the map's filter and the map's window together. However a
+        // reader cuts the window — halving it between two points, or walking it in on the surveyed
+        // point — the list's total must move only with the point the reader is shown.
+        var hidden = Name("in-view");
+        var open = Name("in-view-open");
+        await CreateCaveAsync(hidden, "Bihor", 800, tagged: false, locationProtected: true);
+        await CreateCaveAsync(open, "Bihor", 800, tagged: false);
+        double grid;
+        using (var scope = factory.Services.CreateScope())
+        {
+            grid = scope.ServiceProvider
+                .GetRequiredService<Microsoft.Extensions.Options.IOptions<SilexGis.Api.Common.AccessOptions>>()
+                .Value.LocationGridMeters;
+        }
+
+        var exact = new NetTopologySuite.Geometries.Point(ExactLon, ExactLat) { SRID = 4326 };
+        var published = SilexGis.Domain.Geo.LocationProtection.Snap(exact, grid);
+        published.Distance(exact).ShouldBeGreaterThan(0.002, "the fixture needs the two points apart");
+
+        var hiddenOnly = Token(NamedExactly(hidden));
+        var openOnly = Token(NamedExactly(open));
+
+        // A window holding both points lists the protected cave once.
+        var west = Math.Min(exact.X, published.X) - 0.01;
+        var east = Math.Max(exact.X, published.X) + 0.01;
+        var south = Math.Min(exact.Y, published.Y) - 0.01;
+        var north = Math.Max(exact.Y, published.Y) + 0.01;
+        (await InViewAsync(hiddenOnly, west, south, east, north)).ShouldBe(1);
+
+        // Cut between the two points along the axis they are furthest apart on: the half with the
+        // published point holds it, the half with the surveyed point does not, and the halves add
+        // up to the whole — the cave is never in both, never in neither.
+        var alongX = Math.Abs(exact.X - published.X) >= Math.Abs(exact.Y - published.Y);
+        var cut = alongX ? (exact.X + published.X) / 2 : (exact.Y + published.Y) / 2;
+        var lowHalf = alongX
+            ? await InViewAsync(hiddenOnly, west, south, cut, north)
+            : await InViewAsync(hiddenOnly, west, south, east, cut);
+        var highHalf = alongX
+            ? await InViewAsync(hiddenOnly, cut, south, east, north)
+            : await InViewAsync(hiddenOnly, west, cut, east, north);
+        var publishedIsHigh = alongX ? published.X > cut : published.Y > cut;
+        (publishedIsHigh ? highHalf : lowHalf).ShouldBe(1);
+        (publishedIsHigh ? lowHalf : highHalf).ShouldBe(0);
+
+        // Walked in on the surveyed point, the window never finds the protected cave — while the
+        // open cave standing on the very same point is found at every step, which is what makes
+        // the zeros about protection rather than about windows that match nothing.
+        for (var half = 0.0008; half >= 0.0001; half /= 2)
+        {
+            (await InViewAsync(hiddenOnly, exact.X - half, exact.Y - half, exact.X + half, exact.Y + half))
+                .ShouldBe(0, $"a window {half * 2:0.0000} degrees wide around the surveyed point");
+            (await InViewAsync(openOnly, exact.X - half, exact.Y - half, exact.X + half, exact.Y + half))
+                .ShouldBe(1, $"the open cave in a window {half * 2:0.0000} degrees wide");
+        }
+
+        // The file asked for from that list holds what the list holds, on the grid.
+        var around = FormattableString.Invariant(
+            $"{published.X - 0.001},{published.Y - 0.001},{published.X + 0.001},{published.Y + 0.001}");
+        var response = await reader.GetAsync($"/api/v1/export/caves?format=geojson&filter={hiddenOnly}&bbox={around}");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var text = await response.Content.ReadAsStringAsync();
+        var feature = JsonDocument.Parse(text).RootElement.GetProperty("features").EnumerateArray().Single();
+        feature.GetProperty("properties").GetProperty("approximate").GetString().ShouldBe("yes");
+        text.ShouldNotContain(ExactLon.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        var aroundTheSurvey = Box(ExactLon, ExactLat);
+        var none = await reader.GetAsync($"/api/v1/export/caves?format=geojson&filter={hiddenOnly}&bbox={aroundTheSurvey}");
+        JsonDocument.Parse(await none.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("features").GetArrayLength().ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_window_that_is_not_a_box_is_refused_rather_than_answered_with_every_cave()
+    {
+        await CreateCaveAsync(Name("windowless"), "Bihor", 100, tagged: false);
+        var token = Token(NamedExactly(Name("windowless")));
+
+        foreach (var bbox in new[] { "1,2,3", "a,b,c,d", "23,46,22,47", "-200,46,22,47" })
+        {
+            var refused = await reader.GetAsync($"/api/v1/caves?filter={token}&bbox={bbox}");
+            await ShouldRefuseAsync(refused, HttpStatusCode.BadRequest, "cave.invalid_bbox");
+        }
+
+        // The same filter with a well-formed window, and with none, is answered.
+        (await InViewAsync(token, ExactLon - 0.01, ExactLat - 0.01, ExactLon + 0.01, ExactLat + 0.01)).ShouldBe(1);
+        (await ListAsync(reader, token)).GetProperty("totalItems").GetInt32().ShouldBe(1);
+    }
+
+    /// <summary>The map's filter as it would hand it over: a feature-world document naming one cave.</summary>
+    private static FilterDocument NamedExactly(string name) => new()
+    {
+        Scope =
+        [
+            new WorldScope("feature", new AllOfNode(
+            [
+                new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(name)]),
+            ])),
+        ],
+    };
+
+    private async Task<int> InViewAsync(string token, double west, double south, double east, double north)
+    {
+        var bbox = FormattableString.Invariant($"{west},{south},{east},{north}");
+        var response = await reader.GetAsync($"/api/v1/caves?filter={token}&bbox={bbox}");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("totalItems").GetInt32();
+    }
+
     private static string Box(double lon, double lat) =>
         FormattableString.Invariant($"{lon - 0.0005},{lat - 0.0005},{lon + 0.0005},{lat + 0.0005}");
 
