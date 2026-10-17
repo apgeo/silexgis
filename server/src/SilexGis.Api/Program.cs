@@ -114,6 +114,18 @@ try
         options.SerializerOptions.Converters.Add(
             new System.Text.Json.Serialization.JsonStringEnumConverter(SilexGis.Api.Common.RouteEnums.WireNaming));
         options.SerializerOptions.NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.Strict;
+
+        // A filter read from a body is held to the rules a link and a stored row are: a member the
+        // shape has no default for must be present (a left-out operator or number is not quietly
+        // read as "equals" or 0), and a discriminator is found wherever it sits among an object's
+        // members, as it must be for a document that went through a jsonb column. A polymorphic
+        // object that names no shape at all is a malformed body rather than a server fault.
+        options.SerializerOptions.AllowOutOfOrderMetadataProperties = true;
+        options.SerializerOptions.TypeInfoResolver = System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.WithAddedModifier(
+            System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.WithAddedModifier(
+                options.SerializerOptions.TypeInfoResolver ?? new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
+                SilexGis.Domain.Filters.FilterDocument.RequireAuthoredMembers),
+            SilexGis.Api.Common.PolymorphicBodies.RefuseShapelessObjects);
     });
 
     // A request the framework cannot bind — a body naming a word an enum does not have, a null

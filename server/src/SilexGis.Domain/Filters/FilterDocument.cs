@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace SilexGis.Domain.Filters;
 
@@ -123,10 +124,56 @@ public sealed record FilterDocument
             // discriminators are found wherever they sit, or every saved filter would read back
             // as unreadable the moment it was stored.
             AllowOutOfOrderMetadataProperties = true,
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver { Modifiers = { RequireAuthoredMembers } },
         };
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         return options;
     }
+
+    /// <summary>
+    /// A contract rule for every reader of a filter — a link, a stored row and a request body alike:
+    /// a member of a node, a value, a world's scope or an anchor that the shape has no default for
+    /// must be present in the text, or the text is not a filter.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Left to itself the reader fills a missing member with its type's default, and for a member of
+    /// a value type that default is a meaning nobody wrote: a condition without its operator reads
+    /// as "equals", a number without its value as 0, a yes/no as "no", an anchor without its
+    /// latitude as the equator. Each would run, answer, and look like the question it was not. A
+    /// missing reference — a group without its list, a condition without its field — was already
+    /// caught after reading (it arrives as null), but a value type leaves nothing to catch.
+    /// </para>
+    /// <para>
+    /// What is required is read off the shapes themselves: a constructor parameter with no default
+    /// is a member the author has to give, and one with a default (a world's conditions, which
+    /// default to "everything") stays optional. The document's own members — version, sort and its
+    /// direction — are properties with stated defaults rather than constructor parameters, and stay
+    /// optional for the same reason. The request-body reader adds this same rule to its own
+    /// contract, so a filter sent in a body is held to exactly what a link and a saved row are.
+    /// </para>
+    /// </remarks>
+    public static void RequireAuthoredMembers(JsonTypeInfo typeInfo)
+    {
+        if (typeInfo.Kind != JsonTypeInfoKind.Object || !IsFilterShape(typeInfo.Type))
+        {
+            return;
+        }
+
+        foreach (var property in typeInfo.Properties)
+        {
+            if (property.AssociatedParameter is { HasDefaultValue: false })
+            {
+                property.IsRequired = true;
+            }
+        }
+    }
+
+    private static bool IsFilterShape(Type type) =>
+        typeof(FilterNode).IsAssignableFrom(type)
+        || typeof(FilterValue).IsAssignableFrom(type)
+        || typeof(FilterAnchor).IsAssignableFrom(type)
+        || type == typeof(WorldScope);
 }
 
 /// <summary>

@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.Extensions.Options;
+using SilexGis.Domain.Filters;
+using SilexGis.Infrastructure.Filters;
 
 namespace SilexGis.Api.Common;
 
@@ -44,6 +46,19 @@ public sealed partial class BindingProblemHandler(
     /// <summary>A route, query, header or form parameter that could not be read or was missing.</summary>
     public const string BindingFailedCode = "request.binding_failed";
 
+    /// <summary>
+    /// Members whose content has a refusal of its own: a body fault anywhere inside one answers
+    /// with that member's code rather than the generic one. A filter document is the case — it is
+    /// the same document a link and a saved row carry, those refuse an unreadable one as
+    /// <c>filter.malformed</c>, and a caller should not have to know which way it was sent to
+    /// recognise the refusal. Nothing of the body is named in the answer: a document is refused
+    /// as a whole, which is all its author can act on.
+    /// </summary>
+    private static readonly Dictionary<Type, (string Code, string Detail)> OwnRefusals = new()
+    {
+        [typeof(FilterDocument)] = (SurfaceFilters.MalformedCode, "This filter could not be read."),
+    };
+
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
@@ -78,7 +93,11 @@ public sealed partial class BindingProblemHandler(
             return ApiProblems.BadRequest(BodyInvalidCode, "The request body could not be read as JSON.");
         }
 
-        var (member, type) = Resolve(bodyType, json.Path);
+        var (member, type, own) = Resolve(bodyType, json.Path);
+        if (own is { } refusal)
+        {
+            return ApiProblems.BadRequest(refusal.Code, refusal.Detail);
+        }
 
         var underlying = type is null ? null : Nullable.GetUnderlyingType(type) ?? type;
         if (member is not null && underlying is { IsEnum: true })
@@ -135,21 +154,29 @@ public sealed partial class BindingProblemHandler(
     /// Walks a serializer path (<c>$.participants[0].role</c>) down the declared body type, one
     /// contract lookup per segment, and answers the member spelled as the validators spell it and
     /// the type found at the end. Anything the contract cannot account for answers nothing: a
-    /// guess at the member would be worse than no member.
+    /// guess at the member would be worse than no member. The walk also reports the first member
+    /// on the way that has a refusal of its own, found even when the walk cannot go on past it — a
+    /// polymorphic node's members are not on its declared type's contract.
     /// </summary>
-    private (string? Member, Type? Type) Resolve(Type? bodyType, string? path)
+    private (string? Member, Type? Type, (string Code, string Detail)? Own) Resolve(Type? bodyType, string? path)
     {
         if (bodyType is null || string.IsNullOrEmpty(path) || path[0] != '$')
         {
-            return (null, null);
+            return (null, null, null);
         }
 
         var options = jsonOptions.Value.SerializerOptions;
         var type = bodyType;
         var member = new StringBuilder();
+        (string Code, string Detail)? own = null;
         var i = 1;
         while (i < path.Length)
         {
+            if (own is null && OwnRefusals.TryGetValue(type, out var found))
+            {
+                own = found;
+            }
+
             JsonTypeInfo contract;
             try
             {
@@ -157,7 +184,7 @@ public sealed partial class BindingProblemHandler(
             }
             catch (NotSupportedException)
             {
-                return (null, null);
+                return (null, null, own);
             }
 
             if (path[i] == '.')
@@ -170,7 +197,7 @@ public sealed partial class BindingProblemHandler(
 
                 if (!Step(contract, path[start..i], member, out type))
                 {
-                    return (null, null);
+                    return (null, null, own);
                 }
             }
             else if (path[i] == '[')
@@ -178,7 +205,7 @@ public sealed partial class BindingProblemHandler(
                 var end = path.IndexOf(']', i);
                 if (end < 0)
                 {
-                    return (null, null);
+                    return (null, null, own);
                 }
 
                 var inside = path[(i + 1)..end];
@@ -196,14 +223,14 @@ public sealed partial class BindingProblemHandler(
                     }
                     else if (!Step(contract, name, member, out type))
                     {
-                        return (null, null);
+                        return (null, null, own);
                     }
                 }
                 else
                 {
                     if (contract.ElementType is not { } elementType)
                     {
-                        return (null, null);
+                        return (null, null, own);
                     }
 
                     member.Append('[').Append(inside).Append(']');
@@ -212,11 +239,16 @@ public sealed partial class BindingProblemHandler(
             }
             else
             {
-                return (null, null);
+                return (null, null, own);
             }
         }
 
-        return member.Length == 0 ? (null, type) : (member.ToString(), type);
+        if (own is null && OwnRefusals.TryGetValue(type, out var last))
+        {
+            own = last;
+        }
+
+        return member.Length == 0 ? (null, type, own) : (member.ToString(), type, own);
     }
 
     /// <summary>One property step: the wire name resolves to the declared member and its type.</summary>

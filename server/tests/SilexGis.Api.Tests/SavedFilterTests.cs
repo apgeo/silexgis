@@ -229,6 +229,40 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
         kept.GetProperty("document").GetRawText().ShouldContain("Bihor");
     }
 
+    [Fact]
+    public async Task A_question_that_does_not_say_what_its_parts_are_or_leaves_a_value_out_is_refused_as_unreadable()
+    {
+        // Raw bodies, wrapped as the client sends them, because the shapes below cannot be written
+        // by the typed serialiser: a node or a value with no discriminator made the reader throw an
+        // exception request binding does not catch (a server fault), and an operator or a number
+        // left out used to be read as "equals" or 0 and saved as a question nobody asked.
+        string[] documents =
+        [
+            """{"version":1,"scope":[{"world":"feature","where":{"field":"region","op":"contains","values":[{"type":"text","value":"Bihor"}]}}]}""",
+            """{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"region","op":"contains","values":[{"kind":"text","value":"Bihor"}]}}]}""",
+            """{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"region","values":[{"type":"text","value":"Bihor"}]}}]}""",
+            """{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"surveyedLength","op":"greaterThan","values":[{"type":"number"}]}}]}""",
+        ];
+        var id = (await CreateAsync(author, Body($"Whole {tag}"))).GetProperty("id").GetGuid();
+
+        foreach (var document in documents)
+        {
+            var body = $$"""{"name":"Holed {{tag}}","visibility":"private","document":{{document}}}""";
+
+            var created = await author.PostAsync(Url, new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+            created.StatusCode.ShouldBe(HttpStatusCode.BadRequest, document);
+            (await CodeAsync(created)).ShouldBe("filter.malformed", document);
+
+            var updated = await author.PutAsync($"{Url}/{id}", new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+            updated.StatusCode.ShouldBe(HttpStatusCode.BadRequest, document);
+            (await CodeAsync(updated)).ShouldBe("filter.malformed", document);
+        }
+
+        var kept = await author.GetFromJsonAsync<JsonElement>($"{Url}/{id}");
+        kept.GetProperty("state").GetString().ShouldBe("ready");
+        kept.GetProperty("document").GetRawText().ShouldContain("Bihor");
+    }
+
     // ---------- who may read it ----------
 
     [Fact]

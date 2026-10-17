@@ -319,42 +319,28 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
     }
 
     [Fact]
-    public async Task A_document_this_version_cannot_read_is_refused_rather_than_crashing()
+    public async Task A_document_whose_parts_do_not_say_what_they_are_is_refused_as_malformed_rather_than_crashing()
     {
-        // A value that does not say which type it is. The reader raises NotSupportedException for
-        // this rather than a JsonException, which is a different path through model binding — and a
-        // filter arriving from an older client, or a link somebody edited, must be a refusal rather
-        // than a fault the caller can do nothing about.
+        // Each body is wrapped the way the client sends it, so the document really is read — an
+        // unwrapped document binds as no document at all and is refused for that, whatever is
+        // inside it. A node, a value or an anchor without its discriminator made the reader throw
+        // an exception request binding does not catch, and the caller got a server fault for a
+        // filter from an older client or a link somebody edited.
         using var client = await ClientAsync(GlobalRoles.Viewer, "fe-malformed");
-
-        const string body = """
-            {"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name",
-            "op":"contains","values":[{"kind":"text","value":"urs"}]}}],
-            "sort":"updated","descending":true}
-            """;
-
-        var response = await client.PostAsync(
-            "/api/v1/filters/query",
-            new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
-
-        ((int)response.StatusCode).ShouldBeLessThan(500,
-            "A filter this version cannot read is the caller's mistake, not a fault.");
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task A_document_with_a_member_missing_is_refused_as_unreadable_rather_than_failing()
-    {
-        // Each body names its document properly and leaves one member out of it, which model
-        // binding fills with null; the validator used to dereference that and answer with a fault.
-        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-holed");
 
         string[] bodies =
         [
-            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"allOf"}}]}}""",
-            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","op":"contains"}}]}}""",
-            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","op":"contains","values":[{"type":"text","value":null}]}}]}}""",
-            """{"document":{"version":1,"scope":null}}""",
+            // A value that names its type under another key.
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","op":"contains","values":[{"kind":"text","value":"urs"}]}}]}}""",
+            // A node that does not say which node it is.
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"field":"name","op":"contains","values":[{"type":"text","value":"urs"}]}}]}}""",
+            // A group inside a group, without its discriminator.
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"allOf","of":[{"of":[]}]}}]}}""",
+            // A node and a value naming a shape there is not.
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"someday","of":[]}}]}}""",
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","op":"contains","values":[{"type":"colour","value":"urs"}]}}]}}""",
+            // An anchor that does not say whether it is a point or an object.
+            """{"document":{"version":1,"scope":[{"world":"feature"}],"anchor":{"longitude":22.5,"latitude":46.5}}}""",
         ];
 
         foreach (var body in bodies)
@@ -364,8 +350,67 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
                 new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
 
             response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
-            (await response.Content.ReadAsStringAsync()).ShouldContain("filter.malformed", Case.Sensitive, body);
+            (await CodeOfAsync(response)).ShouldBe("filter.malformed", body);
         }
+    }
+
+    [Fact]
+    public async Task A_document_with_a_member_missing_is_refused_as_unreadable_rather_than_failing()
+    {
+        // Each body names its document properly and leaves one member out of it. A reference left
+        // out arrives as null, which the validator used to dereference; a member of a value type
+        // left out used to arrive as its default — the condition without an operator ran as
+        // "equals", the number without a value as 0 — and answered a question nobody asked.
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-holed");
+
+        string[] bodies =
+        [
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"allOf"}}]}}""",
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","op":"contains"}}]}}""",
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","op":"contains","values":[{"type":"text","value":null}]}}]}}""",
+            """{"document":{"version":1,"scope":null}}""",
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","values":[{"type":"text","value":"urs"}]}}]}}""",
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"condition","op":"contains","values":[{"type":"text","value":"urs"}]}}]}}""",
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"surveyedLength","op":"greaterThan","values":[{"type":"number"}]}}]}}""",
+            """{"document":{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"createdAt","op":"greaterThan","values":[{"type":"instant"}]}}]}}""",
+            """{"document":{"version":1,"scope":[{"where":null}]}}""",
+            """{"document":{"version":1,"scope":[{"world":"feature"}],"anchor":{"anchor":"point","longitude":22.5}}}""",
+        ];
+
+        foreach (var body in bodies)
+        {
+            var response = await client.PostAsync(
+                "/api/v1/filters/query",
+                new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+            (await CodeOfAsync(response)).ShouldBe("filter.malformed", body);
+        }
+    }
+
+    [Fact]
+    public async Task A_document_whose_discriminators_come_after_its_members_is_read_as_a_stored_one_is()
+    {
+        // A document that went through a jsonb column comes back with each object's keys sorted
+        // shortest first, so "of" and "op" ahead of "node". A link and a saved row read it that
+        // way; a body carrying the same text must be read the same way, not refused.
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-order");
+
+        const string body = """
+            {"document":{"scope":[{"world":"feature","where":{"of":[{"op":"contains","field":"name","values":[{"value":"urs","type":"text"}],"node":"condition"}],"node":"allOf"}}],"version":1},"pageSize":1}
+            """;
+
+        var response = await client.PostAsync(
+            "/api/v1/filters/query",
+            new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    private static async Task<string?> CodeOfAsync(HttpResponseMessage response)
+    {
+        using var problem = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return problem.RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
     // ---------- what comes back ----------

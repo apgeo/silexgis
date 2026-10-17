@@ -89,10 +89,41 @@ public class FilterTokenTests
     [InlineData("""{"version":1,"scope":null}""")]
     [InlineData("""{"version":1,"scope":[null]}""")]
     [InlineData("""{"version":1,"scope":[{"where":null}]}""")]
+    // A member of a value type: left out, the reader used to fill in its default — an operator read
+    // as "equals", a number as 0, a yes/no as "no" — and the filter asked something nobody wrote.
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","values":[{"type":"text","value":"x"}]}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"length","op":"greaterThan","values":[{"type":"number"}]}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"surveyed","op":"equals","values":[{"type":"boolean"}]}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"createdAt","op":"greaterThan","values":[{"type":"instant"}]}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature"}],"anchor":{"anchor":"point","longitude":22.5}}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature"}],"anchor":{"anchor":"object","world":"feature"}}""")]
+    // A node, a value or an anchor that does not say which shape it is, or names one there is not.
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"field":"name","op":"contains","values":[{"type":"text","value":"x"}]}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"someday","of":[]}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name","op":"contains","values":[{"type":"colour","value":"x"}]}}]}""")]
+    [InlineData("""{"version":1,"scope":[{"world":"feature"}],"anchor":{"longitude":22.5,"latitude":46.5}}""")]
     public void A_token_with_a_member_missing_reads_as_nothing_rather_than_as_a_document(string json)
     {
         FilterToken.Decode(Tokenise(json)).ShouldBeNull();
         FilterDocument.Deserialize(json).ShouldBeNull();
+    }
+
+    /// <summary>
+    /// The members a document may leave out on purpose still read as their stated meaning: no
+    /// conditions on a world is "everything in it", and the sort, its direction and the version have
+    /// defaults of their own. Requiring members must not turn these into refusals.
+    /// </summary>
+    [Fact]
+    public void The_members_a_document_may_leave_out_still_read_as_their_defaults()
+    {
+        var document = FilterDocument.Deserialize("""{"scope":[{"world":"feature"}]}""");
+
+        document.ShouldNotBeNull();
+        document.Version.ShouldBe(FilterDocument.CurrentVersion);
+        document.Sort.ShouldBe(SortKey.Updated);
+        document.Descending.ShouldBeTrue();
+        document.Scope.Single().Where.ShouldBeNull();
+        FilterToken.Decode(Tokenise("""{"scope":[{"world":"feature"}]}""")).ShouldNotBeNull();
     }
 
     [Fact]
