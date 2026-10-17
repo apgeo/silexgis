@@ -45,6 +45,7 @@ export const specs = {
     // page, so a change here is answered by the walk that reads one as a visitor.
     'public-trip-as-installed.spec.ts',
     'table-map.spec.ts',
+    'filter-spatial.spec.ts',
   ],
   cavingGroups: [
     'announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts', 'caver-caving-groups.spec.ts',
@@ -71,7 +72,7 @@ export const specs = {
   filters: [
     'trip-list.spec.ts', 'trip-map.spec.ts', 'registry-statistics.spec.ts',
     'cave-registry-filters.spec.ts', 'gallery-filters.spec.ts', 'reslinks.spec.ts',
-    'map-filters.spec.ts', 'table-map.spec.ts',
+    'map-filters.spec.ts', 'table-map.spec.ts', 'filter-spatial.spec.ts',
   ],
   geoFeatures: [
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
