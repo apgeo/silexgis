@@ -3,6 +3,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { centreOnDemoCave, gotoRoute, login, mapAddress, openCaveFromRegistry, registryRow } from './helpers.ts';
+import { apiJson, bearerToken, relationId, uploadMapPng } from './rastermapApi.ts';
 
 /** The camera the map's address says it is at: `#zoom/lat/lon`. */
 async function cameraLongitude(page: Page): Promise<number> {
@@ -212,6 +213,94 @@ test('the feature editor and the share-links dialog keep focus inside, and give 
 
   await openCaveFromRegistry(page, 'Peștera Demo Mare');
   await expectFocusKeptAndReturned(page, page.getByRole('button', { name: 'Share', exact: true }), 'Share links');
+});
+
+/**
+ * A region of a picture is reached and opened without a pointer: Tab lands on it — named by what
+ * it links to, not by its colour — and Enter opens its card, as a click on it does. The picture is
+ * generated noise and the link this run's own.
+ */
+test('a region of a picture is reached with Tab and opened with Enter', async ({ page }) => {
+  await login(page);
+  const token = await bearerToken(page);
+  const picture = await uploadMapPng(page, token, `E2E region keyboard ${Date.now()}.png`);
+  const trips = (await apiJson(page, token, 'GET', '/api/v1/trip-logs?pageSize=1')) as { items: { id: string }[] };
+  expect(trips.items.length, 'the demo data holds a trip to link the region to').toBeGreaterThan(0);
+  const relationTypes = (await apiJson(page, token, 'GET', '/api/v1/reslinks/relation-types')) as {
+    id: number;
+    code: string;
+  }[];
+  await apiJson(page, token, 'POST', '/api/v1/reslinks', {
+    relationTypeId: relationId(relationTypes, 'related-to'),
+    description: null,
+    members: [
+      {
+        targetType: 'document',
+        targetId: picture.documentId,
+        // An undirected relation has no main member.
+        isMain: false,
+        sortOrder: 0,
+        note: null,
+        anchorKind: 'imageRegion',
+        anchor: { shape: 'rect', x: 0.2, y: 0.2, w: 0.4, h: 0.4 },
+        anchorFileId: picture.id,
+      },
+      {
+        targetType: 'tripLog',
+        targetId: trips.items[0].id,
+        isMain: false,
+        sortOrder: 1,
+        note: null,
+        anchorKind: 'whole',
+        anchor: null,
+        anchorFileId: null,
+      },
+    ],
+  });
+
+  await gotoRoute(page, `/documents/${picture.documentId}`);
+  const region = page.getByRole('button', { name: /^Related to/ });
+  await expect(region).toBeVisible({ timeout: 20_000 });
+
+  // Reached by Tab from the page, bounded so a region outside the tab order fails here.
+  await page.locator('main').focus();
+  let reached = false;
+  for (let step = 0; step < 60 && !reached; step++) {
+    await page.keyboard.press('Tab');
+    reached = await region.evaluate((element) => element === document.activeElement);
+  }
+  expect(reached, 'the region is in the tab order').toBe(true);
+  await expect(page.locator('.ant-popover:visible')).toHaveCount(0);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.ant-popover:visible')).toHaveCount(1, { timeout: 10_000 });
+});
+
+/**
+ * A table whose rows open on a click opens from the keyboard too: the cell naming the record is a
+ * link, which Tab reaches and Enter follows — to the same page the click goes to.
+ */
+test('a row of the trip list opens with Enter', async ({ page }) => {
+  await login(page);
+  await gotoRoute(page, '/trip-logs');
+  const firstLink = page.locator('.ant-table-row').first().getByRole('link').first();
+  await expect(firstLink).toBeVisible({ timeout: 20_000 });
+  const target = await firstLink.getAttribute('href');
+  expect(target).toMatch(/^\/trip-logs\/[0-9a-f-]+$/);
+
+  await page.locator('main').focus();
+  let reached = false;
+  for (let step = 0; step < 80 && !reached; step++) {
+    await page.keyboard.press('Tab');
+    reached = await page.evaluate(() => document.activeElement?.closest('.ant-table-row') !== null
+      && document.activeElement?.tagName === 'A');
+  }
+  expect(reached, 'a link inside a row is in the tab order').toBe(true);
+  const focusedTarget = await page.evaluate(() => document.activeElement?.getAttribute('href'));
+  await page.keyboard.press('Enter');
+  await page.waitForURL((url) => url.pathname === focusedTarget, { timeout: 15_000 });
+  // One step in the history, not two: the row's own click handler must not have run as well.
+  await page.goBack();
+  await page.waitForURL((url) => url.pathname === '/trip-logs', { timeout: 15_000 });
 });
 
 /** The WCAG 2.0, 2.1 and 2.2 level A and AA rules — the yardstick, with no conformance claimed. */

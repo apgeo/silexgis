@@ -3191,6 +3191,8 @@
     "layouts": "Aranjări salvate",
     "layoutName": "Denumește aranjarea",
     "deleteLayout": "Șterge {{name}}",
+    "layoutKeptHere": "Doar în acest browser",
+    "layoutKeptHereWhy": "Preferințele salvate ale contului erau pline când a fost salvată această aranjare, așa că ea este păstrată doar în acest browser și nu va apărea în altul. Șterge o aranjare pe care n-o mai folosești, iar aceasta ajunge în cont odată cu acea schimbare.",
     "deleteLayoutConfirm": "Ștergi aranjarea {{name}}?",
     "selectionTitle": "Selecție",
     "popOutSelection": "Deschide panoul de selecție într-o fereastră proprie",
@@ -4937,12 +4939,14 @@
         "point": "Punct"
       },
       "regionHelp": {
-        "rect": "Trage peste imagine ca să încadrezi partea la care te referi.",
-        "circle": "Apasă în centru și trage spre exterior.",
-        "polygon": "Dă clic pe fiecare colț pe rând, apoi dublu-clic ca să închizi conturul.",
-        "point": "Dă clic pe locul la care te referi."
+        "rect": "Trage peste imagine ca să încadrezi partea la care te referi. De la tastatură: mută-te cu săgețile (Shift pentru pași mai mari), apasă Enter într-un colț și din nou în colțul opus.",
+        "circle": "Apasă în centru și trage spre exterior. De la tastatură: mută-te cu săgețile, apasă Enter în centru și din nou pe margine.",
+        "polygon": "Dă clic pe fiecare colț pe rând, apoi dublu-clic ca să închizi conturul. De la tastatură: mută-te cu săgețile și apasă Enter în fiecare colț; apasă Enter de două ori pe ultimul colț ca să închizi conturul, Backspace ca să renunți la un colț.",
+        "point": "Dă clic pe locul la care te referi. De la tastatură: mută-te cu săgețile și apasă Enter."
       },
       "regionDrawn": "Partea desenată",
+      "regionSurface": "Desenează pe {{name}}: săgețile mută cursorul, Enter îl fixează, Escape renunță la formă",
+      "regionUnnamed": "Regiunea {{number}}",
       "regionClear": "Desenează din nou",
       "regionRequired": "Desenează partea din imagine la care te referi.",
       "regionNeedsDocument": "Alege întâi imaginea, apoi desenează pe ea.",

@@ -2,6 +2,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { ownContext, test } from './consoleGuard.ts';
 import { deleteFeature, login, paletteEntry } from './helpers.ts';
+import { bearerToken, uploadMapPng } from './rastermapApi.ts';
 
 /**
  * Links between things, driven the way a caver drives them: from the page of whatever they
@@ -894,5 +895,88 @@ test('a link is anchored at a passage selected in a document', async ({ page }) 
 
   await page.goto(featureUrl);
   await deleteLinkRow(page, '1987 survey report');
+  await deleteFeature(page, anchorName);
+});
+
+/**
+ * A region of a picture drawn without a pointer, inside the dialog that records the link — the
+ * place a person actually draws one. The dialog is where the keyboard path could quietly break:
+ * its focus trap could keep Tab off the picture, and its own Escape could close it in the middle
+ * of a shape. So the picture is reached with Tab, a corner placed and abandoned with Escape (the
+ * dialog stays), then a rectangle drawn with the arrows and Enter, and what the dialog sends is
+ * read back. The picture is generated noise uploaded by this run.
+ */
+test('a region of a picture is drawn from the keyboard in the record-a-link dialog', async ({ page }) => {
+  const stamp = Date.now();
+  const anchorName = `E2E Region Anchor ${stamp}`;
+  const pictureName = `E2E region drawn ${stamp}`;
+  await login(page);
+  const token = await bearerToken(page);
+  await uploadMapPng(page, token, `${pictureName}.png`);
+
+  await createPointFeature(page, anchorName);
+  const featureUrl = await openFeature(page, anchorName);
+
+  await page.getByRole('button', { name: 'Link…' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('Record a link')).toBeVisible();
+  await pickOption(page, dialog.getByRole('combobox', { name: 'Relation' }), 'Related to');
+  await pickOption(page, dialog.getByRole('combobox', { name: 'Kind of item' }), 'Document');
+  await pickExistingItem(page, dialog, pictureName, `region drawn ${stamp}`);
+  await pickOption(page, dialog.getByRole('combobox', { name: 'What it points at' }), 'A region of an image');
+
+  const surface = dialog.getByRole('application', { name: /^Draw on / });
+  await expect(surface).toBeVisible({ timeout: 30_000 });
+
+  // Reached by Tab from the control before it, bounded so a surface out of the tab order — or
+  // a focus trap that skips it — fails here rather than being focused for the test.
+  await dialog.getByRole('combobox', { name: 'What it points at' }).focus();
+  let reached = false;
+  for (let step = 0; step < 15 && !reached; step++) {
+    await page.keyboard.press('Tab');
+    reached = await surface.evaluate((element) => element === document.activeElement);
+  }
+  expect(reached, 'the drawing surface is in the dialog’s tab order').toBe(true);
+
+  // A first corner placed and abandoned: Escape takes the shape, not the dialog.
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
+  await expect(dialog.getByText('Record a link')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Draw it again' })).toHaveCount(0);
+
+  // The cursor starts at the centre; Shift moves a tenth of the picture, a plain arrow a fiftieth.
+  for (const key of ['Shift+ArrowLeft', 'Shift+ArrowLeft', 'Shift+ArrowUp', 'Shift+ArrowUp']) {
+    await page.keyboard.press(key);
+  }
+  await page.keyboard.press('Enter');
+  for (const key of ['Shift+ArrowRight', 'Shift+ArrowRight', 'Shift+ArrowRight', 'ArrowRight']) {
+    await page.keyboard.press(key);
+  }
+  for (const key of ['Shift+ArrowDown', 'Shift+ArrowDown', 'Shift+ArrowDown']) {
+    await page.keyboard.press(key);
+  }
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByRole('button', { name: 'Draw it again' })).toBeVisible();
+
+  const created = page.waitForResponse(
+    (response) => /\/api\/v1\/reslinks$/.test(response.url()) && response.request().method() === 'POST',
+  );
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  const response = await created;
+  expect(response.ok(), `the link was refused: ${response.status()}`).toBe(true);
+  const sent = response.request().postDataJSON() as {
+    members: { targetType: string; anchorKind: string; anchor: Record<string, number | string> | null }[];
+  };
+  const region = sent.members.find((member) => member.targetType === 'document');
+  expect(region?.anchorKind).toBe('imageRegion');
+  expect(region?.anchor?.shape).toBe('rect');
+  expect(region?.anchor?.x).toBeCloseTo(0.3, 3);
+  expect(region?.anchor?.y).toBeCloseTo(0.3, 3);
+  expect(region?.anchor?.w).toBeCloseTo(0.32, 3);
+  expect(region?.anchor?.h).toBeCloseTo(0.3, 3);
+  await accepted(page, 'Saved.');
+
+  await page.goto(featureUrl);
+  await deleteLinkRow(page, pictureName);
   await deleteFeature(page, anchorName);
 });

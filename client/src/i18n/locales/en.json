@@ -3191,6 +3191,8 @@
     "layouts": "Saved arrangements",
     "layoutName": "Name this arrangement",
     "deleteLayout": "Delete {{name}}",
+    "layoutKeptHere": "This browser only",
+    "layoutKeptHereWhy": "Your account’s stored preferences were full when this arrangement was saved, so it is kept only in this browser and will not be found in another one. Delete an arrangement you no longer use, and this one goes to your account with that change.",
     "deleteLayoutConfirm": "Delete the arrangement {{name}}?",
     "selectionTitle": "Selection",
     "popOutSelection": "Open the selection panel in its own window",
@@ -4937,12 +4939,14 @@
         "point": "Point"
       },
       "regionHelp": {
-        "rect": "Drag across the picture to box the part you mean.",
-        "circle": "Press at the centre and drag outwards.",
-        "polygon": "Click each corner in turn, then double-click to close the outline.",
-        "point": "Click the spot you mean."
+        "rect": "Drag across the picture to box the part you mean. From the keyboard: move with the arrow keys (Shift for larger steps), press Enter at one corner and again at the opposite one.",
+        "circle": "Press at the centre and drag outwards. From the keyboard: move with the arrow keys, press Enter at the centre and again on the edge.",
+        "polygon": "Click each corner in turn, then double-click to close the outline. From the keyboard: move with the arrow keys and press Enter at each corner; press Enter twice on the last corner to close it, Backspace to take a corner back.",
+        "point": "Click the spot you mean. From the keyboard: move with the arrow keys and press Enter."
       },
       "regionDrawn": "The part you drew",
+      "regionSurface": "Draw on {{name}}: arrow keys move the cursor, Enter places it, Escape abandons the shape",
+      "regionUnnamed": "Region {{number}}",
       "regionClear": "Draw it again",
       "regionRequired": "Draw the part of the picture you mean.",
       "regionNeedsDocument": "Choose the picture first, then draw on it.",
