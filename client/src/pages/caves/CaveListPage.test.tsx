@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { App as AntApp } from 'antd';
+import { useEffect } from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -15,8 +16,10 @@ import { whereOf, withWhere } from '../../filters/document.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
 import { decodeFilter, encodeFilter } from '../../filters/url.ts';
 
-const { canSpy, doorSpy, cavesSpy, downloadSpy, savedFilters, editorSpy, selectAllSpy } = vi.hoisted(() => ({
+const { canSpy, doorSpy, cavesSpy, downloadSpy, savedFilters, editorSpy, editorMounts, selectAllSpy, heldWrites } = vi.hoisted(() => ({
   editorSpy: vi.fn(),
+  editorMounts: { count: 0 },
+  heldWrites: { on: false, queue: [] as (() => void)[] },
   selectAllSpy: vi.fn(),
   canSpy: vi.fn(),
   doorSpy: vi.fn(),
@@ -24,6 +27,26 @@ const { canSpy, doorSpy, cavesSpy, downloadSpy, savedFilters, editorSpy, selectA
   downloadSpy: vi.fn(),
   savedFilters: { current: [] as unknown[] },
 }));
+
+// The browser's router changes the address bar at once and tells the page a moment later. Holding
+// the page's writes stands for that moment, so what is opened inside it can be proved.
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return {
+    ...actual,
+    useSearchParams: (...args: Parameters<typeof actual.useSearchParams>) => {
+      const [params, write] = actual.useSearchParams(...args);
+      const held: typeof write = (...writeArgs) => {
+        if (heldWrites.on) {
+          heldWrites.queue.push(() => write(...writeArgs));
+        } else {
+          write(...writeArgs);
+        }
+      };
+      return [params, held] as const;
+    },
+  };
+});
 
 vi.mock('../../api/hooks.ts', () => ({
   useCan: (domain: string, action: string) => canSpy(domain, action),
@@ -79,14 +102,17 @@ const EDITED_DEPTH: FilterNode = {
   values: [{ type: 'number', value: 50 }],
 };
 vi.mock('../../components/filters/FilterEditor.tsx', () => ({
-  default: (props: {
+  default: function StubEditor(props: {
     world: string;
     document: FilterDocument;
     fixed?: FilterNode;
     onApply: (document: FilterDocument) => void;
     onCancel?: () => void;
-  }) => {
+  }) {
     editorSpy(props);
+    useEffect(() => {
+      editorMounts.count += 1;
+    }, []);
     const edited = withWhere(props.document, props.world, {
       node: 'allOf',
       of: [
@@ -137,6 +163,9 @@ beforeEach(async () => {
   downloadSpy.mockReset();
   savedFilters.current = [];
   editorSpy.mockReset();
+  editorMounts.count = 0;
+  heldWrites.on = false;
+  heldWrites.queue = [];
   selectAllSpy.mockReset();
 });
 
@@ -353,6 +382,33 @@ describe('the advanced filter on the cave registry', () => {
 
     const props = editorSpy.mock.lastCall![0] as { document: FilterDocument };
     expect(whereOf(props.document, 'feature')).toEqual({ node: 'allOf', of: [ODD_DEPTH] });
+  });
+
+  it('opens on a control just written that the page has not yet been told of, and is not seeded again when it arrives', async () => {
+    show('/caves');
+    heldWrites.on = true;
+    const region = screen.getByTestId('cave-registry-region');
+    fireEvent.change(region, { target: { value: 'Bihor' } });
+    fireEvent.blur(region);
+    expect(heldWrites.queue).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId('cave-registry-advanced'));
+    await screen.findByTestId('stub-apply');
+    const opened = editorSpy.mock.lastCall![0] as { document: FilterDocument };
+    expect(whereOf(opened.document, 'feature')).toEqual({
+      node: 'allOf',
+      of: [{ node: 'condition', field: 'region', op: 'contains', values: [{ type: 'text', value: 'Bihor' }] }],
+    });
+
+    heldWrites.on = false;
+    act(() => {
+      heldWrites.queue.splice(0).forEach((apply) => apply());
+    });
+    expect(readCaveRegistryAddress(new URLSearchParams(screen.getByTestId('search').textContent!)).controls)
+      .toEqual({ region: 'Bihor' });
+    // Still the editor that was opened: whatever had been written in it is still there.
+    expect(screen.getByTestId('stub-apply')).toBeInTheDocument();
+    expect(editorMounts.count).toBe(1);
   });
 
   it('changes nothing when it is closed without applying', async () => {

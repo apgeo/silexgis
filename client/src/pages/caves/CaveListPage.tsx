@@ -115,7 +115,6 @@ export default function CaveListPage() {
   // does not always play its closing transition (it was seen skipping it when reopened after a
   // reload), and then it never reports that it has closed while its focused button is simply removed,
   // leaving the focus on the page itself.
-  const editorDocument = caveRegistryEditorQuestion(address);
   const returnFocus = () => {
     requestAnimationFrame(() => {
       const opener = advancedOpener.current;
@@ -146,10 +145,22 @@ export default function CaveListPage() {
     arrivedByOwnWrite.current = arrived !== -1;
   }, [searchParams]);
 
+  /** The address as this page last wrote it, or as it arrived when no write of its own is on its way. */
+  const newestAddress = () => {
+    const newest = written.current.at(-1);
+    return newest === undefined ? address : readCaveRegistryAddress(new URLSearchParams(newest));
+  };
+
+  // The advanced filter opens on the newest question too. The address bar changes at once but the
+  // page learns of it a moment later — longer on a busy machine — so a search that has just
+  // reached the address would otherwise be missing from the editor opened in that moment, and when
+  // it did arrive the editor would be seeded again over whatever had been written in it meanwhile.
+  const editorAddress = newestAddress();
+  const editorDocument = caveRegistryEditorQuestion(editorAddress);
+
   /** A new state written to the address. Typing replaces the entry; anything chosen adds one. */
   const go = (update: (current: AddressState) => Partial<AddressState>, replace = false) => {
-    const newest = written.current.at(-1);
-    const base = newest === undefined ? address : readCaveRegistryAddress(new URLSearchParams(newest));
+    const base = newestAddress();
     const current: AddressState = {
       controls: base.controls,
       extra: base.extra,
@@ -519,7 +530,7 @@ export default function CaveListPage() {
           onCancel={closeAdvanced}
           onApply={(edited) => {
             const reading = readCaveRegistryEditor(edited);
-            const order = caveRegistryOrderAfterEdit(edited, editorDocument, address.sort);
+            const order = caveRegistryOrderAfterEdit(edited, editorDocument, editorAddress.sort);
             go(() => ({ controls: reading.controls, extra: reading.extra, ...order, page: 1 }));
             closeAdvanced();
           }}
