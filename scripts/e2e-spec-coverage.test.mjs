@@ -175,3 +175,23 @@ describe('every spec is watched, in every browser it opens', () => {
     );
   });
 });
+
+// Preferences follow the account, and most specs sign in as the same administrator, so a test that
+// pins a shortcut, opens a panel section or picks a theme as the administrator changes the screen
+// of every test running beside it — seven tests once found two buttons of one name that way. The
+// console guard refuses such a write when the test ends, from the request itself, whichever spec
+// or window made it; what is checked here is that the refusal is still wired in, because a guard
+// that has quietly stopped listening looks exactly like a suite with nothing to refuse.
+describe('no spec changes the shared administrator\'s preferences', () => {
+  const guard = () => readFileSync(join(e2eDir, 'consoleGuard.ts'), 'utf8');
+
+  it('the console guard reads every request of every watched context for one', () => {
+    assert.match(guard(), /watchedContext\.on\('request', notePreferenceWrite\)/);
+    assert.match(guard(), /writesSharedAccountPreferences\(request\)/);
+  });
+
+  it('and refuses the test that made one, whether or not its page reported an error', () => {
+    // Twice: once on the way out of a test whose console was silent, once after the console report.
+    assert.equal(guard().match(/refuseSharedPreferenceWrites\(\);/g)?.length, 2);
+  });
+});

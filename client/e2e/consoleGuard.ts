@@ -18,6 +18,7 @@ import {
   type ErrorRecord,
 } from '../src/diagnostics/errorIdentity.ts';
 import { CHOICE_KEY } from '../src/i18n/languageStorage.ts';
+import { adminEmail } from './helpers.ts';
 
 // Every browser error the suite walks past, recorded.
 //
@@ -82,6 +83,64 @@ const ALLOWED_EVERYWHERE: { pattern: RegExp; reason: string }[] = [
  * which it does for no other failure. A script test holds the two spellings of the word together.
  */
 const NETWORK_CHANGED = 'network-changed';
+
+/** Whether a preferences write carries nothing but object selectors in the state they start in. */
+function onlySelectorsAtTheirStart(body: string | null): boolean {
+  try {
+    const preferences = (JSON.parse(body ?? '') as { preferences?: Record<string, unknown> }).preferences;
+    if (preferences === undefined || Object.keys(preferences).join() !== 'selectors') {
+      return false;
+    }
+    return Object.values(preferences.selectors as Record<string, unknown>).every(
+      (entry) => JSON.stringify(entry) === JSON.stringify({ activeScopeIds: [], sort: 'updated', descending: true }),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a request writes the account preferences of the administrator every spec signs in as.
+ *
+ * Preferences belong to the account, not to the browser: a pinned shortcut, a panel arrangement or
+ * a theme chosen as the shared administrator is on screen in every other test signing in as the
+ * administrator at the same moment, in another worker. A test that changes one and puts it back
+ * afterwards still changes it for whatever runs in between — that is how seven tests once found
+ * two buttons of the same name. So a test that changes a preference does it as an account of its
+ * own (`registerAccount`), and this is what refuses the ones that do not.
+ *
+ * Read from the request alone: the access token is a signed, unencrypted token that names the
+ * account's address, so nothing has to be asked of the server, and the answer is the same whether
+ * the write was made from the test's own page or from a window the application opened.
+ *
+ * One write is passed over, and only in its exact form: the object selector on the map writes its
+ * starting state — no scope chosen, newest first — to the account the first time it is drawn for an
+ * account that has none stored, whatever the test does. That is the application writing on a visit,
+ * not a test changing anything; it changes nothing anybody sees, and it happens once per account,
+ * so it would fail whichever test of a run reached the map first. A selector left in any other state
+ * is still refused. The exemption goes when the selector stops writing a state nobody chose.
+ */
+export function writesSharedAccountPreferences(
+  request: Pick<Request, 'method' | 'url' | 'headers' | 'postData'>,
+): boolean {
+  if (request.method() !== 'PATCH' || new URL(request.url()).pathname !== '/api/v1/me/preferences') {
+    return false;
+  }
+  if (onlySelectorsAtTheirStart(request.postData())) {
+    return false;
+  }
+  const bearer = /^Bearer (.+)$/i.exec(request.headers()['authorization'] ?? '')?.[1];
+  const payload = bearer?.split('.')[1];
+  if (payload === undefined) {
+    return false;
+  }
+  try {
+    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { email?: unknown };
+    return typeof claims.email === 'string' && claims.email.toLowerCase() === adminEmail;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * One error as the suite saw it — the shared record shape, with the suite's own fields filled in.
@@ -303,10 +362,19 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
         }
       };
 
+      // Writes to the shared administrator's preferences, refused when the test ends.
+      let sharedPreferenceWrites = 0;
+      const notePreferenceWrite = (request: Request) => {
+        if (writesSharedAccountPreferences(request)) {
+          sharedPreferenceWrites += 1;
+        }
+      };
+
       const watchContext = (watchedContext: BrowserContext) => {
         watchedContext.on('page', watch);
         watchedContext.pages().forEach(watch);
         watchedContext.on('requestfailed', noteCutOff);
+        watchedContext.on('request', notePreferenceWrite);
       };
       watchContext(context);
       // And any context the test goes on to make for itself, through `ownContext`.
@@ -324,6 +392,19 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
         captured: unexplained,
       });
       watchForRunningTest = null;
+
+      // Not subject to the console gate's mode: this is not about what the application reported but
+      // about one test reaching into every other test's screen, which no mode makes acceptable.
+      // Checked last, so that the console's own report below is still made for the same test.
+      const refuseSharedPreferenceWrites = () => {
+        if (sharedPreferenceWrites > 0) {
+          throw new Error(
+            `${sharedPreferenceWrites} write(s) to the shared administrator's account preferences. ` +
+              'Preferences follow the account into every other test signed in as the administrator: ' +
+              "change them as an account of the test's own (registerAccount in arrange.ts) instead.",
+          );
+        }
+      };
 
       if (cutOff > 0) {
         process.stdout.write(
@@ -351,6 +432,7 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
 
       const found = unexplained();
       if (found.length === 0) {
+        refuseSharedPreferenceWrites();
         return;
       }
 
@@ -379,6 +461,7 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
             found.map((error) => `  [${error.fingerprint}] ${error.message}`).join('\n'),
         );
       }
+      refuseSharedPreferenceWrites();
     },
     { auto: true },
   ],

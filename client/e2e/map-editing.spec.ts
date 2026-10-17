@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
+import { editorOfItsOwn, type Account } from './arrange.ts';
 import {
   centreOnDemoCave,
   deleteFeature,
@@ -152,8 +153,20 @@ test('surface feature draw, attributes, selection and table round-trip', async (
   await expect(page.getByText(featureName)).not.toBeVisible();
 });
 
-test('pinned feature-type shortcuts and the map chrome toggle', async ({ page }) => {
-  await login(page);
+// As an editor of its own: pinned types are kept with the account, and a shortcut pinned for the
+// administrator is a second button named for the type on the screen of every other test signing in
+// as the administrator while this one runs.
+test('pinned feature-type shortcuts and the map chrome toggle', async ({ page, browser }) => {
+  const editor = await editorOfItsOwn(browser, page.request, 'pinned-types');
+  try {
+    await pinnedShortcutsAndChromeToggle(page, editor.account);
+  } finally {
+    await editor.release();
+  }
+});
+
+async function pinnedShortcutsAndChromeToggle(page: Page, account: Account) {
+  await login(page, account.email, account.password);
 
   const toolbar = page.locator('.map-edit-overlay');
   await expect(toolbar).toBeVisible();
@@ -163,13 +176,6 @@ test('pinned feature-type shortcuts and the map chrome toggle', async ({ page })
   await paletteTrigger.click();
   const paletteItem = page.locator('.feature-palette-item-wrap').filter({ hasText: 'Sinkhole / Doline' });
   await paletteItem.hover();
-  // Pinned types are kept with the account, so a run that stopped before its own clean-up below
-  // left this one pinned for the next: start from it unpinned.
-  const leftPinned = paletteItem.getByRole('button', { name: 'Unpin from toolbar' });
-  if (await leftPinned.isVisible()) {
-    await leftPinned.click();
-    await paletteItem.hover();
-  }
   await paletteItem.getByRole('button', { name: 'Pin to toolbar' }).click();
   await paletteTrigger.click(); // close the palette
 
@@ -197,14 +203,14 @@ test('pinned feature-type shortcuts and the map chrome toggle', async ({ page })
   await pill.click();
   await expect(toolbar).toBeVisible();
 
-  // Cleanup: discard the pending edit; unpinning removes the shortcut.
+  // Discard the pending edit; unpinning removes the shortcut.
   await toolbar.getByRole('button', { name: 'Discard edits' }).click();
   await paletteTrigger.click();
   await paletteItem.hover();
   await paletteItem.getByRole('button', { name: 'Unpin from toolbar' }).click();
   await paletteTrigger.click();
   await expect(shortcut).toHaveCount(0);
-});
+}
 
 test('map context menu: typed add-here, cave placement and coordinate copy', async ({ page }) => {
   const featureName = `E2E Context Sinkhole ${Date.now()}`;
@@ -294,15 +300,30 @@ test('dialog placement flip: cave-add continues as a side panel with values inta
   await expect(page.getByText(caveName)).toHaveCount(0);
 });
 
-test('surface feature history records edits and restores in the map panel', async ({ page }) => {
+// As an editor of its own: the flow opens the selection panel's history section, and the panel's
+// arrangement is kept with the account — opened for the administrator, it is open on the screen of
+// every other test signing in as the administrator while this one runs. The administrator, in a
+// browser of their own, removes what is drawn here, which an editor may not.
+test('surface feature history records edits and restores in the map panel', async ({ page, browser }) => {
   const featureName = `E2E Hist Feat ${Date.now()}`;
-  await login(page);
+  const editor = await editorOfItsOwn(browser, page.request, 'history');
+  try {
+    // Selection is by map click at a fixed pixel, so purge any e2e features an earlier
+    // aborted run left stacked on that spot — otherwise the click selects a stale one. Named
+    // rather than swept: only these two flows draw on this pixel, and sweeping everything
+    // stamped E2E takes live subjects out from under whatever else is running beside this.
+    await deleteFeatureRows(editor.admin, /E2E (Hist Feat|Sinkhole) /);
+    await login(page, editor.account.email, editor.account.password);
+    await historyRecordsAndRestores(page, featureName);
+  } finally {
+    await deleteFeatureRows(editor.admin, new RegExp(featureName)).catch(() => {
+      // Left behind, stamped with its run: the purge above removes it on the next run.
+    });
+    await editor.release();
+  }
+});
 
-  // Selection is by map click at a fixed pixel, so purge any e2e features an earlier
-  // aborted run left stacked on that spot — otherwise the click selects a stale one. Named
-  // rather than swept: only these two flows draw on this pixel, and sweeping everything
-  // stamped E2E takes live subjects out from under whatever else is running beside this.
-  await deleteFeatureRows(page, /E2E (Hist Feat|Sinkhole) /);
+async function historyRecordsAndRestores(page: Page, featureName: string) {
   // The map by its own address, and waited for: a hard navigation signs in again before anything
   // is drawn, which under load outlasts the five seconds an unqualified expectation allows, and
   // the root address is whatever the account's landing preference says — which another test of
@@ -348,14 +369,7 @@ test('surface feature history records edits and restores in the map panel', asyn
   await latest.getByLabel('Restore this value').click();
   await expect(page.getByText('Value restored.')).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('.ant-descriptions').first().getByText('Desc One')).toBeVisible({ timeout: 15_000 });
-
-  // The panel's arrangement is kept with the account, and this flow opened its history section:
-  // put it back, or every later spec signing in as the administrator finds history open.
-  await page.getByRole('button', { name: 'Restore the default arrangement' }).click();
-
-  // Cleanup from the features table.
-  await deleteFeatureRows(page, new RegExp(featureName));
-});
+}
 
 // Deletes every features-table row matching `pattern` (tolerant of leftovers from aborted runs).
 async function deleteFeatureRows(page: Page, pattern: RegExp) {

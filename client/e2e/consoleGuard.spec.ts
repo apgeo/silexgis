@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
-import { test } from './consoleGuard.ts';
+import { test, writesSharedAccountPreferences } from './consoleGuard.ts';
+import { adminEmail } from './helpers.ts';
 
 // The console sweep, proving itself.
 //
@@ -72,4 +73,46 @@ test('a console error is recorded, and declaring it takes it back out', async ({
   // what stands between a declared error and a failing run in enforcing mode.
   consoleErrors.allow(new RegExp(message), 'logged by this test to prove declaring one works');
   expect(consoleErrors.captured()).toHaveLength(0);
+});
+
+/** A request as the guard reads it, carrying an access token that names `email`. */
+function preferenceRequest(
+  email: string,
+  method = 'PATCH',
+  path = '/api/v1/me/preferences',
+  preferences: object = { pinnedTypeIds: ['a-type'] },
+) {
+  const part = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const token = `${part({ alg: 'RS256' })}.${part({ sub: 'someone', email })}.signature`;
+  return {
+    method: () => method,
+    url: () => `http://localhost:5173${path}`,
+    headers: () => ({ authorization: `Bearer ${token}` }),
+    postData: () => JSON.stringify({ preferences }),
+  };
+}
+
+// The refusal of a test that changes the shared administrator's preferences, proven on what it
+// reads rather than by a test that fails: the write it refuses is told apart from the same write
+// by somebody else, from a read, and from a write to anything else.
+test('a write to the shared administrator\'s preferences is told apart from every other request', () => {
+  expect(writesSharedAccountPreferences(preferenceRequest(adminEmail))).toBe(true);
+  expect(writesSharedAccountPreferences(preferenceRequest(adminEmail.toUpperCase()))).toBe(true);
+  expect(writesSharedAccountPreferences(preferenceRequest('e2e-member@dev.local'))).toBe(false);
+  expect(writesSharedAccountPreferences(preferenceRequest(adminEmail, 'GET'))).toBe(false);
+  expect(writesSharedAccountPreferences(preferenceRequest(adminEmail, 'PATCH', '/api/v1/me'))).toBe(false);
+  expect(
+    writesSharedAccountPreferences({ ...preferenceRequest(adminEmail), headers: () => ({}) }),
+  ).toBe(false);
+
+  // The one write passed over is the map's object selector writing the state it starts in, which
+  // the application does on a visit; the same selector left in any other state is refused.
+  const selector = (entry: object) => ({ selectors: { map: entry } });
+  const starting = { activeScopeIds: [], sort: 'updated', descending: true };
+  const write = (preferences: object) =>
+    writesSharedAccountPreferences(preferenceRequest(adminEmail, 'PATCH', '/api/v1/me/preferences', preferences));
+  expect(write(selector(starting))).toBe(false);
+  expect(write(selector({ ...starting, sort: 'name' }))).toBe(true);
+  expect(write(selector({ ...starting, activeScopeIds: ['caves'] }))).toBe(true);
+  expect(write({ ...selector(starting), pinnedTypeIds: ['a-type'] })).toBe(true);
 });

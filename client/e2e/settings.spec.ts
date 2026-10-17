@@ -4,6 +4,44 @@ import { test } from './consoleGuard.ts';
 import { asPerson, registerAccount, signedInElsewhere } from './arrange.ts';
 import { gotoRoute, login } from './helpers.ts';
 
+// The theme is kept with the account, so it is chosen as an account of its own: a dark theme set
+// for the administrator paints every other test signing in as the administrator dark while this
+// one runs — the accessibility scans among them, which check the scheme they asked for.
+test.describe('settings, as an account of its own', () => {
+  test.beforeEach(async ({ page }) => {
+    const member = await registerAccount(page.request, 'theme');
+    await login(page, member.email, member.password);
+  });
+
+  test('a dark theme survives a reload, painted before the app loads', async ({ page }) => {
+    await gotoRoute(page, '/settings/accessibility');
+
+    // By accessible name, not position: the shell's own language switcher is the first
+    // combobox in the document.
+    await page.getByLabel('Theme').click();
+    // The visible options are .ant-select-item-option with a title; antd's role="option" nodes
+    // live in a hidden a11y listbox that holds only two of them.
+    //
+    // Scoped to the open list, because the closed control carries the same title attribute for
+    // whatever is currently chosen: unscoped, this finds one element or two depending on which
+    // theme the account happens to be on.
+    await page.locator('.ant-select-dropdown:visible').getByTitle('Dark', { exact: true }).click();
+
+    // Tokens are held in memory, so a reload takes a silent authorize round trip before the
+    // page settles. Evaluating during it would run against a context that is about to be torn
+    // down by the redirect.
+    await page.reload();
+    await page.waitForURL(/\/settings\/accessibility/, { timeout: 20_000 });
+    await expect(page.getByLabel('Theme')).toBeVisible({ timeout: 20_000 });
+
+    // Proves the pre-mount script, which is the only thing that can decide this before the
+    // bundle has run — a React-only implementation flashes white first.
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.dataset.theme))
+      .toBe('dark');
+  });
+});
+
 test.describe('settings', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
@@ -63,43 +101,6 @@ test.describe('settings', () => {
     await card.getByLabel('Remove address').click();
     await page.getByRole('button', { name: 'OK' }).click();
     await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
-  });
-
-  test('a dark theme survives a reload, painted before the app loads', async ({ page }) => {
-    await page.goto('/settings/accessibility');
-
-    // By accessible name, not position: the shell's own language switcher is the first
-    // combobox in the document.
-    await page.getByLabel('Theme').click();
-    // The visible options are .ant-select-item-option with a title; antd's role="option" nodes
-    // live in a hidden a11y listbox that holds only two of them.
-    //
-    // Scoped to the open list, because the closed control carries the same title attribute for
-    // whatever is currently chosen: unscoped, this finds one element or two depending on which
-    // theme the account happens to be on, so it fails on exactly the re-run that follows an
-    // interrupted one — the run where the previous attempt did not reach the reset below.
-    await page.locator('.ant-select-dropdown:visible').getByTitle('Dark', { exact: true }).click();
-
-    // Tokens are held in memory, so a reload takes a silent authorize round trip before the
-    // page settles. Evaluating during it would run against a context that is about to be torn
-    // down by the redirect.
-    await page.reload();
-    await page.waitForURL(/\/settings\/accessibility/, { timeout: 20_000 });
-    await expect(page.getByLabel('Theme')).toBeVisible({ timeout: 20_000 });
-
-    // Proves the pre-mount script, which is the only thing that can decide this before the
-    // bundle has run — a React-only implementation flashes white first.
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.dataset.theme))
-      .toBe('dark');
-
-    // Put it back so the next run starts from the default.
-    await page.goto('/settings/accessibility');
-    await page.getByLabel('Theme').click();
-    await page
-      .locator('.ant-select-dropdown:visible')
-      .getByTitle('Match my system', { exact: true })
-      .click();
   });
 
   test('a limit for the cave walls is kept for this browser across a reload, and handed back', async ({

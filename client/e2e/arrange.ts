@@ -83,6 +83,41 @@ export async function signedInElsewhere(
 }
 
 /**
+ * An account of the flow's own that may edit the map, and the administrator who made it so.
+ *
+ * For a flow that changes one of the account's preferences — a pinned shortcut, a panel section
+ * opened — on the way to editing something: preferences follow the account, so the administrator
+ * every other spec signs in as cannot be the one to change them, and a self-registered account
+ * cannot edit. The account is enrolled in the seeded Editors group by the administrator, in a
+ * browser of their own that stays open for whatever the flow arranges or removes as them — the
+ * Editors group creates and writes but does not delete what others made. `release` takes the
+ * enrolment back and closes that browser; call it in a `finally`.
+ */
+export async function editorOfItsOwn(
+  browser: Browser,
+  request: Page['request'],
+  label: string,
+): Promise<{ account: Account; admin: Page; release: () => Promise<void> }> {
+  const account = await registerAccount(request, label);
+  const admin = await signedInElsewhere(browser);
+  const groups = await asPerson<{ id: string; slug: string }[]>(admin.page, 'GET', '/api/v1/permission-groups');
+  const editors = groups.find((group) => group.slug === 'editors');
+  expect(editors, 'the seeded Editors group is what hands out editing on the map').toBeTruthy();
+  await asPerson(admin.page, 'POST', `/api/v1/permission-groups/${editors!.id}/members`, {
+    memberKind: 'user',
+    memberId: account.id,
+  });
+  return {
+    account,
+    admin: admin.page,
+    release: async () => {
+      await tryAsPerson(admin.page, 'DELETE', `/api/v1/permission-groups/${editors!.id}/members/user/${account.id}`);
+      await admin.context.close();
+    },
+  };
+}
+
+/**
  * One call to the API as the person signed in on `page`, failing at the call when it is refused
  * rather than later, at whatever the flow expected the call to have arranged.
  */
