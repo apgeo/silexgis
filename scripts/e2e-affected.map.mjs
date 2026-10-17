@@ -93,6 +93,7 @@ export const specs = {
     'map-editing.spec.ts', 'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
     'karst-layers.spec.ts', 'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
     'accessibility.spec.ts', 'workspace-state.spec.ts', 'map-filters.spec.ts', 'table-map.spec.ts',
+    'coordinate-converter.spec.ts',
   ],
   // A shared view opened with no account: its background and the public data its link draws.
   mapViews: ['shared-view.spec.ts', 'karst-layers.spec.ts', 'map-filters.spec.ts'],
@@ -192,6 +193,7 @@ export const clientAreas = {
   'client/src/components/import/': 'imports',
   'client/src/components/invitations/': ['trips', 'events'],
   'client/src/components/map/': 'map',
+  'client/src/components/coordinates/': ['map', 'caves', 'settings'],
   'client/src/components/permissions/': 'access',
   'client/src/components/photolibrary/': 'photoLibraries',
   'client/src/components/qr/': 'qr',
@@ -226,6 +228,7 @@ export const clientAreas = {
   'client/src/pages/settings/': 'settings',
   'client/src/pages/statistics/': 'statistics',
   'client/src/pages/trips/': 'trips',
+  'client/src/pages/tools/': 'map',
   'client/src/pages/workareas/': 'workAreas',
   'client/src/pages/Scene3DPage': ['scene', 'terrain'],
   'client/src/pages/QrLandingPage': 'qr',
