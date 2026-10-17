@@ -1007,8 +1007,19 @@ export function filesWithExtension(dir, extension) {
   return out;
 }
 
-/** Empties a directory without removing it, so its ownership and mode stay what they were. */
+/**
+ * Empties a directory without removing it, so its ownership and mode stay what they were.
+ *
+ * Refuses a filesystem root or a directory directly under one (`/`, `/var`, `C:\\`, `D:\\data`):
+ * the directory comes from configuration, and a mistyped or empty setting must end the restore with
+ * a message rather than empty the machine.
+ */
 export function emptyDirectory(dir) {
+  const resolved = path.resolve(dir);
+  const depth = resolved.slice(path.parse(resolved).root.length).split(/[\\/]/).filter(Boolean).length;
+  if (depth < 2) {
+    throw new Error(`refusing to empty ${resolved}: too close to the root of the filesystem to be a data directory`);
+  }
   fs.mkdirSync(dir, { recursive: true });
   for (const entry of fs.readdirSync(dir)) fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
 }

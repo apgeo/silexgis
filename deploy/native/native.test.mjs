@@ -497,3 +497,10 @@ describe('asking a web server by name', () => {
     assert.match(res.body.toString(), /^\/landed for 127\.0\.0\.1:/);
   });
 });
+
+it('emptyDirectory refuses a filesystem root or a directory directly under one', async () => {
+  const { emptyDirectory } = await import('./lib.mjs');
+  const root = path.parse(process.cwd()).root;
+  assert.throws(() => emptyDirectory(root), /too close to the root/);
+  assert.throws(() => emptyDirectory(path.join(root, 'var')), /too close to the root/);
+});
