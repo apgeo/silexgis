@@ -87,7 +87,8 @@ docker compose up -d          # → http://localhost:8080
 ```
 
 See **[docs/INSTALL.md](docs/INSTALL.md)** for HTTPS, encryption at rest, backups, upgrades,
-external login providers, and the non-Docker (Linux/Windows) install path.
+external login providers, and the supported install without Docker — scripted under
+`deploy/native/`, for Linux with systemd, with Windows partly covered.
 
 Word, Excel and OpenDocument files are stored, searched and downloaded out of the box, but
 have no pages to show in the browser — those formats have none until something lays them out.
@@ -104,8 +105,8 @@ to set it up is in [Encryption at rest](docs/INSTALL.md#encryption-at-rest).
 server/   ASP.NET Core API (.NET solution: Api / Domain / Infrastructure + tests)
 client/   React + TypeScript SPA (Vite, Ant Design, OpenLayers)
 deploy/   Docker Compose, TLS and terrain overlays (serving, and the optional tile-making
-          worker), reverse-proxy configs, backup/restore, terrain pre-bake and the
-          mobile-sync development server scripts
+          worker), reverse-proxy configs, backup/restore, terrain pre-bake, the
+          mobile-sync development server scripts, and the install without Docker (native/)
 docs/     Installation and operations documentation, and the mobile-sync integration
           contract in docs/speleoloc-sync/
 contract/ Recorded HTTP exchanges that are the mobile-sync contract, asserted byte for

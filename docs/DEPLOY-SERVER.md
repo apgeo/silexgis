@@ -10,6 +10,10 @@ the *server*: the account the stack runs as, the firewall, the swap, the backup 
 the update procedure. Where the two overlap, INSTALL.md is the authority on the application's
 own configuration.
 
+This runbook is for the Docker installation. A server that is to run SilexGIS without Docker is
+installed, updated and backed up by the scripts in [`deploy/native/`](../deploy/native/) instead —
+see "Non-Docker install" in [INSTALL.md](INSTALL.md#non-docker-install).
+
 Everything here is done by five scripts under [`deploy/server/`](../deploy/server/):
 `provision-host.sh`, `harden-ssh.sh`, `install-app.sh`, `install-ops.sh` and `set-domain.sh`.
 They are idempotent, they are the same scripts used to build the reference installation, and

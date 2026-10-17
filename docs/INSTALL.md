@@ -1,6 +1,6 @@
 # Installing SilexGIS
 
-SilexGIS runs anywhere Docker runs, and can also be installed without Docker. Everything is
+SilexGIS runs anywhere Docker runs, and can also be installed without Docker, by scripts. Everything is
 configured through environment variables with sensible defaults; the only mandatory settings
 are a database password, an admin account, and the public URL.
 
@@ -19,9 +19,12 @@ are a database password, an admin account, and the public URL.
 
 - **Docker path:** Docker Engine with the Compose plugin (`docker compose`). 2 GB RAM is
   comfortable for a small community.
-- **Non-Docker path:** PostgreSQL 15+ with the PostGIS 3.3+, `unaccent` and `ltree` extensions
-  (the last two ship with PostgreSQL itself), the .NET runtime (current LTS), and any static web
-  server (nginx, Caddy, Apache, IIS).
+- **Non-Docker path** (supported, scripted — see [Non-Docker install](#non-docker-install)):
+  PostgreSQL 15+ with the PostGIS 3.3+, `unaccent` and `ltree` extensions (the last two ship with
+  PostgreSQL itself) and its `psql` and `pg_dump` client tools; the .NET 10 SDK (current LTS — it
+  publishes the API and includes the runtime that runs it); **Node.js 24**, which builds the web
+  application and runs the install scripts; and nginx. Linux with systemd is the first-class
+  target; Windows is partly covered.
 
 No system GDAL is required on any path — vector import/export and raster conversion run
 in-process.
@@ -1238,6 +1241,9 @@ A cron example that keeps nightly backups:
 15 3 * * *  cd /opt/silexgis/deploy && sh scripts/backup.sh >> /var/log/silexgis-backup.log 2>&1
 ```
 
+An installation without Docker backs up with `deploy/native/backup.mjs` instead, into the same two
+files — see [Backups and restoring](#backups-and-restoring) under Non-Docker install.
+
 Both outputs are unencrypted. If a copy leaves the host — offsite, object storage, a USB disk —
 encrypt it first; see [Encryption at rest](#encryption-at-rest).
 
@@ -1334,7 +1340,8 @@ docker compose up -d
 ```
 
 Database migrations run automatically on start. Take a backup first; release notes call out
-any manual steps.
+any manual steps. An installation without Docker updates with `deploy/native/update.mjs`, which
+backs up first and rolls back a build that does not come up — see [Updating](#updating).
 
 ### Upgrading across the document text-reading release
 
@@ -1621,48 +1628,265 @@ destination of the code that proves it.
 
 ## Non-Docker install
 
-1. **Database.** Create a PostgreSQL database and enable extensions:
-   ```sql
-   CREATE DATABASE silexgis;
-   \c silexgis
-   CREATE EXTENSION postgis;
-   CREATE EXTENSION unaccent;
-   CREATE EXTENSION ltree;
-   ```
-   The application creates these itself on first start if the database user is allowed to, so
-   this step is a convenience for installations where it is not. Document content search also
-   creates three text-search configurations in the `public` schema on first start
-   (`simple_unaccent`, `romanian_unaccent`, `english_unaccent`), which needs no special
-   privilege beyond owning the database.
-2. **API.** Publish and run it:
-   ```bash
-   dotnet publish server/src/SilexGis.Api -c Release -o /opt/silexgis/api
-   ```
-   Configure via environment variables (or `appsettings.Production.json`). On Linux, use the
-   provided systemd unit (`deploy/systemd/silexgis-api.service`) — it documents the service
-   user, data directories, and an `EnvironmentFile` for secrets. On Windows, run it as a
-   Windows Service (e.g. with `sc.exe create`) or under IIS with the ASP.NET Core Module,
-   pointing at `SilexGis.Api.dll`. A Linux host needs the system's time-zone database (the
-   `tzdata` package on Debian and Ubuntu; a minimal or container base may lack it): importing a
-   tracking sheet on a named zone's clocks and a member's quiet hours both look zones up in it.
-   The optional `tzdata-legacy` package is not needed.
-3. **Client.** Build the SPA and serve `client/dist/` with your web server:
-   ```bash
-   cd client && npm ci && npm run build
-   ```
-   Use `deploy/nginx/silexgis.conf` as a template — it serves the static files, proxies
-   `/api`, `/connect`, `/health`, `/openapi` and `/.well-known` to the API, sets a
-   `client_max_body_size` above the default upload limit, and compresses survey files on their
-   way to the browser (they are stored with no type of their own, which nginx otherwise sends
-   whole: an expedition's model of 20 MB goes over the wire as about 4).
-4. **Admin.** If you did not set `SILEXGIS__Admin__Email/Password`, create the first admin
-   interactively:
-   ```bash
-   dotnet /opt/silexgis/api/SilexGis.Api.dll bootstrap-admin
-   ```
+Docker Compose stays the recommended path: it is the one with the TLS front, the document converter
+and the terrain tile-maker as overlays, and the one most installations run. Installing without
+Docker is **supported** as well, and is done by scripts rather than by following steps: everything
+under `deploy/native/` is plain Node, needs nothing installed beyond the requirements below, and is
+proved on a fresh machine by a workflow of its own every week. **Linux with systemd is the
+first-class target**; what Windows gets is set out at the end of this section.
 
-The same code runs on Windows and Linux; paths, casing and line endings are handled
-cross-platform.
+It is the same application with the same settings — every `SILEXGIS__*` variable in the
+[Configuration reference](#configuration-reference) applies unchanged — and its backups have the
+same form as the Docker path's, so an installation can move between the two.
+
+### What you need
+
+| | |
+|---|---|
+| **PostgreSQL 15 or later** | with **PostGIS 3.3 or later** (on Debian and Ubuntu, `postgresql-<version>-postgis-3`) and the `unaccent` and `ltree` extensions, which ship with PostgreSQL's contrib modules. The client tools `psql` and `pg_dump` on this machine, of at least the server's major version |
+| **.NET 10 SDK** | to publish the API; it includes the ASP.NET Core runtime that runs it. Installed system-wide (`/usr/bin/dotnet` or `/usr/share/dotnet`), not in a home directory, because the service account has to run it |
+| **Node.js 24** | to build the web application — `npm ci && npm run build` in `client/`, which declares `node >=24` — and to run the scripts |
+| **nginx** | the web server in front; the scripts install its site |
+| `tar`, `tzdata`, `git` | backups, time zones (tracking imports and quiet hours look zones up), and the checkout |
+
+On Ubuntu 24.04, for example (the distribution's PostgreSQL is 16; the PostgreSQL project's own
+repository has later ones):
+
+```bash
+sudo apt-get install postgresql postgresql-contrib postgresql-16-postgis-3 nginx tzdata git
+# .NET 10 SDK: the dotnet-sdk-10.0 package, from wherever Microsoft's "Install .NET on Linux"
+#   page says your release gets it
+# Node 24: from nodejs.org, or the NodeSource repository
+```
+
+A server where the database runs on another machine works too: give its address with `--db-host`
+and either administrative access (below) or a role and database somebody created for you.
+
+### Install
+
+From a checkout **with its submodules** — the cave-survey readers are one:
+
+```bash
+git clone --recurse-submodules https://github.com/apgeo/silexgis.git /opt/silexgis-src
+cd /opt/silexgis-src
+sudo node deploy/native/install.mjs --public-url https://caves.example.org --admin-email you@example.org
+```
+
+Keep that checkout: updates are built from it, and the nightly backup runs the script in it.
+
+The installer, in order:
+
+1. **checks the prerequisites** and reports every missing one at once, each with what to install;
+2. **prepares the database.** With administrative access — the local `postgres` account when it
+   runs as root on the database's own machine, or `--db-admin-url
+   postgres://postgres:…@host:5432/postgres` — it creates the role (`silexgis`), the database it
+   owns and the `postgis`, `unaccent` and `ltree` extensions. Without it, give `--db-password` for a
+   role and database that already exist; PostGIS must then already be in the database (a superuser
+   runs `CREATE EXTENSION postgis;`), since no ordinary role may create it. Either way it then
+   connects as the application's role and checks PostgreSQL 15+, PostGIS 3.3+ and the extensions;
+3. **creates the service account** `silexgis` and the directories, each owned and protected for
+   what writes it;
+4. **writes the configuration** to `/etc/silexgis/silexgis.env` (mode 600): the connection string,
+   the public address, the first administrator, the data directories. As the Docker installer
+   does, it generates the database password and the administrator's password when you give none,
+   and prints the administrator's once at the end;
+5. **installs the systemd unit** `silexgis-api` and **the nginx site**, both rendered from the
+   templates in `deploy/systemd/` and `deploy/nginx/`;
+6. **publishes the API and builds the web application**, starts the API — which creates the schema
+   and seeds what every installation needs as it starts, the first administrator included — and
+   runs the [check](#checking-an-installation);
+7. enables a **nightly backup** (a systemd timer at 03:20 keeping 14), and with `--seed-demo` loads
+   the demonstration data set.
+
+Sign in at the public address with the administrator's address and password.
+
+**Re-running it converges.** It keeps every password and setting already written, changes only
+what an option given on that run names, rebuilds only when the checkout is not what is installed
+(or with `--rebuild`), and restarts the API on the configuration in the file.
+
+Where an installation lives, and the options that move it (each can also be set by the
+environment variable named in `node deploy/native/install.mjs --help`):
+
+| What | Default (Linux) | Option |
+|---|---|---|
+| configuration: `silexgis.env`, `install.json` | `/etc/silexgis` | `--config-dir` |
+| the published API (`api/`) and web application (`web/`) | `/opt/silexgis` | `--app-dir` |
+| uploads (`files/`), keys (`keys/`), terrain (`terrain/`) | `/var/lib/silexgis` | `--data-dir` |
+| the API's log in process mode | `/var/log/silexgis` | `--log-dir` |
+| backups | `/var/backups/silexgis` | `--backup-dir` |
+| the port nginx listens on | `80` | `--http-port` |
+| the loopback port the API listens on | `5080` | `--api-port` |
+
+The other scripts find the installation through `/etc/silexgis/install.json`; one installed
+elsewhere is named with `--config-dir` (or `SILEXGIS_CONFIG_DIR`) on every command.
+
+### Configuration
+
+`/etc/silexgis/silexgis.env` is what the API reads, through the unit's `EnvironmentFile`. Add any
+setting from the [Configuration reference](#configuration-reference) to it under its full name —
+`SILEXGIS__Mail__Host=smtp.example.org` — and restart:
+
+```bash
+sudo systemctl restart silexgis-api
+```
+
+The short names in the Docker path's `deploy/.env` (`SILEXGIS_DB_PASSWORD`, `SILEXGIS_ADMIN_EMAIL`,
+…) are read by Docker Compose, not by the application, and mean nothing here. A re-run of the
+installer keeps every line of this file and changes only what its options name.
+
+There is no separate command to create the first administrator: the API creates it from
+`SILEXGIS__Admin__Email` and `SILEXGIS__Admin__Password` on its first start against an empty
+database, which is why the installer asks for the address.
+
+### The web server
+
+The installer renders `deploy/nginx/silexgis.conf` for this installation — host name, port, the
+web application's directory, the API's address and the published-terrain directory — writes it to
+`/etc/nginx/sites-available/silexgis.conf` (linked into `sites-enabled`; on a distribution without
+that layout, `/etc/nginx/conf.d/silexgis.conf`), tests nginx's whole configuration with it, and
+reloads. A rendering nginx rejects is taken back out before anything is reloaded. A copy of the
+rendering is also kept in `/etc/silexgis/nginx-silexgis.conf`.
+
+**HTTPS.** Run your certificate tool against the site once the installation answers on port 80 —
+`sudo certbot --nginx -d caves.example.org` — and make sure `SILEXGIS__PublicUrl` is the `https`
+address. A file somebody changed is never overwritten: later installs and updates put their own
+rendering beside it as `silexgis.conf.new` for you to compare, the way a package manager treats a
+changed configuration file.
+
+Two things to know about the site:
+
+- **One installation per nginx.** The site defines `map` variables and a log format at nginx's top
+  level, under fixed names, so a second copy of it beside the first is refused by `nginx -t`. A
+  second installation on the same machine is a Docker one, or a copy of the site with those names
+  changed by hand.
+- **The distribution's default site** stays enabled and keeps answering requests for any other
+  name. The SilexGIS site answers its own host name.
+
+Caddy, Apache and IIS are not scripted. The nginx site carries more than proxying — the framing
+headers that decide which pages may be embedded elsewhere, the scrubbing that keeps the credential
+in a published-trip or file-link address out of the access log, the caching rules and the type for
+module scripts — and another web server has to be given each of those by hand. Treat
+`deploy/nginx/silexgis.conf` as the specification and `check.mjs` as the test.
+
+### The service
+
+```bash
+systemctl status silexgis-api
+journalctl -u silexgis-api -f
+```
+
+The unit runs the API as the `silexgis` account with the filesystem read-only except the data
+directory, listening on `127.0.0.1:5080` only. Change it with `sudo systemctl edit silexgis-api`:
+a drop-in survives every re-install, and an edit to the unit file itself is kept the same way the
+nginx site's is.
+
+`--service process` runs the API as a plain detached process instead — for a machine with no
+service manager: a container, a continuous-integration runner, Windows. Its log is
+`/var/log/silexgis/api.log` and its process id is kept in the data directory, so the scripts can
+stop and restart it. It does **not** start again after a reboot.
+
+### Updating
+
+```bash
+cd /opt/silexgis-src
+sudo node deploy/native/update.mjs            # update if the branch has moved
+sudo node deploy/native/update.mjs --check    # say whether it has; change nothing
+sudo node deploy/native/update.mjs --force    # rebuild and restart at the same commit
+sudo node deploy/native/update.mjs --no-pull  # build the checkout as it is, without fetching
+```
+
+The same procedure as the Docker path's update script: one update at a time; fetch and
+fast-forward the checkout, submodules included; **back up first** (to
+`/var/backups/silexgis/<timestamp>/`, keeping the newest `SILEXGIS_BACKUP_KEEP`, default 10); build
+the new version beside the running one, so a build that fails changes nothing; bring the nginx site
+and the unit up to date; switch, start, wait for `/health/ready` (up to
+`SILEXGIS_HEALTH_TIMEOUT` seconds, default 300) and run the check. **If the new version is not
+healthy, the previous build is put back and started again**, and the message names the backup.
+
+The program directory keeps the build before the running one (`api.previous`, `web.previous`;
+after a rollback, the one that failed as `api.failed`, `web.failed`) — budget about 2 GB for it.
+The checkout needs about as much again for the build's own output and the client's packages.
+
+The limit is the same as on the Docker path: the database is not rolled back. Migrations run as the
+new API starts, so if it got that far, putting the previous build back is not enough — restore the
+backup the update took, as the message says.
+
+### Backups and restoring
+
+```bash
+sudo node deploy/native/backup.mjs                 # → /var/backups/silexgis/<timestamp>/
+sudo node deploy/native/backup.mjs /path/out       # → /path/out/
+sudo node deploy/native/backup.mjs --keep 14       # and delete all but the newest 14
+```
+
+It writes **the same two files the Docker path's `backup.sh` writes**: `db.sql.gz` (a plain
+`pg_dump`, made with this machine's `pg_dump` as the application's role) and `files.tar.gz` (the
+uploads directory). The keys and baked terrain are left out for the reasons given under
+[Backups](#backups). The installer's nightly timer runs this command; see it with
+`systemctl list-timers silexgis-backup.timer`.
+
+```bash
+sudo node deploy/native/restore.mjs /var/backups/silexgis/<timestamp> --yes
+```
+
+It stops the API, drops and recreates the database's `public` schema, loads the dump, unpacks the
+files, hands them to the service account and starts the API again. **It fails on any error in the
+load** except the three the Docker restore also lets through (the PostGIS image's `tiger`,
+`tiger_data` and `topology` schemas already existing) — and then leaves the files untouched and the
+API stopped, so a half-restored database is not mistaken for a working one. The load recreates
+PostGIS, which needs administrative access: as root on the database's machine it uses the local
+`postgres` account, otherwise give `--db-admin-url`.
+
+**Moving between the Docker path and this one.** A backup from either restores on the other, with
+two conditions. The dump sets every object's owner to the role it was taken from, so the role must
+have the same name on both sides (`silexgis` is the default on both). And PostgreSQL must be the
+same major version or later on the receiving side: the Docker path runs PostgreSQL 17, whose dumps
+set a parameter PostgreSQL 16 does not know, so restoring one into a distribution's PostgreSQL 16
+fails on that line — by design, since a restore that fails is the one that reports it.
+
+### Checking an installation
+
+```bash
+sudo node deploy/native/check.mjs
+sudo node deploy/native/check.mjs --url http://127.0.0.1   # through another address, as the public host
+```
+
+Each check prints `ok` or `FAIL <name>: <reason>`, and the command exits non-zero if any failed:
+`api-health` (readiness, through the web server), `web-app` (the built application, and its script
+served as JavaScript), `module-scripts`, `api-proxy` (`/api` reaches the API rather than the web
+application or a gateway error), `sign-in-discovery` (and that it names the address users reach),
+`migrations` (every migration the installed build defines is applied), `files-writable` and
+`keys-writable` (as the service account). The installer and every update run it; run it yourself
+after changing the configuration or the web server.
+
+### Windows
+
+The same scripts run on Windows (PowerShell or `cmd`, as Administrator), with these defaults:
+the program under `C:\Program Files\SilexGIS`, data, configuration, logs and backups under
+`C:\ProgramData\SilexGIS`, `--service process` and `--web-server none`. What that covers, and what
+it does not:
+
+- **Covered:** the prerequisite check (`--pg-bin "C:\Program Files\PostgreSQL\17\bin"` if the client
+  tools are not on `PATH`); creating the role, database and extensions with `--db-admin-url`; the
+  publish and the build; the directories and the configuration file; starting the API as a process;
+  `backup.mjs` and `restore.mjs` (Windows 10 and later carry the `tar` they use); `check.mjs`. The
+  scripts' unit tests run on Windows in continuous integration.
+- **Not covered: running the API as a service.** The API does not integrate with the Windows
+  service manager, so registering `dotnet SilexGis.Api.dll` with `sc.exe create` gives a service
+  that fails to start. Host it in **IIS** with the ASP.NET Core Module (the .NET Hosting Bundle) —
+  the publish output in `api\` carries the `web.config` it needs, and the settings from
+  `silexgis.env` go into that file's `<environmentVariables>` or an `appsettings.Production.json`
+  beside it — or under a service wrapper of your choice. Until then the API started in process mode
+  stops at sign-out or reboot.
+- **Not covered: the web server.** Nothing is installed; the rendered nginx site is left in
+  `C:\ProgramData\SilexGIS\config\nginx-silexgis.conf`, ready for nginx for Windows. IIS in front
+  needs URL Rewrite and Application Request Routing, and the site's headers and log scrubbing
+  rebuilt by hand (see [The web server](#the-web-server)).
+- **Not covered: file permissions.** The directories inherit ProgramData's; restrict
+  `config\silexgis.env`, which holds the database and administrator passwords, to Administrators
+  and the account the API runs as.
+- **Not proved end to end.** The Linux path is installed, updated, backed up and restored on a
+  fresh machine every week; the Windows path is not.
 
 ## Configuration reference
 
