@@ -1163,6 +1163,40 @@ Two things worth knowing:
   never serves, so a rule aimed too high hands those files to anyone who can reach the site, with no
   sign-in and nothing in the application's log.
 
+## Photo libraries (optional): who keeps them up to date
+
+SilexGIS can read photographs from an **Immich** or a **PhotoPrism** library running beside it
+(`deploy/docker-compose.immich.yml`, `deploy/docker-compose.photoprism.yml`). Read this before
+adding either, because it says what this project does and does not do for you.
+
+**SilexGIS connects to these products; it does not maintain them.** They are separate products with
+their own release schedules, made by other people, and **your club keeps them up to date**: their
+security fixes, their upgrades, their backups. Neither is a small commitment — Immich publishes a
+release every five to seven weeks, changes its API at each major version, does not back-port fixes
+and does not support going back to an older version; PhotoPrism versions its builds by date and has
+no deprecation policy. If nobody at your club will follow their release notes, do not add them: the
+rest of SilexGIS, including its own photographs and documents, works without either.
+
+**What this project does instead** is test against exact builds and say which. The builds a release
+was tested with are the ones named in `deploy/.env.example` (`SILEXGIS_IMMICH_VERSION`,
+`SILEXGIS_PHOTOPRISM_VERSION`); the project's photo-library browser checks run against exactly those,
+read from that file, so the example and the test cannot drift apart. Treat them as the support
+matrix:
+
+| Situation | What to expect |
+|---|---|
+| You run the builds named in `deploy/.env.example` | Tested with this release. |
+| You run a newer build of the same major version | Usually works; not tested. Check the map layer, the browsing page and the search after updating. |
+| You run a newer major version | Not supported until a SilexGIS release names it; expect parts of the integration to stop working. |
+
+**Updating one** is updating that product, not SilexGIS: read its release notes, change the pinned
+build in `.env`, then `docker compose pull <service>` and `docker compose up -d`. An administrator can
+first suspend the library from the installation settings, so nothing in SilexGIS asks it for anything
+while it is down.
+
+**Backing one up is yours too.** `scripts/backup.sh` covers SilexGIS's own database and files, not
+these products' databases, albums, faces or settings. Use each product's own backup procedure.
+
 ## Backups
 
 `deploy/scripts/backup.sh` dumps the database and the uploaded-files volume:
