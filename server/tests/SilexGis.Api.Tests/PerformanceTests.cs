@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Data.Common;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Net;
 using System.Net.Http.Json;
@@ -37,6 +38,18 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     private const int CaveCount = 2000;
     private const int EntrancesPerCave = 50; // 100k entrance features
     private const long BudgetMs = 1000;
+
+    /// <summary>
+    /// The load per core under which this machine counts as quiet enough to measure on, how long
+    /// the class waits for it, and how often it looks. Half a core's worth of work per core leaves
+    /// a request the headroom the budgets above were measured with; the window is short enough
+    /// that a busy machine costs the suite a minute and a half rather than an hour.
+    /// </summary>
+    private const double QuietLoadPerCore = 0.5;
+
+    private static readonly TimeSpan SettleWindow = TimeSpan.FromSeconds(90);
+
+    private static readonly TimeSpan SettlePoll = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// The focused viewport every plan pin uses — roughly a thousandth of the seeded extent,
@@ -88,6 +101,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             factory, GlobalRoles.Viewer, $"perf-view-{Guid.NewGuid():N}@t.local");
         await SeedSyntheticAsync(ownerId);
         using var client = await AuthHelper.BearerClientAsync(factory, email);
+        var settled = await SettleAsync();
 
         // Wide-area clusters, focused points, the cross-kind layer, table page, indexed search.
         var requests = new (string Name, string Url)[]
@@ -113,15 +127,17 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             var stopwatch = Stopwatch.StartNew();
             var response = await client.GetAsync(url);
             stopwatch.Stop();
+            var measuredAt = LoadReading();
             response.StatusCode.ShouldBe(HttpStatusCode.OK, url);
-            output.WriteLine($"{name}: {stopwatch.ElapsedMilliseconds} ms");
-            stopwatch.ElapsedMilliseconds.ShouldBeLessThan(BudgetMs, $"{name} exceeded {BudgetMs}ms");
+            output.WriteLine($"{name}: {stopwatch.ElapsedMilliseconds} ms ({measuredAt})");
+            stopwatch.ElapsedMilliseconds.ShouldBeLessThan(
+                BudgetMs, $"{name} exceeded {BudgetMs}ms — {measuredAt}, {settled}");
         }
 
         await AssertEntranceLayerPlansAsync(ownerId, strangerId);
         await AssertSurveySubstratePlansAsync(strangerId);
         await AssertProximityPlanAsync(strangerId);
-        await AssertSharedLinkAsync(client, ownerId);
+        await AssertSharedLinkAsync(client, ownerId, settled);
     }
 
     /// <summary>
@@ -162,7 +178,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     /// made public first, so the link's own narrowing — an entrance is drawn only when its cave is
     /// itself public — has rows to keep and rows to drop, and the probe it adds per row is real.
     /// </remarks>
-    private async Task AssertSharedLinkAsync(HttpClient owner, Guid ownerId)
+    private async Task AssertSharedLinkAsync(HttpClient owner, Guid ownerId, string settled)
     {
         const int publicCaves = CaveCount / 4;
         using var scope = factory.Services.CreateScope();
@@ -207,10 +223,14 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         var stopwatch = Stopwatch.StartNew();
         var response = await anonymous.GetAsync(url);
         stopwatch.Stop();
+        var measuredAt = LoadReading();
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
-        output.WriteLine($"shared link, world window from zoom 0: {stopwatch.ElapsedMilliseconds} ms");
-        stopwatch.ElapsedMilliseconds.ShouldBeLessThan(BudgetMs, $"the shared link's world window exceeded {BudgetMs}ms");
+        output.WriteLine(
+            $"shared link, world window from zoom 0: {stopwatch.ElapsedMilliseconds} ms ({measuredAt})");
+        stopwatch.ElapsedMilliseconds.ShouldBeLessThan(
+            BudgetMs,
+            $"the shared link's world window exceeded {BudgetMs}ms — {measuredAt}, {settled}");
 
         // Every entrance of a public cave, and nothing of the others.
         JsonNode.Parse(payload)!["features"]!.AsArray()
@@ -552,6 +572,84 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         plan.ShouldNotContain("Seq Scan on features", Case.Insensitive,
             $"{label}: no path in the entrance layer may sequentially scan the feature table");
     }
+
+    /// <summary>
+    /// Waits, for a bounded while, for the machine to be quiet enough that the budgets above
+    /// measure this code rather than whatever else the machine is doing — and returns what that
+    /// wait came to, for the failure messages to carry.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The timed requests measure the machine as much as the code. The country-wide cluster read
+    /// was measured at about 740 ms with nothing else running and at 1,050–1,100 ms beside another
+    /// session's build: three whole integration runs went red on it in October 2026 and every one
+    /// of them passed when the class was re-run on its own. So the class waits for the load to
+    /// fall first, and every failure says what the load was when the figure was taken — a red at
+    /// three per core is the machine's and a red at a tenth of that is the code's, and telling
+    /// them apart no longer costs a re-run of the suite.
+    /// </para>
+    /// <para>
+    /// A reading, never a retry: the measurement is still taken once and asserted once. Waiting
+    /// for a quieter moment before starting makes the figure mean something; measuring again
+    /// until one came in under the budget would hide the slow answer this exists to catch.
+    /// </para>
+    /// <para>
+    /// The wait is bounded because the machine may simply stay busy, and a test that waits for
+    /// quiet that never comes reports nothing at all. When the window runs out the figure is
+    /// taken anyway and stands, with the load it was taken at beside it.
+    /// </para>
+    /// </remarks>
+    private async Task<string> SettleAsync()
+    {
+        var waited = Stopwatch.StartNew();
+
+        // A null reading — this platform publishes no load average — is not greater than the
+        // threshold, so there is nothing to wait for and the loop ends at once.
+        while (LoadPerCore() > QuietLoadPerCore && waited.Elapsed < SettleWindow)
+        {
+            await Task.Delay(SettlePoll);
+        }
+
+        // One interpolated string, because two of them added together are a string and no
+        // longer carry the culture this has to be formatted in.
+        var settled = Invariant(
+            $"settled for {waited.Elapsed.TotalSeconds:0} s of at most {SettleWindow.TotalSeconds:0} s");
+        output.WriteLine($"{settled}; measuring at {LoadReading()}");
+        return settled;
+    }
+
+    /// <summary>The load the machine carried over the last minute, per core — where it says.</summary>
+    /// <remarks>
+    /// Linux publishes the three load averages as the first three words of <c>/proc/loadavg</c>.
+    /// Windows, which this suite also runs on, publishes no equivalent, and nothing here is worth
+    /// failing a test over: a reading that cannot be taken is reported as unknown and the budget
+    /// is asserted without it.
+    /// </remarks>
+    private static double? LoadPerCore()
+    {
+        try
+        {
+            var averages = File.ReadAllText("/proc/loadavg")
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return double.Parse(averages[0], CultureInfo.InvariantCulture) / Environment.ProcessorCount;
+        }
+        catch (Exception reading) when (
+            reading is IOException or UnauthorizedAccessException or NotSupportedException
+                or FormatException or IndexOutOfRangeException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The load reading a failure message carries, in words.</summary>
+    private static string LoadReading() =>
+        LoadPerCore() is { } load
+            ? Invariant($"load {load:0.00} per core across {Environment.ProcessorCount} of them")
+            : "load unknown (this platform publishes no load average)";
+
+    /// <summary>A measurement reads the same wherever it is taken; these figures are not text.</summary>
+    private static string Invariant(FormattableString value) =>
+        value.ToString(CultureInfo.InvariantCulture);
 
     private static void AddViewport(DynamicParameters parameters)
     {
