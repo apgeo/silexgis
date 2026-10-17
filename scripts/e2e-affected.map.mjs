@@ -44,6 +44,7 @@ export const specs = {
     // A cave's declared places are written through the cave's own door and published on a trip's
     // page, so a change here is answered by the walk that reads one as a visitor.
     'public-trip-as-installed.spec.ts',
+    'table-map.spec.ts',
   ],
   cavingGroups: [
     'announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts', 'caver-caving-groups.spec.ts',
@@ -70,11 +71,11 @@ export const specs = {
   filters: [
     'trip-list.spec.ts', 'trip-map.spec.ts', 'registry-statistics.spec.ts',
     'cave-registry-filters.spec.ts', 'gallery-filters.spec.ts', 'reslinks.spec.ts',
-    'map-filters.spec.ts',
+    'map-filters.spec.ts', 'table-map.spec.ts',
   ],
   geoFeatures: [
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
-    'photo-import.spec.ts', 'feature-restore.spec.ts',
+    'photo-import.spec.ts', 'feature-restore.spec.ts', 'table-map.spec.ts',
   ],
   geofiles: ['vector-import.spec.ts'],
   georeferencedMaps: [
@@ -87,7 +88,7 @@ export const specs = {
   map: [
     'map-editing.spec.ts', 'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
     'karst-layers.spec.ts', 'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
-    'accessibility.spec.ts', 'workspace-state.spec.ts', 'map-filters.spec.ts',
+    'accessibility.spec.ts', 'workspace-state.spec.ts', 'map-filters.spec.ts', 'table-map.spec.ts',
   ],
   // A shared view opened with no account: its background and the public data its link draws.
   mapViews: ['shared-view.spec.ts', 'karst-layers.spec.ts', 'map-filters.spec.ts'],
