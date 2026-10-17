@@ -36,7 +36,22 @@ const FIELDS: FilterField[] = [
   field('property:sinkhole:depth_m', 'number', ['lessThan', 'greaterOrEqual'], {
     labelKey: 'filters.fields.property', label: 'Sinkhole depth (m)', requires: { field: 'typeId', value: '7' },
   }),
+  field('position', 'spatial', ['within', 'inside']),
 ];
+
+let sorts: string[] = ['updated'];
+
+// The object pickers are the ordinary selector, proved on its own; a box handing back an id is
+// enough to prove what the editor does with one.
+vi.mock('../selector/ObjectSelector.tsx', () => ({
+  default: (props: { value: string | null; onChange: (id: string | null) => void; 'data-testid': string }) => (
+    <input
+      data-testid={props['data-testid']}
+      value={props.value ?? ''}
+      onChange={(e) => props.onChange(e.target.value === '' ? null : e.target.value)}
+    />
+  ),
+}));
 
 let limits = { maxNodes: 200, maxDepth: 6, maxValuesPerCondition: 200, maxWorlds: 12, maxTextValueLength: 200, maxPageSize: 500 };
 let queryAnswer: { data?: unknown; error?: unknown } = {};
@@ -44,7 +59,7 @@ const queriesAsked: { body: { count: boolean; pageSize: number }; enabled: boole
 
 vi.mock('../../api/hooks.ts', () => ({
   useFilterVocabulary: () => ({
-    data: { worlds: [{ world: 'feature', labelKey: 'x', fields: FIELDS, sorts: ['updated'] }], limits },
+    data: { worlds: [{ world: 'feature', labelKey: 'x', fields: FIELDS, sorts }], limits },
   }),
   useFilterQuery: (body: { count: boolean; pageSize: number }, enabled: boolean) => {
     queriesAsked.push({ body, enabled });
@@ -60,6 +75,8 @@ vi.mock('../../api/hooks.ts', () => ({
   useCavingGroups: () => ({ data: [], isLoading: false }),
   useUserSearch: () => ({ data: [], isFetching: false }),
   useMember: () => ({ data: undefined, isError: true }),
+  useSavedFilters: () => ({ data: [], isLoading: false }),
+  documentOf: () => null,
 }));
 
 const c = (fieldKey: string, op: FilterOp, values: FilterValue[]): FilterNode =>
@@ -87,6 +104,7 @@ beforeEach(async () => {
   limits = { ...limits, maxDepth: 6 };
   queryAnswer = {};
   queriesAsked.length = 0;
+  sorts = ['updated'];
 });
 
 const REGISTRY: FilterNode = {
@@ -233,5 +251,100 @@ describe('the editor names every comparison and every closed value, in both lang
     for (const [set, members] of Object.entries(CLOSED_SETS)) {
       expect(Object.keys(editor.values[set]).sort(), set).toEqual([...members].sort());
     }
+  });
+});
+
+const CAVE = '0b3f6a52-1d7e-4c5a-9a61-3f2d9c4e8b10';
+
+describe('a spatial row', () => {
+  const nearCave = c('position', 'within', [{ type: 'number', value: 500 }, { type: 'object', world: 'feature', id: CAVE }]);
+  const nearPoint = c('position', 'within', [{ type: 'number', value: 500 }, { type: 'point', longitude: 23.5, latitude: 45.25 }]);
+
+  it('is offered as a field, and a radius with a picked object is applied as written', () => {
+    const onApply = show({ node: 'allOf', of: [c('position', 'within', [])] });
+    fireEvent.change(inputOf('filter-editor-value-0-radius'), { target: { value: '500' } });
+    fireEvent.change(inputOf('filter-editor-value-0-object'), { target: { value: CAVE } });
+    fireEvent.click(screen.getByTestId('filter-editor-apply'));
+
+    expect(onApply).toHaveBeenCalledWith(doc({ node: 'allOf', of: [nearCave] }));
+  });
+
+  it('leaves a radius with nothing to measure from out of what is counted', () => {
+    show({ node: 'allOf', of: [c('position', 'within', [])] });
+    fireEvent.change(inputOf('filter-editor-value-0-radius'), { target: { value: '500' } });
+
+    const last = queriesAsked.at(-1)!.body as unknown as { document: FilterDocument };
+    expect(last.document.scope[0]!.where).toBeNull();
+  });
+
+  it('shows a refused anchor on the row that names it, in the reader language, and will not apply it', async () => {
+    queryAnswer = { error: new ApiError(400, 'filter.anchor_not_found', 'What this filter measures from is not available.') };
+    show({ node: 'allOf', of: [c('name', 'contains', [{ type: 'text', value: 'urs' }]), nearCave] });
+
+    expect(screen.getByTestId('filter-editor-row-error-1')).toHaveTextContent(en.filters.editor.spatial.refused.notFound);
+    expect(screen.queryByTestId('filter-editor-row-error-0')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('filter-editor-refusal')).not.toBeInTheDocument();
+    expect(screen.getByTestId('filter-editor-apply')).toBeDisabled();
+
+    cleanup();
+    await i18n.changeLanguage('ro');
+    show({ node: 'allOf', of: [nearCave] });
+    expect(screen.getByTestId('filter-editor-row-error-0')).toHaveTextContent(ro.filters.editor.spatial.refused.notFound);
+    expect(screen.getByTestId('filter-editor')).not.toHaveTextContent('measures from');
+  });
+
+  it('keeps an anchor refusal with the whole filter when no row names something to look up', () => {
+    queryAnswer = { error: new ApiError(400, 'filter.anchor_not_found', 'What this filter measures from is not available.') };
+    show({ node: 'allOf', of: [nearPoint] });
+
+    expect(screen.queryByTestId('filter-editor-row-error-0')).not.toBeInTheDocument();
+    expect(screen.getByTestId('filter-editor-refusal')).toBeInTheDocument();
+  });
+});
+
+describe('nearest first', () => {
+  function showSortable() {
+    const onApply = vi.fn();
+    render(<FilterEditor world="feature" document={doc(null)} onApply={onApply} sortable />);
+    return onApply;
+  }
+
+  it('is not offered where the page orders results its own way', () => {
+    sorts = ['updated', 'proximity'];
+    show(null);
+    expect(screen.queryByTestId('filter-sort')).not.toBeInTheDocument();
+  });
+
+  it('needs a place to measure from before it is asked or applied, and then carries it', () => {
+    sorts = ['updated', 'proximity'];
+    const onApply = showSortable();
+
+    fireEvent.mouseDown(within(screen.getByTestId('filter-sort-key')).getByRole('combobox'));
+    fireEvent.click(screen.getByText(en.filters.sorts.proximity));
+    expect(screen.getByTestId('filter-editor-needs-anchor')).toBeInTheDocument();
+    expect(screen.getByTestId('filter-editor-apply')).toBeDisabled();
+    expect(queriesAsked.at(-1)!.enabled).toBe(false);
+    // Nearest first has no direction to choose.
+    expect(screen.queryByTestId('filter-sort-direction')).not.toBeInTheDocument();
+
+    fireEvent.change(inputOf('filter-sort-anchor-object'), { target: { value: CAVE } });
+    fireEvent.click(screen.getByTestId('filter-editor-apply'));
+
+    expect(onApply).toHaveBeenCalledWith({
+      ...doc(null), sort: 'proximity', descending: true, anchor: { anchor: 'object', world: 'feature', id: CAVE },
+    });
+  });
+
+  it('drops the anchor when another order is chosen', () => {
+    sorts = ['updated', 'title', 'proximity'];
+    const onApply = vi.fn();
+    render(<FilterEditor world="feature" sortable onApply={onApply}
+      document={{ ...doc(null), sort: 'proximity', anchor: { anchor: 'point', longitude: 23.5, latitude: 45.25 } }} />);
+
+    fireEvent.mouseDown(within(screen.getByTestId('filter-sort-key')).getByRole('combobox'));
+    fireEvent.click(screen.getByText(en.filters.sorts.title));
+    fireEvent.click(screen.getByTestId('filter-editor-apply'));
+
+    expect(onApply).toHaveBeenCalledWith({ ...doc(null), sort: 'title', descending: false });
   });
 });

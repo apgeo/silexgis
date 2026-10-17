@@ -202,6 +202,21 @@ describe('the sort buttons', () => {
     expect(sortsOffered(VOCABULARIES, [])).toEqual([]);
   });
 
+  it('offers nearest first only to a control with a place to measure from', () => {
+    // The server refuses nearest first without an anchor, so a feature-only scope set — where the
+    // feature world's own sorts survive the intersection whole — must still not draw the button.
+    const near: WorldVocabulary[] = [
+      { world: 'feature', labelKey: 'x', fields: [], sorts: ['created', 'updated', 'title', 'proximity'] },
+    ];
+
+    expect(sortsOffered(near, ['feature'])).toEqual(['created', 'updated', 'title']);
+    expect(sortsOffered(near, ['feature'], true)).toEqual(['created', 'updated', 'title', 'proximity']);
+
+    // A remembered nearest-first choice falls back to an order the control can serve.
+    const stored = { ...initialState(), sort: 'proximity' as const };
+    expect(effectiveState(stored, [], sortsOffered(near, ['feature'])).sort).not.toBe('proximity');
+  });
+
   it('reverses on a second press and starts sensibly on a first', () => {
     let state = pressSort(initialState(), 'created');
     expect([state.sort, state.descending]).toEqual(['created', true]);

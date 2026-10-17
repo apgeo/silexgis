@@ -4,6 +4,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import type { FilterField, FilterOp, FilterValue } from '../../filters/types.ts';
 import IdPicker from './IdPicker.tsx';
+import SpatialValueInput from './SpatialValueInput.tsx';
 
 /**
  * The value part of one condition row, shaped by the field's kind and the operator.
@@ -15,6 +16,8 @@ import IdPicker from './IdPicker.tsx';
  */
 
 export interface ValueInputProps {
+  /** The world the row filters — what a spatial row's object anchor is picked from. */
+  world: string;
   field: FilterField;
   op: FilterOp;
   values: FilterValue[];
@@ -47,7 +50,7 @@ function instantFor(op: FilterOp, day: Dayjs, end: 'low' | 'high'): string {
   return (late ? day.endOf('day') : day.startOf('day')).toISOString();
 }
 
-export default function ValueInput({ field, op, values, onChange, testId }: ValueInputProps) {
+export default function ValueInput({ world, field, op, values, onChange, testId }: ValueInputProps) {
   const { t } = useTranslation();
   const label = t('filters.editor.value');
 
@@ -144,6 +147,9 @@ export default function ValueInput({ field, op, values, onChange, testId }: Valu
           testId={testId}
         />
       );
+
+    case 'spatial':
+      return <SpatialValueInput world={world} op={op} values={values} onChange={onChange} testId={testId} />;
 
     default:
       return null;

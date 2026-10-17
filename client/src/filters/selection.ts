@@ -256,10 +256,15 @@ export function pressSort(state: SelectorState, sort: SortKey): SelectorState {
  *
  * An intersection rather than a union. A sort only some worlds could honour would leave the others
  * in an order nobody chose, with nothing on screen to say so.
+ *
+ * Nearest first is offered only to a control that has a place to measure from: the server refuses
+ * it without one, so a button for it on a control with no anchor would be a button that only ever
+ * fails.
  */
 export function sortsOffered(
   vocabularies: readonly WorldVocabulary[],
   worlds: readonly string[],
+  hasAnchor = false,
 ): SortKey[] {
   const inPlay = vocabularies.filter((v) => worlds.includes(v.world));
   if (inPlay.length === 0) {
@@ -268,5 +273,6 @@ export function sortsOffered(
 
   return inPlay
     .map((v) => v.sorts)
-    .reduce((all, sorts) => all.filter((s) => sorts.includes(s)));
+    .reduce((all, sorts) => all.filter((s) => sorts.includes(s)))
+    .filter((s) => hasAnchor || s !== 'proximity');
 }

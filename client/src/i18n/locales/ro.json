@@ -5302,6 +5302,48 @@
   },
   "filters": {
     "editor": {
+      "sort": "Ordine",
+      "descending": "Descrescător",
+      "ascending": "Crescător",
+      "spatial": {
+        "radius": "Distanța în metri",
+        "metres": "m",
+        "of": "de",
+        "anchorKind": "Măsurat de la",
+        "anchorKinds": {
+          "object": "un obiect",
+          "point": "un punct",
+          "savedFilter": "rezultatele unui filtru salvat"
+        },
+        "outlineKind": "Contur",
+        "outlineKinds": {
+          "area": "o zonă numită",
+          "polygon": "un poligon lipit"
+        },
+        "object": "Obiectul de la care se măsoară",
+        "area": "Zonă",
+        "areas": "Zone",
+        "savedFilter": "Filtrul salvat de la care se măsoară",
+        "longitude": "Longitudine",
+        "latitude": "Latitudine",
+        "polygon": "Poligon ca GeoJSON",
+        "polygonHint": "Lipiți un Polygon GeoJSON sau un Feature care conține unul",
+        "polygonProblems": {
+          "notJson": "Acesta nu este GeoJSON.",
+          "notPolygon": "Acesta nu este un singur poligon.",
+          "offGlobe": "O poziție nu este o longitudine și o latitudine valide.",
+          "notClosed": "Fiecare inel trebuie să se încheie unde începe.",
+          "tooLarge": "Un contur are cel mult 2000 de poziții."
+        },
+        "needsAnchor": "„Cel mai apropiat” are nevoie de un loc de la care să măsoare: introduceți un punct sau alegeți un obiect.",
+        "refused": {
+          "notFound": "Locul de la care măsoară această condiție nu vă este disponibil.",
+          "notAnArea": "Obiectul ales nu este o zonă cu contur.",
+          "nested": "Un filtru salvat de la care se măsoară nu poate măsura el însuși de la un filtru salvat.",
+          "tooLarge": "Filtrul salvat găsește prea multe obiecte pentru a măsura de la ele."
+        },
+        "notSaved": "Un punct introdus, un poligon lipit sau locul de la care se ordonează „cel mai apropiat” nu se salvează niciodată. Folosiți în schimb un obiect sau o zonă numită."
+      },
       "apply": "Aplică",
       "count": "Rezultate: {{count}}",
       "rowRefused": "Serverul nu poate folosi această condiție. Verificați comparația și valorile ei sau eliminați-o.",
@@ -5407,6 +5449,7 @@
       "savedFilter": "Filtre salvate"
     },
     "fields": {
+      "position": "Poziție",
       "name": "Nume",
       "title": "Titlu",
       "kind": "Fel",

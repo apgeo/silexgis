@@ -5302,6 +5302,48 @@
   },
   "filters": {
     "editor": {
+      "sort": "Order",
+      "descending": "Descending",
+      "ascending": "Ascending",
+      "spatial": {
+        "radius": "Distance in metres",
+        "metres": "m",
+        "of": "of",
+        "anchorKind": "Measured from",
+        "anchorKinds": {
+          "object": "an object",
+          "point": "a point",
+          "savedFilter": "a saved filter's results"
+        },
+        "outlineKind": "Outline",
+        "outlineKinds": {
+          "area": "a named area",
+          "polygon": "a pasted polygon"
+        },
+        "object": "Object to measure from",
+        "area": "Area",
+        "areas": "Areas",
+        "savedFilter": "Saved filter to measure from",
+        "longitude": "Longitude",
+        "latitude": "Latitude",
+        "polygon": "Polygon as GeoJSON",
+        "polygonHint": "Paste a GeoJSON Polygon, or a Feature holding one",
+        "polygonProblems": {
+          "notJson": "This is not GeoJSON.",
+          "notPolygon": "This is not a single polygon.",
+          "offGlobe": "A position is not a longitude and latitude on the globe.",
+          "notClosed": "Each ring must end where it starts.",
+          "tooLarge": "An outline holds at most 2000 positions."
+        },
+        "needsAnchor": "Nearest first needs a place to measure from: type a point or pick an object.",
+        "refused": {
+          "notFound": "What this condition measures from is not available to you.",
+          "notAnArea": "The object chosen is not an area with an outline.",
+          "nested": "A saved filter measured from cannot itself measure from a saved filter.",
+          "tooLarge": "That saved filter finds too many objects to measure from."
+        },
+        "notSaved": "A typed point, a pasted polygon or a place to measure nearest first from is never saved. Use an object or a named area instead."
+      },
       "apply": "Apply",
       "count": "Matches: {{count}}",
       "rowRefused": "The server cannot use this condition. Check its comparison and values, or remove it.",
@@ -5407,6 +5449,7 @@
       "savedFilter": "Saved filters"
     },
     "fields": {
+      "position": "Position",
       "name": "Name",
       "title": "Title",
       "kind": "Kind",

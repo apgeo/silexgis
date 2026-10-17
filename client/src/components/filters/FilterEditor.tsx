@@ -7,13 +7,15 @@ import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import { useFilterQuery, useFilterVocabulary, type FilterQueryBody } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
-import { whereOf, withWhere } from '../../filters/document.ts';
+import { whereOf, withSort, withWhere } from '../../filters/document.ts';
+import { withAnchor } from '../../filters/spatial.ts';
 import {
   appendChild,
   editableOps,
   isEditableKind,
   nodeAt,
   pathKey,
+  placeAnchorRefusal,
   placeRefusal,
   prune,
   removeAt,
@@ -32,8 +34,10 @@ import type {
   FilterLimits,
   FilterNode,
   FilterOp,
+  SortKey,
   WorldVocabulary,
 } from '../../filters/types.ts';
+import SortControl, { type SortState } from './SortControl.tsx';
 import ValueInput from './ValueInput.tsx';
 
 /**
@@ -62,6 +66,28 @@ export interface FilterEditorProps {
    * will show; it is never part of the document handed back.
    */
   fixed?: FilterNode;
+  /**
+   * Whether the editor also chooses how results are ordered — nearest first among them, with what
+   * it is measured from. Only for a page that reads the order back out of the applied document.
+   */
+  sortable?: boolean;
+  /**
+   * The orders offered, when the page serves fewer than the world declares — the cave registry
+   * keeps its own column sorts and takes only nearest first from here. Every world's declared
+   * sorts otherwise.
+   */
+  sorts?: readonly SortKey[];
+}
+
+const ANCHOR_REFUSALS: Record<string, string> = {
+  'filter.anchor_not_found': 'filters.editor.spatial.refused.notFound',
+  'filter.study_area_not_an_outline': 'filters.editor.spatial.refused.notAnArea',
+  'filter.anchor_nested': 'filters.editor.spatial.refused.nested',
+  'filter.anchor_too_large': 'filters.editor.spatial.refused.tooLarge',
+};
+
+function anchorRefusalKey(error: unknown): string | null {
+  return error instanceof ApiError && error.code !== undefined ? (ANCHOR_REFUSALS[error.code] ?? null) : null;
 }
 
 /** A row with nothing chosen yet. It is left out of everything sent until it has a field and a value. */
@@ -76,14 +102,19 @@ function testKey(path: NodePath): string {
 }
 
 interface EditorContext {
+  world: string;
   root: FilterNode;
   fields: FilterField[];
   limits: FilterLimits;
   problems: Map<string, string[]>;
+  /** The phrase a refused row shows: which of the anchor refusals it was, or the general one. */
+  rowRefusalKey: string;
   update: (root: FilterNode) => void;
 }
 
-export default function FilterEditor({ world, document, onApply, onCancel, fixed }: FilterEditorProps) {
+export default function FilterEditor({
+  world, document, onApply, onCancel, fixed, sortable = false, sorts,
+}: FilterEditorProps) {
   const { t } = useTranslation();
   const vocabularyQuery = useFilterVocabulary();
   const worlds = (vocabularyQuery.data?.worlds ?? []) as unknown as WorldVocabulary[];
@@ -98,13 +129,25 @@ export default function FilterEditor({ world, document, onApply, onCancel, fixed
   const [root, setRoot] = useState<FilterNode>(() =>
     initial === null ? { node: 'allOf', of: [] } : isGroup(initial) ? initial : { node: 'allOf', of: [initial] });
 
+  const [sort, setSort] = useState<SortState>(() => ({
+    sort: document.sort,
+    descending: document.descending,
+    anchor: document.anchor ?? null,
+  }));
+  // Nearest first with nothing to measure from is not a question yet; it is held back like an
+  // unfinished row rather than sent to be refused.
+  const needsAnchor = sortable && sort.sort === 'proximity' && sort.anchor === null;
+
   const outgoing = useMemo(() => {
     const pruned = prune(root);
     const where = wrapped && pruned !== null && pruned.node === 'allOf' && pruned.of.length === 1
       ? pruned.of[0]
       : pruned;
-    return withWhere(document, world, where);
-  }, [root, wrapped, document, world]);
+    const edited = withWhere(document, world, where);
+    return sortable
+      ? withAnchor(withSort(edited, sort.sort, sort.descending), sort.sort === 'proximity' ? sort.anchor : null)
+      : edited;
+  }, [root, wrapped, document, world, sortable, sort]);
 
   // What the page will actually ask once this is applied: the fixed condition beside the edited
   // ones, in the same all-of the page writes, so the limits are checked against that shape.
@@ -123,6 +166,9 @@ export default function FilterEditor({ world, document, onApply, onCancel, fixed
   );
 
   const counted = useDebouncedValue(asked, 400);
+  // Asked of the debounced document too: the draft gains its anchor at once while the count still
+  // holds the document from before it, which would be sent nearest first with nothing to measure from.
+  const countedNeedsAnchor = counted.sort === 'proximity' && (counted.anchor ?? null) === null;
   const countQuery = useFilterQuery(
     {
       document: counted as unknown as FilterQueryBody['document'],
@@ -130,11 +176,17 @@ export default function FilterEditor({ world, document, onApply, onCancel, fixed
       pageSize: 1,
       count: true,
     },
-    problems.length === 0,
+    problems.length === 0 && !needsAnchor && !countedNeedsAnchor,
   );
-  const refusal = countQuery.error instanceof ApiError && countQuery.error.code === 'filter.invalid'
-    ? placeRefusal(countQuery.error.detail ?? '', root)
-    : null;
+  // An anchor the reader may not use is refused in one sentence that names no row — saying which
+  // one was withheld would say it exists — so it lands on every row that names something to look up.
+  const refusal = !(countQuery.error instanceof ApiError)
+    ? null
+    : countQuery.error.code === 'filter.invalid'
+      ? placeRefusal(countQuery.error.detail ?? '', root)
+      : anchorRefusalKey(countQuery.error) !== null
+        ? placeAnchorRefusal(countQuery.error.detail ?? '', root)
+        : null;
   const total = countQuery.data?.counted
     ? countQuery.data.worlds.find((w) => w.world === world)?.total ?? null
     : null;
@@ -143,16 +195,28 @@ export default function FilterEditor({ world, document, onApply, onCancel, fixed
     return <Typography.Text type="secondary">{t('common.loading')}</Typography.Text>;
   }
 
+  const offeredSorts = sorts === undefined
+    ? vocabulary.sorts
+    : vocabulary.sorts.filter((s) => sorts.includes(s));
+
   const context: EditorContext = {
+    world,
     root,
     fields: vocabulary.fields.filter((f) => isEditableKind(f.kind)),
     limits,
     problems: refusal?.byPath ?? new Map(),
+    rowRefusalKey: anchorRefusalKey(countQuery.error) ?? 'filters.editor.rowRefused',
     update: setRoot,
   };
 
   return (
     <Flex vertical gap={12} data-testid="filter-editor">
+      {sortable && offeredSorts.length > 0 && (
+        <SortControl world={world} sorts={offeredSorts} value={sort} onChange={setSort} />
+      )}
+      {needsAnchor && (
+        <Alert type="info" showIcon title={t('filters.editor.spatial.needsAnchor')} data-testid="filter-editor-needs-anchor" />
+      )}
       <GroupBlock context={context} path={[]} />
       {problems.map((p) => (
         <Alert key={p.messageKey} type="warning" showIcon title={t(p.messageKey, p.values)}
@@ -171,7 +235,7 @@ export default function FilterEditor({ world, document, onApply, onCancel, fixed
           {onCancel && <Button onClick={onCancel} data-testid="filter-editor-cancel">{t('common.cancel')}</Button>}
           <Button
             type="primary"
-            disabled={problems.length > 0 || refusal !== null}
+            disabled={problems.length > 0 || refusal !== null || needsAnchor}
             onClick={() => onApply(outgoing)}
             data-testid="filter-editor-apply"
           >
@@ -278,7 +342,7 @@ function Item({ context, path }: { context: EditorContext; path: NodePath }) {
         </Flex>
         {context.problems.has(pathKey(innerPath)) && (
           <Typography.Text type="danger" role="alert" data-testid={`filter-editor-row-error-${key}`}>
-            {t('filters.editor.rowRefused')}
+            {t(context.rowRefusalKey)}
           </Typography.Text>
         )}
       </Flex>
@@ -341,6 +405,7 @@ function ConditionFields({ context, path, rowKey }: { context: EditorContext; pa
       )}
       {field && (
         <ValueInput
+          world={context.world}
           field={field}
           op={condition.op}
           values={condition.values}

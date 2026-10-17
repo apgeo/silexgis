@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { isComplete } from './preflight.ts';
+import { isSpatialAnchor, namesAnchor } from './spatial.ts';
 import type { FieldKind, FilterField, FilterNode, FilterOp, FilterValue } from './types.ts';
 
 /**
@@ -207,16 +208,18 @@ export function startCondition(field: FilterField): FilterNode {
 }
 
 /**
- * The operators the editor offers for a field: those the server listed, less the spatial ones. A
- * spatial condition is drawn on a map, not typed into a row, and the editor has no way to write one.
+ * The operators the editor offers for a field: exactly those the server listed. A spatial field's
+ * `within` and `inside` are written as a radius and an anchor, or as an outline, like any other
+ * row's values.
  */
 export function editableOps(field: FilterField): FilterOp[] {
-  return field.ops.filter((op) => op !== 'within' && op !== 'inside');
+  return field.ops;
 }
 
-/** Whether the editor can write a value for this kind of field at all. */
+/** Whether the editor can write a value for this kind of field at all. Every kind it knows. */
 export function isEditableKind(kind: FieldKind): boolean {
-  return kind !== 'spatial';
+  return kind === 'text' || kind === 'number' || kind === 'boolean' || kind === 'instant'
+    || kind === 'id' || kind === 'spatial';
 }
 
 /**
@@ -233,7 +236,35 @@ export function valuesForOp(op: FilterOp, values: FilterValue[]): FilterValue[] 
   if (op === 'in') {
     return values;
   }
-  return values.slice(0, 1);
+  // A radius and an anchor mean nothing to another operator and nothing else means anything to
+  // these, so a spatial row starts again when its operator changes either way.
+  if (op === 'within') {
+    return values[0]?.type === 'number' ? values.slice(0, 2) : [];
+  }
+  if (op === 'inside') {
+    return values[0]?.type === 'polygon' || values[0]?.type === 'object' ? values.slice(0, 1) : [];
+  }
+  return isSpatialAnchor(values[0]) || isSpatialAnchor(values[1]) ? [] : values.slice(0, 1);
+}
+
+/**
+ * Where a refusal of an anchor lands: on every sent row that names something the server had to
+ * look up — an object, an area, another saved filter. The server answers all of them with one
+ * sentence that names no row, on purpose: saying which anchor was withheld would say that it
+ * exists. With no such row the refusal was about the place nearest-first is measured from, and
+ * stays with the filter as a whole.
+ */
+export function placeAnchorRefusal(
+  detail: string,
+  root: FilterNode | null,
+): { byPath: Map<string, string[]>; unplaced: string[] } {
+  const byPath = new Map<string, string[]>();
+  const rows = conditionsWithPaths(root)
+    .filter((c) => isComplete(c.condition) && namesAnchor(c.condition));
+  for (const row of rows) {
+    byPath.set(pathKey(row.path), [detail]);
+  }
+  return { byPath, unplaced: rows.length === 0 ? [detail] : [] };
 }
 
 /** Every condition in the tree, with its path. */

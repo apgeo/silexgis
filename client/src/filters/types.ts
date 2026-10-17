@@ -53,7 +53,32 @@ export type FilterValue =
   | { type: 'number'; value: number }
   | { type: 'boolean'; value: boolean }
   | { type: 'instant'; value: string }
-  | { type: 'id'; value: string };
+  | { type: 'id'; value: string }
+  | SpatialAnchorValue;
+
+/**
+ * What a spatial condition measures from or tests against, beside its radius.
+ *
+ * A point and an outline are positions in their own right, so they travel with a request and a
+ * link but are never stored: the server refuses a saved filter holding one. An object and another
+ * saved filter are only names, looked up afresh under the access of whoever runs the filter, so a
+ * saved filter may hold them. `within` takes a radius in metres then one of point, object or saved
+ * filter; `inside` takes one outline — a polygon or an area object.
+ */
+export type SpatialAnchorValue =
+  | { type: 'point'; longitude: number; latitude: number }
+  | { type: 'polygon'; coordinates: number[][][] }
+  | { type: 'object'; world: string; id: string }
+  | { type: 'savedFilter'; id: string };
+
+/**
+ * What nearest-first is measured from. Discriminated by `anchor`, which is what the server reads.
+ * A request's own, like a point in a condition: a saved filter never holds one, and is given one by
+ * whoever runs it.
+ */
+export type FilterAnchor =
+  | { anchor: 'point'; longitude: number; latitude: number }
+  | { anchor: 'object'; world: string; id: string };
 
 export type FilterNode =
   | { node: 'allOf'; of: FilterNode[] }
@@ -79,6 +104,11 @@ export interface FilterDocument {
   scope: WorldScope[];
   sort: SortKey;
   descending: boolean;
+  /**
+   * What nearest-first is measured from — present only on a request sorted by proximity, and
+   * stripped before a document is saved. Absent everywhere else.
+   */
+  anchor?: FilterAnchor | null;
 }
 
 export const CURRENT_FILTER_VERSION = 1;

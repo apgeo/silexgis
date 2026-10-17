@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   appendChild,
   depthOf,
+  editableOps,
   nodeAt,
+  placeAnchorRefusal,
   placeRefusal,
   prune,
   removeAt,
@@ -82,6 +84,38 @@ describe('the editor tree', () => {
     expect(valuesForOp('greaterOrEqual', two)).toEqual([two[0]]);
     expect(valuesForOp('between', two)).toEqual(two);
     expect(valuesForOp('isEmpty', two)).toEqual([]);
+  });
+
+  it('starts a spatial row again when its operator changes either way', () => {
+    const near = [{ type: 'number' as const, value: 500 }, { type: 'point' as const, longitude: 1, latitude: 2 }];
+    const area = [{ type: 'object' as const, world: 'feature', id: 'a' }];
+    expect(valuesForOp('within', near)).toEqual(near);
+    expect(valuesForOp('inside', near)).toEqual([]);
+    expect(valuesForOp('inside', area)).toEqual(area);
+    expect(valuesForOp('within', area)).toEqual([]);
+    expect(valuesForOp('equals', near)).toEqual([]);
+  });
+});
+
+describe('spatial rows', () => {
+  it('offer every operator the server lists, within and inside among them', () => {
+    const position: FilterField = {
+      key: 'position', labelKey: 'x', kind: 'spatial', ops: ['within', 'inside'], options: null, label: null, requires: null,
+    };
+    expect(editableOps(position)).toEqual(['within', 'inside']);
+  });
+
+  it('take an anchor refusal on every sent row that names something to look up, and on no other', () => {
+    const lookedUp: FilterNode = { node: 'condition', field: 'position', op: 'within',
+      values: [{ type: 'number', value: 5 }, { type: 'savedFilter', id: 's' }] };
+    const typed: FilterNode = { node: 'condition', field: 'position', op: 'within',
+      values: [{ type: 'number', value: 5 }, { type: 'point', longitude: 1, latitude: 2 }] };
+    const root: FilterNode = { node: 'allOf', of: [typed, { node: 'not', of: lookedUp }] };
+
+    const placed = placeAnchorRefusal('Not available.', root);
+    expect([...placed.byPath.keys()]).toEqual(['1.0']);
+    expect(placed.unplaced).toEqual([]);
+    expect(placeAnchorRefusal('Not available.', { node: 'allOf', of: [typed] }).unplaced).toEqual(['Not available.']);
   });
 });
 

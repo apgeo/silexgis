@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { depth, nodeCount } from './document.ts';
+import { isSpatialComplete } from './spatial.ts';
 import type { FilterDocument, FilterLimits, FilterNode, WorldVocabulary } from './types.ts';
 
 /**
@@ -97,9 +98,13 @@ export function isComplete(node: FilterNode): boolean {
       return true;
     }
 
+    if (node.op === 'within' || node.op === 'inside') {
+      return isSpatialComplete(node.op, node.values);
+    }
+
     // A range with one end written is not a range yet: the editor holds the unwritten end as an
     // empty value in its position, so the count alone does not say the row is finished.
-    const filled = node.values.every((v) => v.value !== '' && v.value !== null);
+    const filled = node.values.every((v) => !('value' in v) || (v.value !== '' && v.value !== null));
     if (node.op === 'between') {
       return node.values.length === 2 && filled;
     }
