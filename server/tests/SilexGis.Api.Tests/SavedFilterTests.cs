@@ -160,7 +160,13 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
             document = About(new ConditionNode("altitude", FilterOp.LessThan, [new NumberValue(800)])),
         }, Wire);
         altitude.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await altitude.Content.ReadAsStringAsync()).ShouldContain("filter.invalid");
+        var problem = await altitude.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        problem.GetProperty("code").GetString().ShouldBe("filter.invalid");
+        // Each problem is handed over with its code and its place, so the editor can mark the row.
+        var only = problem.GetProperty("problems").EnumerateArray().ShouldHaveSingleItem();
+        only.GetProperty("code").GetString().ShouldBe(FilterProblemCodes.UnknownField);
+        only.GetProperty("path").GetString().ShouldBe("/scope/0/where");
+        only.GetProperty("field").GetString().ShouldBe("altitude");
     }
 
     [Fact]

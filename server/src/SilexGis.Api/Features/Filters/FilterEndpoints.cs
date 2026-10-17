@@ -111,7 +111,7 @@ public static class FilterEndpoints
             .ToList();
         if (errors.Count > 0)
         {
-            return ApiProblems.BadRequest("filter.invalid", string.Join(" ", errors));
+            return SurfaceFilterProblems.Invalid(errors);
         }
 
         var (page, pageSize) = Paging.Normalize(request.Page, request.PageSize);

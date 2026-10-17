@@ -5,7 +5,9 @@ using SilexGis.Domain.Filters;
 namespace SilexGis.Infrastructure.Filters;
 
 /// <summary>Why a surface declined the filter it was handed, as the problem it answers with.</summary>
-public sealed record SurfaceFilterRefusal(int Status, string Code, string Detail);
+/// <param name="Problems">What was wrong with a document that was read but could not be run.</param>
+public sealed record SurfaceFilterRefusal(
+    int Status, string Code, string Detail, IReadOnlyList<FilterProblem>? Problems = null);
 
 /// <summary>
 /// What a surface request's filter came to: a narrowing to apply, or a refusal to answer with.
@@ -98,7 +100,8 @@ public sealed class SurfaceFilters(FilterWorldRegistry registry, SavedFilterRead
 
             if (errors.Count > 0)
             {
-                return Refused<TEntity>(400, InvalidCode, string.Join(" ", errors));
+                return new(null, new SurfaceFilterRefusal(
+                    400, InvalidCode, string.Join(" ", errors.Select(e => e.Detail)), errors));
             }
 
             document = decoded;

@@ -145,6 +145,46 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         (await response.Content.ReadAsStringAsync()).ShouldContain("filter.invalid");
     }
 
+    [Fact]
+    public async Task A_refusal_lists_each_problem_with_its_code_and_its_place_in_the_document()
+    {
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-problems");
+
+        var document = new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope("feature", new AllOfNode(
+                [
+                    new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue("a")]),
+                    new NotNode(new ConditionNode(FeatureFilterFields.Name, FilterOp.GreaterOrEqual, [new TextValue("b")])),
+                    new ConditionNode("notAField", FilterOp.Equals, [new TextValue("c")]),
+                ])),
+                new WorldScope("no-such-world"),
+            ],
+        };
+
+        var response = await client.PostAsJsonAsync("/api/v1/filters/query", new FilterQueryRequest(document), Wire);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        problem.GetProperty("code").GetString().ShouldBe("filter.invalid");
+        var problems = problem.GetProperty("problems").EnumerateArray().ToList();
+        problems.Count.ShouldBe(3);
+
+        problems[0].GetProperty("code").GetString().ShouldBe(FilterProblemCodes.OpUnsupported);
+        problems[0].GetProperty("path").GetString().ShouldBe("/scope/0/where/of/1/of");
+        problems[0].GetProperty("field").GetString().ShouldBe(FeatureFilterFields.Name);
+        problems[0].GetProperty("op").GetString().ShouldBe("greaterOrEqual");
+
+        problems[1].GetProperty("code").GetString().ShouldBe(FilterProblemCodes.UnknownField);
+        problems[1].GetProperty("path").GetString().ShouldBe("/scope/0/where/of/2");
+        problems[1].GetProperty("field").GetString().ShouldBe("notAField");
+
+        problems[2].GetProperty("code").GetString().ShouldBe(FilterProblemCodes.UnknownWorld);
+        problems[2].GetProperty("path").GetString().ShouldBe("/scope/1");
+    }
+
     // ---------- a feature type's own typed properties ----------
 
     private static string DepthField => FeaturePropertyFields.FieldKey(FeatureTypeSeeds.Sinkhole, "depth_m");
@@ -213,26 +253,35 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         using var client = await ClientAsync(GlobalRoles.Viewer, "fe-prop-alone");
         var sinkhole = await SinkholeTypeIdAsync();
 
-        async Task<string> RefusalAsync(FilterNode where)
+        // The whole refusal, detail and problem list alike, with the one key the caller sent masked:
+        // nothing else in it may tell a property that exists from one that does not.
+        async Task<string> RefusalAsync(FilterNode where, string sent)
         {
             var response = await client.PostAsJsonAsync(
                 "/api/v1/filters/query", new FilterQueryRequest(About("feature", where)), Wire);
             response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
             var problem = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
             problem.GetProperty("code").GetString().ShouldBe("filter.invalid");
-            return problem.GetProperty("detail").GetString()!;
+            var problems = problem.GetProperty("problems");
+            problems.GetArrayLength().ShouldBe(1);
+            problems[0].GetProperty("code").GetString().ShouldBe(FilterProblemCodes.UnknownField);
+            return (problem.GetProperty("detail").GetString() + "|" + problems.GetRawText()).Replace(sent, "X");
         }
 
-        var alone = await RefusalAsync(new ConditionNode(DepthField, FilterOp.LessThan, [new NumberValue(3)]));
+        // The same shape on both sides, so the paths can be compared: the property second in a group.
+        var alone = await RefusalAsync(new AllOfNode([
+            new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue("a")]),
+            new ConditionNode(DepthField, FilterOp.LessThan, [new NumberValue(3)]),
+        ]), "depth_m");
         var invented = await RefusalAsync(new AllOfNode([
             new ConditionNode(FeatureFilterFields.TypeId, FilterOp.Equals, [new IdValue(sinkhole.ToString())]),
             new ConditionNode(
                 FeaturePropertyFields.FieldKey(FeatureTypeSeeds.Sinkhole, "nothing_here"),
                 FilterOp.LessThan,
                 [new NumberValue(3)]),
-        ]));
+        ]), "nothing_here");
 
-        alone.Replace("depth_m", "X").ShouldBe(invented.Replace("nothing_here", "X"));
+        alone.ShouldBe(invented);
 
         // Beside its type the same condition is an ordinary question.
         (await client.PostAsJsonAsync("/api/v1/filters/query", new FilterQueryRequest(About("feature",

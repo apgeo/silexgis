@@ -27,7 +27,7 @@ public class FeaturePropertyFieldsTests
     private static WorldVocabulary Folded(params FeatureTypeSchema[] types) =>
         FeaturePropertyFields.Fold(FeatureFilterFields.Vocabulary, types);
 
-    private static IReadOnlyList<string> Validate(WorldVocabulary vocabulary, FilterNode where) =>
+    private static IReadOnlyList<FilterProblem> Validate(WorldVocabulary vocabulary, FilterNode where) =>
         FilterValidation.Validate(
             new FilterDocument { Scope = [new WorldScope("feature", where)], Sort = SortKey.Updated },
             new Dictionary<string, WorldVocabulary>(StringComparer.Ordinal) { ["feature"] = vocabulary });
@@ -155,7 +155,17 @@ public class FeaturePropertyFieldsTests
 
         alone.Count.ShouldBe(1);
         unknown.Count.ShouldBe(1);
-        alone[0].Replace("depth_m", "X").ShouldBe(unknown[0].Replace("nothing_here", "X"));
+        Masked(alone[0], "depth_m").ShouldBe(Masked(unknown[0], "nothing_here"));
+    }
+
+    private static FilterProblem Masked(FilterProblem problem, string sent) =>
+        problem with { Field = problem.Field?.Replace(sent, "X"), Detail = problem.Detail.Replace(sent, "X") };
+
+    [Fact]
+    public void A_property_refusal_has_the_code_of_an_unknown_field()
+    {
+        Validate(Folded(Sinkhole), DepthUnder(30)).ShouldHaveSingleItem().Code
+            .ShouldBe(FilterProblemCodes.UnknownField);
     }
 
     public static TheoryData<string, FilterNode> NotFixingTheType() => new()
@@ -192,7 +202,7 @@ public class FeaturePropertyFieldsTests
             "property:sinkhole:invented", FilterOp.LessThan, [new NumberValue(30)])]));
 
         real.Count.ShouldBe(1);
-        real[0].Replace("depth_m", "X").ShouldBe(invented.Single().Replace("invented", "X"));
+        Masked(real[0], "depth_m").ShouldBe(Masked(invented.Single(), "invented"));
 
         // And the same question is accepted for a caller whose fold holds the type.
         Validate(Folded(Sinkhole), new AllOfNode([TypeIs("7"), DepthUnder(30)])).ShouldBeEmpty();

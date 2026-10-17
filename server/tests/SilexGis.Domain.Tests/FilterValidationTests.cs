@@ -41,7 +41,7 @@ public class FilterValidationTests
         ["document"] = Documents,
     };
 
-    private static IReadOnlyList<string> Validate(FilterDocument document) =>
+    private static IReadOnlyList<FilterProblem> Validate(FilterDocument document) =>
         FilterValidation.Validate(document, Vocabularies);
 
     private static FilterDocument Over(string world, FilterNode? where, SortKey sort = SortKey.Updated) =>
@@ -102,8 +102,56 @@ public class FilterValidationTests
 
         withheld.Count.ShouldBe(1);
         nonsense.Count.ShouldBe(1);
-        // Same sentence apart from the name the caller themselves supplied.
-        withheld[0].Replace("closestAddress", "X").ShouldBe(nonsense[0].Replace("zzzNotAFieldAtAll", "X"));
+        // The same problem — code, place, sentence — apart from the name the caller themselves
+        // supplied.
+        withheld[0].Code.ShouldBe(FilterProblemCodes.UnknownField);
+        Masked(withheld[0], "closestAddress").ShouldBe(Masked(nonsense[0], "zzzNotAFieldAtAll"));
+    }
+
+    private static FilterProblem Masked(FilterProblem problem, string sent) =>
+        problem with { Field = problem.Field?.Replace(sent, "X"), Detail = problem.Detail.Replace(sent, "X") };
+
+    [Fact]
+    public void Each_problem_names_its_place_in_the_document_and_what_the_condition_asked()
+    {
+        var problems = Validate(new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope("feature", new AllOfNode(
+                [
+                    new ConditionNode("name", FilterOp.Contains, [new TextValue("a")]),
+                    new NotNode(new AnyOfNode(
+                    [
+                        new ConditionNode("name", FilterOp.Contains, [new TextValue("b")]),
+                        new ConditionNode("nothingHere", FilterOp.Equals, [new TextValue("c")]),
+                    ])),
+                ])),
+                new WorldScope("nowhere"),
+            ],
+        });
+
+        problems.Count.ShouldBe(2);
+        problems[0].ShouldBe(new FilterProblem(
+            FilterProblemCodes.UnknownField, "/scope/0/where/of/1/of/of/1", "nothingHere", FilterOp.Equals, null,
+            problems[0].Detail));
+        problems[1].Code.ShouldBe(FilterProblemCodes.UnknownWorld);
+        problems[1].Path.ShouldBe("/scope/1");
+        problems[1].Field.ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_ceiling_problem_says_which_ceiling()
+    {
+        var values = Enumerable.Range(0, FilterValidation.MaxValuesPerCondition + 1)
+            .Select(i => (FilterValue)new IdValue(i.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            .ToList();
+
+        var problem = Validate(Over("feature", new ConditionNode("typeId", FilterOp.In, values))).ShouldHaveSingleItem();
+
+        problem.Code.ShouldBe(FilterProblemCodes.TooManyValues);
+        problem.Limit.ShouldBe(FilterValidation.MaxValuesPerCondition);
+        problem.Path.ShouldBe("/scope/0/where");
     }
 
     [Fact]
@@ -316,7 +364,7 @@ public class FilterValidationTests
         };
 
         FilterValidation.Validate(document, Vocabularies)
-            .ShouldContain(e => e.Contains("missing", StringComparison.OrdinalIgnoreCase));
+            .ShouldContain(e => e.Code == FilterProblemCodes.Unreadable);
     }
 
     /// <summary>

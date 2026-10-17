@@ -30,8 +30,45 @@ public sealed class ProblemSchemaTransformer : IOpenApiSchemaTransformer
                     "The stable, machine-readable reason, e.g. \"acl.forbidden\". The one member a "
                     + "client branches on; the detail is for a person and may change.",
             };
+
+            // Sent only with a filter.invalid refusal, but declared on the one problem shape so a
+            // client reads it the same way from every route that takes a filter.
+            schema.Properties[SurfaceFilterProblems.ProblemsMember] = new OpenApiSchema
+            {
+                Type = JsonSchemaType.Array,
+                Description =
+                    "On a filter.invalid refusal: each problem with the filter, with a stable code and "
+                    + "the JSON Pointer of the place in the document it is about.",
+                Items = FilterProblemSchema(),
+            };
         }
 
         return Task.CompletedTask;
     }
+
+    private static OpenApiSchema FilterProblemSchema() => new()
+    {
+        Type = JsonSchemaType.Object,
+        Required = new HashSet<string> { "code", "path" },
+        Properties = new Dictionary<string, IOpenApiSchema>
+        {
+            ["code"] = new OpenApiSchema
+            {
+                Type = JsonSchemaType.String,
+                Description = "What is wrong, e.g. \"filter.unknown_field\".",
+            },
+            ["path"] = new OpenApiSchema
+            {
+                Type = JsonSchemaType.String,
+                Description = "JSON Pointer into the document that was sent; empty for the whole document.",
+            },
+            ["field"] = new OpenApiSchema { Type = JsonSchemaType.String | JsonSchemaType.Null },
+            ["op"] = new OpenApiSchema { Type = JsonSchemaType.String | JsonSchemaType.Null },
+            ["limit"] = new OpenApiSchema
+            {
+                Type = JsonSchemaType.Integer | JsonSchemaType.Null,
+                Format = "int32",
+            },
+        },
+    };
 }

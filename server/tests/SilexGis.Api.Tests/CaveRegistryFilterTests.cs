@@ -162,7 +162,10 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
             var response = await reader.GetAsync($"/api/v1/caves?filter={Token(document)}");
 
             response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, field);
-            (await response.Content.ReadAsStringAsync()).ShouldContain("filter.invalid");
+            var problem = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            problem.GetProperty("code").GetString().ShouldBe("filter.invalid", field);
+            // A list read through a link answers with the same problem list as the query route.
+            problem.GetProperty("problems")[0].GetProperty("path").GetString().ShouldBe("/scope/0/where", field);
         }
     }
 

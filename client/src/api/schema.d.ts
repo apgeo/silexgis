@@ -10467,6 +10467,17 @@ export interface components {
             };
             /** @description The stable, machine-readable reason, e.g. "acl.forbidden". The one member a client branches on; the detail is for a person and may change. */
             code?: string;
+            /** @description On a filter.invalid refusal: each problem with the filter, with a stable code and the JSON Pointer of the place in the document it is about. */
+            problems?: {
+                /** @description What is wrong, e.g. "filter.unknown_field". */
+                code: string;
+                /** @description JSON Pointer into the document that was sent; empty for the whole document. */
+                path: string;
+                field?: null | string;
+                op?: null | string;
+                /** Format: int32 */
+                limit?: null | number;
+            }[];
         };
         /** Format: binary */
         IFormFile: string;
@@ -12182,6 +12193,17 @@ export interface components {
             instance?: null | string;
             /** @description The stable, machine-readable reason, e.g. "acl.forbidden". The one member a client branches on; the detail is for a person and may change. */
             code?: string;
+            /** @description On a filter.invalid refusal: each problem with the filter, with a stable code and the JSON Pointer of the place in the document it is about. */
+            problems?: {
+                /** @description What is wrong, e.g. "filter.unknown_field". */
+                code: string;
+                /** @description JSON Pointer into the document that was sent; empty for the whole document. */
+                path: string;
+                field?: null | string;
+                op?: null | string;
+                /** Format: int32 */
+                limit?: null | number;
+            }[];
         };
         ProcessingJobDto: {
             /** Format: int64 */

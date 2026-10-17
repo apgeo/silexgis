@@ -64,7 +64,7 @@ public static class SavedFilterRules
     /// was sent and say nothing about it; a client that sent one has misunderstood what a saved
     /// filter keeps, and is better told.
     /// </remarks>
-    public static IReadOnlyList<string> ProblemsOnSave(
+    public static IReadOnlyList<FilterProblem> ProblemsOnSave(
         FilterDocument document, IReadOnlyDictionary<string, WorldVocabulary> authorVocabularies)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -74,7 +74,8 @@ public static class SavedFilterRules
         // runner's access, every time the filter runs.
         if (document.Anchor is not null || SpatialConditions.HoldsPosition(document))
         {
-            return ["A saved filter never stores a place to measure from."];
+            return [new FilterProblem(FilterProblemCodes.AnchorNotStored, "/anchor", null, null, null,
+                "A saved filter never stores a place to measure from.")];
         }
 
         return FilterValidation.Validate(document, authorVocabularies);

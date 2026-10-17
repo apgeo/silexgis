@@ -51,64 +51,71 @@ public static class FilterValidation
     public const double MaxNumberMagnitude = 1e15;
 
     /// <summary>
-    /// Problems with the document, as sentences. Empty means it can be compiled.
+    /// Problems with the document, each with a code and the place in the document it is about.
+    /// Empty means it can be compiled.
     /// </summary>
     /// <param name="vocabularies">
     /// The worlds the caller may ask about, by key. A world absent from this is refused rather than
     /// ignored: silently dropping a scope entry would answer a narrower question than the one asked
     /// while looking like it answered the whole of it.
     /// </param>
-    public static IReadOnlyList<string> Validate(
+    public static IReadOnlyList<FilterProblem> Validate(
         FilterDocument document, IReadOnlyDictionary<string, WorldVocabulary> vocabularies)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(vocabularies);
 
-        var errors = new List<string>();
+        var errors = new List<FilterProblem>();
 
         if (document.Version > FilterDocument.CurrentVersion)
         {
-            errors.Add("This filter was saved by a newer version and cannot be read here.");
+            errors.Add(Whole(FilterProblemCodes.NewerVersion,
+                "This filter was saved by a newer version and cannot be read here."));
             return errors;
         }
 
         if (!IsWellFormed(document))
         {
-            errors.Add("This filter has a part missing and cannot be read.");
+            errors.Add(Whole(FilterProblemCodes.Unreadable, "This filter has a part missing and cannot be read."));
             return errors;
         }
 
         if (document.Scope.Count == 0)
         {
-            errors.Add("A filter has to say which kinds of object it is about.");
+            errors.Add(Whole(FilterProblemCodes.NoScope, "A filter has to say which kinds of object it is about."));
             return errors;
         }
 
         if (document.Scope.Count > MaxWorlds)
         {
-            errors.Add($"A filter covers at most {MaxWorlds} kinds of object.");
+            errors.Add(Whole(FilterProblemCodes.TooManyWorlds,
+                $"A filter covers at most {MaxWorlds} kinds of object.", MaxWorlds));
             return errors;
         }
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var scope in document.Scope)
+        for (var index = 0; index < document.Scope.Count; index++)
         {
+            var scope = document.Scope[index];
+            var at = $"/scope/{index}";
             if (!seen.Add(scope.World))
             {
-                errors.Add($"'{scope.World}' is named twice; each kind of object appears once.");
+                errors.Add(new FilterProblem(FilterProblemCodes.WorldRepeated, at, null, null, null,
+                    $"'{scope.World}' is named twice; each kind of object appears once."));
                 continue;
             }
 
             if (!vocabularies.TryGetValue(scope.World, out var vocabulary))
             {
-                errors.Add($"There is nothing here called '{scope.World}'.");
+                errors.Add(new FilterProblem(FilterProblemCodes.UnknownWorld, at, null, null, null,
+                    $"There is nothing here called '{scope.World}'."));
                 continue;
             }
 
             if (scope.Where is { } tree)
             {
                 var counted = 0;
-                Walk(tree, vocabulary, depth: 1, NoGuards, ref counted, errors);
+                Walk(tree, $"{at}/where", vocabulary, depth: 1, NoGuards, ref counted, errors);
             }
         }
 
@@ -116,11 +123,19 @@ public static class FilterValidation
         {
             // A sort no world in the scope can answer would silently become an arbitrary order,
             // and an arbitrary order paged over reads as rows appearing and vanishing.
-            errors.Add("None of the chosen kinds of object can be sorted that way.");
+            errors.Add(Whole(FilterProblemCodes.SortUnsupported,
+                "None of the chosen kinds of object can be sorted that way."));
         }
 
         return errors;
     }
+
+    private static FilterProblem Whole(string code, string detail, int? limit = null) =>
+        new(code, "", null, null, limit, detail);
+
+    private static FilterProblem About(
+        ConditionNode condition, string path, string code, string detail, int? limit = null) =>
+        new(code, path, condition.Field, condition.Op, limit, detail);
 
     private static readonly IReadOnlyList<FieldRequirement> NoGuards = [];
 
@@ -131,19 +146,22 @@ public static class FilterValidation
     /// among these. Nothing else counts — a companion under an any-of could be the branch not
     /// taken, and one under a negation says the opposite.
     /// </param>
+    /// <param name="path">The node's place in the document, as a JSON Pointer.</param>
     private static void Walk(
         FilterNode node,
+        string path,
         WorldVocabulary vocabulary,
         int depth,
         IReadOnlyList<FieldRequirement> guards,
         ref int counted,
-        List<string> errors)
+        List<FilterProblem> errors)
     {
         if (++counted > MaxNodes)
         {
             if (counted == MaxNodes + 1)
             {
-                errors.Add($"A filter holds at most {MaxNodes} conditions and groups.");
+                errors.Add(new FilterProblem(FilterProblemCodes.TooManyNodes, path, null, null, MaxNodes,
+                    $"A filter holds at most {MaxNodes} conditions and groups."));
             }
 
             return;
@@ -151,18 +169,19 @@ public static class FilterValidation
 
         if (depth > MaxDepth)
         {
-            errors.Add($"Groups are nested at most {MaxDepth} deep.");
+            errors.Add(new FilterProblem(FilterProblemCodes.TooDeep, path, null, null, MaxDepth,
+                $"Groups are nested at most {MaxDepth} deep."));
             return;
         }
 
         switch (node)
         {
             case ConditionNode condition:
-                Check(condition, vocabulary, guards, errors);
+                Check(condition, path, vocabulary, guards, errors);
                 return;
 
             case NotNode not:
-                Walk(not.Of, vocabulary, depth + 1, guards, ref counted, errors);
+                Walk(not.Of, $"{path}/of", vocabulary, depth + 1, guards, ref counted, errors);
                 return;
 
             case AllOfNode or AnyOfNode:
@@ -171,14 +190,15 @@ public static class FilterValidation
                     // An empty group has no honest meaning: read as "everything" it widens a
                     // filter silently, and read as "nothing" it empties one. Refusing it is the
                     // only reading that cannot surprise somebody.
-                    errors.Add("A group needs at least one condition in it.");
+                    errors.Add(new FilterProblem(FilterProblemCodes.EmptyGroup, path, null, null, null,
+                        "A group needs at least one condition in it."));
                     return;
                 }
 
                 var inner = node is AllOfNode ? WithGuards(guards, node.Children) : guards;
-                foreach (var child in node.Children)
+                for (var i = 0; i < node.Children.Count; i++)
                 {
-                    Walk(child, vocabulary, depth + 1, inner, ref counted, errors);
+                    Walk(node.Children[i], $"{path}/of/{i}", vocabulary, depth + 1, inner, ref counted, errors);
                 }
 
                 return;
@@ -257,9 +277,10 @@ public static class FilterValidation
 
     private static void Check(
         ConditionNode condition,
+        string path,
         WorldVocabulary vocabulary,
         IReadOnlyList<FieldRequirement> guards,
-        List<string> errors)
+        List<FilterProblem> errors)
     {
         var field = vocabulary.Field(condition.Field);
         if (field is null || (field.Requires is { } companion && !guards.Contains(companion)))
@@ -270,13 +291,17 @@ public static class FilterValidation
             // the answer to a question that was not supposed to have one. A typed property asked
             // without the type that declares it is refused in the same words, for the same reason:
             // a different sentence would tell somebody probing keys that this one exists somewhere.
-            errors.Add($"'{vocabulary.World}' cannot be filtered by '{condition.Field}'.");
+            // The same holds for the code and every other member: only what the caller sent is
+            // echoed back.
+            errors.Add(About(condition, path, FilterProblemCodes.UnknownField,
+                $"'{vocabulary.World}' cannot be filtered by '{condition.Field}'."));
             return;
         }
 
         if (!FilterOps.For(field.Kind).Contains(condition.Op))
         {
-            errors.Add($"'{condition.Field}' does not support that comparison.");
+            errors.Add(About(condition, path, FilterProblemCodes.OpUnsupported,
+                $"'{condition.Field}' does not support that comparison."));
             return;
         }
 
@@ -285,20 +310,24 @@ public static class FilterValidation
         {
             errors.Add(
                 exact == 0
-                    ? $"'{condition.Field}' takes no value with that comparison."
-                    : $"'{condition.Field}' needs exactly {exact} value(s) with that comparison.");
+                    ? About(condition, path, FilterProblemCodes.TakesNoValue,
+                        $"'{condition.Field}' takes no value with that comparison.")
+                    : About(condition, path, FilterProblemCodes.ValueCount,
+                        $"'{condition.Field}' needs exactly {exact} value(s) with that comparison.", exact));
             return;
         }
 
         if (arity is null && condition.Values.Count == 0)
         {
-            errors.Add($"'{condition.Field}' needs at least one value.");
+            errors.Add(About(condition, path, FilterProblemCodes.ValueMissing,
+                $"'{condition.Field}' needs at least one value."));
             return;
         }
 
         if (condition.Values.Count > MaxValuesPerCondition)
         {
-            errors.Add($"One condition takes at most {MaxValuesPerCondition} values.");
+            errors.Add(About(condition, path, FilterProblemCodes.TooManyValues,
+                $"One condition takes at most {MaxValuesPerCondition} values.", MaxValuesPerCondition));
             return;
         }
 
@@ -306,20 +335,23 @@ public static class FilterValidation
         {
             if (!Matches(field.Kind, value))
             {
-                errors.Add($"'{condition.Field}' was given a value of the wrong kind.");
+                errors.Add(About(condition, path, FilterProblemCodes.ValueKind,
+                    $"'{condition.Field}' was given a value of the wrong kind."));
                 return;
             }
 
             if (value is TextValue text && text.Value.Length > MaxTextValueLength)
             {
-                errors.Add($"A value is longer than {MaxTextValueLength} characters.");
+                errors.Add(About(condition, path, FilterProblemCodes.TextTooLong,
+                    $"A value is longer than {MaxTextValueLength} characters.", MaxTextValueLength));
                 return;
             }
 
             if (value is NumberValue number
                 && (!double.IsFinite(number.Value) || Math.Abs(number.Value) > MaxNumberMagnitude))
             {
-                errors.Add($"'{condition.Field}' was given a number it cannot be compared against.");
+                errors.Add(About(condition, path, FilterProblemCodes.NumberOutOfRange,
+                    $"'{condition.Field}' was given a number it cannot be compared against."));
                 return;
             }
         }
@@ -334,13 +366,15 @@ public static class FilterValidation
         if (condition.Op == FilterOp.Between
             && condition.Values is [NumberValue low, NumberValue high] && low.Value > high.Value)
         {
-            errors.Add($"'{condition.Field}' was given a range that ends before it starts.");
+            errors.Add(About(condition, path, FilterProblemCodes.RangeReversed,
+                $"'{condition.Field}' was given a range that ends before it starts."));
         }
 
         if (condition.Op == FilterOp.Between
             && condition.Values is [InstantValue from, InstantValue to] && from.Value > to.Value)
         {
-            errors.Add($"'{condition.Field}' was given a range that ends before it starts.");
+            errors.Add(About(condition, path, FilterProblemCodes.RangeReversed,
+                $"'{condition.Field}' was given a range that ends before it starts."));
         }
     }
 

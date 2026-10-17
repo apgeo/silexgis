@@ -290,7 +290,7 @@ public static class SavedFilterEndpoints
         }
 
         var errors = SavedFilterRules.ProblemsOnSave(document, await reader.VocabulariesAsync(ctx, ct));
-        return errors.Count == 0 ? null : ApiProblems.BadRequest(SurfaceFilters.InvalidCode, string.Join(" ", errors));
+        return errors.Count == 0 ? null : SurfaceFilterProblems.Invalid(errors);
     }
 
     private static void Apply(SavedFilter row, SavedFilterWriteRequest request)
