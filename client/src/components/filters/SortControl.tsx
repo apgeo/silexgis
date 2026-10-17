@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { Button, Flex, InputNumber, Select, Space, Tooltip } from 'antd';
+import { Flex, InputNumber, Select, Space, Tooltip } from 'antd';
 import { ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { anchorScopes, isOnGlobe } from '../../filters/spatial.ts';
 import type { FilterAnchor, SortKey } from '../../filters/types.ts';
+import Button from '../Button.tsx';
 import ObjectSelector from '../selector/ObjectSelector.tsx';
 
 /**
