@@ -4,11 +4,11 @@ import { formatApproximateCoordinate, formatCoordinate, formatCoordinateForCopy 
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 
 /**
- * Writes a position as text, in the format chosen. The precision is the decimal-degree places to
- * print, or `'approximate'` for a position the server snapped to its location-protection grid,
- * which is then written no finer than that grid.
+ * Writes a position as text, in the format chosen and with the person's settings for it.
+ * `'approximate'` marks a position the server snapped to its location-protection grid, which is
+ * then written no finer than that grid.
  */
-export type CoordinateFormatter = (lon: number, lat: number, precision?: number | 'approximate') => string;
+export type CoordinateFormatter = (lon: number, lat: number, precision?: 'approximate') => string;
 
 /**
  * Positions written the way the signed-in person chose to read them — every display of a
@@ -17,22 +17,25 @@ export type CoordinateFormatter = (lon: number, lat: number, precision?: number 
  */
 export function useCoordinateFormatter(): CoordinateFormatter {
   const format = useUiPrefsStore((s) => s.coordinateFormat);
+  const settings = useUiPrefsStore((s) => s.coordinateSettings);
   return useCallback(
     (lon, lat, precision) =>
       precision === 'approximate'
-        ? formatApproximateCoordinate(lon, lat, format)
-        : formatCoordinate(lon, lat, format, precision),
-    [format],
+        ? formatApproximateCoordinate(lon, lat, format, settings)
+        : formatCoordinate(lon, lat, format, settings),
+    [format, settings],
   );
 }
 
-/** A position as it goes on the clipboard, in the format chosen. */
-export function useCoordinateCopyFormatter(): (lon: number, lat: number) => string {
+/**
+ * A position as it goes on the clipboard, in the format chosen — a protected one exactly as coarse
+ * as it is shown, never finer.
+ */
+export function useCoordinateCopyFormatter(): CoordinateFormatter {
   const format = useUiPrefsStore((s) => s.coordinateFormat);
-  return useCallback((lon, lat) => formatCoordinateForCopy(lon, lat, format), [format]);
-}
-
-/** The same, outside a component: for a module that builds text once, on demand. */
-export function formatCoordinateNow(lon: number, lat: number, decimals?: number): string {
-  return formatCoordinate(lon, lat, useUiPrefsStore.getState().coordinateFormat, decimals);
+  const settings = useUiPrefsStore((s) => s.coordinateSettings);
+  return useCallback(
+    (lon, lat, precision) => formatCoordinateForCopy(lon, lat, format, settings, precision === 'approximate'),
+    [format, settings],
+  );
 }

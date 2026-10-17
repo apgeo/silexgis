@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { TripLogInfo } from '../../api/hooks.ts';
 import { formatCoordinate, type CoordinateFormat } from '../../geo/coordinateFormat.ts';
+import type { FormatSettings } from '../../geo/formats/registry.ts';
 
 /** A trip's sketch, said in words and numbers rather than drawn. */
 export interface GeometrySummary {
@@ -101,9 +102,10 @@ export function formatPosition(
   [lon, lat]: [number, number],
   cardinals: Cardinals,
   format: CoordinateFormat = 'dd',
+  settings?: Partial<FormatSettings>,
 ): string {
   if (format !== 'dd') {
-    return formatCoordinate(lon, lat, format, 5);
+    return formatCoordinate(lon, lat, format, settings);
   }
   const ns = lat >= 0 ? cardinals.north : cardinals.south;
   const ew = lon >= 0 ? cardinals.east : cardinals.west;

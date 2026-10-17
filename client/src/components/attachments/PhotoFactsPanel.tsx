@@ -86,7 +86,7 @@ export default function PhotoFactsPanel({ file }: { file: FileInfo }) {
       label: t('photoFacts.position'),
       children: (
         <span>
-          <Typography.Text copyable={{ text: copyText(lon, lat) }}>{formatPosition(lon, lat, 6)}</Typography.Text>
+          <Typography.Text copyable={{ text: copyText(lon, lat) }}>{formatPosition(lon, lat)}</Typography.Text>
           <br />
           <PositionSourceTag source={position.positionSource} confidence={position.confidence} />
         </span>

@@ -299,7 +299,7 @@ describe('sanitizeAccountPrefs', () => {
     expect(
       sanitizeAccountPrefs({
         appearance: { theme: 'sepia', density: 'compact', reduceMotion: false },
-        coordinateFormat: 'stereo70',
+        coordinateFormat: 'gauss-kruger',
         pinnedTypeIds: [1, 2],
         overviewMap: 'yes',
         docks: { leftHidden: true },
@@ -316,6 +316,19 @@ describe('sanitizeAccountPrefs', () => {
     ).toEqual({ pinnedFilterIds: [id(1), id(2), id(3), id(4), id(5), id(6)] });
     expect(accountPrefsIn({ pinnedFilterIds: [id(9)] })).toEqual({ pinnedFilterIds: [id(9)] });
     expect(ACCOUNT_PREF_KEYS).toContain('pinnedFilterIds');
+  });
+
+  it('keeps the good members of the coordinate settings and drops only what it cannot use', () => {
+    const out = sanitizeAccountPrefs({
+      coordinateFormat: 'stereo70',
+      coordinateSettings: { dd: { decimals: 3, style: 'nonsense' }, utm: { zone: 35, precisionMetres: 7 }, unknown: {} },
+      coordinateFormatsListed: ['mgrs', 'nonsense', 'dd', 'mgrs'],
+    });
+    expect(out.coordinateFormat).toBe('stereo70');
+    expect(out.coordinateSettings?.dd).toEqual({ decimals: 3, style: 'letters' });
+    expect(out.coordinateSettings?.utm).toEqual({ zone: 35, precisionMetres: 1 });
+    expect(out.coordinateSettings?.pluscode).toEqual({ length: 10 });
+    expect(out.coordinateFormatsListed).toEqual(['mgrs', 'dd']);
   });
 });
 

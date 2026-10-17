@@ -5,7 +5,14 @@ import type { MovieGifCalibration } from '../caveview/movie/movieOutput.ts';
 import type { MovieSettings } from '../caveview/movie/movieSettings.ts';
 import { DEFAULT_SAVED_FILTER_AUDIENCE, type SavedFilterAudience } from '../filters/savedFilterAudience.ts';
 import type { SelectorPrefs } from '../filters/selectorPrefs.ts';
-import { DEFAULT_COORDINATE_FORMAT, type CoordinateFormat } from '../geo/coordinateFormat.ts';
+import {
+  DEFAULT_COORDINATE_FORMAT,
+  defaultFormatSettings,
+  FORMAT_IDS,
+  type CoordinateFormat,
+  type FormatId,
+  type FormatSettings,
+} from '../geo/formats/settings.ts';
 import type { DensityPref, PanelLayout, PanelPrefs, PanelScope } from './panelPrefs.ts';
 
 export type { DensityPref };
@@ -173,6 +180,13 @@ interface UiPrefsState {
   /** How positions are written wherever one is shown or copied. */
   coordinateFormat: CoordinateFormat;
   setCoordinateFormat: (format: CoordinateFormat) => void;
+  /** Each format's own settings — places, precision, zone, code length — whether or not it is the one chosen. */
+  coordinateSettings: FormatSettings;
+  /** Replaces one format's settings (with a new object, so the change is seen and saved). */
+  setFormatSettings: <K extends FormatId>(format: K, settings: FormatSettings[K]) => void;
+  /** The formats a position shown in detail is also listed in, under "other formats", in this order. */
+  coordinateFormatsListed: FormatId[];
+  setCoordinateFormatsListed: (formats: FormatId[]) => void;
   /** Whether the map's overview inset is open. */
   overviewMap: boolean;
   setOverviewMap: (open: boolean) => void;
@@ -231,6 +245,8 @@ export interface AccountPrefsState {
   pinnedTypeIds: number[];
   pinnedFilterIds: string[];
   coordinateFormat: CoordinateFormat;
+  coordinateSettings: FormatSettings;
+  coordinateFormatsListed: FormatId[];
   overviewMap: boolean;
   karstLinkTreatment: ProtectedPositionTreatment | undefined;
   savedFilterAudience: SavedFilterAudience;
@@ -255,6 +271,8 @@ export function accountPrefDefaults(): AccountPrefsState {
     pinnedTypeIds: [],
     pinnedFilterIds: [],
     coordinateFormat: DEFAULT_COORDINATE_FORMAT,
+    coordinateSettings: defaultFormatSettings(),
+    coordinateFormatsListed: [...FORMAT_IDS],
     overviewMap: false,
     karstLinkTreatment: undefined,
     savedFilterAudience: DEFAULT_SAVED_FILTER_AUDIENCE,
@@ -357,6 +375,9 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       deleteLayout: (id) => set((state) => ({ layouts: state.layouts.filter((l) => l.id !== id) })),
       setDocks: (patch) => set((state) => ({ docks: { ...state.docks, ...patch } })),
       setCoordinateFormat: (format) => set({ coordinateFormat: format }),
+      setFormatSettings: (format, settings) =>
+        set((state) => ({ coordinateSettings: { ...state.coordinateSettings, [format]: { ...settings } } })),
+      setCoordinateFormatsListed: (formats) => set({ coordinateFormatsListed: [...formats] }),
       setOverviewMap: (open) => set({ overviewMap: open }),
       accountId: undefined,
       accountPrefsBaseline: undefined,

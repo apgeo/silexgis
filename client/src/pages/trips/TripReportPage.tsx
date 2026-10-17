@@ -153,6 +153,7 @@ function personLine(
 export default function TripReportPage() {
   const { t, i18n } = useTranslation();
   const coordinateFormat = useUiPrefsStore((s) => s.coordinateFormat);
+  const coordinateSettings = useUiPrefsStore((s) => s.coordinateSettings);
   const { id } = useParams<{ id: string }>();
   const { data: trip, isPending } = useTripLog(id);
   const { data: tripTypes } = useTripTypes();
@@ -441,7 +442,7 @@ export default function TripReportPage() {
                         south: t('trips.report.south'),
                         east: t('trips.report.east'),
                         west: t('trips.report.west'),
-                      }, coordinateFormat),
+                      }, coordinateFormat, coordinateSettings),
                       count: sketch.positions,
                     },
                   )}
@@ -488,7 +489,7 @@ export default function TripReportPage() {
                         south: t('trips.report.south'),
                         east: t('trips.report.east'),
                         west: t('trips.report.west'),
-                      }, coordinateFormat),
+                      }, coordinateFormat, coordinateSettings),
                       count: meeting.positions,
                     },
                   )}

@@ -99,6 +99,7 @@ function Part({ title, children }: { title: string; children: React.ReactNode })
 export default function ExpeditionReportPage() {
   const { t, i18n } = useTranslation();
   const coordinateFormat = useUiPrefsStore((s) => s.coordinateFormat);
+  const coordinateSettings = useUiPrefsStore((s) => s.coordinateSettings);
   const { id } = useParams<{ id: string }>();
   const { data: camp, isPending } = useExpedition(id);
   const { data: cavingGroups } = useCavingGroups();
@@ -302,7 +303,7 @@ export default function ExpeditionReportPage() {
                         south: t('trips.report.south'),
                         east: t('trips.report.east'),
                         west: t('trips.report.west'),
-                      }, coordinateFormat),
+                      }, coordinateFormat, coordinateSettings),
                       count: area.positions,
                     },
                   )}

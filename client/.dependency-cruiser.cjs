@@ -88,6 +88,30 @@ module.exports = {
       to: { path: '^node_modules/(echarts|zrender)/' },
     },
     {
+      name: 'grid-libraries-only-in-their-format-modules',
+      comment:
+        'Only the national-grid and MGRS format modules may import the projection library '
+        + '(proj4) and the MGRS library. Everything else asks for a position by format id '
+        + 'through the format registry, so each library has one seam and stays replaceable. '
+        + 'Test files are excluded from this graph, so a test may import either library.',
+      severity: 'error',
+      from: { pathNot: '^src/geo/formats/(nationalGrids|militaryGrid)\\.ts$' },
+      to: { path: '^node_modules/(proj4|mgrs)/' },
+    },
+    {
+      name: 'grid-libraries-stay-out-of-the-entry-bundle',
+      comment:
+        'The preference stores load with the application itself, on every page including '
+        + 'sign-in and public shares, and so does the module that names the coordinate formats '
+        + 'and their settings. Neither may reach the projection or MGRS library, by any path: '
+        + 'one import of a format writer from a store moved both (about 35 kB gzipped) into the '
+        + 'entry bundle every visitor downloads. Stores and settings take format ids, defaults '
+        + 'and sanitising from src/geo/formats/settings.ts, which writes no position.',
+      severity: 'error',
+      from: { path: ['^src/stores/', '^src/geo/formats/settings\\.ts$'] },
+      to: { path: '^node_modules/(proj4|mgrs)/', reachable: true },
+    },
+    {
       name: 'page-slices-stay-isolated',
       comment: 'A page slice may not import another page slice\'s internals.',
       severity: 'error',

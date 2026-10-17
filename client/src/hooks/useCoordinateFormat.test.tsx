@@ -3,12 +3,14 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it } from 'vitest';
 import PointField from '../components/settings/PointField.tsx';
 import '../i18n';
+import { defaultFormatSettings } from '../geo/formats/registry.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useCoordinateCopyFormatter } from './useCoordinateFormat.ts';
 
 afterEach(() => {
   cleanup();
   useUiPrefsStore.getState().setCoordinateFormat('dd');
+  useUiPrefsStore.setState({ coordinateSettings: defaultFormatSettings() });
 });
 
 // A public trig point, not a registry position.
@@ -35,5 +37,29 @@ it('copies decimal degrees as lat, lon, and the other formats as they are shown'
   expect(screen.getByTestId('copy').textContent).toBe('45.599440, 24.736170');
 
   act(() => useUiPrefsStore.getState().setCoordinateFormat('utm'));
-  expect(screen.getByTestId('copy').textContent).toMatch(/^35T \d{6}\.\d E \d{7}\.\d N$/);
+  expect(screen.getByTestId('copy').textContent).toMatch(/^35T \d{6} E \d{7} N$/);
+});
+
+it('follows the settings of the format chosen', () => {
+  render(<PointField value={point} />);
+  act(() => useUiPrefsStore.getState().setFormatSettings('dd', { decimals: 2, style: 'signed' }));
+  expect(screen.getByText('45.60, 24.74')).toBeTruthy();
+
+  act(() => {
+    useUiPrefsStore.getState().setCoordinateFormat('mgrs');
+    useUiPrefsStore.getState().setFormatSettings('mgrs', { precisionMetres: 100, spacing: 'compact' });
+  });
+  expect(screen.getByText(/^35T[A-Z]{2}\d{6}$/)).toBeTruthy();
+});
+
+function ApproximateCopyProbe() {
+  const copyText = useCoordinateCopyFormatter();
+  return <span data-testid="copy">{copyText(point[0], point[1], 'approximate')}</span>;
+}
+
+it('copies a protected position no finer than the grid, in every format', () => {
+  render(<ApproximateCopyProbe />);
+  expect(screen.getByTestId('copy').textContent).toBe('45.60, 24.74');
+  act(() => useUiPrefsStore.getState().setCoordinateFormat('pluscode'));
+  expect(screen.getByTestId('copy').textContent).toMatch(/^[23456789CFGHJMPQRVWX]{6}00\+$/);
 });

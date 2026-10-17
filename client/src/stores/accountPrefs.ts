@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { isSavedFilterAudience } from '../filters/savedFilterAudience.ts';
-import { isCoordinateFormat } from '../geo/coordinateFormat.ts';
+import { isCoordinateFormat, isFormatId, sanitizeFormatSettings } from '../geo/formats/settings.ts';
 import { accountPrefDefaults, MAX_PINNED_FILTERS, type AccountPrefsState } from './uiPrefsStore.ts';
 
 /** What a saved filter's id looks like; a pinned chip naming anything else is dropped on read. */
@@ -169,6 +169,8 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
     overviewMap,
     karstLinkTreatment,
     savedFilterAudience,
+    coordinateSettings,
+    coordinateFormatsListed,
   } = read;
   if (
     isPlainObject(appearance) &&
@@ -200,6 +202,15 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
   }
   if (isCoordinateFormat(coordinateFormat)) {
     out.coordinateFormat = coordinateFormat;
+  }
+  // Member by member: a setting this client does not know, or a value outside its choices, falls
+  // back to its default without discarding the settings that are still good.
+  if (isPlainObject(coordinateSettings)) {
+    out.coordinateSettings = sanitizeFormatSettings(coordinateSettings);
+  }
+  // A format this client does not know is dropped from the list; the rest keep their order.
+  if (Array.isArray(coordinateFormatsListed)) {
+    out.coordinateFormatsListed = [...new Set(coordinateFormatsListed.filter(isFormatId))];
   }
   if (typeof overviewMap === 'boolean') {
     out.overviewMap = overviewMap;
