@@ -224,7 +224,8 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
     /// <summary>
     /// The feature list and the two vector exports read a filter document or a saved filter, so each
     /// can answer a filter it cannot read (400) or a saved filter it cannot find (404) — pinned so
-    /// that one quietly dropped is noticed.
+    /// that one quietly dropped is noticed. The filter query itself answers a filter it cannot read
+    /// or run, a place to measure from among them, with 400.
     /// </summary>
     [Fact]
     public async Task OpenApi_document_declares_the_filtered_lists_and_exports_own_refusals()
@@ -233,6 +234,7 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
         var expected = new Dictionary<string, string[]>
         {
             ["featureList"] = ["400", "401", "404"],
+            ["filterQuery"] = ["400", "401", "403"],
             ["exportExportFeatures"] = ["400", "401", "404"],
             ["exportExportCaves"] = ["400", "401", "404"],
         };
@@ -247,7 +249,9 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
 
     /// <summary>
     /// The two layers every map draws, the survey lines and walls a filtered map draws beside
-    /// them, and a shared view's link with the data it draws, declare each refusal their handlers send — pinned so that one quietly dropped is noticed. The link's
+    /// them, the saved views that keep the map's filter, and a shared view's link with the data it
+    /// draws, declare each refusal their handlers send — pinned so that one quietly dropped is
+    /// noticed. A saved view's write refuses a filter holding a place of its own (400). The link's
     /// routes need no token, so they carry no 401, and sit behind a rate limit, so they carry 429.
     /// </summary>
     [Fact]
@@ -261,6 +265,8 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
             ["mapCaveCenterlines"] = ["400", "401", "404"],
             ["caveMeshMapCaveMeshes"] = ["400", "401", "404"],
             ["mapViewShared"] = ["404", "429"],
+            ["mapViewCreate"] = ["400", "401", "403"],
+            ["mapViewUpdate"] = ["400", "401", "403", "404"],
             ["sharedViewMapEntrances"] = ["400", "404", "429"],
             ["sharedViewMapFeatures"] = ["400", "404", "429"],
         };

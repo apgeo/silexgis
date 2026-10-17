@@ -45,7 +45,12 @@ public static class FilterEndpoints
             .WithSummary("What each kind of object can be filtered by, and the limits on a filter.");
 
         filters.MapPost("/query", QueryAsync)
-            .WithSummary("Runs a filter across the kinds of object it names.");
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithSummary(
+                "Runs a filter across the kinds of object it names. Refused with 400 for a filter it "
+                + "cannot read or run — among them a place to measure from that is missing, nested, "
+                + "too large or not an outline.");
 
         filters.MapPost("/resolve", ResolveAsync)
             .WithSummary("Describes rows named by id, for a control showing an existing choice.");
