@@ -28,7 +28,6 @@ interface DraftRule {
   actions: Set<AccessActionFlag>;
   scopeKind: AccessScopeKind;
   scopeId: string | null;
-  scopeLabel: string | null;
   featureKind: FeatureKind | null;
   featureTypeId: number | null;
 }
@@ -75,7 +74,6 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
         actions: new Set([...parseAccessActions(entry.actions)]),
         scopeKind: entry.scopeKind,
         scopeId: entry.scopeId ?? null,
-        scopeLabel: entry.scopeLabel ?? null,
         featureKind: entry.featureKind ?? null,
         featureTypeId: entry.featureTypeId ?? null,
       })));
@@ -110,7 +108,6 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
       domain,
       scopeKind,
       scopeId: null,
-      scopeLabel: null,
       featureKind: null,
       featureTypeId: null,
       actions: new Set([...draft.actions].filter((a) => valid.has(a))),
@@ -122,7 +119,6 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
     patch(draft.key, {
       scopeKind,
       scopeId: null,
-      scopeLabel: null,
       actions: new Set([...draft.actions].filter((a) => valid.has(a))),
       ...(allowsNarrowing(draft.domain, scopeKind) ? {} : { featureKind: null, featureTypeId: null }),
     });
@@ -137,7 +133,6 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
       actions: new Set<AccessActionFlag>(['read']),
       scopeKind: domain.scopes[0].scopeKind,
       scopeId: null,
-      scopeLabel: null,
       featureKind: null,
       featureTypeId: null,
     }]);
@@ -288,8 +283,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
                       scopeKind={draft.scopeKind}
                       catalog={catalog}
                       value={draft.scopeId}
-                      label={draft.scopeLabel}
-                      onChange={(scopeId, scopeLabel) => patch(draft.key, { scopeId, scopeLabel })}
+                      onChange={(scopeId) => patch(draft.key, { scopeId })}
                     />
                   )}
                   {allowsNarrowing(draft.domain, draft.scopeKind) && (

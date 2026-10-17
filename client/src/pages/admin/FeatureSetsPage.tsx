@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DeleteOutlined, GroupOutlined, PlusOutlined } from '@ant-design/icons';
 import {
-  App, Alert, Button, Drawer, Flex, Form, Input, Modal, Popconfirm, Select, Spin, Table, Tag,
+  App, Alert, Button, Drawer, Flex, Form, Input, Modal, Popconfirm, Spin, Table, Tag,
   Typography,
 } from 'antd';
 import List from '../../components/List.tsx';
@@ -12,7 +12,6 @@ import {
   useCapabilities,
   useCreateFeatureSet,
   useDeleteFeatureSet,
-  useFeatures,
   useFeatureSetMembers,
   useFeatureSets,
   useReplaceFeatureSetMembers,
@@ -21,12 +20,25 @@ import {
   type FeatureKind,
 } from '../../api/hooks.ts';
 import { ApiError } from '../../api/client.ts';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
+import type { SelectorScope } from '../../filters/selection.ts';
+import type { FilterHit } from '../../filters/types.ts';
+
+/** A set may hold any kind of feature, so the picker offers the whole feature world. */
+const MEMBER_SCOPES: readonly SelectorScope[] = [
+  { id: 'features', labelKey: 'filters.scopes.features', world: 'feature', where: null },
+];
 
 interface DraftMember {
   id: string;
   name: string | null;
-  kind: FeatureKind;
+  /** Known for a member the set already holds. */
+  kind: FeatureKind | null;
+  /**
+   * For one picked here instead: a search row names the feature's type, not its kind, and the
+   * type is the more particular word anyway.
+   */
+  typeName: string | null;
 }
 
 /**
@@ -40,36 +52,30 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
   const { data: members, isPending } = useFeatureSetMembers(set.id);
   const replaceMembers = useReplaceFeatureSetMembers(set.id);
   const [drafts, setDrafts] = useState<DraftMember[]>([]);
-  const [featureQuery, setFeatureQuery] = useState('');
-  const [picked, setPicked] = useState<string>();
-  const debouncedQuery = useDebouncedValue(featureQuery);
-  const { data: featurePage } = useFeatures(
-    { search: debouncedQuery || undefined, pageSize: 20 },
-    debouncedQuery.trim().length >= 2,
-  );
+  const [picked, setPicked] = useState<FilterHit | null>(null);
 
   useEffect(() => {
     if (members) {
-      setDrafts(members.map((member) => ({ id: member.id, name: member.name, kind: member.kind })));
+      setDrafts(members.map((member) => ({
+        id: member.id,
+        name: member.name,
+        kind: member.kind,
+        typeName: null,
+      })));
     }
   }, [members]);
 
-  const options = (featurePage?.items ?? [])
-    .filter((feature) => !drafts.some((draft) => draft.id === feature.id))
-    .map((feature) => ({
-      value: feature.id,
-      label: feature.name ?? `${t(`featureKinds.${feature.kind}`)} ${feature.id.slice(0, 8)}`,
-      kind: feature.kind,
-    }));
+  // A member appears once. The server keeps a set's membership to distinct features whatever
+  // this list offers; leaving members out of the search is only so a pick cannot look like it
+  // added something.
+  const notOffered = useMemo(() => drafts.map((draft) => draft.id), [drafts]);
 
   const addPicked = () => {
-    const option = options.find((o) => o.value === picked);
-    if (!option) {
+    if (!picked) {
       return;
     }
-    setDrafts([...drafts, { id: option.value, name: option.label, kind: option.kind }]);
-    setPicked(undefined);
-    setFeatureQuery('');
+    setDrafts([...drafts, { id: picked.id, name: picked.title, kind: null, typeName: picked.subtitle }]);
+    setPicked(null);
   };
 
   const onSave = async () => {
@@ -100,18 +106,21 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
     >
       <Flex vertical gap={12}>
         <Alert type="info" showIcon title={t('featureSets.membershipMovesAccess')} />
-        <Flex gap={8}>
-          <Select
-            style={{ flex: 1 }}
-            showSearch
-            filterOption={false}
-            placeholder={t('featureSets.searchFeature')}
-            value={picked}
-            onSearch={setFeatureQuery}
-            onChange={setPicked}
-            options={options}
-            notFoundContent={null}
-          />
+        <Flex gap={8} align="flex-start">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <ObjectSelector
+              scopes={MEMBER_SCOPES}
+              allowClear
+              exclude={notOffered}
+              pageSize={6}
+              sorts={[]}
+              placeholder={t('featureSets.searchFeature')}
+              aria-label={t('featureSets.searchFeature')}
+              value={picked?.id ?? null}
+              onPick={setPicked}
+              data-testid="feature-set-member-picker"
+            />
+          </div>
           <Button icon={<PlusOutlined />} onClick={addPicked} disabled={!picked}>
             {t('featureSets.addFeature')}
           </Button>
@@ -135,8 +144,9 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
               ]}
             >
               <Flex gap={8} align="center">
-                <Tag>{t(`featureKinds.${draft.kind}`)}</Tag>
-                {draft.name ?? draft.id}
+                {draft.kind ? <Tag>{t(`featureKinds.${draft.kind}`)}</Tag>
+                  : draft.typeName && <Tag>{draft.typeName}</Tag>}
+                {draft.name ?? t('features.unnamed')}
               </Flex>
             </List.Item>
           )}

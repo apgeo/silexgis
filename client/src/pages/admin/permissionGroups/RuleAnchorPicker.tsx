@@ -1,26 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
 import { Input, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   useCabinets,
   useCavingGroups,
-  useFeatures,
   usePermissionGroups,
   type AccessCatalog,
   type AccessDomainName,
   type AccessScopeKind,
 } from '../../../api/hooks.ts';
-import { useDebouncedValue } from '../../../hooks/useDebouncedValue.ts';
+import ObjectSelector from '../../../components/selector/ObjectSelector.tsx';
+import type { SelectorScope } from '../../../filters/selection.ts';
+
+/** A subtree or object rule may hang on any kind of feature, so the whole feature world is offered. */
+const FEATURE_ANCHOR_SCOPES: readonly SelectorScope[] = [
+  { id: 'features', labelKey: 'filters.scopes.features', world: 'feature', where: null },
+];
 
 interface RuleAnchorPickerProps {
   domain: AccessDomainName;
   scopeKind: AccessScopeKind;
   catalog: AccessCatalog;
   value: string | null;
-  /** Server-resolved display name; null for a fresh row or an anchor the caller may not read. */
-  label: string | null;
-  onChange: (id: string | null, label: string | null) => void;
+  onChange: (id: string | null) => void;
 }
 
 /**
@@ -30,17 +32,11 @@ interface RuleAnchorPickerProps {
  * Which scopes need an anchor at all comes from the catalog, never from here.
  */
 export default function RuleAnchorPicker({
-  domain, scopeKind, catalog, value, label, onChange,
+  domain, scopeKind, catalog, value, onChange,
 }: RuleAnchorPickerProps) {
   const { t } = useTranslation();
-  const [featureQuery, setFeatureQuery] = useState('');
-  const debouncedQuery = useDebouncedValue(featureQuery);
 
   const anchorsOnFeature = domain === 'features' && (scopeKind === 'subtree' || scopeKind === 'object');
-  const { data: featurePage } = useFeatures(
-    { search: debouncedQuery || undefined, pageSize: 20 },
-    anchorsOnFeature && debouncedQuery.trim().length >= 2,
-  );
   const { data: cavingGroups } = useCavingGroups();
   const { data: permissionGroups } = usePermissionGroups(
     scopeKind === 'object' && domain === 'permissionGroups',
@@ -56,7 +52,7 @@ export default function RuleAnchorPicker({
         optionFilterProp="label"
         placeholder={t('permissionGroups.pickCavingGroupAnchor')}
         value={value ?? undefined}
-        onChange={(id) => onChange(id, cavingGroups?.find((g) => g.id === id)?.name ?? null)}
+        onChange={(id) => onChange(id)}
         options={cavingGroups?.map((group) => ({ value: group.id, label: group.name }))}
       />
     );
@@ -71,7 +67,7 @@ export default function RuleAnchorPicker({
         optionFilterProp="label"
         placeholder={t('permissionGroups.pickFeatureSetAnchor')}
         value={value ?? undefined}
-        onChange={(id) => onChange(id, catalog.featureSets.find((s) => s.id === id)?.name ?? null)}
+        onChange={(id) => onChange(id)}
         options={catalog.featureSets.map((set) => ({ value: set.id, label: set.name }))}
       />
     );
@@ -79,7 +75,9 @@ export default function RuleAnchorPicker({
 
   if (scopeKind === 'cabinet') {
     // Shown with its ancestry, because two shelves in different archives may share a
-    // name and a rule that names the wrong one is not visibly wrong afterwards.
+    // name and a rule that names the wrong one is not visibly wrong afterwards. That is why this
+    // stays a list of its own rather than a search over the cabinet filter world: a row there
+    // names only the cabinet directly above, not the whole path.
     const path = (cabinet: { id: string; name: string; ancestorIds: string[] }) =>
       cabinet.ancestorIds
         .map((id) => cabinets?.find((c) => c.id === id)?.name ?? cabinet.name)
@@ -92,38 +90,31 @@ export default function RuleAnchorPicker({
         optionFilterProp="label"
         placeholder={t('permissionGroups.pickCabinetAnchor')}
         value={value ?? undefined}
-        onChange={(id) => {
-          const picked = cabinets?.find((c) => c.id === id);
-          onChange(id, picked ? path(picked) : null);
-        }}
+        onChange={(id) => onChange(id)}
         options={(cabinets ?? []).map((cabinet) => ({ value: cabinet.id, label: path(cabinet) }))}
       />
     );
   }
 
   if (anchorsOnFeature) {
-    // Server-side search; the current value may not be among the results, so it is
-    // carried as its own option under whatever label the server resolved for it.
-    const options = (featurePage?.items ?? []).map((feature) => ({
-      value: feature.id,
-      label: feature.name ?? `${t(`featureKinds.${feature.kind}`)} ${feature.id.slice(0, 8)}`,
-    }));
-    if (value && !options.some((o) => o.value === value)) {
-      options.unshift({ value, label: label ?? value });
-    }
+    // A stored anchor is named by the filter route under the editor's own visibility; one they
+    // may not read shows as "not shown" rather than as its identifier. Searching is the same
+    // route, so it offers nothing the editor could not already find on the feature list.
     return (
-      <Select
-        size="small"
-        style={{ minWidth: 200 }}
-        showSearch
-        filterOption={false}
-        placeholder={t('permissionGroups.pickFeatureAnchor')}
-        value={value ?? undefined}
-        onSearch={setFeatureQuery}
-        onChange={(id) => onChange(id, options.find((o) => o.value === id)?.label ?? null)}
-        options={options}
-        notFoundContent={null}
-      />
+      <div style={{ minWidth: 200 }}>
+        <ObjectSelector
+          scopes={FEATURE_ANCHOR_SCOPES}
+          presentation="dropdown"
+          size="small"
+          pageSize={8}
+          sorts={[]}
+          placeholder={t('permissionGroups.pickFeatureAnchor')}
+          aria-label={t('permissionGroups.pickFeatureAnchor')}
+          value={value}
+          onPick={(hit) => onChange(hit?.id ?? null)}
+          data-testid="rule-anchor-feature-picker"
+        />
+      </div>
     );
   }
 
@@ -136,7 +127,7 @@ export default function RuleAnchorPicker({
         optionFilterProp="label"
         placeholder={t('permissionGroups.pickPermissionGroupAnchor')}
         value={value ?? undefined}
-        onChange={(id) => onChange(id, permissionGroups?.find((g) => g.id === id)?.name ?? null)}
+        onChange={(id) => onChange(id)}
         options={permissionGroups?.map((group) => ({ value: group.id, label: group.name }))}
       />
     );
@@ -150,7 +141,7 @@ export default function RuleAnchorPicker({
       style={{ minWidth: 200 }}
       placeholder={t('permissionGroups.anchorIdPlaceholder')}
       value={value ?? ''}
-      onChange={(e) => onChange(e.target.value.trim() || null, null)}
+      onChange={(e) => onChange(e.target.value.trim() || null)}
     />
   );
 }
