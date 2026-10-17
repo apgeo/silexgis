@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
 import { InboxOutlined } from '@ant-design/icons';
-import { Alert, App, Form, InputNumber, Modal, Radio, Typography, Upload } from 'antd';
+import { Alert, App, Checkbox, Form, InputNumber, Modal, Radio, Typography, Upload } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   useCaveSummary,
+  useSurveyModels,
   useUploadSurveyModel,
+  type SurveyModelInfo,
   type SurveySourceDeclaration,
 } from '../../api/hooks.ts';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
@@ -47,6 +49,22 @@ function declarationNeed(file: File | undefined): 'none' | 'required' | 'optiona
 
 function isWallMesh(file: File | undefined): boolean {
   return file !== undefined && file.name.toLowerCase().endsWith('.stl');
+}
+
+/**
+ * The model that represents the cave now in the kind the chosen file would be: its line plot for a
+ * `.lox` or `.3d`, its walls for an `.stl`. Undefined when there is none — the file then becomes
+ * the current one by arriving, and there is nothing to ask.
+ */
+function currentOfKind(
+  models: readonly SurveyModelInfo[] | undefined,
+  file: File | undefined,
+): SurveyModelInfo | undefined {
+  if (file === undefined) {
+    return undefined;
+  }
+  const mesh = isWallMesh(file);
+  return models?.find((model) => model.isCurrent && (model.format === 'stl') === mesh);
 }
 
 interface DeclarationForm {
@@ -94,6 +112,8 @@ export default function SurveyModelUploadModal({
   const [tooLarge, setTooLarge] = useState(false);
   const upload = useUploadSurveyModel();
   const { data: summary } = useCaveSummary(caveId);
+  const { data: models } = useSurveyModels(caveId);
+  const [takeOver, setTakeOver] = useState(false);
 
   // The true position, or nothing. Both halves are read: the capability the caller was granted,
   // and the record's own statement that what it sent is not blurred.
@@ -131,6 +151,11 @@ export default function SurveyModelUploadModal({
   // export already states would block the ordinary case to catch the other one.
   const demanded = need === 'required';
   const mesh = isWallMesh(file);
+
+  // Offered only where there is something to take over from. Arriving is not choosing: a second
+  // line plot may be a corrected re-export or a survey of one side passage, and only its uploader
+  // knows which — so the cave goes on being represented by the model it has unless this is ticked.
+  const holder = currentOfKind(models, file);
   const coordinates = Form.useWatch('coordinates', form) ?? 'local';
 
   // The two halves separately, because the effect below depends on the numbers rather than on the
@@ -162,6 +187,7 @@ export default function SurveyModelUploadModal({
     form.resetFields();
     setFile(undefined);
     setTooLarge(false);
+    setTakeOver(false);
     onClose();
   };
 
@@ -194,9 +220,10 @@ export default function SurveyModelUploadModal({
               originLatitude: values.originLatitude,
             };
     }
+    const makeCurrent = takeOver && holder !== undefined;
     try {
-      await upload.mutateAsync({ caveId, file, declaration });
-      message.success(t('surveyModels.uploaded'));
+      await upload.mutateAsync({ caveId, file, declaration, makeCurrent });
+      message.success(t(makeCurrent ? 'surveyModels.uploadedTakingOver' : 'surveyModels.uploaded'));
       close();
     } catch (error) {
       message.error(surveyModelProblemMessage(error, t));
@@ -223,6 +250,8 @@ export default function SurveyModelUploadModal({
         beforeUpload={(chosen) => {
           setFile(chosen);
           setTooLarge(chosen.size > MAX_MODEL_BYTES);
+          // A tick given for a line plot is not a tick for walls chosen instead.
+          setTakeOver(false);
           return false;
         }}
         data-testid="survey-model-file"
@@ -243,6 +272,25 @@ export default function SurveyModelUploadModal({
           style={{ marginTop: 12 }}
           title={t('surveyModels.problems.sizeInvalid')}
         />
+      )}
+
+      {holder && (
+        <div style={{ marginTop: 16 }}>
+          <Checkbox
+            checked={takeOver}
+            onChange={(event) => setTakeOver(event.target.checked)}
+            data-testid="survey-model-take-over"
+          >
+            {t(mesh ? 'surveyModels.takeOverMesh' : 'surveyModels.takeOverLinePlot', {
+              name: holder.name,
+            })}
+          </Checkbox>
+          <Typography.Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 0 }}>
+            {t(mesh ? 'surveyModels.takeOverMeshHint' : 'surveyModels.takeOverLinePlotHint', {
+              name: holder.name,
+            })}
+          </Typography.Paragraph>
+        </div>
       )}
 
       {asked && (

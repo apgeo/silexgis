@@ -56,6 +56,14 @@ making a survey's centerline the default does the same from the other side: the 
 figures always describe the same survey. Deleting the current model passes the mark to the newest
 one left.
 
+**Choosing it while you upload.** When the cave already has a current model of the kind you are
+uploading, the upload dialog offers to make the new file the current one **once it has been read**
+(for walls, once converted). Until then the model the cave has stays current — there is nothing to
+measure or draw from a file that has not been read — and the list moves the mark by itself when the
+reading ends. Two things leave the mark where it is: a file that cannot be read, and somebody choosing
+another model while yours was being read, because theirs is the later choice. Reading a model again
+later does not make it current again; use **Make current** for that.
+
 ### Reading a survey into rows
 
 A compiled survey is not left as a file the browser draws. It is **read into its stations and

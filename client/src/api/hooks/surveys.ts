@@ -456,7 +456,10 @@ type SurveyModelUploadBody =
  * on the server fails this build instead of failing every upload at run time. Only the file itself
  * is set aside, because it is appended separately.
  */
-export type SurveySourceDeclaration = Omit<SurveyModelUploadBody, 'file'>;
+export type SurveySourceDeclaration = Omit<SurveyModelUploadBody, 'file' | 'makeCurrent'>;
+
+/** The contract's name for the request that a model take the cave's current mark once read. */
+const MAKE_CURRENT_FIELD: keyof SurveyModelUploadBody = 'makeCurrent';
 
 export function useUploadSurveyModel() {
   const invalidate = useInvalidateSurveyModels();
@@ -465,11 +468,17 @@ export function useUploadSurveyModel() {
       caveId,
       file,
       declaration,
+      makeCurrent,
     }: {
       caveId: string;
       file: File;
       /** What the uploader said about where the file sits; absent when the file says it itself. */
       declaration?: SurveySourceDeclaration;
+      /**
+       * That the cave be represented by this model once it has been read, rather than by the
+       * model of its kind that represents it now. The server applies it when the reading ends.
+       */
+      makeCurrent?: boolean;
     }): Promise<SurveyModelInfo> => {
       const form = new FormData();
       form.append('file', file, file.name);
@@ -481,6 +490,9 @@ export function useUploadSurveyModel() {
         if (value !== undefined) {
           form.append(field, String(value));
         }
+      }
+      if (makeCurrent === true) {
+        form.append(MAKE_CURRENT_FIELD, 'true');
       }
       return unwrap(api.POST('/api/v1/caves/{caveId}/survey-models', {
         params: { path: { caveId } },

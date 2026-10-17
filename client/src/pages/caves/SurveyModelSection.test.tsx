@@ -535,6 +535,64 @@ describe('uploading a survey model', () => {
     expect(screen.getByText(/Filled in from this cave's main entrance/)).toBeInTheDocument();
   });
 
+  it('offers to make a new line plot the current one only where another line plot is current', async () => {
+    // The cave's walls are current and no line plot is: a .3d arrives as the current line plot on
+    // its own, so there is nothing to ask.
+    models = [model({ id: 'walls', name: 'Grind walls', format: 'stl', isCurrent: true })];
+    const view = show();
+    await openUpload('cave.3d');
+    expect(screen.queryByTestId('survey-model-take-over')).not.toBeInTheDocument();
+    view.unmount();
+
+    models = [
+      model({ id: 'walls', name: 'Grind walls', format: 'stl', isCurrent: true }),
+      model({ id: 'plot', name: 'Grind 2024', format: 'survex3d', isCurrent: true, meshUrl: null }),
+    ];
+    show();
+    await openUpload('cave.3d');
+    expect(screen.getByText(/the current line plot once it has been read, instead of “Grind 2024”/)).toBeInTheDocument();
+    expect(screen.getByTestId('survey-model-take-over')).not.toBeChecked();
+  });
+
+  it('does not ask a new line plot to take over unless that was ticked', async () => {
+    models = [model({ id: 'plot', name: 'Grind 2024', format: 'survex3d', isCurrent: true, meshUrl: null })];
+    show();
+    await openUpload('cave.3d');
+
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Upload model$/ }));
+    await waitFor(() => expect(uploadMutate).toHaveBeenCalledTimes(1));
+    expect(uploadMutate.mock.calls[0][0].makeCurrent).toBe(false);
+    expect(await screen.findByText('Model uploaded')).toBeInTheDocument();
+  });
+
+  it('asks a new line plot to take over when that was ticked, and says when it will', async () => {
+    models = [model({ id: 'plot', name: 'Grind 2024', format: 'survex3d', isCurrent: true, meshUrl: null })];
+    show();
+    await openUpload('cave-corrected.3d');
+
+    fireEvent.click(screen.getByTestId('survey-model-take-over'));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Upload model$/ }));
+    await waitFor(() => expect(uploadMutate).toHaveBeenCalledTimes(1));
+    expect(uploadMutate.mock.calls[0][0].makeCurrent).toBe(true);
+    expect(await screen.findByText(/It becomes the current one once it has been read/)).toBeInTheDocument();
+  });
+
+  it('forgets the tick when another file is chosen, so walls are never taken over by a tick given for a plot', async () => {
+    models = [
+      model({ id: 'walls', name: 'Grind walls', format: 'stl', isCurrent: true }),
+      model({ id: 'plot', name: 'Grind 2024', format: 'survex3d', isCurrent: true, meshUrl: null }),
+    ];
+    show();
+    await openUpload('cave.3d');
+    fireEvent.click(screen.getByTestId('survey-model-take-over'));
+    expect(screen.getByTestId('survey-model-take-over')).toBeChecked();
+
+    chooseFile('walls-corrected.stl');
+    await screen.findByText('walls-corrected.stl');
+    expect(screen.getByText(/the current walls once they have been converted, instead of “Grind walls”/)).toBeInTheDocument();
+    expect(screen.getByTestId('survey-model-take-over')).not.toBeChecked();
+  });
+
   it('asks a Therion plot where it sits, because that format never says so itself', async () => {
     // The plot is now read into stations and shots rather than only drawn, and a .lox has no field
     // for a coordinate system anywhere in it. Uploaded without a position it is not placed

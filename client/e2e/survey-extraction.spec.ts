@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect } from '@playwright/test';
+import { tryAsPerson } from './arrange.ts';
 import { test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
@@ -103,4 +105,62 @@ test('a compiled survey is read in the background and the list follows it there'
   // A second reading replaces the first one's work rather than adding to it: the cave still has
   // one centerline drawn from this survey, not two.
   await expect(page.getByRole('row').filter({ hasText: 'Extracted' })).toHaveCount(1);
+});
+
+/**
+ * A corrected survey uploaded with the request that it take over. What only a browser shows: that
+ * the dialog offers the request where the cave already has a current survey, that the cave goes on
+ * being represented by the one it had while the new file is read, and that the list arrives at the
+ * new one by itself once the reading — not the page — has carried the request out.
+ */
+test('a corrected survey uploaded to take over becomes the current one once it has been read', async ({
+  page,
+}) => {
+  const caveName = `E2E Take Over Cave ${Date.now()}`;
+  await login(page);
+
+  await page.goto('/caves/new');
+  await page.getByLabel('Name', { exact: true }).fill(caveName);
+  await page.getByLabel('Type', { exact: true }).click();
+  await page.locator('.ant-select-item-option').first().click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
+  const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];
+  expect(caveId).toBeTruthy();
+
+  try {
+    const survey = readFileSync(path.join(fixtures, 'P8_Master.3d'));
+    const upload = async (name: string, takeOver: boolean) => {
+      await page.getByRole('button', { name: 'Upload model' }).click();
+      const dialog = page.getByRole('dialog').filter({ hasText: 'Upload a survey model' });
+      await dialog
+        .locator('input[type="file"]')
+        .setInputFiles({ name, mimeType: 'application/octet-stream', buffer: survey });
+      const tick = dialog.getByTestId('survey-model-take-over');
+      if (takeOver) {
+        await tick.check();
+      } else {
+        // The first survey of a cave becomes the current one by arriving: there is nothing to ask.
+        await expect(tick).toHaveCount(0);
+      }
+      await dialog.getByRole('button', { name: 'Upload model' }).click();
+      await expect(dialog).toBeHidden({ timeout: 30_000 });
+    };
+    const row = (name: string) =>
+      page.locator('.ant-card', { hasText: '3D survey models' }).getByRole('row').filter({ hasText: name });
+
+    await upload('Survey 2023.3d', false);
+    await expect(row('Survey 2023').getByText('Ready')).toBeVisible({ timeout: 60_000 });
+    await expect(row('Survey 2023').getByText('Current', { exact: true })).toBeVisible();
+
+    await upload('Survey 2024.3d', true);
+    await expect(page.getByText('It becomes the current one once it has been read.')).toBeVisible();
+
+    // Read by the server, and only then the cave's survey: the list follows by itself.
+    await expect(row('Survey 2024').getByText('Ready')).toBeVisible({ timeout: 60_000 });
+    await expect(row('Survey 2024').getByText('Current', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(row('Survey 2023').getByText('Current', { exact: true })).toHaveCount(0);
+  } finally {
+    await tryAsPerson(page, 'DELETE', `/api/v1/caves/${caveId}`);
+  }
 });
