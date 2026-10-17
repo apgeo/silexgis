@@ -65,6 +65,7 @@ const TEXT_FIELD: Record<string, string> = {
   surveyModel: 'name',
   photograph: 'title',
   geofile: 'name',
+  savedFilter: 'name',
 };
 
 export function textFieldOf(world: string): string | null {

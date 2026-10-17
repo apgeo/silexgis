@@ -89,6 +89,22 @@ export function useDeleteSavedFilter() {
   });
 }
 
+/** One saved filter, read fresh — for a control that applies it the moment it is picked. */
+export async function fetchSavedFilter(id: string): Promise<SavedFilter> {
+  return unwrap(api.GET('/api/v1/saved-filters/{id}', { params: { path: { id } } }));
+}
+
+/**
+ * Whether a saved filter can be applied by a surface that runs `world`: it reads as runnable to
+ * this account and it asks something about that world. Checked before applying, so a filter
+ * about trips picked on the map is refused with a sentence rather than by the map dropping to
+ * unfiltered as if a link had been broken.
+ */
+export function appliesTo(filter: SavedFilter, world: string): boolean {
+  const document = documentOf(filter);
+  return filter.state !== 'unreadable' && document !== null && document.scope.some((s) => s.world === world);
+}
+
 /** A saved filter's stored question in the shape the filter logic reads, or null when it has none. */
 export function documentOf(filter: SavedFilter): FilterDocument | null {
   return (filter.document ?? null) as unknown as FilterDocument | null;

@@ -3,6 +3,8 @@ import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchFeature } from '../../api/hooks.ts';
+import { appliesTo, fetchSavedFilter } from '../../api/hooks/savedFilters.ts';
+import { MAP_FILTER_WORLD, writeMapFilterAddress } from '../../map/mapFilters.ts';
 import type { SelectorScope } from '../../filters/selection.ts';
 import type { FilterHit } from '../../filters/types.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
@@ -50,6 +52,7 @@ const MAP_SCOPES: SelectorScope[] = [
   // destination a pick should have — its raster layer switched on over the map — is not something
   // this selector can reach.
   { id: 'photographs', labelKey: 'filters.scopes.photographs', world: 'photograph', where: null },
+  { id: 'savedFilters', labelKey: 'filters.scopes.savedFilters', world: 'savedFilter', where: null },
 ];
 
 interface MapObjectSelectorProps {
@@ -117,6 +120,25 @@ export default function MapObjectSelector({ fullWidth = false }: MapObjectSelect
           { replace: true },
         );
         return;
+
+      case 'savedFilter': {
+        // A saved filter is a question, so picking one makes it the map's filter. It goes through
+        // the address, which is where the map reads its filter from on every change, so a pick
+        // and a followed link are one path with one set of refusals.
+        try {
+          const filter = await fetchSavedFilter(hit.id);
+          if (!appliesTo(filter, MAP_FILTER_WORLD)) {
+            message.warning(t('filters.selector.savedFilterNotForMap'));
+            return;
+          }
+          setSearchParams((params) =>
+            writeMapFilterAddress(params, { kind: 'saved', savedFilterId: hit.id }),
+          );
+        } catch {
+          message.error(t('search.openFailed'));
+        }
+        return;
+      }
 
       default:
         // A world added later with no case here opens nothing rather than doing something

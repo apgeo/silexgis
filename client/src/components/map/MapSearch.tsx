@@ -97,7 +97,10 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
       label: t('search.features'),
       options: (results?.features ?? []).map((feature) => ({
         value: `feature:${feature.kind}:${feature.id}`,
-        label: `${feature.name ?? t('features.unnamed')} — ${t(`featureKinds.${feature.kind}`)}`,
+        // The server's context line — what it is and the cave or region it belongs to, as far as
+        // this reader may read them — is the same one the object selector shows; the kind is
+        // the fallback for a hit with nothing more to say.
+        label: `${feature.name ?? t('features.unnamed')} — ${feature.subtitle ?? t(`featureKinds.${feature.kind}`)}`,
       })),
     },
     {

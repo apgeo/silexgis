@@ -140,6 +140,22 @@ describe('MapSearch', () => {
     expect(screen.queryByText(/No document text matched/)).toBeNull();
   });
 
+  it('writes the server\'s context line under a feature, and its kind when there is none', () => {
+    // The line is decided on the server, where it knows which parent cave this reader may read;
+    // the box only prints it, so it can never say more than the selector beside it does.
+    searchData = {
+      ...everything,
+      features: [
+        { id: 'e1', kind: 'caveEntrance', name: 'Gura mare', typeCode: null, subtitle: 'Natural · Peștera X · Bihor' },
+        { id: 'g1', kind: 'generic', name: 'Doline', typeCode: null, subtitle: null },
+      ],
+    };
+    show();
+
+    expect(screen.getByText('Gura mare — Natural · Peștera X · Bihor')).toBeTruthy();
+    expect(screen.getByText(/^Doline — /)).toBeTruthy();
+  });
+
   it('still owns up to the text index when nothing at all matched', () => {
     // Paired with the case above, so a fix that simply stopped ever saying it could not pass.
     searchData = {

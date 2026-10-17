@@ -36,6 +36,12 @@ vi.mock('../../api/hooks.ts', () => ({
   fetchFeature: (id: string) => fetchFeature(id),
 }));
 
+const fetchSavedFilter = vi.fn();
+vi.mock('../../api/hooks/savedFilters.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/hooks/savedFilters.ts')>()),
+  fetchSavedFilter: (id: string) => fetchSavedFilter(id),
+}));
+
 /**
  * The selector stands in for itself: this file is about what happens *after* a pick, and driving
  * the real control would mean re-testing the search box to get at the callback.
@@ -128,6 +134,42 @@ describe('picking from the map selector', () => {
 
     await waitFor(() => expect(setSearchParams).toHaveBeenCalled());
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('makes a saved filter about features the map\'s filter, through the address', async () => {
+    fetchSavedFilter.mockResolvedValue({
+      id: 's1',
+      state: 'ready',
+      document: { version: 1, scope: [{ world: 'feature', where: null }], sort: 'updated', descending: true },
+    });
+
+    pick('savedFilter', 's1');
+
+    await waitFor(() => expect(setSearchParams).toHaveBeenCalledTimes(1));
+    const write = setSearchParams.mock.calls[0][0] as (p: URLSearchParams) => URLSearchParams;
+    // A document already in the address would win over the saved id, so it is taken out.
+    const next = write(new URLSearchParams('filter=old&view=keep'));
+    expect(next.get('saved')).toBe('s1');
+    expect(next.get('filter')).toBeNull();
+    expect(next.get('view')).toBe('keep');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('refuses a saved filter the map cannot run, rather than dropping the map to unfiltered', async () => {
+    fetchSavedFilter.mockResolvedValueOnce({
+      id: 's2',
+      state: 'ready',
+      document: { version: 1, scope: [{ world: 'tripLog', where: null }], sort: 'updated', descending: true },
+    });
+    pick('savedFilter', 's2');
+    await waitFor(() => expect(fetchSavedFilter).toHaveBeenCalledWith('s2'));
+
+    cleanup();
+    fetchSavedFilter.mockResolvedValueOnce({ id: 's3', state: 'unreadable', document: null });
+    pick('savedFilter', 's3');
+    await waitFor(() => expect(fetchSavedFilter).toHaveBeenCalledWith('s3'));
+
+    expect(setSearchParams).not.toHaveBeenCalled();
   });
 
   it('does nothing loudly when a later world has no destination here', async () => {
