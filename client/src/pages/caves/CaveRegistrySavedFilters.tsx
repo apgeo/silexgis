@@ -18,6 +18,7 @@ import {
   sameQuestion,
   type CaveRegistryReading,
 } from '../../filters/caveRegistry.ts';
+import { holdsPosition } from '../../filters/spatial.ts';
 
 interface Props {
   /** What the registry's controls and any extra conditions say now. */
@@ -63,6 +64,9 @@ export default function CaveRegistrySavedFilters({
   const [form] = Form.useForm<{ name: string; description?: string }>();
 
   const document = caveRegistryDocument(reading.controls, reading.extra);
+  // A typed point or a pasted outline is a position of its own, which a saved filter never holds:
+  // the server would refuse it, so the button says why before anybody names the filter.
+  const positional = document !== null && holdsPosition(document);
   const active = savedFilterId === undefined
     ? undefined
     : savedFilters?.find((filter) => filter.id === savedFilterId);
@@ -124,14 +128,16 @@ export default function CaveRegistrySavedFilters({
             if (id) apply(id);
           }}
         />
-        <Button
-          icon={<SaveOutlined />}
-          disabled={document === null}
-          data-testid="cave-registry-save-filter"
-          onClick={() => setSaving(true)}
-        >
-          {t('caveRegistry.saveAs')}
-        </Button>
+        <Tooltip title={positional ? t('filters.editor.spatial.notSaved') : undefined}>
+          <Button
+            icon={<SaveOutlined />}
+            disabled={document === null || positional}
+            data-testid="cave-registry-save-filter"
+            onClick={() => setSaving(true)}
+          >
+            {t('caveRegistry.saveAs')}
+          </Button>
+        </Tooltip>
         <Button
           type="link"
           icon={<SettingOutlined />}

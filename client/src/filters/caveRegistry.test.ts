@@ -4,6 +4,9 @@ import {
   CAVE_REGISTRY_SCOPE,
   caveRegistryDocument,
   caveRegistryEditorDocument,
+  caveRegistryEditorQuestion,
+  caveRegistryListToken,
+  caveRegistryOrderAfterEdit,
   caveRegistryToken,
   readCaveRegistry,
   readCaveRegistryEditor,
@@ -14,7 +17,7 @@ import {
 } from './caveRegistry.ts';
 import { describeCaveRegistry } from './describe.ts';
 import { emptyDocument, whereOf, withWhere } from './document.ts';
-import { encodeFilter } from './url.ts';
+import { decodeFilter, encodeFilter } from './url.ts';
 import type { FilterDocument, FilterNode } from './types.ts';
 
 const EVERY_CONTROL: CaveRegistryControls = {
@@ -228,5 +231,52 @@ describe('the registry as the advanced filter sees it', () => {
 
   it('narrows nothing when the edited document is about another world', () => {
     expect(readCaveRegistryEditor(emptyDocument(['tripLog']))).toEqual({ controls: {}, extra: [] });
+  });
+});
+
+describe('nearest first in the registry', () => {
+  const near = { anchor: 'point' as const, longitude: 22.5, latitude: 46.25 };
+  const reading = { controls: { region: 'Bihor' }, extra: [] };
+
+  it('carries the place in the address beside the sort, and only beside nearest first', () => {
+    const params = writeCaveRegistryAddress({ ...reading, sort: 'proximity', near, page: 1, pageSize: 20 });
+    expect(readCaveRegistryAddress(params).near).toEqual(near);
+
+    const object = { anchor: 'object' as const, world: 'feature', id: 'f0e1d2c3-0000-4000-8000-000000000001' };
+    const byObject = writeCaveRegistryAddress({ ...reading, sort: 'proximity', near: object, page: 1, pageSize: 20 });
+    expect(readCaveRegistryAddress(byObject).near).toEqual(object);
+
+    const byName = writeCaveRegistryAddress({ ...reading, sort: 'name', near, page: 1, pageSize: 20 });
+    expect(byName.has('near')).toBe(false);
+    expect(readCaveRegistryAddress(new URLSearchParams('sort=proximity&near=500,1')).near).toBeUndefined();
+  });
+
+  it('asks the list with the place and keeps it out of the token the exports and a save use', () => {
+    const listed = decodeFilter(caveRegistryListToken({ ...reading, sort: 'proximity', near }) ?? null);
+    expect(listed?.sort).toBe('proximity');
+    expect(listed?.anchor).toEqual(near);
+
+    const plain = decodeFilter(caveRegistryToken(reading) ?? null);
+    expect(plain?.anchor ?? null).toBeNull();
+    // With no condition at all there is still a question to carry the place: caves.
+    expect(decodeFilter(caveRegistryListToken({ controls: {}, extra: [], sort: 'proximity', near }) ?? null)?.anchor)
+      .toEqual(near);
+  });
+
+  it('opens the editor on the order the list has and applies the order chosen there', () => {
+    const opened = caveRegistryEditorQuestion({ ...reading, sort: 'proximity', near });
+    expect([opened.sort, opened.anchor]).toEqual(['proximity', near]);
+
+    // Nearest first chosen: the place goes to the address.
+    const byName = caveRegistryEditorQuestion({ ...reading, sort: 'name' });
+    const chosen = { ...byName, sort: 'proximity' as const, anchor: near };
+    expect(caveRegistryOrderAfterEdit(chosen, byName, 'name')).toEqual({ sort: 'proximity', near });
+
+    // Untouched: a column sort the editor cannot show is kept.
+    expect(caveRegistryOrderAfterEdit(byName, byName, 'name')).toEqual({ sort: 'name', near: undefined });
+
+    // Nearest first turned off goes back to the registry's own order.
+    const off = { ...opened, sort: 'updated' as const, descending: true, anchor: null };
+    expect(caveRegistryOrderAfterEdit(off, opened, 'proximity')).toEqual({ sort: undefined, near: undefined });
   });
 });

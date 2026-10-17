@@ -5,7 +5,7 @@ import { Alert, App, Drawer, Dropdown, Flex, Input, InputNumber, Select, Table, 
 import Button from '../../components/Button.tsx';
 import { labelledPaginationItems } from '../../components/paginationLabels.ts';
 import type { TablePaginationConfig } from 'antd';
-import type { SorterResult } from 'antd/es/table/interface';
+import type { SorterResult, TableCurrentDataSource } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { caveExportUrl, DownloadError, downloadFile } from '../../api/download.ts';
@@ -27,7 +27,9 @@ import FilterEditor from '../../components/filters/FilterEditor.tsx';
 import {
   CAVE_REGISTRY_SCOPE,
   CAVE_WORLD,
-  caveRegistryEditorDocument,
+  caveRegistryEditorQuestion,
+  caveRegistryListToken,
+  caveRegistryOrderAfterEdit,
   caveRegistryToken,
   readCaveRegistryAddress,
   readCaveRegistryEditor,
@@ -62,6 +64,12 @@ const sortableFields: Record<string, string> = {
 
 type AddressState = Omit<CaveRegistryAddress, 'unreadableLink'>;
 
+/**
+ * The orders the advanced filter offers here: nearest first, which only it can choose, and the
+ * registry's own order by last change to go back to. The columns keep the rest.
+ */
+const EDITOR_SORTS = ['updated', 'proximity'] as const;
+
 /** A typed number, or nothing when the field is empty or holds no number. */
 function lengthOf(raw: string | undefined): number | undefined {
   const text = raw?.trim() ?? '';
@@ -85,6 +93,9 @@ export default function CaveListPage() {
   const address = useMemo(() => readCaveRegistryAddress(searchParams), [searchParams]);
   const { controls, extra } = address;
   const token = caveRegistryToken(address);
+  // The list alone is asked with the place nearest first is measured from; the exports and a
+  // saved filter keep the plain question.
+  const listToken = caveRegistryListToken(address);
 
   const [karstLinkOpen, setKarstLinkOpen] = useState(false);
 
@@ -104,7 +115,7 @@ export default function CaveListPage() {
   // does not always play its closing transition (it was seen skipping it when reopened after a
   // reload), and then it never reports that it has closed while its focused button is simply removed,
   // leaving the focus on the page itself.
-  const editorDocument = caveRegistryEditorDocument({ controls, extra });
+  const editorDocument = caveRegistryEditorQuestion(address);
   const returnFocus = () => {
     requestAnimationFrame(() => {
       const opener = advancedOpener.current;
@@ -144,6 +155,7 @@ export default function CaveListPage() {
       extra: base.extra,
       savedFilterId: base.savedFilterId,
       sort: base.sort,
+      near: base.near,
       page: base.page,
       pageSize: base.pageSize,
       bbox: base.bbox,
@@ -204,7 +216,7 @@ export default function CaveListPage() {
     page: address.page,
     pageSize: address.pageSize,
     sort: address.sort,
-    filter: token,
+    filter: listToken,
     // The map's window, when the list was opened from it: the server decides which caves are in
     // it, by the point each reader is shown, and counts the page over the same set.
     bbox: address.bbox,
@@ -272,11 +284,18 @@ export default function CaveListPage() {
     pagination: TablePaginationConfig,
     _filters: unknown,
     sorter: SorterResult<CaveListItem> | SorterResult<CaveListItem>[],
+    change: TableCurrentDataSource<CaveListItem>,
   ) => {
+    const paging = { page: pagination.current ?? 1, pageSize: pagination.pageSize ?? address.pageSize };
+    // Turning a page keeps the order, nearest first included, which no column shows as its own.
+    if (change.action !== 'sort') {
+      go(() => paging);
+      return;
+    }
     const single = Array.isArray(sorter) ? sorter[0] : sorter;
     const field = single?.field ? sortableFields[String(single.field)] : undefined;
     const sort = field && single.order ? `${single.order === 'descend' ? '-' : ''}${field}` : undefined;
-    go(() => ({ page: pagination.current ?? 1, pageSize: pagination.pageSize ?? address.pageSize, sort }));
+    go(() => ({ ...paging, sort }));
   };
 
   // The distribution panel decides whether a registry-wide grouping may be laid over these caves
@@ -493,10 +512,13 @@ export default function CaveListPage() {
           world={CAVE_WORLD}
           document={editorDocument}
           fixed={CAVE_REGISTRY_SCOPE}
+          sortable
+          sorts={EDITOR_SORTS}
           onCancel={closeAdvanced}
           onApply={(edited) => {
             const reading = readCaveRegistryEditor(edited);
-            go(() => ({ controls: reading.controls, extra: reading.extra, page: 1 }));
+            const order = caveRegistryOrderAfterEdit(edited, editorDocument, address.sort);
+            go(() => ({ controls: reading.controls, extra: reading.extra, ...order, page: 1 }));
             closeAdvanced();
           }}
         />
@@ -512,7 +534,7 @@ export default function CaveListPage() {
         onForget={() => go(() => ({ savedFilterId: undefined }))}
         onRelease={() => go(() => ({ controls: {}, extra: [], savedFilterId: undefined, page: 1 }))}
       />
-      {error && token !== undefined && (
+      {error && listToken !== undefined && (
         <Alert
           type="warning"
           showIcon

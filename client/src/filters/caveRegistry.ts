@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { decodeFilter, encodeFilter, FILTER_PARAM } from './url.ts';
-import { emptyDocument, whereOf, withWhere } from './document.ts';
-import type { FilterDocument, FilterNode } from './types.ts';
+import { emptyDocument, whereOf, withSort, withWhere } from './document.ts';
+import { isOnGlobe, withAnchor } from './spatial.ts';
+import type { FilterAnchor, FilterDocument, FilterNode } from './types.ts';
 import { readWindow, WINDOW_PARAM } from './tableMapHandoff.ts';
 
 /**
@@ -53,6 +54,12 @@ export interface CaveRegistryAddress extends CaveRegistryReading {
   /** The saved filter the conditions came from, if they came from one. */
   savedFilterId?: string;
   sort?: string;
+  /**
+   * What nearest first is measured from, read only beside `sort=proximity`. It lives in the
+   * address and never in the filter document a saved filter is made from: a place is part of a
+   * request, never of a stored question.
+   */
+  near?: FilterAnchor;
   page: number;
   pageSize: number;
   /**
@@ -65,6 +72,9 @@ export interface CaveRegistryAddress extends CaveRegistryReading {
 }
 
 export const SAVED_FILTER_PARAM = 'saved';
+/** The registry's nearest-first order, spelled as the list's own `sort` parameter. */
+export const PROXIMITY_SORT = 'proximity';
+const NEAR_PARAM = 'near';
 const DEFAULT_PAGE_SIZE = 20;
 
 const kindIsCave: FilterNode = {
@@ -260,6 +270,30 @@ export function sameQuestion(a: CaveRegistryReading, b: CaveRegistryReading): bo
     === JSON.stringify(caveRegistryDocument(b.controls, b.extra));
 }
 
+/** An anchor as the address writes it: `lon,lat` for a point, `world:id` for an object. */
+export function writeNear(anchor: FilterAnchor): string {
+  return anchor.anchor === 'point' ? `${anchor.longitude},${anchor.latitude}` : `${anchor.world}:${anchor.id}`;
+}
+
+/** An anchor read back from the address, or undefined for anything that is not one. */
+export function readNear(raw: string | null): FilterAnchor | undefined {
+  if (raw === null || raw === '') {
+    return undefined;
+  }
+  const colon = raw.indexOf(':');
+  if (colon > 0) {
+    const world = raw.slice(0, colon);
+    const id = raw.slice(colon + 1);
+    return id === '' ? undefined : { anchor: 'object', world, id };
+  }
+  const parts = raw.split(',');
+  if (parts.length !== 2 || parts.some((p) => p.trim() === '')) {
+    return undefined;
+  }
+  const [longitude, latitude] = parts.map(Number);
+  return isOnGlobe(longitude, latitude) ? { anchor: 'point', longitude: longitude!, latitude: latitude! } : undefined;
+}
+
 function positiveInteger(raw: string | null, fallback: number): number {
   const value = Number(raw);
   return Number.isSafeInteger(value) && value > 0 ? value : fallback;
@@ -279,6 +313,7 @@ export function readCaveRegistryAddress(params: URLSearchParams): CaveRegistryAd
     unreadableLink: token !== null && token !== '' && reading === null,
     savedFilterId: params.get(SAVED_FILTER_PARAM) ?? undefined,
     sort: params.get('sort') ?? undefined,
+    near: params.get('sort') === PROXIMITY_SORT ? readNear(params.get(NEAR_PARAM)) : undefined,
     page: positiveInteger(params.get('page'), 1),
     pageSize: positiveInteger(params.get('pageSize'), DEFAULT_PAGE_SIZE),
     bbox: window.bbox,
@@ -302,6 +337,9 @@ export function writeCaveRegistryAddress(
   if (state.sort) {
     params.set('sort', state.sort);
   }
+  if (state.sort === PROXIMITY_SORT && state.near) {
+    params.set(NEAR_PARAM, writeNear(state.near));
+  }
   if (state.page !== 1) {
     params.set('page', String(state.page));
   }
@@ -318,4 +356,50 @@ export function writeCaveRegistryAddress(
 export function caveRegistryToken(reading: CaveRegistryReading): string | undefined {
   const document = caveRegistryDocument(reading.controls, reading.extra);
   return document === null ? undefined : encodeFilter(document);
+}
+
+/**
+ * The token the list itself is asked with: the registry's token, and — when it is ordered nearest
+ * first — the same question carrying the place it is measured from. The exports and a saved filter
+ * keep the plain token; neither is ordered by distance, and a saved filter never keeps a place.
+ */
+export function caveRegistryListToken(address: CaveRegistryReading & Pick<CaveRegistryAddress, 'sort' | 'near'>): string | undefined {
+  if (address.sort !== PROXIMITY_SORT || address.near === undefined) {
+    return caveRegistryToken(address);
+  }
+  const document = caveRegistryDocument(address.controls, address.extra)
+    ?? withWhere(emptyDocument([CAVE_WORLD]), CAVE_WORLD, kindIsCave);
+  return encodeFilter(withAnchor(withSort(document, 'proximity', true), address.near));
+}
+
+/**
+ * The registry's question as the advanced filter opens on it, with the order it can choose there:
+ * nearest first and what it is measured from, or the registry's own order by last change. A column
+ * sort the editor cannot show opens as that default and is kept unless the order is changed there.
+ */
+export function caveRegistryEditorQuestion(
+  address: CaveRegistryReading & Pick<CaveRegistryAddress, 'sort' | 'near'>,
+): FilterDocument {
+  const document = caveRegistryEditorDocument(address);
+  if (address.sort === PROXIMITY_SORT) {
+    return withAnchor(withSort(document, 'proximity', true), address.near ?? null);
+  }
+  return withSort(document, 'updated', address.sort !== 'updatedAt');
+}
+
+/** The list's order once an edited question is applied: what the editor chose, or the order it kept. */
+export function caveRegistryOrderAfterEdit(
+  edited: FilterDocument,
+  opened: FilterDocument,
+  current: string | undefined,
+): Pick<CaveRegistryAddress, 'sort' | 'near'> {
+  if (edited.sort === 'proximity' && edited.anchor) {
+    return { sort: PROXIMITY_SORT, near: edited.anchor };
+  }
+  const changed = edited.sort !== opened.sort || edited.descending !== opened.descending;
+  if (!changed && current !== PROXIMITY_SORT) {
+    return { sort: current, near: undefined };
+  }
+  // The other order offered there is the registry's default, by last change, newest first.
+  return { sort: edited.descending ? undefined : 'updatedAt', near: undefined };
 }
