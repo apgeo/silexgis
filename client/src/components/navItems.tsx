@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
+  AimOutlined,
   ApartmentOutlined,
   ApiOutlined,
   AppstoreOutlined,
@@ -7,6 +8,7 @@ import {
   BlockOutlined,
   BoxPlotOutlined,
   BorderOuterOutlined,
+  CalculatorOutlined,
   CalendarOutlined,
   CameraOutlined,
   CarOutlined,
@@ -296,6 +298,11 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
     ...group('people', <ContactsOutlined />, t('nav.groups.people'), [
       { key: 'caving-groups', icon: <TeamOutlined />, label: t('nav.cavingGroups') },
       { key: 'cavers', icon: <UserOutlined />, label: t('nav.cavers') },
+    ]),
+    // Work done on a position rather than on a record: nothing here reads or writes the register,
+    // so it is offered to everyone.
+    ...group('tools', <CalculatorOutlined />, t('nav.groups.tools'), [
+      { key: 'tools/coordinates', icon: <AimOutlined />, label: t('nav.coordinateConverter') },
     ]),
     ...group('admin', <ControlOutlined />, t('nav.groups.admin'), adminPages),
     ...group('config', <ToolOutlined />, t('nav.groups.config'), configPages),

@@ -26,6 +26,7 @@ export const NAV_SECTIONS = [
   // phone's recording is shown the rail highlighting the trip list — a destination they are not on.
   'trip-logs/speleoloc-import', 'trip-logs/import', 'trip-logs', 'expeditions', 'checklists',
   'caving-groups', 'cavers',
+  'tools/coordinates',
   'admin/audit', 'admin/notification-health', 'admin/messaging', 'admin/message-templates',
   'admin/published-trips',
   'admin/permission-groups', 'admin/users',
