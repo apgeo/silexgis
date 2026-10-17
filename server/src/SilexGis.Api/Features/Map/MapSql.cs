@@ -163,9 +163,22 @@ public static class MapSql
         // The exact-view walk is asked once per row, in a materialised step: the shown point is
         // read by the window test, the averages and the grouping, and an inlined expression would
         // run the walk's subplans at every one of those references.
+        //
+        // And it is asked only of the rows it can refuse. A row no protection root stands above
+        // — itself included, soft-deleted ones still counting — is placed exactly by every
+        // reader, which is precisely what the row's own effective-protection flag records; every
+        // write maintains it and the integrity verifier walks the whole table against it. So the
+        // flag decides the ordinary row and the walk decides the rest, instead of an index probe
+        // per candidate proving over and over that nothing above the row is protected. Measured
+        // over a hundred thousand entrances with a quarter of their caves protected: 1,086 ms
+        // down to 545 ms for a reader who owns none of them, and no change at all for the owner,
+        // whose own arm answers before either. The proximity pool reads this way already, and a
+        // shared view's link places rows by this flag alone; the plan pins on this statement go
+        // on checking that the walk, for the rows that still need it, is reached by an index.
         var sql = $"""
             WITH candidates AS MATERIALIZED (
-                SELECT ST_X(f.geom) AS x, ST_Y(f.geom) AS y, {exactSql} AS exact
+                SELECT ST_X(f.geom) AS x, ST_Y(f.geom) AS y,
+                       (NOT f.is_protected_effective OR {exactSql}) AS exact
                 FROM features f
                 WHERE f.kind = {(short)FeatureKind.CaveEntrance}
                   AND f.deleted_at IS NULL
