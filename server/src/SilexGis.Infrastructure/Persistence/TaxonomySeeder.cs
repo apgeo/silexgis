@@ -373,7 +373,61 @@ public static class TaxonomySeeder
         }
     }
 
+    /// <summary>
+    /// The codes of the feature kinds this software ships, read off the same list the seeder
+    /// writes from, so "is this kind one of ours" has one answer. A shipped kind keeps its code:
+    /// behaviours resolve kinds by code, and installations exchange features under them.
+    /// </summary>
+    public static IReadOnlySet<string> ShippedFeatureTypeCodes { get; } =
+        ShippedFeatureTypes().Select(x => x.Code).ToHashSet(StringComparer.Ordinal);
+
     private static async Task SeedFeatureTypesAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var items = ShippedFeatureTypes();
+        var existing = await db.FeatureTypes.ToDictionaryAsync(x => x.Code, ct);
+        var sort = 0;
+        foreach (var (code, name, category, classes, requiresParent, protectedDisplay, symbol, schema) in items)
+        {
+            sort += 10;
+            if (existing.TryGetValue(code, out var row))
+            {
+                // Backfill a schema only where none was ever set — a non-null value
+                // may be an admin edit and is never overwritten.
+                row.PropertiesSchema ??= schema;
+
+                // Accepted geometry classes are widened, never narrowed. A kind that gains a
+                // class here has gained it for a reason — features of that shape are now
+                // expected — and leaving an already-seeded database on the old set would mean
+                // the same install rejects a drawing a freshly-installed one accepts, with the
+                // tests all passing because they build their database from empty. Narrowing is
+                // not done, because a class already in use would start refusing its own stored
+                // rows on the next edit.
+                var widened = row.AcceptedGeometryClasses.Union(classes).ToArray();
+                if (widened.Length != row.AcceptedGeometryClasses.Length)
+                {
+                    row.AcceptedGeometryClasses = widened;
+                }
+            }
+            else
+            {
+                db.FeatureTypes.Add(new FeatureType
+                {
+                    Code = code,
+                    Name = name,
+                    Category = category,
+                    AcceptedGeometryClasses = classes,
+                    RequiresParent = requiresParent,
+                    ProtectedDisplay = protectedDisplay,
+                    SymbolFile = symbol,
+                    SortOrder = sort,
+                    PropertiesSchema = schema,
+                });
+            }
+        }
+    }
+
+    private static (string Code, string Name, FeatureCategory Category, GeometryClass[] Classes,
+        bool RequiresParent, ProtectedDisplay Protected, string? Symbol, string? Schema)[] ShippedFeatureTypes()
     {
         // Typed-properties JSON schemas (minimal subset: object with string/number/
         // integer/boolean/enum properties). The client renders these as extra form
@@ -450,8 +504,7 @@ public static class TaxonomySeeder
         const ProtectedDisplay snap = ProtectedDisplay.SnapPoint;
         const ProtectedDisplay withhold = ProtectedDisplay.Withhold;
 
-        (string Code, string Name, FeatureCategory Category, GeometryClass[] Classes,
-            bool RequiresParent, ProtectedDisplay Protected, string? Symbol, string? Schema)[] items =
+        return
         [
             // Surface palette (v1/v2 heritage)
             // A doline is a hollow with an outline, and its area, circularity and long axis are
@@ -523,46 +576,5 @@ public static class TaxonomySeeder
             ("surface_area", "Surface area", FeatureCategory.Area, any, false, snap, null, surfaceAreaSchema),
 
         ];
-
-        var existing = await db.FeatureTypes.ToDictionaryAsync(x => x.Code, ct);
-        var sort = 0;
-        foreach (var (code, name, category, classes, requiresParent, protectedDisplay, symbol, schema) in items)
-        {
-            sort += 10;
-            if (existing.TryGetValue(code, out var row))
-            {
-                // Backfill a schema only where none was ever set — a non-null value
-                // may be an admin edit and is never overwritten.
-                row.PropertiesSchema ??= schema;
-
-                // Accepted geometry classes are widened, never narrowed. A kind that gains a
-                // class here has gained it for a reason — features of that shape are now
-                // expected — and leaving an already-seeded database on the old set would mean
-                // the same install rejects a drawing a freshly-installed one accepts, with the
-                // tests all passing because they build their database from empty. Narrowing is
-                // not done, because a class already in use would start refusing its own stored
-                // rows on the next edit.
-                var widened = row.AcceptedGeometryClasses.Union(classes).ToArray();
-                if (widened.Length != row.AcceptedGeometryClasses.Length)
-                {
-                    row.AcceptedGeometryClasses = widened;
-                }
-            }
-            else
-            {
-                db.FeatureTypes.Add(new FeatureType
-                {
-                    Code = code,
-                    Name = name,
-                    Category = category,
-                    AcceptedGeometryClasses = classes,
-                    RequiresParent = requiresParent,
-                    ProtectedDisplay = protectedDisplay,
-                    SymbolFile = symbol,
-                    SortOrder = sort,
-                    PropertiesSchema = schema,
-                });
-            }
-        }
     }
 }

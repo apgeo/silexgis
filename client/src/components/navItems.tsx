@@ -4,6 +4,7 @@ import {
   ApiOutlined,
   AppstoreOutlined,
   BarChartOutlined,
+  BlockOutlined,
   BoxPlotOutlined,
   BorderOuterOutlined,
   CalendarOutlined,
@@ -186,6 +187,9 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
     ...(gates.taxonomyWrite
       ? [
           { key: 'admin/document-types', icon: <ProfileOutlined />, label: t('nav.documentTypes') },
+          // The same gate: a feature kind decides what every feature of it may be drawn as and
+          // how a protected one is shown.
+          { key: 'admin/feature-types', icon: <BlockOutlined />, label: t('nav.featureTypes') },
           // The same gate, for the same reason: what a trip purpose asks a report to
           // record decides what every trip under it may say.
           { key: 'admin/trip-types', icon: <CompassOutlined />, label: t('nav.tripTypes') },

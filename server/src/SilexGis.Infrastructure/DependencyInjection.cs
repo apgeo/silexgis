@@ -169,6 +169,7 @@ public static class DependencyInjection
         services.AddScoped<Trips.TripLogWriteService>();
         services.AddScoped<Documents.DocumentWriteService>();
         services.AddScoped<Documents.DocumentTypeWriteService>();
+        services.AddScoped<Features.FeatureTypeWriteService>();
         services.AddScoped<Documents.CabinetWriteService>();
         services.AddScoped<Documents.AlbumWriteService>();
         services.AddScoped<Documents.UploadAllowanceService>();

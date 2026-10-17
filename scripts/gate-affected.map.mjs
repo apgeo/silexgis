@@ -228,8 +228,8 @@ export const groups = {
   diagnostics: ['ClientErrorReportTests'],
   tags: ['TripAndTagTests'],
   taxonomies: [
-    'ExpeditionRosterRoleVocabularyTests', 'TaxonomyWideningTests', 'TermRuleSetTests',
-    'TripParticipantRoleVocabularyTests', 'TripTypeVocabularyTests',
+    'ExpeditionRosterRoleVocabularyTests', 'FeatureTypeWriteTests', 'TaxonomyWideningTests',
+    'TermRuleSetTests', 'TripParticipantRoleVocabularyTests', 'TripTypeVocabularyTests',
     // A report layout is kept as a vocabulary: read by everyone, written by whoever may edit
     // the installation's vocabularies.
     'ReportTemplateTests',
@@ -461,8 +461,8 @@ export const crossCutting = {
     'ExpeditionMembershipTests', 'ExpeditionReportTests', 'ExpeditionRosterRoleVocabularyTests',
     'ExpeditionRosterTests', 'ExpeditionSharingCascadeTests', 'ExpeditionTests',
     'ExpeditionTimelineTests', 'FeatureHierarchyTests', 'FeatureLinkTests',
-    'FeatureRestoreTests', 'FeatureShareTests', 'FeatureTests', 'FileAttachmentTests',
-    'GeofileTests', 'HypsometryTests', 'ImmichPhotoLibraryTests',
+    'FeatureRestoreTests', 'FeatureShareTests', 'FeatureTests', 'FeatureTypeWriteTests',
+    'FileAttachmentTests', 'GeofileTests', 'HypsometryTests', 'ImmichPhotoLibraryTests',
     'MapBackgroundDocumentChoiceTests', 'MapViewTests', 'NotificationHealthTests',
     'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
     'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',

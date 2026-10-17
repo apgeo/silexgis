@@ -227,7 +227,8 @@ export interface paths {
         };
         get: operations["taxonomyFeatureTypes"];
         put?: never;
-        post?: never;
+        /** Adds a feature type. */
+        post: operations["featureTypeCreate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -244,6 +245,23 @@ export interface paths {
         get: operations["taxonomyLinkKinds"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/diagnostics/client-errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Writes errors the caller's browser saw into this installation's log. */
+        post: operations["clientErrorReport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2422,6 +2440,24 @@ export interface paths {
         /** Regenerates recovery codes (invalidates previous ones). */
         post: operations["mfaRegenerateRecoveryCodes"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/feature-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Updates a feature type; a shipped one keeps its code, category, protected display and need for a parent. */
+        put: operations["featureTypeUpdate"];
+        post?: never;
+        /** Deletes a feature type an installation added and no feature uses; shipped ones cannot be deleted. */
+        delete: operations["featureTypeDelete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -8866,6 +8902,23 @@ export interface components {
             /** Format: double */
             pValue: number;
         };
+        ClientErrorBatch: {
+            errors: components["schemas"]["ClientErrorReport"][];
+        };
+        ClientErrorReport: {
+            fingerprint: string;
+            kind: string;
+            name: null | string;
+            message: string;
+            frame: null | string;
+            stack: null | string;
+            pageUrl: null | string;
+            at: null | string;
+            breadcrumbs: null | string[];
+            componentStack: null | string;
+            userAgent: null | string;
+            viewport: null | string;
+        };
         /** @enum {unknown} */
         ClosestApproachAbsence: "none" | "noLineWork" | "noAltitudes";
         ClosestApproachDto: {
@@ -10008,6 +10061,21 @@ export interface components {
             requiresParent: boolean;
             /** Format: int32 */
             propertiesSchemaVersion: number;
+            protectedDisplay: components["schemas"]["ProtectedDisplay"];
+            symbolFile: null | string;
+            style: null | string;
+            propertiesSchema: null | string;
+            isSeeded: boolean;
+        };
+        FeatureTypeRequest: {
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            category: components["schemas"]["FeatureCategory"];
+            acceptedGeometryClasses: components["schemas"]["GeometryClass"][];
+            requiresParent: boolean;
             protectedDisplay: components["schemas"]["ProtectedDisplay"];
             symbolFile: null | string;
             style: null | string;
@@ -15701,6 +15769,48 @@ export interface operations {
             };
         };
     };
+    featureTypeCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureTypeRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureTypeDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     taxonomyLinkKinds: {
         parameters: {
             query?: never;
@@ -15721,6 +15831,64 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    clientErrorReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientErrorBatch"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20970,6 +21138,79 @@ export interface operations {
             };
             /** @description Too Many Requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    featureTypeUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureTypeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureTypeDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    featureTypeDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -17,13 +17,14 @@ public sealed record TaxonomyDto(long Id, string Code, string Name, string? Desc
 /// carry and how to validate it before a write; <c>ProtectedDisplay</c> is read-only
 /// metadata (its edits are admin-only and audited) that lets a client explain why a
 /// protected row arrives snapped or missing — it never substitutes for server-side
-/// protection.
+/// protection. <c>IsSeeded</c> says the kind ships with the software, so a client can say which
+/// of its settings stay fixed without keeping its own copy of the shipped list.
 /// </summary>
 public sealed record FeatureTypeDto(
     long Id, string Code, string Name, string? Description, int SortOrder,
     FeatureCategory Category, IReadOnlyList<GeometryClass> AcceptedGeometryClasses,
     bool RequiresParent, int PropertiesSchemaVersion, ProtectedDisplay ProtectedDisplay,
-    string? SymbolFile, string? Style, string? PropertiesSchema);
+    string? SymbolFile, string? Style, string? PropertiesSchema, bool IsSeeded);
 
 /// <summary>
 /// Link-kind taxonomy. <c>Locating</c> is fail-closed metadata (admin-only, audited edits):
@@ -33,7 +34,7 @@ public sealed record LinkKindDto(
     long Id, string Code, string Name, string? Description, int SortOrder, bool Locating);
 
 /// <summary>
-/// Read endpoints for the lookup taxonomies (editing arrives with the admin UI). Every
+/// Read endpoints for the lookup taxonomies (feature kinds are written through their own routes). Every
 /// account holds the read through the All Users seed, so these stay as open as they were
 /// — but as an entry an installation can tighten, not as an absence of any rule. The
 /// security-bearing columns here (a kind's protected display, whether a link kind
@@ -87,10 +88,7 @@ public static class TaxonomyEndpoints
             .ThenBy(t => t.Id)
             .ToListAsync(ct);
 
-        return TypedResults.Ok(types.Select(t => new FeatureTypeDto(
-            t.Id, t.Code, t.Name, t.Description, t.SortOrder,
-            t.Category, t.AcceptedGeometryClasses, t.RequiresParent, t.PropertiesSchemaVersion,
-            t.ProtectedDisplay, t.SymbolFile, t.Style, t.PropertiesSchema)).ToList());
+        return TypedResults.Ok(types.Select(FeatureTypeEndpoints.ToDto).ToList());
     }
 
     private static async Task<Results<Ok<List<LinkKindDto>>, ProblemHttpResult>> LinkKindsAsync(

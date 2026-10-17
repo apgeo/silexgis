@@ -29,7 +29,7 @@ export const NAV_SECTIONS = [
   'admin/audit', 'admin/notification-health', 'admin/messaging', 'admin/message-templates',
   'admin/published-trips',
   'admin/permission-groups', 'admin/users',
-  'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',
+  'admin/feature-sets', 'admin/document-types', 'admin/feature-types', 'admin/relation-types', 'admin/term-rules',
   'admin/terrain',
   // The three the rail offers under configuration. Missing here, they matched nothing and
   // fell through to the map, so opening trip purposes lit the map item instead.

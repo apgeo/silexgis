@@ -68,6 +68,7 @@ const PermissionGroupsPage = lazy(() => import('./pages/admin/permissionGroups/P
 const UsersPage = lazy(() => import('./pages/admin/UsersPage.tsx'));
 const FeatureSetsPage = lazy(() => import('./pages/admin/FeatureSetsPage.tsx'));
 const DocumentTypesPage = lazy(() => import('./pages/admin/DocumentTypesPage.tsx'));
+const FeatureTypesPage = lazy(() => import('./pages/admin/FeatureTypesPage.tsx'));
 const TripTypesPage = lazy(() => import('./pages/admin/TripTypesPage.tsx'));
 const TripParticipantRolesPage = lazy(() => import('./pages/admin/TripParticipantRolesPage.tsx'));
 const ExpeditionRosterRolesPage = lazy(() => import('./pages/admin/ExpeditionRosterRolesPage.tsx'));
@@ -215,6 +216,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/admin/users', element: <Loadable><UsersPage /></Loadable> },
           { path: '/admin/feature-sets', element: <Loadable><FeatureSetsPage /></Loadable> },
           { path: '/admin/document-types', element: <Loadable><DocumentTypesPage /></Loadable> },
+          { path: '/admin/feature-types', element: <Loadable><FeatureTypesPage /></Loadable> },
           { path: '/admin/trip-types', element: <Loadable><TripTypesPage /></Loadable> },
           { path: '/admin/participant-roles', element: <Loadable><TripParticipantRolesPage /></Loadable> },
           { path: '/admin/camp-roster-roles', element: <Loadable><ExpeditionRosterRolesPage /></Loadable> },

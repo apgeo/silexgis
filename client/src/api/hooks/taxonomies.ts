@@ -33,6 +33,44 @@ export function useFeatureTypes() {
   });
 }
 
+export type FeatureTypeWrite = components['schemas']['FeatureTypeRequest'];
+
+function useInvalidateFeatureTypes() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: queryKeys.taxonomy('feature-types') });
+}
+
+export function useCreateFeatureType() {
+  const invalidate = useInvalidateFeatureTypes();
+  return useMutation({
+    mutationFn: (body: FeatureTypeWrite) => unwrap(api.POST('/api/v1/feature-types', { body })),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Saves a feature kind. Rewriting its properties schema moves the schema version server-side, so
+ * every feature already stored keeps the version it was checked against and is re-checked the next
+ * time someone edits it.
+ */
+export function useUpdateFeatureType() {
+  const invalidate = useInvalidateFeatureTypes();
+  return useMutation({
+    mutationFn: ({ id, ...body }: FeatureTypeWrite & { id: number }) =>
+      unwrap(api.PUT('/api/v1/feature-types/{id}', { params: { path: { id } }, body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteFeatureType() {
+  const invalidate = useInvalidateFeatureTypes();
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrapVoid(api.DELETE('/api/v1/feature-types/{id}', { params: { path: { id } } })),
+    onSuccess: invalidate,
+  });
+}
+
 export type LinkKind = components['schemas']['LinkKindDto'];
 
 /** Feature-link taxonomy (drains-to, connects-with, …). */

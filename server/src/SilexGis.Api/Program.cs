@@ -468,6 +468,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapUnsubscribeEndpoints();
     api.MapMfaEndpoints();
     api.MapTaxonomyEndpoints();
+    api.MapFeatureTypeEndpoints();
     api.MapClientErrorEndpoints();
     api.MapMapLayerEndpoints();
     api.MapMapLayerDocumentEndpoints();
