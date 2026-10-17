@@ -1,16 +1,21 @@
 # SilexGIS API — systemd unit template for a non-Docker install (Linux).
 #
+# deploy/native/install.mjs installs this for you: it substitutes the paths, the port, the
+# service account and the dotnet it found for the example values below, writes the result to
+# /etc/systemd/system/silexgis-api.service and enables it. The values here are its defaults, so
+# the file also reads as the unit a by-hand install would use:
+#
 # 1. Publish the API:   dotnet publish server/src/SilexGis.Api -c Release -o /opt/silexgis/api
 # 2. Create a service user and data dirs:
 #      useradd --system --home /var/lib/silexgis --shell /usr/sbin/nologin silexgis
 #      mkdir -p /var/lib/silexgis/files /var/lib/silexgis/keys
-#      chown -R silexgis:silexgis /opt/silexgis /var/lib/silexgis
+#      chown -R silexgis:silexgis /var/lib/silexgis
 # 3. Put secrets in /etc/silexgis/silexgis.env (see EnvironmentFile below), chmod 600.
 # 4. cp this file to /etc/systemd/system/, then:
 #      systemctl daemon-reload && systemctl enable --now silexgis-api
 #
 # Serve the built client (client/dist) and reverse-proxy /api, /connect, /health, /openapi,
-# /.well-known to ASPNETCORE_URLS with nginx/Caddy/IIS — see deploy/nginx/silexgis.conf.
+# /.well-known to ASPNETCORE_URLS with nginx — see deploy/nginx/silexgis.conf.
 
 [Unit]
 Description=SilexGIS API
