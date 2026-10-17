@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
 import { DeleteOutlined, EditOutlined, StarFilled } from '@ant-design/icons';
-import { App, Button, Card, Flex, Modal, Radio, Select, Table, Tag, Typography } from 'antd';
+import { App, Card, Flex, Modal, Radio, Table, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { ApiError } from '../../api/client.ts';
 import {
   useFeatureChildren,
   useFeatureParents,
-  useFeatures,
   useSetFeatureParents,
   type FeatureChild,
   type FeatureKind,
 } from '../../api/hooks.ts';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import Button from '../../components/Button.tsx';
+import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
+import type { SelectorScope } from '../../filters/selection.ts';
 
 interface HierarchyCardProps {
   featureId: string;
@@ -29,6 +30,11 @@ interface HierarchyCardProps {
  * same coordinate. The server refuses any other parent set; this page does not offer one.
  */
 const FIXED_PARENT_KINDS: ReadonlySet<FeatureKind> = new Set<FeatureKind>(['caveEntrance', 'centerline']);
+
+/** Any kind of feature may contain another, so the picker offers the whole feature world. */
+const PARENT_SCOPES: readonly SelectorScope[] = [
+  { id: 'features', labelKey: 'filters.scopes.features', world: 'feature', where: null },
+];
 
 interface ParentRow {
   parentId: string;
@@ -51,33 +57,29 @@ export default function HierarchyCard({ featureId, kind, canEdit }: HierarchyCar
 
   const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState<ParentRow[]>([]);
-  const [parentQuery, setParentQuery] = useState('');
-  const debouncedParentQuery = useDebouncedValue(parentQuery);
-  const { data: searchResults, isFetching: searching } = useFeatures(
-    { search: debouncedParentQuery || undefined, pageSize: 20 },
-    editing,
-  );
 
   const openEditor = () => {
     setRows((parents ?? []).map((p) => ({ parentId: p.id, name: p.name, isPrimary: p.isPrimary })));
-    setParentQuery('');
     setEditing(true);
   };
 
-  const addOptions = useMemo(
-    () =>
-      (searchResults?.items ?? [])
-        // The feature cannot contain itself, and each parent appears once.
-        .filter((f) => f.id !== featureId && !rows.some((r) => r.parentId === f.id))
-        .map((f) => ({ value: f.id, label: f.name ?? t('features.unnamed') })),
-    [searchResults, rows, featureId, t],
+  // The feature cannot contain itself, each parent appears once, and a child this card is showing
+  // cannot also be its parent. That is as far as the picker can see: the children are paged, and
+  // whether a candidate sits further below (a grandchild, or a child on another page) is not
+  // something a search row knows, so such a pick is still offered and the server refuses it on
+  // save as a loop — that refusal is the authority, this list is only a courtesy.
+  const notOffered = useMemo(
+    () => [
+      featureId,
+      ...rows.map((r) => r.parentId),
+      ...(children?.items ?? []).map((c) => c.id),
+    ],
+    [featureId, rows, children],
   );
 
-  const addParent = (id: string) => {
-    const option = searchResults?.items.find((f) => f.id === id);
+  const addParent = (id: string, name: string) => {
     // The first edge becomes primary automatically; the DAG requires exactly one.
-    setRows((r) => [...r, { parentId: id, name: option?.name ?? null, isPrimary: r.length === 0 }]);
-    setParentQuery('');
+    setRows((r) => [...r, { parentId: id, name, isPrimary: r.length === 0 }]);
   };
 
   const removeParent = (id: string) => {
@@ -228,24 +230,26 @@ export default function HierarchyCard({ featureId, kind, canEdit }: HierarchyCar
             },
           ]}
         />
-        <Select<string | null, { value: string; label: string }>
-          style={{ width: '100%', marginTop: 12 }}
-          showSearch
-          filterOption={false}
-          loading={searching}
-          onSearch={setParentQuery}
-          searchValue={parentQuery}
-          // Selection appends a row; the select itself stays empty for the next add.
-          value={null}
-          onSelect={(value) => {
-            if (value !== null) {
-              addParent(value);
-            }
-          }}
-          placeholder={t('features.addParent')}
-          options={addOptions}
-          notFoundContent={null}
-        />
+        <div style={{ marginTop: 12 }}>
+          {/* A pick appends a row and the control itself stays empty for the next one. The
+              search is kept, so several parents from one answer can be added in turn — each
+              one leaves the list as it is added. */}
+          <ObjectSelector
+            scopes={PARENT_SCOPES}
+            value={null}
+            exclude={notOffered}
+            pageSize={6}
+            sorts={[]}
+            placeholder={t('features.addParent')}
+            aria-label={t('features.addParent')}
+            data-testid="hierarchy-parent-picker"
+            onPick={(hit) => {
+              if (hit) {
+                addParent(hit.id, hit.title);
+              }
+            }}
+          />
+        </div>
       </Modal>
     </Card>
   );

@@ -1,18 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
 import { ArrowLeftOutlined, ArrowRightOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
-import { App, Button, Card, Flex, Input, Modal, Select, Table, Tooltip, Typography } from 'antd';
+import { App, Card, Flex, Input, Modal, Select, Table, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
   useFeature,
   useFeatureLinks,
-  useFeatures,
   useLinkKinds,
   useSetFeatureLinks,
   type FeatureLink,
 } from '../../api/hooks.ts';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import Button from '../../components/Button.tsx';
+import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
+import type { SelectorScope } from '../../filters/selection.ts';
+
+/** A typed relation may point at a feature of any kind, so the target is the whole feature world. */
+const TARGET_SCOPES: readonly SelectorScope[] = [
+  { id: 'features', labelKey: 'filters.scopes.features', world: 'feature', where: null },
+];
 
 /**
  * Resolves a linked feature's display name through its envelope. Link rows only
@@ -36,7 +42,7 @@ function FeatureNameLink({ id, link = true }: { id: string; link?: boolean }) {
 interface LinkRow {
   key: number;
   toId: string;
-  /** Label captured from the search options; existing rows resolve by envelope. */
+  /** Label captured from the picked row; existing rows resolve by envelope. */
   toName: string | null;
   linkKindCode: string;
   note: string | null;
@@ -65,14 +71,12 @@ export default function LinksCard({ featureId, canEdit }: LinksCardProps) {
   const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState<LinkRow[]>([]);
   const [draftToId, setDraftToId] = useState<string | null>(null);
+  const [draftToName, setDraftToName] = useState<string | null>(null);
   const [draftKind, setDraftKind] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState('');
-  const [targetQuery, setTargetQuery] = useState('');
-  const debouncedTargetQuery = useDebouncedValue(targetQuery);
-  const { data: searchResults, isFetching: searching } = useFeatures(
-    { search: debouncedTargetQuery || undefined, pageSize: 20 },
-    editing,
-  );
+  // A feature is not linked to itself. The server refuses that too; leaving it out here only
+  // spares somebody the refusal.
+  const notOffered = useMemo(() => [featureId], [featureId]);
 
   const openEditor = () => {
     setRows(
@@ -87,39 +91,30 @@ export default function LinksCard({ featureId, canEdit }: LinksCardProps) {
         })),
     );
     setDraftToId(null);
+    setDraftToName(null);
     setDraftKind(null);
     setDraftNote('');
-    setTargetQuery('');
     setEditing(true);
   };
-
-  const targetOptions = useMemo(
-    () =>
-      (searchResults?.items ?? [])
-        .filter((f) => f.id !== featureId)
-        .map((f) => ({ value: f.id, label: f.name ?? t('features.unnamed') })),
-    [searchResults, featureId, t],
-  );
 
   const addRow = () => {
     if (!draftToId || !draftKind) {
       return;
     }
-    const option = searchResults?.items.find((f) => f.id === draftToId);
     setRows((r) => [
       ...r,
       {
         key: nextRowKey++,
         toId: draftToId,
-        toName: option?.name ?? null,
+        toName: draftToName,
         linkKindCode: draftKind,
         note: draftNote.trim() ? draftNote.trim() : null,
       },
     ]);
     setDraftToId(null);
+    setDraftToName(null);
     setDraftKind(null);
     setDraftNote('');
-    setTargetQuery('');
   };
 
   const onSave = async () => {
@@ -226,21 +221,22 @@ export default function LinksCard({ featureId, canEdit }: LinksCardProps) {
             },
           ]}
         />
-        <Flex gap={8} style={{ marginTop: 12 }} wrap>
-          <Select
-            style={{ minWidth: 160, flex: 1 }}
-            showSearch
-            filterOption={false}
-            loading={searching}
-            onSearch={setTargetQuery}
-            searchValue={targetQuery}
+        <div style={{ marginTop: 12 }}>
+          <ObjectSelector
+            scopes={TARGET_SCOPES}
             value={draftToId}
-            onChange={(value: string | null) => setDraftToId(value)}
-            placeholder={t('features.linkTarget')}
-            options={targetOptions}
-            notFoundContent={null}
+            exclude={notOffered}
             allowClear
+            pageSize={6}
+            sorts={[]}
+            placeholder={t('features.linkTarget')}
+            aria-label={t('features.linkTarget')}
+            data-testid="feature-link-target-picker"
+            onChange={(next) => setDraftToId(typeof next === 'string' ? next : null)}
+            onPick={(hit) => setDraftToName(hit?.title ?? null)}
           />
+        </div>
+        <Flex gap={8} style={{ marginTop: 8 }} wrap>
           <Select
             style={{ width: 170 }}
             value={draftKind}

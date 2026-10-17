@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Checkbox, Divider, Form, Input, InputNumber, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
-import {
-  useFeatureTypes,
-  useFeatures,
-  type FeatureDetail,
-  type FeatureType,
-} from '../../api/hooks.ts';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import { useFeatureTypes, type FeatureDetail, type FeatureType } from '../../api/hooks.ts';
+import type { SelectorScope } from '../../filters/selection.ts';
 import DialogHost from '../DialogHost.tsx';
+import ObjectSelector from '../selector/ObjectSelector.tsx';
 import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
 
 type Visibility = FeatureDetail['visibility'];
@@ -65,6 +61,18 @@ const compatibleClasses: Record<DrawShape, GeometryClass[]> = {
 };
 
 /**
+ * A parent may be a feature of any kind, so the one scope is the whole feature world, unnarrowed.
+ * Whether a particular container is allowed — the type's parent rule, a cycle — is the server's
+ * to refuse when the feature is saved; offering it here is not a promise that it will be taken.
+ */
+const PARENT_SCOPES: readonly SelectorScope[] = [
+  { id: 'features', labelKey: 'filters.scopes.features', world: 'feature', where: null },
+];
+
+/** Rows the picker shows before it scrolls: it sits inside a form, not a page of its own. */
+const PARENT_PICKER_ROWS = 6;
+
+/**
  * Attribute form for a generic feature. Deliberately API-agnostic: the caller
  * decides whether the values become a POST (freshly drawn feature) or a PUT
  * (editing an existing one). Extra fields render from the feature type's
@@ -83,14 +91,6 @@ export default function FeatureEditModal({
   const { t } = useTranslation();
   const [form] = Form.useForm<FormValues>();
   const { data: featureTypes } = useFeatureTypes();
-
-  // Parent picker: remote-search select over the generic feature list.
-  const [parentQuery, setParentQuery] = useState('');
-  const debouncedParentQuery = useDebouncedValue(parentQuery);
-  const { data: parentResults, isFetching: searchingParents } = useFeatures(
-    { search: debouncedParentQuery || undefined, pageSize: 20 },
-    open && !!withParent,
-  );
 
   const typeOptions = useMemo(
     () =>
@@ -123,19 +123,9 @@ export default function FeatureEditModal({
         primaryParentId: initial.primaryParentId ?? undefined,
         properties: initial.properties,
       });
-      setParentQuery('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reinitialize only when the modal opens
   }, [open]);
-
-  const parentOptions = useMemo(
-    () =>
-      (parentResults?.items ?? []).map((f) => ({
-        value: f.id,
-        label: f.name ?? t('features.unnamed'),
-      })),
-    [parentResults, t],
-  );
 
   const onOk = async () => {
     const values = await form.validateFields();
@@ -203,15 +193,16 @@ export default function FeatureEditModal({
             label={t('features.parent')}
             rules={selectedType?.requiresParent ? [{ required: true }] : undefined}
           >
-            <Select
+            {/* Remembers nothing and offers no sorting: it is part of filling in a form. The
+                dialog is new each time it opens, so the search box starts empty with it. */}
+            <ObjectSelector
+              scopes={PARENT_SCOPES}
               allowClear
-              showSearch
-              filterOption={false}
-              loading={searchingParents}
-              onSearch={setParentQuery}
+              pageSize={PARENT_PICKER_ROWS}
+              sorts={[]}
               placeholder={t('features.parentSearchPlaceholder')}
-              options={parentOptions}
-              notFoundContent={null}
+              aria-label={t('features.parent')}
+              data-testid="feature-parent-picker"
             />
           </Form.Item>
         )}
