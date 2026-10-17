@@ -45,6 +45,20 @@ public static class TerrainBuildFailures
     public const string SourceUnreadable = "terrain_build.source_unreadable";
 
     /// <summary>
+    /// A directory on the server this build reads its rasters from in place no longer holds what it
+    /// held when the build first read it.
+    /// </summary>
+    /// <remarks>
+    /// Such rasters are read where the operator keeps them rather than copied, so the build's record
+    /// of what it was made from is a list of files, lengths and times written the first time it read
+    /// the directory. Every later run — a run again, a restart — compares the directory with that
+    /// list, and stops on any difference rather than carrying on with a set of rasters nobody asked
+    /// for: a file added would be meshed without anyone choosing it, and a file replaced would leave
+    /// prepared rasters that no longer describe it. Put the directory back, or start a new build.
+    /// </remarks>
+    public const string SourceChanged = "terrain_build.source_changed";
+
+    /// <summary>
     /// The build named nothing to build from, or everything it named turned out to hold no rasters.
     /// </summary>
     /// <remarks>

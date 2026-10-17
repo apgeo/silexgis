@@ -319,17 +319,17 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
         (await ReadAsync(buildId)).ErrorCode.ShouldBe(TerrainBuildFailures.SourceUnreadable);
 
         // The pass that makes both refusals mean something: the account that still holds both
-        // answers gets exactly the raster the directory holds.
+        // answers gets exactly the raster the directory holds — read where it is, not copied.
         await RunAsync(buildId, administratorId);
         var built = await ReadAsync(buildId);
         built.Status.ShouldBe(TerrainBuildStatus.Succeeded, built.ErrorCode ?? built.Message ?? "");
-        Directory.GetFiles(Path.Combine(buildRoot, buildId.ToString("N"), "input"))
-            .Select(Path.GetFileName).ShouldBe(["tile.tif"]);
+        Directory.GetFiles(Path.Combine(buildRoot, buildId.ToString("N"), "input")).ShouldBeEmpty();
+        InPlace(buildId).Rasters.Select(r => r.Path).ShouldBe([Path.Combine(allowed, "tile.tif")]);
     }
 
     /// <summary>
-    /// Two rasters that share a name and a size are both kept, and a raster already taken from the
-    /// same place is not taken twice.
+    /// Two rasters that share a name and a size are both kept, under names of their own, and a
+    /// build handed back after a restart reads the same two under the same names.
     /// </summary>
     /// <remarks>
     /// Several of the formats accepted here are fixed-size grids — every tile of a given resolution
@@ -360,21 +360,110 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
             administrator);
 
         await RunAsync(buildId, administratorId);
+        (await ReadAsync(buildId)).Status.ShouldBe(TerrainBuildStatus.Succeeded);
 
+        // Both are read where they are, and the second is given a name of its own to be prepared
+        // under rather than dropped: two prepared rasters of one name would refuse the build.
         var input = Path.Combine(buildRoot, buildId.ToString("N"), "input");
-        var taken = Directory.GetFiles(input).Select(Path.GetFileName).Order().ToList();
-        taken.ShouldBe(["tile-1.hgt", "tile.hgt"]);
+        Directory.GetFiles(input).ShouldBeEmpty();
+        var listed = InPlace(buildId).Rasters;
+        listed.Select(r => r.Name).Order().ShouldBe(["tile-1.hgt", "tile.hgt"]);
+        listed.Select(r => r.Path).Order().ShouldBe(
+            [Path.Combine(first, "tile.hgt"), Path.Combine(second, "tile.hgt")]);
 
-        // Both sets of bytes are there: the second was numbered rather than dropped.
-        var contents = Directory.GetFiles(input).Select(File.ReadAllBytes).ToList();
-        contents.ShouldContain(b => b[0] == 1);
-        contents.ShouldContain(b => b[0] == 8);
-
-        // Handed the same build again the way a restart hands one back: nothing is copied a second
-        // time, so resuming stays cheap and the input does not fill up with numbered duplicates.
+        // Handed the same build again the way a restart hands one back: the directories still hold
+        // what was listed, so the list — and the name each raster is prepared under — stands.
         await InterruptAsync(buildId);
         await RunAsync(buildId, administratorId);
-        Directory.GetFiles(input).Select(Path.GetFileName).Order().ShouldBe(["tile-1.hgt", "tile.hgt"]);
+        (await ReadAsync(buildId)).Status.ShouldBe(TerrainBuildStatus.Succeeded);
+        InPlace(buildId).Rasters.ShouldBe(listed);
+        Directory.GetFiles(input).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// A directory read in place that holds something different on a later run stops the build
+    /// with its own reason, rather than carrying on over a set of rasters nobody chose — and once it
+    /// is put back the build carries on.
+    /// </summary>
+    [Fact]
+    public async Task A_directory_that_changed_since_the_build_first_read_it_stops_the_build_until_it_is_put_back()
+    {
+        var allowed = Path.Combine(importRoot, "changing");
+        Directory.CreateDirectory(allowed);
+        await WriteRasterAsync(Path.Combine(allowed, "tile.tif"));
+
+        var buildId = await AcceptedAsync(
+            Request(22.75, 46.75, allowed, fetchCoverage: false), administrator);
+        await RunAsync(buildId, administratorId);
+        (await ReadAsync(buildId)).Status.ShouldBe(TerrainBuildStatus.Succeeded);
+
+        // Somebody adds a raster to the directory before the build is run again.
+        var added = Path.Combine(allowed, "later.tif");
+        await WriteRasterAsync(added);
+        await InterruptAsync(buildId);
+        await RunAsync(buildId, administratorId);
+
+        var stopped = await ReadAsync(buildId);
+        stopped.Status.ShouldBe(TerrainBuildStatus.Failed);
+        stopped.ErrorCode.ShouldBe(TerrainBuildFailures.SourceChanged);
+        stopped.Message.ShouldNotBeNull().ShouldContain("1 raster(s) added");
+        InPlace(buildId).Rasters.Select(r => r.Name).ShouldBe(["tile.tif"]);
+
+        // A file rewritten in place is a change too, even at the same length.
+        File.Delete(added);
+        File.SetLastWriteTimeUtc(Path.Combine(allowed, "tile.tif"), DateTime.UtcNow.AddMinutes(5));
+        await InterruptAsync(buildId);
+        await RunAsync(buildId, administratorId);
+        var rewritten = await ReadAsync(buildId);
+        rewritten.ErrorCode.ShouldBe(TerrainBuildFailures.SourceChanged);
+        rewritten.Message.ShouldNotBeNull().ShouldContain("1 changed");
+
+        // Put back as it was, the build carries on.
+        File.SetLastWriteTimeUtc(
+            Path.Combine(allowed, "tile.tif"), new DateTime(InPlace(buildId).Rasters[0].WrittenTicks, DateTimeKind.Utc));
+        await InterruptAsync(buildId);
+        await RunAsync(buildId, administratorId);
+        (await ReadAsync(buildId)).Status.ShouldBe(TerrainBuildStatus.Succeeded);
+    }
+
+    /// <summary>
+    /// The directory is judged against the operator's list again when the build runs: one replaced
+    /// by a link to somewhere outside it after the request was accepted is not read.
+    /// </summary>
+    [Fact]
+    public async Task A_directory_replaced_by_a_link_out_of_the_allowed_ones_is_refused_when_the_build_runs()
+    {
+        var target = Path.Combine(outsideRoot, "swapped-in");
+        Directory.CreateDirectory(target);
+        await WriteRasterAsync(Path.Combine(target, "secret.tif"));
+
+        var allowed = Path.Combine(importRoot, "swapped");
+        Directory.CreateDirectory(allowed);
+        await WriteRasterAsync(Path.Combine(allowed, "tile.tif"));
+
+        var buildId = await AcceptedAsync(
+            Request(22.80, 46.80, allowed, fetchCoverage: false), administrator);
+
+        Directory.Delete(allowed, recursive: true);
+        try
+        {
+            Directory.CreateSymbolicLink(allowed, target);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.WriteLine(
+                "Link resolution at run time was NOT exercised: this host refuses to create a "
+                + $"symbolic link. ({e.GetType().Name})");
+            return;
+        }
+
+        await RunAsync(buildId, administratorId);
+
+        var build = await ReadAsync(buildId);
+        build.Status.ShouldBe(TerrainBuildStatus.Failed);
+        build.ErrorCode.ShouldBe(TerrainBuildFailures.SourceUnreadable);
+        File.Exists(Path.Combine(buildRoot, buildId.ToString("N"), TerrainInPlaceSources.RecordFileName))
+            .ShouldBeFalse();
     }
 
     /// <summary>
@@ -633,6 +722,14 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
         await db.TerrainBuilds.Where(b => b.Id == buildId).ExecuteUpdateAsync(s => s
             .SetProperty(b => b.Status, TerrainBuildStatus.Running)
             .SetProperty(b => b.FinishedAt, (DateTimeOffset?)null));
+    }
+
+    /// <summary>What the build recorded about the directories it reads in place.</summary>
+    private TerrainInPlaceRecord InPlace(Guid buildId)
+    {
+        var path = Path.Combine(buildRoot, buildId.ToString("N"), TerrainInPlaceSources.RecordFileName);
+        File.Exists(path).ShouldBeTrue("the build recorded no directory it reads in place");
+        return JsonSerializer.Deserialize<TerrainInPlaceRecord>(File.ReadAllText(path), JsonSerializerOptions.Web)!;
     }
 
     private async Task<TerrainBuild> ReadAsync(Guid buildId)

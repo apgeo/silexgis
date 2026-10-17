@@ -90,6 +90,11 @@ public sealed class GdalTerrainRasterPreparer : ITerrainRasterPreparer
     public IReadOnlyList<PreparedTerrainRaster> Prepare(
         TerrainRasterPrepareRequest request, CancellationToken ct)
     {
+        // A source may be a raster in a directory the operator keeps, read where it lies, and
+        // nothing may appear beside it: the library's habit of writing what it learned about a file
+        // into a sidecar next to it is switched off for every source this opens and closes.
+        using var untouched = GdalSidecarsOff.OnThisThread();
+
         var plan = Plan(request, ct);
         Directory.CreateDirectory(request.OutputDirectory);
 
@@ -119,6 +124,9 @@ public sealed class GdalTerrainRasterPreparer : ITerrainRasterPreparer
     /// <inheritdoc />
     public IReadOnlyList<PreparedTerrainRaster>? DescribePrepared(TerrainRasterPrepareRequest request)
     {
+        // Opens every source to plan, so the same care as preparing: nothing written beside them.
+        using var untouched = GdalSidecarsOff.OnThisThread();
+
         IReadOnlyList<PlannedRaster> plan;
         try
         {
@@ -201,7 +209,7 @@ public sealed class GdalTerrainRasterPreparer : ITerrainRasterPreparer
 
         foreach (var source in sources)
         {
-            var name = TerrainRasterPreparation.PreparedNameFor(source.Path);
+            var name = TerrainRasterPreparation.PreparedNameFor(request.NameOf(source.Path));
             if (taken.TryGetValue(name, out var already))
             {
                 throw new TerrainBuildException(

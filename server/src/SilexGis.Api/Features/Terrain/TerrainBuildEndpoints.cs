@@ -500,6 +500,15 @@ public static class TerrainBuildEndpoints
                     return RefuseDirectory(code);
                 }
 
+                // A directory inside the ones this application deletes in — its own builds, the
+                // handover to the tile maker, the published pyramids — is not an operator's to read
+                // in place: a build would read work this application may remove from under it. It is
+                // answered as any directory that cannot be read, saying nothing about the layout.
+                if (workspace.IsOwnDirectory(resolved))
+                {
+                    return RefuseDirectory(ServerImportPaths.OutsideRootsCode);
+                }
+
                 reference = resolved;
             }
             else if (uploads.PathOf(source.Reference) is not null)

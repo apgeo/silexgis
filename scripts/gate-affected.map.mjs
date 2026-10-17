@@ -282,9 +282,10 @@ export const groups = {
   // The elevation surface: the chain that builds it, the phases it runs, and the settings and
   // registration that decide whether it runs at all.
   terrain: [
-    'CaveOverburdenTests', 'DemSamplerTests', 'GdalScratchDirectoryTests', 'JobQueueLaneTests',
+    'CaveOverburdenTests', 'DemSamplerTests', 'GdalScratchDirectoryTests', 'GdalSidecarsOffTests',
+    'JobQueueLaneTests',
     'TerrainActivationTests', 'TerrainBakePhaseTests', 'TerrainBuildApiTests',
-    'TerrainBuildCancelRetryTests',
+    'TerrainBuildCancelRetryTests', 'TerrainInPlaceSourceTests',
     'TerrainBuildExtendTests', 'TerrainBuildHeightTests', 'TerrainContourTests', 'TerrainBuildPipelineTests', 'TerrainCellFetchTests',
     'TerrainDerivativeApiTests', 'TerrainDerivativeRegistryTests', 'TerrainDerivativeTests',
     'TerrainMapConfigTests', 'TerrainOptionsTests', 'TerrainPipelineRegistrationTests',
@@ -381,6 +382,7 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Files/': 'files',
   'server/src/SilexGis.Infrastructure/Filters/': 'filters',
   'server/src/SilexGis.Infrastructure/Geodata/': 'geofiles',
+  'server/src/SilexGis.Infrastructure/Geodata/GdalSidecarsOff.cs': 'terrain',
   'server/src/SilexGis.Infrastructure/Geodata/WindowMembershipSql.cs': 'windowMembership',
   'server/src/SilexGis.Infrastructure/Geodata/FeatureAudienceSql.cs': 'windowMembership',
   'server/src/SilexGis.Infrastructure/Import/': 'imports',

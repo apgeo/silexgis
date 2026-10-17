@@ -32,6 +32,7 @@ namespace SilexGis.Infrastructure.Terrain;
 /// </remarks>
 public sealed class TerrainPreparePhase(
     ITerrainRasterPreparer preparer,
+    TerrainPreparedSet preparedSet,
     TerrainRasterIndex index,
     ILogger<TerrainPreparePhase> logger) : ITerrainPhase
 {
@@ -51,14 +52,14 @@ public sealed class TerrainPreparePhase(
     /// </remarks>
     public Task<bool> IsAlreadyDoneAsync(TerrainBuildContext context, CancellationToken ct)
     {
-        var inputs = Sources(context);
+        var inputs = preparedSet.Sources(context, ct);
         if (inputs.Count == 0)
         {
             // Nothing to compare against. The run that follows says so properly, with a code.
             return Task.FromResult(false);
         }
 
-        var existing = preparer.DescribePrepared(RequestFor(context, inputs));
+        var existing = preparer.DescribePrepared(TerrainPreparedSet.RequestFor(context, inputs));
         if (existing is not null)
         {
             logger.LogInformation(
@@ -71,7 +72,7 @@ public sealed class TerrainPreparePhase(
 
     public async Task RunAsync(TerrainBuildContext context, CancellationToken ct)
     {
-        var inputs = Sources(context);
+        var inputs = preparedSet.Sources(context, ct);
         if (inputs.Count == 0)
         {
             throw new TerrainBuildException(
@@ -88,7 +89,7 @@ public sealed class TerrainPreparePhase(
         // that takes one terrain build at a time, and the raster library's handles must not be
         // touched from more than one thread — doing so faults the process in a way no catch block
         // in this language can see.
-        var prepared = preparer.Prepare(RequestFor(context, inputs), ct);
+        var prepared = preparer.Prepare(TerrainPreparedSet.RequestFor(context, inputs), ct);
 
         logger.LogInformation(
             "Terrain build {BuildId} prepared {Prepared} of {Sources} raster(s), {Bytes} bytes",
@@ -124,13 +125,6 @@ public sealed class TerrainPreparePhase(
 
         await context.ReportAsync(100, null, ct);
     }
-
-    private static List<string> Sources(TerrainBuildContext context) =>
-        TerrainPreparedSet.Sources(context);
-
-    private static TerrainRasterPrepareRequest RequestFor(
-        TerrainBuildContext context, IReadOnlyList<string> inputs) =>
-        TerrainPreparedSet.RequestFor(context, inputs);
 
     /// <summary>
     /// A coordinate as a line of a log wants it: enough places to say which valley, not enough to

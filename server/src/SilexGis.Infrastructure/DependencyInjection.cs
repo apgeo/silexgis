@@ -358,11 +358,15 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, TerrainBuildHandler>();
         services.AddScoped<IProcessingJobHandler, TerrainUploadSweepHandler>();
 
-        // Obtaining the rasters: a client for the open elevation dataset, and the step that puts
-        // everything a build was given — downloaded, uploaded or read from a directory the operator
-        // listed — into the one directory the rest of the chain reads.
+        // Obtaining the rasters: a client for the open elevation dataset, and the step that copies
+        // in what was downloaded or uploaded and lists what a directory the operator named holds —
+        // those are read where they are, never copied — plus the one answer every later step asks
+        // for "which rasters is this build made from". Scoped because the directory check reads
+        // the operator's list as it stands at that moment.
         services.AddHttpClient(Terrain.CopernicusFetcher.HttpClientName);
         services.AddScoped<Terrain.CopernicusFetcher>();
+        services.AddScoped<Terrain.TerrainInPlaceSources>();
+        services.AddScoped<Terrain.TerrainPreparedSet>();
         services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainFetchPhase>();
 
         // Turning those rasters into the one form everything after them reads. Stateless and holding

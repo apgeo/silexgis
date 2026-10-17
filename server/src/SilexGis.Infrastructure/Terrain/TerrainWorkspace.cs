@@ -123,9 +123,11 @@ public sealed class TerrainBuildOptions
 /// </summary>
 /// <param name="Root">Everything this build owns. Deleted when the build is.</param>
 /// <param name="Input">
-/// The rasters the build was given, whichever of the three ways they arrived by. One directory for
-/// all of them: what happens next takes a directory of rasters and does not care where each came
-/// from, and a separate tree per source kind would mean every later step learning the difference.
+/// The rasters the build obtained or was sent through the browser, copied here. A directory on the
+/// server the operator named is <b>not</b> copied: its rasters are read where they are, and the
+/// build keeps only a list of them beside this directory — tens of gigabytes of a national survey
+/// already on the machine are not worth having twice. The step that prepares rasters reads both,
+/// and nothing after it reads either: the meshing step is handed the prepared directory.
 /// </param>
 /// <param name="Prepared">
 /// The rasters as everything after the first step reads them: one coordinate system, one value
@@ -191,6 +193,47 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
 
     /// <summary>The one directory whatever serves terrain is pointed at.</summary>
     public string PublishRoot => published;
+
+    /// <summary>
+    /// Whether <paramref name="directory"/> is, or lies inside, one of the directories this
+    /// application writes and deletes in: the build root, the handover directory or the published
+    /// pyramids.
+    /// </summary>
+    /// <remarks>
+    /// A directory on the server that a build reads in place is the operator's, and nothing here
+    /// may ever write in it, rename in it or delete from it. These three are the places this
+    /// application does all three — a build's folder goes with the build, an upload nobody named is
+    /// swept, a withdrawn bake's tiles are emptied — so a source inside one of them is refused, and a
+    /// source that contains one has it stepped over. Asked of where the paths really are, links
+    /// resolved, because the same directory spelled two ways is still the same directory.
+    /// </remarks>
+    public bool IsOwnDirectory(string directory) =>
+        OwnDirectories().Any(own => Within(own, Real(directory)));
+
+    /// <summary>The directories <see cref="IsOwnDirectory"/> asks about, links resolved.</summary>
+    public IReadOnlyList<string> OwnDirectories() => [Real(root), Real(spool), Real(published)];
+
+    /// <summary>Whether <paramref name="path"/> is <paramref name="directory"/> or lies under it.</summary>
+    internal static bool Within(string directory, string path)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var trimmed = Path.TrimEndingDirectorySeparator(directory);
+        var candidate = Path.TrimEndingDirectorySeparator(path);
+        return string.Equals(trimmed, candidate, comparison)
+            || candidate.StartsWith(trimmed + Path.DirectorySeparatorChar, comparison);
+    }
+
+    private static string Real(string path)
+    {
+        try
+        {
+            return Documents.ServerDirectorySource.RealPath(Path.GetFullPath(path)) ?? Path.GetFullPath(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return Path.GetFullPath(path);
+        }
+    }
 
     /// <summary>Everything one build owns, whether or not any of it has been created yet.</summary>
     /// <remarks>

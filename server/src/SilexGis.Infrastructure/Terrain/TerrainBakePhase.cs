@@ -43,6 +43,7 @@ namespace SilexGis.Infrastructure.Terrain;
 /// </remarks>
 public sealed class TerrainBakePhase(
     ITerrainRasterPreparer preparer,
+    TerrainPreparedSet preparedSet,
     TerrainWorkspace workspace,
     IOptions<TerrainBuildOptions> options,
     ILogger<TerrainBakePhase> logger) : ITerrainPhase
@@ -133,7 +134,7 @@ public sealed class TerrainBakePhase(
         // the right name and the wrong length — and a second answer to it here would drift from
         // that one silently, in the direction of meshing a set nothing considers finished.
         var prepared = preparer.DescribePrepared(
-            TerrainPreparedSet.RequestFor(context, TerrainPreparedSet.Sources(context)));
+            TerrainPreparedSet.RequestFor(context, preparedSet.Sources(context, ct)));
 
         if (prepared is null || prepared.Count == 0)
         {

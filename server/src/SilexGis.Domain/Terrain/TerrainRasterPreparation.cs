@@ -161,11 +161,24 @@ public sealed record TerrainArea(double West, double South, double East, double 
 /// exist yet. Until it does, every source keeps the pixel size it arrived with.
 /// </para>
 /// </param>
+/// <param name="Names">
+/// The name an input is prepared under when that is not its own file name, keyed by its path, or
+/// null when every input is prepared under its own. Rasters read where an operator keeps them can
+/// share a file name across two of that operator's folders; they are given distinct names once,
+/// when they are first read, and the same names every time after, because the prepared file's name
+/// is how a later run recognises work already done.
+/// </param>
 public sealed record TerrainRasterPrepareRequest(
     IReadOnlyList<string> InputPaths,
     string OutputDirectory,
     TerrainArea? Area = null,
-    double? TargetPixelSizeDegrees = null);
+    double? TargetPixelSizeDegrees = null,
+    IReadOnlyDictionary<string, string>? Names = null)
+{
+    /// <summary>The name <paramref name="inputPath"/> is prepared under, before its prepared suffix.</summary>
+    public string NameOf(string inputPath) =>
+        Names is not null && Names.TryGetValue(inputPath, out var name) ? name : Path.GetFileName(inputPath);
+}
 
 /// <summary>
 /// What came out: where it is, how big, what ground it covers and what it says for a hole.

@@ -5,35 +5,37 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Terrain;
-using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Terrain;
 
 /// <summary>
-/// The first step: putting the rasters a build is made from into the one directory the rest of the
-/// chain reads.
+/// The first step: establishing which rasters a build is made from, and copying in the ones that
+/// are not already on this machine to stay.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Three ways in and one way out. Coverage for the rectangle is obtained from the open dataset
-/// this application knows; a raster sent through the browser is taken from where the upload left
-/// it; a directory on the server the operator has listed as readable is read in place and copied
-/// across. They all land in the same directory because what happens next takes a directory of
-/// rasters and has no business knowing which of the three each one came by — and because the tool
-/// that eventually meshes them cannot be pointed at a directory it may not write to.
+/// Three ways in. Coverage for the rectangle is obtained from the open dataset this application
+/// knows, and a raster sent through the browser is taken from where the upload left it — both
+/// copied into the build's input directory. A directory on the server the operator has listed as
+/// readable is <b>not</b> copied: it is typically a survey of tens of gigabytes that is already on
+/// this disk, so its rasters are read where they are and the build records a list of them instead
+/// (<see cref="TerrainInPlaceSources"/>). Nothing here or later writes, renames or deletes in that
+/// directory; the step after this one reads both places, and the tool that meshes is handed the
+/// build's own prepared rasters, never the operator's.
 /// </para>
 /// <para>
 /// Every one of the three is safe to run again. A cell already on disk is not obtained twice, a
-/// raster already copied is not copied twice, and nothing here writes a row — the sources were
-/// recorded when the build was asked for, so being handed the same build after a restart leaves
-/// the record exactly as it was rather than doubling it.
+/// raster already copied is not copied twice, a directory already listed is compared with its list
+/// rather than listed afresh, and nothing here writes a row — the sources were recorded when the
+/// build was asked for, so being handed the same build after a restart leaves the record exactly as
+/// it was rather than doubling it.
 /// </para>
 /// </remarks>
 public sealed class TerrainFetchPhase(
     SilexGisDbContext db,
     CopernicusFetcher fetcher,
-    ServerDirectorySource directories,
+    TerrainInPlaceSources inPlace,
     TerrainUploads uploads,
     ILogger<TerrainFetchPhase> logger) : ITerrainPhase
 {
@@ -76,11 +78,22 @@ public sealed class TerrainFetchPhase(
         Directory.CreateDirectory(input);
         var adopted = AdoptedRasters.For(context.Directories);
 
-        for (var i = 0; i < sources.Count; i++)
+        // The directories read in place come last, together, so that every copied raster already
+        // has its name when the in-place ones are given theirs: two rasters prepared under one
+        // name would refuse the whole build, and a name is fixed the first time it is given.
+        var copiedSources = sources.Where(s => s.Kind != TerrainBuildSourceKind.ServerDirectory).ToList();
+        var references = sources
+            .Where(s => s.Kind == TerrainBuildSourceKind.ServerDirectory)
+            .Select(s => s.Reference)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var shares = copiedSources.Count + (references.Count > 0 ? 1 : 0);
+
+        for (var i = 0; i < copiedSources.Count; i++)
         {
-            var source = sources[i];
-            var from = Share(i, sources.Count);
-            var to = Share(i + 1, sources.Count);
+            var source = copiedSources[i];
+            var from = Share(i, shares);
+            var to = Share(i + 1, shares);
 
             switch (source.Kind)
             {
@@ -90,9 +103,6 @@ public sealed class TerrainFetchPhase(
                 case TerrainBuildSourceKind.Uploaded:
                     await UploadAsync(context, source, input, to, adopted, ct);
                     break;
-                case TerrainBuildSourceKind.ServerDirectory:
-                    await DirectoryAsync(context, source, input, to, adopted, ct);
-                    break;
                 default:
                     throw new TerrainBuildException(
                         TerrainBuildFailures.SourceUnreadable,
@@ -100,7 +110,11 @@ public sealed class TerrainFetchPhase(
             }
         }
 
-        if (!Directory.EnumerateFiles(input).Any(f => TerrainRasterFiles.IsRaster(f)))
+        var readInPlace = references.Count == 0
+            ? 0
+            : await DirectoriesAsync(context, references, input, ct);
+
+        if (readInPlace == 0 && !Directory.EnumerateFiles(input).Any(f => TerrainRasterFiles.IsRaster(f)))
         {
             // Well-formed and empty: a rectangle drawn over open water asks only for cells nobody
             // publishes, and a directory somebody emptied while this waited names nothing. Neither
@@ -187,15 +201,18 @@ public sealed class TerrainFetchPhase(
     }
 
     /// <summary>
-    /// Reads a directory on the server's own disk that the operator has listed as readable.
+    /// Lists the rasters in the directories on the server's own disk that this build names, which
+    /// it reads where they are — or, on any later run, checks that they are still what it listed.
     /// </summary>
+    /// <returns>How many rasters the build reads in place.</returns>
     /// <remarks>
     /// The path is resolved and judged against the operator's list <b>here</b>, not merely when the
     /// request was accepted, and the rights of whoever asked are rebuilt at the same moment. Both
     /// halves matter and for the same reason: this runs minutes or hours after the request, and in
     /// between the disk can change — a directory replaced by a link to somewhere else — and rights
     /// can be taken away. Trusting either answer from the moment the request arrived is a way to
-    /// read whatever the service account can open, on a delay.
+    /// read whatever the service account can open, on a delay. The step that reads the rasters
+    /// judges the directory against the list again, immediately before it reads.
     ///
     /// <para>
     /// The rights asked for are the same pair the request was held to: the terrain right, and the
@@ -203,13 +220,16 @@ public sealed class TerrainFetchPhase(
     /// A build queued by the installation itself names nobody and is refused here, because there is
     /// nobody whose permission to read the disk could be checked.
     /// </para>
+    /// <para>
+    /// The first run writes the list; every later one compares the directory with it and stops on
+    /// any difference with its own reason, rather than resuming over a set of rasters that is not
+    /// the one this build was made from.
+    /// </para>
     /// </remarks>
-    private async Task DirectoryAsync(
+    private async Task<int> DirectoriesAsync(
         TerrainBuildContext context,
-        TerrainBuildSource source,
+        IReadOnlyList<string> references,
         string input,
-        int to,
-        AdoptedRasters adopted,
         CancellationToken ct)
     {
         if (context.Requester is not { } requester
@@ -222,81 +242,33 @@ public sealed class TerrainFetchPhase(
                 + "server's own disk.");
         }
 
-        var (resolved, code) = directories.Resolve(source.Reference);
-        if (resolved is null)
+        var seen = inPlace.Look(references, ct);
+        var recorded = inPlace.Read(context.Directories);
+        if (recorded is null)
         {
-            throw new TerrainBuildException(
-                TerrainBuildFailures.SourceUnreadable,
-                $"The directory this build was given cannot be read now ({code}).");
+            var copied = Directory.EnumerateFiles(input)
+                .Where(TerrainRasterFiles.IsRaster)
+                .Select(Path.GetFileName)
+                .OfType<string>();
+            recorded = inPlace.Record(context.Directories, references, seen, copied);
+        }
+        else if (TerrainInPlaceSources.Difference(recorded, references, seen) is { } what)
+        {
+            throw TerrainInPlaceSources.Changed(what);
         }
 
-        var copied = 0;
-        foreach (var file in Rasters(resolved, ct))
-        {
-            ct.ThrowIfCancellationRequested();
-            Adopt(file, input, adopted);
-            copied++;
-
-            if (copied % 10 == 0)
-            {
-                await context.ReportAsync(to, $"{resolved}: {copied} rasters", ct);
-            }
-        }
+        var count = recorded.Rasters.Count;
+        var where = string.Join(", ", references);
 
         logger.LogInformation(
-            "Terrain build {BuildId} took {Count} rasters from {Directory}",
-            context.Build.Id, copied, resolved);
-        await context.ReportAsync(to, $"{resolved}: {copied} rasters", ct);
-        await context.LogAsync($"Took {copied} rasters from {resolved}.", ct);
-    }
+            "Terrain build {BuildId} reads {Count} rasters in place from {Directories}",
+            context.Build.Id, count, where);
+        await context.ReportAsync(100, $"{where}: {count} rasters, read where they are", ct);
+        await context.LogAsync(
+            $"Reads {count} rasters from {where} where they are; nothing there is copied or changed.",
+            ct);
 
-    /// <summary>
-    /// Every raster under a resolved directory.
-    /// </summary>
-    /// <remarks>
-    /// Links are stepped over, files and directories alike. Following one would re-open the
-    /// question the operator's list has just answered, several levels down where nobody is looking,
-    /// and a loop of them turns a bounded walk into an endless one. A folder that cannot be read is
-    /// stepped over too: a permissions problem on one corner of an archive is a fact about that
-    /// corner, not a reason to abandon everything else somebody asked for.
-    /// </remarks>
-    private static IEnumerable<string> Rasters(string resolvedRoot, CancellationToken ct)
-    {
-        var pending = new Stack<string>();
-        pending.Push(resolvedRoot);
-
-        while (pending.Count > 0)
-        {
-            ct.ThrowIfCancellationRequested();
-            var current = pending.Pop();
-
-            FileSystemInfo[] entries;
-            try
-            {
-                entries = new DirectoryInfo(current).GetFileSystemInfos();
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                continue;
-            }
-
-            foreach (var entry in entries)
-            {
-                if (entry.LinkTarget is not null)
-                {
-                    continue;
-                }
-
-                if (entry is DirectoryInfo directory)
-                {
-                    pending.Push(directory.FullName);
-                }
-                else if (TerrainRasterFiles.IsRaster(entry.Name))
-                {
-                    yield return entry.FullName;
-                }
-            }
-        }
+        return count;
     }
 
     /// <summary>
@@ -304,10 +276,9 @@ public sealed class TerrainFetchPhase(
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Copied rather than read where it lies. The operator's directory is theirs and must come back
-    /// untouched, the mesher refuses an input directory it cannot write to, and a build is meant to
-    /// be a record of what it was made from — which it stops being the moment somebody edits the
-    /// originals underneath it.
+    /// Copied because these rasters have no other lasting home on this machine: a downloaded cell
+    /// would otherwise be fetched again on every run, and an upload is swept once no build names
+    /// it. A directory the operator keeps on the server is the one source that is not copied.
     /// </para>
     /// <para>
     /// A raster this build has already taken from this same place, still there and still the same
