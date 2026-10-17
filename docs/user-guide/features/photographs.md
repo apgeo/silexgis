@@ -25,6 +25,28 @@ Open one and you get a viewer with **previous / next**, **zoom in / out**, and a
 **About this photograph** panel: the photographer, the place, the licence, and what the
 camera recorded.
 
+### Conditions and saved gallery views
+
+Beside the search, the tag and the dates, **Conditions…** opens the
+[condition editor](search-and-filters.md#the-condition-editor) as **Photograph conditions**:
+caption, place name, the day it was taken, the day it is dated (taken, else uploaded), tags and
+the rest, in AND and OR groups. The button reads **Conditions… · on** while any are applied.
+
+A set of conditions can be kept as a **saved gallery view** — a
+[saved filter](search-and-filters.md#saved-filters) about photographs:
+
+- **Save as view…** keeps the search, the tag, the dates and the conditions;
+- **Apply a saved gallery view…** picks one of yours, or one shared with your caving group;
+- **Saved filters** opens the list of all your saved filters.
+
+A saved view does **not** keep the photographer, the album, *"without a position"*, or what a
+link opened the gallery on — a cave, a trip, a camp, a map extent. Those are set afresh each
+time. Like every saved filter, a shared gallery view grants nothing: each person who applies it
+sees only the photographs they may see.
+
+If the conditions cannot be applied, the gallery says so: change them, or stop naming the saved
+view.
+
 ### Selecting and acting in bulk
 
 **Select** turns on multi-select. With a selection you can:

@@ -60,7 +60,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | [Persoane, speologi și cluburi](people-and-clubs.md) | Conturi, lista de speologi, grupuri, anunțuri |
 | [Contul și setările](account-and-settings.md) | Profil, e-mail, securitate, accesibilitate, sincronizare |
 | [Notificări](notifications.md) | Ce vi se comunică, unde și cum schimbați |
-| [Căutare și filtre](search-and-filters.md) | Caseta de căutare, constructorul de filtre, sortarea |
+| [Căutare și filtre](search-and-filters.md) | Caseta de căutare, filtrele și editorul de condiții, filtrele salvate |
 
 ## În afara instalării
 

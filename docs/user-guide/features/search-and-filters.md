@@ -42,19 +42,38 @@ document's page **at the page the phrase was found on** (or sheet, or slide).
 
 ## Filters
 
-A filter builder for building saved, shareable queries across several kinds of record at
-once.
+A filter is a **question** about your records: which kinds of object it is about, the
+conditions they have to meet, and how the answer is sorted. You build one on a list screen —
+the [cave registry](#the-cave-registrys-filter) and the
+[gallery](photographs.md#conditions-and-saved-gallery-views) today — and you can keep it as a
+[saved filter](#saved-filters).
 
-### Worlds
+**A filter is always answered with what you yourself may see.** It narrows what you are
+allowed to read; it never widens it.
+
+### Kinds of object
 
 A filter covers one or more **kinds of object**: **Features · Trip logs · Map views ·
-Documents**. Each appears once, and there is a cap on how many one filter covers.
+Documents · Georeferenced maps · Cabinets · Survey models · Photographs · Geodata files**.
+Each appears once, and there is a cap on how many one filter covers.
 
 ### Fields you can condition on
 
-**Name · Title · Kind · Category · Type · Tag · Owner · Caving group · Organising group ·
-Visibility · Protected location · Created · Last changed · Trip type · Trip date · Had an
-incident · State · Language**
+Which fields are offered depends on the kind of object. Among them:
+
+- for everything: **Name · Title · Tag · Owner · Caving group · Visibility · Created · Last
+  changed**;
+- for features and caves: **Kind · Category · Type · Protected location · Region · Rock type ·
+  Surveyed length (m) · Depth (m) · Cave type · Other names**, and the
+  [typed properties](#property-conditions) a feature type declares;
+- for trips: **Trip type · Trip date · Had an incident · State · Organising group**;
+- for photographs: **Caption · Place name · Taken on · Dated (taken, else uploaded)**;
+- for survey models, maps and files: **Survey format · Surveyed on · Current model · Map kind ·
+  File format · Language**.
+
+A field that is not yours to use is not offered. If a filter names one anyway — one that was
+shared with you, or written by hand — it is refused exactly as if the field did not exist:
+the refusal never tells you what is there.
 
 ### Sorting
 
@@ -133,6 +152,120 @@ quick filter"*). They appear as one-click chips on the map and in the cave regis
 on every browser you sign in to. A chip applies its filter; pressing it again lifts it. A chip
 whose filter is no longer there, or cannot be run, is greyed out and says so until you unpin
 it, from the chip or from **Saved filters**.
+
+---
+
+## The cave registry's filter
+
+**Caves** opens the cave registry. Above the list sit its quick controls: **Search name or
+toponym…**, **All types**, **Region**, **Length at least (m)** and **Filter by tag…**. They
+are one filter, and the address of the page carries it, so a link you copy opens the same
+question for whoever follows it (answered with what *they* may see).
+
+**Advanced filter…** opens the [condition editor](#the-condition-editor) on the same filter,
+for anything the controls cannot say — an OR, a NOT, a range. When you apply it,
+the parts the controls can show go back into the controls; the rest is kept beside them:
+*"This filter also has conditions these controls do not show (n). They still narrow the
+list."* — with **Edit them** and **Remove them**.
+
+Next to the controls:
+
+- **Save as filter…** keeps the current question as a [saved filter](#saved-filters);
+- **Apply a saved filter…** picks one of yours, or one shared with your caving group;
+- **Saved filters** opens the list of them.
+
+While a saved filter is applied, the page says *"Saved filter: name"*, and *"changed since"*
+once you change the controls. **Stop naming this saved filter** keeps the question and forgets
+the name.
+
+If a link's filter cannot be read, the page says so and shows every cave rather than guessing;
+ask whoever sent it for a fresh link.
+
+---
+
+## The condition editor
+
+The same editor serves the cave registry (**Advanced filter**) and the gallery
+(**Photograph conditions**). Each row is one condition: a **Field**, a **Comparison** and a
+**Value**.
+
+- **Add condition** adds a row; **Add group** adds a group inside the current one.
+- Each group says how its rows combine: **All of these (AND)** or **Any of these (OR)**.
+- **Not** turns a row or a group into its opposite.
+- Groups nest to a fixed depth; past it the editor says *"Groups are nested at most n deep."*
+- **Matches: n** is counted live, before you apply, with what you may see.
+- **Apply** puts the edited filter on the list.
+
+### Comparisons
+
+Which comparisons a field offers depends on what it holds:
+
+| Comparison | For |
+|---|---|
+| **is** · **is one of** | a choice from a list: a type, a tag, a person, a group |
+| **contains** · **starts with** | text |
+| **less than** · **at most** · **more than** · **at least** · **between** | numbers and dates |
+| **is empty** · **is not empty** | anything that may be left blank |
+
+**at least** and **at most** include the value itself: *Surveyed length at least 500* finds a
+cave of exactly 500 m; *more than 500* does not. **between** includes both ends.
+
+**Dates are days.** When you pick a day, it is the day on your own calendar: *Trip date at least
+5 October* finds the trips of 5 October and after, wherever you are when you ask. A saved filter
+keeps the day its author picked and shows it as that day.
+
+### Property conditions
+
+Mapped features have a feature type, and some types declare typed properties of their own — a
+number, a text, a date, a yes/no. Where features are filtered, the editor offers each as
+**Property: name**, with the comparisons its kind allows.
+
+A property belongs to its type, so it is asked **only together with its feature type in the same
+AND group** — the editor says so under the row. A property of a type you may not read is not
+offered, and is refused like a field that does not exist. Caves themselves carry no feature
+type, so a type or property condition never matches a cave.
+
+### When a filter is refused
+
+If the server cannot run a filter, it says why, **on the row it is about** — for example
+*"This field does not support that comparison."*, *"The range ends before it starts."* or
+*"A value is longer than 200 characters."* Problems that belong to no single row — too many
+conditions, groups nested too deep — are listed for the filter as a whole. **Apply** stays unavailable
+until the filter can be run.
+
+---
+
+## Saved filters
+
+A saved filter is **a question you keep**. The account menu's **Saved filters** lists the ones
+you may use: your own, and those shared with a caving group you belong to.
+
+| Column | Shows |
+|---|---|
+| **Name** | its name and description |
+| **Asks for** | the conditions, in words |
+| **Who can use it** | **Only me**, or **Members of** a caving group |
+| **Saved by** | **You**, the author as their profile shows them to you, or **A club member** |
+| **State** | **Ready**, **Out of date** (a type or tag it names has since been removed, so that condition matches nothing) or **Cannot be read** |
+
+**Open in the cave registry** applies a cave filter there. A saved gallery view is listed here
+too, and is applied from the gallery with **Apply a saved gallery view…**.
+
+### Sharing grants nothing
+
+Sharing a filter with a caving group gives its members **the question only**. Each of them is
+answered with what they themselves may see; a filter never lends its author's access to anyone.
+For the same reason a saved filter **never keeps a place to measure from** — *nearest to here*
+is asked afresh each time.
+
+### Who may change it
+
+Only **its author** or a **full administrator** may rename, describe, share or delete a saved
+filter. The list offers **Rename, describe or share** and **Delete** on exactly the filters you
+may change. Deleting a shared filter takes it away from everyone it was shared with.
+
+A saved filter that asks something you cannot ask — a field you may not use, or a form this
+version cannot read — shows as **Cannot be read** and cannot be applied.
 
 ---
 

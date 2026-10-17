@@ -42,19 +42,41 @@ pagina documentului **la pagina pe care s-a găsit expresia** (sau foaia, sau di
 
 ## Filtre
 
-Un constructor de filtre pentru interogări salvate și partajabile peste mai multe feluri de
-înregistrări deodată.
+Un filtru este o **întrebare** despre înregistrările dumneavoastră: la ce feluri de obiecte se
+referă, ce condiții trebuie să îndeplinească și cum este sortat răspunsul. Îl construiți pe un
+ecran de listă — astăzi [registrul peșterilor](#filtrul-registrului-peșterilor) și
+[galeria](photographs.md#condiții-și-vizualizări-salvate-ale-galeriei) — și îl puteți păstra ca
+[filtru salvat](#filtre-salvate).
 
-### Lumi
+**Unui filtru i se răspunde întotdeauna cu ce aveți dumneavoastră dreptul să vedeți.** El
+restrânge ce aveți voie să citiți; nu îl lărgește niciodată.
 
-Un filtru acoperă unul sau mai multe **feluri de obiecte**: **Elemente · Jurnale de tură · Vederi
-de hartă · Documente**. Fiecare apare o singură dată, și există o limită câte acoperă un filtru.
+### Feluri de obiecte
+
+Un filtru acoperă unul sau mai multe **feluri de obiecte**: **Obiective · Jurnale de tură ·
+Vizualizări de hartă · Documente · Hărți georeferențiate · Dulapuri · Modele topografice ·
+Fotografii · Fișiere de geodate**. Fiecare apare o singură dată, și există o limită câte acoperă
+un filtru.
 
 ### Câmpuri după care puteți pune condiții
 
-**Nume · Titlu · Fel · Categorie · Tip · Etichetă · Proprietar · Grup de speologie · Grup
-organizator · Vizibilitate · Locație protejată · Creat · Ultima modificare · Tip de tură · Data
-turei · A avut incident · Stare · Limbă**
+Câmpurile oferite depind de felul obiectului. Printre ele:
+
+- pentru toate: **Nume · Titlu · Etichetă · Proprietar · Club · Vizibilitate · Creat · Ultima
+  modificare**;
+- pentru elemente (**Obiective**) și peșteri: **Fel · Categorie · Tip · Locație protejată ·
+  Regiune · Tip de rocă · Lungime cartată (m) · Denivelare (m) · Tip de peșteră · Alte
+  denumiri**, plus
+  [proprietățile tipizate](#condiții-pe-proprietăți) pe care le declară un tip de element;
+- pentru ture: **Tip de tură · Data turei · A avut incident · Stare · Club organizator**;
+- pentru fotografii: **Descriere · Nume de loc · Fotografiat la · Datată (fotografiată, altfel
+  încărcată)**;
+- pentru modele topografice, hărți și fișiere: **Format topografie · Topografiat la · Model
+  curent · Tip de hartă · Format fișier · Limbă**.
+
+Un câmp pe care nu aveți dreptul să-l folosiți nu este oferit. Dacă un filtru îl numește totuși —
+unul partajat cu dumneavoastră sau scris de mână — este refuzat exact ca și cum câmpul nu ar
+exista: refuzul nu vă spune niciodată ce se află acolo.
 
 ### Sortare
 
@@ -137,6 +159,127 @@ Fixați până la șase filtre salvate — ale dumneavoastră sau partajate cu d
 registrului de peșteri, în orice browser în care vă autentificați. Un buton aplică filtrul;
 apăsat din nou, îl ridică. Un buton al cărui filtru nu mai există sau nu poate fi rulat apare
 estompat și spune asta, până îl scoateți, din buton sau din **Filtre salvate**.
+
+---
+
+## Filtrul registrului peșterilor
+
+**Peșteri** deschide registrul peșterilor. Deasupra listei stau câmpurile lui rapide:
+**Caută denumire sau toponim…**, **Toate tipurile**, **Regiune**, **Lungime de cel puțin (m)**
+și **Filtrează după etichetă…**. Ele formează un singur filtru, iar adresa paginii îl poartă,
+așa că un link copiat deschide aceeași întrebare pentru oricine îl urmează (cu răspunsul pe
+care *acela* are dreptul să-l vadă).
+
+**Filtru avansat…** deschide [editorul de condiții](#editorul-de-condiții) pe același filtru,
+pentru tot ce câmpurile nu pot spune — un SAU, un NU, un interval. Când îl
+aplicați, părțile pe care câmpurile le pot arăta se întorc în câmpuri; restul este păstrat
+alături: *„Acest filtru mai are condiții pe care aceste câmpuri nu le arată (n). Ele restrâng
+lista în continuare."* — cu **Editați-le** și **Eliminați-le**.
+
+Lângă câmpuri:
+
+- **Salvați ca filtru…** păstrează întrebarea curentă ca [filtru salvat](#filtre-salvate);
+- **Aplicați un filtru salvat…** alege unul dintre ale dumneavoastră sau unul partajat cu
+  grupul dumneavoastră de speologie;
+- **Filtre salvate** deschide lista lor.
+
+Cât timp este aplicat un filtru salvat, pagina spune *„Filtru salvat: nume"*, iar *„modificat
+între timp"* după ce schimbați câmpurile. **Nu mai numiți acest filtru salvat** păstrează
+întrebarea și uită numele.
+
+Dacă filtrul dintr-un link nu poate fi citit, pagina o spune și arată toate peșterile în loc să
+ghicească; cereți celui care l-a trimis un link nou.
+
+---
+
+## Editorul de condiții
+
+Același editor servește registrul peșterilor (**Filtru avansat**) și galeria (**Condiții pentru
+fotografii**). Fiecare rând este o condiție: un **Câmp**, o **Comparație** și o **Valoare**.
+
+- **Adaugă condiție** adaugă un rând; **Adaugă grup** adaugă un grup în interiorul celui curent.
+- Fiecare grup spune cum se combină rândurile lui: **Toate acestea (ȘI)** sau **Oricare dintre
+  acestea (SAU)**.
+- **Nu** transformă un rând sau un grup în opusul lui.
+- Grupurile se imbrică până la o adâncime fixă; dincolo de ea editorul spune *„Grupurile pot fi
+  imbricate pe cel mult n niveluri."*
+- **Rezultate: n** se numără pe loc, înainte să aplicați, cu ce aveți dreptul să vedeți.
+- **Aplică** pune filtrul editat pe listă.
+
+### Comparații
+
+Comparațiile oferite de un câmp depind de ce conține:
+
+| Comparație | Pentru |
+|---|---|
+| **este** · **este unul dintre** | o alegere dintr-o listă: un tip, o etichetă, o persoană, un grup de speologie |
+| **conține** · **începe cu** | text |
+| **mai mic decât** · **cel mult** · **mai mare decât** · **cel puțin** · **între** | numere și date |
+| **este gol** · **nu este gol** | orice poate rămâne necompletat |
+
+**cel puțin** și **cel mult** includ valoarea însăși: *Lungime cartată cel puțin 500* găsește o
+peșteră de exact 500 m; *mai mare decât 500* nu o găsește. **între** include ambele capete.
+
+**Datele sunt zile.** Când alegeți o zi, este ziua din propriul dumneavoastră calendar: *Data
+turei cel puțin 5 octombrie* găsește turele din 5 octombrie și de după, oriunde v-ați afla când
+întrebați. Un filtru salvat păstrează ziua aleasă de autorul lui și o arată ca acea zi.
+
+### Condiții pe proprietăți
+
+Elementele de pe hartă au un tip, iar unele tipuri își declară proprietăți tipizate proprii — un
+număr, un text, o dată, un da/nu. Acolo unde se filtrează elemente, editorul o oferă pe fiecare
+ca **Proprietate: nume**, cu comparațiile pe care felul ei le permite.
+
+O proprietate aparține tipului ei, așa că se cere **doar împreună cu tipul său de obiect, în
+același grup ȘI** — editorul o spune sub rând. O proprietate a unui tip pe care nu aveți dreptul
+să-l citiți nu este oferită și este refuzată ca un câmp care nu există. Peșterile însele nu au
+un tip de element, așa că o condiție pe tip sau pe proprietate nu găsește niciodată o peșteră.
+
+### Când un filtru este refuzat
+
+Dacă serverul nu poate rula un filtru, spune de ce, **pe rândul la care se referă** — de exemplu
+*„Acest câmp nu admite această comparație."*, *„Intervalul se termină înainte să înceapă."* sau
+*„O valoare are mai mult de 200 caractere."* Problemele care nu țin de un singur rând — prea
+multe condiții, grupuri imbricate prea adânc — sunt arătate pentru filtru în ansamblu.
+**Aplică** rămâne indisponibil până când filtrul poate fi rulat.
+
+---
+
+## Filtre salvate
+
+Un filtru salvat este **o întrebare pe care o păstrați**. **Filtre salvate**, din meniul
+contului, le arată pe cele pe care le puteți folosi: ale dumneavoastră și cele partajate cu un
+grup de speologie din care faceți parte.
+
+| Coloană | Arată |
+|---|---|
+| **Nume** | numele și descrierea lui |
+| **Caută** | condițiile, în cuvinte |
+| **Cine îl poate folosi** | **Doar eu** sau **Membrii** unui grup de speologie |
+| **Salvat de** | **Dumneavoastră**, autorul așa cum vi-l arată profilul lui, sau **Un membru al clubului** |
+| **Stare** | **Pregătit**, **Învechit** (un tip sau o etichetă numită de el a fost ștearsă între timp, așa că acea condiție nu mai găsește nimic) sau **Nu poate fi citit** |
+
+**Deschideți în registrul peșterilor** aplică acolo un filtru despre peșteri. O vizualizare
+salvată a galeriei apare și ea aici și se aplică din galerie, cu **Aplică o vizualizare salvată
+a galeriei…**.
+
+### Partajarea nu acordă nimic
+
+Partajarea unui filtru cu un grup de speologie le dă membrilor lui **doar întrebarea**. Fiecăruia i se
+răspunde cu ce are el însuși dreptul să vadă; un filtru nu împrumută nimănui drepturile
+autorului său. Din același motiv, un filtru salvat **nu păstrează niciodată un loc de la care se
+măsoară** — *cel mai apropiat de aici* se întreabă din nou de fiecare dată.
+
+### Cine îl poate modifica
+
+Doar **autorul lui** sau un **administrator complet** poate redenumi, descrie, partaja sau șterge
+un filtru salvat. Lista oferă **Redenumiți, descrieți sau partajați** și **Ștergeți** exact pe
+filtrele pe care le puteți modifica. Ștergerea unui filtru partajat îl ia tuturor celor cu care a
+fost partajat.
+
+Un filtru salvat care întreabă ceva ce nu puteți întreba — un câmp pe care nu îl puteți folosi
+sau o formă pe care această versiune nu o poate citi — apare ca **Nu poate fi citit** și nu poate
+fi aplicat.
 
 ---
 

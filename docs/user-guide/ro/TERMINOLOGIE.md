@@ -235,6 +235,37 @@ A vedea o altă echipă din peșteră nu este „urmărire": „urmărire" răm�
 unei ture. Butonul este **Vezi echipa**, rândul ales este marcat **Pe ecran acum**, iar în text
 verbul este *a privi* („privești o altă echipă", „echipa pe care o priveai").
 
+## Filtre
+
+| Engleză | Română |
+|---|---|
+| Filter | Filtru |
+| Saved filter / Saved filters | Filtru salvat / Filtre salvate |
+| Save as filter… | Salvați ca filtru… |
+| Apply a saved filter… | Aplicați un filtru salvat… |
+| Advanced filter… | Filtru avansat… |
+| Condition | Condiție |
+| Field · Comparison · Value | Câmp · Comparație · Valoare |
+| Add condition · Add group | Adaugă condiție · Adaugă grup |
+| All of these (AND) · Any of these (OR) · Not | Toate acestea (ȘI) · Oricare dintre acestea (SAU) · Nu |
+| at least · at most | cel puțin · cel mult |
+| more than · less than · between | mai mare decât · mai mic decât · între |
+| is · is one of · contains · starts with | este · este unul dintre · conține · începe cu |
+| is empty · is not empty | este gol · nu este gol |
+| Property: (a typed property) | Proprietate: |
+| Kinds of object (what a filter is about) | Feluri de obiecte |
+| Features (a filter's kind of object) | Obiective |
+| Matches: n | Rezultate: n |
+| Who can use it · Only me · Members of … | Cine îl poate folosi · Doar eu · Membrii … |
+| Saved by · You · A club member | Salvat de · Dumneavoastră · Un membru al clubului |
+| Ready · Out of date · Cannot be read | Pregătit · Învechit · Nu poate fi citit |
+| Rename, describe or share | Redenumiți, descrieți sau partajați |
+| Conditions… (gallery) | Condiții… |
+| Photograph conditions | Condiții pentru fotografii |
+| Saved gallery view | Vizualizare salvată a galeriei |
+| Save as view… | Salvează ca vizualizare… |
+| Apply a saved gallery view… | Aplică o vizualizare salvată a galeriei… |
+
 ## Alte
 
 | Engleză | Română |

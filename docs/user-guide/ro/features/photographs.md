@@ -25,6 +25,30 @@ Deschideți una și primiți un vizualizator cu **anterioara / următoarea**, **
 depărtare** și un panou **Despre această fotografie**: fotograful, locul, licența și ce a
 înregistrat aparatul.
 
+### Condiții și vizualizări salvate ale galeriei
+
+Lângă căutare, etichetă și date, **Condiții…** deschide
+[editorul de condiții](search-and-filters.md#editorul-de-condiții) ca **Condiții pentru
+fotografii**: descrierea, numele de loc, ziua în care a fost făcută, ziua cu care este datată
+(fotografiată, altfel încărcată), etichetele și celelalte, în grupuri ȘI și SAU. Butonul arată
+**Condiții… · active** cât timp sunt aplicate.
+
+Un set de condiții poate fi păstrat ca **vizualizare salvată a galeriei** — un
+[filtru salvat](search-and-filters.md#filtre-salvate) despre fotografii:
+
+- **Salvează ca vizualizare…** păstrează căutarea, eticheta, datele și condițiile;
+- **Aplică o vizualizare salvată a galeriei…** alege una dintre ale dumneavoastră sau una
+  partajată cu grupul dumneavoastră de speologie;
+- **Filtre salvate** deschide lista tuturor filtrelor dumneavoastră salvate.
+
+O vizualizare salvată **nu** păstrează fotograful, albumul, *„fără poziție"* și nici ce a deschis
+un link în galerie — o peșteră, o tură, o tabără, o zonă de pe hartă. Acestea se aleg din nou de
+fiecare dată. Ca orice filtru salvat, o vizualizare partajată nu acordă nimic: fiecare persoană
+care o aplică vede doar fotografiile pe care are dreptul să le vadă.
+
+Dacă condițiile nu pot fi aplicate, galeria o spune: modificați-le sau nu mai numiți
+vizualizarea salvată.
+
 ### Selectare și acțiuni în masă
 
 **Selectează** pornește selecția multiplă. Cu o selecție puteți:
