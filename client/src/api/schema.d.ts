@@ -3025,7 +3025,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Runs a filter across the kinds of object it names. */
+        /** Runs a filter across the kinds of object it names. Refused with 400 for a filter it cannot read or run — among them a place to measure from that is missing, nested, too large or not an outline. */
         post: operations["filterQuery"];
         delete?: never;
         options?: never;
@@ -7299,7 +7299,7 @@ export interface paths {
         /** The caller's visible saved views. */
         get: operations["mapViewList"];
         put?: never;
-        /** Saves a view; the caller becomes owner. */
+        /** Saves a view; the caller becomes owner. A `filterDocument` in the view's document that holds a place of its own — a typed point, an outline, or the place nearest first is measured from — is refused with `saved_filter.anchor_refused`. */
         post: operations["mapViewCreate"];
         delete?: never;
         options?: never;
@@ -7315,7 +7315,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Updates a saved view (Write permission). */
+        /** Updates a saved view (Write permission); a filter holding a place is refused as on create. */
         put: operations["mapViewUpdate"];
         post?: never;
         /** Deletes a saved view (Delete permission). */
@@ -23078,8 +23078,26 @@ export interface operations {
                     "application/json": components["schemas"]["FilterQueryResponse"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -35487,6 +35505,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     mapViewUpdate: {
@@ -35524,6 +35551,24 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
