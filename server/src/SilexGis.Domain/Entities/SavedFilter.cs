@@ -8,8 +8,8 @@ namespace SilexGis.Domain.Entities;
 /// <remarks>
 /// <para>
 /// It describes a question and grants nothing. Running one applies the runner's own visibility,
-/// never the author's, so sharing a filter with a caving group hands its members a way of asking
-/// and no rows they could not already read. That is why it carries the ordinary
+/// never the author's, so sharing a filter with a caving group, or with everyone signed in, hands
+/// its readers a way of asking and no rows they could not already read. That is why it carries the ordinary
 /// owner/caving-group/visibility trio and nothing resembling a share token: the trio decides who
 /// may read the <em>question</em>, and the answer is decided afresh for every reader.
 /// </para>

@@ -103,9 +103,9 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
 
     [Theory]
     [InlineData("", "private", false)]
-    [InlineData("ok", "authenticated", false)]
-    [InlineData("ok", "public", false)]
+    [InlineData("ok", "public", false)] // nobody without an account is ever a filter's audience
     [InlineData("ok", "cavingGroup", false)] // shared, but with no group named
+    [InlineData("ok", "authenticated", true)] // everyone signed in, and a group as well
     public async Task A_filter_that_breaks_a_rule_is_refused_before_it_is_stored(
         string name, string visibility, bool withGroup)
     {
@@ -316,6 +316,120 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
         var response = await author.PostAsJsonAsync(Url, Body($"Theirs {tag}", group: strangers), Wire);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    // ---------- shared with everyone signed in ----------
+
+    [Fact]
+    public async Task A_filter_shared_with_everyone_signed_in_reaches_an_account_in_no_club_with_it_and_nobody_anonymous()
+    {
+        var wide = (await CreateAsync(author, Body($"Everyone's {tag}", visibility: EveryoneSignedIn)))
+            .GetProperty("id").GetGuid();
+        // The same author's private filter, beside it: what reaches the outsider is the audience,
+        // not something about the author or the account asking.
+        var mine = (await CreateAsync(author, Body($"Still mine {tag}"))).GetProperty("id").GetGuid();
+
+        var seen = await outsider.GetFromJsonAsync<JsonElement>($"{Url}/{wide}");
+        seen.GetProperty("visibility").GetString().ShouldBe(EveryoneSignedIn);
+        seen.GetProperty("cavingGroupId").ValueKind.ShouldBe(JsonValueKind.Null);
+        seen.GetProperty("mine").GetBoolean().ShouldBeFalse();
+        seen.GetProperty("state").GetString().ShouldBe("ready");
+        var outsiders = await ListedIdsAsync(outsider);
+        outsiders.ShouldContain(wide);
+        outsiders.ShouldNotContain(mine);
+        (await outsider.GetAsync($"{Url}/{mine}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ListedIdsAsync(clubmate)).ShouldContain(wide);
+
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync($"{Url}/{wide}")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.GetAsync($"/api/v1/caves?pageSize=100&savedFilterId={wide}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task A_filter_shared_with_everyone_signed_in_grants_nothing_and_each_runner_sees_only_their_own_rows()
+    {
+        var privateCave = await SeedCaveAsync($"SF wide private {tag}", Visibility.Private);
+        var openCave = await SeedCaveAsync($"SF wide open {tag}", Visibility.Authenticated);
+        var id = (await CreateAsync(author, Body($"Run me wide {tag}", Named(tag), visibility: EveryoneSignedIn)))
+            .GetProperty("id").GetGuid();
+
+        var authors = await IdsOnTheListAsync(author, id);
+        var outsiders = await IdsOnTheListAsync(outsider, id);
+
+        authors.Ids.ShouldBe([privateCave, openCave], ignoreOrder: true);
+        authors.Total.ShouldBe(2);
+        // The outsider shares no club with the author and holds the very same question: the
+        // author's private cave is neither listed nor counted for them.
+        outsiders.Ids.ShouldBe([openCave]);
+        outsiders.Total.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_filter_shared_with_everyone_signed_in_stays_its_authors_to_change_and_can_be_made_private_again()
+    {
+        var id = (await CreateAsync(author, Body($"Wide {tag}", visibility: EveryoneSignedIn)))
+            .GetProperty("id").GetGuid();
+
+        // Every account may read it, so a refusal to change it says so rather than "not there".
+        var seen = await outsider.GetFromJsonAsync<JsonElement>($"{Url}/{id}");
+        seen.GetProperty("mayEdit").GetBoolean().ShouldBeFalse();
+        seen.GetProperty("mayDelete").GetBoolean().ShouldBeFalse();
+        (await outsider.PutAsJsonAsync($"{Url}/{id}", Body("Taken over", visibility: EveryoneSignedIn), Wire))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await outsider.DeleteAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await author.GetFromJsonAsync<JsonElement>($"{Url}/{id}")).GetProperty("name").GetString()
+            .ShouldBe($"Wide {tag}");
+
+        // Its author may narrow it again, and it then reads as absent to the outsider.
+        var narrowed = await author.PutAsJsonAsync($"{Url}/{id}", new { name = $"Wide {tag}", visibility = "private" }, Wire);
+        narrowed.StatusCode.ShouldBe(HttpStatusCode.OK, await narrowed.Content.ReadAsStringAsync());
+        (await outsider.GetAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // And widen it from a club to everyone, the club named no longer.
+        var club = (await CreateAsync(author, Body($"Club first {tag}", group: cavingGroupId)))
+            .GetProperty("id").GetGuid();
+        (await outsider.GetAsync($"{Url}/{club}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var widened = await author.PutAsJsonAsync(
+            $"{Url}/{club}", new { name = $"Club first {tag}", visibility = EveryoneSignedIn }, Wire);
+        widened.StatusCode.ShouldBe(HttpStatusCode.OK, await widened.Content.ReadAsStringAsync());
+        (await widened.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("cavingGroupId").ValueKind
+            .ShouldBe(JsonValueKind.Null);
+        (await outsider.GetAsync($"{Url}/{club}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_filter_shared_with_everyone_signed_in_names_no_caving_group_on_save_or_on_update()
+    {
+        var before = await CountMineAsync();
+        var created = await author.PostAsJsonAsync(
+            Url, Body($"Two audiences {tag}", group: cavingGroupId, visibility: EveryoneSignedIn), Wire);
+        created.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await created.Content.ReadAsStringAsync());
+        (await CodeAsync(created)).ShouldBe("validation.failed");
+        (await CountMineAsync()).ShouldBe(before);
+
+        var id = (await CreateAsync(author, Body($"Club only {tag}", group: cavingGroupId))).GetProperty("id").GetGuid();
+        var updated = await author.PutAsJsonAsync(
+            $"{Url}/{id}", new { name = $"Club only {tag}", visibility = EveryoneSignedIn, cavingGroupId }, Wire);
+        updated.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await updated.Content.ReadAsStringAsync());
+        (await CodeAsync(updated)).ShouldBe("validation.failed");
+        // Refused before anything was stored: the outsider still cannot read it, a clubmate can.
+        (await outsider.GetAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await clubmate.GetAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_filter_sent_without_an_audience_is_private_the_server_choosing_no_wider_default()
+    {
+        var response = await author.PostAsJsonAsync(Url, new { name = $"No audience {tag}", document = Region("Bihor") }, Wire);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        created.GetProperty("visibility").GetString().ShouldBe("private");
+        var id = created.GetProperty("id").GetGuid();
+
+        (await author.GetAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await clubmate.GetAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await outsider.GetAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     // ---------- who may change it ----------
@@ -596,14 +710,20 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
         About(new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(text)]));
 
     private static object Body(
-        string name, FilterDocument? document = null, Guid? group = null, string? description = null) => new
+        string name,
+        FilterDocument? document = null,
+        Guid? group = null,
+        string? description = null,
+        string? visibility = null) => new
         {
             name,
             description,
             document = document ?? Region("Bihor"),
             cavingGroupId = group,
-            visibility = group is null ? "private" : "cavingGroup",
+            visibility = visibility ?? (group is null ? "private" : "cavingGroup"),
         };
+
+    private const string EveryoneSignedIn = "authenticated";
 
     private static async Task<JsonElement> CreateAsync(HttpClient client, object body)
     {

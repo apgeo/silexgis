@@ -30,11 +30,27 @@ public static class SavedFilterRules
     public const string AnchorRefusedCode = "saved_filter.anchor_refused";
 
     /// <summary>
-    /// Who a saved filter may be shown to. Private, or the members of one caving group — the two
-    /// audiences the owner settled on. Wider audiences are refused rather than quietly narrowed.
+    /// Who a saved filter may be shown to: only its author, the members of one caving group, or
+    /// everyone signed in to this installation. Never anybody without an account — a filter's
+    /// wording is workspace, not publication, and no route that runs one answers anonymously — so
+    /// <see cref="Visibility.Public"/> is refused rather than quietly narrowed.
     /// </summary>
+    /// <remarks>
+    /// The widest audience still grants nothing: whoever runs the filter is answered under their
+    /// own access, so it hands every account the same question and each of them only the rows they
+    /// could find by hand.
+    /// </remarks>
     public static bool IsAllowedVisibility(Visibility visibility) =>
-        visibility is Visibility.Private or Visibility.CavingGroup;
+        visibility is Visibility.Private or Visibility.CavingGroup or Visibility.Authenticated;
+
+    /// <summary>
+    /// Whether a filter with this audience names a caving group: exactly when it is shared with
+    /// one. A private filter naming a group would be read by the group's members after all,
+    /// because a row bound to a group is reached by rules scoped to that group whatever its
+    /// visibility says; an installation-wide one naming a group would say two different things
+    /// about who it is for, and the binding would only widen who the club's rules let rewrite it.
+    /// </summary>
+    public static bool NamesACavingGroup(Visibility visibility) => visibility == Visibility.CavingGroup;
 
     /// <summary>
     /// Whether this caller may rewrite, re-share or delete this saved filter: its author, or a full

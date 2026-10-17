@@ -87,11 +87,21 @@ public class SavedFilterRulesTests
     [Theory]
     [InlineData(Visibility.Private, true)]
     [InlineData(Visibility.CavingGroup, true)]
-    [InlineData(Visibility.Authenticated, false)]
+    [InlineData(Visibility.Authenticated, true)]
     [InlineData(Visibility.Public, false)]
-    public void A_saved_filter_is_private_or_shared_with_one_caving_group(Visibility visibility, bool allowed)
+    public void A_saved_filter_is_private_shared_with_one_caving_group_or_with_everyone_signed_in_but_never_public(
+        Visibility visibility, bool allowed)
     {
         SavedFilterRules.IsAllowedVisibility(visibility).ShouldBe(allowed);
+    }
+
+    [Theory]
+    [InlineData(Visibility.Private, false)]
+    [InlineData(Visibility.CavingGroup, true)]
+    [InlineData(Visibility.Authenticated, false)]
+    public void Only_a_filter_shared_with_a_caving_group_names_one(Visibility visibility, bool namesAGroup)
+    {
+        SavedFilterRules.NamesACavingGroup(visibility).ShouldBe(namesAGroup);
     }
 
     [Fact]

@@ -54,7 +54,11 @@ public sealed record SavedFilterDto(
 /// The question. Required when creating; on an update, null keeps the stored one, so renaming or
 /// sharing a filter never has to re-send — and re-validate — a question nobody changed.
 /// </param>
-/// <param name="Visibility">Private, or the members of <paramref name="CavingGroupId"/>.</param>
+/// <param name="Visibility">
+/// Private, the members of <paramref name="CavingGroupId"/>, or everyone signed in. Left out it is
+/// private: the server applies no default audience of its own beyond that — a member's preferred
+/// audience is chosen on their screen and arrives here as what they sent.
+/// </param>
 public sealed record SavedFilterWriteRequest(
     string Name,
     string? Description,
@@ -70,22 +74,25 @@ public sealed class SavedFilterWriteRequestValidator : AbstractValidator<SavedFi
         RuleFor(x => x.Description).MaximumLength(SavedFilterRules.MaxDescriptionLength);
         RuleFor(x => x.Visibility)
             .Must(SavedFilterRules.IsAllowedVisibility)
-            .WithMessage("A saved filter is private or shared with one caving group.");
+            .WithMessage("A saved filter is private, shared with one caving group, or shared with everyone signed in.");
         RuleFor(x => x.CavingGroupId)
             .NotNull()
-            .When(x => x.Visibility == Visibility.CavingGroup)
+            .When(x => SavedFilterRules.NamesACavingGroup(x.Visibility))
             .WithMessage("Sharing with a caving group needs the group.");
-        // A row bound to a group is reached by rules scoped to that group whatever its visibility
-        // says, so "private" with a group would be read by the group's members after all.
         RuleFor(x => x.CavingGroupId)
             .Null()
             .When(x => x.Visibility == Visibility.Private)
             .WithMessage("A private filter is shared with nobody, so it names no caving group.");
+        RuleFor(x => x.CavingGroupId)
+            .Null()
+            .When(x => x.Visibility == Visibility.Authenticated)
+            .WithMessage("A filter shared with everyone signed in names no caving group.");
     }
 }
 
 /// <summary>
-/// Filters somebody named and kept, and shared — or not — with a caving group.
+/// Filters somebody named and kept, and shared — or not — with a caving group or with everyone
+/// signed in.
 /// </summary>
 /// <remarks>
 /// <para>
