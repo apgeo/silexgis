@@ -618,6 +618,50 @@
     "advancedTitle": "Advanced filter",
     "saveTitle": "Save these conditions as a filter"
   },
+  "listFilters": {
+    "savedUnreadable": "That saved filter cannot be read with your access, so it was not applied.",
+    "saved": "Saved as “{{name}}”.",
+    "applySaved": "Apply a saved filter…",
+    "noSaved": "No saved filters yet",
+    "saveAs": "Save as filter…",
+    "manage": "Saved filters",
+    "forget": "Stop naming this saved filter",
+    "active": "Saved filter: {{name}}",
+    "activeUnavailable": "Saved filter not available to you",
+    "changed": "changed since",
+    "extra": "This filter also has conditions these controls do not show ({{count}}). They still narrow the list.",
+    "clearExtra": "Remove them",
+    "saveTitle": "Save these conditions as a filter"
+  },
+  "featureList": {
+    "unreadableLink": "The filter in this link could not be read, so every feature is shown. Ask whoever sent it for a fresh link.",
+    "filterRefused": "This filter could not be run with your access. Change or clear the controls above.",
+    "savedNotAboutFeatures": "That saved filter is not about features.",
+    "searchLabel": "Search features by name",
+    "kindLabel": "Kind of feature",
+    "typeLabel": "Feature type",
+    "categoryLabel": "Feature category",
+    "tagLabel": "Tag"
+  },
+  "tableMap": {
+    "showOnMap": "Show these on the map",
+    "listInView": "List the caves in view",
+    "savedFilterNotListable": "The map's saved filter cannot be read here, so the caves in view cannot be listed by it.",
+    "inMapWindow": "Only caves in the map's view",
+    "clearWindow": "Show caves everywhere",
+    "unreadableWindow": "The link named a map view that is not a valid area, so the list shows caves everywhere.",
+    "highlightLayer": "Row pointed at in a list"
+  },
+  "workingSet": {
+    "selectAll": "Select all found ({{count}}) on the map",
+    "tookAll": "Selected on the map: {{count}}.",
+    "tookFirst": "Selected the first {{taken}} of {{total}} on the map — that is as many as a selection holds.",
+    "firstOf": "The first {{taken}} of {{total}} found by the list.",
+    "failed": "The list could not be read again, so nothing was selected.",
+    "saveAsFilter": "Save as a filter…",
+    "saveTitle": "Save the selection as a filter",
+    "saveHint": "What is saved is the filter that found this selection, not the objects in it: run later, it finds whatever matches then, as you are allowed to see it."
+  },
   "savedFilters": {
     "title": "Saved filters",
     "intro": "A saved filter is a question you keep. Sharing one with a caving group lets its members ask it; each of them is answered with what they themselves may see.",
@@ -3149,6 +3193,7 @@
     "deleteLayoutConfirm": "Delete the arrangement {{name}}?",
     "selectionTitle": "Selection",
     "popOutSelection": "Open the selection panel in its own window",
+    "multiTitle_one": "{{count}} selected",
     "multiTitle": "{{count}} selected",
     "multiReadable": "Readable here",
     "multiMixed": "Mixed",
@@ -5358,7 +5403,8 @@
       "cabinet": "Cabinets",
       "surveyModel": "Survey models",
       "photograph": "Photographs",
-      "geofile": "Geodata files"
+      "geofile": "Geodata files",
+      "savedFilter": "Saved filters"
     },
     "fields": {
       "name": "Name",
@@ -5415,7 +5461,8 @@
       "restricted": "{{count}} not shown — gone, or not yours to see",
       "placeable": "You can be shown where this is",
       "mapPlaceholder": "Go to…",
-      "noDestination": "Nothing to open for that yet."
+      "noDestination": "Nothing to open for that yet.",
+      "savedFilterNotForMap": "That saved filter does not ask about features, or cannot be run with your access, so it was not applied to the map."
     },
     "sorts": {
       "created": "Added",
@@ -5432,7 +5479,8 @@
       "documents": "Documents",
       "trips": "Trips",
       "views": "Views",
-      "photographs": "Photographs"
+      "photographs": "Photographs",
+      "savedFilters": "Saved filters"
     }
   },
   "notificationHealth": {
@@ -6864,6 +6912,7 @@
   },
   "karstlinkExport": {
     "menuItem": "KarstLink (JSON-LD)",
+    "notInWindow": "Not while the list is cut to the map's window — clear the window to export the whole filtered list.",
     "changeAnswer": "KarstLink (JSON-LD) — change my answer…",
     "title": "Export caves for interchange",
     "intro": "Caves described in the published cave and karst vocabulary, as a file you can hand to somebody else. A file outlives the permission that produced it, so what it says about a protected location is decided here and written into the file itself.",

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DeleteOutlined, DownloadOutlined, FilterOutlined, PlusOutlined } from '@ant-design/icons';
+import { AimOutlined, DeleteOutlined, DownloadOutlined, FilterOutlined, PlusOutlined } from '@ant-design/icons';
 import { Alert, App, Drawer, Dropdown, Flex, Input, InputNumber, Select, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { labelledPaginationItems } from '../../components/paginationLabels.ts';
@@ -36,6 +36,9 @@ import {
   type CaveRegistryControls,
 } from '../../filters/caveRegistry.ts';
 import CaveRegistrySavedFilters from './CaveRegistrySavedFilters.tsx';
+import SelectResultButton from '../../components/filters/SelectResultButton.tsx';
+import { mapAddressForList } from '../../filters/tableMapHandoff.ts';
+import { useTableMapLink } from '../../workspace/tableMapLink.ts';
 
 const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
 
@@ -143,6 +146,7 @@ export default function CaveListPage() {
       sort: base.sort,
       page: base.page,
       pageSize: base.pageSize,
+      bbox: base.bbox,
     };
     const params = writeCaveRegistryAddress({ ...current, ...update(current) });
     written.current = [...written.current, params.toString()];
@@ -201,8 +205,12 @@ export default function CaveListPage() {
     pageSize: address.pageSize,
     sort: address.sort,
     filter: token,
+    // The map's window, when the list was opened from it: the server decides which caves are in
+    // it, by the point each reader is shown, and counts the page over the same set.
+    bbox: address.bbox,
   };
   const { data, isFetching, error } = useCaves(listParams);
+  const tableMap = useTableMapLink<CaveListItem>();
 
   const canCreate = useCan('features', 'create');
   // Whoever could have deleted a cave is shown where one is put back from. An owner deletes
@@ -219,12 +227,18 @@ export default function CaveListPage() {
 
   // Exports carry the list's own filter (not the current page — the server streams all rows).
   const onExport = (format: string) => {
-    downloadFile(caveExportUrl(format, { filter: token })).catch(() => message.error(t('common.saveFailed')));
+    downloadFile(caveExportUrl(format, { filter: token, bbox: address.bbox })).catch(() => message.error(t('common.saveFailed')));
   };
 
-  // The same narrowing the list is showing, so the count in the dialog is about the caves on
-  // the screen and the file holds those and no others.
+  // The same filter the list is showing, so the count in the dialog is about the caves on the
+  // screen and the file holds those and no others. The map's window is deliberately not sent:
+  // the interchange export keeps every protected cave its reader may not place inside any window
+  // (so that its membership cannot be walked onto a hidden position), while the list keeps one
+  // only when its published point is inside. Under a window the two would hold different caves,
+  // so the action is withheld while the list is cut to the map's window rather than producing a
+  // file that claims to be the rows on the screen and is not.
   const karstLinkRequest = { filter: token };
+  const karstLinkWithheld = address.bbox !== undefined;
 
   /**
    * The interchange export, asked for from the menu.
@@ -270,8 +284,9 @@ export default function CaveListPage() {
   // there are conditions the controls cannot show — and then it is handed the document, which it
   // knows it cannot honestly group.
   const distributionScope: CaveListParams = extra.length > 0
-    ? { filter: token }
+    ? { filter: token, bbox: address.bbox }
     : {
+        bbox: address.bbox,
         caveTypeId: controls.caveTypeId,
         region: controls.region,
         search: controls.search,
@@ -289,6 +304,21 @@ export default function CaveListPage() {
           {t('caves.title')}
         </Typography.Title>
         <Flex gap={8}>
+          {/* The map is opened with this list's own document as its filter, so it draws the
+              caves listed here — the same question, run by the map's routes. */}
+          <Button
+            icon={<AimOutlined />}
+            data-testid="cave-registry-show-on-map"
+            onClick={() => navigate(mapAddressForList(token))}
+          >
+            {t('tableMap.showOnMap')}
+          </Button>
+          <SelectResultButton
+            list="caves"
+            query={{ filter: token, sort: address.sort, bbox: address.bbox }}
+            total={data?.totalItems}
+            data-testid="cave-registry-select-all"
+          />
           <Dropdown
             menu={{
               items: [
@@ -300,10 +330,20 @@ export default function CaveListPage() {
                 { type: 'divider' as const, key: 'karstlink-divider' },
                 {
                   key: karstLinkKey,
-                  label: t('karstlinkExport.menuItem'),
+                  disabled: karstLinkWithheld,
+                  label: karstLinkWithheld ? (
+                    <Flex vertical data-testid="cave-registry-karstlink-withheld">
+                      <span>{t('karstlinkExport.menuItem')}</span>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {t('karstlinkExport.notInWindow')}
+                      </Typography.Text>
+                    </Flex>
+                  ) : (
+                    t('karstlinkExport.menuItem')
+                  ),
                   onClick: () => void onKarstLinkExport(),
                 },
-                ...(karstLinkTreatment === undefined
+                ...(karstLinkTreatment === undefined || karstLinkWithheld
                   ? []
                   : [
                       {
@@ -341,6 +381,29 @@ export default function CaveListPage() {
           data-testid="cave-registry-unreadable-link"
           title={t('caveRegistry.unreadableLink')}
         />
+      )}
+      {address.unreadableWindow && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="cave-registry-unreadable-window"
+          title={t('tableMap.unreadableWindow')}
+        />
+      )}
+      {address.bbox && (
+        <Flex gap={4} align="center" style={{ marginBottom: 12 }} data-testid="cave-registry-window">
+          <Tag color="blue">{t('tableMap.inMapWindow')}</Tag>
+          {/* A button rather than the tag's own cross, so the keyboard reaches it too. */}
+          <Button
+            size="small"
+            type="link"
+            data-testid="cave-registry-clear-window"
+            onClick={() => go(() => ({ bbox: undefined, page: 1 }))}
+          >
+            {t('tableMap.clearWindow')}
+          </Button>
+        </Flex>
       )}
       <Flex gap={8} wrap style={{ marginBottom: 12 }}>
         <Input.Search
@@ -465,7 +528,12 @@ export default function CaveListPage() {
         loading={isFetching}
         dataSource={data?.items}
         onChange={onTableChange}
-        onRow={(record) => ({ onClick: () => navigate(`/caves/${record.id}`), style: { cursor: 'pointer' } })}
+        rowClassName={tableMap.rowClassName}
+        onRow={(record) => ({
+          onClick: () => navigate(`/caves/${record.id}`),
+          style: { cursor: 'pointer' },
+          ...tableMap.rowHover(record),
+        })}
         pagination={{
           current: data?.page,
           pageSize: data?.pageSize,

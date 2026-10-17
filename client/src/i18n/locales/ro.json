@@ -618,6 +618,50 @@
     "advancedTitle": "Filtru avansat",
     "saveTitle": "Salvați aceste condiții ca filtru"
   },
+  "listFilters": {
+    "savedUnreadable": "Filtrul salvat nu poate fi citit cu drepturile dumneavoastră, așa că nu a fost aplicat.",
+    "saved": "Salvat ca „{{name}}”.",
+    "applySaved": "Aplicați un filtru salvat…",
+    "noSaved": "Niciun filtru salvat încă",
+    "saveAs": "Salvați ca filtru…",
+    "manage": "Filtre salvate",
+    "forget": "Nu mai numiți acest filtru salvat",
+    "active": "Filtru salvat: {{name}}",
+    "activeUnavailable": "Filtru salvat indisponibil pentru dumneavoastră",
+    "changed": "modificat între timp",
+    "extra": "Acest filtru mai are condiții pe care aceste câmpuri nu le arată ({{count}}). Ele restrâng lista în continuare.",
+    "clearExtra": "Eliminați-le",
+    "saveTitle": "Salvați aceste condiții ca filtru"
+  },
+  "featureList": {
+    "unreadableLink": "Filtrul din acest link nu a putut fi citit, așa că sunt afișate toate elementele. Cereți celui care l-a trimis un link nou.",
+    "filterRefused": "Acest filtru nu poate fi rulat cu drepturile dumneavoastră. Modificați sau goliți câmpurile de mai sus.",
+    "savedNotAboutFeatures": "Filtrul salvat nu se referă la elemente.",
+    "searchLabel": "Căutați elemente după denumire",
+    "kindLabel": "Felul elementului",
+    "typeLabel": "Tipul elementului",
+    "categoryLabel": "Categoria elementului",
+    "tagLabel": "Etichetă"
+  },
+  "tableMap": {
+    "showOnMap": "Arată-le pe hartă",
+    "listInView": "Listează peșterile din vedere",
+    "savedFilterNotListable": "Filtrul salvat al hărții nu poate fi citit aici, așa că peșterile din vedere nu pot fi listate după el.",
+    "inMapWindow": "Doar peșterile din vederea hărții",
+    "clearWindow": "Arată peșterile de peste tot",
+    "unreadableWindow": "Legătura numea o vedere a hărții care nu este o zonă validă, așa că lista arată peșterile de peste tot.",
+    "highlightLayer": "Rândul indicat într-o listă"
+  },
+  "workingSet": {
+    "selectAll": "Selectează pe hartă tot ce s-a găsit ({{count}})",
+    "tookAll": "Selectate pe hartă: {{count}}.",
+    "tookFirst": "Au fost selectate primele {{taken}} din {{total}} pe hartă — atâtea încap într-o selecție.",
+    "firstOf": "Primele {{taken}} din {{total}} găsite de listă.",
+    "failed": "Lista nu a putut fi citită din nou, așa că nu s-a selectat nimic.",
+    "saveAsFilter": "Salvează ca filtru…",
+    "saveTitle": "Salvează selecția ca filtru",
+    "saveHint": "Se salvează filtrul care a găsit această selecție, nu obiectele din ea: rulat mai târziu, găsește ce se potrivește atunci, așa cum ai voie să vezi."
+  },
   "savedFilters": {
     "title": "Filtre salvate",
     "intro": "Un filtru salvat este o întrebare pe care o păstrați. Dacă îl partajați cu un grup de speologie, membrii lui o pot pune; fiecăruia i se răspunde cu ce are el însuși dreptul să vadă.",
@@ -3149,6 +3193,7 @@
     "deleteLayoutConfirm": "Ștergi aranjarea {{name}}?",
     "selectionTitle": "Selecție",
     "popOutSelection": "Deschide panoul de selecție într-o fereastră proprie",
+    "multiTitle_one": "{{count}} selectat",
     "multiTitle": "{{count}} selectate",
     "multiReadable": "Lizibile aici",
     "multiMixed": "Amestecate",
@@ -5358,7 +5403,8 @@
       "cabinet": "Dulapuri",
       "surveyModel": "Modele topografice",
       "photograph": "Fotografii",
-      "geofile": "Fișiere de geodate"
+      "geofile": "Fișiere de geodate",
+      "savedFilter": "Filtre salvate"
     },
     "fields": {
       "name": "Nume",
@@ -5415,7 +5461,8 @@
       "restricted": "{{count}} neafișate — dispărute sau nu îți sunt vizibile",
       "placeable": "Ți se poate arăta unde este",
       "mapPlaceholder": "Mergi la…",
-      "noDestination": "Încă nu se poate deschide nimic pentru asta."
+      "noDestination": "Încă nu se poate deschide nimic pentru asta.",
+      "savedFilterNotForMap": "Filtrul salvat nu se referă la obiective sau nu poate fi rulat cu accesul tău, așa că nu a fost aplicat hărții."
     },
     "sorts": {
       "created": "Adăugat",
@@ -5432,7 +5479,8 @@
       "documents": "Documente",
       "trips": "Ture",
       "views": "Vizualizări",
-      "photographs": "Fotografii"
+      "photographs": "Fotografii",
+      "savedFilters": "Filtre salvate"
     }
   },
   "notificationHealth": {
@@ -6864,6 +6912,7 @@
   },
   "karstlinkExport": {
     "menuItem": "KarstLink (JSON-LD)",
+    "notInWindow": "Nu cât timp lista este restrânsă la fereastra hărții — elimină fereastra pentru a exporta toată lista filtrată.",
     "changeAnswer": "KarstLink (JSON-LD) — schimbă răspunsul meu…",
     "title": "Export de peșteri pentru schimb de date",
     "intro": "Peșteri descrise în vocabularul publicat pentru peșteri și carst, ca fișier pe care îl puteți da altcuiva. Un fișier trăiește mai mult decât permisiunea care l-a produs, așa că ce spune despre o locație protejată se decide aici și se scrie chiar în fișier.",

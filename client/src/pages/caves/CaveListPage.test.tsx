@@ -235,6 +235,28 @@ describe('the registry read from its address', () => {
     expect(url.searchParams.get('filter')).toBe(token);
   });
 
+  it('withholds the interchange export while the list is cut to the map’s window', async () => {
+    show('/caves?bbox=22.1,46.2,22.4,46.5');
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: /export/i }));
+    const withheld = await screen.findByTestId('cave-registry-karstlink-withheld');
+    expect(withheld.closest('[role="menuitem"]')).toHaveAttribute('aria-disabled', 'true');
+
+    // The ordinary formats still go, cut to the window as the list is.
+    fireEvent.click(await screen.findByText('CSV'));
+    const url = new URL(downloadSpy.mock.calls[0]![0] as string, 'http://x');
+    expect(url.searchParams.get('bbox')).toBe('22.1,46.2,22.4,46.5');
+  });
+
+  it('offers the interchange export when the list has no window', async () => {
+    show('/caves');
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: /export/i }));
+    const item = await screen.findByText('KarstLink (JSON-LD)');
+    expect(item.closest('[role="menuitem"]')).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.queryByTestId('cave-registry-karstlink-withheld')).toBeNull();
+  });
+
   it('marks the applied saved filter as changed once the controls move', () => {
     const document = caveRegistryDocument({ region: 'Bihor' })!;
     savedFilters.current = [{
