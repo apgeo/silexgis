@@ -6,6 +6,7 @@ import type { TablePaginationConfig } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { RowLink } from '../../components/RowOpeners.tsx';
 import {
   useCan,
   useEvents,
@@ -162,7 +163,11 @@ export default function EventListPage() {
             // a trip, so a one-evening event reads as that day and never as a range of itself.
             render: (_, row) => formatTripDates(row.startDate, row.endDate, i18n.resolvedLanguage),
           },
-          { title: t('events.titleField'), dataIndex: 'title' },
+          {
+            title: t('events.titleField'),
+            dataIndex: 'title',
+            render: (_, row) => <RowLink to={`/events/${row.id}`}>{row.title}</RowLink>,
+          },
           {
             title: t('events.kind'),
             dataIndex: 'kind',

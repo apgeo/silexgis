@@ -15,6 +15,7 @@ import { labelledPaginationItems } from '../../components/paginationLabels.ts';
 import type { SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { RowLink } from '../../components/RowOpeners.tsx';
 import {
   useCan,
   useCreateDoor,
@@ -375,6 +376,7 @@ export default function TripLogListPage() {
             dataIndex: 'title',
             sorter: true,
             sortOrder: orderOf('title'),
+            render: (_, trip) => <RowLink to={`/trip-logs/${trip.id}`}>{trip.title}</RowLink>,
           },
           {
             title: t('trips.state'),

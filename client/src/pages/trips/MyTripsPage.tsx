@@ -6,6 +6,7 @@ import type { TablePaginationConfig } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { RowLink } from '../../components/RowOpeners.tsx';
 import {
   useCreateDoor,
   useMyTripLogs,
@@ -157,7 +158,11 @@ export default function MyTripsPage() {
             render: (_, trip) =>
               formatTripDates(trip.tripDate, trip.tripDateEnd, i18n.resolvedLanguage),
           },
-          { title: t('trips.titleField'), dataIndex: 'title' },
+          {
+            title: t('trips.titleField'),
+            dataIndex: 'title',
+            render: (_, trip) => <RowLink to={`/trip-logs/${trip.id}`}>{trip.title}</RowLink>,
+          },
           {
             title: t('trips.state'),
             dataIndex: 'state',

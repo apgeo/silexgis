@@ -4,6 +4,7 @@ import { Card, Table, Tag } from 'antd';
 import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { RowLink } from '../../components/RowOpeners.tsx';
 import { useTripLogs, useTripTypes, type TripLogInfo } from '../../api/hooks.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { countPeople } from '../../components/trips/roster.ts';
@@ -62,7 +63,11 @@ export default function CaveTripsSection({ caveId }: { caveId: string }) {
             render: (_, trip) =>
               formatTripDates(trip.tripDate, trip.tripDateEnd, i18n.resolvedLanguage),
           },
-          { title: t('trips.titleField'), dataIndex: 'title' },
+          {
+            title: t('trips.titleField'),
+            dataIndex: 'title',
+            render: (_, trip) => <RowLink to={`/trip-logs/${trip.id}`}>{trip.title}</RowLink>,
+          },
           {
             title: t('trips.state'),
             dataIndex: 'state',

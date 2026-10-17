@@ -6,6 +6,7 @@ import type { TablePaginationConfig } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { RowLink } from '../../components/RowOpeners.tsx';
 import {
   useCan,
   useExpeditions,
@@ -144,7 +145,11 @@ export default function ExpeditionListPage() {
             render: (_, camp) =>
               formatTripDates(camp.startDate, camp.endDate, i18n.resolvedLanguage),
           },
-          { title: t('expeditions.nameField'), dataIndex: 'name' },
+          {
+            title: t('expeditions.nameField'),
+            dataIndex: 'name',
+            render: (_, camp) => <RowLink to={`/expeditions/${camp.id}`}>{camp.name}</RowLink>,
+          },
           {
             title: t('expeditions.state'),
             dataIndex: 'state',

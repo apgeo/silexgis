@@ -18,6 +18,7 @@ import CaveViewPanel from '../../components/caveview/CaveViewPanel.tsx';
 import { useCompareOffer } from '../../caveview/useCompareOffer.ts';
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
 import SelectionPanel from '../../components/map/SelectionPanel.tsx';
+import { RowButton } from '../../components/RowOpeners.tsx';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import Scene3DView from '../../components/scene3d/Scene3DView.tsx';
 import AnnotatedTextPanel from '../../textlink/AnnotatedTextPanel.tsx';
@@ -310,7 +311,11 @@ function RegistryPanel() {
           showSizeChanger: false,
         }}
         columns={[
-          { title: t('caves.name'), dataIndex: 'name' },
+          {
+            title: t('caves.name'),
+            dataIndex: 'name',
+            render: (_, record) => <RowButton onClick={() => pick(record)}>{record.name}</RowButton>,
+          },
           { title: t('caves.region'), dataIndex: 'region', width: 140 },
           { title: t('caves.depth'), dataIndex: 'depth', width: 100, align: 'right' },
         ]}

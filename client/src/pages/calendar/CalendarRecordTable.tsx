@@ -17,6 +17,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import type { CalendarEntry, CalendarSource } from '../../api/hooks.ts';
 import GroupBySelect from '../../components/GroupBySelect.tsx';
+import { RowButton } from '../../components/RowOpeners.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates, parseTripDay } from '../../components/trips/tripDates.ts';
 import { calendarListBodyHeight } from '../../theme.ts';
@@ -316,7 +317,9 @@ function CalendarRecordTable({
             ) : (
               <Flex vertical gap={2} data-testid="calendar-agenda-row">
                 <Flex gap={8} align="center" wrap>
-                  <Typography.Text strong>{row.entry.title}</Typography.Text>
+                  <RowButton onClick={() => onOpen(row.entry)}>
+                    <Typography.Text strong>{row.entry.title}</Typography.Text>
+                  </RowButton>
                   <Tag>{kindOf(row.entry)}</Tag>
                   <TripStateTag state={row.entry.state} />
                   {postponed(row.entry)}
@@ -371,7 +374,8 @@ function CalendarRecordTable({
         sorter: true,
         sortOrder: orderOf('title'),
         onCell: spanning(false),
-        render: (_, row) => (row.type === 'entry' ? row.entry.title : null),
+        render: (_, row) =>
+          row.type === 'entry' ? <RowButton onClick={() => onOpen(row.entry)}>{row.entry.title}</RowButton> : null,
       },
       {
         title: t('calendar.kind'),
@@ -393,6 +397,7 @@ function CalendarRecordTable({
     view,
     grouping,
     groupNames,
+    onOpen,
     sorted,
     today,
     language,

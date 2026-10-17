@@ -26,6 +26,7 @@ import {
 } from '../../../api/hooks.ts';
 import type { TerrainBuild, TerrainBuildStatus } from '../../../api/hooks.ts';
 import { formatBbox } from './terrainArea.ts';
+import { RowButton } from '../../../components/RowOpeners.tsx';
 import {
   TERRAIN_BUILD_STATE_LABELS,
   TERRAIN_PAGE_SIZE,
@@ -198,7 +199,9 @@ export default function TerrainBuildList({ canExecute, canDelete }: Props) {
                 const took = formatBuildDuration(build);
                 return (
                   <Space size={4} wrap>
-                    <span>{new Date(createdAt).toLocaleString(i18n.resolvedLanguage)}</span>
+                    <RowButton onClick={() => setChosen(build.id)}>
+                      {new Date(createdAt).toLocaleString(i18n.resolvedLanguage)}
+                    </RowButton>
                     {took !== null && <Typography.Text type="secondary">{took}</Typography.Text>}
                   </Space>
                 );
