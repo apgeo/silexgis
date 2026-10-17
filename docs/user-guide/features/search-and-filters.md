@@ -100,6 +100,10 @@ It only ever takes away from what you can already see.
 - **Saved views** remember the filter and bring it back when applied. A **shared link** to a view
   narrowed by anything more than a tag shows its area and background but no caves, because a
   link has nobody to run the filter as; the share dialog says so.
+- **A place stays out of saved views.** A filter that holds a place of its own — a typed point, a
+  pasted outline, or the place *Nearest* is measured from — works in the map's address but is
+  never saved in a view, because a view is shown to everyone it is shared with. Saving one says
+  so; measure from an object or a named area instead, or apply a saved filter.
 
 ### Layers from saved filters
 

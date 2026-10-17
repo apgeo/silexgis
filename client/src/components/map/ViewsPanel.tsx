@@ -14,12 +14,12 @@ import {
   type MapViewInfo,
 } from '../../api/hooks.ts';
 import { documentBackgroundName } from '../../map/baseLayers.ts';
-import { exportMapImage, viewLinkLeavesOut } from '../../map/viewConfig.ts';
+import { exportMapImage, viewHoldsPosition, viewLinkLeavesOut, type ViewConfig } from '../../map/viewConfig.ts';
 import { saveBlob } from '../../api/download.ts';
 import ViewShareDialog, { type SharedViewLink } from './ViewShareDialog.tsx';
 
 interface ViewsPanelProps {
-  onCapture: () => object;
+  onCapture: () => ViewConfig;
   onApply: (view: MapViewInfo) => void;
 }
 
@@ -40,11 +40,16 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
     if (!trimmed) {
       return;
     }
+    const config = onCapture();
+    if (viewHoldsPosition(config)) {
+      message.warning(t('views.filterHoldsPosition'));
+      return;
+    }
     try {
       await createView.mutateAsync({
         name: trimmed,
         description: null,
-        config: onCapture() as never,
+        config: config as never,
         isHome,
         cavingGroupId: null,
         visibility: 'private',

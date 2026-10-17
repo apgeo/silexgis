@@ -4,7 +4,13 @@ import type { Camera3DState } from '../scene3d/camera3d.ts';
 import { setActiveViewCamera } from '../workspace/viewCamera.ts';
 import { emptyDocument, withWhere } from '../filters/document.ts';
 import { tagChipFilter, type MapFilter } from './mapFilters.ts';
-import { applyViewConfig, captureViewConfig, viewLinkLeavesOut, type WorkspaceUiState } from './viewConfig.ts';
+import {
+  applyViewConfig,
+  captureViewConfig,
+  viewHoldsPosition,
+  viewLinkLeavesOut,
+  type WorkspaceUiState,
+} from './viewConfig.ts';
 
 const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
   baseLayerId: 3,
@@ -416,5 +422,41 @@ describe('what a shared link to a view leaves out', () => {
   it('notes filter layers only when the view has some', () => {
     expect(viewLinkLeavesOut({ filterLayers: [] }).filterLayers).toBe(false);
     expect(viewLinkLeavesOut({ filterLayers: [{ savedFilterId: 'x' }] }).filterLayers).toBe(true);
+  });
+});
+
+describe('a view whose filter holds a place of its own', () => {
+  const typedPoint = withWhere(emptyDocument(['feature']), 'feature', {
+    node: 'not',
+    of: {
+      node: 'condition',
+      field: 'position',
+      op: 'within',
+      values: [{ type: 'number', value: 500 }, { type: 'point', longitude: 23.5, latitude: 45.25 }],
+    },
+  });
+  const plain = withWhere(emptyDocument(['feature']), 'feature', {
+    node: 'condition',
+    field: 'surveyedLength',
+    op: 'greaterThan',
+    values: [{ type: 'number', value: 300 }],
+  });
+  const capture = (mapFilter: MapFilter | null) => captureViewConfig({ ...baseUi, mapFilter });
+
+  it('is one a view may not store: a typed point, or the place nearest first measures from', () => {
+    expect(viewHoldsPosition(capture({ kind: 'document', document: typedPoint }))).toBe(true);
+    const nearestFirst = {
+      ...plain,
+      sort: 'proximity' as const,
+      anchor: { anchor: 'point' as const, longitude: 23.5, latitude: 45.25 },
+    };
+    expect(viewHoldsPosition(capture({ kind: 'document', document: nearestFirst }))).toBe(true);
+  });
+
+  it('is not one naming no place, a saved filter by its id, a tag, or no filter at all', () => {
+    expect(viewHoldsPosition(capture({ kind: 'document', document: plain }))).toBe(false);
+    expect(viewHoldsPosition(capture({ kind: 'saved', savedFilterId: '0e6f2c4a-5b1d-4c39-9b7e-2f8a1d3c4e5f' }))).toBe(false);
+    expect(viewHoldsPosition(capture(tagChipFilter('leads')))).toBe(false);
+    expect(viewHoldsPosition(capture(null))).toBe(false);
   });
 });

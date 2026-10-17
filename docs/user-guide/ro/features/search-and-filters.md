@@ -102,6 +102,11 @@ filtru despre intrări păstrează acele intrări. Nu face decât să scoată di
   către o vedere restrânsă de mai mult decât o etichetă arată zona și fundalul, dar nicio peșteră,
   pentru că în spatele unui link nu este nimeni ca care să ruleze filtrul; dialogul de partajare
   spune asta.
+- **Un loc nu intră în vederile salvate.** Un filtru care conține un loc anume — un punct
+  introdus, un contur lipit sau locul de la care se măsoară *Cel mai apropiat* — funcționează în
+  adresa hărții, dar nu se salvează niciodată într-o vedere, pentru că o vedere este arătată
+  tuturor celor cu care este partajată. Salvarea uneia spune asta; măsurați în schimb de la un
+  obiect sau de la o zonă numită, ori aplicați un filtru salvat.
 
 ### Straturi din filtre salvate
 

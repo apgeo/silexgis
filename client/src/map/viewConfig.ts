@@ -6,6 +6,7 @@ import { unreadableTileLayers } from './baseLayers.ts';
 import { isKarstDensityMode, type KarstDensityMode } from './densityCells.ts';
 import { getOverlayOrder, getWorkspaceMap } from './mapContext.ts';
 import { readFilterDocument } from '../filters/url.ts';
+import { holdsPosition } from '../filters/spatial.ts';
 import type { FilterDocument } from '../filters/types.ts';
 import { isSavedFilterId, tagChipFilter, tagOfMapFilter, type MapFilter } from './mapFilters.ts';
 import { readFilterLayers, type FilterLayerSpec } from './filterLayerList.ts';
@@ -237,6 +238,19 @@ export function viewLinkLeavesOut(config: unknown): { dataLayers: boolean; filte
     dataLayers: present(parsed.savedFilterId) || present(parsed.filterDocument),
     filterLayers: Array.isArray(parsed.filterLayers) && parsed.filterLayers.length > 0,
   };
+}
+
+/**
+ * Whether a captured view's filter holds a place of its own: a typed point, a pasted outline, or
+ * the place nearest first is measured from.
+ *
+ * A view is shown to whoever it is shared with, so it never stores one — the place belongs to the
+ * request that ran with it, which is why the map's address may carry such a filter and a saved
+ * view may not. The server refuses the view; this lets the panel say why before asking. A filter
+ * naming an object or an area, or a saved filter (stored by id), is kept as it always was.
+ */
+export function viewHoldsPosition(config: Pick<ViewConfig, 'filterDocument'>): boolean {
+  return config.filterDocument !== undefined && holdsPosition(config.filterDocument);
 }
 
 /** The filter as a view stores it: a tag in its old key, a saved filter by id, anything else whole. */

@@ -3136,6 +3136,7 @@
     "title": "Vederi salvate",
     "namePlaceholder": "Nume vedere…",
     "save": "Salvează vederea curentă",
+    "filterHoldsPosition": "Filtrul acestei vederi conține un punct introdus, un poligon lipit sau locul de la care se ordonează „cel mai apropiat”, iar o vedere salvată nu le păstrează niciodată. Măsurați în schimb de la un obiect sau de la o zonă numită, ori aplicați un filtru salvat.",
     "share": "Link de partajare",
     "linkCopied": "Linkul de partajare a fost copiat.",
     "exportImage": "Exportă imaginea hărții",

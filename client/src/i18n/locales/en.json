@@ -3136,6 +3136,7 @@
     "title": "Saved views",
     "namePlaceholder": "View name…",
     "save": "Save current view",
+    "filterHoldsPosition": "This view's filter holds a typed point, a pasted polygon or a place to measure nearest first from, and a saved view never stores one. Measure from an object or a named area instead, or apply a saved filter.",
     "share": "Share link",
     "linkCopied": "Share link copied.",
     "exportImage": "Export map image",

@@ -2,10 +2,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Filters;
 
 namespace SilexGis.Api.Tests;
 
@@ -121,6 +123,129 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         (await ViewIdsAsync(outsider)).ShouldNotContain(viewId);
         (await outsider.PutAsJsonAsync($"/api/v1/map-views/{viewId}", ViewBody("Renamed again", isHome: false)))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// A view is shown to whoever it is shared with, so it never stores a place somebody typed into
+    /// its filter — a point, an outline, or the place nearest first was measured from — whether it
+    /// is created that way or updated to it, and a refused update leaves the view as it was. A
+    /// filter naming no place of its own is stored whole, and a view naming a saved filter keeps
+    /// the id.
+    /// </summary>
+    [Fact]
+    public async Task A_filter_holding_a_place_is_refused_on_create_and_update_and_any_other_filter_is_kept()
+    {
+        var deep = new ConditionNode(FeatureFilterFields.Depth, FilterOp.GreaterOrEqual, [new NumberValue(100)]);
+        var plain = new FilterDocument { Scope = [new WorldScope("feature", deep)] };
+        var placed = new (string What, FilterDocument Document)[]
+        {
+            ("a typed point", new FilterDocument
+            {
+                Scope =
+                [
+                    new WorldScope("feature", new AllOfNode(
+                    [
+                        deep,
+                        new ConditionNode(
+                            FeatureFilterFields.Position,
+                            FilterOp.Within,
+                            [new NumberValue(500), new PointValue(PlacedLon, PlacedLat)]),
+                    ])),
+                ],
+            }),
+            ("a pasted outline", new FilterDocument
+            {
+                Scope =
+                [
+                    new WorldScope("feature", new NotNode(new ConditionNode(
+                        FeatureFilterFields.Position,
+                        FilterOp.Inside,
+                        [new PolygonValue([[[25.4, 45.5], [PlacedLon, 45.5], [PlacedLon, PlacedLat], [25.4, 45.5]]])]))),
+                ],
+            }),
+            ("nearest first's place", plain with { Sort = SortKey.Proximity, Anchor = new PointAnchor(PlacedLon, PlacedLat) }),
+        };
+        var name = $"Placed {Guid.NewGuid():N}"[..24];
+
+        foreach (var (what, document) in placed)
+        {
+            await ShouldBeRefusedAsync(await owner.PostAsJsonAsync("/api/v1/map-views/", FilteredViewBody(name, document)), what);
+        }
+
+        (await ViewsAsync(owner)).ShouldNotContain(v => v.GetProperty("name").GetString() == name);
+
+        var created = await owner.PostAsJsonAsync("/api/v1/map-views/", FilteredViewBody(name, plain));
+        var createdPayload = await created.Content.ReadAsStringAsync();
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, createdPayload);
+        var id = JsonDocument.Parse(createdPayload).RootElement.GetProperty("id").GetGuid();
+
+        foreach (var (what, document) in placed)
+        {
+            await ShouldBeRefusedAsync(await owner.PutAsJsonAsync($"/api/v1/map-views/{id}", FilteredViewBody(name, document)), what);
+        }
+
+        var stored = (await ViewsAsync(owner)).Single(v => v.GetProperty("id").GetGuid() == id).GetProperty("config");
+        var storedFilter = FilterDocument.Deserialize(stored.GetProperty("filterDocument").GetRawText()).ShouldNotBeNull();
+        FilterDocument.Serialize(storedFilter).ShouldBe(FilterDocument.Serialize(plain));
+        stored.GetRawText().ShouldNotContain(PlacedLat.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        var savedFilterId = Guid.NewGuid();
+        var bySaved = await owner.PostAsJsonAsync("/api/v1/map-views/", FilteredViewBody($"{name} saved", null, savedFilterId));
+        var bySavedPayload = await bySaved.Content.ReadAsStringAsync();
+        bySaved.StatusCode.ShouldBe(HttpStatusCode.Created, bySavedPayload);
+        JsonDocument.Parse(bySavedPayload).RootElement.GetProperty("config").GetProperty("savedFilterId").GetGuid()
+            .ShouldBe(savedFilterId);
+    }
+
+    private const double PlacedLon = 25.4321;
+    private const double PlacedLat = 45.5432;
+
+    private static JsonObject FilteredViewBody(string name, FilterDocument? document, Guid? savedFilterId = null)
+    {
+        var config = new JsonObject
+        {
+            ["configVersion"] = 1,
+            ["zoom"] = 12,
+            ["center"] = new JsonArray(25.4, 45.5),
+            ["entrancesVisible"] = true,
+            ["surfaceFeaturesVisible"] = true,
+            ["tagFilter"] = null,
+        };
+        if (document is not null)
+        {
+            config["filterDocument"] = JsonNode.Parse(FilterDocument.Serialize(document));
+        }
+
+        if (savedFilterId is { } id)
+        {
+            config["savedFilterId"] = id.ToString();
+        }
+
+        return new JsonObject
+        {
+            ["name"] = name,
+            ["description"] = null,
+            ["config"] = config,
+            ["isHome"] = false,
+            ["cavingGroupId"] = null,
+            ["visibility"] = "private",
+        };
+    }
+
+    private static async Task ShouldBeRefusedAsync(HttpResponseMessage response, string what)
+    {
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, $"{what}: {payload}");
+        JsonDocument.Parse(payload).RootElement.GetProperty("code").GetString()
+            .ShouldBe(SavedFilterRules.AnchorRefusedCode, what);
+    }
+
+    private static async Task<List<JsonElement>> ViewsAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/api/v1/map-views/");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return [.. JsonDocument.Parse(payload).RootElement.Clone().EnumerateArray()];
     }
 
     private const string ViewGeofileId = "6f1c1d36-0d7e-4a3b-9a55-3f0b6b0c2a11";

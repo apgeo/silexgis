@@ -8,6 +8,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Filters;
 using SilexGis.Domain.Map;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -110,9 +111,17 @@ public static class MapViewEndpoints
 
         views.MapGet("/", ListAsync).WithSummary("The caller's visible saved views.");
         views.MapPost("/", CreateAsync).WithValidation<MapViewWriteRequest>()
-            .WithSummary("Saves a view; the caller becomes owner.");
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithSummary(
+                "Saves a view; the caller becomes owner. A `filterDocument` in the view's document "
+                + "that holds a place of its own — a typed point, an outline, or the place nearest "
+                + "first is measured from — is refused with `saved_filter.anchor_refused`.");
         views.MapPut("/{id:guid}", UpdateAsync).WithValidation<MapViewWriteRequest>()
-            .WithSummary("Updates a saved view (Write permission).");
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary(
+                "Updates a saved view (Write permission); a filter holding a place is refused as on "
+                + "create.");
         views.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes a saved view (Delete permission).");
         views.MapPost("/{id:guid}/share", ShareAsync)
@@ -173,6 +182,11 @@ public static class MapViewEndpoints
             return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
+        if (SavedViewRules.FilterHoldsPosition(request.Config))
+        {
+            return ApiProblems.BadRequest(SavedFilterRules.AnchorRefusedCode, SavedViewRules.FilterHoldsPositionDetail);
+        }
+
         var view = new MapView { Name = request.Name, OwnerUserId = ctx.UserId };
         Apply(view, request);
         db.MapViews.Add(view);
@@ -214,6 +228,11 @@ public static class MapViewEndpoints
             && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.MapViews, requested))
         {
             return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
+        }
+
+        if (SavedViewRules.FilterHoldsPosition(request.Config))
+        {
+            return ApiProblems.BadRequest(SavedFilterRules.AnchorRefusedCode, SavedViewRules.FilterHoldsPositionDetail);
         }
 
         Apply(view, request);

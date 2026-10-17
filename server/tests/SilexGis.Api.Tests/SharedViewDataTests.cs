@@ -10,6 +10,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Filters;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Map;
 using SilexGis.Infrastructure.Persistence;
@@ -431,6 +432,56 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=10")).ShouldBe(1);
         (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={window}"))["features"]!.AsArray()
             .ShouldHaveSingleItem()!["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(18.111, 1e-9);
+    }
+
+    /// <summary>
+    /// A view whose filter holds a place of its own is refused when it is saved; one that is in the
+    /// table all the same — written by hand, or before the refusal existed — is drawn through its
+    /// link with no data at all, and nothing of its filter reaches the link.
+    /// </summary>
+    [Fact]
+    public async Task A_link_to_a_view_whose_filter_holds_a_place_draws_no_data()
+    {
+        await CreateCaveAsync("Link Placed", 19.101, 68.101, "public", locationProtected: false);
+        await CreatePointFeatureAsync("Link Placed Sinkhole", 19.111, 68.111, "public", locationProtected: false);
+        var viewId = await CreateViewAsync(entrances: true, features: true, 19.1, 68.1);
+        var token = await ShareAsync(viewId);
+        const string window = "19.0,68.0,19.2,68.2";
+
+        // The control: as saved, the link draws both.
+        (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=14")).ShouldBe(1);
+        (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={window}")).ShouldBe(1);
+
+        // Two kilometres around a typed point beside the cave, written into the stored document.
+        var placed = new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope("feature", new ConditionNode(
+                    FeatureFilterFields.Position,
+                    FilterOp.Within,
+                    [new NumberValue(2000), new PointValue(19.1013, 68.1017)])),
+            ],
+        };
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var view = await db.MapViews.SingleAsync(v => v.Id == viewId);
+            var config = JsonNode.Parse(view.Config)!.AsObject();
+            config["filterDocument"] = JsonNode.Parse(FilterDocument.Serialize(placed));
+            view.Config = config.ToJsonString();
+            await db.SaveChangesAsync();
+        }
+
+        var shared = await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}");
+        shared["overlays"]!["entrances"]!.GetValue<bool>().ShouldBeFalse();
+        shared["overlays"]!["features"]!.GetValue<bool>().ShouldBeFalse();
+        shared["reach"].ShouldBeNull();
+        shared.ToJsonString().ShouldNotContain("19.1013");
+        shared.ToJsonString().ShouldNotContain("68.1017");
+        await ShouldBeNotFoundAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=14");
+        await ShouldBeNotFoundAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=8");
+        await ShouldBeNotFoundAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={window}");
     }
 
     /// <summary>
