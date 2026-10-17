@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { AimOutlined, ClearOutlined, TagsOutlined } from '@ant-design/icons';
-import { Descriptions, Empty, Flex, Tag, Tooltip, Typography } from 'antd';
+import { useState } from 'react';
+import { AimOutlined, ClearOutlined, SaveOutlined, TagsOutlined } from '@ant-design/icons';
+import { App, Descriptions, Empty, Flex, Form, Input, Modal, Tag, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useFeatures, type FeatureListItem } from '../../api/hooks.ts';
+import { useCreateSavedFilter } from '../../api/hooks/savedFilters.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { viewFitGeometry } from '../../workspace/viewCamera.ts';
 
@@ -20,10 +22,38 @@ import { viewFitGeometry } from '../../workspace/viewCamera.ts';
  * without the panel inventing a "3 hidden" line, which would itself be a disclosure.
  */
 export default function MultiSelectionCard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const selectionSet = useWorkspaceStore((s) => s.selectionSet);
   const clear = useWorkspaceStore((s) => s.clearSelectionSet);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
+  const source = useWorkspaceStore((s) => s.selectionSetSource);
+  const { message } = App.useApp();
+  const create = useCreateSavedFilter();
+  const [saving, setSaving] = useState(false);
+  const [form] = Form.useForm<{ name: string; description?: string }>();
+
+  // The filter vocabulary has no "these ids" condition, so the selection is saved as the filter
+  // that produced it — offered only while the set still is that result. A hand-picked set, or one
+  // cut to the map's window, has no filter that describes it, and saving the nearest one would
+  // keep a different question under a name that claims this one.
+  const savable = source?.document ?? null;
+  const save = async () => {
+    if (savable === null) return;
+    const values = await form.validateFields();
+    try {
+      const created = await create.mutateAsync({
+        name: values.name.trim(),
+        description: values.description?.trim() || null,
+        document: savable,
+        visibility: 'private',
+      });
+      setSaving(false);
+      form.resetFields();
+      message.success(t('listFilters.saved', { name: created.name }));
+    } catch {
+      message.error(t('common.saveFailed'));
+    }
+  };
 
   const ids = selectionSet.map((ref) => ref.id);
   const { data } = useFeatures({ ids, pageSize: ids.length || 1 }, ids.length > 0);
@@ -56,6 +86,15 @@ export default function MultiSelectionCard() {
           />
         </Tooltip>
       </Flex>
+
+      {source !== null && source.total > selectionSet.length && (
+        <Typography.Text type="secondary" data-testid="multi-selection-capped" style={{ display: 'block', marginBottom: 8 }}>
+          {t('workingSet.firstOf', {
+            taken: selectionSet.length.toLocaleString(i18n.language),
+            total: source.total.toLocaleString(i18n.language),
+          })}
+        </Typography.Text>
+      )}
 
       <Descriptions column={1} size="small">
         <Descriptions.Item label={t('panel.multiReadable')}>{items.length}</Descriptions.Item>
@@ -97,7 +136,41 @@ export default function MultiSelectionCard() {
             {t('panel.bulkTag')}
           </Button>
         </Tooltip>
+        {savable !== null && (
+          <Button
+            size="small"
+            icon={<SaveOutlined />}
+            data-testid="multi-selection-save-filter"
+            onClick={() => setSaving(true)}
+          >
+            {t('workingSet.saveAsFilter')}
+          </Button>
+        )}
       </Flex>
+
+      <Modal
+        open={saving}
+        title={t('workingSet.saveTitle')}
+        okText={t('common.save')}
+        confirmLoading={create.isPending}
+        onOk={() => void save()}
+        onCancel={() => setSaving(false)}
+        destroyOnHidden
+      >
+        <Typography.Paragraph type="secondary">{t('workingSet.saveHint')}</Typography.Paragraph>
+        <Form form={form} layout="vertical" preserve={false}>
+          <Form.Item
+            name="name"
+            label={t('savedFilters.name')}
+            rules={[{ required: true, whitespace: true, max: 200 }]}
+          >
+            <Input data-testid="multi-selection-filter-name" autoFocus />
+          </Form.Item>
+          <Form.Item name="description" label={t('savedFilters.description')} rules={[{ max: 2000 }]}>
+            <Input.TextArea rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 12 }}>
         {t('panel.multiHint')}

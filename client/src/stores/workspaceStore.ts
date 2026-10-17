@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { create } from 'zustand';
 import type { ClusterCell } from '../geo/cluster.ts';
+import type { FilterDocument } from '../filters/types.ts';
 import type { Scene3DSurfaceMode } from '../scene3d/scene3dEngine.ts';
 import type { SurveyWalls3DMode } from '../scene3d/surveyMeshesInView3d.ts';
 
@@ -54,6 +55,17 @@ export interface SelectedRef {
   id: string;
 }
 
+/**
+ * A list's result, as the working set remembers it. `document` is the filter the list ran, or
+ * null when nothing can describe the result as a saved filter (an unfiltered list, or one cut to
+ * the map's window — a saved filter never stores a place). `total` is the number of rows the list
+ * found for this reader, which is never a count that includes rows they may not read.
+ */
+export interface SelectionSetSource {
+  document: FilterDocument | null;
+  total: number;
+}
+
 interface WorkspaceState {
   selection: WorkspaceSelection | null;
   setSelection: (selection: WorkspaceSelection | null) => void;
@@ -66,6 +78,14 @@ interface WorkspaceState {
   setSelectionSet: (refs: SelectedRef[]) => void;
   toggleInSelectionSet: (ref: SelectedRef) => void;
   clearSelectionSet: () => void;
+  /**
+   * What produced the working set, when a list's whole result was put there at once: the filter
+   * it ran and how many rows it found. Any change made to the set by hand clears it, because the
+   * set then no longer is that result and saving "the filter that produced it" would save a
+   * different question.
+   */
+  selectionSetSource: SelectionSetSource | null;
+  setSelectionSetFromResult: (refs: SelectedRef[], source: SelectionSetSource) => void;
   /**
    * Recently selected objects, so following a link and coming back is one press.
    *
@@ -187,6 +207,21 @@ function sameSelection(a: WorkspaceSelection | null, b: WorkspaceSelection | nul
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/**
+ * Whether the panel answers with the working set rather than the single selection.
+ *
+ * Several objects picked by hand need at least two to be a set; one picked by hand is simply the
+ * selection. A list's whole result put on the map is a set at any size: a filter narrowed to one
+ * row still has to reach the set's actions and its "save as a filter", or the result that was
+ * handed over would silently vanish behind whatever was clicked last.
+ */
+export function showsWorkingSet(
+  selectionSet: readonly SelectedRef[],
+  source: SelectionSetSource | null,
+): boolean {
+  return selectionSet.length > 1 || (source !== null && selectionSet.length >= 1);
+}
+
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   selection: null,
   setSelection: (selection) =>
@@ -208,7 +243,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return { selection, selectionHistory: next, selectionCursor: next.length - 1 };
     }),
   selectionSet: [],
-  setSelectionSet: (refs) => set({ selectionSet: refs.slice(0, MAX_SELECTION_SET) }),
+  setSelectionSet: (refs) =>
+    set({ selectionSet: refs.slice(0, MAX_SELECTION_SET), selectionSetSource: null }),
+  selectionSetSource: null,
+  setSelectionSetFromResult: (refs, source) =>
+    set({ selectionSet: refs.slice(0, MAX_SELECTION_SET), selectionSetSource: source }),
   toggleInSelectionSet: (ref) =>
     set((state) => {
       const without = state.selectionSet.filter((x) => !(x.kind === ref.kind && x.id === ref.id));
@@ -217,9 +256,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           without.length === state.selectionSet.length
             ? [...state.selectionSet, ref].slice(0, MAX_SELECTION_SET)
             : without,
+        selectionSetSource: null,
       };
     }),
-  clearSelectionSet: () => set({ selectionSet: [] }),
+  clearSelectionSet: () => set({ selectionSet: [], selectionSetSource: null }),
   selectionHistory: [],
   selectionCursor: -1,
   goBackSelection: () =>
@@ -296,4 +336,4 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
  * A ceiling on how many objects can be picked at once. Bulk actions write per object through the
  * ordinary gates, so this is what keeps one gesture from becoming two hundred requests.
  */
-const MAX_SELECTION_SET = 200;
+export const MAX_SELECTION_SET = 200;

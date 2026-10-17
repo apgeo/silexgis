@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useWorkspaceStore } from './workspaceStore.ts';
+import { MAX_SELECTION_SET, showsWorkingSet, useWorkspaceStore } from './workspaceStore.ts';
 
 const feature = (id: string) => ({ kind: 'feature' as const, featureId: id });
 
@@ -92,5 +92,49 @@ describe('multi-selection', () => {
     useWorkspaceStore.getState().setSelectionSet(many);
 
     expect(useWorkspaceStore.getState().selectionSet.length).toBeLessThanOrEqual(200);
+  });
+
+  it('remembers the result it was taken from only while it still is that result', () => {
+    const document = { version: 1, scope: [{ world: 'feature', where: null }], sort: 'updated' as const, descending: true };
+    const refs = Array.from({ length: 300 }, (_, i) => ({ kind: 'cave' as const, id: `c${i}` }));
+    useWorkspaceStore.getState().setSelectionSetFromResult(refs, { document, total: 1234 });
+
+    const state = useWorkspaceStore.getState();
+    expect(state.selectionSet).toHaveLength(MAX_SELECTION_SET);
+    expect(state.selectionSetSource).toEqual({ document, total: 1234 });
+
+    // Changed by hand, the set is no longer what the filter found, so it no longer names one.
+    useWorkspaceStore.getState().toggleInSelectionSet({ kind: 'cave', id: 'c0' });
+    expect(useWorkspaceStore.getState().selectionSetSource).toBeNull();
+
+    useWorkspaceStore.getState().setSelectionSetFromResult(refs, { document, total: 1234 });
+    useWorkspaceStore.getState().clearSelectionSet();
+    expect(useWorkspaceStore.getState().selectionSetSource).toBeNull();
+  });
+});
+
+describe('when the panel shows the working set', () => {
+  const document = { version: 1, scope: [{ world: 'feature', where: null }], sort: 'updated' as const, descending: true };
+  const one = [{ kind: 'feature' as const, id: 'f1' }];
+
+  it('shows a one-row result put there from a list, so its actions stay reachable', () => {
+    useWorkspaceStore.getState().setSelectionSetFromResult(one, { document, total: 1 });
+    const state = useWorkspaceStore.getState();
+
+    expect(showsWorkingSet(state.selectionSet, state.selectionSetSource)).toBe(true);
+  });
+
+  it('leaves one object picked by hand to the single selection', () => {
+    useWorkspaceStore.getState().setSelectionSet(one);
+    const state = useWorkspaceStore.getState();
+
+    expect(showsWorkingSet(state.selectionSet, state.selectionSetSource)).toBe(false);
+  });
+
+  it('shows nothing as a set when the result was empty', () => {
+    useWorkspaceStore.getState().setSelectionSetFromResult([], { document, total: 0 });
+    const state = useWorkspaceStore.getState();
+
+    expect(showsWorkingSet(state.selectionSet, state.selectionSetSource)).toBe(false);
   });
 });

@@ -27,6 +27,7 @@ import { mapFilterParams } from '../../map/mapFilters.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { viewFitGeometry, viewFlyTo } from '../../workspace/viewCamera.ts';
 import {
+  showsWorkingSet,
   useWorkspaceStore,
   type CaveSelection,
   type ClusterSelection,
@@ -57,12 +58,13 @@ export default function SelectionPanel({ scope = 'main' }: { scope?: PanelScope 
   const { t } = useTranslation();
   const selection = useWorkspaceStore((s) => s.selection);
   const selectionSet = useWorkspaceStore((s) => s.selectionSet);
+  const selectionSetSource = useWorkspaceStore((s) => s.selectionSetSource);
   const density = useUiPrefsStore((s) => s.panels[scope]?.density);
 
   const body = (() => {
     // Several things picked at once answers first: showing one of them and ignoring the rest is
     // what made a multi-selection look like it had not worked.
-    if (selectionSet.length > 1) {
+    if (showsWorkingSet(selectionSet, selectionSetSource)) {
       return <MultiSelectionCard />;
     }
 
