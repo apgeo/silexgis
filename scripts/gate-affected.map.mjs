@@ -138,6 +138,7 @@ export const groups = {
     'ClosestApproachTests', 'FeatureFilterCompilerTests', 'FeatureHierarchyTests',
     'FeatureIntegrityTests', 'FeatureLinkTests', 'FeatureTests', 'GeoJsonGeometryTests',
     'MapWindowMembershipTests', 'PolygonMorphometryTests', 'StructureComparisonTests',
+    'FeatureListFilterTests',
     // The restore routes and the rule they keep live in the feature slice itself.
     'FeatureRestoreTests',
   ],
@@ -148,7 +149,7 @@ export const groups = {
     'FilterParityTests', 'FilterSpikeTests', 'FilterWorldConformanceTests',
     'FilterWorldListParityTests',
     // Saved filters, and the surfaces that read a filter document through the narrowing seam.
-    'SavedFilterTests', 'CaveRegistryFilterTests', 'MapFilterTests',
+    'SavedFilterTests', 'CaveRegistryFilterTests', 'MapFilterTests', 'FeatureListFilterTests',
   ],
   files: [
     'ErrorHandlerScopeTests',
@@ -240,6 +241,7 @@ export const groups = {
   crs: ['CrsTests', 'SpatialOptionsTests', 'WorkingSridBehaviourTests'],
   exports: [
     'KarstLinkExportTests', 'SpreadsheetWriterTests', 'CaveRegistryFilterTests',
+    'FeatureListFilterTests',
   ],
   // With the smoke test because it asks the same kind of question one step earlier: not whether
   // the application answers, but whether each test was given the application its mode promises.
@@ -499,15 +501,15 @@ export const crossCutting = {
     'EntrancePlacementGuardTests', 'EnumBindingTests', 'ExpeditionDeleteCleanupTests',
     'ExpeditionLeadsTests', 'ExpeditionMapTests', 'ExpeditionReportTests',
     'ExpeditionSurfaceLogTests', 'FeatureFilterCompilerTests', 'FeatureHierarchyTests',
-    'FeatureLinkTests', 'FeatureRestoreTests', 'FeatureShareTests', 'FeatureTests',
-    'FileAccessBatchParityTests', 'FileAttachmentTests', 'FilterParityTests',
-    'FilterWorldConformanceTests', 'FilterWorldListParityTests', 'GeofileTests',
-    'GeoreferencedMapTests', 'HiddenRowCapTests', 'HistoryTests', 'HypsometryTests',
-    'KarstLinkExportTests', 'MapClusterConfigurationTests', 'MapDensityTests', 'MapFilterTests',
-    'MapKarstIndexTests', 'MapPointPatternTests', 'MapWindowMembershipTests',
-    'PhotoBytesProtectionTests', 'PhotoImportTests', 'PolygonMorphometryTests',
-    'ProtectionDepthTests', 'PublicTripCachingTests', 'PublicTripDepthPlacesTests',
-    'PublicTripDiagnosticsTests', 'PublicTripMomentPicturesTests',
+    'FeatureLinkTests', 'FeatureListFilterTests', 'FeatureRestoreTests', 'FeatureShareTests',
+    'FeatureTests', 'FileAccessBatchParityTests', 'FileAttachmentTests', 'FilterEndpointTests',
+    'FilterParityTests', 'FilterWorldConformanceTests', 'FilterWorldListParityTests',
+    'GeofileTests', 'GeoreferencedMapTests', 'HiddenRowCapTests', 'HistoryTests',
+    'HypsometryTests', 'KarstLinkExportTests', 'MapClusterConfigurationTests',
+    'MapDensityTests', 'MapFilterTests', 'MapKarstIndexTests', 'MapPointPatternTests',
+    'MapWindowMembershipTests', 'PhotoBytesProtectionTests', 'PhotoImportTests',
+    'PolygonMorphometryTests', 'ProtectionDepthTests', 'PublicTripCachingTests',
+    'PublicTripDepthPlacesTests', 'PublicTripDiagnosticsTests', 'PublicTripMomentPicturesTests',
     'PublicTripPlannedReturnTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
     'PublishedNamesNowhereTests', 'PublishedSurveyBoundsTests', 'RegistryStatisticsTests',
     'ResLinkApiTests', 'ResLinkProtectionFloorTests', 'ResLinkTargetPictureTests',
