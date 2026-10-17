@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
-import { Alert, App, AutoComplete, Form, Input, Select, Typography } from 'antd';
+import { Alert, App, Form, Input, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
   useCreateFeatureFromLibraryPhoto,
   useFeatureTypes,
-  useSearch,
   type LibraryPhotoFeatureCreated,
   type LibraryPhotoSource,
 } from '../../api/hooks.ts';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { reloadEntrances } from '../../map/entranceLayer.ts';
 import type { LibraryPhotoFeatureTarget } from '../../map/libraryPhotoPopup.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
+import type { SelectorScope } from '../../filters/selection.ts';
 import DialogHost from '../DialogHost.tsx';
+import ObjectSelector from '../selector/ObjectSelector.tsx';
 
 interface LibraryPhotoFeatureModalProps {
   /** The photograph the balloon offered; null keeps the dialog closed. */
@@ -24,6 +24,11 @@ interface LibraryPhotoFeatureModalProps {
 }
 
 type Choice = 'cave' | 'caveEntrance' | 'generic';
+
+/** Only a cave can receive a new entrance, so the picker asks for caves alone. */
+const CAVE_SCOPES: readonly SelectorScope[] = [
+  { id: 'caves', labelKey: 'filters.scopes.caves', world: 'feature', where: { field: 'kind', value: 'cave' } },
+];
 
 interface FormValues {
   choice: Choice;
@@ -121,18 +126,11 @@ export default function LibraryPhotoFeatureModal({
   const [saving, setSaving] = useState(false);
   const [created, setCreated] = useState<LibraryPhotoFeatureCreated | null>(null);
 
-  // Only a cave can receive a new entrance, and the server's hit budget is shared across kinds —
-  // ask for caves rather than sifting them out of a mixed answer.
-  const [caveQuery, setCaveQuery] = useState('');
-  const debouncedQuery = useDebouncedValue(caveQuery);
-  const { data: caveResults } = useSearch(debouncedQuery, 'cave');
-
   const choice = Form.useWatch('choice', form) ?? 'cave';
 
   useEffect(() => {
     if (target === null) {
       form.resetFields();
-      setCaveQuery('');
       setCreated(null);
     } else {
       // The library's own title is a file name as often as a name, so it is offered rather than
@@ -287,13 +285,16 @@ export default function LibraryPhotoFeatureModal({
                 label={t('libraryPhotos.cave')}
                 rules={[{ required: true }]}
               >
-                <AutoComplete
-                  onSearch={setCaveQuery}
-                  options={(caveResults?.features ?? []).map((feature) => ({
-                    value: feature.id,
-                    label: feature.name ?? t('features.unnamed'),
-                  }))}
-                  placeholder={t('libraryPhotos.pickCave')}
+                {/* The field holds the picked cave's id and nothing else: what is typed into the
+                    search box is a query, never a value the form could submit. Whether that cave
+                    may take an entrance is decided by the server on submission. */}
+                <ObjectSelector
+                  scopes={CAVE_SCOPES}
+                  pageSize={6}
+                  sorts={[]}
+                  placeholder={t('features.linkedCavePlaceholder')}
+                  aria-label={t('libraryPhotos.cave')}
+                  data-testid="library-photo-cave-picker"
                 />
               </Form.Item>
             )}

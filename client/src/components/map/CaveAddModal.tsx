@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
-import { App, AutoComplete, Checkbox, Flex, Form, Input, Select, Typography } from 'antd';
+import { App, Checkbox, Flex, Form, Input, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   createEntranceFor,
   useCaveTypes,
   useCreateCave,
   useEntranceTypes,
-  useSearch,
   type CaveWrite,
 } from '../../api/hooks.ts';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { reloadEntrances } from '../../map/entranceLayer.ts';
 import type { PlacementMode } from '../../map/mapEdit.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import DialogHost from '../DialogHost.tsx';
 import EntranceEditorModal from '../caves/EntranceEditorModal.tsx';
+import ObjectSelector from '../selector/ObjectSelector.tsx';
+import type { SelectorScope } from '../../filters/selection.ts';
 
 interface CaveAddModalProps {
   /** Which placement tool produced the click; null keeps everything closed. */
@@ -24,6 +24,11 @@ interface CaveAddModalProps {
   lonLat: [number, number] | null;
   onClose: () => void;
 }
+
+/** Only a cave can receive a new entrance, so the picker asks for caves alone. */
+const CAVE_SCOPES: readonly SelectorScope[] = [
+  { id: 'caves', labelKey: 'filters.scopes.caves', world: 'feature', where: { field: 'kind', value: 'cave' } },
+];
 
 interface NewCaveFormValues {
   name: string;
@@ -53,19 +58,19 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
   const createCave = useCreateCave();
   const [saving, setSaving] = useState(false);
 
-  // "New entrance" flow: pick the cave first, then edit the entrance itself.
-  const [caveQuery, setCaveQuery] = useState('');
-  const debouncedQuery = useDebouncedValue(caveQuery);
-  // Only caves can receive a new entrance, and the server's hit budget is shared across
-  // kinds — ask for caves rather than sifting them out of a mixed answer.
-  const { data: searchResults } = useSearch(debouncedQuery, 'cave');
+  // "New entrance" flow: pick the cave first, then edit the entrance itself. Whether the picked
+  // cave may take one is the server's decision when the entrance is saved; the list only offers
+  // the caves this reader can find.
   const [pickedCaveId, setPickedCaveId] = useState<string | null>(null);
+  // Each use of the tool gets a fresh picker. The dialog's own unmounting waits for its closing
+  // animation, so it cannot be relied on to have emptied the search box by the next click.
+  const [pickerSession, setPickerSession] = useState(0);
 
   useEffect(() => {
     if (mode === null) {
       form.resetFields();
-      setCaveQuery('');
       setPickedCaveId(null);
+      setPickerSession((n) => n + 1);
     }
   }, [mode, form]);
 
@@ -205,19 +210,18 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
         <Typography.Paragraph type="secondary">
           {t('mapEdit.pickCaveForEntrance')}
         </Typography.Paragraph>
-        <AutoComplete
-          style={{ width: '100%' }}
-          value={caveQuery}
-          onSearch={setCaveQuery}
-          options={(searchResults?.features ?? [])
-            .map((feature) => ({
-              value: feature.id,
-              label: feature.name ?? t('features.unnamed'),
-            }))}
-          onSelect={(caveId: string) => setPickedCaveId(caveId)}
-        >
-          <Input.Search placeholder={t('caves.searchPlaceholder')} />
-        </AutoComplete>
+        <ObjectSelector
+          key={pickerSession}
+          scopes={CAVE_SCOPES}
+          autoFocus
+          pageSize={8}
+          sorts={[]}
+          placeholder={t('features.linkedCavePlaceholder')}
+          aria-label={t('mapEdit.pickCaveForEntrance')}
+          value={pickedCaveId}
+          onChange={(value) => setPickedCaveId(typeof value === 'string' ? value : null)}
+          data-testid="new-entrance-cave-picker"
+        />
       </DialogHost>
 
       {pickedCaveId !== null && lonLat !== null && (

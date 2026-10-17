@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
-import { Alert, Card, Col, Empty, Row, Select, Statistic, Typography } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Card, Col, Empty, Row, Statistic, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 
-import { useCaves, useClosestApproach } from '../../api/hooks.ts';
+import { useClosestApproach } from '../../api/hooks.ts';
+import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
+import type { SelectorScope } from '../../filters/selection.ts';
 import {
   setClosestApproachLine,
   type ClosestApproachLine,
@@ -12,6 +14,11 @@ import {
 interface CaveClosestApproachSectionProps {
   caveId: string;
 }
+
+/** The other end of a closest approach is always another cave, never an entrance or a spring. */
+const OTHER_CAVE_SCOPES: readonly SelectorScope[] = [
+  { id: 'caves', labelKey: 'filters.scopes.caves', world: 'feature', where: { field: 'kind', value: 'cave' } },
+];
 
 /**
  * How close this cave comes to another one: the shortest line between the two caves' line work in
@@ -51,32 +58,30 @@ interface CaveClosestApproachSectionProps {
  */
 export default function CaveClosestApproachSection({ caveId }: CaveClosestApproachSectionProps) {
   const { t } = useTranslation();
-  const [search, setSearch] = useState('');
   const [other, setOther] = useState<string | undefined>();
-
-  const { data: caves, isFetching } = useCaves({ pageSize: 20, search: search || undefined });
   const { data, isLoading, isError } = useClosestApproach(caveId, other);
 
-  const options = (caves?.items ?? [])
-    .filter((cave) => cave.id !== caveId)
-    .map((cave) => ({ value: cave.id, label: cave.name }));
+  // A cave is not offered as its own other end. Only a courtesy: which pairs are measured at all is
+  // the server's decision, made on both caves, whatever this list happened to offer.
+  const notOffered = useMemo(() => [caveId], [caveId]);
 
   return (
     <Card title={t('closestApproach.title')} style={{ marginBottom: 16 }}>
-      <Select
-        showSearch
-        allowClear
-        filterOption={false}
-        style={{ width: '100%', maxWidth: 420 }}
-        placeholder={t('closestApproach.pickOther')}
-        aria-label={t('closestApproach.pickOther')}
-        value={other}
-        options={options}
-        loading={isFetching}
-        onSearch={setSearch}
-        onChange={(value?: string) => setOther(value ?? undefined)}
-        data-testid="closest-approach-other"
-      />
+      <div style={{ maxWidth: 420 }}>
+        <ObjectSelector
+          scopes={OTHER_CAVE_SCOPES}
+          presentation="dropdown"
+          allowClear
+          exclude={notOffered}
+          pageSize={8}
+          sorts={[]}
+          placeholder={t('closestApproach.pickOther')}
+          aria-label={t('closestApproach.pickOther')}
+          value={other ?? null}
+          onChange={(value) => setOther(typeof value === 'string' ? value : undefined)}
+          data-testid="closest-approach-other"
+        />
+      </div>
 
       {other && <Body data={data} isError={isError} isLoading={isLoading} />}
       {!other && (

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { AimOutlined, DeleteOutlined, EditOutlined, InboxOutlined } from '@ant-design/icons';
 import {
   App,
@@ -20,15 +20,14 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   useCan,
-  useCave,
   useDeleteRasterMap,
   useRasterMaps,
-  useSearch,
   useUpdateRasterMap,
   useUploadRasterMap,
   type RasterMapInfo,
 } from '../../api/hooks.ts';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
+import type { SelectorScope } from '../../filters/selection.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 
@@ -39,13 +38,18 @@ const statusColor: Record<string, string> = {
   failed: 'error',
 };
 
+/** A georeferenced map is linked to a cave, never to an entrance or any other feature. */
+const LINKED_CAVE_SCOPES: readonly SelectorScope[] = [
+  { id: 'caves', labelKey: 'filters.scopes.caves', world: 'feature', where: { field: 'kind', value: 'cave' } },
+];
+
 interface EditFormValues {
   name: string;
   description?: string;
   mapKind: RasterMapInfo['mapKind'];
   attribution?: string;
   defaultOpacity: number;
-  caveFeatureId?: string;
+  caveFeatureId?: string | null;
   visibility: RasterMapInfo['visibility'];
 }
 
@@ -63,23 +67,6 @@ export default function RasterMapsTab() {
   const setRasterVisible = useWorkspaceStore((s) => s.setRasterVisible);
   const [editing, setEditing] = useState<RasterMapInfo | null>(null);
   const [form] = Form.useForm<EditFormValues>();
-
-  // Cave link: remote-search select (same pattern as the feature editor). The search spans
-  // every feature kind, so only cave results become options here.
-  const [caveQuery, setCaveQuery] = useState('');
-  const debouncedCaveQuery = useDebouncedValue(caveQuery);
-  // Ask the server for caves: its hit budget is shared across kinds, so filtering a mixed
-  // answer here can leave the picker empty while a matching cave exists.
-  const { data: searchResults } = useSearch(debouncedCaveQuery, 'cave');
-  const { data: linkedCave } = useCave(editing?.caveFeatureId ?? undefined);
-  const caveOptions = useMemo(() => {
-    const options = (searchResults?.features ?? [])
-      .map((cave) => ({ value: cave.id, label: cave.name ?? cave.id }));
-    if (linkedCave && !options.some((o) => o.value === linkedCave.id)) {
-      options.unshift({ value: linkedCave.id, label: linkedCave.name });
-    }
-    return options;
-  }, [searchResults, linkedCave]);
 
   const canEdit = useCan('georeferencedMaps', 'write');
   const canUpload = useCan('georeferencedMaps', 'create');
@@ -103,7 +90,6 @@ export default function RasterMapsTab() {
       caveFeatureId: raster.caveFeatureId ?? undefined,
       visibility: raster.visibility,
     });
-    setCaveQuery('');
   };
 
   const onEditSubmit = async () => {
@@ -282,14 +268,18 @@ export default function RasterMapsTab() {
             />
           </Form.Item>
           <Form.Item name="caveFeatureId" label={t('features.linkedCave')}>
-            <Select
+            {/* The linked cave is named by the filter model's resolve, so a cave this account may no
+                longer read shows as "not shown" rather than as its identifier. Whether the map may
+                be linked to the cave chosen is decided by the server when the form is saved. */}
+            <ObjectSelector
+              scopes={LINKED_CAVE_SCOPES}
+              presentation="dropdown"
               allowClear
-              showSearch
-              filterOption={false}
-              onSearch={setCaveQuery}
+              pageSize={8}
+              sorts={[]}
               placeholder={t('features.linkedCavePlaceholder')}
-              options={caveOptions}
-              notFoundContent={null}
+              aria-label={t('features.linkedCave')}
+              data-testid="raster-map-cave-picker"
             />
           </Form.Item>
           <Form.Item name="defaultOpacity" label={t('geodata.defaultOpacity')} rules={[{ required: true }]}>

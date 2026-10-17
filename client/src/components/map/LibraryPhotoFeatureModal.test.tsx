@@ -22,6 +22,11 @@ import LibraryPhotoFeatureModal from './LibraryPhotoFeatureModal.tsx';
 
 const mutateAsync = vi.fn();
 const setSelection = vi.fn();
+const { queryCalls } = vi.hoisted(() => ({
+  queryCalls: [] as { body: unknown; enabled: boolean }[],
+}));
+
+const CAVE = '33333333-3333-4333-8333-333333333333';
 
 vi.mock('../../api/hooks.ts', () => ({
   useCreateFeatureFromLibraryPhoto: () => ({ mutateAsync }),
@@ -52,7 +57,26 @@ vi.mock('../../api/hooks.ts', () => ({
       },
     ],
   }),
-  useSearch: () => ({ data: { features: [] } }),
+  useFilterVocabulary: () => ({
+    data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] },
+  }),
+  useFilterQuery: (body: unknown, enabled: boolean) => {
+    queryCalls.push({ body, enabled });
+    return enabled
+      ? {
+          data: {
+            worlds: [{
+              world: 'feature',
+              hits: [{ world: 'feature', id: CAVE, title: 'Peștera Mică', subtitle: 'Cave', symbol: null, placeable: false }],
+              total: null,
+            }],
+            page: 1, pageSize: 6, counted: false,
+          },
+          isFetching: false,
+        }
+      : { data: undefined, isFetching: false };
+  },
+  useFilterResolve: () => ({ data: [] }),
 }));
 
 vi.mock('../../map/entranceLayer.ts', () => ({ reloadEntrances: vi.fn() }));
@@ -90,6 +114,7 @@ describe('LibraryPhotoFeatureModal', () => {
   beforeEach(() => {
     mutateAsync.mockReset().mockResolvedValue(created);
     setSelection.mockReset();
+    queryCalls.length = 0;
   });
 
   afterEach(cleanup);
@@ -198,6 +223,53 @@ describe('LibraryPhotoFeatureModal', () => {
     // Matched on the form's own error slot rather than on the sentence in it: the wording belongs
     // to the component library and to whichever language is in force, and neither is what this case
     // is about.
+    await waitFor(() =>
+      expect(document.querySelector('.ant-form-item-explain-error')).not.toBeNull(),
+    );
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('files a new entrance under a cave picked from caves alone, and sends its id rather than its name', async () => {
+    show();
+
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    fireEvent.click(await screen.findByTitle('Cave entrance'));
+
+    // What is typed is a search, never the value: the field stays empty until a row is chosen.
+    fireEvent.change(await screen.findByTestId('library-photo-cave-picker-input'), {
+      target: { value: 'mic' },
+    });
+    // The search is debounced; a loaded machine can take longer than the default second to answer.
+    const row = await screen.findByRole('button', { name: /Peștera Mică/ }, { timeout: 3000 });
+    const document = JSON.stringify(queryCalls.filter((c) => c.enabled).at(-1)!.body);
+    expect(document).toContain('"kind"');
+    expect(document).toContain('"cave"');
+
+    // Chosen from the keyboard, which is how the row has to be reachable.
+    fireEvent.keyDown(screen.getByTestId('library-photo-cave-picker-input'), { key: 'ArrowDown' });
+    expect(row).toHaveFocus();
+    fireEvent.keyDown(row, { key: 'Enter' });
+    confirm();
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync.mock.calls[0][0].body).toEqual({
+      kind: 'caveEntrance',
+      name: 'muddy crawl.jpg',
+      featureTypeId: null,
+      caveFeatureId: CAVE,
+    });
+  });
+
+  it('refuses to create an entrance with no cave picked, even with text in the search box', async () => {
+    show();
+
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    fireEvent.click(await screen.findByTitle('Cave entrance'));
+    fireEvent.change(await screen.findByTestId('library-photo-cave-picker-input'), {
+      target: { value: 'Peștera Mică' },
+    });
+    confirm();
+
     await waitFor(() =>
       expect(document.querySelector('.ant-form-item-explain-error')).not.toBeNull(),
     );

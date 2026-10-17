@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { ClosestApproach } from '../../api/hooks.ts';
 import {
@@ -9,14 +9,34 @@ import {
   setClosestApproachLine,
 } from '../../workspace/closestApproachLine.ts';
 
-const { cavesSpy, approachSpy } = vi.hoisted(() => ({
-  cavesSpy: vi.fn(),
+const { approachSpy, queryCalls } = vi.hoisted(() => ({
   approachSpy: vi.fn(),
+  queryCalls: [] as { body: unknown; enabled: boolean }[],
 }));
 
+const hit = (id: string, title: string) =>
+  ({ world: 'feature', id, title, subtitle: 'Cave', symbol: null, placeable: false });
+
 vi.mock('../../api/hooks.ts', () => ({
-  useCaves: (...args: unknown[]) => cavesSpy(...args),
   useClosestApproach: (...args: unknown[]) => approachSpy(...args),
+  useFilterVocabulary: () => ({ data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] } }),
+  // The search answers with the cave whose page this is and one other.
+  useFilterQuery: (body: unknown, enabled: boolean) => {
+    queryCalls.push({ body, enabled });
+    return enabled
+      ? {
+          data: {
+            worlds: [{ world: 'feature', hits: [hit('cave-a', 'Peștera A'), hit('cave-b', 'Peștera B')], total: null }],
+            page: 1, pageSize: 8, counted: false,
+          },
+          isFetching: false,
+        }
+      : { data: undefined, isFetching: false };
+  },
+  // A stored choice is named the way the route would name it.
+  useFilterResolve: (_world: string, ids: readonly string[]) => ({
+    data: ids.filter((id) => id === 'cave-b').map((id) => hit(id, 'Peștera B')),
+  }),
 }));
 
 const { default: CaveClosestApproachSection } = await import('./CaveClosestApproachSection.tsx');
@@ -36,15 +56,11 @@ const measured: ClosestApproach = {
 };
 
 /** Renders the section and picks the second cave, which is what makes it ask anything. */
-function showPicked(result: {
+async function showPicked(result: {
   data?: ClosestApproach;
   isError?: boolean;
   isLoading?: boolean;
 }) {
-  cavesSpy.mockReturnValue({
-    data: { items: [{ id: 'cave-b', name: 'Peștera B' }] },
-    isFetching: false,
-  });
   approachSpy.mockReturnValue({
     data: result.data,
     isError: result.isError ?? false,
@@ -57,16 +73,26 @@ function showPicked(result: {
     </App>,
   );
 
-  fireEvent.mouseDown(screen.getByRole('combobox'));
-  fireEvent.click(screen.getAllByText('Peștera B').at(-1)!);
+  search();
+  // The search is debounced; a loaded machine can take longer than the default second to answer.
+  fireEvent.click(await screen.findByRole('button', { name: /Peștera B/ }, { timeout: 3000 }));
   return rendered;
 }
 
+/** Opens the picker and types into it, which is what makes it ask the filter route anything. */
+function search() {
+  fireEvent.click(screen.getByTestId('closest-approach-other'));
+  fireEvent.change(screen.getByTestId('closest-approach-other-input'), { target: { value: 'pe' } });
+}
+
 afterEach(cleanup);
+beforeEach(() => {
+  queryCalls.length = 0;
+});
 
 describe('CaveClosestApproachSection', () => {
-  it('shows the distance split into how far apart the two ends are across and down', () => {
-    const { container } = showPicked({ data: measured });
+  it('shows the distance split into how far apart the two ends are across and down', async () => {
+    const { container } = await showPicked({ data: measured });
 
     const figures = Array.from(container.querySelectorAll('.ant-statistic-content-value')).map(
       (node) => node.textContent?.replace(/[\s, ]/g, '') ?? '',
@@ -81,27 +107,27 @@ describe('CaveClosestApproachSection', () => {
     expect(screen.getByText(/two parts of that same shortest line/)).toBeTruthy();
   });
 
-  it('shows nothing measurable, and says why, when a cave recorded no depths', () => {
+  it('shows nothing measurable, and says why, when a cave recorded no depths', async () => {
     // An absence with its reason. A blank where a number belongs would present "no depths were
     // recorded here" as "these two have not been compared".
-    showPicked({ data: { ...measured, absence: 'noAltitudes', distanceM: null } });
+    await showPicked({ data: { ...measured, absence: 'noAltitudes', distanceM: null } });
     expect(screen.queryByTestId('closest-approach')).toBeNull();
     expect(screen.getByText(/recorded no depths/)).toBeTruthy();
   });
 
-  it('names the ends of the line the way the bearing is measured, on either cave\u2019s page', () => {
+  it('names the ends of the line the way the bearing is measured, on either cave\u2019s page', async () => {
     // The server reports the pair lowest id first and measures the bearing from the first cave's
     // end to the second's. Putting the cave whose page this is first would, on half of all pages,
     // print a direction and a bearing that disagree by a hundred and eighty degrees — and a caver
     // following it would walk the wrong way.
-    showPicked({ data: { ...measured, caveAId: 'cave-b', caveBId: 'cave-a' } });
+    await showPicked({ data: { ...measured, caveAId: 'cave-b', caveBId: 'cave-a' } });
     expect(screen.getByText('From Peștera A to Peștera B.')).toBeTruthy();
   });
 
-  it('hands the shortest line to the views that can draw it, and leaves it up for them', () => {
+  it('hands the shortest line to the views that can draw it, and leaves it up for them', async () => {
     // The number is half the answer; where the two caves nearly touch is the other half, and this
     // page has no map on it. Both ends come off the same answer as the figures beside them.
-    const { unmount } = showPicked({ data: measured });
+    const { unmount } = await showPicked({ data: measured });
     expect(getClosestApproachLine()).toEqual({
       caveAId: 'cave-a',
       caveBId: 'cave-b',
@@ -119,7 +145,7 @@ describe('CaveClosestApproachSection', () => {
     expect(getClosestApproachLine()).not.toBeNull();
   });
 
-  it('takes down a line left by another pair when a page is opened', () => {
+  it('takes down a line left by another pair when a page is opened', async () => {
     // The other half of the same rule: what outlives the page is one line, not a pile of them,
     // and a line belongs to the pair it was measured from.
     setClosestApproachLine({
@@ -129,20 +155,70 @@ describe('CaveClosestApproachSection', () => {
       to: measured.to!,
       label: 'stale',
     });
-    showPicked({ data: { ...measured, absence: 'noAltitudes', distanceM: null } });
+    await showPicked({ data: { ...measured, absence: 'noAltitudes', distanceM: null } });
     expect(getClosestApproachLine()).toBeNull();
   });
 
-  it('draws no line when there is no measurement to draw', () => {
-    showPicked({ data: { ...measured, absence: 'noAltitudes', distanceM: null } });
+  it('draws no line when there is no measurement to draw', async () => {
+    await showPicked({ data: { ...measured, absence: 'noAltitudes', distanceM: null } });
     expect(getClosestApproachLine()).toBeNull();
   });
 
-  it('offers no number at all to a reader who may not place both caves', () => {
+  it('offers only caves, and never the cave whose page this is', async () => {
+    approachSpy.mockReturnValue({ data: undefined, isError: false, isLoading: false });
+    render(
+      <App>
+        <CaveClosestApproachSection caveId="cave-a" />
+      </App>,
+    );
+    search();
+    // The search is debounced; a loaded machine can take longer than the default second to answer.
+    await screen.findByRole('button', { name: /Peștera B/ }, { timeout: 3000 });
+
+    const document = JSON.stringify(queryCalls.filter((c) => c.enabled).at(-1)!.body);
+    expect(document).toContain('"kind"');
+    expect(document).toContain('"cave"');
+    const offered = screen.getAllByTestId('closest-approach-other-row').map((r) => r.textContent);
+    expect(offered).toEqual([expect.stringContaining('Peștera B')]);
+    // Nothing is measured until a second cave is chosen.
+    expect(approachSpy).toHaveBeenLastCalledWith('cave-a', undefined);
+  });
+
+  it('measures against the picked cave, names it on the box, and forgets it when cleared', async () => {
+    await showPicked({ data: measured });
+    expect(approachSpy).toHaveBeenLastCalledWith('cave-a', 'cave-b');
+    expect(screen.getByTestId('closest-approach-other')).toHaveTextContent('Peștera B');
+
+    fireEvent.click(screen.getByTestId('closest-approach-other'));
+    fireEvent.click(screen.getByTestId('closest-approach-other-clear'));
+    expect(approachSpy).toHaveBeenLastCalledWith('cave-a', undefined);
+    expect(screen.queryByTestId('closest-approach')).toBeNull();
+  });
+
+  it('picks the other cave from the keyboard alone', async () => {
+    approachSpy.mockReturnValue({ data: measured, isError: false, isLoading: false });
+    render(
+      <App>
+        <CaveClosestApproachSection caveId="cave-a" />
+      </App>,
+    );
+    search();
+    // The search is debounced; a loaded machine can take longer than the default second to answer.
+    await screen.findByRole('button', { name: /Peștera B/ }, { timeout: 3000 });
+
+    fireEvent.keyDown(screen.getByTestId('closest-approach-other-input'), { key: 'ArrowDown' });
+    const row = screen.getByRole('button', { name: /Peștera B/ });
+    expect(row).toHaveFocus();
+    fireEvent.keyDown(row, { key: 'Enter' });
+
+    expect(approachSpy).toHaveBeenLastCalledWith('cave-a', 'cave-b');
+  });
+
+  it('offers no number at all to a reader who may not place both caves', async () => {
     // The server refuses the whole measurement rather than rounding or snapping it, and spells
     // the refusal as absence, so this reads the same for a guarded cave as for one that never
     // existed — which is the point.
-    showPicked({ isError: true });
+    await showPicked({ isError: true });
     expect(screen.queryByTestId('closest-approach')).toBeNull();
     expect(screen.getByText(/may see exactly where both are/)).toBeTruthy();
   });

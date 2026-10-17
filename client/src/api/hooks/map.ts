@@ -4,7 +4,7 @@ import { clusterCellBbox, type ClusterCell } from '../../geo/cluster.ts';
 import { api } from '../client.ts';
 import type { components } from '../schema';
 import { unwrap } from './shared.ts';
-import type { EntranceFeatureCollection, FeatureCategory, FeatureKind } from './types.ts';
+import type { EntranceFeatureCollection, FeatureCategory } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 
 export function useMapLayers() {
@@ -75,10 +75,6 @@ export type SearchFeatureItem = components['schemas']['SearchFeatureItemDto'];
  * says. Results carry no coordinates — navigate to the entity (or fetch it) instead of
  * centering the map from here.
  *
- * Pass `kind` when only one kind can be picked. The server's hit budget is shared across
- * kinds, so filtering the answer here instead would let commoner kinds crowd the wanted
- * one out of the response entirely.
- *
  * The document section is the one that is paged, and this hook asks only for its first page:
  * a search box shows the best few answers, and the total that comes back with them says
  * honestly how many more there are. The two query parameters that would change that answer —
@@ -86,10 +82,10 @@ export type SearchFeatureItem = components['schemas']['SearchFeatureItemDto'];
  * because they are not in the cache key and a request that varied them would be served the
  * previous one's rows.
  */
-export function useSearch(q: string, kind?: FeatureKind) {
+export function useSearch(q: string) {
   return useQuery({
-    queryKey: queryKeys.search(q, kind),
-    queryFn: () => unwrap(api.GET('/api/v1/search', { params: { query: { q, kind } } })),
+    queryKey: queryKeys.search(q),
+    queryFn: () => unwrap(api.GET('/api/v1/search', { params: { query: { q } } })),
     enabled: q.trim().length >= 2,
     staleTime: 30_000,
   });
