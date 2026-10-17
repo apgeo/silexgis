@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { createContext, runInContext } from 'node:vm';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { build } from 'vite';
 import type { PublicPastTrack, PublicPastTrackFix } from '../api/hooks.ts';
@@ -169,7 +171,11 @@ async function buildBundle(format: 'iife' | 'es'): Promise<LoadedBundle> {
       write: false,
       target: 'es2020',
       lib: {
-        entry: new URL('./index.ts', import.meta.url).pathname,
+        // A file path made with the platform's own rules. The URL's pathname keeps a slash in
+        // front of a Windows drive letter, and the bundler then finds no entry at all; and
+        // `new URL('./x', import.meta.url)` is a pattern the test's own bundler rewrites into
+        // an address of its dev server, which is no file.
+        entry: join(dirname(fileURLToPath(import.meta.url)), 'index.ts'),
         name: 'SilexGisTrips',
         formats: [format],
         fileName: () => `bundle.${format}.js`,
