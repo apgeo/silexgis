@@ -1014,7 +1014,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Features of any kind as GeoJSON/GPX/KML/CSV/zipped shapefile. */
+        /** Features of any kind as GeoJSON/GPX/KML/CSV/zipped shapefile. Takes the feature list's `filter` or `savedFilterId` (and its `search` and `bbox`), so the file holds the rows the list shows that have a position the caller may be given. */
         get: operations["exportExportFeatures"];
         put?: never;
         post?: never;
@@ -2867,7 +2867,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Paged cross-kind feature list with filters; visibility-filtered and location-protected. */
+        /** Paged cross-kind feature list; visibility-filtered and location-protected. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the feature world's conditions, applied after visibility and counted over the narrowed set; `search`, `ids` and `bbox` narrow the same set further. */
         get: operations["featureList"];
         put?: never;
         /** Creates a generic feature (Create permission in the target context); the caller becomes owner. */
@@ -17824,8 +17824,26 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17839,10 +17857,10 @@ export interface operations {
         parameters: {
             query: {
                 format: string;
-                kind?: string;
-                featureTypeId?: number;
                 search?: string;
                 bbox?: string;
+                filter?: string;
+                savedFilterId?: string;
             };
             header?: never;
             path?: never;
@@ -17850,8 +17868,26 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22573,13 +22609,11 @@ export interface operations {
     featureList: {
         parameters: {
             query?: {
+                filter?: string;
+                savedFilterId?: string;
                 page?: number;
                 pageSize?: number;
-                kind?: string;
-                featureTypeId?: number;
-                category?: string;
                 bbox?: string;
-                tag?: string;
                 search?: string;
                 ids?: string[];
             };
@@ -22598,8 +22632,26 @@ export interface operations {
                     "application/json": components["schemas"]["PagedResultOfFeatureListItemDto"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

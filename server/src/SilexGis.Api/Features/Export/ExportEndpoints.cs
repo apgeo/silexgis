@@ -27,13 +27,20 @@ public static class ExportEndpoints
     {
         api.MapGet("/export/caves", ExportCavesAsync)
             .WithTags("Export")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(
                 "Caves (main entrance points) as GeoJSON/GPX/KML/CSV/zipped shapefile. Takes the "
                 + "cave list's `filter` or `savedFilterId`, so the file holds the rows the list shows "
                 + "(those with a position).");
         api.MapGet("/export/features", ExportFeaturesAsync)
             .WithTags("Export")
-            .WithSummary("Features of any kind as GeoJSON/GPX/KML/CSV/zipped shapefile.");
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary(
+                "Features of any kind as GeoJSON/GPX/KML/CSV/zipped shapefile. Takes the feature "
+                + "list's `filter` or `savedFilterId` (and its `search` and `bbox`), so the file holds "
+                + "the rows the list shows that have a position the caller may be given.");
         api.MapGet("/geofiles/{id:guid}/export", ExportGeofileAsync)
             .WithTags("Export")
             .WithSummary("Imported geofile rows re-exported in the requested format.");
@@ -239,13 +246,14 @@ public static class ExportEndpoints
 
     private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> ExportFeaturesAsync(
         string format,
-        string? kind,
-        long? featureTypeId,
         string? search,
         string? bbox,
+        string? filter,
+        Guid? savedFilterId,
         SilexGisDbContext db,
         IVectorIO vectorIO,
         FeatureProtection protection,
+        SurfaceFilters surfaceFilters,
         IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
@@ -261,31 +269,21 @@ public static class ExportEndpoints
             return UnsupportedFormat(format);
         }
 
-        FeatureKind? kindFilter = null;
-        if (!string.IsNullOrWhiteSpace(kind))
+        var narrowing = await surfaceFilters.ForAsync<Feature>(
+            ctx, FeatureFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
         {
-            if (!RouteEnums.TryParse<FeatureKind>(kind, out var parsedKind))
-            {
-                return ApiProblems.BadRequest("export.kind_invalid", $"Unknown feature kind '{kind}'.");
-            }
-
-            kindFilter = parsedKind;
+            return refusal.ToProblem();
         }
 
-        var query = db.Features.AsNoTracking()
-            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-            .Where(f => f.Geom != null);
-
-        if (kindFilter is not null)
-        {
-            var wanted = kindFilter.Value;
-            query = query.Where(f => f.Kind == wanted);
-        }
-
-        if (featureTypeId is not null)
-        {
-            query = query.Where(f => f.FeatureTypeId == featureTypeId);
-        }
+        // The same narrowing the feature list applies, through the same seam and after the same
+        // visibility walk, so a file asked for from the list holds the rows the list shows — less
+        // those with no position at all, which a vector row cannot carry, and those the protection
+        // rule below keeps out of a file.
+        var query = narrowing.Narrowing!.Apply(
+            db.Features.AsNoTracking()
+                .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+                .Where(f => f.Geom != null));
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -297,8 +295,7 @@ public static class ExportEndpoints
         if (Bbox.TryParse(bbox, out var box))
         {
             query = await NarrowedToBoxAsync(
-                query, db, ctx, box, access.Value.LocationGridMeters,
-                kindFilter is { } only ? new[] { only } : null, ct);
+                query, db, ctx, box, access.Value.LocationGridMeters, null, ct);
         }
 
         var featureTypes = await db.FeatureTypes.AsNoTracking()

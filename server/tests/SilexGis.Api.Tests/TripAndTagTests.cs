@@ -717,8 +717,18 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable, IClassFixture
         ids.ShouldContain(tagged);
         ids.ShouldNotContain(untagged);
 
-        // The cross-kind feature list honors the same tag over the supertype.
-        var features = await outsider.GetFromJsonAsync<JsonElement>($"/api/v1/features?tag={slug}&pageSize=50");
+        // The cross-kind feature list honors the same tag over the supertype, asked as a filter
+        // document — the one way that list takes a tag.
+        var featureTagFilter = FilterToken.Encode(new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope("feature", new ConditionNode(
+                    FeatureFilterFields.Tag, FilterOp.Equals, [new IdValue(slug)])),
+            ],
+        });
+        var features = await outsider.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/features?filter={featureTagFilter}&pageSize=50");
         var featureIds = features.GetProperty("items").EnumerateArray()
             .Select(x => x.GetProperty("id").GetGuid()).ToList();
         featureIds.ShouldContain(tagged);

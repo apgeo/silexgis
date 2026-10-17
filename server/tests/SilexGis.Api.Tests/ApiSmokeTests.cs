@@ -222,6 +222,30 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
     }
 
     /// <summary>
+    /// The feature list and the two vector exports read a filter document or a saved filter, so each
+    /// can answer a filter it cannot read (400) or a saved filter it cannot find (404) — pinned so
+    /// that one quietly dropped is noticed.
+    /// </summary>
+    [Fact]
+    public async Task OpenApi_document_declares_the_filtered_lists_and_exports_own_refusals()
+    {
+        var operations = (await OperationsAsync()).ToDictionary(o => o.Id!);
+        var expected = new Dictionary<string, string[]>
+        {
+            ["featureList"] = ["400", "401", "404"],
+            ["exportExportFeatures"] = ["400", "401", "404"],
+            ["exportExportCaves"] = ["400", "401", "404"],
+        };
+
+        foreach (var (id, statuses) in expected)
+        {
+            operations.ShouldContainKey(id);
+            Responses(operations[id].Value).Where(code => code[0] is '4' or '5')
+                .ShouldBe(statuses, ignoreOrder: true, customMessage: id);
+        }
+    }
+
+    /// <summary>
     /// The two layers every map draws, the survey lines and walls a filtered map draws beside
     /// them, and a shared view's link with the data it draws, declare each refusal their handlers send — pinned so that one quietly dropped is noticed. The link's
     /// routes need no token, so they carry no 401, and sit behind a rate limit, so they carry 429.

@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Filters;
 using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Persistence;
 
@@ -346,12 +347,22 @@ public sealed class MapWindowMembershipTests : IAsyncLifetime, IDisposable, ICla
         JsonNode.Parse(payload)!["code"]!.GetValue<string>().ShouldBe("map.invalid_bbox");
     }
 
+    /// <summary>The feature list narrowed to generic features, spoken the one way it takes a kind.</summary>
+    private static readonly string GenericKindOnly = FilterToken.Encode(new FilterDocument
+    {
+        Scope =
+        [
+            new WorldScope("feature", new ConditionNode(
+                FeatureFilterFields.Kind, FilterOp.Equals, [new IdValue("generic")])),
+        ],
+    });
+
     private async Task<int> ListedAsync(HttpClient client, string route, string bbox)
     {
         var url = route switch
         {
             "map-features" => $"/api/v1/map/features?bbox={bbox}&kinds=generic",
-            "features" => $"/api/v1/features?bbox={bbox}&kind=generic",
+            "features" => $"/api/v1/features?bbox={bbox}&filter={GenericKindOnly}",
             "features-any-kind" => $"/api/v1/features?bbox={bbox}",
             "caves" => $"/api/v1/caves?bbox={bbox}",
             _ => throw new ArgumentOutOfRangeException(nameof(route)),

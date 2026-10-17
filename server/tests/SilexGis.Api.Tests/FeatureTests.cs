@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Filters;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -152,11 +153,25 @@ public sealed class FeatureTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         (await refused.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
             .ShouldBe("feature.too_many_ids");
 
-        // ---- invalid list filters are named errors, not silent misses
-        var badKind = await owner.GetAsync("/api/v1/features?kind=bogus");
+        // ---- invalid list filters are named errors, not silent misses: a condition on a field the
+        // feature world does not have, and a link that cannot be read, are both refused rather than
+        // answered with the whole list.
+        var badField = FilterToken.Encode(new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope("feature", new ConditionNode(
+                    "kindOfThing", FilterOp.Equals, [new IdValue("generic")])),
+            ],
+        });
+        var badKind = await owner.GetAsync($"/api/v1/features?filter={badField}");
         badKind.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await badKind.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
-            .ShouldBe("feature.kind_invalid");
+            .ShouldBe("filter.invalid");
+        var cutShort = await owner.GetAsync("/api/v1/features?filter=eyJ2ZXJzaW9uIjox");
+        cutShort.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await cutShort.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+            .ShouldBe("filter.malformed");
 
         // ---- outsider cannot update or delete; owner can update
         (await outsider.PutWithIfMatchAsync($"/api/v1/features/{privateId}", Body("Hijack", sinkholeTypeId)))

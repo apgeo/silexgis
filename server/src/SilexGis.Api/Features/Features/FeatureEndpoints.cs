@@ -11,6 +11,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -36,7 +37,13 @@ public static class FeatureEndpoints
         var features = api.MapGroup("/features").WithTags("Features");
 
         features.MapGet("/", ListAsync)
-            .WithSummary("Paged cross-kind feature list with filters; visibility-filtered and location-protected.");
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary(
+                "Paged cross-kind feature list; visibility-filtered and location-protected. `filter` "
+                + "(a filter document as a link token) or `savedFilterId` narrows it by the feature "
+                + "world's conditions, applied after visibility and counted over the narrowed set; "
+                + "`search`, `ids` and `bbox` narrow the same set further.");
         features.MapGet("/{id:guid}", GetAsync)
             .WithSummary("Resolves any feature id to a typed envelope (common view plus subtype attributes).");
         features.MapPost("/", CreateAsync).WithValidation<FeatureCreateRequest>()
@@ -65,13 +72,12 @@ public static class FeatureEndpoints
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
         IOptions<AccessOptions> accessOptions,
+        SurfaceFilters surfaceFilters,
+        string? filter,
+        Guid? savedFilterId,
         int? page,
         int? pageSize,
-        string? kind,
-        long? featureTypeId,
-        string? category,
         string? bbox,
-        string? tag,
         string? search,
         [FromQuery] Guid[]? ids,
         CancellationToken ct)
@@ -82,7 +88,19 @@ public static class FeatureEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var query = db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers);
+        var narrowing = await surfaceFilters.ForAsync<Feature>(
+            ctx, FeatureFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return refusal.ToProblem();
+        }
+
+        // Kind, category, type and tag are conditions of the filter document, not parameters of
+        // their own: one spelling of the question, so the list, its export and a saved filter
+        // cannot drift apart. The narrowing is applied to rows this caller may already see, and
+        // the count and the page below are both taken over the composed set.
+        var query = narrowing.Narrowing!.Apply(
+            db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers));
 
         // A named set of objects — what a multi-selection asks about, and what a working set is.
         // It narrows the same visibility-filtered query as every other condition rather than
@@ -97,41 +115,6 @@ public static class FeatureEndpoints
             }
 
             query = query.Where(f => ids.Contains(f.Id));
-        }
-
-        // Enum query parameters arrive as the camelCase strings the JSON contract uses;
-        // parse case-insensitively (route binding's Enum.TryParse would not).
-        FeatureKind? kindFilter = null;
-        if (!string.IsNullOrWhiteSpace(kind))
-        {
-            if (!RouteEnums.TryParse<FeatureKind>(kind, out var kindValue))
-            {
-                return ApiProblems.BadRequest("feature.kind_invalid", $"Unknown feature kind '{kind}'.");
-            }
-
-            query = query.Where(f => f.Kind == kindValue);
-            kindFilter = kindValue;
-        }
-
-        if (!string.IsNullOrWhiteSpace(category))
-        {
-            if (!RouteEnums.TryParse<FeatureCategory>(category, out var categoryValue))
-            {
-                return ApiProblems.BadRequest("feature.category_invalid", $"Unknown feature category '{category}'.");
-            }
-
-            query = query.Where(f => f.Category == categoryValue);
-        }
-
-        if (featureTypeId is not null)
-        {
-            query = query.Where(f => f.FeatureTypeId == featureTypeId);
-        }
-
-        if (!string.IsNullOrWhiteSpace(tag))
-        {
-            query = query.Where(f => db.Taggings.Any(tg =>
-                tg.FeatureId == f.Id && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -150,7 +133,7 @@ public static class FeatureEndpoints
             var polygon = box.ToPolygon();
             var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(
                 db, ctx, box.West, box.South, box.East, box.North,
-                accessOptions.Value.LocationGridMeters, kindFilter is { } only ? new[] { only } : null, ct);
+                accessOptions.Value.LocationGridMeters, null, ct);
             query = query.Where(f => f.Geom != null
                 && ((!f.IsProtectedEffective && f.Geom.Intersects(polygon))
                     || protectedMembers.Contains(f.Id)));
@@ -175,7 +158,8 @@ public static class FeatureEndpoints
 
         var (p, size) = Paging.Normalize(page, pageSize);
         var total = await query.CountAsync(ct);
-        var rows = await query.OrderByDescending(f => f.UpdatedAt)
+        // The id breaks ties so that rows written in one transaction keep their place between pages.
+        var rows = await query.OrderByDescending(f => f.UpdatedAt).ThenBy(f => f.Id)
             .Skip((p - 1) * size).Take(size).ToListAsync(ct);
 
         var types = await FeatureTypesOfAsync(db, rows, ct);
