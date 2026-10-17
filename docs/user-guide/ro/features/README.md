@@ -19,6 +19,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | [Relief](terrain.md) | Relieful real sub scena 3D și ce trebuie să facă o instalare pentru el |
 | [Zone de lucru](work-areas.md) | Terenul pe care lucrează efectiv clubul, ca arbore navigabil |
 | [Vederi salvate, panouri și ferestre multiple](saved-views-and-windows.md) | Salvarea unei hărți, desprinderea panourilor în ferestre proprii |
+| [Coordonate și convertorul](coordinates.md) | Formatele în care sunt scrise pozițiile, setările lor, scrierea unei poziții, convertirea mai multora deodată |
 
 ## Cadastrul
 

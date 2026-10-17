@@ -19,6 +19,7 @@ detail those walkthroughs link into.
 | [Terrain](terrain.md) | Real relief under the 3D scene, and what an installation must do for it |
 | [Work areas](work-areas.md) | The ground your club actually works, as a browsable tree |
 | [Saved views, panels and multi-window](saved-views-and-windows.md) | Saving a map, popping panels into their own windows |
+| [Coordinates and the converter](coordinates.md) | The formats positions are written in, their settings, typing a position, converting many at once |
 
 ## The cadastre
 
