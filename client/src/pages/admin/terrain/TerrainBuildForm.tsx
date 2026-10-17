@@ -33,6 +33,7 @@ import { geometryBbox } from './terrainBuild.ts';
 import { DEFAULT_DEPTH, MAX_DEPTH, MIN_DEPTH, depthBand, depthExceedsCoverage } from './terrainDepth.ts';
 import { terrainProblemMessage } from './terrainProblems.ts';
 import TerrainAreaField from './TerrainAreaField.tsx';
+import { TerrainMemoryNote } from './TerrainBakeLimits.tsx';
 
 /**
  * What the browser refuses to send before the server refuses to read it.
@@ -502,6 +503,7 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
         <Typography.Paragraph type="secondary" data-testid="terrain-bake-service">
           {t('terrain.form.bakeService')}
         </Typography.Paragraph>
+        <TerrainMemoryNote />
 
         <Button
           type="primary"

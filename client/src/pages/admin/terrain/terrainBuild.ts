@@ -50,6 +50,47 @@ export function bakeWorkerMissing(build: TerrainBuild): boolean {
   return build.status === 'failed' && build.errorCode === 'terrain_build.bake_unavailable';
 }
 
+/**
+ * The setting that sizes the tile maker's container, with a value worth trying when 8 GB was not
+ * enough, and the command that applies it.
+ *
+ * The tile maker takes half of its container's memory as its working space and has no other
+ * setting for it, so this line is the only way to give it more. It goes in the same environment
+ * file as the others; the command recreates the one container with the new limit, which a plain
+ * restart would not do. Written out, as the others are, because a description cannot be pasted.
+ */
+export const TERRAIN_WORKER_MEMORY_SETTING = 'SILEXGIS_TERRAIN_WORKER_MEMORY=16g';
+export const TERRAIN_WORKER_APPLY_COMMAND =
+  'docker compose -f docker-compose.yml -f docker-compose.terrain-worker.yml up -d terrain-worker';
+
+/** The setting that raises the time one bake may take, in seconds; 86400 is a day. */
+export const TERRAIN_BAKE_TIMEOUT_SETTING = 'SILEXGIS__Terrain__BakeTimeoutSeconds=86400';
+
+/** The reason a build carries when the tile maker ran short of memory and made coarser tiles. */
+export const TERRAIN_BAKE_DEGRADED_CODE = 'terrain_build.bake_degraded';
+
+/** The reason a build carries when its bake reached the installation's time limit. */
+export const TERRAIN_BAKE_TIMED_OUT_CODE = 'terrain_build.bake_timed_out';
+
+/** Whether a build stopped because the tile maker ran short of memory. */
+export function bakeDegraded(build: TerrainBuild): boolean {
+  return build.status === 'failed' && build.errorCode === TERRAIN_BAKE_DEGRADED_CODE;
+}
+
+/** Whether a build stopped because its bake reached the time limit. */
+export function bakeTimedOut(build: TerrainBuild): boolean {
+  return build.status === 'failed' && build.errorCode === TERRAIN_BAKE_TIMED_OUT_CODE;
+}
+
+/**
+ * A number of seconds as hours, to one decimal place and without a trailing ".0" — "12", "12.5" —
+ * which is how the time limit is set and how a person reads a bake's length.
+ */
+export function hoursOf(seconds: number): string {
+  const hours = Math.round((seconds / 3600) * 10) / 10;
+  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+}
+
 /** The reason a build carries when somebody called it off. */
 export const TERRAIN_CANCELLED_CODE = 'terrain_build.cancelled';
 

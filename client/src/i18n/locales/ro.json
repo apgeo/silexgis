@@ -178,6 +178,16 @@
       "command": "Apoi, din același director:",
       "resumes": "Tot ce s-a întâmplat înainte de acest pas rămâne făcut, iar ce a obținut și a pregătit generarea este în continuare pe disc sub ea. După ce serviciul rulează, apasă „Rulează din nou” pe generarea oprită: continuă de la pasul la care s-a oprit, fără să mai obțină sau să mai pregătească nimic a doua oară."
     },
+    "bakeLimits": {
+      "memoryNote": "Memoria hotărăște cât de fin poate fi relieful. Unealta care face dalele folosește jumătate din memoria propriului container — 8 GB, dacă instalarea nu setează SILEXGIS_TERRAIN_WORKER_MEMORY — iar când nu îi ajunge nu eșuează: face un relief mai grosier decât s-a cerut. O generare care a rămas fără memorie se oprește și spune asta, iar setarea poate fi apoi mărită.",
+      "degradedTitle": "Unealta care face dalele a rămas fără memorie, așa că relieful ar fi ieșit mai grosier decât s-a cerut",
+      "degradedBody": "Mai grosier înseamnă mai puțin detaliu: pante și văi desenate din mai puține triunghiuri, mai mari decât cere nivelul ales pentru această generare, fără ca harta să spună asta. De aceea dalele făcute au fost aruncate. Unealta folosește jumătate din memoria containerului ei și nu are altă setare pentru asta, așa că dă-i containerului mai multă — pentru zone mari, unealta însăși recomandă 32g.",
+      "degradedSetting": "În fișierul de mediu de lângă fișierele compose ale instalării:",
+      "degradedCommand": "Apoi aplic-o din același director și apasă „Rulează din nou” pe această generare; ce a obținut și a pregătit rămâne păstrat:",
+      "timedOutTitle": "Limita de timp a fost atinsă după {{ran}} h (limita: {{limit}} h)",
+      "timedOutTitleBare": "Limita de timp a fost atinsă",
+      "timedOutBody": "Generarea dalelor a fost oprită, iar dalele făcute până atunci au fost aruncate. Așa se încheie o generare care nu mai înainta, dar și una pentru o zonă mare care avea nevoie de mai mult timp. Ca să permiți mai mult, pune asta în fișierul de mediu (în secunde; 86400 înseamnă o zi), repornește aplicația și apasă „Rulează din nou” — ce a obținut și a pregătit generarea rămâne păstrat:"
+    },
     "problems": {
       "notFound": "Generarea nu mai există.",
       "forbidden": "Nu ai voie să faci asta.",

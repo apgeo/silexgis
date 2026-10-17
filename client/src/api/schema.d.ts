@@ -13761,6 +13761,12 @@ export interface components {
         };
         /** @enum {unknown} */
         TermStripMode: "none" | "leading" | "trailing" | "anywhere";
+        TerrainBakeTimeLimitDto: {
+            /** Format: int64 */
+            elapsedSeconds: number;
+            /** Format: int64 */
+            limitSeconds: number;
+        };
         TerrainBuildChoiceDto: {
             /** Format: uuid */
             id: string;
@@ -13813,6 +13819,7 @@ export interface components {
             baseBuildId: null | string;
             /** Format: date-time */
             cancelRequestedAt: null | string;
+            bakeTimeLimit: null | components["schemas"]["TerrainBakeTimeLimitDto"];
         };
         /** @enum {unknown} */
         TerrainBuildPhase: "pending" | "fetch" | "prepare" | "bake" | "validate" | "publish";

@@ -178,6 +178,16 @@
       "command": "Then, from that same directory:",
       "resumes": "Everything before this step still happened, and what the build obtained and prepared is still on disk under it. Once the service is running, press Run again on the stopped build: it carries on from the step it stopped at, without obtaining or preparing anything a second time."
     },
+    "bakeLimits": {
+      "memoryNote": "Memory decides how fine the terrain can be. The tile maker uses half of its own container's memory — 8 GB unless this installation sets SILEXGIS_TERRAIN_WORKER_MEMORY — and when that is not enough it does not fail: it makes coarser terrain than was asked for. A build that ran short stops and says so, and the setting can then be raised.",
+      "degradedTitle": "The tile maker ran short of memory, so the terrain would have been coarser than asked for",
+      "degradedBody": "Coarser means less detail: slopes and valleys drawn from fewer, larger triangles than the level this build asked for, with nothing on the map saying so. The tiles it made were therefore discarded. The tile maker uses half of its container's memory and has no other setting for it, so give the container more — the tool itself recommends 32g for large areas.",
+      "degradedSetting": "In the environment file beside the deployment's compose files:",
+      "degradedCommand": "Then apply it from that same directory and press Run again on this build; what it obtained and prepared is kept:",
+      "timedOutTitle": "Time limit reached after {{ran}} h (limit {{limit}} h)",
+      "timedOutTitleBare": "Time limit reached",
+      "timedOutBody": "The bake was stopped and the tiles it had made were discarded. A bake that stopped making progress ends this way, and so does a large area that simply needed longer. To allow longer, set this in the environment file (in seconds; 86400 is a day), restart the application, and press Run again — what the build obtained and prepared is kept:"
+    },
     "problems": {
       "notFound": "That build is no longer here.",
       "forbidden": "You are not allowed to do that.",

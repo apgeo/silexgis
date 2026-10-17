@@ -125,6 +125,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('before a build is started', () => {
+  it('says what memory decides and that running short means coarser terrain', () => {
+    show();
+    const note = screen.getByTestId('terrain-memory-note');
+    expect(note).toHaveTextContent('coarser terrain');
+    expect(note).toHaveTextContent('SILEXGIS_TERRAIN_WORKER_MEMORY');
+    expect(note).toHaveTextContent('8 GB');
+  });
+});
+
 describe('extending a finished build', () => {
   it('offers only builds whose tiles were checked whole, and nothing when there are none', () => {
     const none = show();

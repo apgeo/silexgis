@@ -3,7 +3,15 @@ import { Alert, Card, Descriptions, Empty, Flex, Progress, Skeleton, Steps, Typo
 import { useTranslation } from 'react-i18next';
 import { useTerrainBuild } from '../../../api/hooks.ts';
 import type { TerrainBuildSource } from '../../../api/hooks.ts';
-import { TERRAIN_PHASE_ORDER, bakeWorkerMissing, buildState, phaseIndex } from './terrainBuild.ts';
+import {
+  TERRAIN_PHASE_ORDER,
+  bakeDegraded,
+  bakeTimedOut,
+  bakeWorkerMissing,
+  buildState,
+  phaseIndex,
+} from './terrainBuild.ts';
+import { TerrainBakeDegraded, TerrainBakeTimedOut } from './TerrainBakeLimits.tsx';
 import TerrainWorkerMissing from './TerrainWorkerMissing.tsx';
 
 interface Props {
@@ -122,7 +130,20 @@ export default function TerrainBuildProgress({ buildId }: Props) {
           />
         )}
 
-        {failed && state !== 'cancelled' && !bakeWorkerMissing(build) && (
+        {/*
+          The two limits a bake runs under, met. Neither is a fault in the build's data: one is
+          the tile maker's memory, the other the installation's patience, and each is a setting
+          somebody can change — so each says, in the reader's language, what was reached and the
+          line to change.
+        */}
+        {bakeDegraded(build) && <TerrainBakeDegraded />}
+        {bakeTimedOut(build) && <TerrainBakeTimedOut build={build} />}
+
+        {failed &&
+          state !== 'cancelled' &&
+          !bakeWorkerMissing(build) &&
+          !bakeDegraded(build) &&
+          !bakeTimedOut(build) && (
           <Alert
             type="error"
             showIcon

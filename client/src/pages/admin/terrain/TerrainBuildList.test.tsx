@@ -34,6 +34,7 @@ function build(overrides: Partial<TerrainBuild>): TerrainBuild {
     finishedAt: '2026-08-17T06:00:12Z',
     updatedAt: '2026-08-17T06:00:12Z',
     cancelRequestedAt: null,
+    bakeTimeLimit: null,
     ...overrides,
   } as TerrainBuild;
 }
@@ -321,8 +322,8 @@ describe('the pipeline view', () => {
       status: 'failed',
       phase: 'bake',
       progress: 45,
-      message: 'The tile maker ran short of memory and wrote coarser tiles than were asked for.',
-      errorCode: 'terrain_build.bake_degraded',
+      message: 'The tile maker ended badly (code 1). It said: out of disk space.',
+      errorCode: 'terrain_build.bake_failed',
       pyramidVersion: null,
       sizeBytes: 1024,
     });
@@ -347,9 +348,7 @@ describe('the pipeline view', () => {
       'terrain-phase-validate',
       'terrain-phase-publish',
     ]);
-    expect(screen.getByTestId('terrain-build-failure')).toHaveTextContent(
-      'coarser tiles than were asked for',
-    );
+    expect(screen.getByTestId('terrain-build-failure')).toHaveTextContent('out of disk space');
     expect(screen.getByTestId('terrain-log-tail')).toHaveTextContent('CRITICAL memory pressure');
     expect(screen.getByTestId('terrain-build-sources')).toHaveTextContent('Obtained coverage');
   });
@@ -414,6 +413,62 @@ describe('the pipeline view', () => {
     expect(screen.getByTestId('terrain-build-cancelled')).toHaveTextContent('Called off.');
     expect(screen.queryByTestId('terrain-build-failure')).not.toBeInTheDocument();
     expect(screen.queryByTestId('terrain-build-cancelling')).not.toBeInTheDocument();
+  });
+
+  // The tile maker short of memory does not fail; it makes coarser terrain. The build that met
+  // that is told what coarser means and the two lines that give the tile maker more memory.
+  it('explains a bake that ran short of memory, with the setting and the command to apply it', () => {
+    const degraded = build({
+      id: 'b1',
+      status: 'failed',
+      phase: 'bake',
+      progress: 45,
+      errorCode: 'terrain_build.bake_degraded',
+      message: 'The tile maker ran short of memory.',
+      pyramidVersion: null,
+    });
+    builds = [degraded];
+    detail = { build: degraded, logTail: null, sources: [] };
+    show();
+
+    const notice = screen.getByTestId('terrain-build-degraded');
+    expect(notice).toHaveTextContent('coarser than asked for');
+    expect(notice).toHaveTextContent('less detail');
+    expect(notice).toHaveTextContent('SILEXGIS_TERRAIN_WORKER_MEMORY=16g');
+    expect(notice).toHaveTextContent(
+      'docker compose -f docker-compose.yml -f docker-compose.terrain-worker.yml up -d terrain-worker',
+    );
+    expect(screen.queryByTestId('terrain-build-failure')).not.toBeInTheDocument();
+    expect(screen.getByTestId('terrain-retry-b1')).toBeInTheDocument();
+  });
+
+  it('says a bake reached the time limit, after how long against what limit, and how to allow longer', () => {
+    const timedOut = build({
+      id: 'b1',
+      status: 'failed',
+      phase: 'bake',
+      progress: 45,
+      errorCode: 'terrain_build.bake_timed_out',
+      message: 'Time limit reached: the bake ran 12 h (43217 s); the limit is 12 h (…=43200).',
+      pyramidVersion: null,
+      bakeTimeLimit: { elapsedSeconds: 46_800, limitSeconds: 43_200 },
+    });
+    builds = [timedOut];
+    detail = { build: timedOut, logTail: null, sources: [] };
+    const shown = show();
+
+    const notice = screen.getByTestId('terrain-build-timed-out');
+    expect(notice).toHaveTextContent('Time limit reached after 13 h (limit 12 h)');
+    expect(notice).toHaveTextContent('SILEXGIS__Terrain__BakeTimeoutSeconds=86400');
+    expect(screen.queryByTestId('terrain-build-failure')).not.toBeInTheDocument();
+    shown.unmount();
+
+    // Without the numbers the heading still names the limit rather than falling back to "failed".
+    const bare = { ...timedOut, bakeTimeLimit: null };
+    builds = [bare];
+    detail = { build: bare, logTail: null, sources: [] };
+    show();
+    expect(screen.getByTestId('terrain-build-timed-out')).toHaveTextContent('Time limit reached');
   });
 
   it('answers an installation that has built nothing with what to do next', () => {
