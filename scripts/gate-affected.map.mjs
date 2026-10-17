@@ -225,6 +225,7 @@ export const groups = {
     'RegistryStatisticsTests', 'TripStatisticsTests',
   ],
   dashboard: ['DashboardTests'],
+  diagnostics: ['ClientErrorReportTests'],
   tags: ['TripAndTagTests'],
   taxonomies: [
     'ExpeditionRosterRoleVocabularyTests', 'TaxonomyWideningTests', 'TermRuleSetTests',
@@ -345,6 +346,7 @@ export const areas = {
   'server/src/SilexGis.Api/Features/Statistics/': 'statistics',
   'server/src/SilexGis.Api/Features/Tags/': 'tags',
   'server/src/SilexGis.Api/Features/Taxonomies/': 'taxonomies',
+  'server/src/SilexGis.Api/Features/Diagnostics/': 'diagnostics',
   'server/src/SilexGis.Api/Features/TripLogs/': 'trips',
   'server/src/SilexGis.Api/Features/TripTracking/': 'trips',
   'server/src/SilexGis.Api/Features/Uploads/': 'uploads',

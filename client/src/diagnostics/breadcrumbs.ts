@@ -7,8 +7,9 @@
 // never acted on. So a short trail is kept — the routes visited, the things clicked, the requests
 // made and what they answered — and attached to whatever is reported next.
 //
-// A ring buffer, small on purpose. Nothing here is stored, sent anywhere but the local development
-// sink, or kept between reloads; and a trail long enough to need scrolling is one nobody reads.
+// A ring buffer, small on purpose. Nothing here is stored or kept between reloads, and it is sent
+// only with an error report — to the development sink while developing, to the installation's own
+// log otherwise; and a trail long enough to need scrolling is one nobody reads.
 
 /** How much history is worth having. Roughly the last half-minute of ordinary use. */
 const TRAIL_LENGTH = 25;

@@ -12,6 +12,7 @@ are a database password, an admin account, and the public URL.
 - [Backups](#backups)
 - [Upgrades](#upgrades)
 - [External login providers](#external-login-providers)
+- [Errors people's browsers see](#errors-peoples-browsers-see)
 - [Non-Docker install](#non-docker-install)
 - [Configuration reference](#configuration-reference)
 
@@ -1755,6 +1756,19 @@ one account. Whether other members can see it is still a profile setting. A **co
 also the only address a notification can be texted to, so a member who has never confirmed one is
 never reached that way — and a number waiting for its code is nobody's address, only the
 destination of the code that proves it.
+
+## Errors people's browsers see
+
+When something goes wrong in a signed-in person's browser — an error the page did not handle, or one
+a library reported — the browser sends a short report to this installation's own API, which writes it
+into the API log as a warning beginning `Browser error`, with a fingerprint that is the same for every
+occurrence of the same fault. Nothing goes anywhere else: there is no outside service and no account.
+Read them with `docker compose logs api | grep "Browser error"`.
+
+Only signed-in accounts can report, at most 30 times a minute each and 50 errors at a time; a page
+caught in a loop is stopped there rather than filling the log. The page's address is logged without
+its query, so a share token or a typed search never reaches the line. The built application ships
+its source maps beside the bundle, so a reported line and column can be traced to the source.
 
 ## Non-Docker install
 

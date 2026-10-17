@@ -128,8 +128,10 @@ function assertRuntimeAssetsCopied(): Plugin {
  * order to carry development diagnostics. Here the guarantee is structural instead: a deployment runs
  * no development server, so the route does not exist there and nothing about it ships.
  *
- * The cost, stated plainly: only browsing through `npm run dev` is covered. Somebody using a packaged
- * installation reports nothing, and covering them means the API endpoint with all of its consequences.
+ * This sink covers browsing through `npm run dev`. A built application reports to an API route
+ * instead — for signed-in accounts only, limited per account and per request, written into the
+ * installation's own log — so the unauthenticated write path this design avoids never exists there
+ * either.
  */
 function clientErrorSink(): Plugin {
   const sinkFile = path.join('.diagnostics', 'browsing-errors.jsonl');

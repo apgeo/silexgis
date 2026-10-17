@@ -15,6 +15,7 @@ using SilexGis.Api.Features.Admin;
 using SilexGis.Api.Features.Attachments;
 using SilexGis.Api.Features.AccessHistory;
 using SilexGis.Api.Features.Audit;
+using SilexGis.Api.Features.Diagnostics;
 using SilexGis.Api.Features.Cabinets;
 using SilexGis.Api.Features.Checklists;
 using SilexGis.Api.Features.Crs;
@@ -342,6 +343,19 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
                     PermitLimit = qrPermitLimit,
                     QueueLimit = 0,
                 }));
+        // Per account, which is what the route is limited to; the address is a fallback for a
+        // request that reached the limiter without one and is refused afterwards anyway.
+        options.AddPolicy(SilexGis.Api.Features.Diagnostics.ClientErrorEndpoints.RateLimitPolicy, context =>
+            System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                (context.User.FindFirst("sub") ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier))?.Value is { } subject
+                    ? "user:" + subject
+                    : "address:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = SilexGis.Api.Features.Diagnostics.ClientErrorEndpoints.PerMinute,
+                    QueueLimit = 0,
+                }));
         options.AddPolicy(PublicTripRateLimits.PolicyName, context =>
             System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -454,6 +468,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapUnsubscribeEndpoints();
     api.MapMfaEndpoints();
     api.MapTaxonomyEndpoints();
+    api.MapClientErrorEndpoints();
     api.MapMapLayerEndpoints();
     api.MapMapLayerDocumentEndpoints();
     api.MapCaveEndpoints();

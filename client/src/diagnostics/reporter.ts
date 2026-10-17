@@ -9,14 +9,17 @@ import {
   type ErrorRecord,
 } from './errorIdentity.ts';
 import { breadcrumbTrail, installBreadcrumbs, recordBreadcrumb } from './breadcrumbs.ts';
+import { userManager } from '../auth/auth.tsx';
 
 // The application reporting its own errors while somebody is using it.
 //
 // The end-to-end suite watches the console on the flows it drives; this covers the rest, which is
-// everything a person does that no spec does. Reports go to a file on the development machine through
-// a route the development server answers — see the sink plugin in the Vite configuration. Nothing
-// leaves the machine, there is no service and no account, and outside development this does not run
-// at all: the address it posts to exists only while the development server does.
+// everything a person does that no spec does. While developing, reports go to a file on the
+// development machine through a route the development server answers — see the sink plugin in the
+// Vite configuration. In a built application they go to the installation's own API, which writes
+// them into its own log, and only while somebody is signed in: the route takes reports from signed-in
+// accounts alone, so a browser nobody has signed in on reports nothing. Either way there is no
+// outside service and no account of ours; the reports stay with whoever runs the installation.
 //
 // Two rules this code must never break, because it is the thing that watches for breakage:
 //
@@ -24,8 +27,50 @@ import { breadcrumbTrail, installBreadcrumbs, recordBreadcrumb } from './breadcr
 //   2. It must not report itself. Reporting calls `console.error` indirectly through anything it
 //      touches, and a wrapper that reported its own reports would not stop.
 
-/** Where the development server takes reports. Answered by nothing in a production build. */
-const SINK_URL = '/__client-errors';
+/** Where reports go: the development server's sink while developing, the installation's API otherwise. */
+const SINK_URL = import.meta.env.DEV ? '/__client-errors' : '/api/v1/diagnostics/client-errors';
+
+/**
+ * The most of each member the installation's route takes; a longer one would have the whole batch
+ * refused, so it is cut here instead. The development sink takes everything as it is.
+ */
+const SERVER_LIMITS = {
+  fingerprint: 64,
+  name: 200,
+  message: 2_000,
+  frame: 500,
+  stack: 8_000,
+  pageUrl: 2_000,
+  at: 40,
+  componentStack: 8_000,
+  userAgent: 500,
+  viewport: 20,
+  breadcrumbs: 30,
+  breadcrumb: 300,
+} as const;
+
+const clip = (value: string | undefined, max: number) =>
+  value === undefined ? undefined : value.length > max ? value.slice(0, max) : value;
+
+/** A record as the installation's route takes it: its own members, each within its limit. */
+function forServer(record: ErrorRecord) {
+  return {
+    fingerprint: clip(record.fingerprint, SERVER_LIMITS.fingerprint),
+    kind: record.kind,
+    name: clip(record.name, SERVER_LIMITS.name),
+    message: clip(record.message, SERVER_LIMITS.message) || record.kind,
+    frame: clip(record.frame, SERVER_LIMITS.frame),
+    stack: clip(record.stack, SERVER_LIMITS.stack),
+    pageUrl: clip(record.pageUrl, SERVER_LIMITS.pageUrl),
+    at: clip(record.at, SERVER_LIMITS.at),
+    breadcrumbs: record.breadcrumbs
+      ?.slice(-SERVER_LIMITS.breadcrumbs)
+      .map((crumb) => clip(crumb, SERVER_LIMITS.breadcrumb)),
+    componentStack: clip(record.componentStack, SERVER_LIMITS.componentStack),
+    userAgent: clip(record.userAgent, SERVER_LIMITS.userAgent),
+    viewport: clip(record.viewport, SERVER_LIMITS.viewport),
+  };
+}
 
 /** How long related errors are collected before being sent, in milliseconds. */
 const BATCH_DELAY = 500;
@@ -67,14 +112,34 @@ let flushTimer: ReturnType<typeof setTimeout> | undefined;
 
 function send(batch: ErrorRecord[]): void {
   // `keepalive` so a report survives the navigation that often follows the error that caused it.
-  // Failures are swallowed on purpose: the sink is absent in a production build and unreachable
-  // whenever the development server is restarting, and neither is worth telling anybody about.
-  void fetch(SINK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(batch),
-    keepalive: true,
-  }).catch(() => undefined);
+  // Failures are swallowed on purpose: the development sink is unreachable whenever the development
+  // server is restarting, the installation refuses a browser that reports too often, and neither is
+  // worth telling anybody about — least of all through `console.error`, which this watches.
+  if (import.meta.env.DEV) {
+    void fetch(SINK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(batch),
+      keepalive: true,
+    }).catch(() => undefined);
+    return;
+  }
+
+  void userManager
+    .getUser()
+    .then((user) => {
+      // Nobody signed in, nothing reported: the route takes reports from accounts alone.
+      if (!user?.access_token) {
+        return;
+      }
+      return fetch(SINK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.access_token}` },
+        body: JSON.stringify({ errors: batch.map(forServer) }),
+        keepalive: true,
+      });
+    })
+    .catch(() => undefined);
 }
 
 function scheduleFlush(): void {

@@ -17,11 +17,10 @@ import { useUiPrefsStore } from './stores/uiPrefsStore.ts';
 import { buildThemeConfig, resolveDark } from './theme.ts';
 
 // Before anything renders, so that a failure while the application is starting up is reported
-// rather than being the one class of failure this never sees. Development only: what it reports to
-// is a route the development server answers, and nothing serves that in a built application.
-if (import.meta.env.DEV) {
-  installErrorReporting();
-}
+// rather than being the one class of failure this never sees. While developing it reports to the
+// development server; a built application reports to the installation's own API, for a signed-in
+// account only.
+installErrorReporting();
 
 /**
  * antd locale follows the i18next language: component-internal strings, and a date picker's
