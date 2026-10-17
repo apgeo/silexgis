@@ -19,11 +19,14 @@
 # that the application writes into, and writes its answer back beside the request. It is given no
 # database credentials and no access to the container engine, because it needs neither.
 #
-# **Size it deliberately.** The pre-baker inside it takes its heap as a percentage of this
-# container's memory limit and has no other setting for it, so the limit below is the only knob
-# there is — and short of memory the tool does not fail, it stops refining and writes coarser
-# tiles. A bake of a couple of hundred square kilometres with one fine island in it was measured
-# peaking around 2.5 GB, so the default leaves real headroom rather than tracking that number.
+# **Size it deliberately.** The pre-baker inside it takes half of this container's memory limit as
+# its heap and has no other setting for it, so the limit below is the only knob there is — and short
+# of memory the tool does not fail, it stops refining and writes coarser tiles (the application
+# discards such a bake and says so on the terrain page). A bake of a couple of hundred square
+# kilometres with one fine island in it was measured peaking at 2.47 GiB, so the 8g default leaves
+# real headroom rather than tracking that number; the tool itself recommends a 16 GB heap, i.e. 32g
+# here, for large or very fine data. A changed limit takes effect when the container is recreated:
+#   docker compose -f docker-compose.yml -f docker-compose.terrain-worker.yml up -d terrain-worker
 #
 # It is a large image — about 1.4 GB — which is the reason it is an overlay rather than part of
 # the stack. An installation that never bakes terrain should never download it.

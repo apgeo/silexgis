@@ -1027,6 +1027,26 @@ having granted anything, and it is worth knowing which:
   paths the `SILEXGIS__Files__ImportRoots__0`, `__1`, … settings name; that one list governs both
   document import and terrain sources.
 
+**A directory on the server is read where it is, never copied.** Downloaded cells and uploaded
+rasters are copied into the build; the rasters in a server directory are not — a national survey
+already on the machine is not worth holding twice. The application only ever opens them for
+reading: nothing it does — running the build, calling it off, running it again, deleting it, or the
+sweep of uploads nobody named — writes, renames or deletes anything in that directory, and the
+raster library is stopped from leaving its usual `.aux.xml` notes beside the files it opens. Under
+Docker the directory can, and should, be mounted into the api container **read-only** (`:ro`). A
+directory inside the application's own terrain directories (the build root, the handover directory,
+the published directory) is refused as a source, because those are the places the application does
+delete in; a directory that *contains* them is read without them.
+
+What the build keeps instead of a copy is a list of what it found — every raster with its size and
+the time it was last written — taken the first time it reads the directory. Every later run of the
+same build (**Run again**, or a restart that hands it back) looks at the directory again, checked
+against the import list at that moment, and compares: if a raster was added, removed, or changed in
+size or time, the build **stops with `terrain_build.source_changed`** rather than carrying on over a
+set of rasters it was not made from. Put the directory back as it was and run the build again, or
+start a new build, which reads the directory as it now is. The prepared rasters the build made are
+its own and are kept either way; it is only the directory's contents that are compared.
+
 Mixing is the point of it: a coarse fill over the whole rectangle with fine local rasters on top
 gives deep detail exactly where the data supports it and no more, which is how the pyramid ends up
 sparse rather than uniformly deep.
@@ -1048,15 +1068,18 @@ both the tile count and the time, and 30 m data cannot usefully go past detail 1
 asked for, so asking for more than the finest raster supports buys nothing but time. Peak memory
 measured over that 197 km² run was **2.47 GiB**.
 
-The published tiles are the small part. A build also keeps everything it was given and everything
-it converted, under `SILEXGIS__Terrain__BuildRoot`, until somebody deletes the build — 46 MB
-against 1.1 MB in the run above. That is what makes re-baking ground that did not change cost
-minutes instead of hours.
+The published tiles are the small part. A build also keeps the rasters it downloaded or was sent and
+everything it converted, under `SILEXGIS__Terrain__BuildRoot`, until somebody deletes the build —
+46 MB against 1.1 MB in the run above. That is what makes re-baking ground that did not change cost
+minutes instead of hours. Rasters read from a server directory are not among them: they stay where
+the operator keeps them, and the build holds only its converted copy of the part of each that covers
+its rectangle.
 
 **Read the size column as "disk this build is responsible for", not "disk in the build root now".**
 It is measured once, over the build's own directory, at the moment the tiles are checked — so it
-counts the sources, the reprojected copies and the pyramid as they all stood together at that
-moment. It is not measured again afterwards, and publishing **moves** the pyramid out into
+counts the copied sources, the reprojected copies and the pyramid as they all stood together at that
+moment. A server directory read in place is the operator's, not the build's, and is not counted:
+deleting the build does not give that disk back, because the build never took it. It is not measured again afterwards, and publishing **moves** the pyramid out into
 `SILEXGIS__Terrain__PublishRoot`, so the figure does not drop when a build is published and is not
 meant to. It stays as the honest total of what deleting that build would get back: the run above
 reads 46 MB before and after publication, and deleting it does free about that much, 1.1 MB of it
@@ -1130,12 +1153,45 @@ and the build cannot be run again until it has:
 docker compose -f docker-compose.yml -f docker-compose.terrain-worker.yml up -d --build terrain-worker
 ```
 
-**Give it memory.** The tile-maker takes its heap as a percentage of the container's memory limit
-and offers no other setting for it, so that limit is the only control there is — and running short
-of memory is not something it reports as a failure. It stops refining and writes coarser tiles than
-were asked for. The default here is 8 GB, against a measured peak of about 2.5 GB for a couple of
-hundred square kilometres with one fine-resolution island in it; lower it with
-`SILEXGIS_TERRAIN_WORKER_MEMORY` only if you know the machine cannot spare that.
+**Give it memory.** The worker's container is limited to `SILEXGIS_TERRAIN_WORKER_MEMORY`, **8 GB
+by default**, and the tile-maker inside it takes **half** of that limit as its working memory (its
+heap) and offers no other setting for it — so that one line is the only control there is. Running
+short of memory is not something it reports as a failure: it stops refining and writes **coarser
+terrain** than was asked for — slopes and valleys drawn from fewer, larger triangles than the level
+chosen, which nothing on the map would ever point out. This application reads the tool's log after
+every bake, so such a bake is not published: the build stops with `terrain_build.bake_degraded`, its
+tiles are discarded, and the terrain page says what happened and what to type.
+
+What the 8 GB is based on: a couple of hundred square kilometres with one fine-resolution island in
+it was measured peaking at **2.47 GiB**, so 8 GB (a 4 GB heap) leaves real headroom over the only
+number measured so far. The tool itself, when given less, prints that it recommends a **16 GB heap —
+a 32 GB container** — which is what to give it for national-scale or very fine data if the machine
+has it. A small server (4–8 GB of memory in all) should expect regional builds at moderate detail to
+work and very fine or very large ones to stop as degraded rather than to finish badly; lowering the
+limit below about 4 GB is only for a machine that genuinely cannot spare more.
+
+To raise it, set the line in `.env` and recreate the worker's container (a plain restart keeps the
+old limit):
+
+```bash
+# in .env:
+#   SILEXGIS_TERRAIN_WORKER_MEMORY=16g
+docker compose -f docker-compose.yml -f docker-compose.terrain-worker.yml up -d terrain-worker
+```
+
+then press **Run again** on the build that stopped; what it obtained and prepared is kept.
+
+**A bake has a time limit: 12 hours by default.** The queue builds run on has no limit of its own, and
+the tile-maker says nothing about how much work is left, so a bake that has stopped making progress
+looks exactly like a long one — and there is one worker, so it would hold every later build behind
+it. `SILEXGIS__Terrain__BakeTimeoutSeconds` (default `43200`, held between a minute and seven days)
+is the only limit there is. A bake that reaches it is **stopped the way a called-off one is**: the
+application leaves the same `cancel` file for the worker, which stops the tool, and the tiles it had
+written are discarded once the worker confirms. The build is recorded as `terrain_build.bake_timed_out`
+and the page says *time limit reached after N h (limit M h)*. If the area is simply large, raise the
+setting (in seconds — `86400` is a day), restart the application, and press **Run again**; it carries
+on at the bake. If the worker has not yet confirmed the stop, **Run again** is refused briefly, as
+for a called-off bake, until it does.
 
 **It is entirely optional, and not running it is the default.** Without it the command-line route
 is unchanged — terrain baked by hand is still served exactly as before — and the terrain page is
@@ -1255,9 +1311,10 @@ purpose, and this is the reasoning so that you can disagree with it knowingly:
 - **It is derived data with a recipe that survives.** The database is backed up, and the database
   is where a build's rectangle, its detail, its sources and which build the scene was drawing all
   live. What is lost is the output, not the decision that produced it.
-- **It is the largest thing here and the least valuable per byte.** A build keeps its sources
-  beside its tiles, so the volume is dominated by copies of data that came from somewhere else —
-  forty times the size of the tiles themselves, in the measured case. Nightly-copying tens of
+- **It is the largest thing here and the least valuable per byte.** A build keeps the rasters it
+  downloaded or was sent beside its tiles, so the volume is dominated by copies of data that came
+  from somewhere else — forty times the size of the tiles themselves, in the measured case. (A
+  directory on the server is read in place and never copied onto this volume.) Nightly-copying tens of
   gigabytes of regenerable raster to protect a pyramid that rebakes in minutes is a poor trade,
   and it is the trade an operator would silently be making.
 - **Nothing waits on it.** Losing the volume costs the 3D view its ground until a build is run
@@ -1975,14 +2032,14 @@ the reasoning beside each one.
 | `SILEXGIS__Terrain__HeightDatum` | `Orthometric` | what the tile heights are measured from: `Orthometric` (above sea level) or `Ellipsoidal` (converted when baked). Wrong here puts every cave about 40 m off its hillside |
 | `SILEXGIS__Terrain__GeoidHeightM` | `0` | the local geoid undulation in metres, used **only** with `Ellipsoidal`. +39 to +45 over Romanian karst |
 | `SILEXGIS__Terrain__Attribution` | *(empty)* | credit the elevation data's licence requires; shown on the 3D scene |
-| `SILEXGIS__Terrain__BuildRoot` | `data/terrain/builds` (the compose stack sets `/data/terrain/builds`) | where a terrain build started from inside the application does its work. A build keeps both the rasters it was given and the reprojected raster it makes of each one, until somebody deletes the build — each source is converted once, at its own pixel size and cut down to the rectangle asked for, so budget for roughly twice what the sources alone occupy. So this wants a disk chosen for size — under Docker it must be a path on a mounted volume, or those tens of gigabytes sit in the container's own writable layer and disappear the next time it is recreated |
+| `SILEXGIS__Terrain__BuildRoot` | `data/terrain/builds` (the compose stack sets `/data/terrain/builds`) | where a terrain build started from inside the application does its work. A build keeps both the rasters it downloaded or was sent and the reprojected raster it makes of each one, until somebody deletes the build — each source is converted once, at its own pixel size and cut down to the rectangle asked for, so budget for roughly twice what those sources occupy. Rasters in a server directory are read where they are and not copied here; only their converted, cut-down copies are. So this wants a disk chosen for size — under Docker it must be a path on a mounted volume, or those tens of gigabytes sit in the container's own writable layer and disappear the next time it is recreated |
 | `SILEXGIS__Terrain__PublishRoot` | `data/terrain/published` (the compose stack sets `/data/terrain/published`) | where a finished, checked pyramid is **moved** so the web server can serve it, at `/terrain/builds/<build id>/`. Deliberately a directory of its own, holding nothing but finished tiles: this is the **only** directory a serving rule may be pointed at, because one level up are the rasters the builds were made from and there is no sign-in in front of any of it. Much smaller than the build root — the tiles are a fraction of the sources they came from |
 | `SILEXGIS__Terrain__CellTimeoutSeconds` | `1200` (20 min) | how long one cell of elevation may take to arrive before that attempt is abandoned. Values outside 30 s to 2 h are brought back inside that range |
 | `SILEXGIS__Terrain__BakeEnabled` | `false` | whether this installation has anything that can turn rasters into tiles. Set by the same deployment that starts the terrain worker; switched on with no worker running, a build waits for a bake nothing will ever do |
 | `SILEXGIS__Terrain__SpoolRoot` | `data/terrain/spool` (the compose stack sets `/data/terrain/spool`) | the directory the application and the terrain worker leave files for each other in. Both sides must name the same directory, on a volume they share, and both compose files already do |
 | `SILEXGIS__Terrain__BakePickupSeconds` | `300` (5 min) | how long a build waits for the worker to take its bake before deciding nothing is going to. Generous, because an image this size takes a while to start and a request left waiting costs nothing. Values outside 5 s to 1 h are brought back inside that range — `0` does **not** mean "wait indefinitely" and becomes 5 s, which reports a worker that is merely starting as absent |
 | `SILEXGIS__Terrain__UploadRetentionHours` | `24` | how long a raster sent through the browser for a terrain build is kept when **no build names it**. The build form sends each raster the moment it is chosen, so one picked and then abandoned would otherwise stay on the terrain volume for ever; an hourly sweep deletes those once they are this old. A raster any build names — queued, running, finished or stopped — is never deleted, whatever its age; deleting the build is what releases it. Values outside 1 hour to a year (8760) are brought back inside that range, so `0` does **not** mean "never" |
-| `SILEXGIS__Terrain__BakeTimeoutSeconds` | `43200` (12 h) | how long one bake may run before it is abandoned. The queue a build runs on has no limit of its own, so this is the only one there is, and it is meant to catch a bake that has stopped making progress rather than to cap a large one. Values outside 60 s to 7 days are brought back inside that range — `0` does **not** mean "no limit" and becomes 60 s, which abandons every real bake after a minute |
+| `SILEXGIS__Terrain__BakeTimeoutSeconds` | `43200` (12 h) | how long one bake may run before it is stopped. The queue a build runs on has no limit of its own, so this is the only one there is, and it is meant to catch a bake that has stopped making progress rather than to cap a large one. A bake that reaches it is withdrawn from the worker exactly as a called-off one is, its tiles are discarded, and the build stops as `terrain_build.bake_timed_out` with the time it ran and the limit; raise this and press **Run again** to carry on at the bake. Values outside 60 s to 7 days are brought back inside that range — `0` does **not** mean "no limit" and becomes 60 s, which stops every real bake after a minute |
 | `SILEXGIS__MapLayers__CatalogPath` | — (the file shipped in the image) | the XML file listing the tile sources this installation offers. Set it to a path outside the image — that is the only way an edit of yours survives an upgrade. Start from a copy of the shipped `map-layers.xml` |
 | `SILEXGIS__MapLayers__ApiKeys__<name>` | — | the access key a catalogue entry names, e.g. `SILEXGIS__MapLayers__ApiKeys__Thunderforest`. An entry whose key is not set is **not offered at all**, rather than offered and broken: a tile address still carrying the placeholder answers 401 for every tile, which on screen looks exactly like a source that is down |
 | `SILEXGIS__Reports__MaxMapBytes` | `5242880` (5 MB) | the largest picture of a map a trip's write-up takes when it is downloaded. The page sends one of a few hundred kilobytes (a megabyte or two over photographic imagery); a larger one is refused and the document is downloaded without it. The picture is held for the one answer it came with and stored nowhere. If a reverse proxy sits in front, its body-size cap has to allow this plus about a megabyte |
