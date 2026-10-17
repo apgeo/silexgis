@@ -7,6 +7,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -16,9 +17,12 @@ namespace SilexGis.Api.Features.Search;
 /// One hit from the feature registry, whatever its kind. <paramref name="Kind"/> tells the
 /// client which detail route to open (every feature also resolves under /features/{id});
 /// <paramref name="TypeCode"/> names the data-level kind of generic features and is null for
-/// the kinds the schema types itself.
+/// the kinds the schema types itself. <paramref name="Subtitle"/> is the same context line the
+/// object selector shows under the hit — its type and the region or the cave it belongs to, a
+/// cave only when this reader may read it — and never anything positional.
 /// </summary>
-public sealed record SearchFeatureItemDto(Guid Id, FeatureKind Kind, string? Name, string? TypeCode);
+public sealed record SearchFeatureItemDto(
+    Guid Id, FeatureKind Kind, string? Name, string? TypeCode, string? Subtitle);
 
 /// <summary>A trip-log hit.</summary>
 public sealed record SearchTripItemDto(Guid Id, string Title, DateOnly TripDate);
@@ -194,7 +198,7 @@ public static class SearchEndpoints
                             && EF.Functions.ILike(f.Cave.IdentificationCode, pattern)))))
             .OrderBy(f => f.Name)
             .Take(FeatureLimit)
-            .Select(f => new { f.Id, f.Kind, f.Name, f.FeatureTypeId })
+            .Select(f => new { f.Id, f.Kind, f.Name, f.FeatureTypeId, f.AncestorIds })
             .ToListAsync(ct);
 
         // Withhold protected centerlines. Filtered after the query rather than before it:
@@ -211,13 +215,23 @@ public static class SearchEndpoints
         }
 
         var typeIds = hits.Where(h => h.FeatureTypeId != null).Select(h => h.FeatureTypeId!.Value).Distinct().ToList();
-        var typeCodes = new Dictionary<long, string>();
+        var types = new Dictionary<long, (string Code, string Name)>();
         if (typeIds.Count > 0)
         {
-            typeCodes = await db.FeatureTypes.AsNoTracking()
+            types = await db.FeatureTypes.AsNoTracking()
                 .Where(t => typeIds.Contains(t.Id))
-                .ToDictionaryAsync(t => t.Id, t => t.Code, ct);
+                .ToDictionaryAsync(t => t.Id, t => (t.Code, t.Name), ct);
         }
+
+        var context = await FeatureContextLines.ForAsync(
+            db,
+            ctx,
+            [.. hits.Select(h => new FeatureContextRow(
+                h.Id,
+                h.Kind,
+                h.FeatureTypeId is { } typeId && types.TryGetValue(typeId, out var type) ? type.Name : null,
+                h.AncestorIds))],
+            ct);
 
         // Trip logs are not features and keep their own query: they have no search_vector,
         // only free text to match.
@@ -301,7 +315,8 @@ public static class SearchEndpoints
                 h.Id,
                 h.Kind,
                 h.Name,
-                h.FeatureTypeId is null ? null : typeCodes.GetValueOrDefault(h.FeatureTypeId.Value)))],
+                h.FeatureTypeId is { } typeId && types.TryGetValue(typeId, out var type) ? type.Code : null,
+                context.GetValueOrDefault(h.Id)))],
             trips,
             expeditions,
             documents));

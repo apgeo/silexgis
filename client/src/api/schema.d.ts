@@ -12940,6 +12940,7 @@ export interface components {
             kind: components["schemas"]["FeatureKind"];
             name: null | string;
             typeCode: null | string;
+            subtitle: null | string;
         };
         SearchResultDto: {
             features: components["schemas"]["SearchFeatureItemDto"][];

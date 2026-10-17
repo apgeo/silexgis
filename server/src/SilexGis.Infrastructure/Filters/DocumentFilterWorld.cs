@@ -141,6 +141,17 @@ public sealed class DocumentFilterWorld(SilexGisDbContext db) : FilterWorld<Docu
                 .Where(t => typeIds.Contains(t.Id))
                 .ToDictionaryAsync(t => t.Id, t => t.Name, ct);
 
+        // Where a document is filed: the cabinets it sits in, which every reader of the document
+        // may name — the cabinet tree is a directory every signed-in account is shown whole, and
+        // what it withholds is documents, never its own names.
+        var ids = rows.Select(d => d.Id).ToArray();
+        var filing = (await db.CabinetDocuments.AsNoTracking()
+                .Where(cd => ids.Contains(cd.DocumentId))
+                .Join(db.Cabinets.AsNoTracking(), cd => cd.CabinetId, c => c.Id, (cd, c) => new { cd.DocumentId, c.Name })
+                .ToListAsync(ct))
+            .GroupBy(x => x.DocumentId)
+            .ToDictionary(g => g.Key, g => string.Join(", ", g.Select(x => x.Name).Order(StringComparer.Ordinal)));
+
         return
         [
             .. rows.Select(d => new FilterHit
@@ -148,9 +159,9 @@ public sealed class DocumentFilterWorld(SilexGisDbContext db) : FilterWorld<Docu
                 World = Key,
                 Id = d.Id,
                 Title = string.IsNullOrWhiteSpace(d.Title) ? Key : d.Title,
-                Subtitle = d.DocumentTypeId is not null && types.TryGetValue(d.DocumentTypeId.Value, out var name)
-                    ? name
-                    : null,
+                Subtitle = ContextLine(
+                    d.DocumentTypeId is not null && types.TryGetValue(d.DocumentTypeId.Value, out var name) ? name : null,
+                    filing.GetValueOrDefault(d.Id)),
                 Symbol = Key,
                 // A document has no position of its own. What it hangs on may have one, and that is
                 // the other end's to disclose.
@@ -158,4 +169,13 @@ public sealed class DocumentFilterWorld(SilexGisDbContext db) : FilterWorld<Docu
             }),
         ];
     }
+
+    private static string? ContextLine(string? type, string? filing) =>
+        (type, filing) switch
+        {
+            (null, null) => null,
+            (_, null) => type,
+            (null, _) => filing,
+            _ => $"{type} · {filing}",
+        };
 }

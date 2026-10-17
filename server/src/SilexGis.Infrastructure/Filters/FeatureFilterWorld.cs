@@ -133,6 +133,15 @@ public sealed class FeatureFilterWorld(SilexGisDbContext db, FeatureProtection p
                 .ToDictionaryAsync(t => t.Id, t => t, ct);
 
         var exact = await protection.ExactViewIdsAsync(caller, [.. rows.Select(f => f.Id)], ct);
+        var context = await FeatureContextLines.ForAsync(
+            db,
+            caller,
+            [.. rows.Select(f => new FeatureContextRow(
+                f.Id,
+                f.Kind,
+                f.FeatureTypeId is not null && types.TryGetValue(f.FeatureTypeId.Value, out var type) ? type.Name : null,
+                f.AncestorIds))],
+            ct);
 
         return
         [
@@ -149,7 +158,7 @@ public sealed class FeatureFilterWorld(SilexGisDbContext db, FeatureProtection p
                     // after what it is rather than shown as a blank row somebody cannot tell apart
                     // from the blank row above it.
                     Title = string.IsNullOrWhiteSpace(f.Name) ? UnnamedTitle(f, type) : f.Name,
-                    Subtitle = type?.Name,
+                    Subtitle = context.GetValueOrDefault(f.Id),
                     Symbol = SymbolOf(f, type),
                     Placeable = exact.Contains(f.Id),
                 };

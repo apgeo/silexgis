@@ -608,6 +608,111 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         (await response.Content.ReadAsStringAsync()).ShouldContain("filter.too_many_ids");
     }
 
+    // ---------- the context line under a hit ----------
+
+    [Fact]
+    public async Task A_hits_context_line_names_a_cave_only_to_a_reader_who_may_read_it_and_never_a_position()
+    {
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
+        using var author = await AuthHelper.BearerClientAsync(factory, OwnerEmail);
+        using var reader = await ClientAsync(GlobalRoles.Viewer, "fe-context");
+
+        var openRegion = $"Open region {tag}";
+        var hiddenRegion = $"Hidden region {tag}";
+        var hiddenName = $"Hidden cave {tag}";
+        var (protectedCave, protectedEntrance) = await CreateCaveAsync(
+            author, $"Guarded cave {tag}", openRegion, "authenticated", locationProtected: true);
+        var (_, strandedEntrance) = await CreateCaveAsync(
+            author, hiddenName, hiddenRegion, "private", locationProtected: true);
+
+        // The entrance is readable on its own visibility while its cave stays private. The walk
+        // admits a row by any ancestor's visibility, its own included, so this is a state the
+        // reader can genuinely be in: the entrance is theirs to see and its cave is not.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.Features.Where(f => f.Id == strandedEntrance)
+                .ExecuteUpdateAsync(u => u.SetProperty(f => f.Visibility, Visibility.Authenticated));
+        }
+
+        var hits = (await QueryAsync(reader, About("feature", Named(tag)), count: false))
+            .Worlds.Single().Hits.ToDictionary(h => h.Id);
+
+        // A protected cave still names its region — the registry shows that to every reader of
+        // the cave — and its entrance names the cave it belongs to and that region.
+        hits[protectedCave].Subtitle.ShouldNotBeNull().ShouldContain(openRegion);
+        hits[protectedEntrance].Subtitle.ShouldNotBeNull().ShouldContain($"Guarded cave {tag}");
+        hits[protectedEntrance].Subtitle.ShouldNotBeNull().ShouldContain(openRegion);
+
+        // The stranded entrance is listed, and says what it is, and nothing about its cave.
+        var stranded = hits[strandedEntrance].Subtitle;
+        stranded.ShouldNotBeNullOrWhiteSpace();
+        stranded.ShouldNotContain(hiddenName);
+        stranded.ShouldNotContain(hiddenRegion);
+
+        // No line says anything positional: not the altitude, not a coordinate.
+        foreach (var hit in hits.Values)
+        {
+            (hit.Subtitle ?? string.Empty).ShouldNotContain("1234");
+            (hit.Subtitle ?? string.Empty).ShouldNotContain("23.4567");
+        }
+
+        // The map's search box writes the same line from the same rule.
+        var search = await reader.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            $"/api/v1/search?q={Uri.EscapeDataString(tag)}");
+        var searched = search.GetProperty("features").EnumerateArray()
+            .ToDictionary(f => f.GetProperty("id").GetGuid(), f => f.GetProperty("subtitle").GetString());
+        searched[strandedEntrance].ShouldBe(stranded);
+        searched[protectedEntrance].ShouldBe(hits[protectedEntrance].Subtitle);
+
+        // And the same entrance, asked by somebody who may read the cave, names it.
+        var owned = (await QueryAsync(author, About("feature", Named(tag)), count: false))
+            .Worlds.Single().Hits.Single(h => h.Id == strandedEntrance);
+        owned.Subtitle.ShouldNotBeNull().ShouldContain(hiddenName);
+        owned.Subtitle.ShouldNotBeNull().ShouldContain(hiddenRegion);
+    }
+
+    private async Task<(Guid Cave, Guid Entrance)> CreateCaveAsync(
+        HttpClient author, string name, string region, string visibility, bool locationProtected)
+    {
+        long caveTypeId;
+        long entranceTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            caveTypeId = await db.CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).SingleAsync();
+            entranceTypeId = await db.EntranceTypes.Where(t => t.Code == "natural").Select(t => t.Id).SingleAsync();
+        }
+
+        var created = await author.PostAsJsonAsync("/api/v1/caves", new
+        {
+            name,
+            region,
+            caveTypeId,
+            visibility,
+            locationProtected,
+            explorationStatus = "Unknown",
+            isShowCave = false,
+        });
+        var payload = await created.Content.ReadAsStringAsync();
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        var caveId = System.Text.Json.JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+
+        var entrance = await author.PostAsJsonAsync($"/api/v1/caves/{caveId}/entrances", new
+        {
+            name = $"{name} entrance",
+            entranceTypeId,
+            isMain = true,
+            geom = new { type = "Point", coordinates = new[] { 23.4567891, 46.5432198 } },
+            altitude = 1234.5m,
+            positionQuality = "Gps",
+        });
+        var entrancePayload = await entrance.Content.ReadAsStringAsync();
+        entrance.StatusCode.ShouldBe(HttpStatusCode.Created, entrancePayload);
+        var entranceId = System.Text.Json.JsonDocument.Parse(entrancePayload).RootElement.GetProperty("id").GetGuid();
+        return (caveId, entranceId);
+    }
+
     // ---------- helpers ----------
 
     private string OwnerEmail => $"fe-owner-{tag}@t.local";
