@@ -475,6 +475,10 @@ for (const scheme of ['light', 'dark'] as const) {
       await gotoRoute(page, '/settings/accessibility');
       await expect(page.getByRole('main')).toBeVisible();
       await scan(page, 'the accessibility settings');
+
+      await gotoRoute(page, '/settings/filters');
+      await expect(page.getByTestId('saved-filter-default-audience-explanation')).toBeVisible({ timeout: 30_000 });
+      await scan(page, 'the saved-filter settings');
     });
   });
 }

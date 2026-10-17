@@ -75,6 +75,7 @@ export const specs = {
     'cave-registry-filters.spec.ts', 'gallery-filters.spec.ts', 'reslinks.spec.ts',
     'map-filters.spec.ts', 'table-map.spec.ts', 'filter-spatial.spec.ts',
     'object-selector-pickers.spec.ts',
+    'saved-filter-audience.spec.ts',
   ],
   geoFeatures: [
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
@@ -114,7 +115,7 @@ export const specs = {
   resLinks: ['reslinks.spec.ts', 'annotated-text.spec.ts', 'cave-grant-link.spec.ts'],
   scene: ['scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts'],
   search: ['documents.spec.ts'],
-  settings: ['settings.spec.ts', 'not-found.spec.ts'],
+  settings: ['settings.spec.ts', 'not-found.spec.ts', 'saved-filter-audience.spec.ts'],
   sms: ['notifications.spec.ts', 'notification-health.spec.ts'],
   statistics: [
     'registry-statistics.spec.ts', 'cave-statistics.spec.ts', 'cave-morphometry.spec.ts',
