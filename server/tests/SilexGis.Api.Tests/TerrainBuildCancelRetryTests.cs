@@ -42,6 +42,7 @@ public sealed class TerrainBuildCancelRetryTests : IAsyncLifetime, IDisposable, 
     private readonly CountingFetchPhase fetch = new();
     private readonly CountingPreparePhase prepare = new();
     private readonly CountingPublishPhase publish = new();
+    private readonly MovableClock clock = new();
     private readonly SilexGisApiFactory factory;
 
     private HttpClient runner = null!;    // Execute and Read on the terrain domain
@@ -225,6 +226,98 @@ public sealed class TerrainBuildCancelRetryTests : IAsyncLifetime, IDisposable, 
         queued.GetProperty("status").GetString().ShouldBe("queued");
         queued.GetProperty("errorCode").ValueKind.ShouldBe(JsonValueKind.Null);
         queued.GetProperty("cancelRequestedAt").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        await using (new FakeBakeWorker(spoolRoot, (directory, request) =>
+        {
+            Pyramid(request["output"]);
+            Answer(directory, "succeeded", exit: 0);
+        }))
+        {
+            await RunAsync(id);
+        }
+
+        var finished = await ReadAsync(id);
+        finished.Status.ShouldBe(TerrainBuildStatus.Succeeded, finished.Message ?? "");
+        fetch.Runs.ShouldBe(1);
+        prepare.Runs.ShouldBe(1);
+        publish.Runs.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A bake that reaches the time limit is stopped as a called-off one is: withdrawn from the tile
+    /// maker through the same file, its tiles discarded once the tile maker has said it stopped,
+    /// and the build recorded with its own reason and a message naming the time it ran, the limit
+    /// and the setting. Run again, it carries on at the bake.
+    /// </summary>
+    /// <remarks>
+    /// The limit cannot be set below a minute, so the clock it is measured on is moved instead: the
+    /// bake is taken, then thirteen hours pass on that clock, against the twelve-hour default.
+    /// </remarks>
+    [Fact]
+    public async Task A_bake_that_reaches_the_time_limit_is_withdrawn_reported_and_can_be_run_again()
+    {
+        var id = await SubmitAsync(24.80, 46.80);
+        var tiles = TilesOf(id);
+        var spool = Path.Combine(spoolRoot, id.ToString("N"));
+
+        await using (new FakeBakeWorker(spoolRoot, (directory, request) =>
+        {
+            // Half a pyramid, then nothing until somebody withdraws the request — a bake that has
+            // stopped making progress looks exactly like this from outside.
+            Pyramid(request["output"]);
+            var deadline = DateTime.UtcNow.AddSeconds(60);
+            while (!File.Exists(Path.Combine(directory, "cancel")) && DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(50);
+            }
+
+            Answer(directory, "cancelled", exit: 143);
+        }))
+        {
+            var run = Task.Run(() => RunAsync(id));
+            await UntilAsync(
+                () => Task.FromResult(File.Exists(Path.Combine(spool, "started"))), "the bake to be taken");
+
+            clock.Offset = TimeSpan.FromHours(13);
+            try
+            {
+                await run.WaitAsync(TimeSpan.FromSeconds(60));
+            }
+            finally
+            {
+                clock.Offset = TimeSpan.Zero;
+            }
+        }
+
+        var stopped = await ReadAsync(id);
+        stopped.Status.ShouldBe(TerrainBuildStatus.Failed);
+        stopped.ErrorCode.ShouldBe(TerrainBuildFailures.BakeTimedOut);
+        stopped.Phase.ShouldBe(TerrainBuildPhase.Bake);
+        stopped.Message.ShouldNotBeNull().ShouldStartWith("Time limit reached");
+        stopped.Message.ShouldContain("SILEXGIS__Terrain__BakeTimeoutSeconds=43200");
+        stopped.Message.ShouldContain("The tile maker stopped");
+
+        // Withdrawn through the file a person calling the build off writes, answered, and what it
+        // wrote is gone — so nothing is left for a later attempt to find and believe.
+        File.Exists(Path.Combine(spool, "cancel")).ShouldBeTrue();
+        File.ReadAllText(Path.Combine(spool, "result")).ShouldContain("status=cancelled");
+        Directory.EnumerateFileSystemEntries(tiles).ShouldBeEmpty();
+        publish.Runs.ShouldBe(0);
+
+        // The screen is handed the two numbers, so it can say them in its reader's language.
+        var detail = await runner.GetAsync($"/api/v1/terrain/builds/{id}");
+        var detailBody = await detail.Content.ReadAsStringAsync();
+        detail.StatusCode.ShouldBe(HttpStatusCode.OK, detailBody);
+        var limit = JsonDocument.Parse(detailBody).RootElement.GetProperty("build").GetProperty("bakeTimeLimit");
+        limit.GetProperty("limitSeconds").GetInt64().ShouldBe(43_200);
+        limit.GetProperty("elapsedSeconds").GetInt64().ShouldBeGreaterThanOrEqualTo(43_200);
+
+        var retried = await runner.PostAsync($"/api/v1/terrain/builds/{id}/retry", null);
+        var retriedBody = await retried.Content.ReadAsStringAsync();
+        retried.StatusCode.ShouldBe(HttpStatusCode.OK, retriedBody);
+        var queued = JsonDocument.Parse(retriedBody).RootElement;
+        queued.GetProperty("errorCode").ValueKind.ShouldBe(JsonValueKind.Null);
+        queued.GetProperty("bakeTimeLimit").ValueKind.ShouldBe(JsonValueKind.Null);
 
         await using (new FakeBakeWorker(spoolRoot, (directory, request) =>
         {
@@ -434,6 +527,10 @@ public sealed class TerrainBuildCancelRetryTests : IAsyncLifetime, IDisposable, 
             }
 
             services.AddSingleton<ITerrainRasterPreparer, DirectoryPreparer>();
+
+            // The clock the bake's time limit is measured on, so a test can let half a day pass
+            // without waiting for it. Read as the wall clock until a test moves it.
+            services.AddSingleton<TimeProvider>(clock);
         },
         ownHost: true);
     }
@@ -581,6 +678,20 @@ public sealed class TerrainBuildCancelRetryTests : IAsyncLifetime, IDisposable, 
         {
             // A leftover temporary directory is not worth failing a test run over.
         }
+    }
+
+    /// <summary>The wall clock, or the wall clock moved on by however much a test says.</summary>
+    private sealed class MovableClock : TimeProvider
+    {
+        private long offsetTicks;
+
+        public TimeSpan Offset
+        {
+            get => TimeSpan.FromTicks(Interlocked.Read(ref offsetTicks));
+            set => Interlocked.Exchange(ref offsetTicks, value.Ticks);
+        }
+
+        public override DateTimeOffset GetUtcNow() => base.GetUtcNow() + Offset;
     }
 
     /// <summary>

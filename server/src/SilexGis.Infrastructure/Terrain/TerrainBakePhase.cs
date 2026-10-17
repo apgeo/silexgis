@@ -46,6 +46,7 @@ public sealed class TerrainBakePhase(
     TerrainPreparedSet preparedSet,
     TerrainWorkspace workspace,
     IOptions<TerrainBuildOptions> options,
+    TimeProvider clock,
     ILogger<TerrainBakePhase> logger) : ITerrainPhase
 {
     /// <summary>
@@ -414,9 +415,10 @@ public sealed class TerrainBakePhase(
         var startedPath = Path.Combine(spool, TerrainBakeHandover.StartedFileName);
         var logPath = Path.Combine(spool, TerrainBakeHandover.LogFileName);
 
-        var began = DateTimeOffset.UtcNow;
+        var began = clock.GetUtcNow();
         var pickupBy = began + TimeSpan.FromSeconds(Math.Clamp(settings.BakePickupSeconds, 5, 3600));
-        var giveUpAt = began + TimeSpan.FromSeconds(Math.Clamp(settings.BakeTimeoutSeconds, 60, 604_800));
+        var limit = TerrainBakeTimeLimit.Limit(settings.BakeTimeoutSeconds);
+        var giveUpAt = began + limit;
         var lastSaid = began;
         var claimed = false;
 
@@ -428,7 +430,7 @@ public sealed class TerrainBakePhase(
             }
 
             claimed = claimed || File.Exists(startedPath);
-            var now = DateTimeOffset.UtcNow;
+            var now = clock.GetUtcNow();
 
             if (!claimed && now > pickupBy)
             {
@@ -443,13 +445,7 @@ public sealed class TerrainBakePhase(
 
             if (now > giveUpAt)
             {
-                var hours = FormattableString.Invariant($"{(now - began).TotalHours:F1}");
-
-                throw new TerrainBuildException(
-                    TerrainBuildFailures.BakeTimedOut,
-                    $"The bake has been running for {hours} hours and has not finished. It was "
-                    + "abandoned rather than left holding the queue every later build waits in.",
-                    LastLines(logPath, KeptLogLines));
+                throw await StopAtTheLimitAsync(context, logPath, now - began, limit, ct);
             }
 
             if (now - lastSaid >= ProgressInterval)
@@ -470,6 +466,41 @@ public sealed class TerrainBakePhase(
 
             await Task.Delay(PollInterval, ct);
         }
+    }
+
+    /// <summary>
+    /// Stops a bake that has reached the time limit the way a called-off one is stopped, and says so.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Abandoning it is not enough. The tile-maker runs in another program and writes into this
+    /// build's own tiles directory; a run that merely stopped waiting would empty that directory
+    /// while the tool carried on writing into it, holding the one worker for hours more and leaving
+    /// the end of a bake for a later attempt to find. So it is withdrawn through the same file a
+    /// person calling the build off writes, and waited for as briefly as that is. The tiles are
+    /// emptied by the step's own failure path once this returns, and again when the build is run
+    /// again if the tool's answer came only afterwards — running it again is refused until it does.
+    /// </para>
+    /// <para>
+    /// The message names how long it ran, the limit, and the setting that raises it, because the
+    /// two readings of this are acted on differently: a bake that hung is a fault to look into, and
+    /// a large area that needed longer is a number to change.
+    /// </para>
+    /// </remarks>
+    private async Task<TerrainBuildException> StopAtTheLimitAsync(
+        TerrainBuildContext context, string logPath, TimeSpan ran, TimeSpan limit, CancellationToken ct)
+    {
+        var confirmed = await workspace.WithdrawBakeAsync(context.Build.Id, workspace.WithdrawalWait, ct);
+        var stop = new TerrainBakeTimeLimit((long)ran.TotalSeconds, (long)limit.TotalSeconds);
+
+        logger.LogWarning(
+            "Terrain build {BuildId} reached the bake time limit after {Ran} (limit {Limit}); tile maker confirmed the stop: {Confirmed}",
+            context.Build.Id, ran, limit, confirmed);
+
+        return new TerrainBuildException(
+            TerrainBuildFailures.BakeTimedOut,
+            stop.Sentence(confirmed),
+            LastLines(logPath, KeptLogLines));
     }
 
     /// <summary>

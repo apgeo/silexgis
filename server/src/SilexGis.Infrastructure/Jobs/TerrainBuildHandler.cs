@@ -3,7 +3,6 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Permissions;
@@ -61,7 +60,6 @@ public sealed class TerrainBuildHandler(
     IEnumerable<ITerrainPhase> phases,
     TerrainWorkspace workspace,
     IServiceScopeFactory scopeFactory,
-    IOptions<TerrainBuildOptions> options,
     ILogger<TerrainBuildHandler> logger) : IProcessingJobHandler
 {
     /// <summary>How often a running build's row is read for a request to call it off.</summary>
@@ -368,8 +366,7 @@ public sealed class TerrainBuildHandler(
     /// </remarks>
     private async Task StopAsCancelledAsync(Guid buildId, TerrainBuildPhase phase, CancellationToken ct)
     {
-        var wait = TimeSpan.FromSeconds(Math.Clamp(options.Value.BakePickupSeconds, 5, 60));
-        var confirmed = await workspace.WithdrawBakeAsync(buildId, wait, ct);
+        var confirmed = await workspace.WithdrawBakeAsync(buildId, workspace.WithdrawalWait, ct);
         workspace.DiscardUnjudgedTiles(buildId);
 
         var said = confirmed

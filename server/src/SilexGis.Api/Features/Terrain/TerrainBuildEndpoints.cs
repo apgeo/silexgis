@@ -48,6 +48,11 @@ public sealed record TerrainBuildSourceDto(
 /// the build is being cancelled and will stop at the first point it can; on a stopped one it says
 /// when the request was made. Null when nobody has asked, and again once the build is run again.
 /// </param>
+/// <param name="BakeTimeLimit">
+/// For a build stopped because its bake reached this installation's time limit, how long the bake
+/// had run and what the limit was, so a screen can say so in its reader's language; null for any
+/// other build. The same two numbers are in the message, in English, for whoever reads the row.
+/// </param>
 public sealed record TerrainBuildDto(
     Guid Id,
     GeoJsonGeometry Extent,
@@ -68,7 +73,11 @@ public sealed record TerrainBuildDto(
     DateTimeOffset? FinishedAt,
     DateTimeOffset UpdatedAt,
     Guid? BaseBuildId,
-    DateTimeOffset? CancelRequestedAt);
+    DateTimeOffset? CancelRequestedAt,
+    TerrainBakeTimeLimitDto? BakeTimeLimit);
+
+/// <summary>A bake stopped at the time limit: how long it ran and the limit, in seconds.</summary>
+public sealed record TerrainBakeTimeLimitDto(long ElapsedSeconds, long LimitSeconds);
 
 /// <summary>
 /// One build in full: everything the list carries, plus the rasters it was made from and the tail
@@ -1385,5 +1394,9 @@ public static class TerrainBuildEndpoints
         build.FinishedAt,
         build.UpdatedAt,
         build.BaseBuildId,
-        build.CancelRequestedAt);
+        build.CancelRequestedAt,
+        build.ErrorCode == TerrainBuildFailures.BakeTimedOut
+            && TerrainBakeTimeLimit.TryRead(build.Message) is { } stop
+                ? new TerrainBakeTimeLimitDto(stop.ElapsedSeconds, stop.LimitSeconds)
+                : null);
 }

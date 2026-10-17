@@ -155,7 +155,9 @@ public static class TerrainBuildFailures
     /// <remarks>
     /// The queue this runs on has no time limit of its own, deliberately, so without this a bake
     /// that has silently stopped making progress holds its worker for ever and every build behind
-    /// it waits on a thing that will never finish.
+    /// it waits on a thing that will never finish. A bake stopped this way is withdrawn from the
+    /// tile-maker exactly as a called-off one is, and what it wrote is discarded; the message says
+    /// how long it ran, what the limit was and which setting raises it.
     /// </remarks>
     public const string BakeTimedOut = "terrain_build.bake_timed_out";
 

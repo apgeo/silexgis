@@ -87,12 +87,15 @@ public sealed class TerrainBuildOptions
     /// </remarks>
     public int BakePickupSeconds { get; set; } = 300;
 
-    /// <summary>How long one bake may run before the attempt is abandoned.</summary>
+    /// <summary>How long one bake may run before it is stopped.</summary>
     /// <remarks>
     /// The queue a build runs on has no time limit of its own, deliberately, so this is the only
     /// one there is. Half a day is far beyond anything measured — a couple of hundred square
     /// kilometres with a fine island in it takes about two minutes — and is meant to catch a bake
-    /// that has stopped making progress rather than to cap a large one.
+    /// that has stopped making progress rather than to cap a large one. A bake that reaches it is
+    /// withdrawn from the tile-maker the way a called-off one is, its tiles are discarded, and the
+    /// build stops saying how long it ran and what the limit was. Values outside a minute to seven
+    /// days are brought back inside that range, so 0 is not "no limit".
     /// </remarks>
     public int BakeTimeoutSeconds { get; set; } = 43_200;
 
@@ -193,6 +196,17 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
 
     /// <summary>The one directory whatever serves terrain is pointed at.</summary>
     public string PublishRoot => published;
+
+    /// <summary>
+    /// How long a bake that has been withdrawn is waited for, before the run records that the
+    /// tile-maker has not yet said it stopped.
+    /// </summary>
+    /// <remarks>
+    /// The pickup window, capped at a minute: both measure how quickly the other side reacts to a
+    /// file appearing in the directory it watches, and a person who pressed a button, or a build
+    /// that has already run out of time, should not wait the full five minutes a cold start gets.
+    /// </remarks>
+    public TimeSpan WithdrawalWait { get; } = TimeSpan.FromSeconds(Math.Clamp(options.Value.BakePickupSeconds, 5, 60));
 
     /// <summary>
     /// Whether <paramref name="directory"/> is, or lies inside, one of the directories this
