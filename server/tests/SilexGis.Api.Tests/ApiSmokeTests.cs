@@ -340,6 +340,32 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
         calendarKind.GetRawText().ShouldContain("#/components/schemas/EventKind");
     }
 
+    /// <summary>
+    /// What a request's validator always requires is published, so a generated client's types
+    /// refuse what the server would refuse; what it requires only conditionally is not.
+    /// </summary>
+    [Fact]
+    public async Task OpenApi_document_publishes_what_a_requests_validator_always_requires()
+    {
+        var schemas = (await DocumentAsync()).GetProperty("components").GetProperty("schemas");
+
+        var kind = schemas.GetProperty("FeatureTypeRequest");
+        var properties = kind.GetProperty("properties");
+        properties.GetProperty("code").GetProperty("minLength").GetInt32().ShouldBe(1);
+        properties.GetProperty("acceptedGeometryClasses").GetProperty("minItems").GetInt32().ShouldBe(1);
+
+        // A member typed as optional that the validator refuses when absent loses its "or null".
+        var bands = schemas.GetProperty("SaveCaveLevelBandsRequest").GetProperty("properties").GetProperty("bands");
+        bands.GetRawText().ShouldNotContain("\"null\"");
+        bands.GetProperty("minItems").GetInt32().ShouldBe(1);
+
+        // The positive twins: a member with no presence rule keeps its "or null", and so does one
+        // whose rule applies only when it is given.
+        properties.GetProperty("description").GetRawText().ShouldContain("\"null\"");
+        properties.GetProperty("symbolFile").GetRawText().ShouldContain("\"null\"");
+        properties.GetProperty("symbolFile").TryGetProperty("minLength", out _).ShouldBeFalse();
+    }
+
     [Fact]
     public async Task A_request_without_a_token_is_refused_with_a_code()
     {

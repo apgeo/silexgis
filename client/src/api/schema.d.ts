@@ -8270,7 +8270,7 @@ export interface components {
         CaveDepthPlaceWriteRequest: {
             /** Format: double */
             depthM: null | number;
-            stationName: null | string;
+            stationName: string;
             placeLabel: null | string;
             note?: null | string;
             landmark?: null | boolean;
@@ -9501,11 +9501,11 @@ export interface components {
             invitations: components["schemas"]["EventInvitationDto"][];
         };
         EventInvitationResponseRequest: {
-            response?: null | components["schemas"]["TripInvitationResponse"];
+            response: null | components["schemas"]["TripInvitationResponse"];
             note?: null | string;
         };
         EventInvitationSelectionRequest: {
-            selected?: null | boolean;
+            selected: boolean;
         };
         /** @enum {unknown} */
         EventKind: "clubMeeting" | "training" | "maintenanceDay" | "gearCheck" | "conference" | "deadline";
@@ -9535,10 +9535,10 @@ export interface components {
             anchor: components["schemas"]["EventDto"];
         };
         EventTransitionRequest: {
-            state?: null | components["schemas"]["ActivityState"];
+            state: null | components["schemas"]["ActivityState"];
         };
         EventWriteRequest: {
-            title?: string;
+            title: string;
             description?: null | string;
             kind?: components["schemas"]["EventKind"];
             /** Format: date */
@@ -9747,7 +9747,7 @@ export interface components {
             party: components["schemas"]["ExpeditionSurfaceLogPersonDto"][];
         };
         ExpeditionTransitionRequest: {
-            state?: null | components["schemas"]["ActivityState"];
+            state: null | components["schemas"]["ActivityState"];
         };
         ExpeditionTripDto: {
             /** Format: uuid */
@@ -9760,10 +9760,10 @@ export interface components {
         };
         ExpeditionTripRequest: {
             /** Format: uuid */
-            tripLogId?: string;
+            tripLogId: string;
         };
         ExpeditionWriteRequest: {
-            name?: string;
+            name: string;
             description?: null | string;
             publicNote?: null | string;
             /** Format: date */
@@ -12872,7 +12872,7 @@ export interface components {
             count: number;
         };
         SaveCaveLevelBandsRequest: {
-            bands: null | components["schemas"]["SavedElevationBand"][];
+            bands: components["schemas"]["SavedElevationBand"][];
             note: null | string;
         };
         SavedElevationBand: {
@@ -13157,7 +13157,7 @@ export interface components {
         SpeleogeneticPatternKind: "insufficient" | "undetermined" | "vadoseBranchwork" | "waterTable" | "looping" | "angularMaze";
         SpeleolocImportCommitRequest: {
             options: null | components["schemas"]["SpeleolocImportOptions"];
-            pointIds: null | string[];
+            pointIds: string[];
             decisions: null | {
                 [key: string]: components["schemas"]["SpeleolocPointDecision"];
             };
@@ -13243,7 +13243,7 @@ export interface components {
         };
         SpeleolocImportSessionWriteRequest: {
             options: null | components["schemas"]["SpeleolocImportOptions"];
-            decisions: null | {
+            decisions: {
                 [key: string]: components["schemas"]["SpeleolocPointDecision"];
             };
         };
@@ -14148,7 +14148,7 @@ export interface components {
             refused: components["schemas"]["TrackingCsvDiagnosticDto"][];
         };
         TrackingCsvCommitRequest: {
-            text: null | string;
+            text: string;
             options: null | components["schemas"]["TrackingCsvImportOptionsDto"];
             replaceExisting: boolean;
             lines: null | number[];
@@ -14183,7 +14183,7 @@ export interface components {
             depthsAreBelowEntrance: boolean;
         };
         TrackingCsvImportRequest: {
-            text: null | string;
+            text: string;
             options: null | components["schemas"]["TrackingCsvImportOptionsDto"];
         };
         TrackingCsvPreviewDto: {
@@ -14356,7 +14356,7 @@ export interface components {
             };
         };
         TrackingPictureWriteRequest: {
-            items: null | components["schemas"]["TrackingPictureInput"][];
+            items: components["schemas"]["TrackingPictureInput"][];
         };
         TrackingPlaceDto: {
             /** Format: double */
@@ -14376,7 +14376,7 @@ export interface components {
         };
         TrackingResolveDepthRequest: {
             /** Format: double */
-            depthM: null | number;
+            depthM: number;
             /** Format: int32 */
             take: null | number;
         };
@@ -14429,8 +14429,8 @@ export interface components {
             times: components["schemas"]["TrackingRosterTimesDto"];
         };
         TrackingRosterTimesTakeRequest: {
-            timeZone: null | string;
-            people: null | components["schemas"]["TrackingRosterTimesTakeDto"][];
+            timeZone: string;
+            people: components["schemas"]["TrackingRosterTimesTakeDto"][];
         };
         TrackingStateDto: {
             state: components["schemas"]["TripTrackingState"];
@@ -14464,7 +14464,7 @@ export interface components {
             title: string;
         };
         TrackingTeamRequest: {
-            title: null | string;
+            title: string;
         };
         TripCalloutRequest: {
             /** Format: date-time */
@@ -14821,11 +14821,11 @@ export interface components {
         /** @enum {unknown} */
         TripInvitationResponse: "pending" | "yes" | "no" | "maybe";
         TripInvitationResponseRequest: {
-            response?: null | components["schemas"]["TripInvitationResponse"];
+            response: null | components["schemas"]["TripInvitationResponse"];
             note?: null | string;
         };
         TripInvitationSelectionRequest: {
-            selected?: null | boolean;
+            selected: boolean;
         };
         TripListFacetsDto: {
             /** Format: int32 */
@@ -14935,7 +14935,7 @@ export interface components {
             unlocatedCount: number;
         };
         TripLogTransitionRequest: {
-            state?: null | components["schemas"]["ActivityState"];
+            state: null | components["schemas"]["ActivityState"];
         };
         TripLogWriteRequest: {
             title: string;

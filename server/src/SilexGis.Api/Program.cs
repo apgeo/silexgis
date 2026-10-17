@@ -165,6 +165,7 @@ try
         options.AddOperationTransformer<SilexGis.Api.Common.AnonymousRouteSecurityOperationTransformer>();
         options.AddOperationTransformer<SilexGis.Api.Common.OperationNameTransformer>();
         options.AddSchemaTransformer<SilexGis.Api.Common.ProblemSchemaTransformer>();
+        options.AddSchemaTransformer<SilexGis.Api.Common.ValidatorPresenceSchemaTransformer>();
         options.AddDocumentTransformer<SilexGis.Api.Common.EnumSchemaTransformer>();
     });
     builder.Services.AddSilexGisPersistence(builder.Configuration);
