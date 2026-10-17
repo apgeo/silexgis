@@ -55,7 +55,13 @@ export type WorkspaceEvent =
    */
   | { kind: 'controls-here'; windowId: string; controls: readonly ViewControlDescriptor[] }
   | { kind: 'controls-roll-call' }
-  | { kind: 'controls-gone'; windowId: string };
+  | { kind: 'controls-gone'; windowId: string }
+  /**
+   * The rows a list's reader is pointing at, for the map in whichever window to mark. Ids only:
+   * each map marks what it has itself drawn for those ids, at the position it was itself given,
+   * so nothing about a row travels that the receiving window was not already shown. Null clears.
+   */
+  | { kind: 'highlight'; ids: readonly string[] | null };
 
 type Listener = (event: WorkspaceEvent) => void;
 

@@ -31,6 +31,7 @@ import {
 import { isDrawable } from '../../map/baseLayers.ts';
 import { CLOSEST_APPROACH_LAYER_ID } from '../../map/closestApproachLayer.ts';
 import { OVERBURDEN_HIGHLIGHT_LAYER_ID } from '../../map/overburdenHighlightLayer.ts';
+import { ROW_HIGHLIGHT_LAYER_ID } from '../../map/rowHighlightLayer.ts';
 import {
   getLibraryPhotoLoadStates,
   libraryPhotoSourceOf,
@@ -417,6 +418,8 @@ export default function LayerPanel({
         return t('map.closestApproach');
       case OVERBURDEN_HIGHLIGHT_LAYER_ID:
         return t('map.overburdenHighlight');
+      case ROW_HIGHLIGHT_LAYER_ID:
+        return t('tableMap.highlightLayer');
       default:
         // Geofile/raster layers carry their catalog name on the OL layer itself.
         return (layer.get('name') as string | undefined) ?? id ?? '';

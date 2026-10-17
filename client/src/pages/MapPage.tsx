@@ -97,6 +97,12 @@ import {
   attachOverburdenHighlight,
   createOverburdenHighlightLayer,
 } from '../map/overburdenHighlightLayer.ts';
+import {
+  attachRowHighlight,
+  createRowHighlightLayer,
+  ROW_HIGHLIGHT_LAYER_ID,
+} from '../map/rowHighlightLayer.ts';
+import MapListInViewButton from '../components/map/MapListInViewButton.tsx';
 import { ENTRANCE_HEATMAP_LAYER_ID, createEntranceHeatmapLayer } from '../map/heatmapLayer.ts';
 import {
   KARST_DENSITY_LAYER_ID,
@@ -450,6 +456,8 @@ export default function MapPage() {
       // Topmost of all: it is a single mark saying "the reading you pressed came from here", and
       // one that anything at all could cover is a mark that failed to answer the question.
       [OVERBURDEN_HIGHLIGHT_LAYER_ID, createOverburdenHighlightLayer],
+      // The row a list in another window is pointing at, ringed over whatever this map drew for it.
+      [ROW_HIGHLIGHT_LAYER_ID, createRowHighlightLayer],
     ] as const) {
       if (!findOverlayLayer(id)) {
         getOverlayGroup().getLayers().push(create());
@@ -463,6 +471,7 @@ export default function MapPage() {
     // curve, wherever in the world that is, and stays until another is pressed or the panel clears
     // it.
     const detachOverburdenHighlight = attachOverburdenHighlight();
+    const detachRowHighlight = attachRowHighlight();
     const detachLoader = attachEntranceLoader(map);
     const detachFeatureLoader = attachSurfaceFeatureLoader(map);
     const detachCenterlineLoader = attachCenterlineLoader(map);
@@ -522,6 +531,7 @@ export default function MapPage() {
       setEditController(null);
       detachApproach();
       detachOverburdenHighlight();
+      detachRowHighlight();
       detachLoader();
       detachFeatureLoader();
       detachCenterlineLoader();
@@ -1513,15 +1523,21 @@ export default function MapPage() {
           <div className={`map-search-overlay map-chrome${isMobile ? ' map-search-overlay-mobile' : ''}`}>
             <MapSearch fullWidth={isMobile} />
             <MapObjectSelector fullWidth={isMobile} />
-            {/* The account's pinned saved filters: one click narrows the main entrance and
-                feature layers to one of them, a second click lifts it again. */}
-            <QuickFilterChips
-              className="map-quick-filters"
-              activeId={mapFilter?.kind === 'saved' ? mapFilter.savedFilterId : null}
-              onApply={(filter) => adoptMapFilter({ kind: 'saved', savedFilterId: filter.id })}
-              onRelease={() => adoptMapFilter(null)}
-              data-testid="map-quick-filters"
-            />
+            {/* A row of its own under search: on the first row the button ran on past the
+                selector, under the pop-out buttons pinned at the top right, which then took
+                every press meant for it. */}
+            <div className="map-filter-row">
+              <MapListInViewButton filter={mapFilter} />
+              {/* The account's pinned saved filters: one click narrows the main entrance and
+                  feature layers to one of them, a second click lifts it again. */}
+              <QuickFilterChips
+                className="map-quick-filters"
+                activeId={mapFilter?.kind === 'saved' ? mapFilter.savedFilterId : null}
+                onApply={(filter) => adoptMapFilter({ kind: 'saved', savedFilterId: filter.id })}
+                onRelease={() => adoptMapFilter(null)}
+                data-testid="map-quick-filters"
+              />
+            </div>
             <MapFilterNotice
               filter={mapFilter}
               unreadableLink={unreadableFilterLink}

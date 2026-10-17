@@ -23,6 +23,7 @@ import Scene3DView from '../../components/scene3d/Scene3DView.tsx';
 import AnnotatedTextPanel from '../../textlink/AnnotatedTextPanel.tsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { publish, subscribe } from '../../workspace/workspaceBus.ts';
+import { useTableMapLink } from '../../workspace/tableMapLink.ts';
 
 /**
  * A single panel rendered chrome-less for pop-out windows (multi-monitor work).
@@ -263,6 +264,9 @@ function RegistryPanel() {
   const [searchInput, setSearchInput] = useState('');
   const search = useDebouncedValue(searchInput);
   const { data, isFetching } = useCaves({ ...params, search: search || undefined });
+  // Pointing at a row rings its cave on the map in the main window; a cave picked there is
+  // marked here.
+  const tableMap = useTableMapLink<CaveListItem>();
 
   const pick = (cave: CaveListItem) => {
     publish({ kind: 'selection', selection: { kind: 'cave', caveId: cave.id } });
@@ -297,7 +301,8 @@ function RegistryPanel() {
         dataSource={data?.items}
         onChange={(pagination: TablePaginationConfig) =>
           setParams((p) => ({ ...p, page: pagination.current, pageSize: pagination.pageSize }))}
-        onRow={(record) => ({ onClick: () => pick(record), style: { cursor: 'pointer' } })}
+        rowClassName={tableMap.rowClassName}
+        onRow={(record) => ({ onClick: () => pick(record), style: { cursor: 'pointer' }, ...tableMap.rowHover(record) })}
         pagination={{
           current: data?.page,
           pageSize: data?.pageSize,

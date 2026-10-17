@@ -105,10 +105,19 @@
   right: 56px;
 }
 
-/* The quick-filter chips take a row of their own under search and the selector. */
-.map-quick-filters {
+/* The quick-filter chips take a row of their own under search and the selector, led by the
+   "list what is in view" button. */
+.map-filter-row {
   flex-basis: 100%;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
   max-width: 640px;
+}
+
+.map-quick-filters {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* Over the map the unpin button needs a ground of its own to be seen against the tiles. */

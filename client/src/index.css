@@ -166,3 +166,13 @@ html[data-reduce-motion='true'] *::after {
   min-width: 24px;
   min-height: 24px;
 }
+
+/* The row whose thing was just picked on a map in another window: the theme's selected-row tint,
+   with an edge on the leading side so it reads without colour too. */
+.ant-table-tbody > tr.table-row-map-picked > td {
+  background: var(--ant-color-primary-bg);
+}
+
+.ant-table-tbody > tr.table-row-map-picked > td:first-child {
+  box-shadow: inset 4px 0 0 var(--ant-color-primary);
+}

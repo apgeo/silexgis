@@ -2,6 +2,7 @@
 import { decodeFilter, encodeFilter, FILTER_PARAM } from './url.ts';
 import { emptyDocument, whereOf, withWhere } from './document.ts';
 import type { FilterDocument, FilterNode } from './types.ts';
+import { readWindow, WINDOW_PARAM } from './tableMapHandoff.ts';
 
 /**
  * The cave registry's familiar controls, as one filter document and back again.
@@ -54,6 +55,13 @@ export interface CaveRegistryAddress extends CaveRegistryReading {
   sort?: string;
   page: number;
   pageSize: number;
+  /**
+   * The map's window the list is narrowed to, as the `bbox` the list route takes — set when the
+   * list was opened from the map's "what is in view". The server decides which caves are in it.
+   */
+  bbox?: string;
+  /** A window was in the address and was not a box; the list opens without it and says so. */
+  unreadableWindow?: boolean;
 }
 
 export const SAVED_FILTER_PARAM = 'saved';
@@ -262,6 +270,7 @@ export function readCaveRegistryAddress(params: URLSearchParams): CaveRegistryAd
   const token = params.get(FILTER_PARAM);
   const document = decodeFilter(token);
   const reading = document === null ? null : readCaveRegistry(document);
+  const window = readWindow(params.get(WINDOW_PARAM));
   return {
     controls: reading?.controls ?? {},
     extra: reading?.extra ?? [],
@@ -272,11 +281,16 @@ export function readCaveRegistryAddress(params: URLSearchParams): CaveRegistryAd
     sort: params.get('sort') ?? undefined,
     page: positiveInteger(params.get('page'), 1),
     pageSize: positiveInteger(params.get('pageSize'), DEFAULT_PAGE_SIZE),
+    bbox: window.bbox,
+    // Only said when it is so, so an address without a window reads exactly as it always did.
+    ...(window.unreadable ? { unreadableWindow: true } : {}),
   };
 }
 
 /** The address for a state; members left at their defaults are left out so a link stays short. */
-export function writeCaveRegistryAddress(state: Omit<CaveRegistryAddress, 'unreadableLink'>): URLSearchParams {
+export function writeCaveRegistryAddress(
+  state: Omit<CaveRegistryAddress, 'unreadableLink' | 'unreadableWindow'>,
+): URLSearchParams {
   const params = new URLSearchParams();
   const document = caveRegistryDocument(state.controls, state.extra);
   if (document !== null) {
@@ -293,6 +307,9 @@ export function writeCaveRegistryAddress(state: Omit<CaveRegistryAddress, 'unrea
   }
   if (state.pageSize !== DEFAULT_PAGE_SIZE) {
     params.set('pageSize', String(state.pageSize));
+  }
+  if (state.bbox) {
+    params.set(WINDOW_PARAM, state.bbox);
   }
   return params;
 }
