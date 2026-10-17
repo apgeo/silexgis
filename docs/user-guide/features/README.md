@@ -58,7 +58,7 @@ detail those walkthroughs link into.
 | Page | Covers |
 |---|---|
 | [People, cavers and clubs](people-and-clubs.md) | Accounts, the roster, caving groups, announcements |
-| [Your account and settings](account-and-settings.md) | Profile, email, security, accessibility, sync |
+| [Your account and settings](account-and-settings.md) | Profile, email, security, accessibility, saved filters, sync |
 | [Notifications](notifications.md) | What you are told, where, and how to change it |
 | [Search and filters](search-and-filters.md) | The search box, filters and the condition editor, saved filters |
 

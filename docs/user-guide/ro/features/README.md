@@ -58,7 +58,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | Pagina | Acoperă |
 |---|---|
 | [Persoane, speologi și cluburi](people-and-clubs.md) | Conturi, lista de speologi, grupuri, anunțuri |
-| [Contul și setările](account-and-settings.md) | Profil, e-mail, securitate, accesibilitate, sincronizare |
+| [Contul și setările](account-and-settings.md) | Profil, e-mail, securitate, accesibilitate, filtre salvate, sincronizare |
 | [Notificări](notifications.md) | Ce vi se comunică, unde și cum schimbați |
 | [Căutare și filtre](search-and-filters.md) | Caseta de căutare, filtrele și editorul de condiții, filtrele salvate |
 

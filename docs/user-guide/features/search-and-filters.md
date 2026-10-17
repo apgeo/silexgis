@@ -238,22 +238,33 @@ until the filter can be run.
 ## Saved filters
 
 A saved filter is **a question you keep**. The account menu's **Saved filters** lists the ones
-you may use: your own, and those shared with a caving group you belong to.
+you may use: your own, those shared with a caving group you belong to, and those shared with
+everyone signed in to this installation.
 
 | Column | Shows |
 |---|---|
 | **Name** | its name and description |
 | **Asks for** | the conditions, in words |
-| **Who can use it** | **Only me**, or **Members of** a caving group |
+| **Who can use it** | **Only me**, **Members of** a caving group, or **Everyone signed in** |
 | **Saved by** | **You**, the author as their profile shows them to you, or **A club member** |
 | **State** | **Ready**, **Out of date** (a type or tag it names has since been removed, so that condition matches nothing) or **Cannot be read** |
 
 **Open in the cave registry** applies a cave filter there. A saved gallery view is listed here
 too, and is applied from the gallery with **Apply a saved gallery view…**.
 
+### Who a new filter is shared with
+
+Wherever you save a filter, the dialog shows **who can use it** and says in one line what that
+means — *"Only you can see this filter."*, *"Members of … can use it"* or *"Everyone signed in
+can use it"*. It starts from **your default**, which is **Only me** until you change it under
+**Settings → Saved filters** (the dialog's **Change your default** link goes there). You can
+choose differently for each filter you save, and change it later from the list. Nobody without
+an account ever sees a saved filter.
+
 ### Sharing grants nothing
 
-Sharing a filter with a caving group gives its members **the question only**. Each of them is
+Sharing a filter — with a caving group or with everyone signed in — gives them **the question
+only**. Each of them is
 answered with what they themselves may see; a filter never lends its author's access to anyone.
 For the same reason a saved filter **never keeps a place to measure from** — *nearest to here*
 is asked afresh each time.

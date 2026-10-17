@@ -248,14 +248,15 @@ multe condiții, grupuri imbricate prea adânc — sunt arătate pentru filtru �
 ## Filtre salvate
 
 Un filtru salvat este **o întrebare pe care o păstrați**. **Filtre salvate**, din meniul
-contului, le arată pe cele pe care le puteți folosi: ale dumneavoastră și cele partajate cu un
-grup de speologie din care faceți parte.
+contului, le arată pe cele pe care le puteți folosi: ale dumneavoastră, cele partajate cu un
+grup de speologie din care faceți parte și cele partajate cu toți cei autentificați în această
+instalare.
 
 | Coloană | Arată |
 |---|---|
 | **Nume** | numele și descrierea lui |
 | **Caută** | condițiile, în cuvinte |
-| **Cine îl poate folosi** | **Doar eu** sau **Membrii** unui grup de speologie |
+| **Cine îl poate folosi** | **Doar eu**, **Membrii** unui grup de speologie sau **Toți cei autentificați** |
 | **Salvat de** | **Dumneavoastră**, autorul așa cum vi-l arată profilul lui, sau **Un membru al clubului** |
 | **Stare** | **Pregătit**, **Învechit** (un tip sau o etichetă numită de el a fost ștearsă între timp, așa că acea condiție nu mai găsește nimic) sau **Nu poate fi citit** |
 
@@ -263,9 +264,19 @@ grup de speologie din care faceți parte.
 salvată a galeriei apare și ea aici și se aplică din galerie, cu **Aplică o vizualizare salvată
 a galeriei…**.
 
+### Cu cine este partajat un filtru nou
+
+Oriunde salvați un filtru, fereastra arată **cine îl poate folosi** și spune într-un rând ce
+înseamnă — *„Doar dumneavoastră vedeți acest filtru."*, *„Membrii … îl pot folosi"* sau *„Toți
+cei autentificați îl pot folosi"*. Pornește de la **alegerea dumneavoastră implicită**, care este
+**Doar eu** până o schimbați în **Setări → Filtre salvate** (legătura **Schimbați alegerea
+implicită** din fereastră duce acolo). Puteți alege altfel pentru fiecare filtru salvat și îl
+puteți schimba mai târziu din listă. Nimeni fără cont nu vede vreodată un filtru salvat.
+
 ### Partajarea nu acordă nimic
 
-Partajarea unui filtru cu un grup de speologie le dă membrilor lui **doar întrebarea**. Fiecăruia i se
+Partajarea unui filtru — cu un grup de speologie sau cu toți cei autentificați — le dă
+**doar întrebarea**. Fiecăruia i se
 răspunde cu ce are el însuși dreptul să vadă; un filtru nu împrumută nimănui drepturile
 autorului său. Din același motiv, un filtru salvat **nu păstrează niciodată un loc de la care se
 măsoară** — *cel mai apropiat de aici* se întreabă din nou de fiecare dată.

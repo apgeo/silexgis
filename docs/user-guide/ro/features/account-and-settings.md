@@ -7,8 +7,8 @@
 
 ---
 
-**Setări** are opt pagini: Profil · Cont · E-mailuri · Notificări · Securitate · Accesibilitate
-· Sincronizare · Avansat.
+**Setări** are nouă pagini: Profil · Cont · E-mailuri · Notificări · Securitate · Accesibilitate
+· Filtre salvate · Sincronizare · Avansat.
 
 ---
 
@@ -153,6 +153,21 @@ furnizor OIDC** pe lângă parolă. Legați și dezlegați de aici.
 **Resetează** readuce cele două setări de mai sus împreună cu tema, densitatea și reducerea
 animațiilor. Limba rămâne cum este, iar numerele de la [Avansat](#avansat) nu sunt atinse —
 acelea au propriul drum înapoi acolo.
+
+---
+
+## Filtre salvate
+
+| | |
+|---|---|
+| **Partajați filtrele noi cu** | Doar eu · Membrii unuia dintre grupurile dumneavoastră de speologie · Toți cei autentificați |
+
+De aici **pornește** un filtru pe care îl salvați: fiecare fereastră de salvare îl preselectează,
+iar dumneavoastră puteți alege altfel de fiecare dată. Este **Doar eu** până îl schimbați și vă
+urmează contul pe orice dispozitiv. Partajarea le dă celorlalți doar întrebarea — fiecăruia i se
+răspunde cu ce are el însuși dreptul să vadă. Dacă grupul de speologie ales aici nu mai este unul
+cu care puteți partaja, filtrele noi pornesc private până alegeți din nou. Vedeți
+[Filtre salvate](search-and-filters.md#filtre-salvate).
 
 ---
 

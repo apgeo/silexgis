@@ -7,8 +7,8 @@
 
 ---
 
-**Settings** has eight pages: Profile · Account · Emails · Notifications · Security ·
-Accessibility · Sync · Advanced.
+**Settings** has nine pages: Profile · Account · Emails · Notifications · Security ·
+Accessibility · Saved filters · Sync · Advanced.
 
 ---
 
@@ -152,6 +152,21 @@ OIDC provider** in addition to your password. Link and unlink from here.
 **Reset these** puts back the two settings above together with the theme, the density and
 reduced motion. It leaves the language alone, and it does not touch the numbers under
 [Advanced](#advanced) — those have their own way back there.
+
+---
+
+## Saved filters
+
+| | |
+|---|---|
+| **Share new filters with** | Only me · Members of one of your caving groups · Everyone signed in |
+
+This is where a filter you save **starts out**: every save dialog pre-selects it, and you can still
+choose differently each time. It is **Only me** until you change it, and it follows your account
+to every device. Sharing gives others the question only — each of them is answered with what they
+themselves may see. If the caving group chosen here is no longer one you can share with, new
+filters start out private until you choose again. See
+[Saved filters](search-and-filters.md#saved-filters).
 
 ---
 
