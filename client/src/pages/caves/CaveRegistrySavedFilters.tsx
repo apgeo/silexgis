@@ -12,6 +12,9 @@ import {
   useSavedFilters,
   type SavedFilter,
 } from '../../api/hooks/savedFilters.ts';
+import SavedFilterAudienceField from '../../components/filters/SavedFilterAudienceField.tsx';
+import { useSavedFilterAudienceChoice } from '../../components/filters/useSavedFilterAudienceChoice.ts';
+import { audienceFields, type SavedFilterAudience } from '../../filters/savedFilterAudience.ts';
 import {
   caveRegistryDocument,
   readCaveRegistry,
@@ -61,7 +64,9 @@ export default function CaveRegistrySavedFilters({
   const { data: savedFilters, isSuccess } = useSavedFilters();
   const create = useCreateSavedFilter();
   const [saving, setSaving] = useState(false);
-  const [form] = Form.useForm<{ name: string; description?: string }>();
+  const [form] = Form.useForm<{ name: string; description?: string; audience: SavedFilterAudience }>();
+  // The dialog is rebuilt on every open, so it starts each time from the member's current default.
+  const { groups, defaultAudience } = useSavedFilterAudienceChoice();
 
   const document = caveRegistryDocument(reading.controls, reading.extra);
   // A typed point or a pasted outline is a position of its own, which a saved filter never holds:
@@ -96,7 +101,7 @@ export default function CaveRegistrySavedFilters({
         name: values.name.trim(),
         description: values.description?.trim() || null,
         document,
-        visibility: 'private',
+        ...audienceFields(values.audience),
       });
       setSaving(false);
       form.resetFields();
@@ -212,7 +217,7 @@ export default function CaveRegistrySavedFilters({
         onCancel={() => setSaving(false)}
         destroyOnHidden
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form form={form} layout="vertical" preserve={false} initialValues={{ audience: defaultAudience }}>
           <Form.Item
             name="name"
             label={t('savedFilters.name')}
@@ -222,6 +227,9 @@ export default function CaveRegistrySavedFilters({
           </Form.Item>
           <Form.Item name="description" label={t('savedFilters.description')} rules={[{ max: 2000 }]}>
             <Input.TextArea rows={3} data-testid="saved-filter-description" />
+          </Form.Item>
+          <Form.Item name="audience" label={t('savedFilters.audience')}>
+            <SavedFilterAudienceField groups={groups} showDefaultLink testId="saved-filter-audience" />
           </Form.Item>
         </Form>
       </Modal>

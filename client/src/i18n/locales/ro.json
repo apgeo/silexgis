@@ -665,7 +665,7 @@
   },
   "savedFilters": {
     "title": "Filtre salvate",
-    "intro": "Un filtru salvat este o întrebare pe care o păstrați. Dacă îl partajați cu un grup de speologie, membrii lui o pot pune; fiecăruia i se răspunde cu ce are el însuși dreptul să vadă.",
+    "intro": "Un filtru salvat este o întrebare pe care o păstrați. Dacă îl partajați cu un grup de speologie sau cu toți cei autentificați, aceștia o pot pune; fiecăruia i se răspunde cu ce are el însuși dreptul să vadă.",
     "toRegistry": "Registrul peșterilor",
     "empty": "Niciun filtru salvat. Salvați unul din registrul peșterilor.",
     "name": "Nume",
@@ -673,13 +673,19 @@
     "asks": "Caută",
     "cannotShow": "Nu poate fi afișat",
     "audience": "Cine îl poate folosi",
-    "audienceHint": "Partajarea dă grupului doar întrebarea — niciodată acces la ce găsește.",
     "private": "Doar eu",
     "someGroup": "Un grup de speologie",
     "author": "Salvat de",
     "byYou": "Dumneavoastră",
     "someMember": "Un membru al clubului",
     "sharedWith": "Membrii {{name}}",
+    "authenticated": "Toți cei autentificați",
+    "explain": {
+      "private": "Doar dumneavoastră vedeți acest filtru.",
+      "cavingGroup": "Membrii {{name}} îl pot folosi — fiecăruia îi arată doar ce poate vedea deja.",
+      "authenticated": "Toți cei autentificați îl pot folosi — fiecăruia îi arată doar ce poate vedea deja."
+    },
+    "changeDefault": "Schimbați alegerea implicită",
     "state": "Stare",
     "states": {
       "ready": "Pregătit",
@@ -3761,6 +3767,7 @@
       "notifications": "Notificări",
       "security": "Securitate",
       "accessibility": "Accesibilitate",
+      "filters": "Filtre salvate",
       "sync": "Sincronizare",
       "advanced": "Avansat"
     },
@@ -3932,6 +3939,13 @@
         "tripCallout": "Se trimit mereu și nu se amână pentru rezumatul zilnic — o echipă întârziată nu mai este o noutate a doua zi dimineața."
       },
       "noDelivery": "Această instalare nu are un server de e-mail configurat, deci nu se trimite nimic încă. Alegerile sunt salvate și vor fi folosite când va exista unul."
+    },
+    "filters": {
+      "heading": "Filtre salvate",
+      "intro": "Un filtru pe care îl salvați este partajat la început cu cei aleși aici. Puteți alege altfel de fiecare dată când salvați unul, iar mai târziu în lista filtrelor salvate. Partajarea le dă celorlalți doar întrebarea — fiecăruia i se răspunde cu ce are el însuși dreptul să vadă.",
+      "defaultAudience": "Partajați filtrele noi cu",
+      "groupGone": "Grupul de speologie ales aici nu mai este unul cu care puteți partaja, așa că filtrele noi pornesc private până alegeți din nou.",
+      "manage": "Filtrele dumneavoastră salvate"
     },
     "accessibility": {
       "heading": "Aspect",

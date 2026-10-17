@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { DeleteOutlined, EditOutlined, PushpinFilled, PushpinOutlined, SearchOutlined } from '@ant-design/icons';
-import { App, Flex, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { App, Flex, Form, Input, Modal, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -16,15 +16,23 @@ import {
 import { readCaveRegistry, writeCaveRegistryAddress } from '../../filters/caveRegistry.ts';
 import { describeCaveRegistry, type ConditionPart } from '../../filters/describe.ts';
 import { MAX_PINNED_FILTERS, useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+import SavedFilterAudienceField from '../../components/filters/SavedFilterAudienceField.tsx';
+import { useSavedFilterAudienceChoice } from '../../components/filters/useSavedFilterAudienceChoice.ts';
+import { audienceFields, type SavedFilterAudience } from '../../filters/savedFilterAudience.ts';
 
 interface EditValues {
   name: string;
   description?: string;
-  /** A caving group's id, or `private`. */
-  audience: string;
+  audience: SavedFilterAudience;
 }
 
-const PRIVATE = 'private';
+/** The audience a stored filter has, as the share control holds it. */
+function audienceOf(filter: SavedFilter): SavedFilterAudience {
+  if (filter.visibility === 'cavingGroup' && filter.cavingGroupId) {
+    return { visibility: 'cavingGroup', cavingGroupId: filter.cavingGroupId };
+  }
+  return filter.visibility === 'authenticated' ? { visibility: 'authenticated' } : { visibility: 'private' };
+}
 
 /**
  * The saved filters this account may read: its own, and those its caving groups were given.
@@ -46,7 +54,10 @@ export default function SavedFiltersPage() {
   const { data: filters, isLoading } = useSavedFilters();
   const { data: caveTypes } = useCaveTypes();
   const { data: tags } = useTags('');
+  // Every club, to name the group a listed filter is shared with; the share control offers only
+  // the member's own groups a filter may be bound to, which is what the server accepts.
   const { data: cavingGroups } = useCavingGroups();
+  const { groups: shareGroups } = useSavedFilterAudienceChoice();
   const update = useUpdateSavedFilter();
   const remove = useDeleteSavedFilter();
   const [editing, setEditing] = useState<SavedFilter | null>(null);
@@ -74,14 +85,13 @@ export default function SavedFiltersPage() {
     form.setFieldsValue({
       name: filter.name,
       description: filter.description ?? undefined,
-      audience: filter.visibility === 'cavingGroup' && filter.cavingGroupId ? filter.cavingGroupId : PRIVATE,
+      audience: audienceOf(filter),
     });
   };
 
   const saveEdit = async () => {
     if (!editing) return;
     const values = await form.validateFields();
-    const shared = values.audience !== PRIVATE;
     try {
       await update.mutateAsync({
         id: editing.id,
@@ -90,8 +100,7 @@ export default function SavedFiltersPage() {
           description: values.description?.trim() || null,
           // Null keeps the stored question: renaming or sharing one never re-sends it.
           document: null,
-          cavingGroupId: shared ? values.audience : null,
-          visibility: shared ? 'cavingGroup' : 'private',
+          ...audienceFields(values.audience),
         },
       });
       setEditing(null);
@@ -185,6 +194,8 @@ export default function SavedFiltersPage() {
             render: (_: unknown, filter) =>
               filter.visibility === 'cavingGroup' ? (
                 <Tag color="blue">{groupName(filter.cavingGroupId)}</Tag>
+              ) : filter.visibility === 'authenticated' ? (
+                <Tag color="green" data-testid={`saved-filter-audience-${filter.id}`}>{t('savedFilters.authenticated')}</Tag>
               ) : (
                 <Tag>{t('savedFilters.private')}</Tag>
               ),
@@ -286,25 +297,11 @@ export default function SavedFiltersPage() {
           <Form.Item name="description" label={t('savedFilters.description')} rules={[{ max: 2000 }]}>
             <Input.TextArea rows={3} />
           </Form.Item>
-          <Form.Item
-            name="audience"
-            label={t('savedFilters.audience')}
-            extra={t('savedFilters.audienceHint')}
-          >
-            <Select
-              data-testid="saved-filter-edit-audience"
-              options={[
-                { value: PRIVATE, label: t('savedFilters.private') },
-                ...(cavingGroups ?? []).map((group) => ({
-                  value: group.id,
-                  label: t('savedFilters.sharedWith', { name: group.name }),
-                })),
-                // An administrator tidying another member's filter may not be in the group it is
-                // shared with; keeping that group on offer lets them rename it without moving it.
-                ...(editing?.cavingGroupId && !(cavingGroups ?? []).some((group) => group.id === editing.cavingGroupId)
-                  ? [{ value: editing.cavingGroupId, label: groupName(editing.cavingGroupId) }]
-                  : []),
-              ]}
+          <Form.Item name="audience" label={t('savedFilters.audience')}>
+            <SavedFilterAudienceField
+              groups={shareGroups}
+              groupName={(id) => cavingGroups?.find((group) => group.id === id)?.name}
+              testId="saved-filter-edit-audience"
             />
           </Form.Item>
         </Form>

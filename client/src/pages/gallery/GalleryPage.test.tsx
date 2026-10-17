@@ -38,6 +38,12 @@ vi.mock('../../api/hooks.ts', () => ({
   },
 }));
 
+// The save dialogs' audience control reads the member's own caving groups from their access.
+vi.mock('../../api/hooks/access.ts', () => ({
+  useCapabilities: () => ({ data: {}, isLoading: false }),
+  useCreateDoor: () => ({ canCreate: true, unbound: false, cavingGroups: [] }),
+}));
+
 vi.mock('../../api/hooks/savedFilters.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks/savedFilters.ts')>(
     '../../api/hooks/savedFilters.ts',

@@ -665,7 +665,7 @@
   },
   "savedFilters": {
     "title": "Saved filters",
-    "intro": "A saved filter is a question you keep. Sharing one with a caving group lets its members ask it; each of them is answered with what they themselves may see.",
+    "intro": "A saved filter is a question you keep. Sharing one with a caving group, or with everyone signed in, lets them ask it; each of them is answered with what they themselves may see.",
     "toRegistry": "Cave registry",
     "empty": "No saved filters. Save one from the cave registry.",
     "name": "Name",
@@ -673,13 +673,19 @@
     "asks": "Asks for",
     "cannotShow": "Cannot be shown",
     "audience": "Who can use it",
-    "audienceHint": "Sharing gives the group the question only — never access to anything it finds.",
     "private": "Only me",
     "someGroup": "A caving group",
     "author": "Saved by",
     "byYou": "You",
     "someMember": "A club member",
     "sharedWith": "Members of {{name}}",
+    "authenticated": "Everyone signed in",
+    "explain": {
+      "private": "Only you can see this filter.",
+      "cavingGroup": "Members of {{name}} can use it — it shows each of them only what they can already see.",
+      "authenticated": "Everyone signed in can use it — it shows each of them only what they can already see."
+    },
+    "changeDefault": "Change your default",
     "state": "State",
     "states": {
       "ready": "Ready",
@@ -3761,6 +3767,7 @@
       "notifications": "Notifications",
       "security": "Security",
       "accessibility": "Accessibility",
+      "filters": "Saved filters",
       "sync": "Sync",
       "advanced": "Advanced"
     },
@@ -3932,6 +3939,13 @@
         "tripCallout": "Always sent, and never held for the daily summary — an overdue party is nobody's news in the morning."
       },
       "noDelivery": "This installation has no mail server configured, so nothing is sent yet. Your choices are saved and will be used once one is."
+    },
+    "filters": {
+      "heading": "Saved filters",
+      "intro": "A filter you save starts out shared with the audience chosen here. You can still choose differently each time you save one, and later in the list of saved filters. Sharing gives others the question only — each of them is answered with what they themselves may see.",
+      "defaultAudience": "Share new filters with",
+      "groupGone": "The caving group chosen here is no longer one you can share with, so new filters start out private until you choose again.",
+      "manage": "Your saved filters"
     },
     "accessibility": {
       "heading": "Appearance",

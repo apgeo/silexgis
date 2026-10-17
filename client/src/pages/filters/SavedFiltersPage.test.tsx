@@ -20,6 +20,12 @@ vi.mock('../../api/hooks.ts', () => ({
   useCavingGroups: () => ({ data: [{ id: 'g-1', name: 'Speo Club', slug: 'speo-club' }] }),
 }));
 
+// The save dialogs' audience control reads the member's own caving groups from their access.
+vi.mock('../../api/hooks/access.ts', () => ({
+  useCapabilities: () => ({ data: {}, isLoading: false }),
+  useCreateDoor: () => ({ canCreate: true, unbound: false, cavingGroups: [{ id: 'g-1', name: 'Speo Club' }] }),
+}));
+
 vi.mock('../../api/hooks/savedFilters.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks/savedFilters.ts')>(
     '../../api/hooks/savedFilters.ts',
@@ -139,6 +145,40 @@ describe('the saved filters screen', () => {
     const sent = updateSpy.mock.calls[0]![0] as { write: { cavingGroupId: string | null; visibility: string } };
     expect(sent.write.cavingGroupId).toBe('g-elsewhere');
     expect(sent.write.visibility).toBe('cavingGroup');
+  });
+
+  it('shows a filter shared with everyone signed in as such, and keeps that audience on a rename', async () => {
+    filters.current = [filter({ id: 'f-4', visibility: 'authenticated', cavingGroupId: null })];
+    show();
+
+    expect(screen.getByTestId('saved-filter-audience-f-4')).toHaveTextContent('Everyone signed in');
+    fireEvent.click(screen.getByTestId('saved-filter-edit-f-4'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByTestId('saved-filter-edit-audience-explanation')).toHaveTextContent(
+      'Everyone signed in can use it',
+    );
+    // Editing an existing filter starts from its own audience, not from the member's default.
+    expect(within(dialog).queryByRole('link', { name: /Change your default/ })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalled());
+    const sent = updateSpy.mock.calls[0]![0] as { write: { cavingGroupId: string | null; visibility: string } };
+    expect(sent.write).toMatchObject({ visibility: 'authenticated', cavingGroupId: null });
+  });
+
+  it('narrows a filter shared with everyone to only its author', async () => {
+    filters.current = [filter({ id: 'f-4', visibility: 'authenticated', cavingGroupId: null })];
+    show();
+
+    fireEvent.click(screen.getByTestId('saved-filter-edit-f-4'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Who can use it' }));
+    fireEvent.click(await screen.findByTitle('Only me'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalled());
+    const sent = updateSpy.mock.calls[0]![0] as { write: { cavingGroupId: string | null; visibility: string } };
+    expect(sent.write).toMatchObject({ visibility: 'private', cavingGroupId: null });
   });
 
   it.each([
