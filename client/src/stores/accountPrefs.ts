@@ -455,3 +455,52 @@ export function storeValuesFor(prefs: AccountPrefs, current: AccountPrefs): Part
   }
   return values as Partial<AccountPrefsState>;
 }
+
+/**
+ * What to send when the page is going away and a change made here is still unsent — or null when
+ * there is nothing to send, or nothing that fits.
+ *
+ * A page being closed cannot wait for the account's document to be read first, so this is planned
+ * from the baseline alone, the account's document as this browser last read or wrote it: the
+ * patch names only what was changed here, and the server merges it member by member, so whatever
+ * another browser changed since stands. The one exception is the named layouts. They travel as a
+ * whole list, merged layout by layout with the list the account holds NOW, and sending this
+ * browser's list unread would remove a layout saved elsewhere in the meantime. So a change to the
+ * layouts is left to the next write that can read first — the next sign-in in this browser —
+ * rather than risk another browser's layout. Held to the server's limit as measured on the
+ * baseline; one that would not fit is not sent, and stays for a write that can plan properly.
+ */
+export function planLeavingWrite(
+  base: AccountPrefs,
+  local: AccountPrefs,
+  maxLength: number = PREFERENCES_MAX_LENGTH,
+): Record<string, unknown> | null {
+  const known = base as Record<string, unknown>;
+  const patch = accountPrefsPatchSince(known, base, { ...local, layouts: base.layouts });
+  if (Object.keys(patch).length === 0) {
+    return null;
+  }
+  return preferencesLength(applyMergePatch(known, patch)) <= maxLength ? patch : null;
+}
+
+/**
+ * The baseline once a leaving write has been sent: the account's document as this browser last
+ * knew it, with the patch applied. The page cannot see the answer, so the patch is taken as having
+ * landed. Counting it as still unsent instead would have the next sign-in here write it again —
+ * over whatever was chosen in another browser after it landed, bringing back a value the person had
+ * already undone there.
+ */
+export function baselineAfterLeaving(base: AccountPrefs, patch: Record<string, unknown>): AccountPrefs {
+  return accountPrefsIn(applyMergePatch(base, patch));
+}
+
+/**
+ * The ids of the named layouts held here that the account does not hold: those a write had to
+ * leave out because the account's document was full, or that a refused write could not take.
+ */
+export function layoutsNotIn(account: AccountPrefs, local: AccountPrefs): string[] {
+  const held = new Set(layoutsOf(account).map((layout) => layout.id));
+  return layoutsOf(local)
+    .map((layout) => layout.id)
+    .filter((id) => !held.has(id));
+}

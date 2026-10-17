@@ -90,4 +90,32 @@ describe('two tabs signed in to one account', () => {
     // And the laptop has the desktop's choice now, from its own write's answer.
     expect(laptop.getState().coordinateFormat).toBe('utm');
   });
+
+  it('a pop-out window writes its own arrangement, and the main window’s next write keeps it', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    stored = {};
+    const main = await openTab();
+    const popout = await openTab();
+
+    act(() => popout.getState().setPanelPrefs('popout', { collapsed: ['history'], pinned: false }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    // Written from the pop-out itself, not left in its copy of the cache.
+    expect((stored.panels as Record<string, unknown>).popout).toEqual({ collapsed: ['history'], pinned: false });
+
+    act(() => main.getState().setPanelPrefs('main', { width: 33 }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    // The main window sent its own change only, and has the pop-out's from its write's answer.
+    expect(stored.panels).toEqual({ main: { width: 33 }, popout: { collapsed: ['history'], pinned: false } });
+    expect(put.mock.calls.at(-1)?.[0]).toEqual({ panels: { main: { width: 33 } } });
+    expect(main.getState().panels.popout).toEqual({ collapsed: ['history'], pinned: false });
+
+    // And the next pop-out opened, anywhere, starts from it.
+    localStorage.clear();
+    const another = await openTab();
+    expect(another.getState().panels.popout).toEqual({ collapsed: ['history'], pinned: false });
+  });
 });

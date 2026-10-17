@@ -7,16 +7,20 @@ import {
   PREFERENCES_MAX_LENGTH,
   PREFERENCES_RETRY_LENGTH,
   accountPrefsIn,
+  baselineAfterLeaving,
   baselineAfterRefusal,
   changedSince,
+  layoutsNotIn,
   mergeAccountPrefs,
   pickAccountPrefs,
   planAccountWrite,
+  planLeavingWrite,
   storeValuesFor,
   withoutLayouts,
   type AccountPrefs,
 } from '../../stores/accountPrefs.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+import type { paths } from '../schema';
 import { queryKeys } from './queryKeys.ts';
 import { unwrap } from './shared.ts';
 
@@ -44,16 +48,30 @@ let takingFromAccount = false;
 /**
  * Takes the account's document as what this browser now knows the account to hold, and the
  * account's value of every preference not changed here since `base`.
+ *
+ * `leftOut` names the layouts the write just made had to leave out because the document was full:
+ * they join those this browser already keeps on its own, and any of them the account now holds —
+ * written up by a later save, or from another browser — stops being marked as kept here.
  */
-function takeAccount(document: Record<string, unknown>, base: AccountPrefs): void {
+function takeAccount(document: Record<string, unknown>, base: AccountPrefs, leftOut: readonly string[] = []): void {
   const account = accountPrefsIn(document);
   const state = useUiPrefsStore.getState();
   const merged = mergeAccountPrefs(base, pickAccountPrefs(state), account);
+  const keptBefore = new Set([...state.layoutsKeptHere, ...leftOut]);
   takingFromAccount = true;
   try {
     state.applyAccountPrefs(storeValuesFor(merged, state), account);
+    const kept = layoutsNotIn(account, pickAccountPrefs(useUiPrefsStore.getState())).filter((id) => keptBefore.has(id));
+    keepLayoutsHere(kept);
   } finally {
     takingFromAccount = false;
+  }
+}
+
+function keepLayoutsHere(ids: string[]): void {
+  const state = useUiPrefsStore.getState();
+  if (ids.length !== state.layoutsKeptHere.length || ids.some((id, index) => state.layoutsKeptHere[index] !== id)) {
+    state.setLayoutsKeptHere(ids);
   }
 }
 
@@ -148,7 +166,7 @@ async function saveOnce(queryClient: QueryClient, accountId: string): Promise<vo
       return;
     }
     // Measured from what was sent: a layout left out to fit is not one the account removed.
-    takeAccount(answer, withoutLayouts(local, write.leftOut));
+    takeAccount(answer, withoutLayouts(local, write.leftOut), write.leftOut);
     return;
   }
 }
@@ -177,9 +195,12 @@ export class AccountPrefsRefused extends Error {
  */
 function giveUp(base: AccountPrefs, local: AccountPrefs): void {
   const state = useUiPrefsStore.getState();
+  const settled = baselineAfterRefusal(base, local);
   takingFromAccount = true;
   try {
-    state.applyAccountPrefs({}, baselineAfterRefusal(base, local));
+    state.applyAccountPrefs({}, settled);
+    // The layouts added here stay out of the settled baseline, and so in this browser only.
+    keepLayoutsHere([...new Set([...state.layoutsKeptHere, ...layoutsNotIn(settled, local)])]);
   } finally {
     takingFromAccount = false;
   }
@@ -218,6 +239,78 @@ export async function flushAccountPreferences(): Promise<void> {
   await Promise.race([flushing.catch(() => undefined), new Promise((resolve) => setTimeout(resolve, FLUSH_WAIT_MS))]);
 }
 
+/** The account's own write, as the page names it when it has no time to go through the client. */
+const PREFERENCES_PATH = '/api/v1/me/preferences';
+
+type PreferencesPatchBody =
+  paths['/api/v1/me/preferences']['patch']['requestBody']['content']['application/json'];
+
+/**
+ * The signed-in account's access token, as last handed to the sync — held here because a page
+ * being closed has no time to ask the sign-in library for it.
+ */
+let bearer: { accountId: string; token: string } | undefined;
+
+/**
+ * Sends a change still unsent as the page goes away — with a request the browser carries on with
+ * after the page has gone, and that cannot wait for a read first (see `planLeavingWrite` for what
+ * that leaves out). Only for the account that holds the cache, and only with that account's own
+ * token: the server writes to whichever account the token is of, so the change can land on
+ * nobody else's preferences, however late it arrives.
+ *
+ * What is sent is counted as written from the moment it goes (see `baselineAfterLeaving`): a page
+ * that is closing never sees the answer, and a change still counted as unsent would be written
+ * again at the next sign-in here, over a choice made in another browser since. Only a page that is
+ * still here to see the request fail or be refused — one kept in the back-forward cache — counts
+ * the change as unsent again. So a closing request that never arrives loses that change: the
+ * account keeps what it had, as it would have without the request. A change still in the cache
+ * is dropped, never applied, if another member signs in on this browser, because claiming the
+ * cache for them resets it.
+ */
+function sendBeforeLeaving(accountId: string): void {
+  const state = useUiPrefsStore.getState();
+  if (state.accountId !== accountId || bearer?.accountId !== accountId) {
+    return;
+  }
+  const base = baselineHere();
+  const patch = planLeavingWrite(base, pickAccountPrefs(state));
+  if (!patch) {
+    return;
+  }
+  const body: PreferencesPatchBody = { preferences: patch };
+  const request = fetch(PREFERENCES_PATH, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${bearer.token}` },
+    body: JSON.stringify(body),
+    keepalive: true,
+    credentials: 'omit',
+  });
+  const sentBaseline = baselineAfterLeaving(base, patch);
+  setBaseline(sentBaseline);
+  const unsent = () => {
+    // Only while nothing has moved the baseline on since: a later read or write knows better.
+    const now = useUiPrefsStore.getState();
+    if (now.accountId === accountId && now.accountPrefsBaseline === sentBaseline) {
+      setBaseline(base);
+    }
+  };
+  void request.then((response) => {
+    if (!response.ok) {
+      unsent();
+    }
+  }, unsent);
+}
+
+/** Moves the baseline alone — no preference value changes, so nothing is scheduled to be written. */
+function setBaseline(baseline: AccountPrefs): void {
+  takingFromAccount = true;
+  try {
+    useUiPrefsStore.getState().applyAccountPrefs({}, baseline);
+  } finally {
+    takingFromAccount = false;
+  }
+}
+
 /**
  * Keeps the account preferences in step between this browser and the account, for as long as the
  * signed-in shell is drawn.
@@ -227,8 +320,12 @@ export async function flushAccountPreferences(): Promise<void> {
  * start, a change to any account preference is written back, a moment after the changes stop —
  * whether or not the account's values could be read.
  */
-export function useAccountPrefsSync(accountId: string | null) {
+export function useAccountPrefsSync(accountId: string | null, accessToken?: string) {
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    bearer = accountId && accessToken ? { accountId, token: accessToken } : undefined;
+  }, [accountId, accessToken]);
 
   useEffect(() => {
     if (!accountId) {
@@ -299,10 +396,29 @@ export function useAccountPrefsSync(accountId: string | null) {
       // are still written as they are made.
     });
 
+    // A change made moments before the page is put away or closed would otherwise wait out the
+    // settling delay on a page that is no longer there. Hidden — the tab switched away from, the
+    // phone's app switcher, often the first step of a close — it is written the ordinary way,
+    // reading first. Going away for good, there is no time to read: what can be sent unread goes
+    // with a request the browser finishes after the page is gone, and is counted as written. A
+    // change caught by both is only written twice, with the same values.
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') {
+        void flush();
+      }
+    };
+    // The settling timer is left running: a page kept in the browser's back-forward cache comes
+    // back with it, and a page that does not come back takes it along.
+    const onPageHide = () => sendBeforeLeaving(accountId);
+    document.addEventListener('visibilitychange', onHidden);
+    window.addEventListener('pagehide', onPageHide);
+
     return () => {
       cancelled = true;
       clearTimeout(timer);
       unsubscribe();
+      document.removeEventListener('visibilitychange', onHidden);
+      window.removeEventListener('pagehide', onPageHide);
       if (flushRunning === flush) {
         flushRunning = undefined;
       }

@@ -5,6 +5,7 @@ import { createBrowserRouter, Navigate, RouterProvider, type RouteObject } from 
 import { AuthProvider } from './auth/auth.tsx';
 import RequireAuth from './auth/RequireAuth.tsx';
 import AppLayout from './components/AppLayout.tsx';
+import PanelShell from './pages/panel/PanelShell.tsx';
 import RouteErrorPage from './components/RouteErrorPage.tsx';
 import CallbackPage from './pages/CallbackPage.tsx';
 import LandingRoute from './pages/LandingRoute.tsx';
@@ -160,8 +161,12 @@ export const routes: RouteObject[] = guarded([
   {
     element: <RequireAuth />,
     children: [
-      // Chrome-less pop-out panels join the workspace bus from their own windows.
-      { path: '/panel/:panelId', element: <Loadable><PanelPage /></Loadable> },
+      // Chrome-less pop-out panels join the workspace bus from their own windows, and keep the
+      // account's preferences in step from there.
+      {
+        element: <PanelShell />,
+        children: [{ path: '/panel/:panelId', element: <Loadable><PanelPage /></Loadable> }],
+      },
       {
         element: <AppLayout />,
         children: [

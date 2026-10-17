@@ -13,7 +13,16 @@ import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
  * as it opens would keep it. Claiming happens in a layout effect, which runs before the browser
  * paints, so the moment of drawing nothing is never seen either.
  */
-export default function AccountPrefsGate({ accountId, children }: { accountId: string | null; children: ReactNode }) {
+export default function AccountPrefsGate({
+  accountId,
+  accessToken,
+  children,
+}: {
+  accountId: string | null;
+  /** The account's access token, for the write a closing page sends without the API client. */
+  accessToken?: string;
+  children: ReactNode;
+}) {
   // The account the cache has been claimed for, as far as drawing goes. Not read live from the
   // store: a sign-out releases the cache while the page is still on screen, and the shell is left
   // drawn — with the defaults — until the sign-out has taken the page away.
@@ -26,6 +35,6 @@ export default function AccountPrefsGate({ accountId, children }: { accountId: s
       setClaimedFor(accountId);
     }
   }, [accountId]);
-  useAccountPrefsSync(accountId);
+  useAccountPrefsSync(accountId, accessToken);
   return accountId && claimedFor !== accountId ? null : children;
 }

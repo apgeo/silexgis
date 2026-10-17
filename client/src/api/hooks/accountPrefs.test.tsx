@@ -63,13 +63,13 @@ vi.mock('../client.ts', async () => {
 
 const { flushAccountPreferences, useAccountPrefsSync } = await import('./accountPrefs.ts');
 
-function sync(accountId: string | null, { strict = false } = {}) {
+function sync(accountId: string | null, { strict = false, token }: { strict?: boolean; token?: string } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => {
     const tree = <QueryClientProvider client={client}>{children}</QueryClientProvider>;
     return strict ? <StrictMode>{tree}</StrictMode> : tree;
   };
-  return renderHook(({ id }) => useAccountPrefsSync(id), { initialProps: { id: accountId }, wrapper });
+  return renderHook(({ id }) => useAccountPrefsSync(id, token), { initialProps: { id: accountId }, wrapper });
 }
 
 beforeEach(() => {
@@ -316,5 +316,196 @@ describe('account preferences between this browser and the account', () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
     expect(put.mock.calls).toEqual([[{ overviewMap: true }]]);
+  });
+
+  it('marks a layout the account could not hold as kept here, until a later write gets it in', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    stored = { layouts: layouts(19).map((layout) => ({ ...layout, name: `${layout.name} ${'x'.repeat(240)}` })) };
+    sync('account-a');
+    await waitFor(() => expect(useUiPrefsStore.getState().layouts).toHaveLength(19));
+
+    act(() => useUiPrefsStore.getState().saveLayout('One more '.repeat(30), false));
+    const added = useUiPrefsStore.getState().layouts.at(-1)!.id;
+    // Not marked while it is merely waiting to be written: only once a write had to leave it out.
+    expect(useUiPrefsStore.getState().layoutsKeptHere).toEqual([]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(useUiPrefsStore.getState().layoutsKeptHere).toEqual([added]);
+
+    // Still kept here after a reload, when the account still has no room for it.
+    cleanup();
+    sync('account-a');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(useUiPrefsStore.getState().layoutsKeptHere).toEqual([added]);
+
+    // Room made by deleting one the account holds: the next write takes it, and the mark goes.
+    act(() => useUiPrefsStore.getState().deleteLayout(useUiPrefsStore.getState().layouts[0].id));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect((stored.layouts as PanelLayout[]).map((layout) => layout.id)).toContain(added);
+    expect(useUiPrefsStore.getState().layoutsKeptHere).toEqual([]);
+  });
+
+  it('marks a layout added here as kept here when the account refuses the write', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    sync('account-a');
+    await waitFor(() => expect(useUiPrefsStore.getState().accountPrefsBaseline).toBeDefined());
+    serverLimit = 0; // refuses everything
+
+    act(() => useUiPrefsStore.getState().saveLayout('Survey', false));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(useUiPrefsStore.getState().layoutsKeptHere).toEqual([useUiPrefsStore.getState().layouts[0].id]);
+  });
+});
+
+describe('a change made just before the page goes away', () => {
+  const sent = vi.fn<(url: string, init: RequestInit) => Promise<Response>>();
+
+  beforeEach(() => {
+    sent.mockReset();
+    sent.mockResolvedValue(new Response());
+    vi.stubGlobal('fetch', sent);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(document, 'visibilityState');
+  });
+
+  async function signedIn(token?: string) {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    stored = { coordinateFormat: 'dms', overviewMap: true };
+    sync('account-a', { token });
+    await waitFor(() => expect(useUiPrefsStore.getState().coordinateFormat).toBe('dms'));
+  }
+
+  function leave() {
+    window.dispatchEvent(new Event('pagehide'));
+  }
+
+  it('is sent as the page goes, with the account’s own token, and nothing else with it', async () => {
+    await signedIn('token-a');
+    act(() => {
+      useUiPrefsStore.getState().setCoordinateFormat('utm');
+      useUiPrefsStore.getState().setPanelPrefs('popout', { pinned: false });
+    });
+    leave();
+
+    expect(sent).toHaveBeenCalledTimes(1);
+    const [url, init] = sent.mock.calls[0];
+    expect(url).toBe('/api/v1/me/preferences');
+    expect(init.method).toBe('PATCH');
+    expect(init.keepalive).toBe(true);
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer token-a');
+    expect(JSON.parse(init.body as string)).toEqual({
+      preferences: { coordinateFormat: 'utm', panels: { popout: { pinned: false } } },
+    });
+  });
+
+  it('leaves a change to the named layouts to a write that reads first', async () => {
+    await signedIn('token-a');
+    act(() => useUiPrefsStore.getState().saveLayout('Late', false));
+    leave();
+    expect(sent).not.toHaveBeenCalled();
+
+    act(() => useUiPrefsStore.getState().setOverviewMap(false));
+    leave();
+    expect(JSON.parse(sent.mock.calls[0][1].body as string)).toEqual({ preferences: { overviewMap: null } });
+  });
+
+  it('sends nothing when nothing is unsent, without the account’s token, or after a sign-out', async () => {
+    await signedIn('token-a');
+    leave();
+    expect(sent).not.toHaveBeenCalled();
+
+    act(() => useUiPrefsStore.getState().setCoordinateFormat('utm'));
+    act(() => useUiPrefsStore.getState().releaseAccount());
+    leave();
+    expect(sent).not.toHaveBeenCalled();
+
+    cleanup();
+    await signedIn(undefined);
+    act(() => useUiPrefsStore.getState().setCoordinateFormat('utm'));
+    leave();
+    expect(sent).not.toHaveBeenCalled();
+  });
+
+  it('is dropped, never applied, when another member signs in on this browser before it lands', async () => {
+    await signedIn('token-a');
+    sent.mockRejectedValue(new TypeError('offline'));
+    act(() => useUiPrefsStore.getState().setCoordinateFormat('utm'));
+    leave();
+    expect(sent).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    // The cache still holds the change, as account A's.
+    expect(useUiPrefsStore.getState().accountId).toBe('account-a');
+    expect(useUiPrefsStore.getState().coordinateFormat).toBe('utm');
+
+    stored = {};
+    sync('account-b');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(useUiPrefsStore.getState().accountId).toBe('account-b');
+    expect(useUiPrefsStore.getState().coordinateFormat).not.toBe('utm');
+    for (const [patch] of put.mock.calls) {
+      expect(patch).not.toHaveProperty('coordinateFormat');
+    }
+  });
+
+  it('counts what it sent as written, so the next sign-in here does not send it again over a later choice', async () => {
+    await signedIn('token-a');
+    act(() => useUiPrefsStore.getState().setCoordinateFormat('utm'));
+    leave();
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(unsaved()).toBe(false);
+    cleanup();
+
+    // The request landed; in another browser the person then went back to what they had before.
+    stored = { coordinateFormat: 'dms', overviewMap: true };
+    sync('account-a', { token: 'token-a' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(useUiPrefsStore.getState().coordinateFormat).toBe('dms');
+    for (const [patch] of put.mock.calls) {
+      expect(patch).not.toHaveProperty('coordinateFormat');
+    }
+  });
+
+  it('counts the change as unsent again when the page is still here to see the request refused', async () => {
+    await signedIn('token-a');
+    sent.mockResolvedValue(new Response(null, { status: 503 }));
+    act(() => useUiPrefsStore.getState().setCoordinateFormat('utm'));
+    leave();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(unsaved()).toBe(true);
+
+    // Back from the back-forward cache: the settling write still goes.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(put).toHaveBeenCalledWith({ coordinateFormat: 'utm' });
+  });
+
+  it('is written the ordinary way, without waiting, when the page is hidden', async () => {
+    await signedIn('token-a');
+    act(() => useUiPrefsStore.getState().setCoordinateFormat('utm'));
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(put).toHaveBeenCalledWith({ coordinateFormat: 'utm' });
+    expect(sent).not.toHaveBeenCalled();
   });
 });

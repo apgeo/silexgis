@@ -37,7 +37,7 @@ import { sectionFor } from './navSections.ts';
 export default function AppLayout() {
   const { user } = useAuth();
   return (
-    <AccountPrefsGate accountId={user?.profile.sub ?? null}>
+    <AccountPrefsGate accountId={user?.profile.sub ?? null} accessToken={user?.access_token}>
       <AppShell />
     </AccountPrefsGate>
   );

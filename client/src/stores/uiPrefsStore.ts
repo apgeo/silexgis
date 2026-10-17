@@ -182,6 +182,14 @@ interface UiPrefsState {
    */
   accountPrefsBaseline?: Record<string, unknown>;
   /**
+   * The named layouts kept in this browser only, by id: those the account's stored preferences
+   * could not hold when they were written, so the layouts list can say that a layout will not be
+   * found in another browser, and why. A fact about this browser's copy, never sent; emptied with
+   * the cache whenever another account claims it.
+   */
+  layoutsKeptHere: string[];
+  setLayoutsKeptHere: (ids: string[]) => void;
+  /**
    * Makes the account preferences this account's: unless they already were, they go back to their
    * defaults first, so a member signing in on this browser starts from nothing of whoever used it
    * before. Says which it was: already this account's, or reset.
@@ -340,6 +348,8 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       setOverviewMap: (open) => set({ overviewMap: open }),
       accountId: undefined,
       accountPrefsBaseline: undefined,
+      layoutsKeptHere: [],
+      setLayoutsKeptHere: (ids) => set({ layoutsKeptHere: ids }),
       adoptAccount: (accountId) => {
         let claim: AccountClaim = 'same';
         set((state) => {
@@ -350,11 +360,12 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           // claimed is the defaults a sign-out left, or this browser's arrangement from before
           // preferences belonged to an account, which on an expedition's shared laptop is anybody's.
           claim = 'reset';
-          return { ...accountPrefDefaults(), accountId, accountPrefsBaseline: undefined };
+          return { ...accountPrefDefaults(), accountId, accountPrefsBaseline: undefined, layoutsKeptHere: [] };
         });
         return claim;
       },
-      releaseAccount: () => set({ ...accountPrefDefaults(), accountId: undefined, accountPrefsBaseline: undefined }),
+      releaseAccount: () =>
+        set({ ...accountPrefDefaults(), accountId: undefined, accountPrefsBaseline: undefined, layoutsKeptHere: [] }),
       applyAccountPrefs: (prefs, baseline) => set({ ...prefs, accountPrefsBaseline: baseline }),
     }),
     {
@@ -375,7 +386,14 @@ export const useUiPrefsStore = create<UiPrefsState>()(
         // cache says nothing about whose they are, so its account preferences are dropped rather
         // than handed to whoever signs in next, and the account's own come back at sign-in. (A
         // later version keeps them when migrating from this one or after it.)
-        return { ...state, ...browser, ...accountPrefDefaults(), accountId: undefined, accountPrefsBaseline: undefined };
+        return {
+          ...state,
+          ...browser,
+          ...accountPrefDefaults(),
+          accountId: undefined,
+          accountPrefsBaseline: undefined,
+          layoutsKeptHere: [],
+        };
       },
     },
   ),

@@ -8,11 +8,14 @@ import {
   accountPrefsIn,
   accountPrefsPatchSince,
   applyMergePatch,
+  baselineAfterLeaving,
   changedSince,
+  layoutsNotIn,
   mergeAccountPrefs,
   mergeLayouts,
   pickAccountPrefs,
   planAccountWrite,
+  planLeavingWrite,
   preferencesLength,
   readAccountPrefs,
   sanitizeAccountPrefs,
@@ -322,5 +325,55 @@ describe('mergeLayouts', () => {
     // Left out of the account's document to fit its limit: not in the baseline, so not removed.
     expect(mergeLayouts([a], [a, b], [a])).toEqual([a, b]);
     expect(changedSince({ layouts: [a] }, { layouts: [a, b] })).toBe(true);
+  });
+});
+
+describe('planLeavingWrite: what a closing page sends without reading first', () => {
+  const base: AccountPrefs = {
+    coordinateFormat: 'dms',
+    panels: { main: { width: 30 } },
+    layouts: [{ id: 'a', name: 'Survey', panels: {} }],
+  };
+
+  it('names only what was changed here, member by member', () => {
+    const local: AccountPrefs = { ...base, coordinateFormat: 'utm', panels: { main: { width: 30 }, popout: { pinned: false } } };
+    expect(planLeavingWrite(base, local)).toEqual({ coordinateFormat: 'utm', panels: { popout: { pinned: false } } });
+  });
+
+  it('removes a preference put back to its default', () => {
+    const local: AccountPrefs = { panels: base.panels, layouts: base.layouts };
+    expect(planLeavingWrite(base, local)).toEqual({ coordinateFormat: null });
+  });
+
+  it('never sends the named layouts, which only a write that reads first may merge', () => {
+    const local: AccountPrefs = { ...base, layouts: [...(base.layouts as object[]), { id: 'b', name: 'Late', panels: {} }] };
+    expect(planLeavingWrite(base, local)).toBeNull();
+    expect(planLeavingWrite(base, { ...local, overviewMap: true })).toEqual({ overviewMap: true });
+  });
+
+  it('sends nothing when nothing changed, or when the result would not fit', () => {
+    expect(planLeavingWrite(base, base)).toBeNull();
+    expect(planLeavingWrite(base, { ...base, coordinateFormat: 'utm' }, 10)).toBeNull();
+  });
+});
+
+describe('baselineAfterLeaving', () => {
+  it('takes what a closing page sent as written, leaving only an unsent layout change still to go', () => {
+    const base = accountPrefsIn({ coordinateFormat: 'dms', overviewMap: true });
+    const local: AccountPrefs = { ...base, coordinateFormat: 'utm' };
+    delete local.overviewMap;
+    const patch = planLeavingWrite(base, local);
+    expect(patch).toEqual({ coordinateFormat: 'utm', overviewMap: null });
+    const after = baselineAfterLeaving(base, patch!);
+    expect(changedSince(after, local)).toBe(false);
+    expect(changedSince(base, local)).toBe(true);
+  });
+});
+
+describe('layoutsNotIn', () => {
+  it('lists the layouts held here that the account does not hold', () => {
+    const account: AccountPrefs = { layouts: [{ id: 'a' }] };
+    expect(layoutsNotIn(account, { layouts: [{ id: 'a' }, { id: 'b' }] })).toEqual(['b']);
+    expect(layoutsNotIn({}, {})).toEqual([]);
   });
 });
