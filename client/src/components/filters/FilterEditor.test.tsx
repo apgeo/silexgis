@@ -198,33 +198,70 @@ describe('the condition editor', () => {
     expect((onApply.mock.calls[0]![0] as FilterDocument).scope[0]!.where).toEqual({ node: 'allOf', of: [where] });
   });
 
-  it('puts the server refusal on the row it names, and will not apply it', () => {
+  /** A refusal as the server sends it: a code per problem and the place in the sent document. */
+  function refusal(problems: { code: string; path: string; field?: string; limit?: number }[]): ApiError {
+    return new ApiError(400, 'filter.invalid', 'An English sentence the reader is never shown.', {
+      code: 'filter.invalid',
+      problems,
+    });
+  }
+
+  it('puts each problem on the row its path points at, the rest above the rows, and will not apply', () => {
     queryAnswer = {
-      error: new ApiError(400, 'filter.invalid',
-        "'surveyedLength' was given a number it cannot be compared against. A filter holds at most 200 conditions and groups."),
+      error: refusal([
+        { code: 'filter.number_out_of_range', path: '/scope/0/where/of/1', field: 'surveyedLength' },
+        { code: 'filter.too_many_nodes', path: '/scope/0/where', limit: 200 },
+      ]),
     };
     show(REGISTRY);
 
-    expect(screen.getByTestId('filter-editor-row-error-1')).toHaveTextContent(en.filters.editor.rowRefused);
+    expect(screen.getByTestId('filter-editor-row-error-1')).toHaveTextContent(en.filters.editor.problems.number_out_of_range);
     expect(screen.queryByTestId('filter-editor-row-error-0')).not.toBeInTheDocument();
-    expect(screen.getByTestId('filter-editor-refusal')).toHaveTextContent(en.filters.editor.refused);
+    const whole = screen.getByTestId('filter-editor-refusal');
+    expect(whole).toHaveTextContent(en.filters.editor.refused);
+    expect(whole).toHaveTextContent('A filter holds at most 200 conditions and groups.');
     expect(screen.getByTestId('filter-editor-apply')).toBeDisabled();
+    expect(screen.getByTestId('filter-editor')).not.toHaveTextContent('never shown');
   });
 
   it("tells a Romanian reader in Romanian, and never shows the server's English or its field keys", async () => {
     await i18n.changeLanguage('ro');
     queryAnswer = {
-      error: new ApiError(400, 'filter.invalid',
-        "'surveyedLength' was given a range that ends before it starts. A filter holds at most 200 conditions and groups."),
+      error: refusal([
+        { code: 'filter.range_reversed', path: '/scope/0/where/of/1', field: 'surveyedLength' },
+        { code: 'filter.too_many_nodes', path: '/scope/0/where', limit: 200 },
+      ]),
     };
     show(REGISTRY);
 
-    expect(screen.getByTestId('filter-editor-row-error-1')).toHaveTextContent(ro.filters.editor.rowRefused);
+    expect(screen.getByTestId('filter-editor-row-error-1')).toHaveTextContent(ro.filters.editor.problems.range_reversed);
     expect(screen.getByTestId('filter-editor-refusal')).toHaveTextContent(ro.filters.editor.refused);
+    expect(screen.getByTestId('filter-editor-refusal')).toHaveTextContent('Un filtru conține cel mult 200 condiții și grupuri.');
     const editor = screen.getByTestId('filter-editor');
     expect(editor).not.toHaveTextContent('surveyedLength');
-    expect(editor).not.toHaveTextContent('ends before it starts');
-    expect(editor).not.toHaveTextContent('at most 200 conditions');
+    expect(editor).not.toHaveTextContent('English sentence');
+  });
+
+  it("reads a path past the page's fixed condition, which is on no row of its own", () => {
+    const fixed = c('kind', 'equals', [{ type: 'id', value: 'cave' }]);
+    const where = c('surveyedLength', 'greaterOrEqual', [{ type: 'number', value: 300 }]);
+    queryAnswer = {
+      error: refusal([
+        { code: 'filter.value_kind', path: '/scope/0/where/of/1', field: 'surveyedLength' },
+        { code: 'filter.unknown_field', path: '/scope/0/where/of/0', field: 'kind' },
+      ]),
+    };
+    render(<FilterEditor world="feature" document={doc({ node: 'allOf', of: [where] })} fixed={fixed} onApply={vi.fn()} />);
+
+    expect(screen.getByTestId('filter-editor-row-error-0')).toHaveTextContent(en.filters.editor.problems.value_kind);
+    expect(screen.getByTestId('filter-editor-refusal')).toHaveTextContent(en.filters.editor.problems.unknown_field);
+  });
+
+  it('words a code it does not know in the general sentence rather than leaving the row unmarked', () => {
+    queryAnswer = { error: refusal([{ code: 'filter.something_new', path: '/scope/0/where/of/0' }]) };
+    show(REGISTRY);
+
+    expect(screen.getByTestId('filter-editor-row-error-0')).toHaveTextContent(en.filters.editor.rowRefused);
   });
 
   it("offers a type's own property only beside a condition fixing that type", async () => {

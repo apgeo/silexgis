@@ -4,6 +4,7 @@ import { Alert, Checkbox, Flex, Select, Space, Tooltip, Typography } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { ApiError } from '../../api/client.ts';
 import { useFilterQuery, useFilterVocabulary, type FilterQueryBody } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
@@ -11,12 +12,14 @@ import { whereOf, withSort, withWhere } from '../../filters/document.ts';
 import { withAnchor } from '../../filters/spatial.ts';
 import {
   appendChild,
+  draftPathOfSent,
   editableOps,
   isEditableKind,
   nodeAt,
   pathKey,
   placeAnchorRefusal,
-  placeRefusal,
+  placeProblems,
+  problemsOf,
   prune,
   removeAt,
   replaceAt,
@@ -25,6 +28,7 @@ import {
   toggleNot,
   valuesForOp,
   withinDepth,
+  type FilterProblem,
   type NodePath,
 } from '../../filters/editorTree.ts';
 import { preflight } from '../../filters/preflight.ts';
@@ -106,10 +110,23 @@ interface EditorContext {
   root: FilterNode;
   fields: FilterField[];
   limits: FilterLimits;
-  problems: Map<string, string[]>;
-  /** The phrase a refused row shows: which of the anchor refusals it was, or the general one. */
-  rowRefusalKey: string;
+  problems: Map<string, FilterProblem[]>;
   update: (root: FilterNode) => void;
+}
+
+/**
+ * A refusal's problem in the reader's language, worded from its code alone — the server's English
+ * sentence is never shown. A code this client does not know yet reads as the general sentence.
+ */
+function problemText(t: TFunction, problem: FilterProblem): string {
+  const anchorKey = ANCHOR_REFUSALS[problem.code];
+  if (anchorKey !== undefined) {
+    return t(anchorKey);
+  }
+  return t(`filters.editor.problems.${problem.code.replace(/^filter\./, '')}`, {
+    limit: problem.limit ?? undefined,
+    defaultValue: t('filters.editor.rowRefused'),
+  });
 }
 
 export default function FilterEditor({
@@ -178,14 +195,23 @@ export default function FilterEditor({
     },
     problems.length === 0 && !needsAnchor && !countedNeedsAnchor,
   );
+  // A refusal's paths point into the document that was counted. While a newer draft waits to be
+  // counted they may point at different rows of it, so nothing is placed until it has been asked.
   // An anchor the reader may not use is refused in one sentence that names no row — saying which
   // one was withheld would say it exists — so it lands on every row that names something to look up.
   const refusal = !(countQuery.error instanceof ApiError)
     ? null
     : countQuery.error.code === 'filter.invalid'
-      ? placeRefusal(countQuery.error.detail ?? '', root)
+      ? counted === asked
+        ? placeProblems(
+          problemsOf(countQuery.error.problem),
+          asked.scope.findIndex((s) => s.world === world),
+          root,
+          (sent) => draftPathOfSent(root, sent, { unwrapped: wrapped, fixed: fixed !== undefined }),
+        )
+        : { byPath: new Map<string, FilterProblem[]>(), unplaced: [] }
       : anchorRefusalKey(countQuery.error) !== null
-        ? placeAnchorRefusal(countQuery.error.detail ?? '', root)
+        ? placeAnchorRefusal({ code: countQuery.error.code ?? '', path: '' }, root)
         : null;
   const total = countQuery.data?.counted
     ? countQuery.data.worlds.find((w) => w.world === world)?.total ?? null
@@ -205,7 +231,6 @@ export default function FilterEditor({
     fields: vocabulary.fields.filter((f) => isEditableKind(f.kind)),
     limits,
     problems: refusal?.byPath ?? new Map(),
-    rowRefusalKey: anchorRefusalKey(countQuery.error) ?? 'filters.editor.rowRefused',
     update: setRoot,
   };
 
@@ -222,10 +247,22 @@ export default function FilterEditor({
         <Alert key={p.messageKey} type="warning" showIcon title={t(p.messageKey, p.values)}
           data-testid="filter-editor-problem" />
       ))}
-      {/* The server explains a refusal in English and in its own field keys, so the reader is told
-          in their language which rows it was about rather than shown its sentences. */}
+      {/* The server lists each problem by code and place; one on a row is shown there, the rest
+          with the filter as a whole — in the reader's language, never in the server's sentences. */}
       {refusal !== null && refusal.unplaced.length > 0 && (
-        <Alert type="error" showIcon title={t('filters.editor.refused')} data-testid="filter-editor-refusal" />
+        <Alert
+          type="error"
+          showIcon
+          title={t('filters.editor.refused')}
+          description={
+            <ul data-testid="filter-editor-refusal-problems">
+              {[...new Set(refusal.unplaced.map((p) => problemText(t, p)))].map((text) => (
+                <li key={text}>{text}</li>
+              ))}
+            </ul>
+          }
+          data-testid="filter-editor-refusal"
+        />
       )}
       <Flex justify="space-between" align="center" wrap gap={8}>
         <Typography.Text data-testid="filter-editor-count" aria-live="polite">
@@ -342,7 +379,7 @@ function Item({ context, path }: { context: EditorContext; path: NodePath }) {
         </Flex>
         {context.problems.has(pathKey(innerPath)) && (
           <Typography.Text type="danger" role="alert" data-testid={`filter-editor-row-error-${key}`}>
-            {t(context.rowRefusalKey)}
+            {[...new Set(context.problems.get(pathKey(innerPath))!.map((p) => problemText(t, p)))].join(' ')}
           </Typography.Text>
         )}
       </Flex>

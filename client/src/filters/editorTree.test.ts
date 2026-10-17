@@ -3,10 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   appendChild,
   depthOf,
+  draftPathOf,
+  draftPathOfSent,
   editableOps,
   nodeAt,
+  nodeOfPointer,
   placeAnchorRefusal,
-  placeRefusal,
+  placeProblems,
+  problemsOf,
   prune,
   removeAt,
   replaceAt,
@@ -112,10 +116,12 @@ describe('spatial rows', () => {
       values: [{ type: 'number', value: 5 }, { type: 'point', longitude: 1, latitude: 2 }] };
     const root: FilterNode = { node: 'allOf', of: [typed, { node: 'not', of: lookedUp }] };
 
-    const placed = placeAnchorRefusal('Not available.', root);
+    const refused = { code: 'filter.anchor_not_found', path: '' };
+    const placed = placeAnchorRefusal(refused, root);
     expect([...placed.byPath.keys()]).toEqual(['1.0']);
+    expect(placed.byPath.get('1.0')).toEqual([refused]);
     expect(placed.unplaced).toEqual([]);
-    expect(placeAnchorRefusal('Not available.', { node: 'allOf', of: [typed] }).unplaced).toEqual(['Not available.']);
+    expect(placeAnchorRefusal(refused, { node: 'allOf', of: [typed] }).unplaced).toEqual([refused]);
   });
 });
 
@@ -144,14 +150,49 @@ describe('a property field is offered only where its type is fixed', () => {
 });
 
 describe('a refusal is placed on the row it names', () => {
-  it('puts a sentence that quotes a field on that row, and the rest above the rows', () => {
-    const root: FilterNode = { node: 'allOf', of: [cond('name'), { node: 'anyOf', of: [cond('depth')] }, { ...blank, field: 'depth' }] };
-    const placed = placeRefusal(
-      "'depth' was given a range that ends before it starts. A filter holds at most 200 conditions and groups.",
-      root,
-    );
+  it('reads a pointer as a scope entry and a node path, a negation\'s child at index 0', () => {
+    expect(nodeOfPointer('/scope/1/where')).toEqual({ scope: 1, path: [] });
+    expect(nodeOfPointer('/scope/0/where/of/2/of/of/1')).toEqual({ scope: 0, path: [2, 0, 1] });
+    expect(nodeOfPointer('/scope/0')).toBeNull();
+    expect(nodeOfPointer('')).toBeNull();
+    expect(nodeOfPointer('/anchor')).toBeNull();
+  });
 
-    expect([...placed.byPath.entries()]).toEqual([['1.0', ["'depth' was given a range that ends before it starts."]]]);
-    expect(placed.unplaced).toEqual(['A filter holds at most 200 conditions and groups.']);
+  it('walks a pruned path back past the half-written rows that were never sent', () => {
+    const root: FilterNode = { node: 'allOf', of: [blank, cond('a'), { node: 'anyOf', of: [blank, cond('b')] }] };
+    expect(prune(root)).toEqual({ node: 'allOf', of: [cond('a'), { node: 'anyOf', of: [cond('b')] }] });
+    expect(draftPathOf(root, [1, 0])).toEqual([2, 1]);
+    expect(draftPathOf(root, [0])).toEqual([1]);
+    expect(draftPathOf(root, [2])).toBeNull();
+  });
+
+  it('undoes the unwrapping of a group of one and the fixed condition put in front', () => {
+    const root: FilterNode = { node: 'allOf', of: [blank, { node: 'not', of: cond('a') }] };
+    // Sent unwrapped as the negation alone, then behind a fixed condition: allOf[fixed, not(a)].
+    expect(draftPathOfSent(root, [0], { unwrapped: true, fixed: false })).toEqual([1, 0]);
+    expect(draftPathOfSent(root, [1, 0], { unwrapped: true, fixed: true })).toEqual([1, 0]);
+    expect(draftPathOfSent(root, [0], { unwrapped: true, fixed: true })).toBeNull();
+
+    const group: FilterNode = { node: 'allOf', of: [cond('a'), blank, cond('b')] };
+    expect(draftPathOfSent(group, [2], { unwrapped: false, fixed: true })).toEqual([2]);
+    expect(draftPathOfSent(group, [1], { unwrapped: false, fixed: false })).toEqual([2]);
+  });
+
+  it('puts a problem on the condition it points at, and one about no row above the rows', () => {
+    const root: FilterNode = { node: 'allOf', of: [cond('name'), { node: 'anyOf', of: [cond('depth')] }, { ...blank, field: 'depth' }] };
+    const onRow = { code: 'filter.range_reversed', path: '/scope/0/where/of/1/of/0', field: 'depth' };
+    const whole = { code: 'filter.too_many_nodes', path: '/scope/0/where', limit: 200 };
+    const elsewhere = { code: 'filter.unknown_field', path: '/scope/1/where', field: 'x' };
+    const placed = placeProblems([onRow, whole, elsewhere], 0, root, (sent) => draftPathOf(root, sent));
+
+    expect([...placed.byPath.entries()]).toEqual([['1.0', [onRow]]]);
+    expect(placed.unplaced).toEqual([whole, elsewhere]);
+  });
+
+  it('reads the problem list defensively', () => {
+    expect(problemsOf(undefined)).toEqual([]);
+    expect(problemsOf({ problems: 'no' })).toEqual([]);
+    expect(problemsOf({ problems: [{ code: 'filter.x', path: '' }, { code: 3 }, null] }))
+      .toEqual([{ code: 'filter.x', path: '' }]);
   });
 });

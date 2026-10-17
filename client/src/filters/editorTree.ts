@@ -255,16 +255,16 @@ export function valuesForOp(op: FilterOp, values: FilterValue[]): FilterValue[] 
  * stays with the filter as a whole.
  */
 export function placeAnchorRefusal(
-  detail: string,
+  problem: FilterProblem,
   root: FilterNode | null,
-): { byPath: Map<string, string[]>; unplaced: string[] } {
-  const byPath = new Map<string, string[]>();
+): { byPath: Map<string, FilterProblem[]>; unplaced: FilterProblem[] } {
+  const byPath = new Map<string, FilterProblem[]>();
   const rows = conditionsWithPaths(root)
     .filter((c) => isComplete(c.condition) && namesAnchor(c.condition));
   for (const row of rows) {
-    byPath.set(pathKey(row.path), [detail]);
+    byPath.set(pathKey(row.path), [problem]);
   }
-  return { byPath, unplaced: rows.length === 0 ? [detail] : [] };
+  return { byPath, unplaced: rows.length === 0 ? [problem] : [] };
 }
 
 /** Every condition in the tree, with its path. */
@@ -281,42 +281,150 @@ export function conditionsWithPaths(
   return childrenOf(node).flatMap((child, i) => conditionsWithPaths(child, [...path, i]));
 }
 
-/**
- * Where on the screen each sentence of a refusal belongs.
- *
- * The server refuses a filter with one problem whose detail joins a sentence per fault, and every
- * sentence about a condition quotes that condition's field. A sentence is put on each row whose
- * field it quotes; a sentence that quotes no field on screen — a limit on the whole filter, a world
- * — stays with the filter as a whole. Matching prose is the weaker form of this: the stronger is a
- * refusal that names the node it is about, which the server does not send yet. Until it does, a
- * reworded sentence degrades to "shown above the rows", never to a sentence on the wrong row.
- */
-export function placeRefusal(
-  detail: string,
-  root: FilterNode | null,
-): { byPath: Map<string, string[]>; unplaced: string[] } {
-  const byPath = new Map<string, string[]>();
-  const unplaced: string[] = [];
-  // Only the rows that were sent: a half-written row is left out of the request, so a sentence
-  // cannot be about it even when it holds the same field.
-  const conditions = conditionsWithPaths(root).filter((c) => isComplete(c.condition));
-  for (const sentence of splitSentences(detail)) {
-    const rows = conditions.filter((c) => sentence.includes(`'${c.condition.field}'`));
-    if (rows.length === 0) {
-      unplaced.push(sentence);
-      continue;
-    }
-    for (const row of rows) {
-      const key = pathKey(row.path);
-      byPath.set(key, [...(byPath.get(key) ?? []), sentence]);
-    }
-  }
-  return { byPath, unplaced };
+/** One problem of a refused filter, as the server lists it beside its refusal. */
+export interface FilterProblem {
+  /** What is wrong, from a closed list; the editor words it from this and from nothing else. */
+  code: string;
+  /** A JSON Pointer into the document that was sent; empty for the document as a whole. */
+  path: string;
+  field?: string | null;
+  op?: string | null;
+  limit?: number | null;
 }
 
-function splitSentences(detail: string): string[] {
-  return detail
-    .split(/(?<=[.!?])\s+(?=\S)/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+/** The problems a refusal lists, read defensively: whatever is not a well-formed entry is skipped. */
+export function problemsOf(problem: Readonly<Record<string, unknown>> | undefined): FilterProblem[] {
+  const listed = problem?.problems;
+  if (!Array.isArray(listed)) {
+    return [];
+  }
+  return listed.filter(
+    (p): p is FilterProblem =>
+      typeof p === 'object' && p !== null
+      && typeof (p as FilterProblem).code === 'string'
+      && typeof (p as FilterProblem).path === 'string',
+  );
+}
+
+/**
+ * The scope entry and the node a problem's pointer names, in this module's path form — or null for
+ * a pointer that names no node (the document, a whole scope entry).
+ *
+ * A group's child is `/of/<index>` and a negation's single child is `/of` with no index, which is
+ * index 0 here.
+ */
+export function nodeOfPointer(pointer: string): { scope: number; path: NodePath } | null {
+  const tokens = pointer.split('/').slice(1);
+  if (tokens[0] !== 'scope' || !/^\d+$/.test(tokens[1] ?? '') || tokens[2] !== 'where') {
+    return null;
+  }
+  const path: number[] = [];
+  for (let i = 3; i < tokens.length; i++) {
+    if (tokens[i] !== 'of') {
+      return null;
+    }
+    const next = tokens[i + 1];
+    if (next !== undefined && /^\d+$/.test(next)) {
+      path.push(Number(next));
+      i++;
+    } else {
+      path.push(0);
+    }
+  }
+  return { scope: Number(tokens[1]), path };
+}
+
+/**
+ * Where a node of the pruned tree is in the draft it was pruned from, or null when the path leads
+ * nowhere in it. Each group's kept children are its children that survive pruning, in order.
+ */
+export function draftPathOf(root: FilterNode, prunedPath: NodePath): NodePath | null {
+  let node = root;
+  const out: number[] = [];
+  for (const index of prunedPath) {
+    if (node.node === 'condition') {
+      return null;
+    }
+    if (node.node === 'not') {
+      if (index !== 0) {
+        return null;
+      }
+      out.push(0);
+      node = node.of;
+      continue;
+    }
+    const kept = node.of.flatMap((child, i) => (prune(child) === null ? [] : [i]));
+    const at = kept[index];
+    if (at === undefined) {
+      return null;
+    }
+    out.push(at);
+    node = node.of[at];
+  }
+  return out;
+}
+
+/**
+ * Where a node of what the editor sent is in the draft on screen.
+ *
+ * What is sent is not the draft: half-written rows are pruned out, a draft that holds one node is
+ * sent as that node rather than a group of one (`unwrapped`), and a page's fixed condition is put
+ * first in an all-of beside the edited ones (`fixed`). Each of those shifts a node's position, so a
+ * path from the server is walked back through them in the opposite order. The fixed condition
+ * itself is on no row, and answers null.
+ */
+export function draftPathOfSent(
+  root: FilterNode,
+  sentPath: NodePath,
+  options: { unwrapped: boolean; fixed: boolean },
+): NodePath | null {
+  const pruned = prune(root);
+  if (pruned === null) {
+    return null;
+  }
+  const where = options.unwrapped && pruned.node === 'allOf' && pruned.of.length === 1 ? pruned.of[0] : pruned;
+  let path: NodePath = sentPath;
+  if (options.fixed) {
+    const [head, ...rest] = sentPath;
+    if (head === undefined || head === 0) {
+      return null;
+    }
+    if (where.node === 'allOf') {
+      path = [head - 1, ...rest];
+    } else if (head === 1) {
+      path = rest;
+    } else {
+      return null;
+    }
+  }
+  if (where !== pruned) {
+    path = [0, ...path];
+  }
+  return draftPathOf(root, path);
+}
+
+/**
+ * Where on the screen each problem of a refusal belongs: on the row of the condition it points at,
+ * or, for one about no row — a limit on the whole filter, another world, the page's own fixed
+ * condition — with the filter as a whole.
+ */
+export function placeProblems(
+  problems: readonly FilterProblem[],
+  scope: number,
+  root: FilterNode,
+  locate: (sentPath: NodePath) => NodePath | null,
+): { byPath: Map<string, FilterProblem[]>; unplaced: FilterProblem[] } {
+  const byPath = new Map<string, FilterProblem[]>();
+  const unplaced: FilterProblem[] = [];
+  for (const problem of problems) {
+    const at = nodeOfPointer(problem.path);
+    const draft = at !== null && at.scope === scope ? locate(at.path) : null;
+    if (draft === null || nodeAt(root, draft)?.node !== 'condition') {
+      unplaced.push(problem);
+      continue;
+    }
+    const key = pathKey(draft);
+    byPath.set(key, [...(byPath.get(key) ?? []), problem]);
+  }
+  return { byPath, unplaced };
 }
