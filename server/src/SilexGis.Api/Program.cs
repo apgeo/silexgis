@@ -608,6 +608,13 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     {
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        // A database the old migration chain built is moved onto the single baseline first, so the
+        // migrator does not try to create its tables again.
+        if (await MigrationBaseline.AdoptAsync(db) == MigrationBaseline.Outcome.Adopted)
+        {
+            Log.Information("The database's migration history was moved onto {Baseline}", MigrationBaseline.BaselineId);
+        }
+
         await db.Database.MigrateAsync();
         await TaxonomySeeder.SeedAsync(db);
         await MapLayerStartup.SeedAsync(app.Environment.ContentRootPath, scope.ServiceProvider, db);

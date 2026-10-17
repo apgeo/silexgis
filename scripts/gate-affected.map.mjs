@@ -132,7 +132,6 @@ export const groups = {
   cavers: ['CaverRosterTests', 'ProfileVisibilityTests'],
   cavingGroups: [
     'AclAndCavingGroupTests', 'CavingGroupAnnouncementPaidCapTests', 'CavingGroupMembershipTests',
-    'SeededGroupUpgradeTests',
   ],
   geoFeatures: [
     'ClosestApproachTests', 'FeatureFilterCompilerTests', 'FeatureHierarchyTests',
@@ -166,7 +165,7 @@ export const groups = {
   georeferencedMaps: ['GeoreferencedMapTests', 'FilterWorldConformanceTests', 'FilterWorldListParityTests'],
   history: ['AccessHistoryTests', 'HistoryTests'],
   imports: [
-    'ArchiveUpgradeMigrationTests', 'BulkImportTests', 'PhotoImportTests',
+    'BulkImportTests', 'PhotoImportTests',
     'ServerDirectoryContainmentTests',
     'SpeleolocTripImportTests', 'StagedImportTests', 'TripTrackImportTests',
     // The proximity pool every importer compares against is cut after it is filtered.
@@ -199,7 +198,7 @@ export const groups = {
   // The proximity pool's one statement: every importer that compares against it, the cap test
   // that pins who may be in it, and the plan pin on it.
   proximity: [
-    'ArchiveUpgradeMigrationTests', 'BulkImportTests', 'HiddenRowCapTests', 'PerformanceTests',
+    'BulkImportTests', 'HiddenRowCapTests', 'PerformanceTests',
     'PhotoImportTests', 'ServerDirectoryContainmentTests', 'SpeleolocTripImportTests',
     'StagedImportTests', 'TripTrackImportTests',
   ],
@@ -248,9 +247,12 @@ export const groups = {
   // With the smoke test because it asks the same kind of question one step earlier: not whether
   // the application answers, but whether each test was given the application its mode promises.
   about: ['ApiSmokeTests', 'TestClassDisposalTests', 'TestModeTests'],
+  // How a database the old migration chain built is moved onto the baseline; a change to
+  // persistence or the migrations selects the whole suite anyway, so this group only names it.
+  migrationBaseline: ['MigrationBaselineTests'],
   audit: ['AccessHistoryTests', 'HistoryTests', 'AuditClientAddressTests'],
   admin: [
-    'AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests', 'SeededGroupUpgradeTests',
+    'AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests',
     // Which map backgrounds a document may copy is an administrator's setting, kept across
     // restarts beside the shipped catalogue's answer.
     'MapBackgroundDocumentChoiceTests',
@@ -473,20 +475,20 @@ export const crossCutting = {
     'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
     'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',
     'PublicTripMomentPicturesTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
-    'ReportTemplateTests', 'ResLinkApiTests', 'SavedFilterTests', 'SeededGroupUpgradeTests',
-    'SpeleolocTripImportTests', 'SpeologieCatalogueTests', 'StagedImportTests',
-    'SurveyCompilationTests', 'SurveyModelReadingTests', 'SurveyModelTests',
-    'SurveySourceTests', 'SyncSetTests', 'TermRuleSetTests', 'TerrainActivationTests',
-    'TerrainBuildApiTests', 'TerrainBuildCancelRetryTests', 'TerrainBuildPipelineTests',
-    'TerrainDerivativeApiTests', 'TerrainProbeTests', 'TerrainSourceTests',
-    'TextExtractionPipelineTests', 'TrackingCsvImportTests', 'TripAndTagTests',
-    'TripAttendanceLimitTests', 'TripCalloutStandDownTests', 'TripChecklistTickTests',
-    'TripImportCommitTests', 'TripImportSessionTests', 'TripInvitationTests',
-    'TripOrganizingGroupGuardTests', 'TripParticipantRoleVocabularyTests', 'TripPromotionTests',
-    'TripReportDocumentTests', 'TripReportMapTests', 'TripRestoreTests',
-    'TripRosterTimesFromTrackingTests', 'TripStatisticsTests', 'TripTrackImportTests',
-    'TripTrackingCaveNoteTests', 'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
-    'TripTrackingTests', 'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
+    'ReportTemplateTests', 'ResLinkApiTests', 'SavedFilterTests', 'SpeleolocTripImportTests',
+    'SpeologieCatalogueTests', 'StagedImportTests', 'SurveyCompilationTests',
+    'SurveyModelReadingTests', 'SurveyModelTests', 'SurveySourceTests', 'SyncSetTests',
+    'TermRuleSetTests', 'TerrainActivationTests', 'TerrainBuildApiTests',
+    'TerrainBuildCancelRetryTests', 'TerrainBuildPipelineTests', 'TerrainDerivativeApiTests',
+    'TerrainProbeTests', 'TerrainSourceTests', 'TextExtractionPipelineTests',
+    'TrackingCsvImportTests', 'TripAndTagTests', 'TripAttendanceLimitTests',
+    'TripCalloutStandDownTests', 'TripChecklistTickTests', 'TripImportCommitTests',
+    'TripImportSessionTests', 'TripInvitationTests', 'TripOrganizingGroupGuardTests',
+    'TripParticipantRoleVocabularyTests', 'TripPromotionTests', 'TripReportDocumentTests',
+    'TripReportMapTests', 'TripRestoreTests', 'TripRosterTimesFromTrackingTests',
+    'TripStatisticsTests', 'TripTrackImportTests', 'TripTrackingCaveNoteTests',
+    'TripTrackingPicturesTests', 'TripTrackingPublicationTests', 'TripTrackingTests',
+    'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
     'UserAdministrationLastAdministratorTests', 'UserAdministrationTests',
     'UserTwoFactorResetTests',
   ],
