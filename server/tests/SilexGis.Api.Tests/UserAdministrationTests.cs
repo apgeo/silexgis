@@ -46,7 +46,7 @@ public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClas
     public UserAdministrationTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         adminId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"ua-adm-{tag}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"ua-ed-{tag}@t.local");
@@ -438,7 +438,11 @@ public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClas
         return body.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

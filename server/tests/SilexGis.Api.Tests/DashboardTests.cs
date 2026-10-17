@@ -33,7 +33,7 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable, IClassFixture<
     public DashboardTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"db-own-{suffix}@t.local");
@@ -260,11 +260,12 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable, IClassFixture<
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         owner.Dispose();
         outsider.Dispose();
-        return Task.CompletedTask;
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     public void Dispose() => factory.Dispose();

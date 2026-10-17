@@ -43,7 +43,7 @@ public sealed class AssociationDisclosureTests : IAsyncLifetime, IDisposable, IC
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"ad-own-{suffix}@t.local");
@@ -386,11 +386,12 @@ public sealed class AssociationDisclosureTests : IAsyncLifetime, IDisposable, IC
         return [new Rational(d), new Rational(m), new Rational(seconds)];
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.AppSettings.Where(s => s.Key == AppSettingSections.Protection).ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

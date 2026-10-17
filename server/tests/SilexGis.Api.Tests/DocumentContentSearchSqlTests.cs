@@ -46,7 +46,7 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable,
     public DocumentContentSearchSqlTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         nonce = Nonce();
@@ -495,7 +495,11 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable,
         ScopeId = documentId,
     };
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

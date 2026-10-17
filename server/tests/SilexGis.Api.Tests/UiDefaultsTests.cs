@@ -23,7 +23,7 @@ public sealed class UiDefaultsTests : IAsyncLifetime, IDisposable, IClassFixture
     public UiDefaultsTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"ud-admin-{tag}@t.local");
@@ -130,7 +130,11 @@ public sealed class UiDefaultsTests : IAsyncLifetime, IDisposable, IClassFixture
         }
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

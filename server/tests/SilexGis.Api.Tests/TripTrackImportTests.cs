@@ -62,7 +62,7 @@ public sealed class TripTrackImportTests : IAsyncLifetime, IDisposable, IClassFi
             ["Import:MaxTripTrackPoints"] = "4",
         });
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tt-org-{suffix}@t.local");
         // A Viewer, deliberately: the seeded Editors group writes every trip at the widest
@@ -231,7 +231,11 @@ public sealed class TripTrackImportTests : IAsyncLifetime, IDisposable, IClassFi
         return await db.Geofiles.CountAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

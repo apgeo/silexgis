@@ -43,7 +43,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable, IClassFixture
     public CaveDomainTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"owner-{suffix}@t.local");
@@ -678,7 +678,11 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable, IClassFixture
         return JsonDocument.Parse(payload).RootElement.Clone();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

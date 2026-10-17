@@ -31,7 +31,7 @@ public sealed class ClientErrorReportTests : IAsyncLifetime, IDisposable, IClass
             services.AddSingleton<ILogEventSink>(logs);
         });
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         email = $"cer-{Guid.NewGuid().ToString("N")[..8]}@t.local";
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, email);
@@ -39,7 +39,11 @@ public sealed class ClientErrorReportTests : IAsyncLifetime, IDisposable, IClass
         anonymous = factory.CreateClient();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

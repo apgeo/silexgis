@@ -46,7 +46,7 @@ public sealed class TripRestoreTests : IAsyncLifetime, IDisposable, IClassFixtur
         factory = new SilexGisApiFactory(connectionString);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"trs-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"trs-rdr-{suffix}@t.local");
@@ -60,7 +60,11 @@ public sealed class TripRestoreTests : IAsyncLifetime, IDisposable, IClassFixtur
         anonymous = factory.CreateClient();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

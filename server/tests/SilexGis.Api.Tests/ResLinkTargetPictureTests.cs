@@ -49,7 +49,7 @@ public sealed class ResLinkTargetPictureTests : IAsyncLifetime, IDisposable, ICl
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"rp-own-{suffix}@t.local");
@@ -631,11 +631,12 @@ public sealed class ResLinkTargetPictureTests : IAsyncLifetime, IDisposable, ICl
         return [new Rational(d), new Rational(m), new Rational(seconds)];
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.AppSettings.Where(s => s.Key == AppSettingSections.Protection).ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

@@ -41,7 +41,7 @@ public sealed class NotificationInboxTests : IAsyncLifetime, IDisposable, IClass
             postgres.ConnectionString,
             new Dictionary<string, string?> { ["Auth:RateLimitPerMinute"] = "500" });
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, OwnerEmail);
         readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, ReaderEmail);
@@ -403,7 +403,7 @@ public sealed class NotificationInboxTests : IAsyncLifetime, IDisposable, IClass
         return body;
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         // Notifications are one table for the whole database, so a class takes its own rows away
         // rather than the table.
@@ -412,6 +412,7 @@ public sealed class NotificationInboxTests : IAsyncLifetime, IDisposable, IClass
         await db.Notifications
             .Where(n => n.RecipientUserId == readerId || n.RecipientUserId == strangerId)
             .ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

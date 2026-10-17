@@ -38,7 +38,7 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
     public SavedFilterTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         authorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"sf-author-{tag}@t.local");
@@ -576,7 +576,11 @@ public sealed class SavedFilterTests : IAsyncLifetime, IDisposable, IClassFixtur
         return feature.Id;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

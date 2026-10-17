@@ -40,7 +40,7 @@ public sealed class ExpeditionDeleteCleanupTests : IAsyncLifetime, IDisposable, 
     public ExpeditionDeleteCleanupTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"xdc-own-{suffix}@t.local");
         owner = await AuthHelper.BearerClientAsync(factory, $"xdc-own-{suffix}@t.local");
@@ -50,7 +50,11 @@ public sealed class ExpeditionDeleteCleanupTests : IAsyncLifetime, IDisposable, 
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

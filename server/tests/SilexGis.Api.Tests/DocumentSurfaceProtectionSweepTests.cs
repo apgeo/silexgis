@@ -83,7 +83,7 @@ public sealed class DocumentSurfaceProtectionSweepTests : IAsyncLifetime, IDispo
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         // Checked here so that moving either side of the relationship fails at once, with a
         // sentence naming the real cause. The alternative is what happened before: the bulk
@@ -534,7 +534,11 @@ public sealed class DocumentSurfaceProtectionSweepTests : IAsyncLifetime, IDispo
         }
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

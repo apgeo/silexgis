@@ -50,7 +50,7 @@ public sealed class MapKarstIndexTests : IAsyncLifetime, IDisposable, IClassFixt
             ["Map:KarstIndexMaxAreas"] = MaxAreas.ToString(System.Globalization.CultureInfo.InvariantCulture),
         });
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"kix-own-{suffix}@t.local");
@@ -367,11 +367,12 @@ public sealed class MapKarstIndexTests : IAsyncLifetime, IDisposable, IClassFixt
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         owner.Dispose();
         viewer.Dispose();
-        return Task.CompletedTask;
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     public void Dispose() => factory.Dispose();

@@ -52,7 +52,7 @@ public sealed class ExpeditionMapTests : IAsyncLifetime, IDisposable, IClassFixt
         factory = new SilexGisApiFactory(connectionString);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"xmap-own-{suffix}@t.local");
@@ -427,7 +427,11 @@ public sealed class ExpeditionMapTests : IAsyncLifetime, IDisposable, IClassFixt
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

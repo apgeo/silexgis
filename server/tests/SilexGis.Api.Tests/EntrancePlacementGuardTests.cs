@@ -56,7 +56,7 @@ public sealed class EntrancePlacementGuardTests : IAsyncLifetime, IDisposable, I
     public EntrancePlacementGuardTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"epg-own-{tag}@t.local");
         editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"epg-ed-{tag}@t.local");
@@ -202,7 +202,11 @@ public sealed class EntrancePlacementGuardTests : IAsyncLifetime, IDisposable, I
         return body.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

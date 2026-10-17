@@ -42,7 +42,7 @@ public sealed class SeededGroupUpgradeTests : IAsyncLifetime, IDisposable, IClas
     public SeededGroupUpgradeTests(PostgresFixture postgres) =>
         adminConnectionString = postgres.ConnectionString;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await using (var admin = new NpgsqlConnection(adminConnectionString))
         {
@@ -217,7 +217,11 @@ public sealed class SeededGroupUpgradeTests : IAsyncLifetime, IDisposable, IClas
             problem.TryGetProperty("code", out var code) ? code.GetString() : null);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

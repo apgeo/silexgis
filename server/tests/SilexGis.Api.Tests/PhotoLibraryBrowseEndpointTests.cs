@@ -61,7 +61,7 @@ public sealed class PhotoLibraryBrowseEndpointTests : IAsyncLifetime, IDisposabl
         factory = Configured(library);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"pb-ad-{tag}@t.local");
@@ -74,7 +74,11 @@ public sealed class PhotoLibraryBrowseEndpointTests : IAsyncLifetime, IDisposabl
         anonymous = factory.CreateClient();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

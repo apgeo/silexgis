@@ -38,7 +38,7 @@ public sealed class CaveDepthPlaceTests : IAsyncLifetime, IDisposable, IClassFix
         }, JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"dp-own-{suffix}@t.local");
@@ -54,7 +54,11 @@ public sealed class CaveDepthPlaceTests : IAsyncLifetime, IDisposable, IClassFix
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

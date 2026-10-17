@@ -67,7 +67,7 @@ public sealed class SyncPageSizeTests : IAsyncLifetime, IDisposable, IClassFixtu
             });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         marker = Guid.NewGuid().ToString("N")[..8];
         ownerEmail = $"sp-page-{marker}@t.local";
@@ -234,5 +234,9 @@ public sealed class SyncPageSizeTests : IAsyncLifetime, IDisposable, IClassFixtu
         defaultAboveCeiling.Dispose();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 }

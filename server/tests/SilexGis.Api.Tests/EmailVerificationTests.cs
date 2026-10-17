@@ -31,7 +31,7 @@ public sealed class EmailVerificationTests : IAsyncLifetime, IDisposable, IClass
             ["Auth:RateLimitPerMinute"] = "200",
         });
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
     [Fact]
     public async Task Registering_sends_a_confirmation_that_the_anonymous_link_completes()
@@ -272,11 +272,12 @@ public sealed class EmailVerificationTests : IAsyncLifetime, IDisposable, IClass
     /// The settings live in the database, which is shared with every other test class in this
     /// collection — a policy left switched on here would silently change what they are testing.
     /// </summary>
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.AppSettings.Where(s => s.Key == AppSettingSections.Security).ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose() => factory.Dispose();

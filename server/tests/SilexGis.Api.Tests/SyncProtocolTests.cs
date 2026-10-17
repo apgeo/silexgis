@@ -39,7 +39,7 @@ public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable, IClassFixtu
     public SyncProtocolTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         marker = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"sp-own-{marker}@t.local");
@@ -1112,5 +1112,9 @@ public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable, IClassFixtu
         factory.Dispose();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 }

@@ -39,7 +39,7 @@ public sealed class MapClusterConfigurationTests : IAsyncLifetime, IDisposable, 
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"clu-own-{suffix}@t.local");
@@ -153,11 +153,12 @@ public sealed class MapClusterConfigurationTests : IAsyncLifetime, IDisposable, 
         entrance.StatusCode.ShouldBe(HttpStatusCode.Created, await entrance.Content.ReadAsStringAsync());
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         owner.Dispose();
         viewer.Dispose();
-        return Task.CompletedTask;
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     public void Dispose() => factory.Dispose();

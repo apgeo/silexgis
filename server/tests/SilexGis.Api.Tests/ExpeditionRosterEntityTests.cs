@@ -25,7 +25,7 @@ public sealed class ExpeditionRosterEntityTests : IAsyncLifetime, IDisposable, I
     public ExpeditionRosterEntityTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"xr-own-{suffix}@t.local");
@@ -219,7 +219,11 @@ public sealed class ExpeditionRosterEntityTests : IAsyncLifetime, IDisposable, I
     private static Caver NewCaver(string what) =>
         new() { FullName = $"Roster {what} {Guid.NewGuid().ToString("N")[..6]}" };
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

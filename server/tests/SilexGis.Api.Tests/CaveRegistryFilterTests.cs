@@ -43,7 +43,7 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
     public CaveRegistryFilterTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"crf-author-{tag}@t.local");
@@ -499,7 +499,11 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
     /// <summary>The wire's own conventions, so a document is written here the way a browser writes it.</summary>
     private static readonly JsonSerializerOptions Wire = FilterDocument.SerializerOptions;
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

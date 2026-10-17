@@ -5,6 +5,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- An xunit v3 test project is a program of its own; the test adapter starts it. -->
+    <OutputType>Exe</OutputType>
+    <!-- xunit v3 asks every call that takes a cancellation token to be handed the test's own.
+         A run here is stopped by ending the process, never by cancelling one test, so threading a
+         token through every call would change thousands of lines for a stop nothing sends. -->
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,7 +22,7 @@
          advisories, and the build treats the audit warning as an error. Pinned here rather
          than in the product projects, which resolve a clean version on their own. -->
     <PackageReference Include="System.Security.Cryptography.Xml" />
-    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
 

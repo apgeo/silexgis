@@ -90,7 +90,7 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
             });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"trj-own-{suffix}@t.local");
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"trj-read-{suffix}@t.local");
@@ -120,12 +120,13 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         // The layout is a row of a table every class shares; the trips and caves are named apart.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.ReportTemplates.Where(t => t.Id == layoutId || t.Id == stationLayoutId).ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

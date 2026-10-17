@@ -26,7 +26,7 @@ public sealed class AdminTestSendRateLimitTests : IAsyncLifetime, IDisposable, I
             ["Auth:RateLimitPerMinute"] = Budget,
         });
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         adminEmail = $"testsend-{Guid.NewGuid():N}@t.local";
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, adminEmail);
@@ -56,7 +56,11 @@ public sealed class AdminTestSendRateLimitTests : IAsyncLifetime, IDisposable, I
         (await admin.PostAsJsonAsync(
             "/api/v1/admin/settings/sms/test", new { recipient = "+40712345678" })).StatusCode;
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

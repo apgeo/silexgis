@@ -46,7 +46,7 @@ public sealed class SurveyCompilationTests : IAsyncLifetime, IDisposable, IClass
             JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"svc-own-{suffix}@t.local");
@@ -457,7 +457,11 @@ public sealed class SurveyCompilationTests : IAsyncLifetime, IDisposable, IClass
         return new MultipartFormDataContent { { content, "file", fileName } };
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

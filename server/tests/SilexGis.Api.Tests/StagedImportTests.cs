@@ -40,7 +40,7 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"si-editor-{tag}@t.local");
@@ -1092,7 +1092,11 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
         return JsonDocument.Parse(payload).RootElement;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

@@ -54,7 +54,7 @@ public sealed class DocumentContentSearchTests : IAsyncLifetime, IDisposable, IC
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -432,7 +432,11 @@ public sealed class DocumentContentSearchTests : IAsyncLifetime, IDisposable, IC
         return JsonDocument.Parse(payload).RootElement;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

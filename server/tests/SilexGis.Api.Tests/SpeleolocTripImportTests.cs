@@ -107,7 +107,7 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
             JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"spl-ed-{tag}@t.local");
@@ -1444,7 +1444,11 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
     private static string? CodeOf(string problemBody) =>
         JsonDocument.Parse(problemBody).RootElement.GetProperty("code").GetString();
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

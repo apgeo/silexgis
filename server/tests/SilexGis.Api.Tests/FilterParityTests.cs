@@ -75,7 +75,7 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable, IClassFixtu
     public FilterParityTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-own-{suffix}@t.local");
@@ -537,7 +537,11 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable, IClassFixtu
         });
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

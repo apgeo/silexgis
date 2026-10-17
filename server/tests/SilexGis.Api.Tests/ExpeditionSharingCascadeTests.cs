@@ -48,7 +48,7 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
     public ExpeditionSharingCascadeTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         organiserId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"xc-org-{suffix}@t.local");
@@ -875,7 +875,11 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

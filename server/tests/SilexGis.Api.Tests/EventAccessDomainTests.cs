@@ -30,7 +30,7 @@ public sealed class EventAccessDomainTests : IAsyncLifetime, IDisposable, IClass
     public EventAccessDomainTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"ev-own-{suffix}@t.local");
 
@@ -248,7 +248,11 @@ public sealed class EventAccessDomainTests : IAsyncLifetime, IDisposable, IClass
             .Select(x => x.Id)
             .ToListAsync();
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

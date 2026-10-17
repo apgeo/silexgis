@@ -46,7 +46,7 @@ public sealed class AreaKarstStatisticsTests : IAsyncLifetime, IDisposable, ICla
     public AreaKarstStatisticsTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"kst-own-{suffix}@t.local");
@@ -529,11 +529,12 @@ public sealed class AreaKarstStatisticsTests : IAsyncLifetime, IDisposable, ICla
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         owner.Dispose();
         viewer.Dispose();
-        return Task.CompletedTask;
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     public void Dispose() => factory.Dispose();

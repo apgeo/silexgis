@@ -57,7 +57,7 @@ public sealed class CalendarTests : IAsyncLifetime, IDisposable, IClassFixture<P
         factory = new SilexGisApiFactory(connectionString);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         anaId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"cal-ana-{suffix}@t.local");
@@ -697,7 +697,11 @@ public sealed class CalendarTests : IAsyncLifetime, IDisposable, IClassFixture<P
         narrowed.GetProperty("omitted").GetInt32().ShouldBe(0);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

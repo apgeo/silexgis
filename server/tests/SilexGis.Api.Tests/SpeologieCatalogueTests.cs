@@ -83,7 +83,7 @@ public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable, IClas
                 .ConfigurePrimaryHttpMessageHandler(() => catalogue));
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
 
@@ -835,7 +835,11 @@ public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable, IClas
     private static HttpResponseMessage Answer(string json, HttpStatusCode status = HttpStatusCode.OK) =>
         new(status) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

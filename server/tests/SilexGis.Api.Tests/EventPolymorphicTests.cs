@@ -44,7 +44,7 @@ public sealed class EventPolymorphicTests : IAsyncLifetime, IDisposable, IClassF
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"ep-own-{suffix}@t.local");
         readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ep-rdr-{suffix}@t.local");
@@ -231,7 +231,11 @@ public sealed class EventPolymorphicTests : IAsyncLifetime, IDisposable, IClassF
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

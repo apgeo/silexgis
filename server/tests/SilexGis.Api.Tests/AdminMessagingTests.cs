@@ -33,7 +33,7 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable, IClassFix
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         adminEmail = $"admin-msg-{suffix}@t.local";
@@ -413,12 +413,13 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable, IClassFix
         (await settings.GetMailAsync()).Password.ShouldBe(expected);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.AppSettings.ExecuteDeleteAsync();
         await db.MessageTemplates.ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose() => factory.Dispose();

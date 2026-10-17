@@ -59,7 +59,7 @@ public sealed class CalendarFeedTests : IAsyncLifetime, IDisposable, IClassFixtu
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         anaId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"feed-ana-{suffix}@t.local");
@@ -73,7 +73,11 @@ public sealed class CalendarFeedTests : IAsyncLifetime, IDisposable, IClassFixtu
         admin = await AuthHelper.BearerClientAsync(factory, $"feed-adm-{suffix}@t.local");
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

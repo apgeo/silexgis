@@ -56,7 +56,7 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable, IClassFixture
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"rl-own-{suffix}@t.local");
@@ -3151,7 +3151,11 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable, IClassFixture
         return doc.RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

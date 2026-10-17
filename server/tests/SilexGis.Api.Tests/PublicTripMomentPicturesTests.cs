@@ -109,7 +109,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(switchedOff, GlobalRoles.Editor, $"pics-own-{suffix}@t.local");
@@ -129,7 +129,11 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

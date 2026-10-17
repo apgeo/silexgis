@@ -36,7 +36,7 @@ public sealed class PhoneCredentialTests : IAsyncLifetime, IDisposable, IClassFi
             ["Auth:RateLimitPerMinute"] = "200",
         });
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         email = $"phone-{suffix}@t.local";
         userId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, email);
@@ -135,7 +135,11 @@ public sealed class PhoneCredentialTests : IAsyncLifetime, IDisposable, IClassFi
             .GetProperty("code").GetString().ShouldBe("me.phone_taken");
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

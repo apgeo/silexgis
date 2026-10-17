@@ -67,7 +67,7 @@ public sealed class CaveExternalIdTests : IAsyncLifetime, IDisposable, IClassFix
                 .ConfigurePrimaryHttpMessageHandler(() => upstream));
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(enabled, GlobalRoles.Editor, $"xid-editor-{tag}@t.local");
@@ -262,7 +262,11 @@ public sealed class CaveExternalIdTests : IAsyncLifetime, IDisposable, IClassFix
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

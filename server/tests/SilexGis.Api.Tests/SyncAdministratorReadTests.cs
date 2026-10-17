@@ -68,7 +68,7 @@ public sealed class SyncAdministratorReadTests : IAsyncLifetime, IDisposable, IC
             new Dictionary<string, string?> { ["Sync:AllowAdministratorRead"] = "true" });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         suffix = Guid.NewGuid().ToString("N")[..8];
         ownerEmail = $"sar-own-{suffix}@t.local";
@@ -290,5 +290,9 @@ public sealed class SyncAdministratorReadTests : IAsyncLifetime, IDisposable, IC
         widened.Dispose();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 }

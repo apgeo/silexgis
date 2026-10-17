@@ -63,7 +63,7 @@ public sealed class TripTrackingCaveNoteTests : IAsyncLifetime, IDisposable, ICl
             JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         // An editor writes the log and may place the cave. The reader is a plain viewer: the
@@ -82,7 +82,11 @@ public sealed class TripTrackingCaveNoteTests : IAsyncLifetime, IDisposable, ICl
         anonymous = factory.CreateClient();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

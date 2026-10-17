@@ -47,7 +47,7 @@ public sealed class HypsometryTests : IAsyncLifetime, IDisposable, IClassFixture
     public HypsometryTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"hyp-own-{suffix}@t.local");
@@ -311,7 +311,11 @@ public sealed class HypsometryTests : IAsyncLifetime, IDisposable, IClassFixture
         none.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 

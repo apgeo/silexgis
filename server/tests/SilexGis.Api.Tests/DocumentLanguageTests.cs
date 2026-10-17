@@ -58,7 +58,7 @@ public sealed class DocumentLanguageTests : IAsyncLifetime, IDisposable, IClassF
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"lang-own-{suffix}@t.local");
@@ -393,7 +393,11 @@ public sealed class DocumentLanguageTests : IAsyncLifetime, IDisposable, IClassF
         }
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

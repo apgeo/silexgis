@@ -41,14 +41,18 @@ public sealed class AccessOrphanSweepTests : IAsyncLifetime, IDisposable, IClass
     public AccessOrphanSweepTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString, configureServices: JobWorkers.RemoveFrom);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         adminId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"aos-adm-{suffix}@t.local");
         readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"aos-rdr-{suffix}@t.local");
         admin = await AuthHelper.BearerClientAsync(factory, $"aos-adm-{suffix}@t.local");
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

@@ -94,7 +94,7 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tip-editor-{tag}@t.local");
@@ -591,7 +591,11 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
     private static List<JsonElement> Items(JsonElement preview) =>
         [.. preview.GetProperty("items").EnumerateArray()];
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

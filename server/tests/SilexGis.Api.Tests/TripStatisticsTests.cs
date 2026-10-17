@@ -56,7 +56,7 @@ public sealed class TripStatisticsTests : IAsyncLifetime, IDisposable, IClassFix
             postgres.ConnectionString,
             configureServices: JobWorkers.RemoveFrom);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         var suffix = tag;
@@ -75,7 +75,11 @@ public sealed class TripStatisticsTests : IAsyncLifetime, IDisposable, IClassFix
             .Where(r => r.Code == "surveyor").Select(r => r.Id).SingleAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     // The application each test stands up is let go when the test ends. Without this every one of
     // the class's tests left a running application behind, its background workers with it, until

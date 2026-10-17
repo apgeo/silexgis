@@ -90,7 +90,7 @@ public sealed class TripHandoverTests : IAsyncLifetime, IDisposable, IClassFixtu
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var email = $"handover-{Guid.NewGuid().ToString("N")[..8]}@t.local";
         _ = await AuthHelper.CreateUserAsync(host, GlobalRoles.Editor, email);
@@ -102,7 +102,11 @@ public sealed class TripHandoverTests : IAsyncLifetime, IDisposable, IClassFixtu
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

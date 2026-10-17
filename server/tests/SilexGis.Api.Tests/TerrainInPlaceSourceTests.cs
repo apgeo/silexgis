@@ -78,7 +78,7 @@ public sealed class TerrainInPlaceSourceTests : IAsyncLifetime, IDisposable, ICl
             ownHost: true);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         administratorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"tip-adm-{suffix}@t.local");
@@ -375,12 +375,13 @@ public sealed class TerrainInPlaceSourceTests : IAsyncLifetime, IDisposable, ICl
         dataset.FlushCache();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.ProcessingJobs.Where(j => j.Kind == ProcessingJobKinds.TerrainBuild).ExecuteDeleteAsync();
         await db.TerrainBuilds.ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

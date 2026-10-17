@@ -28,7 +28,7 @@ public sealed class CrsTests : IAsyncLifetime, IDisposable, IClassFixture<Postgr
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var email = $"crs-{Guid.NewGuid().ToString("N")[..8]}@t.local";
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, email);
@@ -129,7 +129,11 @@ public sealed class CrsTests : IAsyncLifetime, IDisposable, IClassFixture<Postgr
         (await anonymous.GetAsync("/api/v1/crs/4326.proj4")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

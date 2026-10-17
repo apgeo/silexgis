@@ -53,7 +53,7 @@ public sealed class TripImportSessionTests : IAsyncLifetime, IDisposable, IClass
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"ti-editor-{tag}@t.local");
@@ -353,7 +353,11 @@ public sealed class TripImportSessionTests : IAsyncLifetime, IDisposable, IClass
     private static string? CodeOf(string problemBody) =>
         JsonDocument.Parse(problemBody).RootElement.GetProperty("code").GetString();
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

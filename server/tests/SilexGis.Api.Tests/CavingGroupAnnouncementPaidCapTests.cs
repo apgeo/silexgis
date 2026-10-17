@@ -113,7 +113,7 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
     public CavingGroupAnnouncementPaidCapTests(PostgresFixture postgres) =>
         connectionString = postgres.ConnectionString;
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
     /// <summary>
     /// A host with a charging channel wired in, and the installation's answer about paying for one
@@ -607,7 +607,7 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
             .ToListAsync();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (factory is null)
         {
@@ -622,6 +622,7 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
         await db.CavingGroupAnnouncements.Where(a => a.CavingGroupId == cavingGroupId).ExecuteDeleteAsync();
         await db.AccessEntries.Where(e => e.ScopeId == cavingGroupId).ExecuteDeleteAsync();
         await db.CavingGroups.Where(c => c.Id == cavingGroupId).ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

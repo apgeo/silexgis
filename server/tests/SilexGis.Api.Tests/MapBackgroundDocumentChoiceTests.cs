@@ -50,7 +50,7 @@ public sealed class MapBackgroundDocumentChoiceTests : IAsyncLifetime, IDisposab
         factory = new SilexGisApiFactory(connectionString);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         adminId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"mbd-adm-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"mbd-edt-{suffix}@t.local");
@@ -58,7 +58,11 @@ public sealed class MapBackgroundDocumentChoiceTests : IAsyncLifetime, IDisposab
         await SignInAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

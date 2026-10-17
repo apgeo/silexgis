@@ -106,7 +106,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
         factory = Configured(library);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"pl-ad-{tag}@t.local");
@@ -130,7 +130,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
     /// rather than at the end of each case for exactly that reason: it has to happen on the path
     /// where something went wrong.
     /// </remarks>
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (admin is not null)
         {
@@ -138,6 +138,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
                 "/api/v1/admin/settings/photo-libraries",
                 new { immichSuspended = false, photoPrismSuspended = false });
         }
+        Dispose();
     }
 
     public void Dispose()

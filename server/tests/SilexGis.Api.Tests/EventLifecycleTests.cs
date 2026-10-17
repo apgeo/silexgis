@@ -43,7 +43,7 @@ public sealed class EventLifecycleTests : IAsyncLifetime, IDisposable, IClassFix
     public EventLifecycleTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"evs-own-{suffix}@t.local");
         var clubmateId = await AuthHelper.CreateUserAsync(
@@ -337,7 +337,11 @@ public sealed class EventLifecycleTests : IAsyncLifetime, IDisposable, IClassFix
         JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement
             .GetProperty("code").GetString();
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

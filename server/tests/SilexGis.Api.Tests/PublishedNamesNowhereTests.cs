@@ -97,7 +97,7 @@ public sealed class PublishedNamesNowhereTests : IAsyncLifetime, IDisposable, IC
         return new SilexGisApiFactory(connectionString, settings, JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var email = $"names-{Guid.NewGuid().ToString("N")[..8]}@t.local";
         _ = await AuthHelper.CreateUserAsync(naming, GlobalRoles.Editor, email);
@@ -109,7 +109,11 @@ public sealed class PublishedNamesNowhereTests : IAsyncLifetime, IDisposable, IC
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

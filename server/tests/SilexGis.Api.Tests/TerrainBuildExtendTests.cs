@@ -64,7 +64,7 @@ public sealed class TerrainBuildExtendTests : IAsyncLifetime, IDisposable, IClas
         factory = Installation();
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         operatorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"tx-op-{suffix}@t.local");
@@ -72,13 +72,14 @@ public sealed class TerrainBuildExtendTests : IAsyncLifetime, IDisposable, IClas
         await GrantAsync(operatorId, AccessAction.Read | AccessAction.Execute | AccessAction.Delete);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.ProcessingJobs.Where(j => j.Kind == ProcessingJobKinds.TerrainBuild).ExecuteDeleteAsync();
         await db.TerrainBuilds.ExecuteDeleteAsync();
         await factory.DisposeAsync();
+        Dispose();
     }
 
     public void Dispose()

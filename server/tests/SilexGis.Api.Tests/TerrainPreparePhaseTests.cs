@@ -82,14 +82,15 @@ public sealed class TerrainPreparePhaseTests : IAsyncLifetime, IDisposable, ICla
             });
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.TerrainBuilds.ExecuteDeleteAsync();
         await factory.DisposeAsync();
+        Dispose();
     }
 
     public void Dispose()

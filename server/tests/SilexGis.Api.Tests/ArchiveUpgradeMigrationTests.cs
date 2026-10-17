@@ -45,7 +45,7 @@ public sealed class ArchiveUpgradeMigrationTests : IAsyncLifetime, IClassFixture
     public ArchiveUpgradeMigrationTests(PostgresFixture postgres) =>
         adminConnectionString = postgres.ConnectionString;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await using (var admin = new NpgsqlConnection(adminConnectionString))
         {
@@ -194,7 +194,7 @@ public sealed class ArchiveUpgradeMigrationTests : IAsyncLifetime, IClassFixture
         return exists;
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var admin = new NpgsqlConnection(adminConnectionString);
         await admin.OpenAsync();

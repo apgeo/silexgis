@@ -77,7 +77,7 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable, ICl
     public DocumentAccessParityTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -539,7 +539,11 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable, ICl
         return facts;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

@@ -60,7 +60,7 @@ public sealed class TripSoftDeleteTests : IAsyncLifetime, IDisposable, IClassFix
             ["Protection:CalendarFeedEnabled"] = "true",
         });
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tsd-own-{suffix}@t.local");
         // A plain reader, and it has to be: the seeded editors hold every content domain at the
@@ -77,7 +77,11 @@ public sealed class TripSoftDeleteTests : IAsyncLifetime, IDisposable, IClassFix
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

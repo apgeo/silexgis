@@ -30,7 +30,7 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
     public ConcurrencyTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var ownerUserId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"cc-own-{suffix}@t.local");
@@ -341,7 +341,11 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
         surveyedAt,
     };
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

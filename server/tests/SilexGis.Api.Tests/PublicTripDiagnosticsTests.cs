@@ -87,7 +87,7 @@ public sealed class PublicTripDiagnosticsTests : IAsyncLifetime, IDisposable, IC
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"diag-own-{suffix}@t.local");
@@ -99,7 +99,11 @@ public sealed class PublicTripDiagnosticsTests : IAsyncLifetime, IDisposable, IC
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

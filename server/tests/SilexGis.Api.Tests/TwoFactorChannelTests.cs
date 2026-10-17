@@ -27,7 +27,7 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
             ["Auth:RateLimitPerMinute"] = "200",
         });
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         email = $"tfa-{Guid.NewGuid():N}@t.local";
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, email);
@@ -311,11 +311,12 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
     }
 
     /// <summary>The settings row is shared with every other class in this collection.</summary>
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.AppSettings.Where(s => s.Key == AppSettingSections.Security).ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose() => factory.Dispose();

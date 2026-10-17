@@ -60,7 +60,7 @@ public sealed class UserTwoFactorResetTests : IAsyncLifetime, IDisposable, IClas
         factory = new SilexGisApiFactory(
             postgres.ConnectionString, new Dictionary<string, string?> { ["Auth:RateLimitPerMinute"] = "200" });
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         adminId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, Email("adm"));
         var managerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, Email("mgr"));
@@ -394,7 +394,11 @@ public sealed class UserTwoFactorResetTests : IAsyncLifetime, IDisposable, IClas
         return body.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

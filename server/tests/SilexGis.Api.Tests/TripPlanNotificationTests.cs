@@ -53,7 +53,7 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable, ICl
     public TripPlanNotificationTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -787,7 +787,11 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable, ICl
         return [.. sent.Where(x => x.Placeholders.Contains(tripId.ToString(), StringComparison.Ordinal))];
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

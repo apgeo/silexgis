@@ -40,7 +40,7 @@ public sealed class ReportTemplateTests : IAsyncLifetime, IDisposable, IClassFix
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tpl-own-{suffix}@t.local");
@@ -405,12 +405,13 @@ public sealed class ReportTemplateTests : IAsyncLifetime, IDisposable, IClassFix
     /// about a trip, so a suite that left one behind would change what every write-up produced
     /// afterwards looks like — including in other suites, which share this database.
     /// </remarks>
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         foreach (var id in stored)
         {
             using var response = await admin.DeleteAsync($"/api/v1/report-templates/{id}");
         }
+        Dispose();
     }
 
     public void Dispose()

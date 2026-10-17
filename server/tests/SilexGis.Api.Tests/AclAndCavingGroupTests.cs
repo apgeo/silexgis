@@ -36,7 +36,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable, IClass
     public AclAndCavingGroupTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"acl-own-{suffix}@t.local");
@@ -424,7 +424,11 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable, IClass
         return JsonDocument.Parse(payload).RootElement.GetProperty("actions").GetString() ?? string.Empty;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

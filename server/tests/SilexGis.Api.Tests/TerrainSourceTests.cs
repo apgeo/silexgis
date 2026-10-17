@@ -94,7 +94,7 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
             });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -782,12 +782,13 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
     /// class's terrain worker would claim these and run them against a host with none of this
     /// class's directories.
     /// </summary>
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.ProcessingJobs.Where(j => j.Kind == ProcessingJobKinds.TerrainBuild).ExecuteDeleteAsync();
         await db.TerrainBuilds.ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

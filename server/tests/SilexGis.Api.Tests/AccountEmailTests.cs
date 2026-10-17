@@ -33,7 +33,7 @@ public sealed class AccountEmailTests : IAsyncLifetime, IDisposable, IClassFixtu
     public AccountEmailTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         myId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, StartingEmail);
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, NeighbourEmail);
@@ -231,7 +231,11 @@ public sealed class AccountEmailTests : IAsyncLifetime, IDisposable, IClassFixtu
         return doc.RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

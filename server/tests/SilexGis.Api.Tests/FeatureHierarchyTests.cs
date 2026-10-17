@@ -36,7 +36,7 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable, IClassF
     public FeatureHierarchyTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"fhown-{suffix}@t.local");
@@ -567,11 +567,12 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable, IClassF
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         owner.Dispose();
         outsider.Dispose();
         await Task.CompletedTask;
+        Dispose();
     }
 
     public void Dispose() => factory.Dispose();

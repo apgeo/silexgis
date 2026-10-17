@@ -36,7 +36,7 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable, IClass
     public ProfileVisibilityTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         subjectId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, SubjectEmail);
         groupMateId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, GroupMateEmail);
@@ -316,7 +316,11 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable, IClass
         return doc.RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

@@ -11,7 +11,6 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Persistence;
-using Xunit.Abstractions;
 
 namespace SilexGis.Api.Tests;
 
@@ -54,7 +53,7 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable, I
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"rf-own-{suffix}@t.local");
@@ -1500,11 +1499,12 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable, I
         return [new Rational(d), new Rational(m), new Rational(seconds)];
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.AppSettings.Where(s => s.Key == AppSettingSections.Protection).ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

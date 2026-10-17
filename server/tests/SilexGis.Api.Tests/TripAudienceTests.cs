@@ -43,7 +43,7 @@ public sealed class TripAudienceTests : IAsyncLifetime, IDisposable, IClassFixtu
     public TripAudienceTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         cavingGroupName = $"Audience Club {suffix}";
@@ -351,7 +351,11 @@ public sealed class TripAudienceTests : IAsyncLifetime, IDisposable, IClassFixtu
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

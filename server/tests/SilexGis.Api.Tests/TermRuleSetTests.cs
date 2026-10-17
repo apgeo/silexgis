@@ -28,7 +28,7 @@ public sealed class TermRuleSetTests : IAsyncLifetime, IDisposable, IClassFixtur
     public TermRuleSetTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tr-editor-{tag}@t.local");
@@ -258,7 +258,11 @@ public sealed class TermRuleSetTests : IAsyncLifetime, IDisposable, IClassFixtur
         return JsonDocument.Parse(payload).RootElement;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

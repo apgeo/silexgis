@@ -56,7 +56,7 @@ public sealed class KarstLinkExportTests : IAsyncLifetime, IDisposable, IClassFi
     public KarstLinkExportTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"kl-author-{tag}@t.local");
@@ -616,7 +616,11 @@ public sealed class KarstLinkExportTests : IAsyncLifetime, IDisposable, IClassFi
         response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

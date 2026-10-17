@@ -76,7 +76,7 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tic-editor-{tag}@t.local");
@@ -1225,7 +1225,11 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
     private static string? CodeOf(string problemBody) =>
         JsonDocument.Parse(problemBody).RootElement.GetProperty("code").GetString();
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

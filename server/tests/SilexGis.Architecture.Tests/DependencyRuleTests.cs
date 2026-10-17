@@ -401,7 +401,7 @@ public class DependencyRuleTests
         "SilexGis.Domain.Trips.TripReadiness",
     ];
 
-    private static string FailureMessage(TestResult result) =>
+    private static string FailureMessage(NetArchTest.Rules.TestResult result) =>
         result.IsSuccessful
             ? string.Empty
             : $"Violating types: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}";

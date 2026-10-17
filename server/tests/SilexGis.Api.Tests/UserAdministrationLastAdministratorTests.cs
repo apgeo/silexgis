@@ -52,7 +52,7 @@ public sealed class UserAdministrationLastAdministratorTests
     public UserAdministrationLastAdministratorTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var managerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ula-mgr-{tag}@t.local");
         lockedAdminId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"ula-adm-{tag}@t.local");
@@ -207,7 +207,11 @@ public sealed class UserAdministrationLastAdministratorTests
         return body.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

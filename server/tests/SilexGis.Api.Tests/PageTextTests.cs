@@ -48,7 +48,7 @@ public sealed class PageTextTests : IAsyncLifetime, IDisposable, IClassFixture<P
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"pt-own-{suffix}@t.local");
@@ -177,11 +177,12 @@ public sealed class PageTextTests : IAsyncLifetime, IDisposable, IClassFixture<P
         return (fileId, pagesUrl);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         owner.Dispose();
         anonymous.Dispose();
         await factory.DisposeAsync();
+        Dispose();
     }
 
     public void Dispose()

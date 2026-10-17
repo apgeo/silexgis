@@ -28,14 +28,18 @@ public sealed class ChecklistSeedTests : IAsyncLifetime, IDisposable, IClassFixt
     public ChecklistSeedTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         adminId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"cls-adm-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"cls-read-{suffix}@t.local");
         reader = await AuthHelper.BearerClientAsync(factory, $"cls-read-{suffix}@t.local");
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

@@ -31,7 +31,7 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
     public ChecklistAuthoringTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"cla-own-{suffix}@t.local");
 
@@ -306,7 +306,11 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
         }
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

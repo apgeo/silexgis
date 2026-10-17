@@ -42,7 +42,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable, IClassFixture<Po
     public HistoryTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"hown-{suffix}@t.local");
@@ -575,12 +575,13 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         owner.Dispose();
         editor.Dispose();
         outsider.Dispose();
-        return Task.CompletedTask;
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     public void Dispose() => factory.Dispose();

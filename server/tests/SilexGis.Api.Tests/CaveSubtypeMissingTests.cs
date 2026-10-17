@@ -49,7 +49,7 @@ public sealed class CaveSubtypeMissingTests : IAsyncLifetime, IDisposable, IClas
             postgres.ConnectionString,
             configureServices: services => services.AddSingleton<ILogEventSink>(logs));
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"csm-{tag}@t.local");
         editor = await AuthHelper.BearerClientAsync(factory, $"csm-{tag}@t.local");
@@ -269,7 +269,11 @@ public sealed class CaveSubtypeMissingTests : IAsyncLifetime, IDisposable, IClas
     private static Guid[] IdsOf(JsonElement page) =>
         [.. page.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid())];
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

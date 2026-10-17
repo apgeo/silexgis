@@ -55,7 +55,7 @@ public sealed class FeatureRestoreTests : IAsyncLifetime, IDisposable, IClassFix
     public FeatureRestoreTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"frs-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"frs-rdr-{suffix}@t.local");
@@ -76,7 +76,11 @@ public sealed class FeatureRestoreTests : IAsyncLifetime, IDisposable, IClassFix
         sinkholeTypeId = await db.FeatureTypes.Where(t => t.Code == "sinkhole").Select(t => t.Id).SingleAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

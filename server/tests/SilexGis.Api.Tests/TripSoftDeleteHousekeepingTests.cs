@@ -40,7 +40,7 @@ public sealed class TripSoftDeleteHousekeepingTests : IAsyncLifetime, IDisposabl
     public TripSoftDeleteHousekeepingTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tsh-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"tsh-adm-{suffix}@t.local");
@@ -50,7 +50,11 @@ public sealed class TripSoftDeleteHousekeepingTests : IAsyncLifetime, IDisposabl
         reader = await AuthHelper.BearerClientAsync(factory, $"tsh-rdr-{suffix}@t.local");
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

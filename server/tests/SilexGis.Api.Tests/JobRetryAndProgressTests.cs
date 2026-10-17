@@ -47,7 +47,7 @@ public sealed class JobRetryAndProgressTests : IAsyncLifetime, IDisposable, ICla
                 services.AddScoped<IProcessingJobHandler, ReportsProgressHandler>();
             });
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var email = $"jobs-{Guid.NewGuid():N}@t.local";
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, email);
@@ -171,7 +171,11 @@ public sealed class JobRetryAndProgressTests : IAsyncLifetime, IDisposable, ICla
         JobRetry.MayRetry(JobRetry.MaxAttempts, new TimeoutException()).ShouldBeFalse();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 

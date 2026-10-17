@@ -44,7 +44,7 @@ public sealed class ExpeditionPolymorphicTests : IAsyncLifetime, IDisposable, IC
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"xp-own-{suffix}@t.local");
@@ -538,7 +538,11 @@ public sealed class ExpeditionPolymorphicTests : IAsyncLifetime, IDisposable, IC
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

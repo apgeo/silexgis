@@ -29,7 +29,7 @@ public sealed class TaxonomyWideningTests : IAsyncLifetime, IClassFixture<Postgr
     public TaxonomyWideningTests(PostgresFixture postgres) =>
         adminConnectionString = postgres.ConnectionString;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await using (var admin = new NpgsqlConnection(adminConnectionString))
         {
@@ -104,7 +104,7 @@ public sealed class TaxonomyWideningTests : IAsyncLifetime, IClassFixture<Postgr
             .UseOpenIddict()
             .Options);
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var admin = new NpgsqlConnection(adminConnectionString);
         await admin.OpenAsync();

@@ -48,7 +48,7 @@ public sealed class TripOrganizingGroupGuardTests : IAsyncLifetime, IDisposable,
     public TripOrganizingGroupGuardTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var memberId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tog-mem-{tag}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tog-out-{tag}@t.local");
@@ -118,7 +118,11 @@ public sealed class TripOrganizingGroupGuardTests : IAsyncLifetime, IDisposable,
         return client.PostAsJsonAsync("/api/v1/trip-logs/", body);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

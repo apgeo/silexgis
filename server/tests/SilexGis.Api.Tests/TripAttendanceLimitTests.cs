@@ -49,7 +49,7 @@ public sealed class TripAttendanceLimitTests : IAsyncLifetime, IDisposable, ICla
     public TripAttendanceLimitTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -474,7 +474,11 @@ public sealed class TripAttendanceLimitTests : IAsyncLifetime, IDisposable, ICla
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

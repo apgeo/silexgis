@@ -25,7 +25,7 @@ public sealed class MapLayerKindTests : IAsyncLifetime, IDisposable, IClassFixtu
     public MapLayerKindTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"mlk-rdr-{suffix}@t.local");
         reader = await AuthHelper.BearerClientAsync(factory, $"mlk-rdr-{suffix}@t.local");
@@ -145,10 +145,11 @@ public sealed class MapLayerKindTests : IAsyncLifetime, IDisposable, IClassFixtu
             .ToDictionary(l => l!["name"]!.GetValue<string>(), l => l!);
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         reader.Dispose();
-        return Task.CompletedTask;
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     public void Dispose() => factory.Dispose();

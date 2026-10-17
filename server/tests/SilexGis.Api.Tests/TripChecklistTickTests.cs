@@ -55,7 +55,7 @@ public sealed class TripChecklistTickTests : IAsyncLifetime, IDisposable, IClass
     public TripChecklistTickTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tct-own-{suffix}@t.local");
         owner = await AuthHelper.BearerClientAsync(factory, $"tct-own-{suffix}@t.local");
@@ -416,7 +416,11 @@ public sealed class TripChecklistTickTests : IAsyncLifetime, IDisposable, IClass
         return found;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

@@ -55,7 +55,7 @@ public sealed class SpeleoLocDevSeedTests : IAsyncLifetime, IClassFixture<Postgr
     public SpeleoLocDevSeedTests(PostgresFixture postgres) =>
         adminConnectionString = postgres.ConnectionString;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await using (var admin = new NpgsqlConnection(adminConnectionString))
         {
@@ -301,7 +301,7 @@ public sealed class SpeleoLocDevSeedTests : IAsyncLifetime, IClassFixture<Postgr
             .UseOpenIddict()
             .Options);
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await factory.DisposeAsync();
         await using var admin = new NpgsqlConnection(adminConnectionString);

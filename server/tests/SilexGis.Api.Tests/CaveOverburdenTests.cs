@@ -85,7 +85,7 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
             JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -347,12 +347,13 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.TerrainBuilds.Where(b => b.Id == buildId).ExecuteDeleteAsync();
         await factory.DisposeAsync();
+        Dispose();
     }
 
     public void Dispose()

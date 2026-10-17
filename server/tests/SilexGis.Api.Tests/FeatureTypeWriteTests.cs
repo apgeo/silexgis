@@ -29,7 +29,7 @@ public sealed class FeatureTypeWriteTests : IAsyncLifetime, IDisposable, IClassF
     public FeatureTypeWriteTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"ftw-ed-{suffix}@t.local");
@@ -42,7 +42,11 @@ public sealed class FeatureTypeWriteTests : IAsyncLifetime, IDisposable, IClassF
         anonymous = factory.CreateClient();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

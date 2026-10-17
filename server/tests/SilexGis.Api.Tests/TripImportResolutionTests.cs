@@ -43,7 +43,7 @@ public sealed class TripImportResolutionTests : IAsyncLifetime, IDisposable, ICl
     public TripImportResolutionTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
 
@@ -415,7 +415,11 @@ public sealed class TripImportResolutionTests : IAsyncLifetime, IDisposable, ICl
     private static async Task<long> AreaTypeIdAsync(SilexGisDbContext db) =>
         await db.FeatureTypes.AsNoTracking().Where(t => t.Code == "massif").Select(t => t.Id).FirstAsync();
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

@@ -41,7 +41,7 @@ public sealed class AuditClientAddressTests : IAsyncLifetime, IDisposable, IClas
             postgres.ConnectionString,
             configureServices: services => services.AddSingleton<IStartupFilter, PeerAddressStandIn>());
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var email = $"audit-ip-{Guid.NewGuid():N}@t.local";
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, email);
@@ -123,7 +123,11 @@ public sealed class AuditClientAddressTests : IAsyncLifetime, IDisposable, IClas
             .ShouldBe([typeof(HttpContextRequestOrigin)]);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 

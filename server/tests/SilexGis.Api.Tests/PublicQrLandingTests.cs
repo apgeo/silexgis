@@ -31,7 +31,7 @@ public sealed class PublicQrLandingTests : IAsyncLifetime, IDisposable, IClassFi
     public PublicQrLandingTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"qrland-{suffix}@t.local");
@@ -334,11 +334,12 @@ public sealed class PublicQrLandingTests : IAsyncLifetime, IDisposable, IClassFi
         return JsonDocument.Parse(body).RootElement.GetProperty("id").GetGuid();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         owner.Dispose();
         anonymous.Dispose();
         await Task.CompletedTask;
+        Dispose();
     }
 
     public void Dispose() => factory.Dispose();

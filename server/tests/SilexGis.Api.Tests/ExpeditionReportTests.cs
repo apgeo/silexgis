@@ -54,7 +54,7 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"cmp-own-{suffix}@t.local");
         owner = await AuthHelper.BearerClientAsync(factory, $"cmp-own-{suffix}@t.local");
@@ -66,7 +66,11 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
         admin = await AuthHelper.BearerClientAsync(factory, $"cmp-adm-{suffix}@t.local");
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

@@ -39,7 +39,7 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable, IClassFixtur
     public CaverRosterTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         suffix = Guid.NewGuid().ToString("N")[..8];
         keeperId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Manager, $"ros-keep-{suffix}@t.local");
@@ -900,7 +900,11 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable, IClassFixtur
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

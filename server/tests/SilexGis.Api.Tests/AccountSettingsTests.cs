@@ -43,7 +43,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         myId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, MyEmail);
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OtherEmail);
@@ -1016,7 +1016,11 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
         return [new Rational(degrees), new Rational(minutes), new Rational(seconds)];
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

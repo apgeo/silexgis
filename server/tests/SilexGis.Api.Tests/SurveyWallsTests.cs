@@ -66,7 +66,7 @@ public sealed class SurveyWallsTests : IAsyncLifetime, IDisposable, IClassFixtur
             });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"swl-own-{suffix}@t.local");
@@ -662,7 +662,11 @@ public sealed class SurveyWallsTests : IAsyncLifetime, IDisposable, IClassFixtur
         finished.Status.ShouldBe(ProcessingJobStatus.Succeeded, finished.Error);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

@@ -65,7 +65,7 @@ public sealed class TripPurgeTests : IAsyncLifetime, IDisposable, IClassFixture<
             services.AddSingleton<TimeProvider>(clock);
         });
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tpg-own-{suffix}@t.local");
         readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"tpg-rdr-{suffix}@t.local");
@@ -76,7 +76,11 @@ public sealed class TripPurgeTests : IAsyncLifetime, IDisposable, IClassFixture<
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

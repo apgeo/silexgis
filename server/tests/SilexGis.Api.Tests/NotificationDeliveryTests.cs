@@ -59,7 +59,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
             services => services.AddSingleton<TimeProvider>(clock));
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         managerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Manager, ManagerEmail);
         recipientId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, RecipientEmail);
@@ -1111,7 +1111,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
             .ToListAsync();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         // The table is global like app_settings, so a class cleans up after itself. Deliveries go
         // with their notifications: the cascade is on the constraint, not on the change tracker,
@@ -1125,6 +1125,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
         // A retention window saved by one test would otherwise decide how long another class's
         // notifications are kept, against the one database they all share.
         await db.AppSettings.Where(a => a.Key == AppSettingSections.Notifications).ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

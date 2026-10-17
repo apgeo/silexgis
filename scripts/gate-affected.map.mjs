@@ -241,7 +241,7 @@ export const groups = {
   ],
   // With the smoke test because it asks the same kind of question one step earlier: not whether
   // the application answers, but whether each test was given the application its mode promises.
-  about: ['ApiSmokeTests', 'TestModeTests'],
+  about: ['ApiSmokeTests', 'TestClassDisposalTests', 'TestModeTests'],
   audit: ['AccessHistoryTests', 'HistoryTests', 'AuditClientAddressTests'],
   admin: [
     'AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests', 'SeededGroupUpgradeTests',

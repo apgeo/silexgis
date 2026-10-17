@@ -68,7 +68,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable, I
 
     public SmsNotificationChannelTests(PostgresFixture postgres) => connectionString = postgres.ConnectionString;
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
     [Fact]
     public async Task A_number_nobody_has_proved_is_theirs_is_never_texted()
@@ -965,7 +965,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable, I
             .ToString("D8", CultureInfo.InvariantCulture)
         + index.ToString("D2", CultureInfo.InvariantCulture);
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (factory is null)
         {
@@ -985,6 +985,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable, I
         await db.AppSettings
             .Where(s => s.Key == AppSettingSections.Announcements)
             .ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose() => factory?.Dispose();

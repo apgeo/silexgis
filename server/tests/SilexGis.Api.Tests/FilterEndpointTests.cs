@@ -31,10 +31,10 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
     public FilterEndpointTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public Task InitializeAsync()
+    public ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>
@@ -718,7 +718,11 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

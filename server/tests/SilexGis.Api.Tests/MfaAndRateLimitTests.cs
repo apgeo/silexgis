@@ -26,7 +26,7 @@ public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable, IClassFi
             ["Auth:RateLimitPerMinute"] = "200",
         });
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         email = $"mfa-{suffix}@t.local";
@@ -105,7 +105,11 @@ public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable, IClassFi
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

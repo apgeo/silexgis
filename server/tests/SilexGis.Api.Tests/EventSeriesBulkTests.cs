@@ -48,7 +48,7 @@ public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable, IClassFi
     public EventSeriesBulkTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var ownerId = await AuthHelper.CreateUserAsync(
             factory, GlobalRoles.Editor, $"evb-own-{suffix}@t.local");
@@ -557,7 +557,11 @@ public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable, IClassFi
             .ShouldBe(["2057-06-01", "2057-06-08", "2057-06-15"]);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

@@ -51,7 +51,7 @@ public sealed class WriteUpPdfTests : IAsyncLifetime, IDisposable, IClassFixture
             services => services.AddSingleton<IDocumentConverter>(converter));
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
         owner = await AuthHelper.BearerClientAsync(factory, OwnerEmail);
@@ -60,7 +60,11 @@ public sealed class WriteUpPdfTests : IAsyncLifetime, IDisposable, IClassFixture
         reader = await AuthHelper.BearerClientAsync(factory, ReaderEmail);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

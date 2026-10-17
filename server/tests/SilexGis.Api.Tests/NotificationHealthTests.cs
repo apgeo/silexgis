@@ -61,7 +61,7 @@ public sealed class NotificationHealthTests : IAsyncLifetime, IDisposable, IClas
 
     private string RecipientEmail => $"health-rcp-{suffix}@t.local";
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         operatorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, OperatorEmail);
         editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, EditorEmail);
@@ -580,12 +580,13 @@ public sealed class NotificationHealthTests : IAsyncLifetime, IDisposable, IClas
             .Select(c => c.GetProperty("count").GetInt32())
             .SingleOrDefault();
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.Notifications.ExecuteDeleteAsync();
         await db.UserNotificationPreferences.Where(p => p.UserId == recipientId).ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

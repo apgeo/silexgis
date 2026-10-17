@@ -58,7 +58,7 @@ public sealed class SurveySegmentSubstrateTests : IAsyncLifetime, IDisposable, I
             JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"seg-own-{suffix}@t.local");
@@ -612,7 +612,11 @@ public sealed class SurveySegmentSubstrateTests : IAsyncLifetime, IDisposable, I
         await QueuedJob.RunAsync(factory.Services, mine[0].Id);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

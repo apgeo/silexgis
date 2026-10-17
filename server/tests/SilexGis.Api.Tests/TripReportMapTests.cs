@@ -67,7 +67,7 @@ public sealed class TripReportMapTests : IAsyncLifetime, IDisposable, IClassFixt
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
         readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, ReaderEmail);
@@ -683,7 +683,11 @@ public sealed class TripReportMapTests : IAsyncLifetime, IDisposable, IClassFixt
             .Order(StringComparer.Ordinal)];
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

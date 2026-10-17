@@ -54,7 +54,7 @@ public sealed class TrackingCsvImportReplacementTests : IAsyncLifetime, IDisposa
             JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"csvrep-own-{suffix}@t.local");
@@ -68,7 +68,11 @@ public sealed class TrackingCsvImportReplacementTests : IAsyncLifetime, IDisposa
         owner = await AuthHelper.BearerClientAsync(factory, $"csvrep-own-{suffix}@t.local");
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

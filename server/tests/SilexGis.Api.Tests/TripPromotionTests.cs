@@ -56,7 +56,7 @@ public sealed class TripPromotionTests : IAsyncLifetime, IDisposable, IClassFixt
     public TripPromotionTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -501,7 +501,11 @@ public sealed class TripPromotionTests : IAsyncLifetime, IDisposable, IClassFixt
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

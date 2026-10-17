@@ -48,7 +48,7 @@ public sealed class PhotoImportTests : IAsyncLifetime, IDisposable, IClassFixtur
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"pi-editor-{tag}@t.local");
@@ -925,7 +925,11 @@ public sealed class PhotoImportTests : IAsyncLifetime, IDisposable, IClassFixtur
         return [new Rational(d), new Rational(m), new Rational(seconds)];
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

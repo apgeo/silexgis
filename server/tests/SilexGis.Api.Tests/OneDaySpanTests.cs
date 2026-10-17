@@ -55,7 +55,7 @@ public sealed class OneDaySpanTests : IAsyncLifetime, IDisposable, IClassFixture
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         anaId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"oneday-ana-{suffix}@t.local");
         anaCaver = await RosterHelper.CaverIdForAsync(factory, anaId);
@@ -69,7 +69,11 @@ public sealed class OneDaySpanTests : IAsyncLifetime, IDisposable, IClassFixture
             .Where(r => r.Code == "cook").Select(r => r.Id).SingleAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

@@ -22,7 +22,6 @@ using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
-using Xunit.Abstractions;
 
 namespace SilexGis.Api.Tests;
 
@@ -1072,7 +1071,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         return Math.Round(stopwatch.Elapsed.TotalMilliseconds / 10, 2);
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
     /// <summary>
     /// Removes the bulk-seeded rows again.
@@ -1093,7 +1092,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     /// failure more slowly, and the next reader would have no reason to suspect it.
     /// </para>
     /// </summary>
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (seededOwnerId is not { } owner) return;
 
@@ -1157,6 +1156,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             + "after it in this collection now queries a table carrying them, which is how a run "
             + "starts failing on surfaces nobody touched, with timeouts that read as server "
             + "errors and pass whenever the class is run on its own.");
+        Dispose();
     }
 
     public void Dispose() => factory.Dispose();

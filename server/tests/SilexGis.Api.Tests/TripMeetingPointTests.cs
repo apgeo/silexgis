@@ -39,7 +39,7 @@ public sealed class TripMeetingPointTests : IAsyncLifetime, IDisposable, IClassF
     public TripMeetingPointTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tmp-own-{suffix}@t.local");
@@ -330,7 +330,11 @@ public sealed class TripMeetingPointTests : IAsyncLifetime, IDisposable, IClassF
         return JsonDocument.Parse(payload).RootElement;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

@@ -49,7 +49,7 @@ public sealed class AccessAnchorCleanupTests : IAsyncLifetime, IDisposable, ICla
     public AccessAnchorCleanupTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString, configureServices: JobWorkers.RemoveFrom);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         adminId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"aac-adm-{suffix}@t.local");
         readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"aac-rdr-{suffix}@t.local");
@@ -61,7 +61,11 @@ public sealed class AccessAnchorCleanupTests : IAsyncLifetime, IDisposable, ICla
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

@@ -34,7 +34,7 @@ public sealed class ExpeditionTimelineTests : IAsyncLifetime, IDisposable, IClas
     public ExpeditionTimelineTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"xt-own-{suffix}@t.local");
@@ -291,7 +291,11 @@ public sealed class ExpeditionTimelineTests : IAsyncLifetime, IDisposable, IClas
     private static string[] Redacted(JsonElement e) =>
         [.. e.GetProperty("redactedProperties").EnumerateArray().Select(x => x.GetString()!)];
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

@@ -50,7 +50,7 @@ public sealed class CavingGroupAnnouncementTests : IAsyncLifetime, IDisposable, 
         factory = new SilexGisApiFactory(connectionString, null, JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -559,7 +559,7 @@ public sealed class CavingGroupAnnouncementTests : IAsyncLifetime, IDisposable, 
         return db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Email!).Single();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -567,6 +567,7 @@ public sealed class CavingGroupAnnouncementTests : IAsyncLifetime, IDisposable, 
         await db.Notifications.Where(n => mine.Contains(n.RecipientUserId)).ExecuteDeleteAsync();
         await db.AccessEntries.Where(e => e.ScopeId == cavingGroupId).ExecuteDeleteAsync();
         await db.CavingGroups.Where(c => c.Id == cavingGroupId).ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

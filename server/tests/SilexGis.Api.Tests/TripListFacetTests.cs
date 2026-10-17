@@ -48,7 +48,7 @@ public sealed class TripListFacetTests : IAsyncLifetime, IDisposable, IClassFixt
         factory = new SilexGisApiFactory(connectionString, configureServices: JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerUserId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tf-own-{suffix}@t.local");
@@ -656,7 +656,11 @@ public sealed class TripListFacetTests : IAsyncLifetime, IDisposable, IClassFixt
         return await db.TripLogParticipants.AsNoTracking().CountAsync(p => p.TripLogId == tripId);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

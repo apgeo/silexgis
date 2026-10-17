@@ -48,7 +48,7 @@ public sealed class DocumentAccessApiTests : IAsyncLifetime, IDisposable, IClass
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"da-own-{suffix}@t.local");
@@ -612,7 +612,11 @@ public sealed class DocumentAccessApiTests : IAsyncLifetime, IDisposable, IClass
         return [new Rational(d), new Rational(m), new Rational(seconds)];
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

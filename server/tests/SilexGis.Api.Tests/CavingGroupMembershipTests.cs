@@ -35,7 +35,7 @@ public sealed class CavingGroupMembershipTests : IAsyncLifetime, IDisposable, IC
     public CavingGroupMembershipTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Manager, $"cgm-mgr-{suffix}@t.local");
         memberId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"cgm-mem-{suffix}@t.local");
@@ -51,7 +51,11 @@ public sealed class CavingGroupMembershipTests : IAsyncLifetime, IDisposable, IC
         outsider = await AuthHelper.BearerClientAsync(factory, $"cgm-out-{suffix}@t.local");
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

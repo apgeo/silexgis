@@ -59,7 +59,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// <summary>The database this test class owns. Nothing else in the run can see it.</summary>
     public string ConnectionString { get; private set; } = null!;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var maintenance = await EnsureTemplateAsync();
         try
@@ -122,7 +122,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             cause);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (maintenanceConnectionString is null)
         {

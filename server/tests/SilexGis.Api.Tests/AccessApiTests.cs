@@ -32,7 +32,7 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<
     public AccessApiTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"acc-api-adm-{suffix}@t.local");
@@ -1400,7 +1400,11 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

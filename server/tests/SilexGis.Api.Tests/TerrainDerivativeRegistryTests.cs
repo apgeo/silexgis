@@ -71,9 +71,9 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
             ownHost: true);
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -81,6 +81,7 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
         // The pictures and their rasters go with the build they were drawn from.
         await db.TerrainBuilds.Where(b => seeded.Contains(b.Id)).ExecuteDeleteAsync();
         await factory.DisposeAsync();
+        Dispose();
     }
 
     public void Dispose()

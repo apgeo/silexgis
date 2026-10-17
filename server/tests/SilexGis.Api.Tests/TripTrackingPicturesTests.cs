@@ -65,7 +65,7 @@ public sealed class TripTrackingPicturesTests : IAsyncLifetime, IDisposable, ICl
             JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerUserId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tpic-own-{suffix}@t.local");
@@ -83,7 +83,11 @@ public sealed class TripTrackingPicturesTests : IAsyncLifetime, IDisposable, ICl
         stranger = await AuthHelper.BearerClientAsync(factory, $"tpic-str-{suffix}@t.local");
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

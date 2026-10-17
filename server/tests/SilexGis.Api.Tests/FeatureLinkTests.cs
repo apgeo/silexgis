@@ -33,7 +33,7 @@ public sealed class FeatureLinkTests : IAsyncLifetime, IDisposable, IClassFixtur
     public FeatureLinkTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"flown-{suffix}@t.local");
@@ -240,11 +240,12 @@ public sealed class FeatureLinkTests : IAsyncLifetime, IDisposable, IClassFixtur
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         owner.Dispose();
         outsider.Dispose();
         await Task.CompletedTask;
+        Dispose();
     }
 
     public void Dispose() => factory.Dispose();

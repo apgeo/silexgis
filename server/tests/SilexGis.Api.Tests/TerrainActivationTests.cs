@@ -60,7 +60,7 @@ public sealed class TerrainActivationTests : IAsyncLifetime, IDisposable, IClass
             },
             JobWorkers.RemoveFrom);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -499,7 +499,11 @@ public sealed class TerrainActivationTests : IAsyncLifetime, IDisposable, IClass
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

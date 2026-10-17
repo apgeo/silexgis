@@ -71,7 +71,7 @@ public sealed class PublishedLinkWithdrawalTests : IAsyncLifetime, IDisposable, 
         ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
     };
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         adminEmail = $"pubwd-adm-{suffix}@t.local";
@@ -90,7 +90,11 @@ public sealed class PublishedLinkWithdrawalTests : IAsyncLifetime, IDisposable, 
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

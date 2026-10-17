@@ -51,7 +51,7 @@ public sealed class FileAccessBatchParityTests : IAsyncLifetime, IDisposable, IC
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"bp-own-{suffix}@t.local");
@@ -313,7 +313,7 @@ public sealed class FileAccessBatchParityTests : IAsyncLifetime, IDisposable, IC
     /// checks look for. The database is shared with every other class in this collection, so a
     /// row left behind here does not fail this test, it fails theirs.
     /// </summary>
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -323,6 +323,7 @@ public sealed class FileAccessBatchParityTests : IAsyncLifetime, IDisposable, IC
         // One of these is visible to every signed-in account, which would put it in the
         // listings other classes in this collection are counting.
         await db.TripLogs.Where(t => tripIds.Contains(t.Id)).ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

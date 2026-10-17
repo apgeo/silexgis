@@ -41,7 +41,7 @@ public sealed class TripStatsTests : IAsyncLifetime, IDisposable, IClassFixture<
     public TripStatsTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString, configureServices: JobWorkers.RemoveFrom);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerUserId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"ts-own-{suffix}@t.local");
@@ -516,7 +516,11 @@ public sealed class TripStatsTests : IAsyncLifetime, IDisposable, IClassFixture<
         return await db.TripLogParticipants.AsNoTracking().CountAsync(p => p.TripLogId == tripId);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

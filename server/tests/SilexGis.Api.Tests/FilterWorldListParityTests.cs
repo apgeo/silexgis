@@ -38,10 +38,10 @@ public sealed class FilterWorldListParityTests : IAsyncLifetime, IDisposable, IC
     public FilterWorldListParityTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public Task InitializeAsync()
+    public ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
     [Theory]
@@ -867,7 +867,11 @@ public sealed class FilterWorldListParityTests : IAsyncLifetime, IDisposable, IC
         return options;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

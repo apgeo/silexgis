@@ -52,7 +52,7 @@ public sealed class AttachmentReachListingTests : IAsyncLifetime, IDisposable, I
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"reach-own-{suffix}@t.local");
@@ -334,7 +334,11 @@ public sealed class AttachmentReachListingTests : IAsyncLifetime, IDisposable, I
         return JsonDocument.Parse(payload).RootElement;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

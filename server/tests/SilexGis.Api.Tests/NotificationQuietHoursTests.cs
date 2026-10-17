@@ -65,7 +65,7 @@ public sealed class NotificationQuietHoursTests : IAsyncLifetime, IDisposable, I
             },
             services => services.AddSingleton<TimeProvider>(clock));
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         recipientId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, RecipientEmail);
         recipient = await AuthHelper.BearerClientAsync(factory, RecipientEmail);
@@ -265,11 +265,12 @@ public sealed class NotificationQuietHoursTests : IAsyncLifetime, IDisposable, I
             .Where(r => r.RecipientUserId == recipientId).OrderBy(r => r.Id).ToListAsync();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.Notifications.Where(r => r.RecipientUserId == recipientId).ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

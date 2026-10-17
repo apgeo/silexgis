@@ -34,7 +34,7 @@ public sealed class FeatureShareTests : IAsyncLifetime, IDisposable, IClassFixtu
     public FeatureShareTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"fsown-{suffix}@t.local");
@@ -311,11 +311,12 @@ public sealed class FeatureShareTests : IAsyncLifetime, IDisposable, IClassFixtu
         return (await response.Content.ReadFromJsonAsync<JsonObject>())!;
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         owner.Dispose();
         outsider.Dispose();
         await Task.CompletedTask;
+        Dispose();
     }
 
     public void Dispose() => factory.Dispose();

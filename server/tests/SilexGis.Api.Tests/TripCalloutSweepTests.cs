@@ -53,7 +53,7 @@ public sealed class TripCalloutSweepTests : IAsyncLifetime, IDisposable, IClassF
         factory = new SilexGisApiFactory(connectionString);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -817,7 +817,11 @@ public sealed class TripCalloutSweepTests : IAsyncLifetime, IDisposable, IClassF
         }
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

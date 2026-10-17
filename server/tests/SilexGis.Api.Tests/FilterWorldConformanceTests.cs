@@ -869,10 +869,10 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
     public FilterWorldConformanceTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public Task InitializeAsync()
+    public ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
     private IReadOnlyList<IFilterWorld> Worlds(IServiceScope scope) =>
@@ -1213,7 +1213,11 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
         1, null, AccessSubjectKind.User, id, AccessEffect.Allow, AccessDomain.Taxonomies,
         AccessAction.Read, AccessScopeKind.All, null, null, null, null);
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

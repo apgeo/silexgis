@@ -45,7 +45,7 @@ public sealed class EnumBindingTests : IAsyncLifetime, IDisposable, IClassFixtur
     public EnumBindingTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"enum-own-{suffix}@t.local");
         owner = await AuthHelper.BearerClientAsync(factory, $"enum-own-{suffix}@t.local");
@@ -55,7 +55,11 @@ public sealed class EnumBindingTests : IAsyncLifetime, IDisposable, IClassFixtur
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

@@ -59,7 +59,7 @@ public sealed class TerrainBuildCancelRetryTests : IAsyncLifetime, IDisposable, 
         factory = Installation(bakes: true);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -652,12 +652,13 @@ public sealed class TerrainBuildCancelRetryTests : IAsyncLifetime, IDisposable, 
         await db.SaveChangesAsync();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.ProcessingJobs.Where(j => j.Kind == ProcessingJobKinds.TerrainBuild).ExecuteDeleteAsync();
         await db.TerrainBuilds.ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

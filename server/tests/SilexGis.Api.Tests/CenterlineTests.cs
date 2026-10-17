@@ -45,7 +45,7 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable, IClassFixture
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"ctl-own-{suffix}@t.local");
@@ -894,7 +894,11 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable, IClassFixture
         return new MultipartFormDataContent { { content, "file", fileName } };
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

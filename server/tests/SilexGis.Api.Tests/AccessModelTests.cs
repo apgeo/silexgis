@@ -27,7 +27,7 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable, IClassFixtur
     public AccessModelTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
     [Fact]
     public async Task Seeded_permission_groups_exist_with_their_rulesets()
@@ -677,7 +677,11 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable, IClassFixtur
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

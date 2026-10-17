@@ -62,7 +62,7 @@ public sealed class MapWindowMembershipTests : IAsyncLifetime, IDisposable, ICla
 
     private static double Cell => LocationProtection.CellDegrees(GridMeters);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"win-own-{suffix}@t.local");
@@ -451,12 +451,13 @@ public sealed class MapWindowMembershipTests : IAsyncLifetime, IDisposable, ICla
         return caveId;
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         owner.Dispose();
         viewer.Dispose();
         granted.Dispose();
-        return Task.CompletedTask;
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     public void Dispose() => factory.Dispose();

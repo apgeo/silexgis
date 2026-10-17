@@ -35,7 +35,7 @@ public sealed class FilterSpikeTests : IAsyncLifetime, IDisposable, IClassFixtur
     public FilterSpikeTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
     [Fact]
     public async Task A_jsonb_containment_predicate_reaches_the_database_as_the_containment_operator()
@@ -175,7 +175,11 @@ public sealed class FilterSpikeTests : IAsyncLifetime, IDisposable, IClassFixtur
         everything.ShouldBeTrue();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

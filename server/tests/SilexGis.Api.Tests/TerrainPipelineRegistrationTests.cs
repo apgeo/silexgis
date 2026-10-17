@@ -38,9 +38,9 @@ public sealed class TerrainPipelineRegistrationTests : IAsyncLifetime, IClassFix
             // this one asks nothing of it. Nothing else is touched: the registrations are the point.
             JobWorkers.RemoveFrom);
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
-    public async Task DisposeAsync() => await factory.DisposeAsync();
+    public async ValueTask DisposeAsync() => await factory.DisposeAsync();
 
     [Fact]
     public void The_steps_a_build_walks_through_are_all_registered()

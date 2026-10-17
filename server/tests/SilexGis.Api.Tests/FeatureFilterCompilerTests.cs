@@ -36,10 +36,10 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
     public FeatureFilterCompilerTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public Task InitializeAsync()
+    public ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>
@@ -677,7 +677,11 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
         return feature;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

@@ -56,7 +56,7 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
             JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -75,12 +75,13 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
         anonymous = factory.CreateClient();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.TerrainBuilds.Where(b => seeded.Contains(b.Id)).ExecuteDeleteAsync();
         await factory.DisposeAsync();
+        Dispose();
     }
 
     public void Dispose()

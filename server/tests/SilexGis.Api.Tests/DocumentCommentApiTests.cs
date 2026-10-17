@@ -48,7 +48,7 @@ public sealed class DocumentCommentApiTests : IAsyncLifetime, IDisposable, IClas
         });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"dc-own-{suffix}@t.local");
@@ -534,7 +534,11 @@ public sealed class DocumentCommentApiTests : IAsyncLifetime, IDisposable, IClas
         return doc.RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

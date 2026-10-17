@@ -60,7 +60,7 @@ public sealed class SurveyModelReadingTests : IAsyncLifetime, IDisposable, IClas
             JobWorkers.RemoveFrom);
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"srd-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"srd-read-{suffix}@t.local");
@@ -815,7 +815,11 @@ public sealed class SurveyModelReadingTests : IAsyncLifetime, IDisposable, IClas
             CancellationToken.None);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

@@ -79,7 +79,7 @@ public sealed class TerrainBuildPipelineTests : IAsyncLifetime, IDisposable, ICl
             });
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -616,12 +616,13 @@ public sealed class TerrainBuildPipelineTests : IAsyncLifetime, IDisposable, ICl
     /// class's terrain worker would claim these and run them against a host with no steps and no
     /// directories of theirs — work belonging to a class that has already gone.
     /// </summary>
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.ProcessingJobs.Where(j => j.Kind == ProcessingJobKinds.TerrainBuild).ExecuteDeleteAsync();
         await db.TerrainBuilds.ExecuteDeleteAsync();
+        Dispose();
     }
 
     public void Dispose()

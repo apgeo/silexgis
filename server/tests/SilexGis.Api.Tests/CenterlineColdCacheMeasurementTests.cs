@@ -13,7 +13,6 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
-using Xunit.Abstractions;
 
 namespace SilexGis.Api.Tests;
 
@@ -85,7 +84,7 @@ public sealed class CenterlineColdCacheMeasurementTests : IAsyncLifetime, IDispo
     private static bool Requested =>
         Environment.GetEnvironmentVariable(OptInVariable) == "1";
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         if (!Requested)
         {
@@ -268,10 +267,11 @@ public sealed class CenterlineColdCacheMeasurementTests : IAsyncLifetime, IDispo
 
     private static string Invariant(FormattableString value) => value.ToString(CultureInfo.InvariantCulture);
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         owner?.Dispose();
-        return Task.CompletedTask;
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     public void Dispose()
