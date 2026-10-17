@@ -262,6 +262,71 @@ public sealed class SurveySegmentSubstrateTests : IAsyncLifetime, IDisposable, I
         again.Segments.ShouldAllBe(s => s.SurveyModelId != null);
     }
 
+    /// <summary>
+    /// A corrected survey uploaded with the request that it take over: the cave goes on being
+    /// measured over, and drawn from, the survey it had until the new one has been read — there is
+    /// nothing to measure before that — and from the new one afterwards, its centerline and its
+    /// figures moving together.
+    /// </summary>
+    [Fact]
+    public async Task A_survey_uploaded_to_take_over_measures_and_draws_the_cave_once_it_has_been_read()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var first = await UploadLocalLoxAsync(caveId, FlaggedSurvey());
+        await RunQueuedGraphJobAsync(first);
+
+        var second = await UploadLocalLoxAsync(caveId, FlaggedSurvey(), makeCurrent: true);
+
+        (await CurrentAndDrawnAsync(caveId)).ShouldBe((first, first));
+        (await SegmentsAsync(ownerId, caveId)).SurveyModelId.ShouldBe(first);
+
+        await RunQueuedGraphJobAsync(second);
+
+        (await CurrentAndDrawnAsync(caveId)).ShouldBe((second, second));
+        (await SegmentsAsync(ownerId, caveId)).SurveyModelId.ShouldBe(second);
+    }
+
+    /// <summary>
+    /// The request was "this one instead of that one". Somebody who chooses a third survey while
+    /// the new one is still being read has made the later choice, and the reading does not undo it.
+    /// </summary>
+    [Fact]
+    public async Task A_choice_made_while_a_survey_asked_to_take_over_is_being_read_stands()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var first = await UploadLocalLoxAsync(caveId, FlaggedSurvey());
+        await RunQueuedGraphJobAsync(first);
+
+        var asked = await UploadLocalLoxAsync(caveId, FlaggedSurvey(), makeCurrent: true);
+        var chosen = await UploadLocalLoxAsync(caveId, FlaggedSurvey());
+        await RunQueuedGraphJobAsync(chosen);
+        var choice = await owner.PutAsync($"/api/v1/survey-models/{chosen}/current", null);
+        choice.StatusCode.ShouldBe(HttpStatusCode.OK, await choice.Content.ReadAsStringAsync());
+
+        await RunQueuedGraphJobAsync(asked);
+
+        (await CurrentAndDrawnAsync(caveId)).ShouldBe((chosen, chosen));
+    }
+
+    /// <summary>
+    /// Which line plot holds the cave's current mark, and which one the cave's default centerline —
+    /// what the map draws — was read out of.
+    /// </summary>
+    private async Task<(Guid? Current, Guid? Drawn)> CurrentAndDrawnAsync(Guid caveId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var current = await db.SurveyModels
+            .Where(m => m.CaveFeatureId == caveId && m.IsCurrent)
+            .Select(m => (Guid?)m.Id)
+            .SingleOrDefaultAsync();
+        var drawn = await db.Centerlines
+            .Where(c => c.CaveFeatureId == caveId && c.IsDefault)
+            .Select(c => c.SurveyModelId)
+            .SingleOrDefaultAsync();
+        return (current, drawn);
+    }
+
     [Fact]
     public async Task A_cave_the_caller_may_not_read_at_all_has_no_segments_from_either_producer()
     {
@@ -509,12 +574,17 @@ public sealed class SurveySegmentSubstrateTests : IAsyncLifetime, IDisposable, I
     }
 
     /// <summary>Uploads a survey in plain metres with the position of its zero point declared.</summary>
-    private async Task<Guid> UploadLocalLoxAsync(Guid caveId, byte[] bytes)
+    /// <param name="makeCurrent">Asks for it to represent the cave once it has been read.</param>
+    private async Task<Guid> UploadLocalLoxAsync(Guid caveId, byte[] bytes, bool makeCurrent = false)
     {
         using var form = BuildForm("Local.lox", bytes);
         form.Add(new StringContent("25.2"), "originLongitude");
         form.Add(new StringContent("45.5"), "originLatitude");
         form.Add(new StringContent("1200"), "originHeightM");
+        if (makeCurrent)
+        {
+            form.Add(new StringContent("true"), "makeCurrent");
+        }
 
         var created = await owner.PostAsync($"/api/v1/caves/{caveId}/survey-models", form);
         created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());

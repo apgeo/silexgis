@@ -16033,6 +16033,8 @@ export interface operations {
                 } & {
                     /** Format: double */
                     originHeightM?: number;
+                } & {
+                    makeCurrent?: boolean;
                 };
             };
         };

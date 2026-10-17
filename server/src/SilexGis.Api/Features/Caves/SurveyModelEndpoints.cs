@@ -376,6 +376,10 @@ public static class SurveyModelEndpoints
         [FromForm] double? originLongitude,
         [FromForm] double? originLatitude,
         [FromForm] double? originHeightM,
+        // Whether the cave is to be represented by this model once it has been read, rather than
+        // by the one it is represented by now. Applied by the reading, because only a finished
+        // model can be chosen; see where the job is queued below.
+        [FromForm] bool? makeCurrent,
         SilexGisDbContext db,
         DocumentWriteService documents,
         IFileStore fileStore,
@@ -481,7 +485,14 @@ public static class SurveyModelEndpoints
         // 3D scene draws, and a line plot has to be read into the station and shot rows that carry
         // its own flags. The row and the job are written in one save, so a model can never be
         // stored in a state that says work is coming with nothing queued to do it.
-        SurveyModelReading.QueueFirst(db, model, ctx.UserId);
+        //
+        // Asked to take the cave's current mark, the reading is told which model holds it now, and
+        // takes it only from that model: somebody who chooses another while this one is being read
+        // has made the later choice, and it stands.
+        var takesMarkFrom = makeCurrent == true
+            ? await SurveyModelCurrency.HolderAsync(db, caveId, model.Format, ct)
+            : null;
+        SurveyModelReading.QueueFirst(db, model, ctx.UserId, takesMarkFrom);
 
         // The first model of a kind is the one the cave is represented by; a later one takes over
         // only when somebody says so. Arriving is not choosing: a second line plot may be a
@@ -764,24 +775,9 @@ public static class SurveyModelEndpoints
 
         await using (var transaction = await db.Database.BeginTransactionAsync(ct))
         {
-            if (!model.IsCurrent)
-            {
-                await SurveyModelCurrency.MakeCurrentAsync(db, model, ct);
-            }
-
             // The cave's shape follows the choice: the centerline read out of this model becomes
-            // the default, whatever was the default before. Looked at on every call, not only when
-            // the mark moved, so that choosing the holder again repairs a shape that had drifted.
-            var own = await db.Centerlines
-                .Where(c => c.SurveyModelId == model.Id)
-                .OrderBy(c => c.Source == CenterlineSource.Extracted ? 0 : 1).ThenBy(c => c.Id)
-                .Select(c => new { c.Id, c.IsDefault })
-                .ToListAsync(ct);
-            if (own.Count > 0 && !own.Any(c => c.IsDefault))
-            {
-                await writes.SetDefaultCenterlineAsync(own[0].Id, ct);
-            }
-
+            // the default, whatever was the default before.
+            await writes.MakeSurveyModelCurrentAsync(model, ct);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
         }

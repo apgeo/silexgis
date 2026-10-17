@@ -7,13 +7,19 @@ using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Infrastructure.Jobs;
 
 /// <summary>Payload contract for <see cref="ProcessingJobKinds.SurveyMesh"/> jobs.</summary>
-public sealed record SurveyMeshPayload(Guid SurveyModelId);
+/// <param name="SurveyModelId">The model to convert.</param>
+/// <param name="TakesMarkFrom">
+/// The model that held the cave's current mark when the uploader asked for this one to take it
+/// once converted; null when nobody asked. See <see cref="SurveyReadingMark"/>.
+/// </param>
+public sealed record SurveyMeshPayload(Guid SurveyModelId, Guid? TakesMarkFrom = null);
 
 /// <summary>
 /// Turns an uploaded wall mesh into the one file the 3D scene draws, and records where it belongs.
@@ -36,6 +42,7 @@ public sealed class SurveyMeshHandler(
     IFileStore fileStore,
     DocumentWriteService documents,
     SurveyMeshConverter converter,
+    FeatureWriteService writes,
     ILogger<SurveyMeshHandler> logger) : IProcessingJobHandler
 {
     public string Kind => ProcessingJobKinds.SurveyMesh;
@@ -144,6 +151,11 @@ public sealed class SurveyMeshHandler(
             model.Status = SurveyModelStatus.Ready;
             model.ProcessingError = null;
             await db.SaveChangesAsync(ct);
+
+            // In the same commit, so that the scene never draws the walls as finished and not yet
+            // the ones their uploader chose — and guarded, so that it cannot undo the conversion.
+            await SurveyReadingMark.TakeIfStillAskedAsync(
+                db, transaction, writes, model, payload.TakesMarkFrom, logger, ct);
             await transaction.CommitAsync(ct);
 
             // Bytes are dropped only once the row that named them is gone for good.

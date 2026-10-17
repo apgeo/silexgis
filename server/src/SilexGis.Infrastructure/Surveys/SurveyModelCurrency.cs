@@ -51,6 +51,20 @@ public static class SurveyModelCurrency
     }
 
     /// <summary>
+    /// The model that holds the current mark of <paramref name="format"/>'s kind for a cave, or null
+    /// when none does.
+    /// </summary>
+    public static Task<Guid?> HolderAsync(
+        SilexGisDbContext db, Guid caveFeatureId, SurveyModelFormat format, CancellationToken ct)
+    {
+        var formats = SurveyModelKinds.FormatsOf(SurveyModelKinds.Of(format));
+        return db.SurveyModels
+            .Where(m => m.CaveFeatureId == caveFeatureId && m.IsCurrent && formats.Contains(m.Format))
+            .Select(m => (Guid?)m.Id)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    /// <summary>
     /// Makes <paramref name="model"/> the current model of its kind for its cave, taking the mark
     /// from whichever model held it. The model is tracked; the caller saves it.
     /// </summary>

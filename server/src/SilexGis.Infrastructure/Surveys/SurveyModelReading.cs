@@ -82,11 +82,17 @@ public static class SurveyModelReading
     /// is tracked and not yet saved; the caller's save writes the row and the job together, so a
     /// model is never stored saying work is coming with nothing queued to do it.
     /// </summary>
-    public static void QueueFirst(SilexGisDbContext db, SurveyModel model, Guid? requestedBy)
+    /// <param name="takesMarkFrom">
+    /// The model holding the cave's current mark of this kind, when the uploader asked for the new
+    /// one to take it once it has been read; null otherwise. Carried by the job rather than stored
+    /// on the model, because it is a request about this one reading: a model read again later is
+    /// not thereby chosen again.
+    /// </param>
+    public static void QueueFirst(SilexGisDbContext db, SurveyModel model, Guid? requestedBy, Guid? takesMarkFrom = null)
     {
         model.Status = SurveyModelStatus.Pending;
         model.ProcessingError = null;
-        db.ProcessingJobs.Add(JobFor(model, requestedBy));
+        db.ProcessingJobs.Add(JobFor(model, requestedBy, takesMarkFrom));
     }
 
     /// <summary>
@@ -160,18 +166,18 @@ public static class SurveyModelReading
     /// a line plot is read into station and leg rows. Which of the two a format is, is the
     /// domain's answer and is not restated here.
     /// </summary>
-    private static ProcessingJob JobFor(SurveyModel model, Guid? requestedBy) =>
+    private static ProcessingJob JobFor(SurveyModel model, Guid? requestedBy, Guid? takesMarkFrom = null) =>
         SurveyModelKinds.Of(model.Format) == SurveyModelKind.LinePlot
             ? new ProcessingJob
             {
                 Kind = ProcessingJobKinds.SurveyGraph,
-                Payload = JsonSerializer.Serialize(new SurveyGraphPayload(model.Id), JsonSerializerOptions.Web),
+                Payload = JsonSerializer.Serialize(new SurveyGraphPayload(model.Id, takesMarkFrom), JsonSerializerOptions.Web),
                 RequestedBy = requestedBy,
             }
             : new ProcessingJob
             {
                 Kind = ProcessingJobKinds.SurveyMesh,
-                Payload = JsonSerializer.Serialize(new SurveyMeshPayload(model.Id), JsonSerializerOptions.Web),
+                Payload = JsonSerializer.Serialize(new SurveyMeshPayload(model.Id, takesMarkFrom), JsonSerializerOptions.Web),
                 RequestedBy = requestedBy,
             };
 }

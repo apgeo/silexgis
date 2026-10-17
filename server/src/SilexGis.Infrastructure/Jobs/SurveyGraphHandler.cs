@@ -19,7 +19,12 @@ using Therion.Blender.Geometry;
 namespace SilexGis.Infrastructure.Jobs;
 
 /// <summary>Payload contract for <see cref="ProcessingJobKinds.SurveyGraph"/> jobs.</summary>
-public sealed record SurveyGraphPayload(Guid SurveyModelId);
+/// <param name="SurveyModelId">The model to read.</param>
+/// <param name="TakesMarkFrom">
+/// The model that held the cave's current mark when the uploader asked for this one to take it
+/// once read; null when nobody asked. See <see cref="SurveyReadingMark"/>.
+/// </param>
+public sealed record SurveyGraphPayload(Guid SurveyModelId, Guid? TakesMarkFrom = null);
 
 /// <summary>
 /// Reads an uploaded line-plot survey into station and shot rows carrying the file's own flags.
@@ -199,6 +204,12 @@ public sealed class SurveyGraphHandler(
                 // published as read and as walled in one step — and guarded, so that the commit
                 // below happens whether or not the walls could be recorded.
                 outcome = await ReplaceWallsAsync(tx, model, upload, walls, ct);
+
+                // In the same commit, so that nothing reads the survey as finished and not yet
+                // the one its uploader chose — and guarded like the walls, so that it cannot undo
+                // the reading.
+                await SurveyReadingMark.TakeIfStillAskedAsync(
+                    db, tx, writes, model, payload.TakesMarkFrom, logger, ct);
                 await tx.CommitAsync(ct);
             }
 

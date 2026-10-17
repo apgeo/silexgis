@@ -285,14 +285,72 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable, IClassFixtur
         });
     }
 
-    private async Task<Guid> UploadMeshAsync(Guid caveId, string fileName)
+    /// <param name="makeCurrent">Asks for it to be the cave's walls once it has been converted.</param>
+    private async Task<Guid> UploadMeshAsync(Guid caveId, string fileName, bool makeCurrent = false)
     {
         using var form = BuildForm(fileName, ProjectedStl());
         form.Add(new StringContent("32635"), "sourceEpsg");
         form.Add(new StringContent("1100"), "originHeightM");
+        if (makeCurrent)
+        {
+            form.Add(new StringContent("true"), "makeCurrent");
+        }
         var created = await owner.PostAsync($"/api/v1/caves/{caveId}/survey-models", form);
         created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
         return (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// Corrected walls uploaded with the request that they take over: the scene goes on drawing the
+    /// walls the cave had until the new ones are converted — there is nothing to draw before that —
+    /// and the new ones afterwards. The other kind's mark is not touched.
+    /// </summary>
+    [Fact]
+    public async Task A_wall_mesh_uploaded_to_take_over_holds_the_mark_once_it_has_been_converted()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        var plot = await UploadAsync(caveId, "plot.lox");
+        var walls = await UploadMeshAsync(caveId, "Walls.stl");
+        await RunQueuedMeshJobAsync(walls);
+
+        var corrected = await UploadMeshAsync(caveId, "Walls-corrected.stl", makeCurrent: true);
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool>
+        {
+            [plot] = true, [walls] = true, [corrected] = false,
+        });
+
+        await RunQueuedMeshJobAsync(corrected);
+
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool>
+        {
+            [plot] = true, [walls] = false, [corrected] = true,
+        });
+    }
+
+    /// <summary>
+    /// Asked for and impossible: walls that cannot be converted have nothing to draw, so the mark
+    /// stays where it was and the failure is the only thing recorded.
+    /// </summary>
+    [Fact]
+    public async Task A_wall_mesh_asked_to_take_over_that_cannot_be_converted_leaves_the_mark_where_it_was()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        var walls = await UploadMeshAsync(caveId, "Walls.stl");
+        await RunQueuedMeshJobAsync(walls);
+
+        using var form = BuildForm("Broken.stl", FakeLox()); // not an STL at all
+        form.Add(new StringContent("32635"), "sourceEpsg");
+        form.Add(new StringContent("1100"), "originHeightM");
+        form.Add(new StringContent("true"), "makeCurrent");
+        var created = await owner.PostAsync($"/api/v1/caves/{caveId}/survey-models", form);
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var broken = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        await RunQueuedMeshJobAsync(broken, expectFailure: true);
+
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{broken}"))
+            .GetProperty("status").GetString().ShouldBe("failed");
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [walls] = true, [broken] = false });
     }
 
     /// <summary>

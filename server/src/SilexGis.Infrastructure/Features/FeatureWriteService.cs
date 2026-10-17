@@ -297,6 +297,35 @@ public sealed class FeatureWriteService(
     }
 
     /// <summary>
+    /// Makes a survey model the current one of its kind for its cave, and — for a line plot — the
+    /// centerline read out of it the cave's default, whatever was the default before. The caller
+    /// has checked that the model has finished; the caller saves, inside its own transaction.
+    /// </summary>
+    /// <remarks>
+    /// One home for a choice made in two places: by somebody on the cave's page, and by the reading
+    /// of a model its uploader asked to have chosen once read. The centerline is looked at even
+    /// when the model already holds the mark, so that choosing the holder again repairs a shape that
+    /// had drifted from it.
+    /// </remarks>
+    public async Task MakeSurveyModelCurrentAsync(SurveyModel model, CancellationToken ct = default)
+    {
+        if (!model.IsCurrent)
+        {
+            await SurveyModelCurrency.MakeCurrentAsync(db, model, ct);
+        }
+
+        var own = await db.Centerlines
+            .Where(c => c.SurveyModelId == model.Id)
+            .OrderBy(c => c.Source == CenterlineSource.Extracted ? 0 : 1).ThenBy(c => c.Id)
+            .Select(c => new { c.Id, c.IsDefault })
+            .ToListAsync(ct);
+        if (own.Count > 0 && !own.Any(c => c.IsDefault))
+        {
+            await SetDefaultCenterlineAsync(own[0].Id, ct);
+        }
+    }
+
+    /// <summary>
     /// Refreshes the cave's derived mirror: entrance count and the representative point
     /// (main entrance's geometry, Z included). Call after any entrance change.
     /// </summary>
