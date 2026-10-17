@@ -1,0 +1,107 @@
+# The installation without Docker, proved on a fresh machine: PostgreSQL and PostGIS from the
+# distribution's own packages, nginx in front, the .NET SDK and Node the project names, and the
+# scripts under deploy/native doing everything else — prerequisites, database, directories,
+# configuration, the web server's site, the build, the start and the check.
+#
+# Then the rest of an operator's life with it: a backup, an update that rebuilds the same tree and
+# switches to it, a restore of the backup, and the check after each. Row counts are compared
+# across the backup and the restore so a restore that loaded nothing cannot pass for one that
+# loaded everything.
+#
+# The API runs as a plain process (--service process), not as the systemd service a real Linux
+# host gets: the scripts' process mode is what the container proof on the development machine
+# uses too, and keeps this job from depending on the runner's service manager. What differs under
+# systemd is the unit the installer renders, which the unit tests read line by line.
+#
+# Weekly as well as on change, because what it installs onto moves underneath it: a distribution
+# package, a runner image, a PostGIS release. A path that is only proved when somebody touches it
+# rots quietly in between.
+
+name: Native install
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 4 * * 1'
+  push:
+    branches: [master]
+    paths:
+      - 'deploy/native/**'
+      - 'deploy/nginx/**'
+      - 'deploy/systemd/**'
+      - 'server/**'
+      - 'client/package*.json'
+      - '.github/workflows/native-install.yml'
+
+concurrency:
+  group: native-install-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PUBLIC_URL: http://localhost:8080
+      DB_COUNT: >-
+        select (select count(*) from caves) || '/' || (select count(*) from features) || '/' ||
+        (select count(*) from "__EFMigrationsHistory")
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Whatever PostgreSQL the distribution ships, with the PostGIS built for it. Started here
+      # because a runner image keeps its database service stopped; on a real host it is running.
+      - name: PostgreSQL, PostGIS and nginx from the distribution
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql postgresql-contrib nginx tzdata
+          version=$(ls /usr/lib/postgresql | sort -V | tail -1)
+          sudo apt-get install -y --no-install-recommends "postgresql-$version-postgis-3"
+          sudo systemctl start postgresql
+          psql --version
+
+      # As root, the way an operator runs it: the installer reaches PostgreSQL as the local
+      # postgres account, creates the service account, writes under /etc, /opt and /var/lib, and
+      # installs the nginx site. sudo resets PATH, so the runner's node and dotnet are passed on.
+      - name: Install
+        run: >-
+          sudo env "PATH=$PATH" "DOTNET_ROOT=$DOTNET_ROOT" node deploy/native/install.mjs
+          --service process --public-url "$PUBLIC_URL" --http-port 8080
+          --admin-email admin@native-ci.example --seed-demo
+
+      - name: Check
+        run: sudo env "PATH=$PATH" node deploy/native/check.mjs
+
+      - name: Back up
+        run: |
+          sudo -u postgres psql -d silexgis -tAc "$DB_COUNT" | tee "$RUNNER_TEMP/before.txt"
+          sudo env "PATH=$PATH" node deploy/native/backup.mjs "$RUNNER_TEMP/backup"
+          sudo test -s "$RUNNER_TEMP/backup/db.sql.gz"
+          sudo test -s "$RUNNER_TEMP/backup/files.tar.gz"
+
+      - name: Update (rebuild the same tree and switch to it)
+        run: sudo env "PATH=$PATH" "DOTNET_ROOT=$DOTNET_ROOT" node deploy/native/update.mjs --no-pull --force
+
+      - name: Restore the backup
+        run: |
+          sudo env "PATH=$PATH" node deploy/native/restore.mjs "$RUNNER_TEMP/backup" --yes
+          sudo -u postgres psql -d silexgis -tAc "$DB_COUNT" | tee "$RUNNER_TEMP/after.txt"
+          diff "$RUNNER_TEMP/before.txt" "$RUNNER_TEMP/after.txt"
+
+      - name: Check after the restore
+        run: sudo env "PATH=$PATH" node deploy/native/check.mjs
+
+      # The check names what failed; why is in these, and the runner is discarded with the job.
+      - name: Logs, when something did not pass
+        if: failure()
+        run: |
+          sudo tail -n 200 /var/log/silexgis/api.log || true
+          sudo tail -n 50 /var/log/nginx/error.log || true
