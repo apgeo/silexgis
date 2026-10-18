@@ -168,7 +168,7 @@ estompat și spune asta, până îl scoateți, din buton sau din **Filtre salvat
 ## Filtrul registrului peșterilor
 
 **Peșteri** deschide registrul peșterilor. Deasupra listei stau câmpurile lui rapide:
-**Caută denumire sau toponim…**, **Toate tipurile**, **Regiune**, **Lungime de cel puțin (m)**
+**Caută denumire sau toponim…**, **Toate tipurile**, **Regiune**, **Lungime (m)**
 și **Filtrează după etichetă…**. Ele formează un singur filtru, iar adresa paginii îl poartă,
 așa că un link copiat deschide aceeași întrebare pentru oricine îl urmează (cu răspunsul pe
 care *acela* are dreptul să-l vadă).
@@ -222,6 +222,30 @@ Comparațiile oferite de un câmp depind de ce conține:
 
 **cel puțin** și **cel mult** includ valoarea însăși: *Lungime cartată cel puțin 500* găsește o
 peșteră de exact 500 m; *mai mare decât 500* nu o găsește. **între** include ambele capete.
+
+### Scrierea unei comparații
+
+Un număr sau o dată se pot scrie cu un semn, în loc să alegeți comparația din listă:
+
+| Scris | Înseamnă |
+|---|---|
+| `>300` | mai mare decât 300 |
+| `>=300` · `≥300` | cel puțin 300 |
+| `<30` | mai mic decât 30 |
+| `<=30` · `≤30` | cel mult 30 |
+| `=300` | egal cu 300 |
+| `!=300` · `≠300` | diferit de 300 — se bifează **Nu** pe rând, așa că găsește și ce nu are valoare înregistrată |
+| `300..500` · `300-500` | între 300 și 500, ambele incluse |
+| `300` | comparația deja aleasă pentru rând |
+
+Un număr poate folosi virgula sau punctul pentru zecimale (`2,5`) și poate fi urmat de `m`
+(`300 m`); virgula nu este citită niciodată ca separator de mii. O zi se scrie `2024-05-01` sau
+`1.5.2024`; un interval de zile se scrie doar cu două puncte (`2024-05-01..2024-06-30`), pentru
+că ziua are deja liniuțe, iar `=2024-05-01` înseamnă toată acea zi. Lângă câmp editorul spune
+ce a înțeles — *„Înțeles ca: cel puțin 300 m"* — înainte de a aplica ceva. Un text pe care nu îl
+poate citi, sau o comparație pe care câmpul nu o oferă, este semnalat pe rând și nu aplică
+nimic. Câmpul **Lungime (m)** al registrului citește aceleași semne; acolo, un număr simplu
+înseamnă *cel puțin*.
 
 **Datele sunt zile.** Când alegeți o zi, este ziua din propriul dumneavoastră calendar: *Data
 turei cel puțin 5 octombrie* găsește turele din 5 octombrie și de după, oriunde v-ați afla când

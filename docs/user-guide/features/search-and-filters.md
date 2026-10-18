@@ -160,7 +160,7 @@ it, from the chip or from **Saved filters**.
 ## The cave registry's filter
 
 **Caves** opens the cave registry. Above the list sit its quick controls: **Search name or
-toponym…**, **All types**, **Region**, **Length at least (m)** and **Filter by tag…**. They
+toponym…**, **All types**, **Region**, **Length (m)** and **Filter by tag…**. They
 are one filter, and the address of the page carries it, so a link you copy opens the same
 question for whoever follows it (answered with what *they* may see).
 
@@ -211,6 +211,30 @@ Which comparisons a field offers depends on what it holds:
 
 **at least** and **at most** include the value itself: *Surveyed length at least 500* finds a
 cave of exactly 500 m; *more than 500* does not. **between** includes both ends.
+
+### Typing a comparison
+
+A number or a date can be typed with a sign instead of choosing the comparison from the list:
+
+| Typed | Means |
+|---|---|
+| `>300` | more than 300 |
+| `>=300` · `≥300` | at least 300 |
+| `<30` | less than 30 |
+| `<=30` · `≤30` | at most 30 |
+| `=300` | equal to 300 |
+| `!=300` · `≠300` | not equal to 300 — the row's **Not** is ticked, so it also finds what has no value recorded |
+| `300..500` · `300-500` | between 300 and 500, both included |
+| `300` | the comparison already chosen for the row |
+
+A number may use a comma or a point for its decimals (`2,5`) and may be followed by `m`
+(`300 m`); a comma is never read as a thousands separator. A day is written `2024-05-01` or
+`1.5.2024`; a range of days is written only with two dots (`2024-05-01..2024-06-30`), because a
+day already has dashes in it, and `=2024-05-01` means the whole of that day. Beside the box the
+editor says what it read — *"Read as: at least 300 m"* — before anything is applied. Text it
+cannot read, or a comparison the field does not offer, is said so on the row and applies
+nothing. The registry's **Length (m)** box reads the same signs; there, a bare number means
+*at least*.
 
 **Dates are days.** When you pick a day, it is the day on your own calendar: *Trip date at least
 5 October* finds the trips of 5 October and after, wherever you are when you ask. The same holds
