@@ -23,13 +23,17 @@ describe.each([
     // The calendar day each bound names, as written, is the day picked — on both sides of midnight.
     expect(dayBound('greaterOrEqual', fifth, 'low')).toBe(`2026-10-05T00:00:00.000${offset}`);
     expect(dayBound('lessThan', fifth, 'low')).toBe(`2026-10-05T00:00:00.000${offset}`);
-    expect(dayBound('lessOrEqual', fifth, 'low')).toBe(`2026-10-05T23:59:59.999${offset}`);
-    expect(dayBound('greaterThan', fifth, 'low')).toBe(`2026-10-05T23:59:59.999${offset}`);
+    expect(dayBound('lessOrEqual', fifth, 'low')).toBe(`2026-10-05T23:59:59.999999${offset}`);
+    expect(dayBound('greaterThan', fifth, 'low')).toBe(`2026-10-05T23:59:59.999999${offset}`);
     expect(dayBound('between', fifth, 'low')).toBe(`2026-10-05T00:00:00.000${offset}`);
-    expect(dayBound('between', fifth, 'high')).toBe(`2026-10-05T23:59:59.999${offset}`);
+    expect(dayBound('between', fifth, 'high')).toBe(`2026-10-05T23:59:59.999999${offset}`);
 
     // And as a moment it is still the reader's own midnight, for the fields that compare moments.
     expect(new Date(dayBound('greaterOrEqual', fifth, 'low')).getTime()).toBe(fifth.startOf('day').valueOf());
+    // The late bound reaches the last microsecond the database can hold of the day, so nothing
+    // recorded in the day's final millisecond falls outside "at most" or inside "more than".
+    expect(new Date(dayBound('lessOrEqual', fifth, 'low')).getTime())
+      .toBe(fifth.add(1, 'day').startOf('day').valueOf() - 1);
   });
 
   it('reads a bound back as the day it names, whoever wrote it', () => {
@@ -38,6 +42,7 @@ describe.each([
     expect(pickedDay('2026-10-05T00:00:00.000+03:00')?.format('YYYY-MM-DD')).toBe('2026-10-05');
     // Written west of UTC at the last moment of the 5th: still the 5th, not the morning of the 6th.
     expect(pickedDay('2026-10-05T23:59:59.999-05:00')?.format('YYYY-MM-DD')).toBe('2026-10-05');
+    expect(pickedDay('2026-10-05T23:59:59.999999-05:00')?.format('YYYY-MM-DD')).toBe('2026-10-05');
     // A plain day at midnight UTC, as the gallery writes it.
     expect(pickedDay('2026-10-05T00:00:00Z')?.format('YYYY-MM-DD')).toBe('2026-10-05');
     expect(pickedDay('not a day')).toBeNull();

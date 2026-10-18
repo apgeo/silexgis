@@ -17,7 +17,15 @@ import type { FilterOp } from './types.ts';
  */
 export function dayBound(op: FilterOp, day: Dayjs, end: 'low' | 'high'): string {
   const late = op === 'greaterThan' || op === 'lessOrEqual' || (op === 'between' && end === 'high');
-  return (late ? day.endOf('day') : day.startOf('day')).format('YYYY-MM-DDTHH:mm:ss.SSSZ');
+  if (!late) {
+    return day.startOf('day').format('YYYY-MM-DDTHH:mm:ss.SSSZ');
+  }
+  // The last microsecond, not the last millisecond a Date can hold: the database keeps a moment to
+  // the microsecond, so a bound at .999 would leave a record made in the day's final 999
+  // microseconds outside "at most the 5th" and inside "more than the 5th". Nothing stored falls
+  // between .999999 and the next midnight, so this bound is exactly the end of the day.
+  const last = day.endOf('day');
+  return `${last.format('YYYY-MM-DDTHH:mm:ss')}.999999${last.format('Z')}`;
 }
 
 const WRITTEN_DAY = /^(\d{4}-\d{2}-\d{2})T/;
