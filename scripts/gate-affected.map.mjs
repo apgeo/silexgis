@@ -21,7 +21,7 @@ export const groups = {
     'TripCaveReachTests', 'TripChecklistTickTests', 'TripInvitationTests',
     'TripInvitationSubjectTests', 'TripMeetingPointTests', 'TripParticipantRoleVocabularyTests',
     'TripPlanNotificationTests', 'TripPromotionTests', 'TripReportDocumentTests',
-    'TripReportJournalTests', 'TripReportTrackingTests',
+    'TripReportJournalTests', 'TripReportStationListTests', 'TripReportTrackingTests',
     'TripListGroupingTests', 'ReportTemplateTests', 'TripRoleLinkUnitOfWorkTests',
     'TripSectionSchemaTests', 'TripSilentWriteTests', 'TripStatisticsTests',
     'TripTypeVocabularyTests', 'TripTrackingTests', 'TripTrackingPublicationTests',

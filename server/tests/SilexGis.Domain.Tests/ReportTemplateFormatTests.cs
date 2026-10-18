@@ -185,6 +185,57 @@ public class ReportTemplateFormatTests
     }
 
     /// <summary>
+    /// A trip's layout may ask for the stations of the survey it was followed in with one word
+    /// that stands alone, like the journal — and a camp's layout may not, because a camp reaches
+    /// no single cave's survey. The shipped layout documents the word and asks for it nowhere, so
+    /// what every club's documents print is unchanged by its existing.
+    /// </summary>
+    [Fact]
+    public void The_station_list_is_a_word_of_a_trips_layout_that_stands_alone_and_a_camp_has_none()
+    {
+        var asked = ReportTemplateFormat.Parse("title: {title}\nheading: Stations\nsurvey");
+        asked.Ok.ShouldBeTrue(string.Join(" ", asked.Errors));
+        var word = asked.Parts.Single(p => p.Directive == ReportTemplateDirective.SurveyStations);
+        word.Line.ShouldBe(3);
+        word.Label.ShouldBeNull();
+        word.Text.ShouldBeEmpty();
+
+        // It takes nothing after it: not a colon and a choice, not a name in braces.
+        foreach (var trailing in new[] { "survey: all", "survey: {caves}" })
+        {
+            var refused = ReportTemplateFormat.Parse($"title: {{title}}\n{trailing}");
+            refused.Ok.ShouldBeFalse(trailing);
+            refused.Errors.ShouldHaveSingleItem().ShouldContain("Line 2");
+            refused.Errors[0].ShouldContain("'survey' stands on its own");
+        }
+
+        // The same line that is a layout for a trip is refused for a camp, by its line.
+        var onACamp = ReportTemplateFormat.Parse("title: {title}\nsurvey", ReportTemplateKind.Expedition);
+        onACamp.Ok.ShouldBeFalse();
+        onACamp.Errors.ShouldHaveSingleItem().ShouldContain("Line 2");
+        onACamp.Errors[0].ShouldContain("'survey' is not something a template can ask for");
+
+        // And a refusal on a trip's layout offers it among the words that may be written.
+        ReportTemplateFormat.Parse("title: {title}\nphoto: x").Errors.ShouldHaveSingleItem().ShouldContain("survey");
+
+        // The count of a trip's surveyed stations keeps its own meaning: the word asks for the
+        // list, the name in braces for the number, and neither has become the other.
+        var both = ReportTemplateFormat.Parse("title: {title}\nfield: Stations = {stations}\nsurvey");
+        both.Ok.ShouldBeTrue(string.Join(" ", both.Errors));
+        both.Parts.Count.ShouldBe(3);
+
+        // Documented where the person editing a layout reads the vocabulary, asked for nowhere in
+        // the shipped layout, and documented in no camp's.
+        var lines = ReportTemplateFormat.Default.Split('\n');
+        lines.ShouldContain(line => line.StartsWith("#   survey ", StringComparison.Ordinal));
+        lines.ShouldNotContain(line => line.TrimStart().StartsWith("survey", StringComparison.Ordinal));
+        ReportTemplateFormat.Parse(ReportTemplateFormat.Default).Parts
+            .ShouldNotContain(p => p.Directive == ReportTemplateDirective.SurveyStations);
+        ReportTemplateFormat.ExpeditionDefault.Split('\n')
+            .ShouldNotContain(line => line.StartsWith("#   survey ", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// The layout the system ships says how to ask for the journal and does not ask for it: what
     /// it prints is, line for line, what it printed before the word existed.
     /// </summary>

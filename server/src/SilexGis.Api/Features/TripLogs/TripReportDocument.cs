@@ -62,7 +62,11 @@ internal sealed record TripReportContent(
     // The language the document's own lines under that journal are written in, as two letters;
     // null is English, like the rest of a write-up's own words. Asked of whoever produced the
     // document, as its layout is, and deciding nothing about what the document says.
-    string? Language = null);
+    string? Language = null,
+    // The stations of the survey the trip was followed in as the reading this document is built
+    // from may be told them, read only when the layout asks for them; null when there is no list
+    // to speak of, and carrying the mark that says a reading was not told them.
+    TripSurveyStationList? Stations = null);
 
 /// <summary>
 /// One trip, arranged as the document a club circulates, under the layout the club asked for.
@@ -169,6 +173,11 @@ internal static class TripReportDocument
                 case ReportTemplateDirective.Tracking:
                     TripReportJournal.Append(
                         blocks, content.Tracking, TripJournalWording.For(content.Language));
+                    break;
+
+                case ReportTemplateDirective.SurveyStations:
+                    TripReportStations.Append(
+                        blocks, content.Stations, TripStationListWording.For(content.Language));
                     break;
 
                 default:

@@ -53,6 +53,19 @@ public enum ReportTemplateDirective
     /// from, and what was reported, in time order.
     /// </summary>
     Tracking = 13,
+
+    /// <summary>
+    /// The stations of the survey the trip was followed in, each with how far it lies below the
+    /// datum depths are measured from.
+    /// </summary>
+    /// <remarks>
+    /// A cave's whole station vocabulary, which is why it is a word of its own rather than part
+    /// of the journal: the journal says where the party was reported, and this says what the
+    /// names in it mean, which is what the paper sheet a surface coordinator fills in wants
+    /// beside it. It is also a way for every station name of a cave to leave in bulk, so it is
+    /// printed only for a reader who may be told where that cave is.
+    /// </remarks>
+    SurveyStations = 14,
 }
 
 /// <summary>
@@ -289,6 +302,7 @@ public static class ReportTemplateFormat
                 case ReportTemplateDirective.Teams:
                 case ReportTemplateDirective.Accounts:
                 case ReportTemplateDirective.Tracking:
+                case ReportTemplateDirective.SurveyStations:
                     if (rest.Length > 0)
                     {
                         errors.Add($"Line {number}: '{word}' stands on its own and takes nothing after it.");
@@ -404,6 +418,10 @@ public static class ReportTemplateFormat
             // has no watch of its own: its layout reaches its trips' logs through the hours they
             // come to, and a journal per trip belongs in that trip's own write-up.
             ["tracking"] = ReportTemplateDirective.Tracking,
+            // A trip's alone for the same reason, and after it for the same one: a camp's layout
+            // reaches no single cave's survey, and the words a refusal prints keep the order they
+            // are written in here.
+            ["survey"] = ReportTemplateDirective.SurveyStations,
         };
 
     /// <remarks>
@@ -465,6 +483,11 @@ public static class ReportTemplateFormat
         "#                           watch ran, each person's last report, and every report in time",
         "#                           order. Not printed unless a line here asks for it; a place a",
         "#                           reader of the document may not be told is printed as withheld",
+        "#   survey                  the stations of the survey the trip was followed in, each with",
+        "#                           how far it lies below the depth datum. Not printed unless a",
+        "#                           line here asks for it, and then only for a reader who may be",
+        "#                           told where the cave is: for anybody else the document says in",
+        "#                           one line that the list is not shown",
         "#",
         "# Anything in braces is filled in from the trip:",
         "#",

@@ -264,6 +264,10 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // this one: it asks, and tracking answers with its own reads, so one rule decides what of a
     // place a reader is told wherever it is told.
     builder.Services.AddScoped<ITripTrackingJournal, SilexGis.Api.Features.TripTracking.TripTrackingJournalReads>();
+    // The stations of the survey a trip was followed in, with their depths, for the same asker
+    // and for the same reason — and gated where tracking gates a survey: a cave's whole station
+    // vocabulary leaves in one piece or not at all.
+    builder.Services.AddScoped<ITripSurveyStations, SilexGis.Api.Features.TripTracking.TripSurveyStationReads>();
     // Why a published page was refused and how much the published surface is read, for the
     // operator: a log event and counters, and nothing in any response. One for the application's
     // lifetime because it owns the counters.

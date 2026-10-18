@@ -136,13 +136,14 @@ internal static class TripReportEndpoints
         IDocumentWriter writer,
         WriteUpPdfConverter pdf,
         ITripTrackingJournal tracking,
+        ITripSurveyStations surveyStations,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var built = await BuildAsync(
             id, templateId, db, access, ctx, ctx, userAccessor, protection, thumbnails, writer, null,
             () => ReportDownloads.RefusalBeforeBuilding(format, pdf),
-            tracking, LanguageOf(request), ct);
+            tracking, surveyStations, LanguageOf(request), ct);
         if (built.Problem is { } problem)
         {
             return problem;
@@ -217,6 +218,7 @@ internal static class TripReportEndpoints
         WriteUpPdfConverter pdf,
         IOptions<ReportOptions> options,
         ITripTrackingJournal tracking,
+        ITripSurveyStations surveyStations,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -224,7 +226,7 @@ internal static class TripReportEndpoints
             id, templateId, db, access, ctx, ctx, userAccessor, protection, thumbnails, writer,
             () => ReadMapAsync(request, options.Value, ct),
             () => ReportDownloads.RefusalBeforeBuilding(format, pdf),
-            tracking, LanguageOf(request), ct);
+            tracking, surveyStations, LanguageOf(request), ct);
         if (built.Problem is { } problem)
         {
             return problem;
@@ -279,6 +281,7 @@ internal static class TripReportEndpoints
         UploadIngestService ingest,
         IFileStore fileStore,
         ITripTrackingJournal tracking,
+        ITripSurveyStations surveyStations,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -324,14 +327,17 @@ internal static class TripReportEndpoints
         // No picture, and no way to pass one: this is the copy every reader of the trip opens.
         // The tracking journal, where the layout asks for one, is read under that same reading —
         // so it names a station only where any account may be told it, whoever is filing this.
-        // That is the answer of the day it is filed, and a file does not ask again: when a cave
-        // comes under protection, the copies kept on the trips followed in it are taken off them
-        // by the write that protects it.
+        // That is the answer of the day it is filed, and a file does not ask again — which is a
+        // known gap, left open on purpose: a copy filed before a cave was protected goes on
+        // naming that cave's stations to everybody who may read the trip, and the only way to
+        // take it back is to delete it. The reasoning, and the routine that would withdraw such
+        // copies if the decision is reversed, are with that routine in the trips folder of the
+        // infrastructure layer.
         // The language is the filer's, as the layout is: it changes how a line is worded and
         // nothing a line says.
         var built = await BuildAsync(
             id, templateId, db, access, ctx, everyReader, userAccessor, protection, thumbnails, writer,
-            null, null, tracking, LanguageOf(request), ct);
+            null, null, tracking, surveyStations, LanguageOf(request), ct);
         if (built.Problem is { } problem)
         {
             return problem;
@@ -584,6 +590,7 @@ internal static class TripReportEndpoints
         Func<Task<MapReading>>? readMap,
         Func<ProblemHttpResult?>? formatRefusal,
         ITripTrackingJournal tracking,
+        ITripSurveyStations surveyStations,
         string? acceptLanguage,
         CancellationToken ct)
     {
@@ -686,10 +693,18 @@ internal static class TripReportEndpoints
                 .Where(r => roleIds.Contains(r.Id))
                 .ToDictionaryAsync(r => r.Id, r => r.Name, ct);
 
-        // Only a document that prints a journal has lines of its own to word, so only that one
-        // asks which language they are in.
         var journal = await JournalAsync(id, parts, tracking, reading, user, ct);
-        var language = journal is null
+
+        // Read under the same reading as everything else, and only when the layout asks: so the
+        // copy somebody downloads states the stations they may be told, and the copy kept on the
+        // trip states them only where any account may be told where the cave is.
+        var stations = parts.Any(part => part.Directive == ReportTemplateDirective.SurveyStations)
+            ? await surveyStations.ReadAsync(id, reading, ct)
+            : null;
+
+        // Only a document with lines of its own has anything to word, so only such a document
+        // asks which language they are in. Both the journal and the station list have them.
+        var language = journal is null && stations is null
             ? null
             : await ReadingLanguage.ForAccountAsync(db, user?.UserId, acceptLanguage, ct);
 
@@ -703,7 +718,8 @@ internal static class TripReportEndpoints
             await PlatesAsync(id, db, reading, thumbnails, ct),
             map,
             journal,
-            language);
+            language,
+            stations);
 
         var fileName = $"{TripReportNaming.GeneratedPrefix(id)}{DateTime.UtcNow:yyyyMMdd}.{writer.Extension}";
         return new BuiltReport(writer.Write(TripReportDocument.Blocks(content, parts)), fileName, null);
