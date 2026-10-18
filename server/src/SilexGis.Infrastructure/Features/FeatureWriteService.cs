@@ -7,7 +7,6 @@ using SilexGis.Domain.Features;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
-using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Infrastructure.Features;
 
@@ -659,31 +658,27 @@ public sealed class FeatureWriteService(
             byId[local.Id] = local;
         }
 
-        var newlyProtectedCaves = new List<Guid>();
         foreach (var feature in byId.Values)
         {
             var ancestors = ancestorSets[feature.Id];
             feature.AncestorIds = [.. ancestors.OrderBy(a => a)];
-            var wasProtected = feature.IsProtectedEffective;
             feature.IsProtectedEffective =
                 FeatureHierarchyRules.IsProtectedEffective(ancestors, protectedIds.Contains);
-
-            // A cave that is only now being created has had no trip followed in it.
-            if (!wasProtected
-                && feature.IsProtectedEffective
-                && feature.Kind == FeatureKind.Cave
-                && db.Entry(feature).State != EntityState.Added)
-            {
-                newlyProtectedCaves.Add(feature.Id);
-            }
         }
 
-        // A write-up kept on a trip is a file and cannot ask again what its readers may be told.
-        // Where it printed the trip's tracking journal it names stations of a cave that has just
-        // come under protection — by its own flag or by one set anywhere above it, which is why
-        // this is asked here, where both arrive — so it comes off the trip in the same unit of
-        // work, and writing the trip up again reads the journal under the cave as it now stands.
-        await FiledTripWriteUps.TakeOffTripsFollowedInAsync(db, newlyProtectedCaves, ct);
+        // Nothing is done here about the write-ups already filed on the trips that were followed
+        // in a cave this change has just protected. That is a known gap and it is open on
+        // purpose: a write-up filed before the cave was protected can still name that cave's
+        // stations to everybody who may read the trip, and protecting the cave does not take such
+        // a copy back — the only way to remove it is to delete the filed copy. Withdrawing them
+        // from here was built and then switched off as more machinery than it buys: the
+        // protection can arrive by a cave's own flag or by one set anywhere above it, a filed
+        // file records nothing about whether its layout ever printed a place, and the sweep had
+        // to reach deleted trips and reports since taken off a log, so it withdrew files that
+        // stated no place at all. The routine that does the withdrawing is kept where it was,
+        // called by nothing, and the decision is to be looked at again. Live surfaces are
+        // unaffected either way: each of them decides a place on every read, and a write-up filed
+        // after this point reads the cave as it now stands.
     }
 
     // ---------- internals ----------

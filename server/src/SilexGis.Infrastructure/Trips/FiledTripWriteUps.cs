@@ -7,33 +7,46 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Trips;
 
 /// <summary>
-/// What becomes of the write-ups kept on trips when a cave those trips were followed in comes
-/// under location protection: they come off the trips.
+/// Takes the write-ups filed on trips off those trips when a cave the trips were followed in
+/// comes under location protection. <b>Nothing calls this.</b> It is kept, with the gap it was
+/// written to close stated below, because the decision to stop calling it is to be looked at
+/// again.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A write-up kept on a trip is a file, and a file does not ask again. Where its layout prints the
-/// trip's tracking journal it states the stations and depths any account could be told on the day
-/// it was made — and from the moment the cave is protected that is no longer what any account may
-/// be told, while everybody who may read the trip can still open the file. Every live surface
-/// decides a place on each read for exactly this reason. A kept file cannot, so it is withdrawn
-/// instead: the attachment that hangs it on the trip is removed in the same unit of work that
-/// switches the protection on, and the trip can be written up again, at which point the journal is
-/// read under the cave as it now stands.
+/// <b>The danger this leaves open, in one sentence.</b> A write-up filed before a cave was
+/// protected can still name that cave's stations to everybody who may read the trip; protecting
+/// the cave does not take such a copy back, and the way to remove it is to delete the filed copy.
 /// </para>
 /// <para>
-/// <b>Taken off the trip, not destroyed</b> — the same thing that happens to a kept write-up when a
-/// newer one replaces it. The document stays in the library of whoever made it, and they and an
-/// administrator are the only ones who reach it once nothing hangs it on a record others read.
+/// Why that happens. A write-up filed on a trip is a file, and a file does not ask again. Where
+/// its layout printed the trip's tracking journal, or the survey's station list, it states the
+/// stations and depths any account could be told on the day it was made — and from the moment the
+/// cave is protected that is no longer what any account may be told, while everybody who may read
+/// the trip can still open the file. Every live surface decides a place on each read for exactly
+/// this reason; a filed file cannot, and a write-up filed after the protection withholds the
+/// place as it should.
 /// </para>
 /// <para>
-/// <b>Wider than it strictly needs to be, on purpose.</b> Whether a given file's layout printed a
-/// journal is not recorded anywhere, and a report since taken off the log may still be in a file
-/// made before it was. So every generated write-up of every trip that was ever followed in the
-/// cave goes — a deleted trip's and one whose only report there was removed included. One that
-/// stated no place costs a press of a button to make again; one that did and stayed is the
-/// failure. A report a club wrote and uploaded by hand into the same slot is not the
-/// application's to withdraw and stays where it is.
+/// <b>Why it is not closed.</b> Withdrawing the files was built and then judged more machinery
+/// than it buys. The protection can arrive by the cave's own flag or by one set anywhere above
+/// it, so "newly protected" has to be recognised inside the ancestry recompute; a filed file
+/// records nothing about whether its layout ever printed a place, and a report since taken off a
+/// log may still be named in a file made before it was, so the sweep had to run wide — every
+/// generated write-up of every trip ever followed in the cave, a deleted trip's included — and so
+/// it withdrew files that stated no place at all. The judgement was that the logic costs more
+/// than the hole it fills. <b>It is to be looked at again</b>, which is why the routine below is
+/// kept rather than deleted: it is exercised by a test, so that it still works the day somebody
+/// decides to call it.
+/// </para>
+/// <para>
+/// What it does when it is called. <b>Taken off the trip, not destroyed</b> — the same thing that
+/// happens to a filed write-up when a newer one replaces it. The document stays in the library of
+/// whoever made it, and they and an administrator are the only ones who reach it once nothing
+/// hangs it on a record others read. It is wider than it strictly needs to be, for the reasons
+/// above: every generated write-up of every trip that was ever followed in the cave goes. A
+/// report a club wrote and uploaded by hand into the same slot is not the application's to
+/// withdraw and stays where it is.
 /// </para>
 /// </remarks>
 public static class FiledTripWriteUps

@@ -202,8 +202,11 @@ public class TripSoftDeleteGuardTests
             ["server/src/SilexGis.Infrastructure/Trips/TripTypeWriteService.cs"] =
                 (1, "a purpose a deleted trip names is still in use"),
             ["server/src/SilexGis.Infrastructure/Trips/FiledTripWriteUps.cs"] =
-                (1, "a cave coming under protection takes the kept write-ups off every trip followed in it: "
-                    + "a deleted trip can be put back with the file still on it, and a report since taken off "
+                (1, "the routine that would take the filed write-ups off every trip followed in a cave "
+                    + "coming under protection. Nothing calls it any more — the withdrawal is switched off and "
+                    + "the gap is written down where it is read — and it is kept, exercised by a test, against "
+                    + "the decision being looked at again. Its one statement reads past the filter because a "
+                    + "deleted trip can be put back with the file still on it, and a report since taken off "
                     + "the log, which the same filter hides, may be in a file made before it was"),
             ["server/src/SilexGis.Infrastructure/Jobs/TripPurgeHandler.cs"] =
                 (3, "the pass that removes deleted trips: selecting them, claiming one, loading it"),

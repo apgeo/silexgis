@@ -16,6 +16,7 @@ using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Api.Tests;
 
@@ -40,6 +41,22 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
 {
     private const string Layout = "title: {title}\nheading: Followed underground\ntracking\n";
 
+    /// <summary>A layout that asks for the survey's stations and for nothing else about a place.</summary>
+    private const string StationLayout = "title: {title}\nheading: Stations underground\nsurvey\n";
+
+    /// <summary>What a note about the cave says, invented: it is the cave's state, not anybody's.</summary>
+    private const string Hazard = "Loose rock above the second pitch, qzx";
+
+    /// <summary>The phrase that stands where a name would, on a line about the cave.</summary>
+    private const string AboutTheCave = "About the cave, not about a person";
+
+    /// <summary>
+    /// Asked of every read whose assertion is an English phrase of the document's own, so that
+    /// what the reading account happens to have stored as its language cannot decide whether the
+    /// assertion holds.
+    /// </summary>
+    private const string English = "en-GB,en;q=0.9";
+
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];
@@ -50,6 +67,7 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
     private HttpClient admin = null!;   // Admin — stores the layout, and keeps a copy on a trip
     private long caveTypeId;
     private Guid layoutId;
+    private Guid stationLayoutId;
 
     public TripReportTrackingTests(PostgresFixture postgres)
     {
@@ -87,13 +105,19 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
             caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
         }
 
+        layoutId = await StoreLayoutAsync($"With the journal {suffix}", Layout);
+        stationLayoutId = await StoreLayoutAsync($"With the stations {suffix}", StationLayout);
+    }
+
+    private async Task<Guid> StoreLayoutAsync(string name, string body)
+    {
         using var stored = await admin.PostAsJsonAsync("/api/v1/report-templates/", new
         {
-            name = $"With the journal {suffix}", body = Layout, isDefault = false, kind = "trip", tripTypeId = (long?)null,
+            name, body, isDefault = false, kind = "trip", tripTypeId = (long?)null,
         });
         var payload = await stored.Content.ReadAsStringAsync();
         stored.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
-        layoutId = JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
     public async Task DisposeAsync()
@@ -101,7 +125,7 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
         // The layout is a row of a table every class shares; the trips and caves are named apart.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        await db.ReportTemplates.Where(t => t.Id == layoutId).ExecuteDeleteAsync();
+        await db.ReportTemplates.Where(t => t.Id == layoutId || t.Id == stationLayoutId).ExecuteDeleteAsync();
     }
 
     public void Dispose()
@@ -189,80 +213,183 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
         // A request that names no language this application writes leaves it to the language the
         // account has stored — the order every line worded for a reader is picked by — and one
         // that does name a language is answered in it whatever the account has stored.
-        using (var scope = factory.Services.CreateScope())
+        //
+        // The stored language is put back whatever happens below: it belongs to an account every
+        // test of this class reads documents as, and a test that left it changed would decide what
+        // language a later test's document comes out in — which the order tests run in, not this
+        // file, would then be choosing.
+        var spoken = await SetReaderLocaleAsync("ro");
+        try
         {
-            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-            (await db.Users.Where(u => u.Email == $"trj-read-{suffix}@t.local")
-                .ExecuteUpdateAsync(set => set.SetProperty(u => u.Locale, "ro"))).ShouldBe(1);
+            (await DocumentTextAsync(reader, guarded, layoutId, "de-DE,*;q=0.5"))
+                .ShouldContain("La o stație · loc reținut");
+            (await DocumentTextAsync(reader, guarded, layoutId, acceptLanguage: null))
+                .ShouldContain("La o stație · loc reținut");
+            var asked = await DocumentTextAsync(reader, guarded, layoutId, "en-GB,en;q=0.9");
+            asked.ShouldContain("At a station · place withheld");
+            asked.ShouldNotContain("loc reținut");
+        }
+        finally
+        {
+            await SetReaderLocaleAsync(spoken);
+        }
+    }
+
+    /// <summary>
+    /// Puts the reading member's stored language where this test wants it, asserting that it
+    /// reached exactly the one account, and answers with the language it replaced — which is what
+    /// the caller puts back, rather than a language written here that the account may not have had.
+    /// </summary>
+    private async Task<string> SetReaderLocaleAsync(string locale)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var reading = db.Users.Where(u => u.Email == $"trj-read-{suffix}@t.local");
+        var previous = await reading.Select(u => u.Locale).SingleAsync();
+        (await reading.ExecuteUpdateAsync(set => set.SetProperty(u => u.Locale, locale))).ShouldBe(1);
+        return previous;
+    }
+
+    /// <summary>
+    /// A note about the cave is about nobody, and the printed journal says so in words: the next
+    /// party has to be able to read a hazard off the write-up, so it is printed — in its hour's
+    /// place in the log, never as a report about a person the document has no name for. Its
+    /// station is the cave's own and follows the one rule every place follows: stated to a reader
+    /// who may be told where that cave is, withheld from one who may not, in the copy somebody
+    /// downloads, in the copy filed on the trip and in the portable copy alike.
+    /// </summary>
+    [Fact]
+    public async Task A_note_about_the_cave_is_printed_as_a_line_about_the_cave_and_its_station_is_withheld_like_any_other()
+    {
+        var guarded = await FollowedPastAHazardAsync(locationProtected: true);
+        var open = await FollowedPastAHazardAsync(locationProtected: false);
+
+        // The account that may place the cave: the hazard, the station it names, on both trips —
+        // and nothing suggesting the line is somebody's report.
+        foreach (var trip in new[] { guarded, open })
+        {
+            var mine = await DocumentTextAsync(owner, trip, layoutId);
+            mine.ShouldContain("Followed underground");
+            mine.ShouldContain($"2026-09-12 10:30 UTC · {AboutTheCave} · cave.parallel.2 · {Hazard}");
+            mine.ShouldContain("At a station · cave.upper.2");
+            mine.ShouldContain("Guest 1");
+            mine.ShouldNotContain("A person not named here");
+            mine.ShouldNotContain("place withheld");
         }
 
-        (await DocumentTextAsync(reader, guarded, layoutId, "de-DE,*;q=0.5"))
-            .ShouldContain("La o stație · loc reținut");
-        (await DocumentTextAsync(reader, guarded, layoutId, acceptLanguage: null))
-            .ShouldContain("La o stație · loc reținut");
-        var asked = await DocumentTextAsync(reader, guarded, layoutId, "en-GB,en;q=0.9");
-        asked.ShouldContain("At a station · place withheld");
-        asked.ShouldNotContain("loc reținut");
-    }
+        // The member who may read the trip and may not place the protected cave: the hazard's
+        // words are the trip's and are printed; where it is, is not.
+        var theirs = await DocumentTextAsync(reader, guarded, layoutId, English);
+        theirs.ShouldContain($"2026-09-12 10:30 UTC · {AboutTheCave} · place withheld · {Hazard}");
+        theirs.ShouldNotContain("cave.");
+        theirs.ShouldContain("Some places are withheld");
+        theirs.ShouldNotContain("A person not named here");
 
-    /// <summary>
-    /// A note about the cave is about nobody, and every line of the journal is about somebody. A
-    /// trip whose log holds one is still written up, with the reports about its people as they
-    /// were: the note's words are not printed under a person the document does not name, and the
-    /// station it names is not stated on its account — to the account that may place the cave no
-    /// more than to anybody else.
-    /// </summary>
-    [Fact]
-    public async Task A_note_about_the_cave_in_the_log_is_not_printed_in_the_journal_as_somebodys_report()
-    {
-        var (trip, cavers) = await CreateTripAsync("Followed past a hazard", guests: 1);
-        var cave = await CreateCaveAsync(locationProtected: false);
-        var model = await SeedModelWithStationsAsync(cave);
-        (await PutConfigAsync(owner, trip, new { state = "armed", surveyModelId = model }))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
-        await ReportAsync(trip, new { caverIds = cavers, kind = "entered", recordedAt = At(9, 0) });
-        await ReportAsync(trip, new
-        {
-            caverIds = new[] { cavers[0] }, kind = "atStation", stationName = "cave.upper.2", recordedAt = At(10, 0),
-        });
-        // At a station nobody was reported at, so nothing else in the log names it.
-        var note = await ReportAsync(trip, new
-        {
-            kind = "caveNote", note = "Loose rock, qzx", stationName = "cave.parallel.2", recordedAt = At(10, 30),
-        });
-        note.GetArrayLength().ShouldBe(1);
-        note[0].GetProperty("caverId").ValueKind.ShouldBe(JsonValueKind.Null);
+        // The positive half: the very same member, on the cave nothing protects, is told the
+        // station of the very same hazard.
+        var theirsOpen = await DocumentTextAsync(reader, open, layoutId, English);
+        theirsOpen.ShouldContain($"2026-09-12 10:30 UTC · {AboutTheCave} · cave.parallel.2 · {Hazard}");
+        theirsOpen.ShouldNotContain("place withheld");
 
-        var journal = await DocumentTextAsync(owner, trip, layoutId);
-        journal.ShouldContain("Followed underground");
-        journal.ShouldContain("2026-09-12 10:00 UTC");
-        journal.ShouldContain("At a station · cave.upper.2");
-        journal.ShouldContain("Guest 1");
-        journal.ShouldNotContain("Loose rock, qzx");
-        journal.ShouldNotContain("cave.parallel.2");
-        journal.ShouldNotContain("2026-09-12 10:30 UTC");
-        journal.ShouldNotContain("A person not named here");
-    }
+        // The phrase is one of the journal's own words and follows the language the page asks in.
+        var romanian = await DocumentTextAsync(reader, guarded, layoutId, "ro-RO,ro;q=0.9,en;q=0.8");
+        romanian.ShouldContain($"Despre peșteră, nu despre o persoană · loc reținut · {Hazard}");
+        romanian.ShouldNotContain(AboutTheCave);
+        romanian.ShouldNotContain("cave.");
 
-    /// <summary>
-    /// A copy kept on a trip is a file, and a file does not ask again what its readers may be
-    /// told. So when the cave the trip was followed in comes under protection, the copy comes off
-    /// the trip: nobody who reads the trip finds it there any more or can fetch it, and the copy
-    /// made afterwards names no station. A trip followed in another cave keeps its own.
-    /// </summary>
-    [Fact]
-    public async Task Protecting_the_cave_takes_the_kept_copy_off_every_trip_followed_in_it()
-    {
-        var followed = await FollowedTripAsync(locationProtected: false);
-        var elsewhere = await FollowedTripAsync(locationProtected: false);
-        foreach (var trip in new[] { followed, elsewhere })
+        // The copy filed on the trip is read by everybody who may read the trip, so it states a
+        // place only where any account may be told it — proved on the bytes of the file, with the
+        // positive half fetched the same way through the same route.
+        foreach (var trip in new[] { guarded, open })
         {
             using var kept = await admin.PostAsync($"/api/v1/trip-logs/{trip}/report?templateId={layoutId}", null);
             kept.StatusCode.ShouldBe(HttpStatusCode.OK, await kept.Content.ReadAsStringAsync());
         }
 
-        // While nothing protects the cave the kept copy names its stations, and the member
-        // fetches it: what is withdrawn below was there, and was theirs to read.
+        var (words, package) = await FiledReportAsync(reader, guarded);
+        words.ShouldContain($"2026-09-12 10:30 UTC · {AboutTheCave} · place withheld · {Hazard}");
+        package.ShouldContain(Hazard);
+        package.ShouldNotContain("cave.parallel");
+        package.ShouldNotContain("cave.upper");
+        var (openWords, openPackage) = await FiledReportAsync(reader, open);
+        openWords.ShouldContain($"2026-09-12 10:30 UTC · {AboutTheCave} · cave.parallel.2 · {Hazard}");
+        openPackage.ShouldContain("cave.parallel.2");
+
+        // The portable copy is the same document laid out by the conversion service: what the
+        // service is handed for this member carries the hazard and no station of the cave.
+        using var portableRequest = new HttpRequestMessage(
+            HttpMethod.Get, $"/api/v1/trip-logs/{guarded}/report?templateId={layoutId}&format=pdf");
+        portableRequest.Headers.TryAddWithoutValidation("Accept-Language", English);
+        using var portable = await reader.SendAsync(portableRequest);
+        await ShouldBeAPdfAsync(portable);
+        var handed = converter.LastSource.ShouldNotBeNull();
+        WordsOf(handed).ShouldContain($"{AboutTheCave} · place withheld · {Hazard}");
+        PackageText(handed).ShouldContain(Hazard);
+        PackageText(handed).ShouldNotContain("cave.");
+    }
+
+    /// <summary>
+    /// Widening the journal to the whole log widened nothing else. The two readings that are built
+    /// out of what was said about the party — the review of each person's hours on the trip, and
+    /// the log written out as a sheet — answer exactly what they answered before the hazard was
+    /// reported, and the sheet does not carry its words.
+    /// </summary>
+    [Fact]
+    public async Task The_roster_times_review_and_the_sheet_still_read_the_partys_own_reports_only()
+    {
+        var trip = await FollowedPastAHazardAsync(locationProtected: false, hazard: false);
+
+        async Task<(string Review, string Sheet)> ReadAsync()
+        {
+            using var review = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/roster-times?timeZone=UTC");
+            review.StatusCode.ShouldBe(HttpStatusCode.OK, await review.Content.ReadAsStringAsync());
+            using var sheet = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events/export");
+            sheet.StatusCode.ShouldBe(HttpStatusCode.OK, await sheet.Content.ReadAsStringAsync());
+            return (await review.Content.ReadAsStringAsync(), await sheet.Content.ReadAsStringAsync());
+        }
+
+        var before = await ReadAsync();
+        // What is being held still is something, not two empty answers: the review reads the
+        // hours the reports about the one person give, and the sheet carries their station.
+        before.Review.ShouldContain("09:00:00");
+        before.Review.ShouldContain("12:00:00");
+        before.Sheet.ShouldContain("cave.upper.2");
+
+        await ReportAsync(trip, new
+        {
+            kind = "caveNote", note = Hazard, stationName = "cave.parallel.2", recordedAt = At(10, 30),
+        });
+
+        var after = await ReadAsync();
+        after.Review.ShouldBe(before.Review);
+        after.Sheet.ShouldBe(before.Sheet);
+        after.Sheet.ShouldNotContain(Hazard);
+        after.Sheet.ShouldNotContain("cave.parallel.2");
+
+        // And the write-up beside them does print it, so the two above are narrower on purpose
+        // and not because nothing was reported.
+        (await DocumentTextAsync(owner, trip, layoutId))
+            .ShouldContain($"2026-09-12 10:30 UTC · {AboutTheCave} · cave.parallel.2 · {Hazard}");
+    }
+
+    /// <summary>
+    /// The gap the application leaves open on purpose, written down as a test so that it is not
+    /// discovered by surprise: a copy filed before the cave was protected stays on the trip and
+    /// still names the cave's stations to everybody who may read the trip. Beside it the two
+    /// things that are true — a copy filed after the protection withholds the place, and the only
+    /// way to take the stale copy back is to delete it.
+    /// </summary>
+    [Fact]
+    public async Task A_copy_filed_before_the_cave_was_protected_stays_on_the_trip_and_still_names_its_stations()
+    {
+        var followed = await FollowedTripAsync(locationProtected: false);
+        using (var kept = await admin.PostAsync($"/api/v1/trip-logs/{followed}/report?templateId={layoutId}", null))
+        {
+            kept.StatusCode.ShouldBe(HttpStatusCode.OK, await kept.Content.ReadAsStringAsync());
+        }
+
+        // While nothing protects the cave the filed copy names its stations, and the member — who
+        // may read the trip and may not be told where the cave is — fetches it.
         var fileId = (await FiledReportsAsync(reader, followed)).ShouldHaveSingleItem().File;
         (await FiledReportAsync(reader, followed)).Package.ShouldContain("cave.upper.2");
 
@@ -277,21 +404,18 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
             await db.SaveChangesAsync();
         }
 
-        // Off the trip, for the member and for the account that may place the cave alike…
-        (await FiledReportsAsync(reader, followed)).ShouldBeEmpty();
-        (await FiledReportsAsync(owner, followed)).ShouldBeEmpty();
-        // …and asked for by name, the file is not the member's to be handed an address for. (An
-        // address already handed out is a decision already taken and runs out by itself.)
-        using (var refused = await reader.GetAsync($"/api/v1/files/{fileId}"))
+        // Protecting the cave does not reach the file. It is still on the trip, the member is
+        // still handed an address for it, and its bytes still hold the station names.
+        (await FiledReportsAsync(reader, followed)).ShouldHaveSingleItem().File.ShouldBe(fileId);
+        using (var still = await reader.GetAsync($"/api/v1/files/{fileId}"))
         {
-            refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            still.StatusCode.ShouldBe(HttpStatusCode.OK);
         }
 
-        // The trip followed in the cave nothing protects keeps its copy, stations and all.
-        (await FiledReportAsync(reader, elsewhere)).Package.ShouldContain("cave.upper.2");
+        (await FiledReportAsync(reader, followed)).Package.ShouldContain("cave.upper.2");
 
-        // Written up again, the trip has a copy once more, and it is read under the cave as it
-        // now stands.
+        // Written up again under the cave as it now stands, the copy withholds the place: the
+        // live path is right, which is what makes the stale file the whole of the gap.
         using (var again = await admin.PostAsync($"/api/v1/trip-logs/{followed}/report?templateId={layoutId}", null))
         {
             again.StatusCode.ShouldBe(HttpStatusCode.OK, await again.Content.ReadAsStringAsync());
@@ -301,6 +425,42 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
         words.ShouldContain("At a station · place withheld");
         package.ShouldNotContain("cave.upper");
         package.ShouldNotContain("cave.deep");
+    }
+
+    /// <summary>
+    /// The routine that takes filed write-ups off the trips followed in a cave is called by
+    /// nothing while the withdrawal is switched off. It is kept against the decision being looked
+    /// at again, so this drives it directly and holds it honest: called, it takes the generated
+    /// copy off the trip in the cave named and leaves the trip followed elsewhere alone.
+    /// </summary>
+    [Fact]
+    public async Task The_routine_that_withdraws_a_filed_write_up_still_does_it_when_something_calls_it()
+    {
+        var followed = await FollowedTripAsync(locationProtected: false);
+        var elsewhere = await FollowedTripAsync(locationProtected: false);
+        foreach (var trip in new[] { followed, elsewhere })
+        {
+            using var kept = await admin.PostAsync($"/api/v1/trip-logs/{trip}/report?templateId={layoutId}", null);
+            kept.StatusCode.ShouldBe(HttpStatusCode.OK, await kept.Content.ReadAsStringAsync());
+        }
+
+        (await FiledReportAsync(reader, followed)).Package.ShouldContain("cave.upper.2");
+
+        int taken;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var cave = (await db.TripTrackings.Where(t => t.TripLogId == followed)
+                .Select(t => t.CaveFeatureId).SingleAsync()).ShouldNotBeNull();
+            taken = await FiledTripWriteUps.TakeOffTripsFollowedInAsync(db, [cave], CancellationToken.None);
+            await db.SaveChangesAsync();
+        }
+
+        taken.ShouldBe(1);
+        (await FiledReportsAsync(reader, followed)).ShouldBeEmpty();
+        (await FiledReportsAsync(owner, followed)).ShouldBeEmpty();
+        // The trip followed in another cave keeps its copy, stations and all.
+        (await FiledReportAsync(reader, elsewhere)).Package.ShouldContain("cave.upper.2");
     }
 
     /// <summary>
@@ -390,6 +550,138 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
         (await filed.Content.ReadAsStringAsync()).ShouldContain("report.pdf_not_filed");
     }
 
+    /// <summary>
+    /// The stations of the survey the trip was followed in, asked for by a layout's own word: the
+    /// account that may place the cave is told them with their depths, and the member who may
+    /// read the trip and not place the cave is told in one line that the list is not shown —
+    /// while the same member is told the stations of the trip in the cave nothing protects. The
+    /// trip nobody followed prints no list and no heading above one.
+    /// </summary>
+    [Fact]
+    public async Task A_download_lists_the_survey_stations_for_a_reader_who_may_place_the_cave_and_says_so_to_one_who_may_not()
+    {
+        var guarded = await FollowedTripAsync(locationProtected: true);
+        var open = await FollowedTripAsync(locationProtected: false);
+
+        // Told: the datum is the survey's own entrance, and each station's depth below it.
+        var theirs = await DocumentTextAsync(owner, guarded, stationLayoutId);
+        theirs.ShouldContain("Stations underground");
+        theirs.ShouldContain("nothing about where anybody was");
+        theirs.ShouldContain("Depths measured below");
+        theirs.ShouldContain("cave.ent.0 · entrance · 0 m");
+        theirs.ShouldContain("cave.upper.1 · 10 m");
+        theirs.ShouldContain("cave.upper.2 · 50 m");
+        theirs.ShouldContain("cave.deep.3 · 120 m");
+        theirs.ShouldNotContain("not shown");
+
+        // Not told, and told that: no station of the survey anywhere in the file, and the member
+        // is a Viewer with no grant that would place a protected cave.
+        using var refusedRequest = new HttpRequestMessage(
+            HttpMethod.Get, $"/api/v1/trip-logs/{guarded}/report?templateId={stationLayoutId}");
+        refusedRequest.Headers.TryAddWithoutValidation("Accept-Language", English);
+        using var refused = await reader.SendAsync(refusedRequest);
+        var withheld = await TextOfAsync(refused);
+        withheld.ShouldContain("Stations underground");
+        withheld.ShouldContain("The station list is not shown in this copy");
+        withheld.ShouldNotContain("Depths measured below");
+
+        // The same member, the same layout, the cave nothing protects: the list is theirs. So the
+        // copy above is narrow because of the cave's protection and not because a member is never
+        // told stations.
+        var mine = await DocumentTextAsync(reader, open, stationLayoutId);
+        mine.ShouldContain("cave.deep.3 · 120 m");
+        mine.ShouldNotContain("not shown");
+
+        // A trip with no watch at all has no list to print, so the heading its layout wrote above
+        // the word goes with it.
+        var unfollowed = (await CreateTripAsync("Not followed", guests: 1)).Trip;
+        var nothing = await DocumentTextAsync(owner, unfollowed, stationLayoutId);
+        nothing.ShouldNotContain("Stations underground");
+        nothing.ShouldNotContain("not shown");
+        nothing.ShouldNotContain("cave.");
+    }
+
+    /// <summary>
+    /// The station the printed depths are named as measured below is the one the trip's watch was
+    /// set to measure from, even where another station of the same survey sits at exactly that
+    /// altitude — so that somebody looking the datum up on the drawing is sent to the station the
+    /// figures were taken from, and two downloads of one trip name the same one.
+    /// </summary>
+    [Fact]
+    public async Task The_printed_depth_datum_is_the_station_the_watch_measures_from_and_not_another_at_its_altitude()
+    {
+        var (trip, cavers) = await CreateTripAsync("Followed from the second entrance", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave, twinnedEntrance: true);
+        (await PutConfigAsync(owner, trip, new
+        {
+            state = "armed", surveyModelId = model, referenceStationName = "cave.ent.9",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ReportAsync(trip, new { caverIds = cavers, kind = "entered", recordedAt = At(9, 0) });
+
+        var printed = await DocumentTextAsync(owner, trip, stationLayoutId, English);
+
+        // Named as the watch names it, not as the other station at 350 m is named — and both are
+        // still listed, because the list is the survey's whole vocabulary.
+        printed.ShouldContain("Depths measured below: cave.ent.9");
+        printed.ShouldNotContain("Depths measured below: cave.ent.0");
+        printed.ShouldContain("cave.ent.0 · entrance · 0 m");
+        printed.ShouldContain("cave.ent.9 · entrance · 0 m");
+        printed.ShouldContain("cave.deep.3 · 120 m");
+
+        // The same trip, read again: one answer, since nothing about which station carries the
+        // datum altitude is left to the order the rows come back in.
+        (await DocumentTextAsync(owner, trip, stationLayoutId, English)).ShouldBe(printed);
+    }
+
+    /// <summary>
+    /// The copy kept on a trip is opened by everybody who may read the trip, so it lists a cave's
+    /// stations only where any account may be told where that cave is — whoever pressed the
+    /// button. Kept by an administrator on a trip in a protected cave it names no station
+    /// anywhere in the file; kept by the same administrator on a trip in a cave nothing protects
+    /// it names them all.
+    /// </summary>
+    [Fact]
+    public async Task The_copy_kept_on_a_trip_in_a_protected_cave_lists_no_station_even_when_an_administrator_kept_it()
+    {
+        var guarded = await FollowedTripAsync(locationProtected: true);
+        var open = await FollowedTripAsync(locationProtected: false);
+
+        // The administrator's own download lists the stations: what the kept copy leaves out
+        // below is left out for its readers and not for want of rights.
+        (await DocumentTextAsync(admin, guarded, stationLayoutId)).ShouldContain("cave.deep.3 · 120 m");
+
+        foreach (var trip in new[] { guarded, open })
+        {
+            using var kept = await admin.PostAsync(
+                $"/api/v1/trip-logs/{trip}/report?templateId={stationLayoutId}", null);
+            kept.StatusCode.ShouldBe(HttpStatusCode.OK, await kept.Content.ReadAsStringAsync());
+        }
+
+        // Fetched the way a reader of the trip reaches it, by the member and by the administrator
+        // alike: it is one file, and it says the same to both.
+        foreach (var client in new[] { reader, admin })
+        {
+            var (words, package) = await FiledReportAsync(client, guarded);
+            words.ShouldContain("Stations underground");
+            words.ShouldContain("The station list is not shown in this copy");
+            // On the bytes: no part of the package — not the body, not its properties, not a part
+            // nobody reads — carries a station of the survey.
+            package.ShouldNotContain("cave.ent");
+            package.ShouldNotContain("cave.upper");
+            package.ShouldNotContain("cave.parallel");
+            package.ShouldNotContain("cave.deep");
+        }
+
+        // The positive half, searched the same way through the same route: the cave any account
+        // may place has its stations in the kept copy, for the member refused them above.
+        var (openWords, openPackage) = await FiledReportAsync(reader, open);
+        openWords.ShouldContain("cave.ent.0 · entrance · 0 m");
+        openWords.ShouldContain("cave.deep.3 · 120 m");
+        openWords.ShouldNotContain("not shown");
+        openPackage.ShouldContain("cave.upper.2");
+    }
+
     // ---- fixtures ---------------------------------------------------------------------------
 
     /// <summary>
@@ -424,6 +716,37 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
         (await owner.DeleteAsync($"/api/v1/trip-logs/{trip}/tracking/events/{mistaken[0].GetProperty("id").GetGuid()}"))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await PutConfigAsync(owner, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        return trip;
+    }
+
+    /// <summary>
+    /// A watch with one person placed at a station and, unless asked otherwise, a note about the
+    /// cave at a station no report about a person names — so a station that reaches a document on
+    /// the note's account reaches it on nobody else's.
+    /// </summary>
+    private async Task<Guid> FollowedPastAHazardAsync(bool locationProtected, bool hazard = true)
+    {
+        var (trip, cavers) = await CreateTripAsync("Followed past a hazard", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await PutConfigAsync(owner, trip, new { state = "armed", surveyModelId = model }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ReportAsync(trip, new { caverIds = cavers, kind = "entered", recordedAt = At(9, 0) });
+        await ReportAsync(trip, new
+        {
+            caverIds = new[] { cavers[0] }, kind = "atStation", stationName = "cave.upper.2", recordedAt = At(10, 0),
+        });
+        await ReportAsync(trip, new { caverIds = new[] { cavers[0] }, kind = "exited", recordedAt = At(12, 0) });
+        if (hazard)
+        {
+            var note = await ReportAsync(trip, new
+            {
+                kind = "caveNote", note = Hazard, stationName = "cave.parallel.2", recordedAt = At(10, 30),
+            });
+            note.GetArrayLength().ShouldBe(1);
+            note[0].GetProperty("caverId").ValueKind.ShouldBe(JsonValueKind.Null);
+        }
+
         return trip;
     }
 
@@ -471,7 +794,7 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
     /// at 350 m, two branches at the same level and a deep point 120 m down. Nothing reads the
     /// file — the workers are off.
     /// </summary>
-    private async Task<Guid> SeedModelWithStationsAsync(Guid caveId)
+    private async Task<Guid> SeedModelWithStationsAsync(Guid caveId, bool twinnedEntrance = false)
     {
         using var form = new MultipartFormDataContent();
         var bytes = new ByteArrayContent([1, 2, 3, 4]);
@@ -491,6 +814,15 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
             Station(modelId, "cave.upper.2", "cave.upper", 300, SurveyStationFlags.Underground),
             Station(modelId, "cave.parallel.2", "cave.parallel", 300, SurveyStationFlags.Underground),
             Station(modelId, "cave.deep.3", "cave.deep", 230, SurveyStationFlags.Underground));
+        if (twinnedEntrance)
+        {
+            // A second entrance at exactly the altitude of the first, added after it: survey files
+            // store rounded altitudes, so two stations sharing one is ordinary, and the one added
+            // second is the one a row order nothing declares is least likely to put first.
+            db.SurveyStations.Add(
+                Station(modelId, "cave.ent.9", "cave.ent", 350, SurveyStationFlags.Entrance));
+        }
+
         await db.SaveChangesAsync();
         return modelId;
     }
