@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type Map from 'ol/Map';
-import type { FeatureLike } from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import VectorLayer from 'ol/layer/Vector';
 import { transformExtent } from 'ol/proj';
@@ -16,6 +15,17 @@ export interface SharedViewOverlays {
   entrances: boolean;
   features: boolean;
 }
+
+/** A surface feature on a shared view: a dot for a point, the outline or line for the rest. */
+const sharedFeatureStyle = new Style({
+  image: new CircleStyle({
+    radius: 6,
+    fill: new Fill({ color: surfaceFeaturePalette.point }),
+    stroke: new Stroke({ color: surfaceFeaturePalette.stroke, width: 2 }),
+  }),
+  stroke: new Stroke({ color: surfaceFeaturePalette.line, width: 2 }),
+  fill: new Fill({ color: surfaceFeaturePalette.fill }),
+});
 
 /**
  * The data layers of a shared view's page: the public cave entrances and surface features its
@@ -87,22 +97,4 @@ export function createSharedViewLayers(
   };
 
   return { layers, attach };
-}
-
-/** A surface feature on a shared view: a dot for a point, the outline or line for the rest. */
-function sharedFeatureStyle(feature: FeatureLike): Style {
-  const approximate = feature.get('approximate') === true;
-  return new Style({
-    image: new CircleStyle({
-      radius: 6,
-      fill: new Fill({ color: surfaceFeaturePalette.point }),
-      stroke: new Stroke({
-        color: surfaceFeaturePalette.stroke,
-        width: 2,
-        lineDash: approximate ? [2, 2] : undefined,
-      }),
-    }),
-    stroke: new Stroke({ color: surfaceFeaturePalette.line, width: 2 }),
-    fill: new Fill({ color: surfaceFeaturePalette.fill }),
-  });
 }

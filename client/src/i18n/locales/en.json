@@ -3141,7 +3141,6 @@
     "linkCopied": "Share link copied.",
     "exportImage": "Export map image",
     "sharedNotFound": "This shared view does not exist or was revoked.",
-    "sharedApproximate": "Approximate position",
     "sharedClusterHint": "{{count}} entrances here — zoom in to see them one by one.",
     "sharedNoBackground": "No background map is available for shared views on this installation.",
     "sharedUnnamed": "Unnamed",

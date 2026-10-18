@@ -31,7 +31,7 @@ describe('the data layers of a shared view', () => {
         {
           type: 'Feature',
           geometry: { type: 'Point', coordinates: [12.4, 61.2] },
-          properties: { name: 'Avenul', approximate: false },
+          properties: { name: 'Avenul' },
         },
       ]),
     );

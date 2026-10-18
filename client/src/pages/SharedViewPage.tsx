@@ -13,10 +13,9 @@ import { fetchSharedView } from '../api/hooks.ts';
 import { tileLayerFor } from '../map/baseLayers.ts';
 import { createSharedViewLayers } from '../map/sharedViewLayers.ts';
 
-/** What a click on the shared map shows: a public name, and whether the position is approximate. */
+/** What a click on the shared map shows: a public name. */
 interface Picked {
   name: string | null;
-  approximate: boolean;
 }
 
 /**
@@ -24,10 +23,10 @@ interface Picked {
  * saved with, and the public cave entrances and surface features it had switched on.
  *
  * Everything drawn here comes from the link's own routes, which answer for nobody in particular:
- * rows that are themselves at the widest visibility level, inside the view's own area, every
- * protected position snapped or left out, and no identifiers. The page adds nothing to that and
- * has nothing to withhold — a click shows the name the server sent, and whether the point is
- * approximate. The map is held inside the area the server names, so its reader meets the edge of
+ * rows that are themselves at the widest visibility level and that nothing protects, inside the
+ * view's own area, with no identifiers. A protected cave or feature never reaches the page, not even
+ * approximately, so every position drawn is where the record is. The page adds nothing to that and
+ * has nothing to withhold — a click shows the name the server sent. The map is held inside the area the server names, so its reader meets the edge of
  * what was shared rather than data stopping for no reason they can see.
  */
 export default function SharedViewPage() {
@@ -97,7 +96,6 @@ export default function SharedViewPage() {
           setCluster(null);
           setPicked({
             name: (hit.get('name') as string | null | undefined) ?? null,
-            approximate: hit.get('approximate') === true,
           });
         });
       } catch {
@@ -142,14 +140,7 @@ export default function SharedViewPage() {
           >
             <Flex align="center" gap={8}>
               <Flex vertical style={{ flex: 1 }}>
-                {picked && (
-                  <>
-                    <Typography.Text strong>{picked.name ?? t('views.sharedUnnamed')}</Typography.Text>
-                    {picked.approximate && (
-                      <Typography.Text type="secondary">{t('views.sharedApproximate')}</Typography.Text>
-                    )}
-                  </>
-                )}
+                {picked && <Typography.Text strong>{picked.name ?? t('views.sharedUnnamed')}</Typography.Text>}
                 {cluster !== null && (
                   <Typography.Text>{t('views.sharedClusterHint', { count: cluster })}</Typography.Text>
                 )}
