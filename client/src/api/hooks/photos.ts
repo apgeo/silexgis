@@ -2,11 +2,11 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client.ts';
 import { invalidateAfterDelete, unwrap, unwrapVoid } from './shared.ts';
-import type { AlbumListParams, EntranceFeatureCollection, PhotoQueryParams } from './types.ts';
+import type { AlbumListParams, PhotoFeatureCollection, PhotoQueryParams } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 
 /** Imperative fetch used by the OpenLayers photo overlay loader (not a hook). */
-export async function fetchPhotoFeatures(bbox: string): Promise<EntranceFeatureCollection> {
+export async function fetchPhotoFeatures(bbox: string): Promise<PhotoFeatureCollection> {
   return unwrap(api.GET('/api/v1/map/photos', { params: { query: { bbox } } }));
 }
 

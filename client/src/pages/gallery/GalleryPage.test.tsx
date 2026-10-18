@@ -10,10 +10,11 @@ import { emptyDocument, withWhere } from '../../filters/document.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
 import { encodeFilter } from '../../filters/url.ts';
 
-const { photosSpy, editorSpy, savedFilters } = vi.hoisted(() => ({
+const { photosSpy, editorSpy, savedFilters, extentCutShort } = vi.hoisted(() => ({
   photosSpy: vi.fn(),
   editorSpy: vi.fn(),
   savedFilters: { current: [] as unknown[] },
+  extentCutShort: { current: false },
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
@@ -29,7 +30,11 @@ vi.mock('../../api/hooks.ts', () => ({
   usePhotoBulk: () => ({ mutateAsync: vi.fn() }),
   usePhotos: (params: unknown) => {
     photosSpy(params);
-    return { data: { items: [], page: 1, pageSize: 60, totalItems: 0 }, isFetching: false, isError: false };
+    return {
+      data: { items: [], page: 1, pageSize: 60, totalItems: 0, extentCutShort: extentCutShort.current },
+      isFetching: false,
+      isError: false,
+    };
   },
 }));
 
@@ -105,6 +110,7 @@ beforeEach(async () => {
   photosSpy.mockReset();
   editorSpy.mockReset();
   savedFilters.current = [];
+  extentCutShort.current = false;
 });
 
 /**
@@ -206,5 +212,25 @@ describe('the gallery filter', () => {
 
     expect(screen.getByTestId('gallery-unreadable-link')).toBeInTheDocument();
     expect(photosSpy).toHaveBeenLastCalledWith(expect.objectContaining({ filter: undefined }));
+  });
+});
+
+describe('a map extent with more photographs than one search carries', () => {
+  it('says that not every photograph of the extent is listed, only when the answer was cut short', () => {
+    show('/gallery?bbox=25,45,26,46');
+    expect(screen.queryByTestId('gallery-extent-cut-short')).not.toBeInTheDocument();
+    cleanup();
+
+    extentCutShort.current = true;
+    show('/gallery?bbox=25,45,26,46');
+    expect(screen.getByTestId('gallery-extent-cut-short')).toHaveTextContent(
+      i18n.t('gallery.mapExtentCutShort'),
+    );
+  });
+
+  it('says nothing about an extent when the gallery is not narrowed to one', () => {
+    extentCutShort.current = true;
+    show('/gallery');
+    expect(screen.queryByTestId('gallery-extent-cut-short')).not.toBeInTheDocument();
   });
 });

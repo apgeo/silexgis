@@ -320,6 +320,18 @@ export default function GalleryPage() {
         />
       )}
 
+      {/* The extent held more photographs than one search carries, so the grid is a share of
+          them; without this a dense extent reads as complete. */}
+      {params.get('bbox') && data?.extentCutShort && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="gallery-extent-cut-short"
+          title={t('gallery.mapExtentCutShort')}
+        />
+      )}
+
       {canWrite && selected.length > 0 && (
         <Flex align="center" gap={12} style={{ marginBottom: 12 }} data-testid="photo-bulk-bar">
           <Typography.Text strong>{t('gallery.selected', { count: selected.length })}</Typography.Text>

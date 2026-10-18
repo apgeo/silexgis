@@ -68,6 +68,38 @@ export function createPhotoLayer(): VectorLayer {
   return layer;
 }
 
+/**
+ * What the last answer said about itself. `cutShort` means the window held more photographs than
+ * one answer carries, so the pins on the map are some of them, not all: the reader is told so,
+ * and zooming in is the remedy. It is a yes/no, never a count — the server does not say how many
+ * were left out, and the notice must not guess.
+ */
+export interface PhotoLoadState {
+  cutShort: boolean;
+}
+
+let loadState: PhotoLoadState = { cutShort: false };
+const listeners = new Set<(state: PhotoLoadState) => void>();
+
+function publish(next: PhotoLoadState): void {
+  if (next.cutShort === loadState.cutShort) {
+    return;
+  }
+  loadState = next;
+  listeners.forEach((listener) => listener(loadState));
+}
+
+export function getPhotoLoadState(): PhotoLoadState {
+  return loadState;
+}
+
+export function subscribePhotoLoadState(listener: (state: PhotoLoadState) => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 // Loading only runs while the overlay is enabled — no wasted fetches when it is toggled off.
 let enabled = false;
 let activeReload: (() => void) | undefined;
@@ -77,11 +109,14 @@ export function setPhotosEnabled(value: boolean): void {
   enabled = value;
   if (enabled) {
     activeReload?.();
+  } else {
+    // A hidden layer states nothing, so the notice must not go on reporting the last answer.
+    publish({ cutShort: false });
   }
 }
 
 /** Bbox loading on moveend (debounced), stale responses discarded — mirrors the entrance loader. */
-export function attachPhotoLoader(map: Map): () => void {
+export function attachPhotoLoader(map: Map, fetchPhotos: typeof fetchPhotoFeatures = fetchPhotoFeatures): () => void {
   let requestSeq = 0;
   let timer: number | undefined;
 
@@ -98,12 +133,13 @@ export function attachPhotoLoader(map: Map): () => void {
     const bbox = extent.map((n) => n.toFixed(5)).join(',');
     const seq = ++requestSeq;
     try {
-      const collection = await fetchPhotoFeatures(bbox);
-      if (seq !== requestSeq) {
-        return; // a newer request superseded this one
+      const collection = await fetchPhotos(bbox);
+      if (seq !== requestSeq || !enabled) {
+        return; // a newer request superseded this one, or the layer was switched off meanwhile
       }
       source.clear(true);
       source.addFeatures(format.readFeatures(collection, { featureProjection: 'EPSG:3857' }));
+      publish({ cutShort: collection.cutShort });
     } catch {
       // Keep previous features on transient errors; next moveend retries.
     }

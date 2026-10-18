@@ -27,6 +27,7 @@ export type DeletedPhoto = components['schemas']['DeletedPhotoDto'];
 export type Visibility = components['schemas']['Visibility'];
 export type FileConfig = components['schemas']['FileConfigDto'];
 export type EntranceFeatureCollection = components['schemas']['FeatureCollection'];
+export type PhotoFeatureCollection = components['schemas']['PhotoFeatureCollection'];
 export type Me = components['schemas']['MeDto'];
 export type MeUpdate = components['schemas']['MeUpdateRequest'];
 export type MeLocale = components['schemas']['MeLocaleDto'];
