@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Filters;
@@ -55,21 +56,30 @@ public static class FeaturePropertySql
     // calendar date, or an ISO date-time that names its offset (a time without one names no single
     // moment). The shape alone does not make a cast safe — 2025-02-30 has it — so
     // pg_input_is_valid, which answers rather than raises, has the last word before the cast.
-    // A calendar date with no time is read as its midday in UTC. The editor sends the bounds of the
-    // day the reader picked in their own zone, and midday UTC falls inside that same day for every
-    // zone from twelve hours behind UTC to just under twelve ahead, so "on or after the 3rd" takes
-    // a property dated the 3rd in, wherever the reader is. Braces are doubled for the format string.
-    private const string Instant = """
+    //
+    // The two are different questions and are asked differently. A date-time is a moment, compared
+    // with the moment the bound names. A date with no time is a day, compared with the calendar day
+    // the bound names at the offset it was written with — the editor sends the first or last moment
+    // of the day the reader picked in their own zone, so "at most the 3rd" picked in Tonga takes a
+    // property dated the 3rd in, which no single moment of the 3rd could promise for every zone.
+    // This text is formatted once before it joins the query — {0} becomes the date arm's comparison
+    // and {1} the date-time arm's — so every brace meant for the query's own format string is
+    // doubled once more than elsewhere in this file.
+    private const string Dated = """
         (CASE
-          WHEN jsonb_typeof(f.properties -> {1}) <> 'string' THEN NULL
-          WHEN (f.properties ->> {1}) ~ '^\d{{4}}-\d{{2}}-\d{{2}}$'
-               AND pg_input_is_valid(f.properties ->> {1}, 'date')
-            THEN ((f.properties ->> {1})::date + time '12:00') AT TIME ZONE 'UTC'
-          WHEN (f.properties ->> {1}) ~ '^\d{{4}}-\d{{2}}-\d{{2}}[Tt ]\d{{2}}:\d{{2}}(:\d{{2}}(\.\d+)?)?([Zz]|[+-]\d{{2}}(:?\d{{2}})?)$'
-               AND pg_input_is_valid(f.properties ->> {1}, 'timestamptz')
-            THEN (f.properties ->> {1})::timestamptz
+          WHEN jsonb_typeof(f.properties -> {{1}}) <> 'string' THEN NULL
+          WHEN (f.properties ->> {{1}}) ~ '^\d{{{{4}}}}-\d{{{{2}}}}-\d{{{{2}}}}$'
+               AND pg_input_is_valid(f.properties ->> {{1}}, 'date')
+            THEN {0}
+          WHEN (f.properties ->> {{1}}) ~ '^\d{{{{4}}}}-\d{{{{2}}}}-\d{{{{2}}}}[Tt ]\d{{{{2}}}}:\d{{{{2}}}}(:\d{{{{2}}}}(\.\d+)?)?([Zz]|[+-]\d{{{{2}}}}(:?\d{{{{2}}}})?)$'
+               AND pg_input_is_valid(f.properties ->> {{1}}, 'timestamptz')
+            THEN {1}
         END)
         """;
+
+    private const string Day = "(f.properties ->> {1})::date";
+
+    private const string Moment = "(f.properties ->> {1})::timestamptz";
 
     /// <summary>The ids of the rows of type <paramref name="typeCode"/> the condition matches.</summary>
     public static IQueryable<Guid> Matching(
@@ -100,12 +110,14 @@ public static class FeaturePropertySql
             (FilterOp.Between, [NumberValue low, NumberValue high]) =>
                 ($"{Number} BETWEEN {{2}} AND {{3}}", [ToNumeric(low), ToNumeric(high)]),
 
-            (FilterOp.LessThan, [InstantValue i]) => ($"{Instant} < {{2}}", [ToUtc(i)]),
-            (FilterOp.LessOrEqual, [InstantValue i]) => ($"{Instant} <= {{2}}", [ToUtc(i)]),
-            (FilterOp.GreaterThan, [InstantValue i]) => ($"{Instant} > {{2}}", [ToUtc(i)]),
-            (FilterOp.GreaterOrEqual, [InstantValue i]) => ($"{Instant} >= {{2}}", [ToUtc(i)]),
-            (FilterOp.Between, [InstantValue low, InstantValue high]) =>
-                ($"{Instant} BETWEEN {{2}} AND {{3}}", [ToUtc(low), ToUtc(high)]),
+            // A day arm's bound at {2} (and {3}), the moment arm's after it.
+            (FilterOp.LessThan, [InstantValue i]) => Compared("<", i),
+            (FilterOp.LessOrEqual, [InstantValue i]) => Compared("<=", i),
+            (FilterOp.GreaterThan, [InstantValue i]) => Compared(">", i),
+            (FilterOp.GreaterOrEqual, [InstantValue i]) => Compared(">=", i),
+            (FilterOp.Between, [InstantValue low, InstantValue high]) => (
+                string.Format(CultureInfo.InvariantCulture, Dated, $"{Day} BETWEEN {{2}} AND {{3}}", $"{Moment} BETWEEN {{4}} AND {{5}}"),
+                [FilterLeaves.DayNamed(low), FilterLeaves.DayNamed(high), ToUtc(low), ToUtc(high)]),
 
             // Text is matched the way every other text field is: accent- and case-blind, with the
             // value used as the pattern it already is on those fields.
@@ -120,6 +132,10 @@ public static class FeaturePropertySql
                 $"No typed-property arm for {condition.Op} over {condition.Values.Count} value(s). A "
                 + "property field the vocabulary offers must have one here."),
         };
+
+    private static (string Sql, object[] Values) Compared(string comparison, InstantValue bound) => (
+        string.Format(CultureInfo.InvariantCulture, Dated, $"{Day} {comparison} {{2}}", $"{Moment} {comparison} {{3}}"),
+        [FilterLeaves.DayNamed(bound), ToUtc(bound)]);
 
     private const string Present =
         "(COALESCE(jsonb_typeof(f.properties -> {1}), 'null') <> 'null' AND f.properties -> {1} <> '\"\"'::jsonb)";

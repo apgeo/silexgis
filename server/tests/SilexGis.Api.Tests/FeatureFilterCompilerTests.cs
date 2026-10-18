@@ -290,6 +290,65 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
     }
 
     [Fact]
+    public async Task A_date_property_is_compared_by_the_day_the_bound_names_wherever_it_was_picked()
+    {
+        // A property holding a date and no time is a day, not a moment. The editor bounds a picked
+        // day by its first or last moment in the reader's own zone; read as one moment of its own
+        // (midday UTC), the 1st fell outside "at most the 1st" for a reader thirteen hours ahead of
+        // UTC and inside "more than the 1st". A property holding a date-time is still a moment.
+        var ownerId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Editor, $"fc-day-{tag}@t.local");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var sinkhole = await db.FeatureTypes.AsNoTracking()
+            .Where(t => t.Code == FeatureTypeSeeds.Sinkhole).Select(t => t.Id).SingleAsync();
+
+        Rootless(db, sinkhole, ownerId, $"Day {tag}", properties: """{"seen":"2025-06-01"}""");
+        Rootless(db, sinkhole, ownerId, $"Moment {tag}", properties: """{"seen":"2025-06-01T08:00:00+03:00"}""");
+        // In the last millisecond of the 1st at +13:00: inside "at most the 1st" only because the
+        // bound reaches the day's last microsecond, the finest a stored moment holds.
+        Rootless(db, sinkhole, ownerId, $"Late {tag}", properties: """{"seen":"2025-06-01T23:59:59.9995+13:00"}""");
+        await db.SaveChangesAsync();
+
+        var compiler = new FeatureFilterCompiler(db);
+
+        async Task<List<string>> Matching(FilterOp op, params DateTimeOffset[] bounds)
+        {
+            var predicate = compiler.Compile(new ConditionNode(
+                $"{FeatureFilterFields.PropertyPrefix}{FeatureTypeSeeds.Sinkhole}:seen", op,
+                [.. bounds.Select(b => (FilterValue)new InstantValue(b))]));
+            return await db.Features.AsNoTracking()
+                .Where(predicate)
+                .Where(f => f.Name!.EndsWith(tag))
+                .OrderBy(f => f.Name)
+                .Select(f => f.Name!.Replace($" {tag}", ""))
+                .ToListAsync();
+        }
+
+        // The first and last moment of a day, as a reader at that offset's editor writes them.
+        static DateTimeOffset First(int month, int day, int hours) =>
+            new(2025, month, day, 0, 0, 0, TimeSpan.FromHours(hours));
+        static DateTimeOffset Last(int month, int day, int hours) =>
+            new DateTimeOffset(2025, month, day, 23, 59, 59, TimeSpan.FromHours(hours)).AddTicks(9_999_990);
+
+        // Thirteen hours ahead of UTC.
+        (await Matching(FilterOp.LessOrEqual, Last(6, 1, 13))).ShouldBe(["Day", "Late", "Moment"]);
+        (await Matching(FilterOp.GreaterThan, Last(6, 1, 13))).ShouldBeEmpty();
+        (await Matching(FilterOp.GreaterOrEqual, First(6, 2, 13))).ShouldBeEmpty();
+        (await Matching(FilterOp.LessThan, First(6, 2, 13))).ShouldBe(["Day", "Late", "Moment"]);
+        (await Matching(FilterOp.Between, First(6, 1, 13), Last(6, 1, 13))).ShouldBe(["Day", "Late", "Moment"]);
+
+        // Five hours behind UTC. The moment, 05:00 UTC, is the very first moment of the 1st there.
+        (await Matching(FilterOp.GreaterOrEqual, First(6, 1, -5))).ShouldBe(["Day", "Late", "Moment"]);
+        (await Matching(FilterOp.LessThan, First(6, 1, -5))).ShouldBeEmpty();
+        (await Matching(FilterOp.LessOrEqual, Last(5, 31, -5))).ShouldBeEmpty();
+        (await Matching(FilterOp.GreaterThan, Last(5, 31, -5))).ShouldBe(["Day", "Late", "Moment"]);
+        (await Matching(FilterOp.Between, First(6, 1, -5), Last(6, 1, -5))).ShouldBe(["Day", "Late", "Moment"]);
+        (await Matching(FilterOp.Between, First(6, 2, -5), Last(6, 2, -5))).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Asking_whether_a_column_that_is_never_empty_is_empty_gets_a_straight_answer()
     {
         await SeedCorpusAsync();

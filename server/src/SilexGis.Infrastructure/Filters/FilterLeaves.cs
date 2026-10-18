@@ -161,9 +161,7 @@ internal static class FilterLeaves
             return _ => true;
         }
 
-        var days = condition.Values.OfType<InstantValue>()
-            .Select(v => DateOnly.FromDateTime(v.Value.DateTime))
-            .ToList();
+        var days = condition.Values.OfType<InstantValue>().Select(DayNamed).ToList();
 
         var body = condition.Op switch
         {
@@ -180,6 +178,12 @@ internal static class FilterLeaves
 
         return Expression.Lambda<Func<T, bool>>(body, selector.Parameters);
     }
+
+    /// <summary>
+    /// The calendar day a bound names: its date as written, at the offset it was written with — the
+    /// day a bound means to every field that holds a day rather than a moment.
+    /// </summary>
+    public static DateOnly DayNamed(InstantValue bound) => DateOnly.FromDateTime(bound.Value.DateTime);
 
     /// <summary>
     /// A calendar date that may be missing — the day a survey was taken, when anybody wrote it down.
