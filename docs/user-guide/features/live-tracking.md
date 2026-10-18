@@ -753,20 +753,23 @@ The page says what it is showing, for a reader who has never followed a trip:
 - **Since when.** Under the title, *Followed since 08:40 · 3 hr 10 min* while the watch runs, and
   the span it ran for once it is closed. The hour is when the watch was **started**, not when
   anybody went underground.
-- **Planned out by — only where the installation publishes it.** An installation can choose to
-  let the page say the hour the party planned to be out by; it is **off** unless an administrator
-  of the server turns it on (`SILEXGIS__TripTracking__PublishExpectedReturn`, see the installation
-  guide). Where it is on, a line under *Followed since* reads *Planned out by 17:00* for as long
+- **Planned out by — not published, and that is a decision.** The hour a party planned to be out
+  by is **not** shown to a visitor, on any installation, unless an administrator deliberately
+  turns it on (`SILEXGIS__TripTracking__PublishExpectedReturn`, see the installation guide). It
+  is kept back on purpose rather than left unfinished: the hour is a plan made before anybody went
+  underground, a party is routinely later than it than not, and a stranger reading it an hour
+  after it has gone by concludes something has gone wrong when nothing has. The people who need
+  it — the coordinator, the callout — have it on the trip itself, where it belongs. Where it is on, a line under *Followed since* reads *Planned out by 17:00* for as long
   as somebody of that party is underground, and *The plan was to be out by 17:00* once that hour
   has gone by. It states the plan and nothing else: it never says anybody is late, it changes no
   colour, and it is not how anyone is alerted — word from underground takes time to arrive. It is
   not shown once everybody is out, once the watch is closed, in a replay of a past trip, or in a
   framed page. Nothing about the trip's overdue callout is ever shown to a visitor.
-- **The cave's own names for places — only where the installation publishes them.** A cave can
-  declare what its depths mean and give each a name (see *What a cave's depths mean* above). An
-  installation can choose to let a published page read those names; it is **off** unless an
-  administrator of the server turns it on (`SILEXGIS__TripTracking__PublishDepthPlaces`, see the
-  installation guide). Where it is on, somebody reported at a named station is shown as the name
+- **The cave's own names for places — unless the installation keeps them back.** A cave can
+  declare what its depths mean and give each a name (see *What a cave's depths mean* above). A
+  published page reads those names; it is **on** unless an administrator of the server switches it
+  off (`SILEXGIS__TripTracking__PublishDepthPlaces`, see the installation guide). Where it is on,
+  somebody reported at a named station is shown as the name
   with the station under it — *Sala Mare* over `p.g.7` — on a trip being followed and in a replay
   of a past trip. Only declarations that have a name are published, and only for stations of the
   survey the page draws — places named without a depth included, each with its note and whether it
@@ -874,10 +877,10 @@ neither is told about nobody else, and the page asks the server for neither.
   no. A reader whose device asks for reduced motion gets the replay opened at the moment and
   standing still, with **Play** one press away. Where the browser refuses the clipboard, the
   link is shown in a box to copy by hand.
-- **Photographs at their moment — only where the installation publishes them.** Photographs can
-  be hung on moments of a trip from its tracking tab (*Photographs of this moment*, above). An
-  installation can choose to let the replay of a **finished** published trip show them; it is
-  **off** unless an administrator of the server turns it on
+- **Photographs at their moment — unless the installation keeps them back.** Photographs can
+  be hung on moments of a trip from its tracking tab (*Photographs of this moment*, above). The
+  replay of a **finished** published trip shows them; it is **on** unless an administrator of the
+  server switches it off
   (`SILEXGIS__TripPastTracks__PublishMomentPictures`, see the installation guide). Where it is
   on, a row of small pictures appears under the replay's rail when the clock reaches a moment
   that has any — *Photographs from 14:05* — and stays until a later moment brings its own;
@@ -908,6 +911,23 @@ taken off — is under [How long a published trip stays readable, and taking one
 off](#how-long-a-published-trip-stays-readable-and-taking-one-off).
 
 ---
+
+### Five things the page does that an installation can switch off
+
+Each of these is **on** as installed, and each can be switched off on its own by whoever runs the
+server (the names are in the [install guide](../../INSTALL.md#configuration-reference)). Switched
+off, the page does exactly what it did before the thing existed — nothing is merely hidden.
+
+| Switched off | What the page does instead |
+|---|---|
+| `SILEXGIS__TripTracking__OfferSiblingWatch` | No *Parties in this cave now* section and no way to follow another party. The list is not read at all, rather than read and not shown — and the address it would have been read from answers nobody while the setting is off, so the cave's other parties are not reachable through a published link either |
+| `SILEXGIS__TripTracking__OfferLanguageChoice` | No **English** / **Română** button, and `?lang=` in an address is ignored. The page opens in Romanian, as it always did. The one exception is a link that opens nothing at all: that screen never learns the setting, so it keeps the button and still honours `?lang=` — deliberately, because its one sentence is the one a reader most needs to understand |
+| `SILEXGIS__TripPastTracks__OfferMomentLinks` | No **Copy link to this moment** button, and `at=`/`play=` in an address is ignored: a replay opens at its start |
+| `SILEXGIS__TripPastTracks__CompactReplayBarInFrame` | A framed page shows the whole replay strip at every frame size, instead of splitting it into one line and a sheet in a narrow frame |
+| `SILEXGIS__TripTracking__TellReadersNothingChanged` | Every read is answered in full. The page no longer gets the short *nothing has changed* answer, so it costs more to leave open — switch it off only behind something that caches badly |
+
+Switching one of them changes what the page is told about itself, so a reader who already has the
+page open gets the new answer on their next read rather than being told nothing changed.
 
 ## Putting it on your website
 

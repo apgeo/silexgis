@@ -790,20 +790,24 @@ Pagina spune ce arată, pentru un cititor care nu a mai urmărit niciodată o tu
 - **De când.** Sub titlu, *Urmărită de la 08:40 · 3 ore 10 min.* cât timp urmărirea este pornită,
   și intervalul cât a durat după ce a fost încheiată. Ora este cea la care urmărirea a fost
   **pornită**, nu cea la care a intrat cineva în peșteră.
-- **Ieșire plănuită până la — doar unde instalarea o publică.** O instalare poate alege ca pagina
-  să spună ora până la care echipa și-a plănuit ieșirea; este **oprită** dacă un administrator al
-  serverului nu o pornește (`SILEXGIS__TripTracking__PublishExpectedReturn`, vezi ghidul de
-  instalare). Unde este pornită, un rând sub *Urmărită de la* spune *Ieșire plănuită până la
+- **Ieșire plănuită până la — nepublicată, și asta este o hotărâre.** Ora până la care o echipă
+  și-a plănuit ieșirea **nu** este arătată unui vizitator, pe nicio instalare, dacă un
+  administrator nu o pornește anume (`SILEXGIS__TripTracking__PublishExpectedReturn`, vezi ghidul
+  de instalare). Este reținută dinadins, nu lăsată neterminată: ora este un plan făcut înainte ca
+  cineva să intre în peșteră, o echipă iese mai târziu decât ea mai des decât la timp, iar un
+  străin care o citește o oră după ce a trecut înțelege că s-a întâmplat ceva rău când nu s-a
+  întâmplat nimic. Cei cărora le trebuie — coordonatorul, apelul de urgență — o au pe tura însăși,
+  unde îi este locul. Unde este pornită, un rând sub *Urmărită de la* spune *Ieșire plănuită până la
   17:00* cât timp cineva din echipă este în peșteră, și *Ieșirea era plănuită până la 17:00* după
   ce ora a trecut. Spune planul și nimic altceva: nu spune niciodată că cineva întârzie, nu își
   schimbă culoarea și nu este felul în care este anunțat cineva — veștile din peșteră ajung cu
   întârziere. Nu apare după ce toată lumea a ieșit, după ce urmărirea a fost încheiată, la
   reluarea unei ture trecute și nici într-o pagină încadrată. Nimic despre apelul de urgență al
   turei nu este arătat vreodată unui vizitator.
-- **Numele date de peșteră locurilor — doar unde instalarea le publică.** O peșteră poate declara
+- **Numele date de peșteră locurilor — dacă instalarea nu le reține.** O peșteră poate declara
   ce înseamnă adâncimile ei și poate da fiecăreia un nume (vezi *Ce înseamnă adâncimile unei
-  peșteri* mai sus). O instalare poate alege ca o pagină publicată să citească aceste nume; este
-  **oprită** dacă un administrator al serverului nu o pornește
+  peșteri* mai sus). O pagină publicată citește aceste nume; este **pornită** dacă un administrator
+  al serverului nu o oprește
   (`SILEXGIS__TripTracking__PublishDepthPlaces`, vezi ghidul de instalare). Unde este pornită,
   cineva raportat la o stație cu nume apare cu numele și cu stația dedesubt — *Sala Mare* peste
   `p.g.7` — la o tură urmărită și la reluarea unei ture trecute. Sunt publicate doar declarațiile
@@ -918,10 +922,10 @@ care nu deschide niciuna nu află despre nimeni altcineva, iar pagina nu cere se
   ca nu. Un cititor al cărui dispozitiv cere mișcare redusă primește reluarea deschisă la moment
   și oprită, cu **Redă** la o apăsare distanță. Unde browserul refuză clipboardul, linkul este
   arătat într-o casetă, de copiat manual.
-- **Fotografii la momentul lor — doar unde instalarea le publică.** Fotografiile pot fi puse pe
-  momente ale unei ture din fila ei de urmărire (*Fotografii de la acest moment*, mai sus). O
-  instalare poate alege ca reluarea unei ture publicate **încheiate** să le arate; este
-  **oprită** dacă un administrator al serverului nu o pornește
+- **Fotografii la momentul lor — dacă instalarea nu le reține.** Fotografiile pot fi puse pe
+  momente ale unei ture din fila ei de urmărire (*Fotografii de la acest moment*, mai sus).
+  Reluarea unei ture publicate **încheiate** le arată; este **pornită** dacă un administrator al
+  serverului nu o oprește
   (`SILEXGIS__TripPastTracks__PublishMomentPictures`, vezi ghidul de instalare). Unde este
   pornită, sub linia reluării apare un rând de imagini mici când ceasul ajunge la un moment care
   are fotografii — *Fotografii de la 14:05* — și rămâne până când un moment ulterior le aduce pe
@@ -952,6 +956,24 @@ tură — este la [Cât rămâne citibilă o tură publicată și cum se
 scoate](#cât-rămâne-citibilă-o-tură-publicată-și-cum-se-scoate).
 
 ---
+
+### Cinci lucruri pe care pagina le face și pe care o instalare le poate opri
+
+Fiecare este **pornit** așa cum vine instalarea și fiecare poate fi oprit separat de cine
+administrează serverul (numele sunt în [ghidul de instalare](../../../INSTALL.md#configuration-reference)).
+Oprit, pagina face exact ce făcea înainte să existe lucrul respectiv — nimic nu este doar ascuns.
+
+| Oprit | Ce face pagina în schimb |
+|---|---|
+| `SILEXGIS__TripTracking__OfferSiblingWatch` | Nicio secțiune *Echipe în această peșteră acum* și niciun fel de a urmări altă echipă. Lista nu este citită deloc, nu citită și neafișată — iar adresa de la care ar fi fost citită nu răspunde nimănui cât timp setarea este oprită, deci celelalte echipe din peșteră nu sunt accesibile nici printr-un link publicat |
+| `SILEXGIS__TripTracking__OfferLanguageChoice` | Niciun buton **English** / **Română**, iar `?lang=` din adresă este ignorat. Pagina se deschide în română, așa cum s-a deschis mereu. Singura excepție este un link care nu deschide nimic: acel ecran nu află niciodată setarea, deci păstrează butonul și respectă `?lang=` — intenționat, fiindcă singura lui propoziție este cea pe care cititorul are cea mai mare nevoie să o înțeleagă |
+| `SILEXGIS__TripPastTracks__OfferMomentLinks` | Niciun buton **Copiază linkul către acest moment**, iar `at=`/`play=` din adresă sunt ignorate: reluarea se deschide de la început |
+| `SILEXGIS__TripPastTracks__CompactReplayBarInFrame` | O pagină încadrată arată toată bara de reluare la orice lățime a cadrului, în loc să o împartă într-un rând și o filă într-un cadru îngust |
+| `SILEXGIS__TripTracking__TellReadersNothingChanged` | Fiecare citire primește răspuns întreg. Pagina nu mai primește răspunsul scurt *nu s-a schimbat nimic*, deci costă mai mult lăsată deschisă — opriți-l doar în spatele a ceva care memorează prost |
+
+Schimbarea unuia dintre ele schimbă ce i se spune paginii despre ea însăși, așa că un cititor care
+are deja pagina deschisă primește răspunsul nou la următoarea citire, nu i se spune că nu s-a
+schimbat nimic.
 
 ## Pe site-ul dumneavoastră
 
