@@ -9,7 +9,6 @@ import path from 'node:path';
 // Read as text, from the client package the test runner is rooted at: the test environment does
 // not load stylesheets.
 const mapPageCss = readFileSync(path.resolve(process.cwd(), 'src/pages/MapPage.css'), 'utf8');
-const indexCss = readFileSync(path.resolve(process.cwd(), 'src/index.css'), 'utf8');
 
 function systemPrefersDark(dark: boolean) {
   vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
@@ -111,113 +110,90 @@ function contrast(foreground: string, background: string): number {
 }
 
 /**
- * Every pair is measured on the tokens antd actually derives, not on the values written in the
- * theme, because the algorithms rewrite seeds: the dark algorithm darkens the brand colour and the
- * link colour, and a ratio computed from what was written would pass while the screen failed.
+ * The colours the screens are drawn in are antd's own derivation from the brand colour, in both
+ * themes, with one exception: the dark theme's keyboard focus ring. Pinned value by value, so that
+ * a token override slipping in (or the library's derivation moving under an upgrade) changes the
+ * look on purpose rather than silently.
  */
-describe.each(['light', 'dark'] as const)('contrast in the %s theme', (mode) => {
-  const config = buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: mode });
-  const token = theme.getDesignToken(config);
-  const surfaces = { page: token.colorBgContainer, raised: token.colorBgElevated };
+describe('the look the theme draws', () => {
+  const restored = {
+    light: {
+      colorBorder: '#d9d9d9',
+      colorTextTertiary: 'rgba(0,0,0,0.45)',
+      colorTextDescription: 'rgba(0,0,0,0.45)',
+      colorTextPlaceholder: 'rgba(0,0,0,0.25)',
+      colorTextDisabled: 'rgba(0,0,0,0.25)',
+      colorPrimaryBg: '#97a19f',
+      colorPrimaryBgHover: '#7c9491',
+      colorPrimaryBorder: '#5c8783',
+      colorPrimaryText: '#146262',
+      colorLink: '#1677ff',
+      colorError: '#ff4d4f',
+      colorErrorText: '#ff4d4f',
+      colorWarningText: '#faad14',
+      colorSuccessText: '#52c41a',
+      colorInfoText: '#1677ff',
+      gold7: '#d48806',
+      yellow7: '#d4b106',
+      green7: '#389e0d',
+    },
+    dark: {
+      colorBorder: '#424242',
+      colorTextTertiary: 'rgba(255,255,255,0.45)',
+      colorTextPlaceholder: 'rgba(255,255,255,0.25)',
+      colorTextDisabled: 'rgba(255,255,255,0.25)',
+      colorPrimary: '#145656',
+      colorPrimaryText: '#145656',
+      colorPrimaryTextHover: '#256562',
+      colorPrimaryTextActive: '#144747',
+      colorLink: '#1668dc',
+      colorError: '#dc4446',
+      colorErrorText: '#dc4446',
+      colorErrorTextHover: '#e86e6b',
+      colorErrorTextActive: '#ad393a',
+      colorInfoText: '#1668dc',
+      geekblue7: '#5273e0',
+      purple7: '#854eca',
+      // The one replaced value: the keyboard focus ring.
+      colorPrimaryBorder: '#3fa8a8',
+    },
+  } as const;
 
-  it.each([
-    ['body text', token.colorText],
-    ['secondary text', token.colorTextSecondary],
-    ['description text', token.colorTextDescription],
-    ['placeholder text', token.colorTextPlaceholder],
-    ['links', token.colorLink],
-    ['error text', token.colorErrorText],
-    ['warning text', token.colorWarningText],
-    ['success text', token.colorSuccessText],
-    ['info text', token.colorInfoText],
-  ])('%s reads at 4.5:1 on the page and on raised surfaces', (_, colour) => {
-    expect(contrast(colour, surfaces.page)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(colour, surfaces.raised)).toBeGreaterThanOrEqual(4.5);
-  });
-
-  it('description text also reads on the grey layout background', () => {
-    expect(contrast(token.colorTextDescription, token.colorBgLayout)).toBeGreaterThanOrEqual(4.5);
-  });
-
-  it('text on a primary or a danger button reads at 4.5:1', () => {
-    expect(contrast(token.colorTextLightSolid, token.colorPrimary)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(token.colorTextLightSolid, token.colorError)).toBeGreaterThanOrEqual(4.5);
-  });
-
-  it('the focus ring and a field outline stand out at 3:1', () => {
-    expect(contrast(token.colorPrimaryBorder, surfaces.page)).toBeGreaterThanOrEqual(3);
-    expect(contrast(token.colorPrimaryBorder, surfaces.raised)).toBeGreaterThanOrEqual(3);
-    expect(contrast(token.colorBorder, surfaces.page)).toBeGreaterThanOrEqual(3);
-    expect(contrast(token.colorBorder, surfaces.raised)).toBeGreaterThanOrEqual(3);
-  });
-
-  it('the selected item of a menu reads at 4.5:1 on its highlight', () => {
-    const selectedText = config.components?.Menu?.itemSelectedColor ?? token.colorPrimary;
-    expect(contrast(selectedText, token.colorPrimaryBg)).toBeGreaterThanOrEqual(4.5);
-  });
-
-  it('the selected tab reads at 4.5:1', () => {
-    const selectedTab = config.components?.Tabs?.itemSelectedColor ?? token.colorPrimary;
-    expect(contrast(selectedTab, surfaces.page)).toBeGreaterThanOrEqual(4.5);
-  });
-
-  it('the brand colour drawn as text reads at 4.5:1', () => {
-    for (const colour of [token.colorPrimaryText, token.colorPrimaryTextHover, token.colorPrimaryTextActive]) {
-      expect(contrast(colour, surfaces.page)).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(colour, surfaces.raised)).toBeGreaterThanOrEqual(4.5);
+  it.each(['light', 'dark'] as const)("the %s theme draws antd's own colours", (mode) => {
+    const token = theme.getDesignToken(buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: mode })) as unknown as Record<
+      string,
+      string
+    >;
+    for (const [name, value] of Object.entries(restored[mode])) {
+      expect(token[name], name).toBe(value);
     }
   });
 
-  // The places antd draws the brand colour as text, each read the way that component resolves it:
-  // its own token where it has one, else the brand colour as overridden for that component alone,
-  // else the global brand colour.
-  const brandFor = (component: 'Pagination' | 'Radio' | 'Steps') =>
-    (config.components?.[component] as { colorPrimary?: string } | undefined)?.colorPrimary ?? token.colorPrimary;
-
-  it("the active page's number reads at 4.5:1", () => {
-    const pagination = config.components?.Pagination;
-    expect(contrast(pagination?.itemActiveColor ?? token.colorPrimary, surfaces.page)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(pagination?.itemActiveColorHover ?? token.colorPrimaryHover, surfaces.page)).toBeGreaterThanOrEqual(4.5);
-    // Its border marks which page is current alongside the bold number.
-    expect(contrast(brandFor('Pagination'), surfaces.page)).toBeGreaterThanOrEqual(3);
+  it.each(['light', 'dark'] as const)('the %s theme overrides no component colour beyond the slider', (mode) => {
+    const components = buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: mode }).components ?? {};
+    expect(Object.keys(components).sort()).toEqual(mode === 'dark' ? ['Layout', 'Slider'] : ['Layout']);
   });
 
-  it('a checked radio button reads at 4.5:1', () => {
-    expect(contrast(brandFor('Radio'), surfaces.page)).toBeGreaterThanOrEqual(4.5);
+  it("the dark theme's slider keeps the colour the dark algorithm gives it, not the focus ring's", () => {
+    const slider = buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'dark' }).components?.Slider;
+    const derived = theme.getDesignToken({ token: { colorPrimary: '#146262' }, algorithm: theme.darkAlgorithm });
+    expect(slider?.trackBg).toBe(derived.colorPrimaryBorder);
+    expect(slider?.handleColor).toBe(derived.colorPrimaryBorder);
+    expect(slider?.dotActiveBorderColor).toBe(derived.colorPrimaryBorder);
   });
+});
 
-  it("the steps' icons read at 4.5:1", () => {
-    const steps = config.components?.Steps;
-    // A finished step: the brand colour on its pale circle.
-    expect(contrast(brandFor('Steps'), token.colorPrimaryBg)).toBeGreaterThanOrEqual(4.5);
-    // The current step: its number on a circle of the brand colour.
-    expect(contrast(steps?.colorTextLightSolid ?? token.colorTextLightSolid, brandFor('Steps'))).toBeGreaterThanOrEqual(4.5);
-  });
+/**
+ * The keyboard focus ring is held at 3:1 against the page and the raised surfaces in both themes.
+ * It is the one colour kept from the contrast work: it appears only while moving through a screen
+ * with the keyboard, and without it the dark theme shows no focus at all.
+ */
+describe.each(['light', 'dark'] as const)('the focus ring in the %s theme', (mode) => {
+  const token = theme.getDesignToken(buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: mode }));
 
-  it.each(['red', 'volcano', 'orange', 'gold', 'yellow', 'lime', 'green', 'cyan', 'blue', 'geekblue', 'purple', 'magenta'])(
-    'a %s tag reads at 4.5:1 on its own background',
-    (colour) => {
-      const tag = (config.components?.Tag ?? {}) as Record<string, string | undefined>;
-      const palette = token as unknown as Record<string, string>;
-      expect(contrast(tag[`${colour}7`] ?? palette[`${colour}7`], palette[`${colour}1`])).toBeGreaterThanOrEqual(4.5);
-    },
-  );
-
-  it.each(['Success', 'Warning', 'Error', 'Info'])('a %s status tag reads at 4.5:1 on its own background', (status) => {
-    const tag = (config.components?.Tag ?? {}) as Record<string, string | undefined>;
-    const palette = token as unknown as Record<string, string>;
-    expect(contrast(tag[`color${status}`] ?? palette[`color${status}`], palette[`color${status}Bg`])).toBeGreaterThanOrEqual(4.5);
-  });
-
-  it('an empty table says so at 4.5:1', () => {
-    const empty = (config.components?.Table as { colorTextDisabled?: string } | undefined)?.colorTextDisabled;
-    expect(contrast(empty ?? token.colorTextDisabled, surfaces.page)).toBeGreaterThanOrEqual(4.5);
-  });
-
-  it("a default button's text under the pointer reads at 4.5:1", () => {
-    const button = config.components?.Button;
-    expect(contrast(button?.defaultHoverColor ?? token.colorPrimaryHover, surfaces.page)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(button?.defaultActiveColor ?? token.colorPrimaryActive, surfaces.page)).toBeGreaterThanOrEqual(4.5);
+  it('stands out at 3:1 from the page and from raised surfaces', () => {
+    expect(contrast(token.colorPrimaryBorder, token.colorBgContainer)).toBeGreaterThanOrEqual(3);
+    expect(contrast(token.colorPrimaryBorder, token.colorBgElevated)).toBeGreaterThanOrEqual(3);
   });
 });
 
@@ -234,7 +210,7 @@ function tokenOf(property: string): string {
   return property.replace(/^--ant-/, '').replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
 }
 
-describe.each(['light', 'dark'] as const)('rings and overrides drawn by the stylesheet, %s theme', (mode) => {
+describe.each(['light', 'dark'] as const)('the ring the stylesheet draws on the map, %s theme', (mode) => {
   const token = theme.getDesignToken(buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: mode })) as unknown as Record<
     string,
     string
@@ -249,28 +225,4 @@ describe.each(['light', 'dark'] as const)('rings and overrides drawn by the styl
     const [inner, outer] = propertiesIn(mapPageCss, '.map-canvas:focus-visible::after');
     expect(contrast(token[tokenOf(outer)], token[tokenOf(inner)])).toBeGreaterThanOrEqual(3);
   });
-
-  it('the text shades the stylesheet gives non-solid primary buttons read at 4.5:1', () => {
-    const properties = propertiesIn(indexCss, ".ant-btn-color-primary:not(.ant-btn-variant-solid)");
-    expect(properties).toHaveLength(3);
-    for (const property of properties) {
-      expect(contrast(token[tokenOf(property)], token.colorBgContainer)).toBeGreaterThanOrEqual(4.5);
-    }
-  });
 });
-
-describe('overrides the stylesheet draws for the dark theme only', () => {
-  const token = theme.getDesignToken(buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'dark' })) as unknown as Record<
-    string,
-    string
-  >;
-
-  it('the text shades it gives non-solid danger buttons read at 4.5:1, at rest, hovered and pressed', () => {
-    const properties = propertiesIn(indexCss, "html[data-theme='dark'] .ant-btn-color-dangerous:not(.ant-btn-variant-solid)");
-    expect(properties).toHaveLength(3);
-    for (const property of properties) {
-      expect(contrast(token[tokenOf(property)], token.colorBgContainer), property).toBeGreaterThanOrEqual(4.5);
-    }
-  });
-});
-

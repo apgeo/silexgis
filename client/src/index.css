@@ -18,26 +18,6 @@ html[data-theme='light'] {
   background: #fff;
 }
 
-/* An outlined, dashed or text-only primary button draws the brand colour as its text, and antd
-   feeds that text and the solid primary button's fill from one variable — so in the dark theme,
-   where the fill's teal is too dark to read as text, the variable is re-pointed for the
-   non-solid variants only, at the theme's text shades of the brand colour. */
-html[data-theme='dark'] .ant-btn-color-primary:not(.ant-btn-variant-solid) {
-  --ant-btn-color-base: var(--ant-color-primary-text);
-  --ant-btn-color-hover: var(--ant-color-primary-text-hover);
-  --ant-btn-color-active: var(--ant-color-primary-text-active);
-}
-
-/* A danger button that is not filled draws the error colour as its text, and in the dark theme the
-   colour the dark algorithm derives for it reads at 3.8:1 on the page. Re-pointed, for the
-   non-solid variants only, at the theme's error text shades — the same way, for the same reason,
-   as the primary button above. */
-html[data-theme='dark'] .ant-btn-color-dangerous:not(.ant-btn-variant-solid) {
-  --ant-btn-color-base: var(--ant-color-error-text);
-  --ant-btn-color-hover: var(--ant-color-error-text-hover);
-  --ant-btn-color-active: var(--ant-color-error-text-active);
-}
-
 /* A selection panel section's drag handle: the glyph is 14 pixels wide, and 24 is the smallest
    target WCAG 2.2 asks for (2.5.8). It is the handle Alt+arrows work on from the keyboard too. */
 .panel-section-handle {

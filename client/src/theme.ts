@@ -25,148 +25,32 @@ export const themeConfig: ThemeConfig = {
 };
 
 /**
- * Token overrides that bring text and controls up to readable contrast — 4.5:1 for text, 3:1 for
- * the outline of a control and for the focus ring — against the page and against the raised
- * surfaces (dialogs, menus) it sits on.
+ * The keyboard focus ring in the dark theme. Everything else in both themes is antd's own
+ * derivation from the brand colour; this one value is replaced because the dark algorithm darkens
+ * the brand teal to nearly the page colour, and the ring antd draws from it (on every button,
+ * tab, checkbox and link it focuses, and the rings this application draws itself) stood out from
+ * the dark page at 1.2:1, i.e. was not there. It is seen only while moving through the screen with
+ * the keyboard.
  *
- * antd's own defaults miss these in several places, and two of the misses come from the brand
- * colour rather than from antd: the palette generated from a teal this dark has a grey-green as
- * its lightest step, which antd puts behind the selected row of every menu, list and picker — so
- * the selected page in the navigation read at 2.7:1 — and the dark algorithm darkens the brand
- * colour further, which left the focus ring at 1.2:1 against the dark page, i.e. not there. The
- * seed stays the brand colour in both modes; only derived values are replaced, and where a value
- * is itself a seed (link, error) it is chosen so that what the algorithm makes of it lands where
- * it must.
- *
- * Each mode has its own set because the two fail in different places: the darker amber that
- * rescues warning text on the light page is exactly the one that fails on the dark page.
- * `theme.test.ts` recomputes every ratio from the tokens antd derives, so a change here that
- * drops a pair below its threshold fails there rather than on somebody's screen.
+ * antd also fills a slider's track, handle and passed mark dots from this token, so those are given
+ * back the colour the dark algorithm derives for them, and the slider looks as it always did. Two
+ * other uses read the token and cannot be handed back without a component token of their own: the
+ * pressed background of a primary filled or text button, and the edge of the date picker's preset
+ * tags. Both take the ring's brighter teal in the dark theme.
  */
-/**
- * A coloured tag writes its words in the seventh step of its colour's palette on the first step;
- * for the warm and green palettes that is under 4.5:1 on the light theme (green 3.4, gold 2.8,
- * yellow 2.1), and for two cool ones on the dark theme. The words take the first darker (light
- * theme) or lighter (dark theme) step that reads; the tag's background and outline keep antd's.
- * The status tags (success, warning, info, error) write in the status colour itself, which is a
- * fill colour; they take the status's text colour instead.
- */
-const lightTagText = {
-  volcano7: '#ad2102',
-  orange7: '#ad4e00',
-  gold7: '#874d00',
-  yellow7: '#876800',
-  lime7: '#3f6600',
-  green7: '#237804',
-  cyan7: '#006d75',
-  colorSuccess: '#237804',
-  colorWarning: '#874d00',
-  colorInfo: '#0958d9',
-} satisfies NonNullable<ThemeConfig['components']>['Tag'];
+const DARK_FOCUS_RING = '#3fa8a8';
+const DARK_DERIVED_PRIMARY_BORDER = '#142b2b';
 
-const darkTagText = {
-  geekblue7: '#7f9ef3',
-  purple7: '#ab7ae0',
-  colorError: '#ff7875',
-  colorInfo: '#69b1ff',
-} satisfies NonNullable<ThemeConfig['components']>['Tag'];
-
-const lightContrast: ThemeConfig = {
-  token: {
-    colorPrimaryBg: '#e3efee',
-    colorPrimaryBgHover: '#cde3e1',
-    colorLink: '#0958d9',
-    colorTextTertiary: 'rgba(0, 0, 0, 0.56)',
-    colorTextPlaceholder: 'rgba(0, 0, 0, 0.54)',
-    colorError: '#d32f2f',
-    colorWarningText: '#874d00',
-    colorSuccessText: '#237804',
-    colorInfoText: '#0958d9',
-    // The outline is all that marks out an empty field or a default button.
-    colorBorder: '#8c8c8c',
-  },
+const darkFocusRing: ThemeConfig = {
+  token: { colorPrimaryBorder: DARK_FOCUS_RING },
   components: {
-    Tag: lightTagText,
-    // An empty table says so in the disabled grey (1.8:1); it is a message, not a disabled control.
-    Table: { colorTextDisabled: 'rgba(0, 0, 0, 0.56)' },
-  },
-};
-
-/**
- * The brand teal as the dark theme draws it as TEXT — selected items, the active page number, a
- * checked button, an outlined or text-only primary button — and its hover and pressed shades.
- *
- * The dark algorithm darkens the brand colour to a fill that carries white text well (8.4:1) but
- * reads at 2.2:1 as text on the dark page, and no single teal can do both: a colour light enough
- * to be read on the page is too light to carry white text. So the fill keeps antd's derived
- * colour and every place antd draws the brand colour as text is pointed at these instead. They
- * are also published as antd's `colorPrimaryText` family, which no antd component reads, so that
- * the stylesheet can reach them as `--ant-color-primary-text*` where no component token exists.
- */
-export const DARK_PRIMARY_TEXT = { base: '#5cbdbd', hover: '#7fd0d0', active: '#3fa8a8' } as const;
-
-const darkContrast: ThemeConfig = {
-  token: {
-    colorPrimaryBorder: '#3fa8a8',
-    colorPrimaryText: DARK_PRIMARY_TEXT.base,
-    colorPrimaryTextHover: DARK_PRIMARY_TEXT.hover,
-    colorPrimaryTextActive: DARK_PRIMARY_TEXT.active,
-    colorLink: '#69b1ff',
-    colorTextTertiary: 'rgba(255, 255, 255, 0.5)',
-    colorTextPlaceholder: 'rgba(255, 255, 255, 0.5)',
-    colorError: '#f04040',
-    // As text — a danger button that is not filled, under the pointer and pressed too (the
-    // stylesheet points those at these): the derived shades read at 3.8:1 and 2.7:1 on the page.
-    colorErrorText: '#ff7875',
-    colorErrorTextHover: '#ffa39e',
-    colorErrorTextActive: '#e86060',
-    colorInfoText: '#69b1ff',
-    colorBorder: '#6b6b6b',
-  },
-  components: {
-    // The places antd draws the brand colour as text rather than as a fill. Where a component
-    // has a token for that text it is set; where it reads the brand colour itself (a checked
-    // radio button, the steps' icons, the active page's border) the brand colour is replaced for
-    // that component alone, which leaves the fills that read the derived component tokens — the
-    // radio dot, the primary button — on antd's own darker teal.
-    Menu: { itemSelectedColor: DARK_PRIMARY_TEXT.base },
-    Tabs: {
-      itemSelectedColor: DARK_PRIMARY_TEXT.base,
-      itemActiveColor: DARK_PRIMARY_TEXT.base,
-      inkBarColor: DARK_PRIMARY_TEXT.base,
-    },
-    Pagination: {
-      itemActiveColor: DARK_PRIMARY_TEXT.base,
-      itemActiveColorHover: DARK_PRIMARY_TEXT.hover,
-      colorPrimary: DARK_PRIMARY_TEXT.base,
-      colorPrimaryHover: DARK_PRIMARY_TEXT.hover,
-    },
-    Radio: {
-      colorPrimary: DARK_PRIMARY_TEXT.base,
-      colorPrimaryHover: DARK_PRIMARY_TEXT.hover,
-      colorPrimaryActive: DARK_PRIMARY_TEXT.active,
-    },
-    // The current step is a circle of the brand colour with its number on it; once that circle
-    // is the light teal, the number has to be dark to be read.
-    Steps: {
-      colorPrimary: DARK_PRIMARY_TEXT.base,
-      colorPrimaryHover: DARK_PRIMARY_TEXT.hover,
-      colorTextLightSolid: '#141414',
-    },
-    // A default button's text turns brand-coloured under the pointer. The outlined and text-only
-    // primary buttons cannot be reached from here — one token feeds both their text and the
-    // solid primary button's fill — and are re-pointed in the stylesheet instead.
-    Tag: darkTagText,
-    Table: { colorTextDisabled: 'rgba(255, 255, 255, 0.5)' },
-    Button: {
-      defaultHoverColor: DARK_PRIMARY_TEXT.hover,
-      defaultHoverBorderColor: DARK_PRIMARY_TEXT.hover,
-      defaultActiveColor: DARK_PRIMARY_TEXT.active,
-      defaultActiveBorderColor: DARK_PRIMARY_TEXT.active,
+    Slider: {
+      trackBg: DARK_DERIVED_PRIMARY_BORDER,
+      handleColor: DARK_DERIVED_PRIMARY_BORDER,
+      dotActiveBorderColor: DARK_DERIVED_PRIMARY_BORDER,
     },
   },
 };
-
 
 /**
  * How the stack of records inside one day of a month grid is allowed to grow — an override of the
@@ -238,14 +122,14 @@ export function resolveDark(preference: Appearance['theme']): boolean {
  */
 export function buildThemeConfig(appearance: Appearance): ThemeConfig {
   const dark = resolveDark(appearance.theme);
-  const contrast = dark ? darkContrast : lightContrast;
+  const focusRing: ThemeConfig = dark ? darkFocusRing : {};
   return {
     ...themeConfig,
     algorithm: [
       dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
       ...(appearance.density === 'compact' ? [theme.compactAlgorithm] : []),
     ],
-    token: { ...themeConfig.token, ...contrast.token, motion: !appearance.reduceMotion },
-    components: { ...themeConfig.components, ...contrast.components },
+    token: { ...themeConfig.token, ...focusRing.token, motion: !appearance.reduceMotion },
+    components: { ...themeConfig.components, ...focusRing.components },
   };
 }
