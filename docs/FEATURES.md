@@ -3,7 +3,7 @@
 Everything SilexGIS does, in prose. This page is the long answer to *what is it for*; the
 [README](../README.md) carries the short one, and the
 [user guide](user-guide/README.md) — in English and
-[română](user-guide/ro/README.md) — is the handbook for actually using it, with a page per
+[Romanian - română](user-guide/ro/README.md) — is the handbook for actually using it, with a page per
 feature and walkthroughs of whole jobs.
 
 - **Cave registry** — caves, entrances with precise coordinates, taxonomies, morphometry,
