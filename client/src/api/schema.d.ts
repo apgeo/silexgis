@@ -12364,6 +12364,10 @@ export interface components {
             model: null | components["schemas"]["PublicTripSurveyModelDto"];
             teams: components["schemas"]["PublicTripTeamDto"][];
             participants: components["schemas"]["PublicTripParticipantDto"][];
+            offersSiblingWatch: boolean;
+            offersLanguageChoice: boolean;
+            offersMomentLinks: boolean;
+            compactsReplayBarInFrame: boolean;
         };
         PublishedLinkCaveDto: {
             /** Format: uuid */

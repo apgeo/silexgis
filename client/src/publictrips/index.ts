@@ -68,8 +68,9 @@ export type { PublicReportedPlace } from '../caveview/publicTrackedCavers.ts';
 // What the cave calls the station somebody was reported at, read off the names a published survey
 // may come with (`model.places`). Asked here so that an article and this application put the same
 // name beside the same station — and so that both fall back to the station, in the same cases,
-// where there is no list: it is null on every installation that does not publish these names and
-// for a cave that has named nothing, and is sent only when it has entries.
+// where there is no list: an installation publishes these names unless it has switched them off,
+// and the member is null on one that has, and on any installation for a cave that has named
+// nothing, so it is sent only when it has entries.
 // A place's `depthM` is a magnitude, where a person's own reported depth carries its sign (note 2
 // above), and null for a place the cave named without a depth; this compares neither. The list
 // arrives in the cave's own order — depths shallowest first, then the places named without one as
@@ -124,8 +125,9 @@ export type { ReplayWindow } from '../caveview/trackingReplay.ts';
 
 // The photographs to show at a moment of a replay, read off the list a published replay may come
 // with (`pictures`): those of the latest moment at or before the clock that carries any, by the
-// rule a coordinator's replay shows its own by. The list is empty on every installation that does
-// not publish photographs at their moment, and absent from an older answer; both answer nothing.
+// rule a coordinator's replay shows its own by. An installation publishes these unless it has
+// switched them off; the list is empty on one that has, and absent from an older answer, and both
+// answer nothing.
 // A picture carries a place in the party (`ordinal`, matching a participant's) or null, never
 // anything else about a person — the article names that place in its own words.
 export { pastPicturesAt } from '../pages/public/pastTrackPictures.ts';

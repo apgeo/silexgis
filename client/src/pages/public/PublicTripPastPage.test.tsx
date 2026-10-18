@@ -123,6 +123,12 @@ function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelo
         out: false,
       },
     ],
+    // What this installation has decided its published pages do: all four as installed, and
+    // a test that is about one of them switched off says so where it builds its own.
+    offersSiblingWatch: true,
+    offersLanguageChoice: true,
+    offersMomentLinks: true,
+    compactsReplayBarInFrame: true,
     ...overrides,
   };
 }
@@ -802,6 +808,24 @@ describe('a link to a moment of a past trip', () => {
     rerender(<PublicTripPage />);
 
     clockShows('2019-07-06T10:00:00Z');
+  });
+
+  it('offers no such link, and ignores a moment in an address, where the installation does not offer them', () => {
+    // Offered first, over the same address, so that the absence below is this installation's
+    // answer and not the replay having stood at its beginning anyway.
+    address = new URLSearchParams(`past=${TRIP_2019}&at=${HALF_NINE}`);
+    render(<PublicTripPage />);
+    clockShows(HALF_NINE);
+    expect(screen.getByTestId('public-past-copy-moment')).toBeInTheDocument();
+    cleanup();
+
+    live = { data: envelope({ offersMomentLinks: false }), isPending: false, error: null };
+    render(<PublicTripPage />);
+    // The trip the address names is still replayed — which trip is not what this switch is about
+    // — and neither copy button is offered.
+    expect(screen.getByTestId('public-past-bar')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-past-copy-moment')).toBeNull();
+    expect(screen.queryByTestId('public-past-copy-playing')).toBeNull();
   });
 
   it('copies a link that opens the trip, the team followed and the moment on the clock — playing or not', async () => {

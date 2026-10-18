@@ -137,6 +137,12 @@ function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelo
         out: false,
       },
     ],
+    // What this installation has decided its published pages do: all four as installed, and
+    // a test that is about one of them switched off says so where it builds its own.
+    offersSiblingWatch: true,
+    offersLanguageChoice: true,
+    offersMomentLinks: true,
+    compactsReplayBarInFrame: true,
     ...overrides,
   };
 }
@@ -1303,6 +1309,134 @@ describe('a second published link opened in the same frame', () => {
       tripLogId: TRIP_2019,
       at: '2019-07-06T09:30:00.000Z',
     });
+  });
+});
+
+describe('a moment in an address, on an installation that does not offer them', () => {
+  it('opens the trip at its beginning, stopped, and honours the moment where the installation does', () => {
+    // Honoured first, over the same address, so that the beginning below is this installation's
+    // answer and not the address having named no moment.
+    address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T09:30:00Z&play=1`);
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    expect(readies(sent).at(-1)?.past).toMatchObject({
+      tripLogId: TRIP_2019,
+      at: '2019-07-06T09:30:00.000Z',
+    });
+    cleanup();
+
+    live = { data: envelope({ offersMomentLinks: false }), isPending: false, error: null };
+    const second = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(second.parent, 'https://club.example.org', hello);
+    // The trip the address names is still opened — which trip to replay is not what this switch
+    // is about — and the clock is at the beginning of the replay rather than at the named moment.
+    const announced = readies(second.sent).at(-1)?.past as { tripLogId: string; at: string };
+    expect(announced.tripLogId).toBe(TRIP_2019);
+    expect(announced.at).not.toBe('2019-07-06T09:30:00.000Z');
+  });
+
+  /**
+   * The same switch over the frame's own conversation, where the two halves of a message part
+   * company.
+   *
+   * <b>The moment an article names is honoured either way; the play is not.</b> Naming a moment
+   * of a replay through this channel is older than any address that could name one, and an
+   * article whose hyperlinks drive the frame has been doing it since the archive existed — so the
+   * switch does not take it away. Setting the replay running of its own accord arrived with those
+   * addresses, so it goes with them: off, the clock stands at the moment the article asked for
+   * and waits for the reader's own press.
+   */
+  it('honours a moment the frame is given either way and starts it playing only where the installation offers that', () => {
+    const offered = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(offered.parent, 'https://club.example.org', hello);
+    deliver(
+      offered.parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:30:00Z', { trip: TRIP_2019, play: true }),
+    );
+    expect(focused(offered.sent).at(-1)).toMatchObject({ target: { kind: 'moment' }, found: true });
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Pause');
+    cleanup();
+
+    live = { data: envelope({ offersMomentLinks: false }), isPending: false, error: null };
+    const withheld = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(withheld.parent, 'https://club.example.org', hello);
+    deliver(
+      withheld.parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:30:00Z', { trip: TRIP_2019, play: true }),
+    );
+
+    // The article is still answered, and the clock is still where it asked — it is the playing
+    // that the installation withheld.
+    expect(focused(withheld.sent).at(-1)).toMatchObject({ target: { kind: 'moment' }, found: true });
+    const announcedToTheFrame = readies(withheld.sent).at(-1)?.past as { at: string };
+    expect(announcedToTheFrame.at).toBe('2019-07-06T09:30:00.000Z');
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+  });
+
+  /**
+   * And over the replay already on screen, which is the other place the word reached: a message
+   * whose whole request was "play from here".
+   */
+  it('leaves a replay already on screen standing still when the frame asks it to play and the installation does not offer that', () => {
+    live = { data: envelope({ offersMomentLinks: false }), isPending: false, error: null };
+    const { parent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019, { play: true }));
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+  });
+});
+
+describe('a frame on an installation that does not split the strip', () => {
+  beforeEach(() => {
+    // A frame with no room for the whole strip — the case the split exists for — on an
+    // installation that would rather every frame had the whole strip anyway.
+    roomy = false;
+    live = { data: envelope({ compactsReplayBarInFrame: false }), isPending: false, error: null };
+  });
+
+  it('gives the narrow frame the whole strip and no sheet of controls to open', () => {
+    render(<PublicTripEmbedPage />);
+    fireEvent.click(screen.getByTestId('public-past-open'));
+    fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
+
+    const strip = within(screen.getByTestId('public-past-bar'));
+    for (const id of [
+      'public-past-play',
+      'public-past-clock',
+      'public-past-back',
+      'public-past-speed',
+      'public-past-report-previous',
+      'public-past-report-next',
+      'public-past-follow',
+      'public-past-scrub',
+    ]) {
+      expect(strip.getByTestId(id), id).toBeInTheDocument();
+      expect(screen.getAllByTestId(id), id).toHaveLength(1);
+    }
+    expect(screen.queryByTestId('public-past-controls-open')).toBeNull();
+  });
+
+  it('splits the same frame where the installation leaves the split on', () => {
+    // The other position of the one switch, over the same frame and the same trip, so that the
+    // whole strip above is this installation's answer and not the frame having had room.
+    live = { data: envelope(), isPending: false, error: null };
+    render(<PublicTripEmbedPage />);
+    fireEvent.click(screen.getByTestId('public-past-open'));
+    fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
+
+    const line = within(screen.getByTestId('public-past-bar'));
+    expect(line.queryByTestId('public-past-scrub')).toBeNull();
+    expect(screen.getByTestId('public-past-controls-open')).toBeInTheDocument();
   });
 });
 

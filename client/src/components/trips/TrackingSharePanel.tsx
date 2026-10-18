@@ -130,6 +130,13 @@ export default function TrackingSharePanel({
    * <b>Not part of the link.</b> One token answers in either language; this only decides whether
    * the two strings on screen say `lang=`. So changing it mints nothing and takes nothing back —
    * somebody can copy the Romanian address for one article and the English one for another.
+   *
+   * <b>An installation may have switched the published pages' language choice off</b>, and such a
+   * page ignores a language in its address. This panel is not told which way that setting stands —
+   * the answer it is drawn from says what publishing a trip shows, not what a published page
+   * offers — so the control stays and the help text beside it says what happens there. Said in
+   * words rather than hidden because the setting is read as each page is drawn and may be turned
+   * back on tomorrow, while an address somebody pasted into an article is forever.
    */
   const [language, setLanguage] = useState<PublicTripLanguage | null>(null);
 

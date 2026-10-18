@@ -38,6 +38,13 @@ export function liveTripAsEnvelope(row: PublicLiveTrip, own: PublicTripEnvelope)
     model: own.model,
     teams: row.teams,
     participants: row.participants,
+    // The installation's own answers, which are the same whichever party of its caves is on
+    // screen — carried over from the link's answer for the reason the survey above it is: one
+    // answer decided them, and a row of a list is not a second place they could be decided.
+    offersSiblingWatch: own.offersSiblingWatch,
+    offersLanguageChoice: own.offersLanguageChoice,
+    offersMomentLinks: own.offersMomentLinks,
+    compactsReplayBarInFrame: own.compactsReplayBarInFrame,
   };
 }
 

@@ -140,6 +140,12 @@ function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelo
       participant({ ordinal: 1, label: 'Ana', stationName: 'p.g.7', in: true }),
       participant({ ordinal: 2, in: true }),
     ],
+    // What this installation has decided its published pages do: all four as installed, and
+    // a test that is about one of them switched off says so where it builds its own.
+    offersSiblingWatch: true,
+    offersLanguageChoice: true,
+    offersMomentLinks: true,
+    compactsReplayBarInFrame: true,
     ...overrides,
   };
 }

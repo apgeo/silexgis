@@ -128,7 +128,14 @@ export default function PublicTripPage() {
   const [search, setSearch] = useSearchParams();
   // The language an address names, and the button that changes it. Read before every early
   // return below, so a page that has nothing to show still says so in the language asked for.
-  const language = usePublicLanguage();
+  // Four of the things this page does are the installation's to decide, and the envelope above is
+  // where it says so. Each is false until the envelope is in hand: a page that assumed the opposite
+  // would draw a control this installation does not offer and take it away again.
+  const offersSiblingWatch = data?.offersSiblingWatch ?? false;
+  const offersMomentLinks = data?.offersMomentLinks ?? false;
+  // Read before every early return below, as the language is: the installation's answer arrives
+  // with the envelope, and what the hook does before it has one is written down beside it.
+  const language = usePublicLanguage(data?.offersLanguageChoice);
 
   /**
    * The other party of the cave this reader asked to see, if any — and its name as it stood when
@@ -158,7 +165,12 @@ export default function PublicTripPage() {
    */
   const [askedUnder, setAskedUnder] = useState(token);
   const sameLink = askedUnder === token;
-  const liveTrips = usePublicLiveTrips(token, sameLink && (liveOpen || watch !== null));
+  // Not read at all on an installation that does not offer the other parties of the cave: the
+  // switch is not a control being hidden, it is the second party never being asked for.
+  const liveTrips = usePublicLiveTrips(
+    token,
+    sameLink && offersSiblingWatch && (liveOpen || watch !== null),
+  );
   const watchId = watch?.tripLogId ?? null;
   const ownTripLogId = data?.tripLogId;
   const watched = useMemo(
@@ -238,14 +250,23 @@ export default function PublicTripPage() {
   const askedOfThePast = PAST_LINK_PARAMS.map((name) => search.get(name) ?? '\u0000').join('\u0001');
   const searchRef = useRef(search);
   searchRef.current = search;
+  //
+  // The moment and whether to start playing are the two parts of this reading an installation can
+  // switch off; where it has, they are read as absent and the replay opens at its beginning,
+  // stopped, exactly as a link that named neither always has. Which trip, which team and which
+  // person are not part of that switch — they are how the archive itself is linked to.
   useEffect(() => {
     const asked = readPastLink(searchRef.current);
     if (asked !== null) {
-      openPast(asked.tripLogId, { at: asked.at, follow: asked.follow, play: asked.play });
+      openPast(asked.tripLogId, {
+        at: offersMomentLinks ? asked.at : null,
+        follow: asked.follow,
+        play: offersMomentLinks && asked.play,
+      });
     } else {
       leaveThePast();
     }
-  }, [askedOfThePast, openPast, leaveThePast, token]);
+  }, [askedOfThePast, openPast, leaveThePast, offersMomentLinks, token]);
 
   // The address the viewer is given: held still while it is the same survey, replaced when the
   // survey itself changes. Both halves matter and the reasoning for each lives with the rule,
@@ -736,7 +757,7 @@ export default function PublicTripPage() {
                 >
                   {t('publicTrip.retry')}
                 </Button>
-                <PublicLanguageButton control={language} />
+                {language.offered && <PublicLanguageButton control={language} />}
               </Flex>
             }
             data-testid="public-trip-unreachable"
@@ -755,7 +776,7 @@ export default function PublicTripPage() {
             title={t('publicTrip.notFoundTitle')}
             subTitle={t('publicTrip.notFoundBody')}
             // The one sentence on this page is the one a reader most needs to be able to read.
-            extra={<PublicLanguageButton control={language} />}
+            extra={language.offered ? <PublicLanguageButton control={language} /> : null}
             data-testid="public-trip-not-found"
           />
         </Card>
@@ -1121,7 +1142,7 @@ export default function PublicTripPage() {
               playback={{ ...past, backToNow: leavePast, setFollow: followPast }}
               liveState={data.state}
               cavers={cavers}
-              momentAddress={momentAddress}
+              momentAddress={offersMomentLinks ? momentAddress : undefined}
             />
             {/* The cave's other past trips, one press from the replay. Its rows are not on the
                 page at all while it is shut — taken out by this page in the same render, not left
@@ -1511,9 +1532,11 @@ export default function PublicTripPage() {
             questions nobody asked — so each list is fetched on the press that opens its own
             section, and a reader who never presses either costs exactly what they cost before
             these existed.
-            <b>Two sections, each with one list.</b> They answer different questions and are read
-            from different routes, one of which an installation may have switched off: the parties
-            in the cave now are offered whether or not the cave's history is. */}
+            <b>Two sections, each with one list.</b> They answer different questions, are read
+            from different routes, and each is a thing an installation may have switched off on its
+            own: the parties in the cave now are offered whether or not the cave's history is, and
+            the history whether or not they are. A section switched off is not here at all — not a
+            heading nobody may open — and its route is never asked. */}
         <section className="public-trip-past" data-testid="public-trip-past">
           <Collapse
             ghost
@@ -1523,31 +1546,37 @@ export default function PublicTripPage() {
               setPastOpen(keys.includes('past'));
             }}
             items={[
-              {
-                key: 'live',
-                label: (
-                  <span className="public-trip-past-label" data-testid="public-trip-live-section">
-                    <TeamOutlined /> {t('publicTrip.live.sectionTitle')}
-                  </span>
-                ),
-                children: (
-                  <PublicLiveTripList
-                    trips={liveTrips.data?.trips}
-                    more={liveTrips.data?.more ?? false}
-                    loading={liveTrips.isPending}
-                    failed={liveFailed}
-                    refused={isSettledRefusal(liveTrips.error)}
-                    // The list's own final refusal counts while it is what the screen is drawn
-                    // from: the notice above has just said this link stopped answering, and the
-                    // list must not invite another try beneath it.
-                    linkEnded={linkEnded || shownEnded}
-                    pastOnly={pastOnly}
-                    ownTripLogId={data.tripLogId}
-                    onWatch={watchParty}
-                    watchingId={mode === 'watched' ? watchId : null}
-                  />
-                ),
-              },
+              // The other parties of the cave, where this installation offers them. Left out
+              // rather than disabled, and the list is not read either: see the fetch above.
+              ...(offersSiblingWatch
+                ? [
+                    {
+                      key: 'live',
+                      label: (
+                        <span className="public-trip-past-label" data-testid="public-trip-live-section">
+                          <TeamOutlined /> {t('publicTrip.live.sectionTitle')}
+                        </span>
+                      ),
+                      children: (
+                        <PublicLiveTripList
+                          trips={liveTrips.data?.trips}
+                          more={liveTrips.data?.more ?? false}
+                          loading={liveTrips.isPending}
+                          failed={liveFailed}
+                          refused={isSettledRefusal(liveTrips.error)}
+                          // The list's own final refusal counts while it is what the screen is drawn
+                          // from: the notice above has just said this link stopped answering, and the
+                          // list must not invite another try beneath it.
+                          linkEnded={linkEnded || shownEnded}
+                          pastOnly={pastOnly}
+                          ownTripLogId={data.tripLogId}
+                          onWatch={watchParty}
+                          watchingId={mode === 'watched' ? watchId : null}
+                        />
+                      ),
+                    },
+                  ]
+                : []),
               {
                 key: 'past',
                 label: (
@@ -1575,7 +1604,7 @@ export default function PublicTripPage() {
 
       <footer className="public-trip-foot">
         <Typography.Text type="secondary">{t('app.name')}</Typography.Text>
-        <PublicLanguageButton control={language} />
+        {language.offered && <PublicLanguageButton control={language} />}
       </footer>
     </div>
   );

@@ -104,7 +104,12 @@ export default function PublicTripEmbedPage() {
   const present = useNow();
   // The language the frame's own address names — which is how the article it sits in says what
   // language it is written in — and the button that changes it for the reader in front of it.
-  const language = usePublicLanguage();
+  // What this installation has decided its published pages do, as the envelope says it. False
+  // until the envelope is in hand, so nothing is drawn and then taken away.
+  const offersSiblingWatch = data?.offersSiblingWatch ?? false;
+  const offersMomentLinks = data?.offersMomentLinks ?? false;
+  const compactBarInFrame = data?.compactsReplayBarInFrame ?? false;
+  const language = usePublicLanguage(data?.offersLanguageChoice);
   const [focusRequest, setFocusRequest] = useState<CaveViewFocusRequest | undefined>();
   /**
    * How big the frame's own buttons are drawn: for a finger where a finger drives them, whatever
@@ -193,7 +198,12 @@ export default function PublicTripEmbedPage() {
   // controls, which share the sheet — and then for as long as one of those parties is on screen
   // with the sheet shut again: the list is where that party's places come from, and where the
   // frame learns that the party is no longer being followed.
-  const liveTrips = usePublicLiveTrips(token, sameLink && (listsAsked || watch !== null));
+  // Never asked where the installation does not offer the other parties of the cave: the switch
+  // is the second party not being fetched, not a control being hidden.
+  const liveTrips = usePublicLiveTrips(
+    token,
+    sameLink && offersSiblingWatch && (listsAsked || watch !== null),
+  );
   const watchId = watch?.tripLogId ?? null;
   const ownTripLogId = data?.tripLogId;
   const watched = useMemo(
@@ -371,12 +381,20 @@ export default function PublicTripEmbedPage() {
   // Read again when the link itself changes under the same address: the playback forgets a
   // replay that belonged to another link, and a frame whose new address names a past trip in the
   // very same words would otherwise be left on the live party under an address asking for more.
+  //
+  // The moment and whether to start playing are read only where the installation offers them;
+  // where it does not they are read as absent, and a frame given an address naming a moment opens
+  // the replay at its beginning, stopped, as an address naming none always has.
   useEffect(() => {
     const asked = readPastLink(searchRef.current);
     if (asked !== null) {
-      openPast(asked.tripLogId, { at: asked.at, follow: asked.follow, play: asked.play });
+      openPast(asked.tripLogId, {
+        at: offersMomentLinks ? asked.at : null,
+        follow: asked.follow,
+        play: offersMomentLinks && asked.play,
+      });
     }
-  }, [askedOfThePast, openPast, token]);
+  }, [askedOfThePast, offersMomentLinks, openPast, token]);
 
   const followStation = followedStation(cavers, past.follow);
   useEffect(() => {
@@ -739,6 +757,7 @@ export default function PublicTripEmbedPage() {
     pastEngaged,
     pastTripLogId,
     pastLoading,
+    offersMomentLinks,
   });
   useLayoutEffect(() => {
     heard.current = {
@@ -749,6 +768,7 @@ export default function PublicTripEmbedPage() {
       pastEngaged,
       pastTripLogId,
       pastLoading,
+      offersMomentLinks,
     };
   });
 
@@ -794,6 +814,7 @@ export default function PublicTripEmbedPage() {
         pastEngaged,
         pastTripLogId,
         pastLoading,
+        offersMomentLinks,
       } = heard.current;
       const { kind, ref } = inbound.target;
       const settled = (found: boolean) =>
@@ -814,6 +835,19 @@ export default function PublicTripEmbedPage() {
        */
       const tripRef = inbound.trip ?? (kind === 'trip' ? ref : null);
       const askedAt = inbound.at ?? (kind === 'moment' ? ref : null);
+      /*
+       * Whether to start the clock running, which is the one part of this message the
+       * installation has a say over.
+       *
+       * <b>The moment itself is not.</b> An article naming a moment of a replay through this
+       * channel is how the archive has been linked to since the archive existed, and the setting
+       * that governs moments governs what a published *address* offers and honours — the strip's
+       * two buttons, and `at=` in an address. Starting a replay playing of its own accord is the
+       * part that arrived with those addresses, so where the installation does not offer them a
+       * message asking for play is read as a message that did not: the replay opens at the moment
+       * the article named, standing still, and the reader's own press still plays it.
+       */
+      const askedPlay = offersMomentLinks && inbound.play;
 
       if (tripRef === EMBED_TRIP_LIVE) {
         // An article's own way back out of the past — the hyperlink form of the button this frame
@@ -836,7 +870,7 @@ export default function PublicTripEmbedPage() {
             : kind === 'caver'
               ? { kind: 'caver', id: ref }
               : null;
-        openPast(tripRef, { at: askedAt, follow, play: inbound.play });
+        openPast(tripRef, { at: askedAt, follow, play: askedPlay });
         // A *place* named alongside one is the other half of the same sentence, and it is held
         // rather than dropped: the trip's survey is not on screen yet, so the move is made when it
         // is, and the answer sent then is the drawing's own.
@@ -850,7 +884,7 @@ export default function PublicTripEmbedPage() {
         settled(true);
         return;
       }
-      if (inbound.play && pastTripLogId !== null) {
+      if (askedPlay && pastTripLogId !== null) {
         // A link that also says to play, over the replay already on screen: its clock is started
         // where it stands, or — the request being held as a moment is — where the rest of this
         // press puts it, once there is a track to play. Over the trip being followed now there is
@@ -970,7 +1004,9 @@ export default function PublicTripEmbedPage() {
       <div className="public-trip-embed-failure">
         <Flex vertical align="center" gap="small">
           <Typography.Text type="secondary">{message}</Typography.Text>
-          <PublicLanguageButton control={language} compact size={controlSize} />
+          {language.offered && (
+            <PublicLanguageButton control={language} compact size={controlSize} />
+          )}
         </Flex>
       </div>
     </div>
@@ -1022,7 +1058,9 @@ export default function PublicTripEmbedPage() {
             >
               {t('publicTrip.retry')}
             </Button>
-            <PublicLanguageButton control={language} compact size={controlSize} />
+            {language.offered && (
+              <PublicLanguageButton control={language} compact size={controlSize} />
+            )}
           </Flex>
         </div>
       </div>
@@ -1195,7 +1233,12 @@ export default function PublicTripEmbedPage() {
    * height has room for both — and there its reader keeps the rail, the speed, the steps and
    * whom to follow on screen, and drags the rail while looking at the drawing it moves.
    */
-  const pastInOneLine = past.engaged && !roomy;
+  // The strip splits in a frame too small for the whole of it — unless the installation would
+  // rather every frame had the whole strip, which is what every frame had before it could split.
+  const pastInOneLine = past.engaged && !roomy && compactBarInFrame;
+  // Where the strip does not split there is nothing of it on the sheet, so the sheet is reached
+  // the way a roomy frame reaches it: straight to the cave's lists.
+  const wholeStrip = roomy || !compactBarInFrame;
   // The sheet opened for the replay's controls has nothing to show once they are no longer in it
   // — the reader was sent back to the party now by a link in the article, or the frame grew — and
   // must not turn, unasked, into the cave's lists. Shut while rendering, so the lists are never
@@ -1254,21 +1297,25 @@ export default function PublicTripEmbedPage() {
       )}
       {listsAsked && (
         <>
-          <PublicLiveTripList
-            trips={liveTrips.data?.trips}
-            more={liveTrips.data?.more ?? false}
-            loading={liveTrips.isPending}
-            failed={liveFailed}
-            refused={isSettledRefusal(liveTrips.error)}
-            // The list's own final refusal counts while it is what the frame is drawn from: the
-            // line above has just said this link stopped answering, and the list must not invite
-            // another try beneath it.
-            linkEnded={linkEnded || shownEnded}
-            pastOnly={pastOnly}
-            ownTripLogId={data.tripLogId}
-            onWatch={watchParty}
-            watchingId={mode === 'watched' ? watchId : null}
-          />
+          {/* The other parties of the cave, where this installation offers them at all. Left out
+              rather than shown empty, and the list behind it is not read either. */}
+          {offersSiblingWatch && (
+            <PublicLiveTripList
+              trips={liveTrips.data?.trips}
+              more={liveTrips.data?.more ?? false}
+              loading={liveTrips.isPending}
+              failed={liveFailed}
+              refused={isSettledRefusal(liveTrips.error)}
+              // The list's own final refusal counts while it is what the frame is drawn from: the
+              // line above has just said this link stopped answering, and the list must not invite
+              // another try beneath it.
+              linkEnded={linkEnded || shownEnded}
+              pastOnly={pastOnly}
+              ownTripLogId={data.tripLogId}
+              onWatch={watchParty}
+              watchingId={mode === 'watched' ? watchId : null}
+            />
+          )}
           <PublicPastTripList
             trips={pastTrips.data?.trips}
             more={pastTrips.data?.more ?? false}
@@ -1315,8 +1362,8 @@ export default function PublicTripEmbedPage() {
       playback={past}
       liveState={data.state}
       cavers={cavers}
-      layout={roomy ? 'frame' : 'line'}
-      onMore={() => setPicker(roomy ? 'lists' : 'controls')}
+      layout={wholeStrip ? 'frame' : 'line'}
+      onMore={() => setPicker(wholeStrip ? 'lists' : 'controls')}
     />
   ) : (
     <div
@@ -1378,7 +1425,9 @@ export default function PublicTripEmbedPage() {
         {/* Two letters, in the strip that is this frame's only chrome. Not drawn while a past trip
             is playing: that line is the replay's own and has no room left at the narrowest width
             a frame is given. */}
-        <PublicLanguageButton control={language} compact size={controlSize} />
+        {language.offered && (
+          <PublicLanguageButton control={language} compact size={controlSize} />
+        )}
       </span>
     </div>
   );

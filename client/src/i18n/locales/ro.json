@@ -2155,7 +2155,7 @@
         "tellsParty": "Toți participanții la această tură care au cont sunt anunțați că a fost publicată.",
         "languageLabel": "Limba în care se deschide pagina",
         "languageDefault": "Nicio limbă precizată",
-        "languageHelp": "O adresă care nu precizează nicio limbă se deschide în română sau în limba aleasă anterior de cititor pe acest site. Alegerea de aici rescrie adresa și blocul pentru site de mai jos — nu se creează nimic nou, același link răspunde în ambele cazuri, iar cititorul poate schimba limba și din pagină.",
+        "languageHelp": "O adresă care nu precizează nicio limbă se deschide în română sau în limba aleasă anterior de cititor pe acest site. Alegerea de aici rescrie adresa și blocul pentru site de mai jos — nu se creează nimic nou, același link răspunde în ambele cazuri, iar cititorul poate schimba limba și din pagină. O instalare care a oprit alegerea limbii pe paginile publicate ignoră limba din adresă: acolo, lasă prima opțiune.",
         "replace": "Înlocuiește linkul",
         "replaceConfirm": "Înlocuiești acest link de urmărire? Adresa veche nu mai răspunde din acest moment, oriunde a fost lipită. Una nouă este arătată aici, o singură dată; expiră atunci când ar fi expirat cea veche și nimeni din tură nu este anunțat.",
         "replacedTitle": "Adresa nouă este gata",

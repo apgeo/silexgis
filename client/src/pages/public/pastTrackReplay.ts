@@ -265,6 +265,14 @@ export function pastEnvelopeAt(track: PublicPastTrack, at: number): PublicTripEn
       // time nothing says anything about. The roster is still named, with nothing reported of
       // anybody — which is the honest reading of "we do not know which moment this is".
       : track.participants.map((participant) => participantAt(participant, Number.NEGATIVE_INFINITY)),
+    // What a published page may do of its own accord is the installation's answer and not a fact
+    // about any trip: it is told once, on the answer to the link the page was opened under, and
+    // that is the only place a page reads it. A folded view is not that answer, so these say no —
+    // the value that cannot be mistaken for permission if anybody ever reads them from here.
+    offersSiblingWatch: false,
+    offersLanguageChoice: false,
+    offersMomentLinks: false,
+    compactsReplayBarInFrame: false,
   };
 }
 

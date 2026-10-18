@@ -38,6 +38,8 @@ let askedFor: string | undefined;
  * console is being watched, and the page then draws exactly what it would have drawn anyway.
  */
 let reachedBeyondTheEnvelope: string[] = [];
+/** Whether the page asked for the cave's other parties — the whole of what a switch off means. */
+let liveAsked: boolean | undefined;
 const authenticatedOnly = (name: string) => () => {
   reachedBeyondTheEnvelope.push(name);
   return { data: undefined, isPending: false, error: null };
@@ -59,11 +61,10 @@ vi.mock('../../api/hooks.ts', () => ({
     isPending: enabled,
     isError: false,
   }),
-  usePublicLiveTrips: (_token: string | undefined, enabled: boolean) => ({
-    data: undefined,
-    isPending: enabled,
-    isError: false,
-  }),
+  usePublicLiveTrips: (_token: string | undefined, enabled: boolean) => {
+    liveAsked = enabled;
+    return { data: undefined, isPending: enabled, isError: false };
+  },
   usePublicPastTrack: (_token: string | undefined, tripLogId: string | undefined) => ({
     data: undefined,
     isPending: tripLogId !== undefined,
@@ -158,6 +159,12 @@ function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelo
       participant({ ordinal: 3, teamId: TEAM_B, out: true, lastRecordedAt: '2026-09-14T08:00:00Z' }),
       participant({ ordinal: 4 }),
     ],
+    // What this installation has decided its published pages do: all four as installed, and
+    // a test that is about one of them switched off says so where it builds its own.
+    offersSiblingWatch: true,
+    offersLanguageChoice: true,
+    offersMomentLinks: true,
+    compactsReplayBarInFrame: true,
     ...overrides,
   };
 }
@@ -173,6 +180,7 @@ beforeEach(() => {
   mounts = 0;
   narrow = false;
   reachedBeyondTheEnvelope = [];
+  liveAsked = undefined;
   sheetPane = undefined;
 });
 
@@ -1340,5 +1348,36 @@ describe('the drawing on a followed page', () => {
 
     // And nothing about sheets reached beyond the envelope: no route answers a stranger.
     expect(reachedBeyondTheEnvelope).toEqual([]);
+  });
+});
+
+describe('what the installation has decided this page may do', () => {
+  it('offers the cave’s other parties, and where it does not, neither offers them nor asks for them', () => {
+    // Offered first, over the same trip, and the section actually opened — because the list is
+    // read on the press that opens it and on nothing else. Without that press the absence below
+    // would be the absence of a press, and this test would pass with the switch taken out of the
+    // fetch altogether.
+    ready();
+    render(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-live-section')).toBeInTheDocument();
+    expect(liveAsked).toBe(false);
+    fireEvent.click(screen.getByTestId('public-trip-live-section'));
+    expect(liveAsked).toBe(true);
+    cleanup();
+    liveAsked = undefined;
+
+    ready({ offersSiblingWatch: false });
+    render(<PublicTripPage />);
+    // Not a heading nobody may open: it is not on the page at all…
+    expect(screen.queryByTestId('public-trip-live-section')).toBeNull();
+    // …and the list behind it was never asked for, which is what the switch is for — there being
+    // nothing on the page to press, and nothing read without a press, not even while the other
+    // section is being opened. What makes that hold is the section being absent rather than this
+    // assertion, which no press can make false here; the address itself is closed by the server,
+    // and that is proved where the server is.
+    expect(liveAsked).toBe(false);
+    expect(screen.getByTestId('public-trip-past-section')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('public-trip-past-section'));
+    expect(liveAsked).toBe(false);
   });
 });

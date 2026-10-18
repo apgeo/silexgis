@@ -177,6 +177,12 @@ function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelo
     model: MODEL,
     teams: [],
     participants: [person(1, 'Ana', 'own.1')],
+    // What this installation has decided its published pages do: all four as installed, and
+    // a test that is about one of them switched off says so where it builds its own.
+    offersSiblingWatch: true,
+    offersLanguageChoice: true,
+    offersMomentLinks: true,
+    compactsReplayBarInFrame: true,
     ...overrides,
   };
 }

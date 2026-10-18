@@ -12,26 +12,30 @@ import PublicLanguageButton from './PublicLanguageButton.tsx';
 import { PUBLIC_CHOICE_KEY } from './publicLanguageStorage.ts';
 import { usePublicLanguage } from './usePublicLanguage.ts';
 
-/** A published trip's page, reduced to the two things this rule is about. */
-function Published() {
+/**
+ * A published trip's page, reduced to the two things this rule is about — and to the third: what
+ * the installation has said about offering the choice at all, which arrives with the trip's own
+ * answer and so is undefined for the first frames.
+ */
+function Published({ offered }: { offered: boolean | undefined }) {
   const { t } = useTranslation();
-  const control = usePublicLanguage();
+  const control = usePublicLanguage(offered);
   const { search } = useLocation();
   return (
     <>
       <p data-testid="said">{t('publicTrip.retry')}</p>
       <p data-testid="address">{search}</p>
-      <PublicLanguageButton control={control} />
+      {control.offered && <PublicLanguageButton control={control} />}
     </>
   );
 }
 
-function open(address: string) {
+function open(address: string, offered: boolean | undefined = true) {
   return render(
     <MemoryRouter initialEntries={[address]}>
       <Routes>
-        <Route path="/shared/trips/:token" element={<Published />} />
-        <Route path="/shared/trips/:token/embed" element={<Published />} />
+        <Route path="/shared/trips/:token" element={<Published offered={offered} />} />
+        <Route path="/shared/trips/:token/embed" element={<Published offered={offered} />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -211,5 +215,92 @@ describe('the button that changes a published trip’s language', () => {
     fireEvent.click(screen.getByTestId('public-trip-language'));
     expect(screen.getByTestId('said')).toHaveTextContent(IN_ENGLISH);
     expect(screen.getByTestId('address')).toHaveTextContent('?lang=en');
+  });
+
+  describe('on an installation that does not offer the choice', () => {
+    it('draws no way to change it and ignores a language the address names', async () => {
+      // Offered beside it, over the same address, so that the absence below is this installation's
+      // answer and not the address having said nothing.
+      open('/shared/trips/tok?lang=en');
+      expect(screen.getByTestId('public-trip-language')).toBeInTheDocument();
+      expect(screen.getByTestId('said')).toHaveTextContent(IN_ENGLISH);
+      cleanup();
+      // A second visitor's browser, which the first page's answer to the address did not touch:
+      // the language is shared by the whole process here and the page above moved it.
+      await i18n.changeLanguage('ro');
+
+      open('/shared/trips/tok?lang=en', false);
+      expect(screen.queryByTestId('public-trip-language')).toBeNull();
+      expect(screen.getByTestId('said')).toHaveTextContent(IN_ROMANIAN);
+      expect(document.documentElement.lang).toBe('ro');
+      // The address itself is left exactly as the reader was given it: the page answers nothing
+      // to it, and rewrites nothing either.
+      expect(screen.getByTestId('address')).toHaveTextContent('?lang=en');
+    });
+
+    it('ignores a choice made on a published page before the installation decided', async () => {
+      window.localStorage.setItem(PUBLIC_CHOICE_KEY, 'en');
+      open('/shared/trips/tok');
+      expect(screen.getByTestId('said')).toHaveTextContent(IN_ENGLISH);
+      cleanup();
+      await i18n.changeLanguage('ro');
+
+      open('/shared/trips/tok', false);
+      expect(screen.getByTestId('said')).toHaveTextContent(IN_ROMANIAN);
+      // And the record is left standing: the installation may offer the choice again tomorrow,
+      // and the reader's own answer is not this setting's to throw away.
+      expect(window.localStorage.getItem(PUBLIC_CHOICE_KEY)).toBe('en');
+    });
+
+    it('puts back the language it had applied before the installation’s answer arrived', () => {
+      // The answer carrying this arrives after the first frames, so the address is honoured for
+      // them and undone when the answer turns out to be no.
+      const page = open('/shared/trips/tok?lang=en', undefined);
+      expect(screen.getByTestId('said')).toHaveTextContent(IN_ENGLISH);
+
+      page.rerender(
+        <MemoryRouter initialEntries={['/shared/trips/tok?lang=en']}>
+          <Routes>
+            <Route path="/shared/trips/:token" element={<Published offered={false} />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      expect(screen.getByTestId('said')).toHaveTextContent(IN_ROMANIAN);
+      expect(screen.queryByTestId('public-trip-language')).toBeNull();
+    });
+
+    /**
+     * The one screen the setting does not reach, stated as a test so nobody reads the absence of
+     * one as an oversight.
+     *
+     * <b>A link that opens nothing never learns the setting, and cannot.</b> What carries it is
+     * the followed trip's own answer, and that answer is the one that was refused — a link taken
+     * back, one that has run out, a cave since protected. Telling such a page would take a second
+     * address answering strangers questions about the installation, which is not something this
+     * application has. So the button stays and the address is still honoured there, which is also
+     * the right answer on its own terms: that page's single sentence is the one a reader most
+     * needs to be able to read.
+     */
+    it('keeps the choice on a page whose link never answers, because nothing ever tells it', () => {
+      const page = open('/shared/trips/tok?lang=en', undefined);
+      expect(screen.getByTestId('said')).toHaveTextContent(IN_ENGLISH);
+      expect(screen.getByTestId('public-trip-language')).toBeInTheDocument();
+
+      // Redrawn with the answer still absent — which is the whole life of such a page — and
+      // nothing has changed: this is not a frame that is about to be corrected.
+      page.rerender(
+        <MemoryRouter initialEntries={['/shared/trips/tok?lang=en']}>
+          <Routes>
+            <Route path="/shared/trips/:token" element={<Published offered={undefined} />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      expect(screen.getByTestId('said')).toHaveTextContent(IN_ENGLISH);
+      expect(screen.getByTestId('public-trip-language')).toBeInTheDocument();
+
+      // And the press still works, in the language it leads to.
+      fireEvent.click(screen.getByTestId('public-trip-language'));
+      expect(screen.getByTestId('said')).toHaveTextContent(IN_ROMANIAN);
+    });
   });
 });
