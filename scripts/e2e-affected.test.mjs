@@ -55,6 +55,14 @@ describe('a change selects the specs that answer for it', () => {
     assert.match(shell.reasons[0], /every page leans on it/);
   });
 
+  it('the condition editor and its pickers select the filter specs, not the whole suite', () => {
+    const { whole, specs } = chosen(['client/src/components/filters/FilterEditor.tsx']);
+    assert.equal(whole, false);
+    assert.ok(specs.includes('cave-registry-filters.spec.ts'), specs.join(', '));
+    assert.ok(specs.includes('gallery-filters.spec.ts'), specs.join(', '));
+    assert.ok(specs.includes('smoke.spec.ts'), specs.join(', '));
+  });
+
   it('a changed spec selects itself, and a helper every spec shares selects everything', () => {
     assert.deepEqual(chosen(['client/e2e/gallery.spec.ts']).specs, ['gallery.spec.ts', 'smoke.spec.ts']);
     assert.equal(chosen(['client/e2e/helpers.ts']).whole, true);
