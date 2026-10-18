@@ -1005,7 +1005,9 @@ test('a visitor watches another party of the cave on the survey of the link they
  * place for a depth and hang no photograph in a public gallery, so the two settings that are on
  * have nothing to say over these fixtures, and whether the page draws any of the three is not
  * something the tests above decide either way. This one is that other side — the three drawn in a
- * browser at a desk's width, over answers of this test's own.
+ * browser at a desk's width, over answers of this test's own. That a real server, as installed,
+ * really sends the two that ship on is proved by `public-trip-as-installed.spec.ts`, which
+ * declares a place and consents a photograph to the public gallery and stubs nothing.
  */
 test('where an installation publishes them, a visitor is told the planned hour, reads a place by its name, and sees a replay’s photographs at their moment', async ({
   page,

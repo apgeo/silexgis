@@ -6,13 +6,16 @@ import type { Page } from '@playwright/test';
  * One published cave whose installation publishes everything it may: the names the cave gives its
  * places, and the photographs hung on the moments of a finished trip.
  *
- * <b>Served by the test, because no installation the suite stands up publishes either.</b> Both
- * are settings an operator turns on, and both are off as installed — which is what every other
- * browser test of the published page runs against, and what proves the page prints nothing for
- * them. What is left to prove is the browser's half of the other side: a row of thumbnails that
- * scrolls inside itself at a phone's width, a picture that opens larger under a press, the same
- * row inside a frame's sheet, a name standing over a station. None of that is visible to a test
- * that renders the component without a layout engine.
+ * <b>Served by the test, because no cave the suite stands up has either.</b> Both ship on — an
+ * installation publishes them unless it switches them off — but the caves these walks create
+ * declare no place and hang no photograph in the public gallery, so over their own fixtures the
+ * two settings have nothing to say. That the server really sends both as installed is proved
+ * against a real one by `public-trip-as-installed.spec.ts`; what this fixture is for is the
+ * browser's half, which no answer from a server decides: a row of thumbnails that scrolls inside
+ * itself at a phone's width, a picture that opens larger under a press, the same row inside a
+ * frame's sheet, a name standing over a station, and the hour a party planned to be out by where
+ * an installation has turned that on. None of it is visible to a test that renders the component
+ * without a layout engine.
  *
  * <b>One fixture for the desktop and the phone runs</b>, so the two look at the same answer and a
  * change to the shape is made once. The survey is the real committed file, so the drawing the

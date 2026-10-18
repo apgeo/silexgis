@@ -1155,8 +1155,10 @@ test.describe('a cave’s past trips on a phone', () => {
 
 /**
  * What an installation may choose to publish beside a replay: the photographs hung on its moments,
- * and the names the cave gives its places. Neither is published as installed, which is what the
- * tests above are served; these are served the other answer.
+ * and the names the cave gives its places. Both ship on, and neither has anything to say over the
+ * caves the tests above stand up, which declare no place and hang no photograph in the public
+ * gallery; these are served a cave that has both. What a real server sends as installed is proved
+ * at a desk's width by `public-trip-as-installed.spec.ts`.
  */
 test.describe('a replay that came with photographs and named places, on a phone', () => {
   /** The picture a press opened, drawn over the page. */
