@@ -26,9 +26,10 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
     {
         var problems = new List<IntegrityProblem>();
 
-        var edges = await db.FeatureHierarchyEdges
-            .Select(e => new FeatureHierarchyRules.Edge(e.ParentId, e.ChildId))
+        var storedEdges = await db.FeatureHierarchyEdges
+            .Select(e => new { e.ParentId, e.ChildId, e.IsPrimary })
             .ToListAsync(ct);
+        var edges = storedEdges.Select(e => new FeatureHierarchyRules.Edge(e.ParentId, e.ChildId)).ToList();
         var parentsByChild = FeatureHierarchyRules.ParentsByChild(edges);
 
         var features = await db.Features.IgnoreQueryFilters()
@@ -119,27 +120,40 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
             }
         }
 
-        // Structural FK ↔ primary-edge mirror for entrances and centerlines.
-        var primaryEdges = await db.FeatureHierarchyEdges.Where(e => e.IsPrimary)
-            .ToDictionaryAsync(e => e.ChildId, e => e.ParentId, ct);
+        // Structural FK ↔ primary-edge mirror for entrances and centerlines, and then the rest
+        // of the fixed-parent rule: such a row sits under its own cave as its one primary parent
+        // and under nothing else. The schema allows only one primary edge per child but any
+        // number of others, so an extra edge written past the service is a state nothing
+        // refuses — and every extra parent widens who reads the row and what its protection
+        // inherits. Reported only once the mirror holds, so one broken row is one problem.
+        var primaryEdges = storedEdges.Where(e => e.IsPrimary).ToDictionary(e => e.ChildId, e => e.ParentId);
+        var edgesByChild = storedEdges.ToLookup(e => e.ChildId, e => (e.ParentId, e.IsPrimary));
+        void CheckFixedParent(Guid id, Guid caveId, string mirrorCheck)
+        {
+            if (!primaryEdges.TryGetValue(id, out var parent) || parent != caveId)
+            {
+                problems.Add(new IntegrityProblem(mirrorCheck, id, "cave FK and primary containment edge disagree"));
+                return;
+            }
+
+            var parents = edgesByChild[id].ToList();
+            if (!FeatureHierarchyRules.IsFixedParentSet(parents, caveId))
+            {
+                problems.Add(new IntegrityProblem("fixed_parent", id,
+                    $"{parents.Count} containment edge(s), {parents.Count - 1} besides the primary edge to its own cave"));
+            }
+        }
+
         foreach (var e in await db.CaveEntrances.IgnoreQueryFilters()
                      .Select(x => new { x.Id, x.CaveFeatureId }).ToListAsync(ct))
         {
-            if (!primaryEdges.TryGetValue(e.Id, out var parent) || parent != e.CaveFeatureId)
-            {
-                problems.Add(new IntegrityProblem("entrance_edge_mirror", e.Id,
-                    "cave FK and primary containment edge disagree"));
-            }
+            CheckFixedParent(e.Id, e.CaveFeatureId, "entrance_edge_mirror");
         }
 
         foreach (var c in await db.Centerlines.IgnoreQueryFilters()
                      .Select(x => new { x.Id, x.CaveFeatureId }).ToListAsync(ct))
         {
-            if (!primaryEdges.TryGetValue(c.Id, out var parent) || parent != c.CaveFeatureId)
-            {
-                problems.Add(new IntegrityProblem("centerline_edge_mirror", c.Id,
-                    "cave FK and primary containment edge disagree"));
-            }
+            CheckFixedParent(c.Id, c.CaveFeatureId, "centerline_edge_mirror");
         }
 
         // Cave mirror: entrance count and representative point. Live rows only on both

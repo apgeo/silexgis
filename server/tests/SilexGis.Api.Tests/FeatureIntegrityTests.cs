@@ -68,6 +68,58 @@ public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable, IClassF
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.IsDefault, true)));
     }
 
+    /// <summary>
+    /// A centerline sits under its own cave and nothing else. A second, non-primary edge — which
+    /// the schema does not prevent — is reported, and only as that: the closure and the stored
+    /// ancestor ids are brought into line with the extra edge first, so the one thing wrong is the
+    /// parent set itself.
+    /// </summary>
+    [Fact]
+    public async Task A_centerline_with_a_second_parent_breaks_the_fixed_parent_rule()
+    {
+        var caveId = await SeedCaveWithCenterlinesAsync(count: 1);
+        var otherCaveId = await SeedCaveWithCenterlinesAsync(count: 0);
+        var centerlineId = await SingleAsync(db => db.Centerlines
+            .Where(c => c.CaveFeatureId == caveId).Select(c => c.Id));
+
+        (await VerifyAsync()).ShouldBeEmpty();
+
+        var ancestorIds = await ExecuteReturningAsync(db => db.Features
+            .Where(f => f.Id == centerlineId).Select(f => f.AncestorIds).SingleAsync());
+        await ExecuteAsync(async db =>
+        {
+            db.FeatureHierarchyEdges.Add(
+                new FeatureHierarchyEdge { ParentId = otherCaveId, ChildId = centerlineId, IsPrimary = false });
+            db.FeatureAncestors.Add(new FeatureAncestor { FeatureId = centerlineId, AncestorId = otherCaveId });
+            await db.SaveChangesAsync();
+            await db.Features.Where(f => f.Id == centerlineId)
+                .ExecuteUpdateAsync(s => s.SetProperty(f => f.AncestorIds, ancestorIds.Append(otherCaveId).ToArray()));
+        });
+
+        try
+        {
+            var problem = (await VerifyAsync()).ShouldHaveSingleItem();
+            problem.Check.ShouldBe("fixed_parent");
+            problem.FeatureId.ShouldBe(centerlineId);
+            problem.Detail.ShouldBe("2 containment edge(s), 1 besides the primary edge to its own cave");
+        }
+        finally
+        {
+            // Other classes assert the verifier finds nothing in the shared database.
+            await ExecuteAsync(async db =>
+            {
+                await db.FeatureHierarchyEdges
+                    .Where(e => e.ParentId == otherCaveId && e.ChildId == centerlineId).ExecuteDeleteAsync();
+                await db.FeatureAncestors
+                    .Where(a => a.FeatureId == centerlineId && a.AncestorId == otherCaveId).ExecuteDeleteAsync();
+                await db.Features.Where(f => f.Id == centerlineId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(f => f.AncestorIds, ancestorIds));
+            });
+        }
+
+        (await VerifyAsync()).ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task A_soft_deleted_centerline_does_not_count_towards_the_default_rule()
     {
