@@ -118,7 +118,7 @@ test('the cave registry keeps its filter in the address, exports it and saves it
   await expect(page).toHaveURL(/\/saved-filters$/);
   const row = page.getByRole('row').filter({ hasText: filterName });
   await expect(row).toContainText('Region contains “Brașov”');
-  await expect(row).toContainText('At least 1000 m long');
+  await expect(row).toContainText('Surveyed length at least 1000 m');
   await row.getByRole('button', { name: 'Delete' }).click();
   await page.locator('.ant-popconfirm').getByRole('button', { name: 'Delete' }).click();
   await expect(page.getByRole('row').filter({ hasText: filterName })).toHaveCount(0);
