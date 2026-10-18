@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using System.Buffers.Text;
 using System.Data;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
@@ -185,9 +182,10 @@ public static class TripTrackingPublicationEndpoints
         var reachesProtectedCave = await PublishedSurveyBounds.ReachesProtectedCaveAsync(
             db, protection, ctx!, tracking.SurveyModelId, tracking.CaveFeatureId, ct);
 
-        // 32 random bytes, base64url-encoded, become the URL token; only its SHA-256 is stored,
-        // so a database leak cannot resurrect live links and the token cannot be shown again.
-        var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
+        // A fresh token by the one rule that makes them: random bytes, base64url-encoded, and
+        // only its SHA-256 stored, so a database leak cannot resurrect live links and the token
+        // cannot be shown again.
+        var token = TripTrackingRules.NewShareToken();
         var share = new TripTrackingShare
         {
             TripLogId = tripLogId,
@@ -331,7 +329,7 @@ public static class TripTrackingPublicationEndpoints
         if (old is null) return ApiProblems.NotFound(NotFoundCode);
         if (!TripPublicationWindow.MayBeReplaced(old.RevokedAt)) return alreadyTakenBack;
 
-        var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
+        var token = TripTrackingRules.NewShareToken();
         var fresh = new TripTrackingShare
         {
             TripLogId = tripLogId,
@@ -392,7 +390,8 @@ public static class TripTrackingPublicationEndpoints
 
     private static async Task<Results<Ok<PublicTripTrackingEnvelopeDto>, ProblemHttpResult>> FollowAsync(
         string token, SilexGisDbContext db, FeatureProtection protection, ICrsRegistry crs,
-        IFileAccessTokenService tokens, IOptions<TripTrackingOptions> options, TimeProvider clock,
+        IFileAccessTokenService tokens, IOptions<TripTrackingOptions> options,
+        IOptions<TripPastTrackOptions> past, TimeProvider clock,
         PublicTripDiagnostics diagnostics, CancellationToken ct)
     {
         // Every refusal below is this one answer. What differs is the reason beside it, which goes
@@ -504,7 +503,16 @@ public static class TripTrackingPublicationEndpoints
             party.PositionsWithheld,
             model,
             party.Teams,
-            party.Participants));
+            party.Participants,
+            // What this installation has decided its published pages do, told to the page that is
+            // about to draw itself. Read here and nowhere else: this is the one answer every
+            // reader of a published page fetches first, so the page that obeys these learns them
+            // before it draws, and there is no second place the same question could be answered
+            // differently.
+            options.Value.OfferSiblingWatch,
+            options.Value.OfferLanguageChoice,
+            past.Value.OfferMomentLinks,
+            past.Value.CompactReplayBarInFrame));
     }
 
 
@@ -1901,9 +1909,12 @@ public static class TripTrackingPublicationEndpoints
                 "This trip's cave has protected coordinates, so the trip cannot be published.");
     }
 
-    /// <summary>SHA-256 of the URL token, base64url — the stored/looked-up form; the plaintext never persists.</summary>
-    internal static string HashToken(string token) =>
-        Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+    /// <summary>
+    /// SHA-256 of the URL token, base64url — the stored/looked-up form; the plaintext never
+    /// persists. The rule itself lives with the other publication rules, so that every writer of
+    /// a publication row hashes a token the same way; this is the name the routes call it by.
+    /// </summary>
+    internal static string HashToken(string token) => TripTrackingRules.ShareTokenHash(token);
 
     /// <summary>
     /// The stored bytes of one file, for the caller of this envelope. Reserved for the survey

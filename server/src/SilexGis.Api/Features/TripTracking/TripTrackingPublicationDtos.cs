@@ -111,7 +111,50 @@ public sealed record PublicTripTrackingEnvelopeDto(
     bool PositionsWithheld,
     PublicTripSurveyModelDto? Model,
     IReadOnlyList<PublicTripTeamDto> Teams,
-    IReadOnlyList<PublicTripParticipantDto> Participants);
+    IReadOnlyList<PublicTripParticipantDto> Participants,
+    /// <summary>
+    /// Whether this installation's published pages offer the other parties of the same cave that
+    /// are being followed now.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why an installation's own choices ride on this answer.</b> Four of the things a
+    /// published page does are an installation's to decide, and a page has no other way to learn
+    /// them: a visitor has no account, so nothing about this server has been handed to them, and
+    /// the page is one file served to everybody. This is the one answer every reader of a
+    /// published page fetches before anything is drawn, so each choice is told here, as a plain
+    /// yes or no, with no second place where the same question is decided and no new route for a
+    /// stranger to ask. The server decides and the page obeys — a page that made the decision
+    /// itself would be a second rule to keep in step, and a reader that edited the answer would be
+    /// editing a presentation and nothing more.
+    /// </para>
+    /// <para>
+    /// They are also why these answers' validators move when an installation changes its mind:
+    /// the validator is worked out from the answer, so a reader holding yesterday's copy is sent
+    /// the new one rather than told that nothing changed.
+    /// </para>
+    /// <para>
+    /// False means the page offers no such control and asks for no second party: the list of
+    /// parties being followed is not read on a visitor's behalf at all.
+    /// </para>
+    /// </remarks>
+    bool OffersSiblingWatch,
+    /// <summary>
+    /// Whether this installation's published pages offer a reader the choice between the two
+    /// languages, and honour a language named in an address. False leaves every published page in
+    /// the language the installation opens in.
+    /// </summary>
+    bool OffersLanguageChoice,
+    /// <summary>
+    /// Whether a replay offers an address that opens it again at the moment on screen, and honours
+    /// one given to it. False ignores a moment in an address and offers none.
+    /// </summary>
+    bool OffersMomentLinks,
+    /// <summary>
+    /// Whether a replay's controls split into one line and a sheet when the page is drawn in a
+    /// frame too small for the whole strip. False gives every frame the whole strip.
+    /// </summary>
+    bool CompactsReplayBarInFrame);
 
 /// <summary>
 /// Enough of the survey model for the embedded viewer to draw it, and no more: no name, no

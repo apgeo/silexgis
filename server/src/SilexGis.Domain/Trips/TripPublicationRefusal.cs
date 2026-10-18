@@ -74,6 +74,13 @@ public enum PublishedReadRefusal : short
     /// cave's past trips.
     /// </summary>
     PastSiblingWindow = 9,
+
+    /// <summary>
+    /// This installation does not offer a published page the other parties of its cave, so the
+    /// list of them is not answered to anybody. Said of that list alone: every other read the
+    /// same link opens is served.
+    /// </summary>
+    SiblingWatchOff = 10,
 }
 
 /// <summary>

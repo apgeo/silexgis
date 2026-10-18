@@ -195,7 +195,9 @@ public static class PublicTripValidator
 /// whatever its reason, as it gets the same status and the same body.
 /// </para>
 /// </remarks>
-internal sealed class PublicTripValidatorFilter(TimeProvider clock, IOptions<JsonOptions> json) : IEndpointFilter
+internal sealed class PublicTripValidatorFilter(
+    TimeProvider clock, IOptions<JsonOptions> json, IOptions<TripTrackingOptions> options)
+    : IEndpointFilter
 {
     /// <summary>The reader may keep its copy and must ask before using it; nobody else may keep one.</summary>
     internal const string Revalidated = "private, no-cache";
@@ -208,6 +210,18 @@ internal sealed class PublicTripValidatorFilter(TimeProvider clock, IOptions<Jso
     {
         var result = await next(context);
         var http = context.HttpContext;
+
+        // An installation may decide that none of its published answers is to be kept or compared
+        // at all. Asked here, per read, rather than by leaving this filter off the route: the route
+        // declares in the contract that it can answer "nothing changed", and a contract that
+        // differed per installation would make the generated client a fact about one server. So
+        // the route is always behind this and the answer is always whole where this is switched
+        // off, carrying no validator and kept by nobody.
+        if (!options.Value.TellReadersNothingChanged)
+        {
+            http.Response.Headers.CacheControl = NotKept;
+            return result;
+        }
 
         // A route declares the answers it can give as one union; what it chose is inside.
         var decided = result is INestedHttpResult union ? union.Result : result;

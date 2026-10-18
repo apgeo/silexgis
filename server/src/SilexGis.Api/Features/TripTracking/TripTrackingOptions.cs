@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Trips;
+
 namespace SilexGis.Api.Features.TripTracking;
 
 /// <summary>
@@ -45,7 +47,11 @@ public sealed class TripTrackingOptions
 
     /// <summary>
     /// Whether a published trip says the hour its party planned to be out by. <b>Off unless an
-    /// installation turns it on.</b>
+    /// installation turns it on, and off is a decision rather than an oversight</b> — the owner of
+    /// this project was asked whether a published page may show the hour a party planned to be out
+    /// and answered no, so nothing here is waiting to be finished and the default is not to be
+    /// "corrected" to on. The setting stays because it is how an installation that wants it, or a
+    /// later change of mind, grants it without new code.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -72,19 +78,22 @@ public sealed class TripTrackingOptions
     /// <summary>
     /// Whether a published trip's survey comes with the names the cave has given its places — the
     /// depths it has declared and the stations it has named without a depth.
-    /// <b>Off unless an installation turns it on.</b>
+    /// <b>On unless an installation switches it off.</b>
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Off, because the names are words a club typed for its own members — what it calls a pitch,
-    /// where it camps — and nothing published has carried them before; whether people without an
-    /// account are to read them is the club's to decide. Turned off, the member is null whatever
-    /// the cave has declared — never a list with no entries, which a reader keeping names of its
-    /// own could take as "there are none" — no declaration is read on a published route at all,
-    /// and the answer is otherwise exactly what it was.
+    /// On, because the names are what makes a published page answer the question it was opened
+    /// with: a visitor told that the party is at <c>p.g.7</c> learns nothing, and a visitor told
+    /// that <c>p.g.7</c> is the foot of the big pitch knows where the party is. The names are
+    /// words a club typed for its own members — what it calls a pitch, where it camps — so an
+    /// installation that would rather keep them to its members switches this off. Switched off,
+    /// the member is null whatever the cave has declared — never a list with no entries, which a
+    /// reader keeping names of its own could take as "there are none" — no declaration is read on
+    /// a published route at all, and the answer is byte for byte what it was before this setting
+    /// existed.
     /// </para>
     /// <para>
-    /// What it widens, exactly: for each place the cave has named — with a declared depth, or
+    /// What it carries, exactly: for each place the cave has named — with a declared depth, or
     /// named without one — whose station the survey being handed over holds, that name, the
     /// station, the declared depth where there is one (null where the place was named without a
     /// depth), the short note the cave wrote beside the name where it wrote one, and whether the
@@ -99,7 +108,7 @@ public sealed class TripTrackingOptions
     /// published page for these to appear on, whichever way this is set.
     /// </para>
     /// </remarks>
-    public bool PublishDepthPlaces { get; set; }
+    public bool PublishDepthPlaces { get; set; } = true;
 
     /// <summary>
     /// Whether a published trip says which caving groups each person named on it belongs to.
@@ -131,6 +140,89 @@ public sealed class TripTrackingOptions
     public bool PublishClubs { get; set; }
 
     /// <summary>
+    /// Whether a published trip's page offers its reader the other parties of the same cave that
+    /// are being followed at the same time. <b>On unless an installation switches it off.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On, because a cave with two parties in it at once is the case a published page is least
+    /// able to answer without it: somebody holding one link reads one party's standing and has no
+    /// way of learning that the other party exists, let alone that it is out. The list is read
+    /// only once a reader asks for it, and it says of each party no more than the page already
+    /// says of the one its own link is about.
+    /// </para>
+    /// <para>
+    /// Switched off, a published page offers no such control and asks for no second party at all:
+    /// the list of parties being followed is never read on a visitor's behalf, and a page carries
+    /// exactly the trip its link was published for — which is what these pages did before the
+    /// control was built. The route that answers that list is withdrawn with it: it refuses every
+    /// caller as an address nobody published does, before it reads any link, because a switch that
+    /// only stopped the page from asking would leave every party of the cave — and, where the
+    /// installation publishes names, the names in them — answered to whoever holds any link of
+    /// that cave. Nothing else a link opens is touched: the page itself, the cave's past trips and
+    /// a replay all answer as they did.
+    /// </para>
+    /// </remarks>
+    public bool OfferSiblingWatch { get; set; } = true;
+
+    /// <summary>
+    /// Whether a published trip's page offers its reader the choice between the two languages it
+    /// is written in, and honours a language named in its address. <b>On unless an installation
+    /// switches it off.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On, because one published page is read by two audiences at once — a club's own members and
+    /// the families of whoever is visiting — and a page with no way to change its language serves
+    /// whichever audience the installation happened to be set up for and nobody else. The choice
+    /// is the reader's own and is remembered for published pages alone.
+    /// </para>
+    /// <para>
+    /// Switched off, no such control is drawn, a language named in an address is ignored, and
+    /// every published page is in the language the installation opens in — which is what these
+    /// pages did before the control was built. It decides nothing about the signed-in
+    /// application, where the language is an account's own choice.
+    /// </para>
+    /// <para>
+    /// <b>One screen keeps the choice whatever this says, and it cannot be otherwise.</b> This
+    /// setting reaches a page on the followed trip's own answer, so a page whose link opens
+    /// nothing — taken back, run out, a cave since protected — is never told it: the answer that
+    /// would have carried it is the answer that was refused, and the only other way to tell such a
+    /// page would be a second address answering strangers questions about the installation. So
+    /// that one screen keeps its button and still honours a language in the address. Deliberate,
+    /// and not only unavoidable: its single sentence is the one sentence on any of these pages a
+    /// reader most needs to be able to read.
+    /// </para>
+    /// </remarks>
+    public bool OfferLanguageChoice { get; set; } = true;
+
+    /// <summary>
+    /// Whether a published read may answer a reader that already holds the answer by saying so,
+    /// instead of sending it again. <b>On unless an installation switches it off.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On, because a page watching a party underground asks the same question every few seconds
+    /// for hours while the answer changes only when somebody reports. The short "nothing changed"
+    /// answer is what keeps a family's phone usable on a cave-mouth connection, and what keeps a
+    /// link printed in a club's article from costing the installation a survey's worth of reading
+    /// per reader per minute.
+    /// </para>
+    /// <para>
+    /// Switched off, no answer carries a validator, no read is ever answered with "nothing
+    /// changed", and every read is answered in full and kept by nobody — which is what these
+    /// routes did before this was built. An installation sitting behind a cache it does not
+    /// control, or chasing a reader that was shown a page out of date, switches it off and pays
+    /// the difference in bytes.
+    /// </para>
+    /// <para>
+    /// It covers the published reads together rather than one at a time: a reader holding a kept
+    /// copy of one of them and none of the others would be the worst of both.
+    /// </para>
+    /// </remarks>
+    public bool TellReadersNothingChanged { get; set; } = true;
+
+    /// <summary>
     /// How long a follow link goes on working after the trip it is about. <b>Two weeks unless an
     /// installation says otherwise.</b>
     /// </summary>
@@ -155,7 +247,7 @@ public sealed class TripTrackingOptions
     /// on nearly every real trip. What this covers is the watch that is never closed at all.
     /// </para>
     /// </remarks>
-    public TimeSpan ShareLifetime { get; set; } = TimeSpan.FromDays(14);
+    public TimeSpan ShareLifetime { get; set; } = TripPublicationWindow.DefaultShareLifetime;
 
     /// <summary>
     /// How long a followed page keeps answering after the watch is closed. <b>No time at all unless

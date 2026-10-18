@@ -274,6 +274,61 @@ public sealed class PublicTripCachingTests : IAsyncLifetime, IDisposable, IClass
     }
 
     /// <summary>
+    /// An installation may decide that none of this happens: with it switched off no answer
+    /// carries a validator, nothing is ever answered "unchanged", and every read is answered
+    /// whole and kept by nobody — while the same reads on the host beside it, which has not
+    /// switched it off, are answered "unchanged" from the same rows.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both positions in one test, over the same published trips, because the only way this check
+    /// could pass while meaning nothing is a reader that was never going to be told "unchanged"
+    /// anyway — a stale tag, a route that had stopped answering. The host that does say so is
+    /// asserted first, on each route, from the same rows and through the same helper.
+    /// </para>
+    /// <para>
+    /// The route still declares the short answer in the contract, so what a generated client
+    /// expects does not depend on how one installation is set up; it is the answer that changes,
+    /// not the shape of the route.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Nothing_is_ever_answered_unchanged_where_the_installation_has_switched_that_off()
+    {
+        var cave = await PublishedCaveAsync();
+
+        using var silent = HostWith(("TripTracking:TellReadersNothingChanged", "false"));
+        using var reader = silent.CreateClient();
+
+        foreach (var route in cave.Routes)
+        {
+            // The installation that has not switched it off, first, so that the absence below is
+            // this setting's doing and not the read's.
+            var told = await ReadAsync(anonymous, route);
+            told.Status.ShouldBe(HttpStatusCode.OK, route);
+            told.Tag.ShouldNotBeNull(route);
+            (await ReadAsync(anonymous, route, told.Tag)).Status.ShouldBe(HttpStatusCode.NotModified, route);
+
+            var whole = await ReadAsync(reader, route);
+            whole.Status.ShouldBe(HttpStatusCode.OK, route);
+            whole.Tag.ShouldBeNull(route);
+            whole.Kept.ShouldBe(KeptByNobody, route);
+            whole.Body.ShouldNotBeEmpty(route);
+
+            // A reader holding what the other host gave it, and a reader claiming to hold
+            // anything at all, are both answered whole.
+            foreach (var holding in new[] { told.Tag!, "*" })
+            {
+                var again = await ReadAsync(reader, route, holding);
+                again.Status.ShouldBe(HttpStatusCode.OK, $"{route} {holding}");
+                again.Tag.ShouldBeNull($"{route} {holding}");
+                again.Kept.ShouldBe(KeptByNobody, $"{route} {holding}");
+                again.Body.ShouldNotBeEmpty($"{route} {holding}");
+            }
+        }
+    }
+
+    /// <summary>
     /// A read the per-address window turns away is kept by nobody and carries no validator, like
     /// every other refusal here — and is turned away whatever the reader says it holds.
     /// </summary>

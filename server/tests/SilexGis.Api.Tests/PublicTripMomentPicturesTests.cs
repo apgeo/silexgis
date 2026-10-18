@@ -17,23 +17,27 @@ namespace SilexGis.Api.Tests;
 
 /// <summary>
 /// The photographs hung on moments of a finished trip, as the four published-trip routes tell them
-/// to somebody without an account — which, on an installation as it is installed, is not at all.
+/// to somebody without an account — which, on an installation as it is installed, is every one of
+/// them the public gallery holds for a moment of the replay.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>What these hold down.</b> An installation that has not switched the setting on sends the
-/// list empty with every replay, whatever the trip holds. Switched on, the one read that replays a
+/// <b>What these hold down.</b> An installation that has switched the setting off sends the list
+/// there and empty with every replay — never absent — whatever the trip holds. On, the one read
+/// that replays a
 /// finished trip carries the photographs that are in the public gallery, hang on a moment inside
 /// the replay and are reached through a link naming nothing guarded — each as a moment, an address
 /// of a rendering, the gallery's caption and a number in the party or nothing — and the other
 /// three reads are what they were.
 /// </para>
 /// <para>
-/// <b>Every "nothing is told" here is read beside a "something is told".</b> Three hosts stand
-/// over one database and one clock: one as installed, one that publishes these, and one that
-/// publishes these while naming nobody. So an empty list on the first is the setting's doing and
-/// not a trip with no photographs, and a search that finds no trace of a person is run over an
-/// answer known to carry pictures of them.
+/// <b>Every "nothing is told" here is read beside a "something is told".</b> Four hosts stand
+/// over one database and one clock: one told the setting is off, one told it is on, one that
+/// publishes these while naming nobody, and one given no word about the setting at all. So an
+/// empty list on the first is the setting's doing and not a trip with no photographs; a search
+/// that finds no trace of a person is run over an answer known to carry pictures of them; and
+/// what the last answers is what the shipped default really is, asserted against the other two
+/// rather than read off the source.
 /// </para>
 /// </remarks>
 public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
@@ -50,8 +54,9 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
     // Typed beside a picture when it was hung on the trip: one names the person it is of.
     private const string NoteNamingAna = "Quorvix pe coarda Vextral";
 
-    private readonly SilexGisApiFactory asInstalled;
+    private readonly SilexGisApiFactory switchedOff;
     private readonly SilexGisApiFactory publishing;
+    private readonly SilexGisApiFactory asInstalled;
     private readonly SilexGisApiFactory publishingUnnamed;
     private readonly SilexGisApiFactory publishingWords;
     private readonly TestTimeProvider clock = new(DateTimeOffset.UtcNow);
@@ -61,21 +66,26 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
     private HttpClient owner = null!;
     private HttpClient curator = null!;
     private HttpClient reader = null!;
-    private HttpClient visitor = null!;
+    private HttpClient visitorOfSwitchedOff = null!;
     private HttpClient visitorOfPublishing = null!;
     private HttpClient visitorOfUnnamed = null!;
+    private HttpClient visitorOfInstallation = null!;
     private long caveTypeId;
 
     public PublicTripMomentPicturesTests(PostgresFixture postgres)
     {
         connectionString = postgres.ConnectionString;
         filesRoot = Path.Combine(AppContext.BaseDirectory, "test-data", $"trippics-{Guid.NewGuid():N}");
-        // The first host is given no word about the setting at all: what it answers is what an
-        // installation answers that never heard of it.
-        asInstalled = HostWith();
+        // The first host is told the setting is off in so many words — what an installation
+        // answers that has decided against these photographs. The last is given no word about it
+        // at all, which is what decides what the shipped default really is: its answers are
+        // asserted to be the publishing host's, not the switched-off host's. The words host pins
+        // this setting off so that it answers for its own setting and nothing else.
+        switchedOff = HostWith((PublishKey, "false"));
         publishing = HostWith((PublishKey, "true"));
         publishingUnnamed = HostWith((PublishKey, "true"), ("TripTracking:PublishRealNames", "false"));
-        publishingWords = HostWith((WordsKey, "true"));
+        publishingWords = HostWith((WordsKey, "true"), (PublishKey, "false"));
+        asInstalled = HostWith();
     }
 
     /// <summary>
@@ -102,18 +112,19 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
     public async Task InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        _ = await AuthHelper.CreateUserAsync(asInstalled, GlobalRoles.Editor, $"pics-own-{suffix}@t.local");
-        _ = await AuthHelper.CreateUserAsync(asInstalled, GlobalRoles.Admin, $"pics-adm-{suffix}@t.local");
-        owner = await AuthHelper.BearerClientAsync(asInstalled, $"pics-own-{suffix}@t.local");
-        curator = await AuthHelper.BearerClientAsync(asInstalled, $"pics-adm-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(switchedOff, GlobalRoles.Editor, $"pics-own-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(switchedOff, GlobalRoles.Admin, $"pics-adm-{suffix}@t.local");
+        owner = await AuthHelper.BearerClientAsync(switchedOff, $"pics-own-{suffix}@t.local");
+        curator = await AuthHelper.BearerClientAsync(switchedOff, $"pics-adm-{suffix}@t.local");
         // An account that may read the trips below — they are open to every account — and edit none.
-        _ = await AuthHelper.CreateUserAsync(asInstalled, GlobalRoles.Viewer, $"pics-read-{suffix}@t.local");
-        reader = await AuthHelper.BearerClientAsync(asInstalled, $"pics-read-{suffix}@t.local");
-        visitor = asInstalled.CreateClient();
+        _ = await AuthHelper.CreateUserAsync(switchedOff, GlobalRoles.Viewer, $"pics-read-{suffix}@t.local");
+        reader = await AuthHelper.BearerClientAsync(switchedOff, $"pics-read-{suffix}@t.local");
+        visitorOfSwitchedOff = switchedOff.CreateClient();
         visitorOfPublishing = publishing.CreateClient();
         visitorOfUnnamed = publishingUnnamed.CreateClient();
+        visitorOfInstallation = asInstalled.CreateClient();
 
-        using var scope = asInstalled.Services.CreateScope();
+        using var scope = switchedOff.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
@@ -122,10 +133,11 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
 
     public void Dispose()
     {
+        asInstalled.Dispose();
         publishingUnnamed.Dispose();
         publishingWords.Dispose();
         publishing.Dispose();
-        asInstalled.Dispose();
+        switchedOff.Dispose();
         try { Directory.Delete(filesRoot, recursive: true); } catch { /* best effort */ }
     }
 
@@ -192,7 +204,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         var off = new Dictionary<string, Answer>();
         foreach (var route in cave.Routes)
         {
-            off[route] = await ReadAsync(visitor, route);
+            off[route] = await ReadAsync(visitorOfSwitchedOff, route);
             off[route].Status.ShouldBe(HttpStatusCode.OK, route);
             foreach (var photograph in everyPhotograph)
             {
@@ -250,7 +262,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
 
         // ---- a reader holding the installed answer is not told "nothing changed" -------------
         on[cave.PastTrip].Tag.ShouldNotBe(off[cave.PastTrip].Tag);
-        (await ReadAsync(visitor, cave.PastTrip, off[cave.PastTrip].Tag)).Status.ShouldBe(HttpStatusCode.NotModified);
+        (await ReadAsync(visitorOfSwitchedOff, cave.PastTrip, off[cave.PastTrip].Tag)).Status.ShouldBe(HttpStatusCode.NotModified);
         (await ReadAsync(visitorOfPublishing, cave.PastTrip, off[cave.PastTrip].Tag)).Status.ShouldBe(HttpStatusCode.OK);
         // Where the setting changes nothing it changes no validator.
         foreach (var route in new[] { cave.Follow, cave.Live, cave.Past })
@@ -275,10 +287,76 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
     }
 
     /// <summary>
-    /// On an installation that publishes these and names nobody, a replay carrying pictures of
-    /// people carries no word of anybody's name on any of the four routes — although a note typed
-    /// beside one of the pictures names its subject.
+    /// <b>What an installation that was never told about the setting does.</b> The shipped default
+    /// is to carry the photographs: a host given no word about the setting answers a replay byte
+    /// for byte as the host told to publish them does, under the same validator, while the host
+    /// told to switch it off answers the member there and empty. The text is read in both
+    /// positions — an array of objects as installed, <c>"pictures":[]</c> switched off, and the
+    /// member absent in neither — and the two positions do not share a validator, so a reader
+    /// holding one answer is sent the whole of the other rather than "nothing changed" when an
+    /// installation moves the setting either way.
     /// </summary>
+    /// </summary>
+    [Fact]
+    public async Task As_installed_a_replay_carries_its_photographs_and_only_switching_the_setting_off_empties_them()
+    {
+        var cave = await PublishedCaveAsync();
+        var then = cave.Then.Trip;
+        var people = await PeopleOfAsync(then);
+        var start = Stamp(clock.Now.AddDays(-6));
+        var moment = start.AddHours(2);
+
+        var ofAna = await PhotographAsync("as-installed");
+        await PutInGalleryAsync(ofAna.Document);
+        await AttachAsync(then, new
+        {
+            documentId = ofAna.Document,
+            at = moment,
+            caverId = (Guid?)people[Ana],
+            caption = (string?)null,
+        });
+        await FinishAsync(then, start, start.AddHours(8));
+
+        var installed = await ReadAsync(visitorOfInstallation, cave.PastTrip);
+        var told = await ReadAsync(visitorOfPublishing, cave.PastTrip);
+        var off = await ReadAsync(visitorOfSwitchedOff, cave.PastTrip);
+
+        // Given no word, the host answers what the host told to publish them answers — the same
+        // photograph, and the same bytes once the addresses signed afresh are set aside.
+        PicturesOf(installed).ShouldBe(Expecting((moment, NumbersByLabel(installed)[Ana], ofAna.File)));
+        installed.Body.ShouldContain("\"pictures\":[{", Case.Sensitive);
+        Comparable(Json(installed), null).ShouldBe(Comparable(Json(told), null));
+        installed.Tag.ShouldBe(told.Tag);
+
+        // Switched off in so many words: the member is there and empty, never absent, and nothing
+        // of the photograph or of the link that hung it is anywhere in the answer.
+        PicturesOf(off).ShouldBeEmpty();
+        off.Body.ShouldContain("\"pictures\":[]", Case.Sensitive);
+        ShouldNotHold(off.Body, ofAna.File, "switched off");
+        ShouldNotHold(off.Body, ofAna.Document, "switched off");
+
+        // Neither position confirms the other's copy, so nobody is told "nothing changed" across
+        // a change of the setting; each still confirms its own.
+        off.Tag.ShouldNotBeNull();
+        installed.Tag.ShouldNotBe(off.Tag);
+        (await ReadAsync(visitorOfInstallation, cave.PastTrip, off.Tag)).Status.ShouldBe(HttpStatusCode.OK);
+        (await ReadAsync(visitorOfSwitchedOff, cave.PastTrip, installed.Tag)).Status.ShouldBe(HttpStatusCode.OK);
+        (await ReadAsync(visitorOfInstallation, cave.PastTrip, installed.Tag))
+            .Status.ShouldBe(HttpStatusCode.NotModified);
+        (await ReadAsync(visitorOfSwitchedOff, cave.PastTrip, off.Tag))
+            .Status.ShouldBe(HttpStatusCode.NotModified);
+
+        // The three reads that are not a replay carry no photograph whichever way it is set.
+        foreach (var route in new[] { cave.Follow, cave.Live, cave.Past })
+        {
+            var one = await ReadAsync(visitorOfInstallation, route);
+            var other = await ReadAsync(visitorOfSwitchedOff, route);
+            one.Status.ShouldBe(HttpStatusCode.OK, route);
+            ShouldNotHold(one.Body, ofAna.File, route);
+            Comparable(Json(one), null).ShouldBe(Comparable(Json(other), null), route);
+        }
+    }
+
     /// <summary>
     /// What a report says the party was doing, and what was noted with it, reach a replay only on
     /// an installation that publishes a report's words — and the page of a party still underground
@@ -293,7 +371,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         // answer can only mean the report's own text was sent.
         const string doing = "lucru: vextralare";
         const string noted = "Zorvath la baza putului";
-        using (var scope = asInstalled.Services.CreateScope())
+        using (var scope = switchedOff.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             foreach (var report in await db.TripPositionEvents.Where(e => e.TripLogId == then || e.TripLogId == cave.Now.Trip).ToListAsync())
@@ -309,7 +387,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         await FinishAsync(then, start, start.AddHours(8));
 
         // As installed: the members are there and say nothing, and neither text is anywhere.
-        var quiet = await ReadAsync(visitor, cave.PastTrip);
+        var quiet = await ReadAsync(visitorOfSwitchedOff, cave.PastTrip);
         quiet.Status.ShouldBe(HttpStatusCode.OK, quiet.Body);
         var quietFix = Json(quiet).GetProperty("participants").EnumerateArray()
             .SelectMany(p => p.GetProperty("track").EnumerateArray()).ShouldHaveSingleItem();
@@ -338,6 +416,11 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         }
     }
 
+    /// <summary>
+    /// On an installation that publishes these and names nobody, a replay carrying pictures of
+    /// people carries no word of anybody's name on any of the four routes — although a note typed
+    /// beside one of the pictures names its subject.
+    /// </summary>
     [Fact]
     public async Task With_names_switched_off_a_replay_carrying_pictures_of_people_carries_no_word_of_a_name()
     {
@@ -398,14 +481,14 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         // Told, while the cave may be published.
         PicturesOf(await ReadAsync(visitorOfPublishing, cave.PastTrip)).Select(p => p.File).ShouldBe([photograph.File]);
 
-        using (var scope = asInstalled.Services.CreateScope())
+        using (var scope = switchedOff.Services.CreateScope())
         {
             var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
             await writer.SetLocationProtectedAsync(cave.Cave, true);
             await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().SaveChangesAsync();
         }
 
-        foreach (var client in new[] { visitor, visitorOfPublishing })
+        foreach (var client in new[] { visitorOfSwitchedOff, visitorOfPublishing })
         {
             foreach (var route in cave.Routes)
             {
@@ -450,7 +533,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         await FinishAsync(then, start, start.AddHours(8));
 
         long documenting;
-        using (var scope = asInstalled.Services.CreateScope())
+        using (var scope = switchedOff.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             documenting = await db.ResLinkRelationTypes.AsNoTracking()
@@ -673,7 +756,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         var fileId = JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
 
-        using var scope = asInstalled.Services.CreateScope();
+        using var scope = switchedOff.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var file = await db.StoredFiles.AsNoTracking().FirstAsync(f => f.Id == fileId);
         var version = await db.DocumentVersions.AsNoTracking().FirstAsync(v => v.Id == file.DocumentVersionId);
@@ -704,7 +787,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
     /// </summary>
     private async Task AlsoNamingAsync(Guid documentId, Guid feature)
     {
-        using var scope = asInstalled.Services.CreateScope();
+        using var scope = switchedOff.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var link = await db.ResLinkMembers
             .Where(m => m.EntityType == AttachedEntityType.Document && m.EntityId == documentId)
@@ -717,7 +800,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
     /// <summary>Takes somebody off a trip's list, leaving everything hung about them where it was.</summary>
     private async Task TakeOffTheTripAsync(Guid trip, Guid caver)
     {
-        using var scope = asInstalled.Services.CreateScope();
+        using var scope = switchedOff.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var rows = await db.TripLogParticipants.Where(p => p.TripLogId == trip && p.CaverId == caver).ToListAsync();
         rows.ShouldNotBeEmpty();
@@ -728,7 +811,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
     /// <summary>The people of a trip by name.</summary>
     private async Task<Dictionary<string, Guid>> PeopleOfAsync(Guid trip)
     {
-        using var scope = asInstalled.Services.CreateScope();
+        using var scope = switchedOff.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var ids = await db.TripLogParticipants.Where(p => p.TripLogId == trip)
             .Select(p => p.CaverId).Distinct().ToListAsync();
@@ -743,7 +826,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
     {
         (await PutConfigAsync(trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        using var scope = asInstalled.Services.CreateScope();
+        using var scope = switchedOff.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var tracking = await db.TripTrackings.SingleAsync(t => t.TripLogId == trip);
         tracking.ArmedAt = armedAt;
@@ -801,7 +884,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         var trip = JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
 
         Guid caver;
-        using (var scope = asInstalled.Services.CreateScope())
+        using (var scope = switchedOff.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             caver = await db.TripLogParticipants.Where(p => p.TripLogId == trip)
@@ -850,7 +933,7 @@ public sealed class PublicTripMomentPicturesTests : IAsyncLifetime, IDisposable,
         created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
         var modelId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
 
-        using var scope = asInstalled.Services.CreateScope();
+        using var scope = switchedOff.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var model = await db.SurveyModels.SingleAsync(m => m.Id == modelId);
         model.Status = SurveyModelStatus.Ready;

@@ -19,24 +19,28 @@ namespace SilexGis.Api.Tests;
 
 /// <summary>
 /// The names a cave has given its depths, as the four published-trip routes tell them to somebody
-/// without an account — which, on an installation as it is installed, is not at all.
+/// without an account — which, on an installation as it is installed, is all of those the survey
+/// on the page holds.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>What these hold down.</b> An installation that has not switched the setting on sends the
-/// list empty with every survey it hands over, whatever the cave has declared, and reads no
-/// declaration to do so. Switched on, the two reads that hand a survey over carry the places that
+/// <b>What these hold down.</b> An installation that has switched the setting off sends the member
+/// as null with every survey it hands over — never a list with no entries, which a reader keeping
+/// names of its own would read as "there are none" — whatever the cave has declared, and reads no
+/// declaration to do so. On, the two reads that hand a survey over carry the places that
 /// have a name and whose station that survey holds — those with a depth shallowest first, then
 /// those named without one as they were declared, each with its note and landmark flag, no more
 /// than the stated bound — and the two that hand over no survey are the same bytes they were.
 /// Whatever the setting, a survey handed over comes with the digest of its file.
 /// </para>
 /// <para>
-/// <b>Every "nothing is told" here is read beside a "something is told".</b> Two hosts stand over
-/// one database, one as installed and one with the setting on, and are asked about the same trips
-/// in the same instant; so an empty list on the first is the setting's doing and not a cave that
-/// had declared nothing, and a search that finds no trace of a name is run over answers known to
-/// carry the others.
+/// <b>Every "nothing is told" here is read beside a "something is told".</b> Three hosts stand
+/// over one database — one told the setting is off, one told it is on, and one given no word about
+/// it at all — and are asked about the same trips in the same instant. So a null member on the
+/// first is the setting's doing and not a cave that had declared nothing; a search that finds no
+/// trace of a name is run over answers known to carry the others; and what the third answers is
+/// what the shipped default really is, asserted against the other two rather than read off the
+/// source.
 /// </para>
 /// <para>
 /// The clock is the test's and stands still, so two hosts asked a moment apart sign their
@@ -49,27 +53,33 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
 {
     private const string PublishKey = "TripTracking:PublishDepthPlaces";
 
-    private readonly SilexGisApiFactory asInstalled;
+    private readonly SilexGisApiFactory switchedOff;
     private readonly SilexGisApiFactory publishing;
-    private readonly CommandCounter installedCommands = new();
+    private readonly SilexGisApiFactory asInstalled;
+    private readonly CommandCounter offCommands = new();
     private readonly CommandCounter publishingCommands = new();
+    private readonly CommandCounter installedCommands = new();
     private readonly TestTimeProvider clock = new(DateTimeOffset.UtcNow);
     private readonly string filesRoot;
     private readonly string connectionString;
 
     private HttpClient owner = null!;
-    private HttpClient visitor = null!;
+    private HttpClient visitorOfSwitchedOff = null!;
     private HttpClient visitorOfPublishing = null!;
+    private HttpClient visitorOfInstallation = null!;
     private long caveTypeId;
 
     public PublicTripDepthPlacesTests(PostgresFixture postgres)
     {
         connectionString = postgres.ConnectionString;
         filesRoot = Path.Combine(AppContext.BaseDirectory, "test-data", $"tripplaces-{Guid.NewGuid():N}");
-        // The first host is given no word about the setting at all: what it answers is what an
-        // installation answers that never heard of it.
-        asInstalled = HostWith(installedCommands);
+        // Three hosts over one database. The first is told the setting is off in so many words —
+        // what an installation answers that has decided against these names. The second is told it
+        // is on. The third is given no word about it at all, which is what decides what the
+        // shipped default really is: its answers are asserted to be the second's, not the first's.
+        switchedOff = HostWith(offCommands, (PublishKey, "false"));
         publishing = HostWith(publishingCommands, (PublishKey, "true"));
+        asInstalled = HostWith(installedCommands);
     }
 
     /// <summary>
@@ -95,12 +105,13 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
     public async Task InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        _ = await AuthHelper.CreateUserAsync(asInstalled, GlobalRoles.Editor, $"places-own-{suffix}@t.local");
-        owner = await AuthHelper.BearerClientAsync(asInstalled, $"places-own-{suffix}@t.local");
-        visitor = asInstalled.CreateClient();
+        _ = await AuthHelper.CreateUserAsync(switchedOff, GlobalRoles.Editor, $"places-own-{suffix}@t.local");
+        owner = await AuthHelper.BearerClientAsync(switchedOff, $"places-own-{suffix}@t.local");
+        visitorOfSwitchedOff = switchedOff.CreateClient();
         visitorOfPublishing = publishing.CreateClient();
+        visitorOfInstallation = asInstalled.CreateClient();
 
-        using var scope = asInstalled.Services.CreateScope();
+        using var scope = switchedOff.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
@@ -109,8 +120,9 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
 
     public void Dispose()
     {
-        publishing.Dispose();
         asInstalled.Dispose();
+        publishing.Dispose();
+        switchedOff.Dispose();
         try { Directory.Delete(filesRoot, recursive: true); } catch { /* best effort */ }
     }
 
@@ -151,7 +163,7 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         var off = new Dictionary<string, Answer>();
         foreach (var route in cave.Routes)
         {
-            off[route] = await ReadAsync(visitor, route);
+            off[route] = await ReadAsync(visitorOfSwitchedOff, route);
             off[route].Status.ShouldBe(HttpStatusCode.OK, route);
             foreach (var label in EveryLabel) off[route].Body.ShouldNotContain(label, Case.Insensitive, route);
         }
@@ -208,7 +220,7 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         foreach (var route in new[] { cave.Follow, cave.PastTrip })
         {
             on[route].Tag.ShouldNotBe(off[route].Tag, route);
-            (await ReadAsync(visitor, route, off[route].Tag)).Status.ShouldBe(HttpStatusCode.NotModified, route);
+            (await ReadAsync(visitorOfSwitchedOff, route, off[route].Tag)).Status.ShouldBe(HttpStatusCode.NotModified, route);
             var asked = await ReadAsync(visitorOfPublishing, route, off[route].Tag);
             asked.Status.ShouldBe(HttpStatusCode.OK, route);
             asked.Body.ShouldNotBeEmpty();
@@ -227,6 +239,62 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         var after = await ReadAsync(visitorOfPublishing, cave.Follow, on[cave.Follow].Tag);
         after.Status.ShouldBe(HttpStatusCode.OK);
         PlacesOf(after).Select(p => p.Label).ShouldBe([Entrance, Sump]);
+    }
+
+    /// <summary>
+    /// <b>What an installation that was never told about the setting does.</b> The shipped default
+    /// is to tell the names: a host given no word about the setting answers the two reads that
+    /// hand a survey over byte for byte as the host told to publish them does, under the same
+    /// validator, while the host told to switch it off sends the member as null. The text is read
+    /// in both positions — an array of objects as installed, <c>"places":null</c> switched off,
+    /// and an empty array in neither — and the two positions do not share a validator, so a
+    /// reader holding one answer is sent the whole of the other rather than "nothing changed"
+    /// when an installation moves the setting either way.
+    /// </summary>
+    [Fact]
+    public async Task As_installed_the_named_depths_are_told_and_only_switching_the_setting_off_sends_null()
+    {
+        var cave = await PublishedCaveAsync();
+        await DeclareAsync(cave.Cave, 50m, "cave.upper.2", Hall);
+
+        foreach (var route in new[] { cave.Follow, cave.PastTrip })
+        {
+            var installed = await ReadAsync(visitorOfInstallation, route);
+            var told = await ReadAsync(visitorOfPublishing, route);
+            var off = await ReadAsync(visitorOfSwitchedOff, route);
+
+            // Given no word, the host answers what the host told to publish them answers — the
+            // same names, and the same bytes once the addresses signed afresh are set aside.
+            PlacesOf(installed).ShouldBe([("cave.upper.2", 50m, Hall)]);
+            installed.Body.ShouldContain("\"places\":[{", Case.Sensitive, route);
+            installed.Body.ShouldContain(Hall, Case.Sensitive, route);
+            Comparable(Json(installed), "").ShouldBe(Comparable(Json(told), ""), route);
+            installed.Tag.ShouldBe(told.Tag, route);
+
+            // Switched off in so many words: null, never an empty list, and no trace of the name.
+            ShouldSendNoListOfPlaces(off);
+            off.Body.ShouldNotContain(Hall, Case.Insensitive, route);
+
+            // Neither position confirms the other's copy, so nobody is told "nothing changed"
+            // across a change of the setting; each still confirms its own.
+            off.Tag.ShouldNotBeNull();
+            installed.Tag.ShouldNotBe(off.Tag, route);
+            (await ReadAsync(visitorOfInstallation, route, off.Tag)).Status.ShouldBe(HttpStatusCode.OK, route);
+            (await ReadAsync(visitorOfSwitchedOff, route, installed.Tag)).Status.ShouldBe(HttpStatusCode.OK, route);
+            (await ReadAsync(visitorOfInstallation, route, installed.Tag))
+                .Status.ShouldBe(HttpStatusCode.NotModified, route);
+            (await ReadAsync(visitorOfSwitchedOff, route, off.Tag))
+                .Status.ShouldBe(HttpStatusCode.NotModified, route);
+        }
+
+        // The two reads that hand over no survey are the same bytes whichever way it is set.
+        foreach (var route in new[] { cave.Live, cave.Past })
+        {
+            var installed = await ReadAsync(visitorOfInstallation, route);
+            var off = await ReadAsync(visitorOfSwitchedOff, route);
+            installed.Body.ShouldBe(off.Body, route);
+            installed.Tag.ShouldBe(off.Tag, route);
+        }
     }
 
     /// <summary>
@@ -254,7 +322,7 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
             // An installation that turned the setting on and has nothing to say answers what one
             // that never heard of it answers, member for member — and under the same validator,
             // so a reader's copy from before the setting was turned on is still confirmed.
-            var installed = await ReadAsync(visitor, route);
+            var installed = await ReadAsync(visitorOfSwitchedOff, route);
             ShouldSendNoListOfPlaces(installed);
             Comparable(Json(nothingDeclared[route]), without: "").ShouldBe(Comparable(Json(installed), without: ""), route);
             nothingDeclared[route].Tag.ShouldBe(installed.Tag, route);
@@ -290,7 +358,7 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
             told.Tag.ShouldNotBe(nothingDeclared[route].Tag, route);
 
             // The installation beside it, the same cave with all of that declared: still null.
-            var installed = await ReadAsync(visitor, route);
+            var installed = await ReadAsync(visitorOfSwitchedOff, route);
             ShouldSendNoListOfPlaces(installed);
             foreach (var label in EveryLabel) installed.Body.ShouldNotContain(label, Case.Insensitive, route);
             installed.Tag.ShouldNotBe(told.Tag, route);
@@ -308,11 +376,11 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         var cave = await PublishedCaveAsync();
 
         // Each host once before it is counted, so nothing a first request sets up is in the count.
-        (await ReadAsync(visitor, cave.Follow)).Status.ShouldBe(HttpStatusCode.OK);
+        (await ReadAsync(visitorOfSwitchedOff, cave.Follow)).Status.ShouldBe(HttpStatusCode.OK);
         (await ReadAsync(visitorOfPublishing, cave.Follow)).Status.ShouldBe(HttpStatusCode.OK);
 
         // ---- nothing declared ----------------------------------------------------------------
-        var baseline = await CountedAsync(installedCommands, visitor, cave.Follow);
+        var baseline = await CountedAsync(offCommands, visitorOfSwitchedOff, cave.Follow);
         var askedOnly = await CountedAsync(publishingCommands, visitorOfPublishing, cave.Follow);
         baseline.ShouldBeGreaterThan(0);
         askedOnly.ShouldBe(baseline + 1);
@@ -323,13 +391,13 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
 
         // ---- one named depth -----------------------------------------------------------------
         await DeclareAsync(cave.Cave, 50m, "cave.upper.2", Hall);
-        (await CountedAsync(installedCommands, visitor, cave.Follow)).ShouldBe(baseline);
+        (await CountedAsync(offCommands, visitorOfSwitchedOff, cave.Follow)).ShouldBe(baseline);
         (await CountedAsync(publishingCommands, visitorOfPublishing, cave.Follow)).ShouldBe(baseline + 2);
         PlacesOf(await ReadAsync(visitorOfPublishing, cave.Follow)).ShouldBe([("cave.upper.2", 50m, Hall)]);
 
         // ---- more named depths than a published survey is ever handed --------------------------
         var beyond = TrackingDepthPlacements.MaxPublishedPlaces + 5;
-        using (var scope = asInstalled.Services.CreateScope())
+        using (var scope = switchedOff.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             // From 200 m down, a metre apart, deepest written first so that the order of the
@@ -344,7 +412,7 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
             await db.SaveChangesAsync();
         }
 
-        (await CountedAsync(installedCommands, visitor, cave.Follow)).ShouldBe(baseline);
+        (await CountedAsync(offCommands, visitorOfSwitchedOff, cave.Follow)).ShouldBe(baseline);
         (await CountedAsync(publishingCommands, visitorOfPublishing, cave.Follow)).ShouldBe(baseline + 2);
 
         var capped = PlacesOf(await ReadAsync(visitorOfPublishing, cave.Follow));
@@ -354,12 +422,12 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         // The deepest five are the ones left out.
         capped[^1].DepthM.ShouldBe(200m + beyond - 2 - 5);
         // And on the installation beside it the same cave still comes with no list.
-        ShouldSendNoListOfPlaces(await ReadAsync(visitor, cave.Follow));
+        ShouldSendNoListOfPlaces(await ReadAsync(visitorOfSwitchedOff, cave.Follow));
 
         // The replay hands the same survey over and pays the same two reads for the same list.
-        (await ReadAsync(visitor, cave.PastTrip)).Status.ShouldBe(HttpStatusCode.OK);
+        (await ReadAsync(visitorOfSwitchedOff, cave.PastTrip)).Status.ShouldBe(HttpStatusCode.OK);
         (await ReadAsync(visitorOfPublishing, cave.PastTrip)).Status.ShouldBe(HttpStatusCode.OK);
-        var replayInstalled = await CountedAsync(installedCommands, visitor, cave.PastTrip);
+        var replayInstalled = await CountedAsync(offCommands, visitorOfSwitchedOff, cave.PastTrip);
         (await CountedAsync(publishingCommands, visitorOfPublishing, cave.PastTrip)).ShouldBe(replayInstalled + 2);
     }
 
@@ -378,14 +446,14 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         PlacesOf(await ReadAsync(visitorOfPublishing, cave.Follow)).ShouldBe([("cave.upper.2", 50m, Hall)]);
         PlacesOf(await ReadAsync(visitorOfPublishing, cave.PastTrip)).ShouldBe([("cave.upper.2", 50m, Hall)]);
 
-        using (var scope = asInstalled.Services.CreateScope())
+        using (var scope = switchedOff.Services.CreateScope())
         {
             var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
             await writer.SetLocationProtectedAsync(cave.Cave, true);
             await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().SaveChangesAsync();
         }
 
-        foreach (var client in new[] { visitor, visitorOfPublishing })
+        foreach (var client in new[] { visitorOfSwitchedOff, visitorOfPublishing })
         {
             foreach (var route in cave.Routes)
             {
@@ -429,12 +497,12 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         // ---- as installed: nothing, on any route ---------------------------------------------
         foreach (var route in cave.Routes)
         {
-            var off = await ReadAsync(visitor, route);
+            var off = await ReadAsync(visitorOfSwitchedOff, route);
             off.Status.ShouldBe(HttpStatusCode.OK, route);
             foreach (var word in words) off.Body.ShouldNotContain(word, Case.Insensitive, route);
         }
-        ShouldSendNoListOfPlaces(await ReadAsync(visitor, cave.Follow));
-        ShouldSendNoListOfPlaces(await ReadAsync(visitor, cave.PastTrip));
+        ShouldSendNoListOfPlaces(await ReadAsync(visitorOfSwitchedOff, cave.Follow));
+        ShouldSendNoListOfPlaces(await ReadAsync(visitorOfSwitchedOff, cave.PastTrip));
 
         // ---- publishing ----------------------------------------------------------------------
         var follow = await ReadAsync(visitorOfPublishing, cave.Follow);
@@ -492,7 +560,7 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         nowFile.ShouldNotBe(thenFile, "the two trips are on two surveys, each with its own file");
         nowDigest.ShouldNotBe(thenDigest, "the two files must differ for this to prove anything");
 
-        foreach (var client in new[] { visitor, visitorOfPublishing })
+        foreach (var client in new[] { visitorOfSwitchedOff, visitorOfPublishing })
         {
             foreach (var (route, digest) in new[] { (cave.Follow, nowDigest), (cave.PastTrip, thenDigest) })
             {
@@ -515,7 +583,7 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
     /// <summary>The file a trip's watch draws, and the digest it was stored under.</summary>
     private async Task<(Guid File, string Sha256)> FileOfTripModelAsync(Guid trip)
     {
-        using var scope = asInstalled.Services.CreateScope();
+        using var scope = switchedOff.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var modelId = await db.TripTrackings.Where(t => t.TripLogId == trip).Select(t => t.SurveyModelId).SingleAsync();
         var fileId = await db.SurveyModels.Where(m => m.Id == modelId).Select(m => m.FileId).SingleAsync();
@@ -753,7 +821,7 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         var trip = JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
 
         Guid caver;
-        using (var scope = asInstalled.Services.CreateScope())
+        using (var scope = switchedOff.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             caver = await db.TripLogParticipants.Where(p => p.TripLogId == trip)
@@ -778,7 +846,7 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
     {
         (await PutConfigAsync(trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        using var scope = asInstalled.Services.CreateScope();
+        using var scope = switchedOff.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var tracking = await db.TripTrackings.SingleAsync(t => t.TripLogId == trip);
         tracking.ClosedAt = closedAt;
@@ -817,7 +885,7 @@ public sealed class PublicTripDepthPlacesTests : IAsyncLifetime, IDisposable, IC
         created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
         var modelId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
 
-        using var scope = asInstalled.Services.CreateScope();
+        using var scope = switchedOff.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var model = await db.SurveyModels.SingleAsync(m => m.Id == modelId);
         model.Status = SurveyModelStatus.Ready;

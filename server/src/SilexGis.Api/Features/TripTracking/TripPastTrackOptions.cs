@@ -119,20 +119,24 @@ public sealed class TripPastTrackOptions
     public bool PublishReportWords { get; set; }
 
     /// <summary>
-    /// Whether a finished trip's replay comes with the photographs hung on its moments. <b>Off
-    /// unless an installation turns it on.</b>
+    /// Whether a finished trip's replay comes with the photographs hung on its moments. <b>On
+    /// unless an installation switches it off.</b>
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Off, because a photograph hung on a moment of a trip is, more often than not, a photograph
-    /// of somebody at a time — and the act that put it in the installation's public gallery was
-    /// taken about the picture, not about showing it beside a person's place in a party at the
-    /// minute it was taken. Whether people without an account are to see that is the club's to
-    /// decide. Turned off, the member is there and empty whatever the trip holds, no link of the
-    /// trip is read for it, and the answer is otherwise exactly what it was.
+    /// On, because a replay of a finished trip is a club's account of what happened in the cave,
+    /// and the pictures taken while it happened are most of that account; a page that has them and
+    /// will not show them is a worse telling of the same story. A photograph hung on a moment is
+    /// nonetheless, more often than not, a photograph of somebody at a time, and the act that put
+    /// it in the installation's public gallery was taken about the picture rather than about
+    /// showing it beside a person's place in a party at the minute it was taken — so an
+    /// installation that reads that act narrowly switches this off. Switched off, the member is
+    /// there and empty whatever the trip holds — never absent, so that a reader keeping pictures
+    /// of its own is never told to replace them with nothing — no link of the trip is read for it,
+    /// and the answer is byte for byte what it was before this setting existed.
     /// </para>
     /// <para>
-    /// What it widens, exactly: on the one read that replays a finished trip, each photograph that
+    /// What it carries, exactly: on the one read that replays a finished trip, each photograph that
     /// is in the public gallery and hangs on a moment inside the replay, as its moment, an address
     /// that opens a rendering of it and never the upload, the gallery's own caption, and — when
     /// the picture is about one person who is on the published party — that person's number in the
@@ -156,5 +160,57 @@ public sealed class TripPastTrackOptions
     /// about the archive: no page of a party still underground carries these.
     /// </para>
     /// </remarks>
-    public bool PublishMomentPictures { get; set; }
+    public bool PublishMomentPictures { get; set; } = true;
+
+    /// <summary>
+    /// Whether a replay offers its reader an address that opens it again at the moment they are
+    /// looking at, and honours such a moment when one is given to it. <b>On unless an
+    /// installation switches it off.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On, because what somebody wants to pass on about a replay is a moment of it and not the
+    /// whole of it — "this is where they turned back" — and without this the only thing a reader
+    /// can send is the trip, leaving whoever opens it to find the moment again by hand.
+    /// </para>
+    /// <para>
+    /// Switched off, no such address is offered, and a moment named in an address is ignored: a
+    /// link that names one opens the replay at its beginning, stopped, exactly as a link that
+    /// named no moment always has. Which trip of the cave's past to replay, which team and which
+    /// person to keep the camera on are not part of this — they are how the archive itself is
+    /// linked to and were there before a moment could be named.
+    /// </para>
+    /// <para>
+    /// <b>A framed viewer and the page that frames it are a case where the two halves part
+    /// company.</b> An article driving the frame by its own hyperlinks has been able to name a
+    /// moment of a replay for as long as the archive has been linkable at all — that is older than
+    /// any address which could name one, and this does not take it away: such a message still
+    /// winds the clock to the moment it names. What it does take away is the playing, which
+    /// arrived with those addresses: where this is off, a message asking the frame to start
+    /// running is read as a message that did not ask, and the replay stands at the named moment
+    /// until the reader presses play.
+    /// </para>
+    /// </remarks>
+    public bool OfferMomentLinks { get; set; } = true;
+
+    /// <summary>
+    /// Whether a replay's controls split into a single line and a sheet opened from it when the
+    /// page is drawn inside a frame too small for the whole strip. <b>On unless an installation
+    /// switches it off.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On, because the frame a club's article gives this page is often the width of a phone, and
+    /// the whole strip of controls in that width either takes the height the drawing needed or
+    /// wraps into something nobody can press. One line of controls with the rest a press away
+    /// leaves the cave on screen.
+    /// </para>
+    /// <para>
+    /// Switched off, every frame gets the whole strip, exactly as every frame did before the split
+    /// was built. An installation whose articles give the page room, or that would rather every
+    /// control were on screen at once, switches it off; the controls themselves are the same ones
+    /// either way.
+    /// </para>
+    /// </remarks>
+    public bool CompactReplayBarInFrame { get; set; } = true;
 }

@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using ImageMagick;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -91,6 +92,42 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         settings["TripTracking:PublishRealNames"] = "false";
         return new SilexGisApiFactory(connectionString, settings, JobWorkers.RemoveFrom);
     }
+
+    /// <summary>
+    /// The members by which a published page learns what this installation has decided it may do.
+    /// </summary>
+    private static readonly string[] PresentationChoices =
+    [
+        "offersSiblingWatch", "offersLanguageChoice", "offersMomentLinks", "compactsReplayBarInFrame",
+    ];
+
+    /// <summary>
+    /// A second host over the same database, run by an operator who has switched off every one of
+    /// the things a published page does of its own accord.
+    /// </summary>
+    private SilexGisApiFactory PresentationOffFactory()
+    {
+        var settings = HostSettings();
+        settings["TripTracking:OfferSiblingWatch"] = "false";
+        settings["TripTracking:OfferLanguageChoice"] = "false";
+        settings["TripPastTracks:OfferMomentLinks"] = "false";
+        settings["TripPastTracks:CompactReplayBarInFrame"] = "false";
+        return new SilexGisApiFactory(connectionString, settings, JobWorkers.RemoveFrom);
+    }
+
+    /// <summary>
+    /// The whole of an envelope but those choices, with every signature taken out of the addresses
+    /// it carries: each is signed afresh on every read, so they are what two answers to one link
+    /// always differ in and nothing else is.
+    /// </summary>
+    private static string WithoutChoices(JsonElement envelope)
+    {
+        var node = JsonNode.Parse(envelope.GetRawText())!.AsObject();
+        foreach (var choice in PresentationChoices) node.Remove(choice);
+        return SignaturesBlanked.Replace(node.ToJsonString(), "token=");
+    }
+
+    private static readonly Regex SignaturesBlanked = new(@"token=[^&""]*", RegexOptions.Compiled);
 
     /// <summary>What a followed page calls each member of the party, in the envelope's order.</summary>
     private static List<string?> Labels(JsonElement envelope) =>
@@ -853,6 +890,66 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     }
 
     /// <summary>
+    /// What a published page does of its own accord is this installation's choice, and the page
+    /// learns each choice from the one answer every reader of it fetches first: each is yes as
+    /// installed, each is no where the installation has switched it off, and switching them moves
+    /// nothing else the answer says.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Asserted against the whole answer rather than against the four members alone.</b> These
+    /// are presentation choices and widen nothing, so the thing that could go wrong is not that a
+    /// reader is told too much but that a switch reaches something it has no business reaching —
+    /// a party counted differently, a place name withheld, a plan published. So the two answers to
+    /// one published link are compared whole, with only the four choices and the freshly signed
+    /// survey address taken out.
+    /// </para>
+    /// <para>
+    /// The two lists and a finished trip's replay carry none of these: a page reads them only
+    /// after it has read this, so one home for each choice is this one.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task What_a_published_page_may_do_is_the_installations_choice_and_moves_nothing_else()
+    {
+        var trip = await TrackedTripAsync("What the page may do", locationProtected: false);
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        var asInstalled = await FollowAsync(token);
+        foreach (var choice in PresentationChoices)
+        {
+            asInstalled.GetProperty(choice).GetBoolean().ShouldBeTrue(choice);
+        }
+
+        using var off = PresentationOffFactory();
+        using var visitor = off.CreateClient();
+        var switchedOff = await FollowAsync(token, visitor);
+        foreach (var choice in PresentationChoices)
+        {
+            switchedOff.GetProperty(choice).GetBoolean().ShouldBeFalse(choice);
+        }
+
+        WithoutChoices(switchedOff).ShouldBe(WithoutChoices(asInstalled));
+
+        // The lists and the replay are not where a page asks any of this, and must not become a
+        // second place it could be answered differently. Read on the host that offers the other
+        // parties, because on the other one that address answers nobody — which is the next
+        // assertion, and the reason this one cannot be made there: a refusal's own body carries
+        // none of these members either, and would pass this loop while proving nothing.
+        var listed = await BodyAsync(await anonymous.GetAsync($"{Follow(token)}/live"));
+        foreach (var choice in PresentationChoices)
+        {
+            listed.TryGetProperty(choice, out _).ShouldBeFalse(choice);
+        }
+
+        // One of the four is more than a presentation choice: the other parties of the cave are
+        // read from an address of their own, so switching the control off closes that address as
+        // well. The rest of what the link opens is untouched — the envelope above was served to
+        // this very visitor.
+        (await visitor.GetAsync($"{Follow(token)}/live")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
     /// The published party is the trip's roster and nothing wider, and the envelope has exactly
     /// the members it had.
     /// </summary>
@@ -872,6 +969,11 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         [
             "tripLogId", "expedition", "title", "tripDate", "tripDateEnd", "state", "armedAt", "closedAt",
             "expectedReturnAt", "positionsWithheld", "model", "teams", "participants",
+            // What this installation has decided its published pages do. Pinned with the rest on
+            // purpose: these are the one place a page learns those choices, so one of them going
+            // missing is a page that quietly falls back to a default nobody chose.
+            "offersSiblingWatch", "offersLanguageChoice", "offersMomentLinks",
+            "compactsReplayBarInFrame",
         ];
         string[] participantMembers =
         [

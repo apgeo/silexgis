@@ -712,6 +712,65 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
+    /// An installation that does not offer a published page the other parties of its cave answers
+    /// this address to nobody — and the switch is the server's, not the page's.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why the server and not the page.</b> The control is drawn by the published page, so a
+    /// switch read only there would look like it worked while the address went on listing every
+    /// party of the cave — with the people in them, under their own names on an installation that
+    /// publishes names — to whoever holds any link of that cave. The reader this route has is a
+    /// stranger with a token; what the page's own JavaScript does with the answer is not a gate.
+    /// </para>
+    /// <para>
+    /// Both positions over the same rows, as every test in this class does: the trip, the watch
+    /// and the publication are the very same ones the host above served. The refusal is asserted
+    /// to be the one an invented token gets, to cost the database nothing — it is decided before
+    /// any link is read — and to leave the followed page and the cave's past trips alone, because
+    /// this switch is about one list and not about what a link opens.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_other_parties_switched_off_are_answered_to_nobody_and_cost_the_database_nothing()
+    {
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var over = await PublishedTripAsync("Over", cave, model);
+        await CloseAsync(over.Trip, DateTimeOffset.UtcNow.AddDays(-5));
+        var running = await PublishedTripAsync("Underground", cave, model);
+
+        // On this class's own host the list is offered, and it finds the second party of the cave
+        // for the very rows the refusals below are taken over.
+        var offered = await anonymous.GetAsync(LiveList(running.Token));
+        offered.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var listed = await offered.Content.ReadFromJsonAsync<JsonElement>();
+        listed.GetProperty("trips").EnumerateArray().ShouldNotBeEmpty();
+
+        var counter = new CommandCounter();
+        var settings = HostSettings();
+        settings["TripTracking:OfferSiblingWatch"] = "false";
+        using var off = new SilexGisApiFactory(connectionString, settings, services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(counter));
+        });
+        using var client = off.CreateClient();
+
+        foreach (var token in new[] { running.Token, over.Token, "not-a-token-at-all" })
+        {
+            var asked = await CountedAsync(counter, client, LiveList(token));
+            asked.Status.ShouldBe(HttpStatusCode.NotFound, token);
+            asked.Commands.ShouldBe(0, token);
+        }
+
+        // And nothing else the same link opens has moved: the followed page of the party still
+        // underground, and the cave's past trips behind the finished one.
+        (await client.GetAsync(Follow(running.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await client.GetAsync(PastList(over.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
     /// A token that was once real costs the database exactly what an invented one costs, on every
     /// anonymous route — so response time says nothing that the body and the code keep back.
     /// </summary>

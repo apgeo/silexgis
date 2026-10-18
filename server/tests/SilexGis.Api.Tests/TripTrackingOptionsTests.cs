@@ -343,6 +343,162 @@ public class TripTrackingOptionsTests
         }
     }
 
+    // ---- what a published page tells an installation that has set nothing ---------------------
+
+    /// <summary>
+    /// The shipped answer to each of the three questions a published page asks about disclosure,
+    /// asserted as the value an installation that set nothing gets: the names a cave gives its
+    /// places and the photographs hung on the moments of a finished trip <b>are</b> published, and
+    /// the hour a party planned to be out is <b>not</b>. Asserted on the settings rather than on
+    /// an answer, so that a default moved by a careless edit is named here before any route test
+    /// has to notice it.
+    /// </summary>
+    [Fact]
+    public void The_shipped_answer_publishes_the_place_names_and_the_moment_photographs_and_not_the_planned_hour()
+    {
+        new TripTrackingOptions().PublishDepthPlaces.ShouldBeTrue();
+        new TripPastTrackOptions().PublishMomentPictures.ShouldBeTrue();
+        // Off by decision rather than by oversight: the owner of this project was asked whether a
+        // published page may show the hour a party planned to be out and answered no. The setting
+        // stays because it is how a different answer is granted without new code — so this value
+        // is not to be "corrected" to true on the assumption that somebody forgot it.
+        new TripTrackingOptions().PublishExpectedReturn.ShouldBeFalse();
+
+        // Each stays an installation's to move, in both directions.
+        Bound(("TripTracking:PublishDepthPlaces", "false")).PublishDepthPlaces.ShouldBeFalse();
+        Bound(("TripTracking:PublishDepthPlaces", "true")).PublishDepthPlaces.ShouldBeTrue();
+        Bound(("TripTracking:PublishExpectedReturn", "true")).PublishExpectedReturn.ShouldBeTrue();
+        BoundPast(("TripPastTracks:PublishMomentPictures", "false")).PublishMomentPictures.ShouldBeFalse();
+        BoundPast(("TripPastTracks:PublishMomentPictures", "true")).PublishMomentPictures.ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// The five things a published page does of its own accord are each on as installed, each an
+    /// installation's to switch off, and none of them is the same switch as another.
+    /// </summary>
+    /// <remarks>
+    /// Each was built and in use before anybody was asked whether it should be; the answer was to
+    /// keep every one of them and give each a switch of its own, on as installed. So the shipped
+    /// value is what a page does today, and the switch is how an installation that wants the
+    /// quieter page gets it — not the other way round. Asserted together, because what would go
+    /// wrong is one of the five quietly shipping off, or two of them reading one key.
+    /// </remarks>
+    [Fact]
+    public void Each_thing_a_published_page_does_of_its_own_accord_is_on_as_installed_and_switchable()
+    {
+        new TripTrackingOptions().OfferSiblingWatch.ShouldBeTrue();
+        new TripTrackingOptions().OfferLanguageChoice.ShouldBeTrue();
+        new TripTrackingOptions().TellReadersNothingChanged.ShouldBeTrue();
+        new TripPastTrackOptions().OfferMomentLinks.ShouldBeTrue();
+        new TripPastTrackOptions().CompactReplayBarInFrame.ShouldBeTrue();
+
+        // Switched off one at a time, each under the name an operator types — and each leaving the
+        // others as they were, so that two of them cannot be one setting wearing two names.
+        var watch = Bound(("TripTracking:OfferSiblingWatch", "false"));
+        watch.OfferSiblingWatch.ShouldBeFalse();
+        watch.OfferLanguageChoice.ShouldBeTrue();
+        watch.TellReadersNothingChanged.ShouldBeTrue();
+
+        var language = Bound(("TripTracking:OfferLanguageChoice", "false"));
+        language.OfferLanguageChoice.ShouldBeFalse();
+        language.OfferSiblingWatch.ShouldBeTrue();
+        language.TellReadersNothingChanged.ShouldBeTrue();
+
+        var quiet = Bound(("TripTracking:TellReadersNothingChanged", "false"));
+        quiet.TellReadersNothingChanged.ShouldBeFalse();
+        quiet.OfferSiblingWatch.ShouldBeTrue();
+        quiet.OfferLanguageChoice.ShouldBeTrue();
+
+        var moments = BoundPast(("TripPastTracks:OfferMomentLinks", "false"));
+        moments.OfferMomentLinks.ShouldBeFalse();
+        moments.CompactReplayBarInFrame.ShouldBeTrue();
+
+        var strip = BoundPast(("TripPastTracks:CompactReplayBarInFrame", "false"));
+        strip.CompactReplayBarInFrame.ShouldBeFalse();
+        strip.OfferMomentLinks.ShouldBeTrue();
+
+        // And switched back on by hand, so "false" above is the setting answering and not the
+        // property having become a constant.
+        Bound(("TripTracking:OfferSiblingWatch", "true")).OfferSiblingWatch.ShouldBeTrue();
+        BoundPast(("TripPastTracks:OfferMomentLinks", "true")).OfferMomentLinks.ShouldBeTrue();
+
+        // Nothing a page does of its own accord moves what a page may say: the three disclosure
+        // settings are untouched by any of them.
+        var all = Bound(
+            ("TripTracking:OfferSiblingWatch", "false"),
+            ("TripTracking:OfferLanguageChoice", "false"),
+            ("TripTracking:TellReadersNothingChanged", "false"));
+        all.PublishDepthPlaces.ShouldBeTrue();
+        all.PublishExpectedReturn.ShouldBeFalse();
+        all.PublishRealNames.ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// One of those five written as something that is neither yes nor no stops the reading under
+    /// the name it was typed: they ship on, so a mistyped word would otherwise leave the page
+    /// doing what the operator had just tried to stop it doing, with nothing anywhere to say so.
+    /// </summary>
+    [Theory]
+    [InlineData("TripTracking:OfferSiblingWatch", "flase")]
+    [InlineData("TripTracking:OfferLanguageChoice", "off")]
+    [InlineData("TripTracking:TellReadersNothingChanged", "nope")]
+    public void A_tracking_presentation_switch_that_is_neither_yes_nor_no_stops_the_reading(string key, string written)
+    {
+        var refusal = Should.Throw<InvalidOperationException>(() => Bound((key, written)));
+        refusal.Message.ShouldContain(key);
+        refusal.Message.ShouldContain(written);
+    }
+
+    [Theory]
+    [InlineData("TripPastTracks:OfferMomentLinks", "flase")]
+    [InlineData("TripPastTracks:CompactReplayBarInFrame", "off")]
+    public void An_archive_presentation_switch_that_is_neither_yes_nor_no_stops_the_reading(string key, string written)
+    {
+        var refusal = Should.Throw<InvalidOperationException>(() => BoundPast((key, written)));
+        refusal.Message.ShouldContain(key);
+        refusal.Message.ShouldContain(written);
+    }
+
+    /// <summary>
+    /// A disclosure setting written as something that is neither yes nor no stops the reading with
+    /// the path the operator typed, rather than being passed over for the shipped value. It
+    /// matters most for the two that are shipped on: an operator who meant to switch one off and
+    /// mistyped the word would otherwise go on publishing, with nothing anywhere to tell them.
+    /// </summary>
+    [Theory]
+    [InlineData("TripTracking:PublishDepthPlaces", "flase")]
+    [InlineData("TripTracking:PublishDepthPlaces", "off")]
+    [InlineData("TripTracking:PublishExpectedReturn", "yes")]
+    public void A_tracking_disclosure_setting_that_is_neither_yes_nor_no_stops_the_reading(string key, string written)
+    {
+        var refusal = Should.Throw<InvalidOperationException>(() => Bound((key, written)));
+        refusal.Message.ShouldContain(key);
+        refusal.Message.ShouldContain(written);
+    }
+
+    [Theory]
+    [InlineData("TripPastTracks:PublishMomentPictures", "flase")]
+    [InlineData("TripPastTracks:PublishMomentPictures", "off")]
+    [InlineData("TripPastTracks:PublishReportWords", "yes")]
+    public void An_archive_disclosure_setting_that_is_neither_yes_nor_no_stops_the_reading(string key, string written)
+    {
+        var refusal = Should.Throw<InvalidOperationException>(() => BoundPast((key, written)));
+        refusal.Message.ShouldContain(key);
+        refusal.Message.ShouldContain(written);
+    }
+
+    /// <summary>The archive options as the application binds them from the given settings.</summary>
+    private static TripPastTrackOptions BoundPast(params (string Key, string Value)[] settings)
+    {
+        var options = new TripPastTrackOptions();
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(settings.Select(s => new KeyValuePair<string, string?>(s.Key, s.Value)))
+            .Build()
+            .GetSection(TripPastTrackOptions.SectionName)
+            .Bind(options);
+        return options;
+    }
+
     /// <summary>The tracking options as the application binds them from the given settings.</summary>
     private static TripTrackingOptions Bound(params (string Key, string Value)[] settings)
     {

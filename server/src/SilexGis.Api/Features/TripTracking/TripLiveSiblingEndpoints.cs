@@ -107,6 +107,20 @@ public static class TripLiveSiblingEndpoints
         // The one reading of the clock this request takes: the gate and the list below are both
         // asked at this instant.
         var now = clock.GetUtcNow();
+
+        // The installation's own answer first, before the link is looked up at all. Where an
+        // operator has decided that a published page does not offer the other parties of its
+        // cave, there is nothing for this list to be read on anybody's behalf for — and a switch
+        // that only stopped the page asking would leave the parties, and the names in them,
+        // answered to whoever holds any link of the cave. Refused as an address nobody published
+        // is, and said in the log for the operator who wonders why the section is gone, which
+        // costs the database nothing: no link is read to decide it.
+        if (!live.Value.OfferSiblingWatch)
+        {
+            diagnostics.Refused(PublicTripRoute.Live, PublishedReadRefusal.SiblingWatchOff, token);
+            return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+        }
+
         var opened = await TripPastTrackEndpoints.OpenAsync(
             token, db, protection, live.Value, past.Value, now, ct);
         if (opened.Refusal is { } refused)

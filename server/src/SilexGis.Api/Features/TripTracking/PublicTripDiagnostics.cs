@@ -162,6 +162,7 @@ public sealed partial class PublicTripDiagnostics
         PublishedReadRefusal.ArchiveOff => "archive_off",
         PublishedReadRefusal.TripNotInArchive => "trip_not_in_archive",
         PublishedReadRefusal.PastSiblingWindow => "past_sibling_window",
+        PublishedReadRefusal.SiblingWatchOff => "sibling_watch_off",
         _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "A refusal with no word."),
     };
 
