@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Buffers.Text;
+using System.Security.Cryptography;
+using System.Text;
 using SilexGis.Domain.Entities;
 
 namespace SilexGis.Domain.Trips;
@@ -84,6 +87,32 @@ public static class TripTrackingRules
     /// exactly as an unknown one is.
     /// </summary>
     public const int MaxShareTokenLength = 100;
+
+    /// <summary>How many random bytes a publication token is made of.</summary>
+    /// <remarks>
+    /// 256 bits, because the token <em>is</em> the authority: it is the whole of what somebody
+    /// without an account presents, and an address guessable in any number of tries is a page
+    /// nobody chose to publish.
+    /// </remarks>
+    public const int ShareTokenBytes = 32;
+
+    /// <summary>A fresh publication token: the address a link hands over, once.</summary>
+    /// <remarks>
+    /// Here rather than at the one surface that mints links today, so that everything which lays
+    /// a publication row down — the act a person takes, the act that replaces a link, and the
+    /// demonstration dataset — makes the same kind of token and hashes it the same way. Two
+    /// places doing this would be two token rules, and the weaker one would decide the strength
+    /// of every link it made.
+    /// </remarks>
+    public static string NewShareToken() =>
+        Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(ShareTokenBytes));
+
+    /// <summary>
+    /// What is stored for a publication token: SHA-256 of its characters, base64url. The token
+    /// itself is never written down, so a copy of the database cannot resurrect a live link.
+    /// </summary>
+    public static string ShareTokenHash(string token) =>
+        Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
     /// <summary>How far ahead of the server clock a report may claim to be — clock skew, not planning.</summary>
     public static readonly TimeSpan RecordedAtSkew = TimeSpan.FromMinutes(2);

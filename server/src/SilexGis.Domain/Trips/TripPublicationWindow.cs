@@ -67,6 +67,18 @@ namespace SilexGis.Domain.Trips;
 public static class TripPublicationWindow
 {
     /// <summary>
+    /// How long a publication outlives the trip it is about where nobody has said otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than only in the installation setting that reads it, because the setting lives
+    /// where configuration is bound and the demonstration dataset — which publishes a link of its
+    /// own, under no installation's configuration — needs the same number. Two numbers would be
+    /// two answers to "how long does a published page answer strangers", and only one of them
+    /// would be documented.
+    /// </remarks>
+    public static readonly TimeSpan DefaultShareLifetime = TimeSpan.FromDays(14);
+
+    /// <summary>
     /// When a link minted now should lapse, given the trip it is for.
     /// </summary>
     /// <param name="lifetime">
