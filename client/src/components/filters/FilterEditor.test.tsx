@@ -33,6 +33,7 @@ const FIELDS: FilterField[] = [
   field('surveyedLength', 'number', ['equals', 'lessThan', 'lessOrEqual', 'greaterThan', 'greaterOrEqual', 'between', 'isEmpty', 'isNotEmpty']),
   field('caveTypeId', 'id', ['equals', 'in', 'isEmpty', 'isNotEmpty'], { options: 'caveTypes' }),
   field('typeId', 'id', ['equals', 'in', 'isEmpty', 'isNotEmpty'], { options: 'featureTypes' }),
+  field('surveyedAt', 'instant', ['lessThan', 'lessOrEqual', 'greaterThan', 'greaterOrEqual', 'between', 'isEmpty', 'isNotEmpty']),
   field('property:sinkhole:depth_m', 'number', ['lessThan', 'greaterOrEqual'], {
     labelKey: 'filters.fields.property', label: 'Sinkhole depth (m)', requires: { field: 'typeId', value: '7' },
   }),
@@ -277,6 +278,108 @@ describe('the condition editor', () => {
     fireEvent.mouseDown(within(screen.getByTestId('filter-editor-field-1')).getByRole('combobox'));
     expect(await screen.findByText('Surveyed length (m)')).toBeInTheDocument();
     expect(screen.queryByText('Property: Sinkhole depth (m)')).not.toBeInTheDocument();
+  });
+});
+
+describe('a comparison typed with signs', () => {
+  const length = (op: FilterOp, value: number) => c('surveyedLength', op, [{ type: 'number', value }]);
+
+  function type(testId: string, text: string) {
+    fireEvent.change(inputOf(testId), { target: { value: text } });
+  }
+
+  it('becomes the comparison it names, says what it understood, and is applied as that', () => {
+    const onApply = show(length('greaterOrEqual', 300));
+
+    type('filter-editor-value-0', '>300 m');
+    expect(screen.getByTestId('filter-editor-value-0-understood')).toHaveTextContent('Read as: more than 300 m');
+    expect(screen.getByTestId('filter-editor-op-0')).toHaveTextContent('more than');
+    fireEvent.click(screen.getByTestId('filter-editor-apply'));
+
+    expect(onApply).toHaveBeenCalledWith(doc(length('greaterThan', 300)));
+  });
+
+  it('keeps the chosen comparison for a bare number, and reads a range as between', () => {
+    const onApply = show({ node: 'allOf', of: [length('lessOrEqual', 1), length('equals', 1)] });
+
+    type('filter-editor-value-0', '2,5');
+    type('filter-editor-value-1', '300-500');
+    expect(screen.getByTestId('filter-editor-value-1-understood')).toHaveTextContent('between 300 and 500');
+    fireEvent.click(screen.getByTestId('filter-editor-apply'));
+
+    expect(onApply).toHaveBeenCalledWith(doc({
+      node: 'allOf',
+      of: [
+        length('lessOrEqual', 2.5),
+        c('surveyedLength', 'between', [{ type: 'number', value: 300 }, { type: 'number', value: 500 }]),
+      ],
+    }));
+  });
+
+  it('writes “not equal to” as a negated equals, ticks the row’s not, and undoes it when the sign goes', () => {
+    const onApply = show(length('greaterOrEqual', 300));
+
+    type('filter-editor-value-0', '!=300');
+    expect(inputOf('filter-editor-not-0')).toBeChecked();
+    expect(screen.getByTestId('filter-editor-value-0-understood')).toHaveTextContent('not equal to 300');
+    fireEvent.click(screen.getByTestId('filter-editor-apply'));
+    expect(onApply).toHaveBeenLastCalledWith(doc({ node: 'not', of: length('equals', 300) }));
+
+    type('filter-editor-value-0', '>300');
+    expect(inputOf('filter-editor-not-0')).not.toBeChecked();
+    fireEvent.click(screen.getByTestId('filter-editor-apply'));
+    expect(onApply).toHaveBeenLastCalledWith(doc(length('greaterThan', 300)));
+  });
+
+  it('says on the row when it cannot read the text, and applies nothing for it', () => {
+    const onApply = show({ node: 'allOf', of: [length('greaterOrEqual', 300), c('name', 'contains', [{ type: 'text', value: 'urs' }])] });
+
+    type('filter-editor-value-0', '300 km');
+    expect(screen.getByTestId('filter-editor-value-0-unreadable')).toHaveTextContent(en.filters.typed.unreadable);
+    fireEvent.click(screen.getByTestId('filter-editor-apply'));
+
+    expect(onApply).toHaveBeenCalledWith(doc({ node: 'allOf', of: [c('name', 'contains', [{ type: 'text', value: 'urs' }])] }));
+  });
+
+  it('refuses a comparison the field does not offer', () => {
+    show({ node: 'allOf', of: [c('property:sinkhole:depth_m', 'greaterOrEqual', [{ type: 'number', value: 1 }]), c('typeId', 'equals', [{ type: 'id', value: '7' }])] });
+
+    type('filter-editor-value-0', '>5');
+    expect(screen.getByTestId('filter-editor-value-0-unreadable')).toHaveTextContent(en.filters.typed.notOffered);
+  });
+
+  it('tells a Romanian reader in Romanian', async () => {
+    await i18n.changeLanguage('ro');
+    show({ node: 'allOf', of: [length('greaterOrEqual', 300)] });
+
+    type('filter-editor-value-0', '≤30');
+    expect(screen.getByTestId('filter-editor-value-0-understood')).toHaveTextContent('Înțeles ca: cel mult 30');
+    type('filter-editor-value-0', 'abc');
+    expect(screen.getByTestId('filter-editor-value-0-unreadable')).toHaveTextContent(ro.filters.typed.unreadable);
+  });
+
+  it('writes the row back into the box when its comparison is chosen from the list', () => {
+    show({ node: 'allOf', of: [length('greaterOrEqual', 300)] });
+
+    type('filter-editor-value-0', '>300');
+    fireEvent.click(screen.getByTestId('filter-editor-not-0'));
+    fireEvent.click(screen.getByTestId('filter-editor-not-0'));
+    expect(inputOf('filter-editor-value-0')).toHaveValue('300');
+  });
+
+  it('reads a typed day as the whole day it names, beside the picker', () => {
+    const onApply = show(c('surveyedAt', 'greaterThan', []));
+
+    type('filter-editor-value-0-typed', '=2024-05-01');
+    expect(screen.getByTestId('filter-editor-value-0-typed-understood')).toHaveTextContent('on 2024-05-01');
+    fireEvent.click(screen.getByTestId('filter-editor-apply'));
+
+    const where = (onApply.mock.calls[0]![0] as FilterDocument).scope[0]!.where as Extract<FilterNode, { node: 'condition' }>;
+    expect(where.op).toBe('between');
+    expect(where.values.map((v) => String(v.value).slice(0, 10))).toEqual(['2024-05-01', '2024-05-01']);
+
+    type('filter-editor-value-0-typed', '2024-05-01-2024-06-01');
+    expect(screen.getByTestId('filter-editor-value-0-typed-unreadable')).toHaveTextContent(en.filters.typed.unreadableDay);
   });
 });
 

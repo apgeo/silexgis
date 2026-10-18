@@ -5324,6 +5324,32 @@
     }
   },
   "filters": {
+    "typed": {
+      "understood": "Read as: {{text}}",
+      "unreadable": "Could not read this, so nothing is applied. Write a number such as 300, or a comparison such as >300, <=30, !=300 or 300..500.",
+      "unreadableDay": "Could not read this, so nothing is applied. Write a day such as 2024-05-01 or 1.5.2024, or a comparison such as >2024-05-01, !=2024-05-01 or 2024-05-01..2024-06-30.",
+      "notOffered": "This field cannot be compared that way, so nothing is applied.",
+      "hint": "e.g. >300, 300..500",
+      "hintDay": "or type >2024-05-01",
+      "number": {
+        "equals": "equal to {{value}}",
+        "notEquals": "not equal to {{value}}",
+        "greaterThan": "more than {{value}}",
+        "greaterOrEqual": "at least {{value}}",
+        "lessThan": "less than {{value}}",
+        "lessOrEqual": "at most {{value}}",
+        "between": "between {{low}} and {{high}}"
+      },
+      "day": {
+        "equals": "on {{value}}",
+        "notEquals": "not on {{value}}",
+        "greaterThan": "after {{value}}",
+        "greaterOrEqual": "on or after {{value}}",
+        "lessThan": "before {{value}}",
+        "lessOrEqual": "on or before {{value}}",
+        "between": "from {{low}} to {{high}}"
+      }
+    },
     "editor": {
       "sort": "Order",
       "descending": "Descending",
@@ -5407,8 +5433,6 @@
       "chooseField": "Choose a field",
       "operator": "Comparison",
       "value": "Value",
-      "from": "From",
-      "to": "To",
       "yes": "Yes",
       "no": "No",
       "unavailableField": "a field not available to you",

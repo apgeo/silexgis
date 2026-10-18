@@ -1,8 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { DatePicker, Input, InputNumber, Select, Space } from 'antd';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { DatePicker, Flex, Input, Select, Typography } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { dayBound, pickedDay } from '../../filters/dayBounds.ts';
+import { editableOps } from '../../filters/editorTree.ts';
+import {
+  describeComparison,
+  formatCondition,
+  negationShown,
+  readComparison,
+  resolveTyped,
+  type TypedCondition,
+  type TypedKind,
+} from '../../filters/typedComparison.ts';
 import type { FilterField, FilterOp, FilterValue } from '../../filters/types.ts';
 import IdPicker from './IdPicker.tsx';
 import SpatialValueInput from './SpatialValueInput.tsx';
@@ -23,6 +34,13 @@ export interface ValueInputProps {
   op: FilterOp;
   values: FilterValue[];
   onChange: (values: FilterValue[]) => void;
+  /** Whether the row is negated: a typed "not equal to" is spelled in the box. */
+  negated: boolean;
+  /**
+   * A comparison typed with signs, which may change the row's comparison and negation as well as
+   * its values.
+   */
+  onTyped: (next: TypedCondition) => void;
   testId: string;
 }
 
@@ -31,17 +49,12 @@ function blank(type: 'number' | 'instant'): FilterValue {
   return { type, value: null } as unknown as FilterValue;
 }
 
-function numberAt(values: FilterValue[], index: number): number | null {
-  const v = values[index];
-  return v?.type === 'number' && typeof v.value === 'number' ? v.value : null;
-}
-
 function instantAt(values: FilterValue[], index: number): Dayjs | null {
   const v = values[index];
   return v?.type === 'instant' && typeof v.value === 'string' ? pickedDay(v.value) : null;
 }
 
-export default function ValueInput({ world, field, op, values, onChange, testId }: ValueInputProps) {
+export default function ValueInput({ world, field, op, values, onChange, negated, onTyped, testId }: ValueInputProps) {
   const { t } = useTranslation();
   const label = t('filters.editor.value');
 
@@ -61,31 +74,11 @@ export default function ValueInput({ world, field, op, values, onChange, testId 
         />
       );
 
-    case 'number': {
-      const put = (index: number, next: number | null) => {
-        if (op !== 'between') {
-          onChange(next === null ? [] : [{ type: 'number', value: next }]);
-          return;
-        }
-        const pair = [values[0] ?? blank('number'), values[1] ?? blank('number')];
-        pair[index] = next === null ? blank('number') : { type: 'number', value: next };
-        onChange(pair);
-      };
-      if (op === 'between') {
-        return (
-          <Space.Compact>
-            <InputNumber aria-label={t('filters.editor.from')} data-testid={`${testId}-low`}
-              value={numberAt(values, 0)} onChange={(n) => put(0, n)} />
-            <InputNumber aria-label={t('filters.editor.to')} data-testid={`${testId}-high`}
-              value={numberAt(values, 1)} onChange={(n) => put(1, n)} />
-          </Space.Compact>
-        );
-      }
+    case 'number':
       return (
-        <InputNumber aria-label={label} data-testid={testId}
-          value={numberAt(values, 0)} onChange={(n) => put(0, n)} />
+        <TypedComparisonInput kind="number" field={field} condition={{ op, values, negated }}
+          onTyped={onTyped} testId={testId} ariaLabel={label} placeholder={t('filters.typed.hint')} />
       );
-    }
 
     case 'boolean':
       return (
@@ -102,9 +95,10 @@ export default function ValueInput({ world, field, op, values, onChange, testId 
         />
       );
 
-    case 'instant':
-      if (op === 'between') {
-        return (
+    case 'instant': {
+      // The picker for choosing a day by eye, and beside it a box for typing one with a sign.
+      const picker = op === 'between'
+        ? (
           <DatePicker.RangePicker
             aria-label={label}
             data-testid={testId}
@@ -115,17 +109,22 @@ export default function ValueInput({ world, field, op, values, onChange, testId 
               range?.[1] ? { type: 'instant', value: dayBound(op, range[1], 'high') } : blank('instant'),
             ])}
           />
+        )
+        : (
+          <DatePicker
+            aria-label={label}
+            data-testid={testId}
+            value={instantAt(values, 0)}
+            onChange={(day: Dayjs | null) =>
+              onChange(day ? [{ type: 'instant', value: dayBound(op, day, 'low') }] : [])}
+          />
         );
-      }
       return (
-        <DatePicker
-          aria-label={label}
-          data-testid={testId}
-          value={instantAt(values, 0)}
-          onChange={(day: Dayjs | null) =>
-            onChange(day ? [{ type: 'instant', value: dayBound(op, day, 'low') }] : [])}
-        />
+        <TypedComparisonInput kind="day" field={field} condition={{ op, values, negated }}
+          onTyped={onTyped} testId={`${testId}-typed`} ariaLabel={t('filters.typed.hintDay')}
+          placeholder={t('filters.typed.hintDay')} before={picker} />
       );
+    }
 
     case 'id':
       return (
@@ -145,4 +144,97 @@ export default function ValueInput({ world, field, op, values, onChange, testId 
     default:
       return null;
   }
+}
+
+/** A condition's identity, whatever order its members were written in. */
+function keyOf(condition: TypedCondition): string {
+  return JSON.stringify([condition.op, condition.negated, condition.values.map((v) => [v.type, v.value])]);
+}
+
+interface TypedComparisonInputProps {
+  kind: TypedKind;
+  field: FilterField;
+  condition: TypedCondition;
+  onTyped: (next: TypedCondition) => void;
+  testId: string;
+  ariaLabel: string;
+  placeholder: string;
+  /** A control drawn ahead of the box, in the same line. */
+  before?: ReactNode;
+}
+
+/**
+ * A box a comparison is typed into, with what was understood beside it.
+ *
+ * The box keeps what was typed; the row keeps the condition it was read as. Text that cannot be
+ * read, or that asks a comparison this field does not offer, leaves the row without a value, so it
+ * is left out of what is counted and applied, and the box says why. A change that arrives from
+ * outside — another comparison chosen, the "not" ticked, a day picked — writes the row's condition
+ * back into the box.
+ */
+function TypedComparisonInput({
+  kind, field, condition, onTyped, testId, ariaLabel, placeholder, before,
+}: TypedComparisonInputProps) {
+  const { t } = useTranslation();
+  const key = keyOf(condition);
+  const shown = formatCondition(condition, kind) ?? '';
+  const [text, setText] = useState(shown);
+  const written = useRef(key);
+  useEffect(() => {
+    if (written.current !== key) {
+      written.current = key;
+      setText(shown);
+    }
+  }, [key, shown]);
+
+  const reading = readComparison(text, kind, condition.op);
+  const next = reading.kind === 'read' ? resolveTyped(condition, reading.comparison, kind) : null;
+  const offered = next !== null && editableOps(field).includes(next.op);
+
+  const type = (typed: string) => {
+    setText(typed);
+    const read = readComparison(typed, kind, condition.op);
+    const resolved = read.kind === 'read' ? resolveTyped(condition, read.comparison, kind) : null;
+    const out: TypedCondition = resolved !== null && editableOps(field).includes(resolved.op)
+      ? resolved
+      : { op: condition.op, values: [], negated: condition.negated && !negationShown(condition, kind) };
+    written.current = keyOf(out);
+    onTyped(out);
+  };
+
+  const refused = reading.kind === 'unreadable' || (reading.kind === 'read' && !offered);
+  let note: ReactNode = null;
+  if (refused) {
+    const message = reading.kind === 'unreadable'
+      ? t(kind === 'number' ? 'filters.typed.unreadable' : 'filters.typed.unreadableDay')
+      : t('filters.typed.notOffered');
+    note = (
+      <Typography.Text type="danger" role="alert" data-testid={`${testId}-unreadable`}>
+        {message}
+      </Typography.Text>
+    );
+  } else if (reading.kind === 'read') {
+    const described = describeComparison(reading.comparison, kind);
+    note = (
+      <Typography.Text type="secondary" aria-live="polite" data-testid={`${testId}-understood`}>
+        {t('filters.typed.understood', { text: t(described.key, described.values) })}
+      </Typography.Text>
+    );
+  }
+
+  return (
+    <Flex gap={8} wrap align="center">
+      {before}
+      <Input
+        aria-label={ariaLabel}
+        data-testid={testId}
+        placeholder={placeholder}
+        value={text}
+        onChange={(e) => type(e.target.value)}
+        status={refused ? 'error' : undefined}
+        style={{ width: kind === 'number' ? 160 : 200 }}
+      />
+      {note}
+    </Flex>
+  );
 }

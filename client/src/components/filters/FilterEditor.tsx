@@ -374,7 +374,7 @@ function Item({ context, path }: { context: EditorContext; path: NodePath }) {
       <Flex vertical gap={4} data-testid={`filter-editor-row-${key}`}>
         <Flex gap={8} wrap align="center">
           {notBox}
-          <ConditionFields context={context} path={innerPath} rowKey={key} />
+          <ConditionFields context={context} path={innerPath} rowKey={key} negation={{ negated, at: path }} />
           {remove}
         </Flex>
         {context.problems.has(pathKey(innerPath)) && (
@@ -396,7 +396,13 @@ function Item({ context, path }: { context: EditorContext; path: NodePath }) {
   );
 }
 
-function ConditionFields({ context, path, rowKey }: { context: EditorContext; path: NodePath; rowKey: string }) {
+function ConditionFields({ context, path, rowKey, negation }: {
+  context: EditorContext;
+  path: NodePath;
+  rowKey: string;
+  /** Whether the row is negated, and the path of the item whose negation is toggled. */
+  negation: { negated: boolean; at: NodePath };
+}) {
   const { t } = useTranslation();
   const condition = nodeAt(context.root, path) as Extract<FilterNode, { node: 'condition' }>;
   const field = context.fields.find((f) => f.key === condition.field);
@@ -447,6 +453,12 @@ function ConditionFields({ context, path, rowKey }: { context: EditorContext; pa
           op={condition.op}
           values={condition.values}
           onChange={(values) => set({ ...condition, values })}
+          negated={negation.negated}
+          onTyped={(next) => {
+            // The row first, then its negation, which wraps or unwraps whatever stands at its place.
+            const written = replaceAt(context.root, path, { ...condition, op: next.op, values: next.values });
+            context.update(next.negated === negation.negated ? written : toggleNot(written, negation.at));
+          }}
           testId={`filter-editor-value-${rowKey}`}
         />
       )}

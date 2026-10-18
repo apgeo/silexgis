@@ -5324,6 +5324,32 @@
     }
   },
   "filters": {
+    "typed": {
+      "understood": "Înțeles ca: {{text}}",
+      "unreadable": "Textul nu a putut fi citit, așa că nu se aplică nimic. Scrieți un număr, de exemplu 300, sau o comparație, de exemplu >300, <=30, !=300 sau 300..500.",
+      "unreadableDay": "Textul nu a putut fi citit, așa că nu se aplică nimic. Scrieți o zi, de exemplu 2024-05-01 sau 1.5.2024, sau o comparație, de exemplu >2024-05-01, !=2024-05-01 sau 2024-05-01..2024-06-30.",
+      "notOffered": "Acest câmp nu poate fi comparat astfel, așa că nu se aplică nimic.",
+      "hint": "de ex. >300, 300..500",
+      "hintDay": "sau scrieți >2024-05-01",
+      "number": {
+        "equals": "egal cu {{value}}",
+        "notEquals": "diferit de {{value}}",
+        "greaterThan": "mai mare decât {{value}}",
+        "greaterOrEqual": "cel puțin {{value}}",
+        "lessThan": "mai mic decât {{value}}",
+        "lessOrEqual": "cel mult {{value}}",
+        "between": "între {{low}} și {{high}}"
+      },
+      "day": {
+        "equals": "pe {{value}}",
+        "notEquals": "nu pe {{value}}",
+        "greaterThan": "după {{value}}",
+        "greaterOrEqual": "pe {{value}} sau după",
+        "lessThan": "înainte de {{value}}",
+        "lessOrEqual": "pe {{value}} sau înainte",
+        "between": "de la {{low}} până la {{high}}"
+      }
+    },
     "editor": {
       "sort": "Ordine",
       "descending": "Descrescător",
@@ -5407,8 +5433,6 @@
       "chooseField": "Alege un câmp",
       "operator": "Comparație",
       "value": "Valoare",
-      "from": "De la",
-      "to": "Până la",
       "yes": "Da",
       "no": "Nu",
       "unavailableField": "un câmp care nu îți este accesibil",
