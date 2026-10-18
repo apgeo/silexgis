@@ -322,11 +322,24 @@ puneți cuvântul într-un model propriu, sub un titlu ales de dumneavoastră
   comunicat oricărui cont, indiferent cine a apăsat butonul: într-o peșteră protejată copia
   aceea nu numește nicio stație și spune că o copie descărcată de cineva pentru sine poate spune
   mai mult.
-- **O copie clasată este un fișier și nu se mai schimbă după ce a fost clasată.** De aceea, când
-  o peșteră primește protecția locației, rapoartele clasate pe turele urmărite în ea sunt
-  **scoase de pe acele ture** în acel moment — cine citește tura nu mai găsește niciunul acolo;
-  cel care l-a clasat îl are în continuare printre documentele sale. Clasați raportul din nou și
-  noua copie nu numește nicio stație.
+- **O copie clasată este un fișier și nu se mai schimbă după ce a fost clasată — nici când
+  peștera este protejată mai târziu.** Aceasta este singura breșă în regula de mai sus și merită
+  știută: un raport clasat **înainte** ca peștera să primească protecția locației poate numi în
+  continuare stațiile acelei peșteri, iar oricine poate citi tura îl poate deschide în
+  continuare. Punerea peșterii sub protecție nu retrage copia aceea. **Singurul mod de a o
+  înlătura este să ștergeți copia clasată** (fișierele turei sau fila raportului ei), după care
+  tura poate fi raportată din nou — noua copie nu numește nicio stație. Retragerea automată a
+  acelor copii a fost construită și apoi oprită, fiind socotită mai multă complicație decât
+  merita, iar hotărârea va fi reluată; până atunci, momentul în care protejați o peșteră urmărită
+  de la suprafață este un moment bun pentru a vedea ce este clasat pe turele ei.
+- **O notă despre peșteră este tipărită și spune că este despre peșteră.** Un pericol raportat de
+  cineva — *bloc instabil deasupra puțului al doilea* — nu este despre nimeni de pe listă, așa că
+  este tipărit la ora lui în jurnal, după cuvintele *Despre peșteră, nu despre o persoană*, și nu
+  sub un nume. Cuvintele lui sunt ale turei și sunt tipărite întotdeauna; **stația** pe care o
+  numește este a peșterii și urmează aceeași regulă ca locul oricui, așa că un cititor căruia nu i
+  se poate spune unde este peștera aceea citește *loc reținut* lângă pericol. O tură pe care nu a
+  fost plasat nimeni, dar al cărei jurnal ține doar un pericol, este totuși raportată, iar
+  pericolul este ceea ce tipărește.
 - **Un raport scos nu este tipărit.** Jurnalul este cel din momentul în care este făcut
   documentul: un raport scos *după* ce o copie a fost clasată rămâne în copia aceea, până când
   raportul turei este clasat din nou.
@@ -334,6 +347,32 @@ puneți cuvântul într-un model propriu, sub un titlu ales de dumneavoastră
   sub el dispare odată cu el.
 - **Un jurnal foarte lung este scurtat, iar documentul spune cu cât**: câte rapoarte a tipărit și
   câte nu. Jurnalul întreg poate fi luat oricând ca foaie din fila de urmărire a turei.
+- **Doar în modelul unei ture.** Modelul unei tabere care folosește cuvântul este refuzat la
+  încărcare.
+
+**Lista stațiilor, pentru un model care o cere.** Un rând care conține doar cuvântul `survey`
+tipărește stațiile ridicării în care a fost urmărită tura, fiecare cu adâncimea la care se află
+sub stația de la care se măsoară adâncimile — foaia pe care o vrea un coordonator de la suprafață
+lângă jurnal, ca să poată căuta o stație numită într-un raport. **Modelul standard nu o
+tipărește** — puneți cuvântul într-un model propriu, sub un titlu ales de dumneavoastră
+(`heading: Stații în subteran`, apoi `survey`).
+
+- **Spune ce este.** Blocul începe prin a spune că este lista ridicării și că nu spune nimic
+  despre unde a fost cineva. Aceste cuvinte sunt ale documentului, în limba dumneavoastră.
+- **Este tipărită doar pentru un cititor căruia i se poate spune unde este peștera.** O listă de
+  stații este tot vocabularul de stații al unei peșteri, așa că urmează regula pe care o urmează
+  și căutarea de stații a ridicării: un cititor care poate citi peștera și o poate localiza
+  exact primește lista, iar oricine altcineva citește un singur rând care spune că lista nu este
+  inclusă — niciodată un titlu cu un gol sub el. În copia **clasată pe tură**, stațiile sunt
+  tipărite doar acolo unde poate fi comunicat **oricărui** cont unde se află peștera, așa că
+  stațiile unei peșteri protejate nu sunt în copia aceea pentru nimeni.
+- **Adâncimile sunt măsurate sub o singură stație**, numită în document: cea de la care a fost
+  pusă să măsoare urmărirea turei sau, în lipsa ei, cea mai înaltă intrare a ridicării.
+- **Ordinea este de la cea mai puțin adâncă**, așa cum le întâlnești intrând.
+- **O listă lungă este scurtată, iar documentul spune cu cât**: câte stații a tipărit și câte
+  ține ridicarea. Toată lista se află pe pagina peșterii.
+- **La o tură care nu a fost urmărită sau a cărei urmărire nu numește nicio ridicare, rândul nu
+  tipărește nimic**, iar un titlu rămas fără nimic sub el dispare odată cu el.
 - **Doar în modelul unei ture.** Modelul unei tabere care folosește cuvântul este refuzat la
   încărcare.
 

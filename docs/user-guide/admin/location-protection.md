@@ -56,7 +56,7 @@ not a protection.
 | **Exports** (GeoJSON, GPX, KML, CSV, shapefile) | The same protection as the screen |
 | **Share links and shared views** | The same protection. Sharing is not a route around it |
 | **Photographs** | The **original** of a photo whose capture point would place the cave is refused. The rendering is shown |
-| **Trip pages and reports** | Caves you may not open are **not named**; you are told *how many* are not named |
+| **Trip pages and reports** | Caves you may not open are **not named**; you are told *how many* are not named. A trip's generated write-up withholds a station and a depth the same way — but see the limit below for a write-up **already filed** |
 | **Notification emails** | **Never name a cave.** Not trip mail, not the overdue-party alarm |
 | **The calendar** | A row **never names a cave**, nor a count of caves left out |
 | **Change history** | A protected value reads *"Value hidden (protected location)"* |
@@ -71,6 +71,31 @@ not a protection.
 
 **None of this is done by the client.** The withholding happens on the server. A modified
 browser, a direct API call and a scraped page all get the same answer.
+
+### One limit worth knowing: a write-up already filed on a trip
+
+**A write-up filed before a cave was protected can still name that cave's stations to everybody
+who may read the trip. Protecting the cave does not take such a copy back, and the way to remove
+it is to delete the filed copy.**
+
+A trip can be [followed from the surface](../features/live-tracking.md), and a club's own write-up
+layout can print the tracking journal, or the survey's station list, into the trip's write-up. A
+copy **filed on the trip** is a file: it printed the stations any account could be told on the day
+it was made, and it goes on saying so afterwards. Every live surface — the map, the tracking tab,
+an export, a fresh write-up — asks again on every read and withholds the place correctly; only a
+file already filed cannot.
+
+So when you protect a cave that has been followed from the surface:
+
+1. Open the trips followed in it (the cave's page lists them) and look at what is filed on each.
+2. Delete any filed write-up whose layout printed tracking or the station list.
+3. Write the trip up again if the club wants a copy there — the new one names no station.
+
+Taking those copies off the trips automatically was built and then switched off: it had to run
+much wider than the problem (a file records nothing about whether its layout ever printed a place,
+so every generated write-up of every trip ever followed in the cave would have gone, deleted
+trips included), and the judgement was that the logic cost more than the hole it fills. **The
+decision is to be looked at again**, and this page will say so when it changes.
 
 ---
 

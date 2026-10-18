@@ -621,12 +621,27 @@ feature and walkthroughs of whole jobs.
   simply disappears — so the same layout produces an honest document for a member and for an editor.
   A layout of a club's own may also ask, with the one word `tracking`, for the **journal of a trip
   that was followed underground** — when tracking ran, each person as last reported, every report
-  in time order, under a sentence saying it is a journal and not a callout record. The standard
-  layout does not print it; a place is printed only to a reader who may be told it, and the copy
-  filed against the trip names a place only where every account may be. A filed copy is a file and
-  does not change: putting a cave under location protection takes the filed write-ups off the
-  trips followed in it, to be filed again, and a report removed later stays in a filed copy until
-  then.
+  in time order, under a sentence saying it is a journal and not a callout record. A note about the
+  cave itself — a hazard the next party has to be able to read off the write-up, reported about
+  nobody — stands in that journal in its own hour's place, behind words saying it is about the cave
+  and not about a person. The standard layout does not print the journal; a place is printed only
+  to a reader who may be told it — the cave's own place in such a note included — and the copy
+  filed against the trip names a place only where every account may be. With the one word `survey`
+  a layout asks instead for **the stations of the survey the trip was followed in**, each with how
+  far it lies below the station the depths are measured from: the sheet a surface coordinator reads
+  a reported station's name off, beside the journal. The standard layout does not print that
+  either. A cave's whole station vocabulary is one disclosure, so it is printed only for a reader
+  who may be told where that cave is — anybody else reads one line saying the list is not shown,
+  never a heading with a gap under it — and the copy filed against the trip prints a station only
+  where every account may be told where the cave is, so a protected cave's stations are in no filed
+  copy for anybody. A list longer than the document carries is cut short and says by how much, and
+  a camp's layout that uses the word is refused on upload. A filed copy is a file and does not
+  change: a report removed later stays in it, and so does every station it printed — **a write-up
+  filed before a cave was protected can still name that cave's stations to everybody who may read
+  the trip.** Protecting the cave does not take such a copy back; the way to remove it is to delete
+  the filed copy and write the trip up again, which names no station it may not. Withdrawing those
+  copies by itself was built and then switched off, judged more machinery than it buys, and is to
+  be looked at again.
   **A camp writes itself up too**, as one document over the trips it gathered — day by day, team by
   team, in a layout of its own kind — and it carries **what each trip wrote about itself**: the
   trip's account, its results and the answers on its form, under the trip's date and title. Each

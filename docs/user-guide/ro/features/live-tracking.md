@@ -701,6 +701,10 @@ pagina turei. Un model de raport al clubului îl cere printr-un rând care conț
 dată urmărirea și când a fost încheiată, fiecare persoană după ultimul raport, apoi toate
 rapoartele în ordinea timpului, sub o propoziție care spune că este un jurnal a ceea ce s-a
 raportat la suprafață — nu o evidență a apelului de urgență, și unul care nu a dat nicio alarmă.
+O **notă despre peșteră** este și ea în ordinea aceea a timpului, după cuvintele *Despre peșteră,
+nu despre o persoană*: pericolul este partea din evidența unei ture de care are nevoie echipa
+următoare, așa că este tipărit, iar stația pe care o numește este reținută de la un cititor căruia
+nu i se poate comunica, exact ca locul oricui.
 
 Este citit la fel ca tot restul unui raport. Copia pe care o **descărcați** spune ce vă poate fi
 comunicat, cu *loc reținut* acolo unde o stație sau o adâncime vă este reținută. Copia **clasată
@@ -708,11 +712,23 @@ pe tură** este deschisă de oricine poate citi tura, așa că numește un loc d
 comunicat oricărui cont — într-o peșteră protejată, niciunul — indiferent cine a clasat-o. Un
 raport deja scos nu este în niciuna.
 
-O copie clasată nu se mai schimbă după aceea. Dacă peștera primește mai târziu protecția
-locației, copiile clasate pe turele urmărite în ea sunt scoase de pe acele ture, pentru a fi
-clasate din nou fără stații; dacă un raport este scos mai târziu, el rămâne în copia clasată până
-când raportul turei este clasat din nou. [Scrierea unui model și restul a ceea ce face
+O copie clasată nu se mai schimbă după aceea, iar asta are două fețe. Dacă un raport este scos
+mai târziu, el rămâne în copia clasată până când raportul turei este clasat din nou. **Dacă
+peștera primește mai târziu protecția locației, copiile deja clasate pe turele urmărite în ea
+rămân acolo unde sunt și numesc în continuare stațiile acelei peșteri pentru oricine poate citi
+tura** — punerea peșterii sub protecție nu le retrage, iar modul de a înlătura una este să
+ștergeți copia clasată și să raportați tura din nou. Retragerea automată a fost construită și
+apoi oprită, fiind socotită mai multă complicație decât merita, iar hotărârea va fi reluată.
+[Scrierea unui model și restul a ceea ce face
 cuvântul](trips.md).
+
+Alături de jurnal, un model poate cere, cu un rând care conține doar cuvântul `survey`, **stațiile
+ridicării în care a fost urmărită tura**, fiecare cu adâncimea la care se află sub stația de la
+care urmărirea măsoară adâncimile — foaia în care se caută o stație raportată. O listă întreagă de
+stații este tot vocabularul de stații al unei peșteri, așa că este tipărită doar pentru un cititor
+căruia i se poate spune unde este peștera; oricine altcineva citește un singur rând care spune că
+lista nu este inclusă, iar copia clasată pe tură tipărește stațiile doar acolo unde poate fi
+comunicat oricărui cont unde se află peștera.
 
 ---
 

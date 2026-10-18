@@ -668,7 +668,10 @@ the trip's page. A club's own report layout asks for it with a line holding the 
 `tracking`; **the standard layout does not print it.** What is printed: when tracking was first
 started and when it was closed, each person as last reported, then every report in time order,
 under a sentence saying that this is a journal of what was reported to the surface — not a
-callout record, and one that raised no alarm.
+callout record, and one that raised no alarm. A **note about the cave** is in that time order
+too, behind the words *About the cave, not about a person*: the hazard is the part of a trip's
+record the next party needs, so it is printed, while the station it names is withheld from a
+reader who may not be told it exactly as anybody's place is.
 
 It is read the way everything else in a write-up is. The copy you **download** says what you
 may be told, with *place withheld* where a station or a depth is kept from you. The copy **filed
@@ -676,10 +679,21 @@ against the trip** is opened by everybody who may read the trip, so it names a p
 account may be told it — in a protected cave, none — whoever filed it. A report already removed
 is in neither.
 
-A filed copy does not change afterwards. Put the cave under location protection later, and the
-copies filed against the trips followed in it are taken off those trips, to be filed again without
-their stations; remove a report later, and it stays in the filed copy until the write-up is filed
-again. [Writing a layout, and the rest of what the word does](trips.md).
+A filed copy does not change afterwards, and that cuts both ways. Remove a report later and it
+stays in the filed copy until the write-up is filed again. **Put the cave under location
+protection later and the copies already filed on the trips followed in it stay where they are,
+still naming that cave's stations to everybody who may read the trip** — protecting the cave does
+not take them back, and the way to remove one is to delete the filed copy and write the trip up
+again. Withdrawing them automatically was built and then switched off as more machinery than it
+was worth, and the decision is to be looked at again. [Writing a layout, and the rest of what the
+word does](trips.md).
+
+Beside the journal a layout can ask, with a line holding the one word `survey`, for **the stations
+of the survey the trip was followed in**, each with how far it lies below the station the watch
+measures depths from — the sheet to look a reported station up in. A whole station list is a
+cave's whole station vocabulary, so it is printed only for a reader who may be told where the cave
+is; anybody else reads one line saying the list is not shown, and the copy filed against the trip
+prints the stations only where every account may be told where the cave is.
 
 ---
 

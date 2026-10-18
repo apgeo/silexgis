@@ -315,11 +315,23 @@ your own, under a heading of your choosing (`heading: Followed underground`, the
   the trip can open — a place is printed only where every account may be told it, whoever
   pressed the button: in a protected cave that copy names no station at all, and it says that a
   copy somebody downloads for themselves may say more.
-- **A filed copy is a file, and it does not change after it is filed.** So when a cave is put
-  under location protection, the write-ups filed against the trips that were followed in it are
-  **taken off those trips** at that moment — nobody who reads the trip finds one there any more;
-  whoever filed it still has it among their own documents. File the write-up again and the new
-  copy names no station.
+- **A filed copy is a file, and it does not change after it is filed — including when the cave is
+  protected later.** This is the one gap in the rule above, and it is worth knowing about: a
+  write-up filed **before** a cave was put under location protection can still name that cave's
+  stations, and everybody who may read the trip can still open it. Putting the cave under
+  protection does not take such a copy back. **The way to remove it is to delete the filed copy**
+  (the trip's files, or its write-up tab), after which the trip can be written up again — the new
+  copy names no station. Withdrawing those copies automatically was built and then switched off
+  as more machinery than it was worth, and the decision is to be looked at again; until then,
+  protecting a cave that has been followed from the surface is a good moment to look at what is
+  filed on its trips.
+- **A note about the cave is printed, and says it is about the cave.** A hazard somebody reported
+  — *loose rock above the second pitch* — is about nobody on the roster, so it is printed in its
+  hour's place in the log behind the words *About the cave, not about a person* rather than under
+  a name. Its words are the trip's and are always printed; the **station** it names is the cave's
+  own and follows the same rule as anybody's place, so a reader who may not be told where that
+  cave is reads *place withheld* beside the hazard. A trip nobody was placed on whose log holds
+  only a hazard is still written up, and the hazard is what it prints.
 - **A removed report is not printed.** The journal is the log as it stands when the document is
   made: a report removed *after* a copy was filed is still in that copy, until the write-up is
   filed again.
@@ -328,6 +340,30 @@ your own, under a heading of your choosing (`heading: Followed underground`, the
 - **A very long log is cut short, and the document says by how much**: how many reports it
   printed and how many it did not. The whole log can always be taken as a sheet from the trip's
   tracking tab.
+- **Only in a trip's layout.** A camp's layout that uses the word is refused when it is uploaded.
+
+**The station list, for a layout that asks for it.** A line holding the one word `survey` prints
+the stations of the survey the trip was followed in, each with how far it lies below the station
+depths are measured from — the sheet a surface coordinator wants beside the journal, so that a
+station named in a report can be looked up. **The standard layout does not print it** — put the
+word in a layout of your own, under a heading of your choosing (`heading: Stations underground`,
+then `survey`).
+
+- **It says what it is.** The block opens by saying that it is the survey's own list and says
+  nothing about where anybody was. Those words are the document's own, in your language.
+- **It is printed only to a reader who may be told where the cave is.** A list of stations is a
+  cave's whole station vocabulary, so it follows the rule the survey's own station search follows:
+  a reader who may read the cave and place it exactly gets the list, and anybody else reads one
+  line saying that the list is not shown — never a heading with a gap under it. In the copy
+  **filed against the trip** the stations are printed only where **every** account may be told
+  where the cave is, so a protected cave's stations are in that copy for nobody.
+- **The depths are measured below one station**, named in the document: the one the trip's watch
+  was set to measure from, or failing that the survey's highest entrance.
+- **The order is shallowest first**, the way you meet them walking in.
+- **A long survey is cut short, and the document says by how much**: how many stations it printed
+  and how many the survey holds. The whole survey is on the cave's own page.
+- **On a trip that was never followed, or one whose watch names no survey, the line prints
+  nothing**, and a heading left with nothing under it disappears with it.
 - **Only in a trip's layout.** A camp's layout that uses the word is refused when it is uploaded.
 
 ### The map in the download

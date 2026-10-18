@@ -54,7 +54,7 @@ protecție.
 | **Exporturi** (GeoJSON, GPX, KML, CSV, shapefile) | Aceeași protecție ca ecranul |
 | **Linkuri și vederi partajate** | Aceeași protecție. Partajarea nu este o cale de ocolire |
 | **Fotografii** | **Originalul** unei poze al cărei punct de capturare ar localiza peștera este refuzat. Randarea se arată |
-| **Pagini și rapoarte de tură** | Peșterile pe care nu le puteți deschide **nu sunt numite**; vi se spune *câte* nu sunt numite |
+| **Pagini și rapoarte de tură** | Peșterile pe care nu le puteți deschide **nu sunt numite**; vi se spune *câte* nu sunt numite. Raportul generat al unei ture reține la fel o stație și o adâncime — dar vedeți limita de mai jos pentru un raport **deja clasat** |
 | **E-mailuri de notificare** | **Nu numesc niciodată o peșteră.** Nici mesajele de tură, nici alarma de echipă întârziată |
 | **Calendarul** | Un rând **nu numește niciodată o peșteră**, nici un număr de peșteri omise |
 | **Istoricul modificărilor** | O valoare protejată se citește *„Valoare ascunsă (locație protejată)"* |
@@ -69,6 +69,33 @@ protecție.
 **Nimic din toate acestea nu este făcut de client.** Reținerea se face pe server. Un browser
 modificat, un apel direct la interfața de programare și o pagină extrasă automat primesc toate
 același răspuns.
+
+### O limită care merită știută: un raport deja clasat pe o tură
+
+**Un raport clasat înainte ca o peșteră să fie protejată poate numi în continuare stațiile acelei
+peșteri pentru oricine poate citi tura. Protejarea peșterii nu retrage copia aceea, iar modul de a
+o înlătura este să ștergeți copia clasată.**
+
+O tură poate fi [urmărită de la suprafață](../features/live-tracking.md), iar modelul de raport al
+unui club poate tipări jurnalul urmăririi, sau lista stațiilor ridicării, în raportul turei. O
+copie **clasată pe tură** este un fișier: a tipărit stațiile care puteau fi comunicate oricărui
+cont în ziua în care a fost făcută și continuă să le spună și după aceea. Orice suprafață vie —
+harta, fila de urmărire, un export, un raport făcut din nou — întreabă iar la fiecare citire și
+reține locul cum trebuie; doar un fișier deja clasat nu poate.
+
+Așadar, când protejați o peșteră care a fost urmărită de la suprafață:
+
+1. Deschideți turele urmărite în ea (pagina peșterii le listează) și vedeți ce este clasat pe
+   fiecare.
+2. Ștergeți orice raport clasat al cărui model a tipărit urmărirea sau lista stațiilor.
+3. Raportați tura din nou dacă clubul vrea o copie acolo — cea nouă nu numește nicio stație.
+
+Scoaterea automată a acelor copii de pe ture a fost construită și apoi oprită: trebuia să treacă
+mult mai larg decât problema (un fișier nu consemnează nimic despre faptul că modelul lui a
+tipărit vreodată un loc, așa că ar fi plecat fiecare raport generat al fiecărei ture urmărite
+vreodată în peșteră, inclusiv al turelor șterse), iar judecata a fost că logica costă mai mult
+decât breșa pe care o acoperă. **Hotărârea va fi reluată**, iar pagina aceasta o va spune când se
+schimbă.
 
 ---
 
