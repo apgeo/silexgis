@@ -204,3 +204,42 @@ test('the advanced filter edits the registry’s own question and keeps it in th
   await expect(page.getByTestId('cave-registry-edit-extra')).toBeFocused();
   expect(documentIn(page.url())).toBe(written);
 });
+
+test('the length box reads a comparison typed with signs and the editor opens on it', async ({ page }) => {
+  test.slow();
+
+  await login(page);
+  await gotoRoute(page, '/caves');
+  const region = page.getByTestId('cave-registry-region');
+  await region.fill('Brașov');
+  await region.press('Enter');
+
+  // A range written with a dash and a unit: the short cave is inside it, the long one is not.
+  const length = page.getByTestId('cave-registry-min-length');
+  await length.fill('100-500 m');
+  await expect(page.getByTestId('cave-registry-length-understood')).toHaveText('Read as: between 100 m and 500 m');
+  await length.press('Enter');
+  await expect(page.getByRole('cell', { name: SHORT, exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('cell', { name: FOUND, exact: true })).toHaveCount(0);
+  expect(documentIn(page.url())).toContain('"op":"between"');
+  await expect(length).toHaveValue('100..500');
+
+  // Text it cannot read changes nothing and says so.
+  const before = page.url();
+  await length.fill('100 km');
+  await length.press('Enter');
+  await expect(page.getByTestId('cave-registry-length-unreadable')).toBeVisible();
+  expect(page.url()).toBe(before);
+
+  // In the editor, a sign typed into the row's value becomes the row's comparison.
+  await length.fill('100..500');
+  await page.getByTestId('cave-registry-advanced').click();
+  await expect(page.getByTestId('filter-editor')).toBeVisible();
+  await expect(page.getByTestId('filter-editor-op-1')).toContainText('between');
+  await page.getByTestId('filter-editor-value-1').fill('>=1000');
+  await expect(page.getByTestId('filter-editor-op-1')).toContainText('at least');
+  await expect(page.getByTestId('filter-editor-value-1-understood')).toHaveText('Read as: at least 1000');
+  await page.getByTestId('filter-editor-apply').click();
+  await expectTheNarrowedRows(page);
+  await expect(length).toHaveValue('1000');
+});
