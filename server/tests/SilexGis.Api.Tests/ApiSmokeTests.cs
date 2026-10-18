@@ -280,6 +280,30 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
     }
 
     /// <summary>
+    /// The feature list and the two vector exports declare the 400 they send for a window that is
+    /// not one (and the exports for an unknown format or kind); the cave export, which reads the
+    /// cave list's filter, declares the 404 of a saved filter that is not there for this caller.
+    /// </summary>
+    [Fact]
+    public async Task OpenApi_document_declares_the_feature_list_and_vector_exports_own_refusals()
+    {
+        var operations = (await OperationsAsync()).ToDictionary(o => o.Id!);
+        var expected = new Dictionary<string, string[]>
+        {
+            ["featureList"] = ["400", "401"],
+            ["exportExportCaves"] = ["400", "401", "404"],
+            ["exportExportFeatures"] = ["400", "401"],
+        };
+
+        foreach (var (id, statuses) in expected)
+        {
+            operations.ShouldContainKey(id);
+            Responses(operations[id].Value).Where(code => code[0] is '4' or '5')
+                .ShouldBe(statuses, ignoreOrder: true, customMessage: id);
+        }
+    }
+
+    /// <summary>
     /// The gallery reads a filter, so it declares the refusals a filter brings: an unreadable,
     /// invalid, ambiguous or off-world filter (400) and a saved filter that is not there for this
     /// caller (404) — beside the 400 a malformed map extent always sent.

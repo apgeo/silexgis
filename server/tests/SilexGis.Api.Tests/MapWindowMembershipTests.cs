@@ -339,12 +339,39 @@ public sealed class MapWindowMembershipTests : IAsyncLifetime, IDisposable, ICla
     [InlineData("/api/v1/map/cave-entrances?zoom=6&bbox=-200,-10,10,10")]
     [InlineData("/api/v1/map/features?bbox=26,45,25,46")]
     [InlineData("/api/v1/map/features?bbox=0,-95,10,10")]
+    [InlineData("/api/v1/features?bbox=26,45,25,46")]
+    [InlineData("/api/v1/features?bbox=25,46,26,45&kind=generic")]
+    [InlineData("/api/v1/features?bbox=-200,-10,10,10")]
+    [InlineData("/api/v1/features?bbox=not-a-box")]
+    [InlineData("/api/v1/export/caves?format=geojson&bbox=26,45,25,46")]
+    [InlineData("/api/v1/export/caves?format=csv&bbox=0,-95,10,10")]
+    [InlineData("/api/v1/export/features?format=geojson&bbox=25,46,26,45")]
+    [InlineData("/api/v1/export/features?format=kml&bbox=170,10,190,20")]
+    [InlineData("/api/v1/export/features?format=geojson&bbox=1,2,3")]
     public async Task A_window_the_wrong_way_round_or_off_the_globe_is_refused(string url)
     {
         var response = await viewer.GetAsync(url);
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, payload);
         JsonNode.Parse(payload)!["code"]!.GetValue<string>().ShouldBe("map.invalid_bbox");
+    }
+
+    /// <summary>
+    /// The control for the refusal above on the routes whose window is optional: a real window
+    /// and no window at all (absent or blank) are both still answered.
+    /// </summary>
+    [Theory]
+    [InlineData("/api/v1/features?bbox=25,45,26,46")]
+    [InlineData("/api/v1/features?bbox=")]
+    [InlineData("/api/v1/features")]
+    [InlineData("/api/v1/export/caves?format=geojson&bbox=25,45,26,46")]
+    [InlineData("/api/v1/export/caves?format=geojson&bbox=")]
+    [InlineData("/api/v1/export/features?format=geojson&bbox=25,45,26,46")]
+    [InlineData("/api/v1/export/features?format=geojson")]
+    public async Task A_real_window_or_none_is_still_answered_where_the_window_is_optional(string url)
+    {
+        var response = await viewer.GetAsync(url);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
     /// <summary>The feature list narrowed to generic features, spoken the one way it takes a kind.</summary>

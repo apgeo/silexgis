@@ -108,6 +108,13 @@ public static class ExportEndpoints
             return UnsupportedFormat(format);
         }
 
+        // A box that is not a window is refused rather than read as "no window", which would
+        // write every readable cave into a file asked for as one part of the map.
+        if (WindowProblems.Optional(bbox, out var window) is { } windowProblem)
+        {
+            return windowProblem;
+        }
+
         var narrowing = await surfaceFilters.ForAsync<Feature>(
             ctx, FeatureFilterWorld.Key, filter, savedFilterId, ct);
         if (narrowing.Refusal is { } refusal)
@@ -140,7 +147,7 @@ public static class ExportEndpoints
                 f.Name != null && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern)));
         }
 
-        if (Bbox.TryParse(bbox, out var box))
+        if (window is { } box)
         {
             query = await NarrowedToBoxAsync(
                 query, db, ctx, box, access.Value.LocationGridMeters, [FeatureKind.Cave], ct);
@@ -276,6 +283,11 @@ public static class ExportEndpoints
             return refusal.ToProblem();
         }
 
+        if (WindowProblems.Optional(bbox, out var window) is { } windowProblem)
+        {
+            return windowProblem;
+        }
+
         // The same narrowing the feature list applies, through the same seam and after the same
         // visibility walk, so a file asked for from the list holds the rows the list shows — less
         // those with no position at all, which a vector row cannot carry, and those the protection
@@ -292,7 +304,7 @@ public static class ExportEndpoints
                 f.Name != null && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern)));
         }
 
-        if (Bbox.TryParse(bbox, out var box))
+        if (window is { } box)
         {
             query = await NarrowedToBoxAsync(
                 query, db, ctx, box, access.Value.LocationGridMeters, null, ct);

@@ -128,7 +128,16 @@ public static class FeatureEndpoints
         // point, or nowhere for a line or polygon whose geometry is withheld from them — never by
         // its stored one: tested on the stored geometry, the page and its total would bisect a
         // hidden position below the protection grid.
-        if (Bbox.TryParse(bbox, out var box))
+        // A box that is not a window is refused, not read as "no window" (the page would then
+        // list every readable row) nor handed on reversed (the stored-geometry test and the
+        // shown-position test disagree on such a box, so unprotected rows would answer while
+        // protected ones did not).
+        if (WindowProblems.Optional(bbox, out var window) is { } windowProblem)
+        {
+            return windowProblem;
+        }
+
+        if (window is { } box)
         {
             var polygon = box.ToPolygon();
             var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(

@@ -1637,17 +1637,8 @@ public static class MapEndpoints
     /// unprotected rows came back and protected ones did not, and the cluster branch answered
     /// nothing at all. One answer for every caller and both branches is a refusal.
     /// </remarks>
-    internal static ProblemHttpResult? WindowProblem(string? bbox, out Bbox box)
-    {
-        if (Bbox.TryParse(bbox, out box) && box.IsWithinWorld)
-        {
-            return null;
-        }
-
-        return ApiProblems.BadRequest(
-            "map.invalid_bbox",
-            "bbox must be 'west,south,east,north' inside -180..180 and -90..90, with west < east and south < north.");
-    }
+    internal static ProblemHttpResult? WindowProblem(string? bbox, out Bbox box) =>
+        WindowProblems.Required(bbox, out box);
 
     /// <summary>
     /// Parses the cross-kind layer's kind filter. Absent means the data-driven kinds only.
