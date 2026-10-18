@@ -157,10 +157,17 @@ public sealed record DensityAutocorrelationDto(
 /// The most cells one answer holds, so a client stepping to a coarser multiple of the minimum cell
 /// can choose one that fits its window instead of discovering the limit by being refused.
 /// </param>
+/// <param name="MaxCellMetres">
+/// The coarsest cell this installation will build, published beside the finest for the same
+/// reason: a client stepping to coarser cells to fit a wide window stops at the last size it may
+/// ask for, and tells its reader the window is too wide, instead of asking for one more doubling
+/// and being refused by the validator.
+/// </param>
 public sealed record DensityGridDto(
     double CellMetres,
     double MinimumCellMetres,
     int MaxCells,
+    double MaxCellMetres,
     double ProtectionGridMetres,
     double BandwidthMetres,
     double MinimumBandwidthMetres,

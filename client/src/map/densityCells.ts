@@ -22,6 +22,12 @@ export interface DensityGridLimits {
   minimumCellMetres: number;
   /** The most cells one answer holds. */
   maxCells: number;
+  /**
+   * The coarsest cell this installation builds, in metres. Stepping stops here: a cell past it is
+   * refused by the server's validator, which would read as a broken request rather than as a
+   * window too wide to draw.
+   */
+  maxCellMetres?: number;
 }
 
 /** Window in degrees: west, south, east, north. */
@@ -78,17 +84,31 @@ export function densityCellCount(box: LonLatBox, cellMetres: number): number {
  */
 export function fittingCellMultiple(box: LonLatBox, limits: DensityGridLimits): number | null {
   for (let step = 0, multiple = 1; step <= MAX_DOUBLINGS; step += 1, multiple *= 2) {
-    if (densityCellCount(box, densityCellMetres(limits.minimumCellMetres, multiple)) <= limits.maxCells) {
+    const cellMetres = densityCellMetres(limits.minimumCellMetres, multiple);
+    if (pastLargestCell(cellMetres, limits)) {
+      return null;
+    }
+    if (densityCellCount(box, cellMetres) <= limits.maxCells) {
       return multiple;
     }
   }
   return null;
 }
 
-/** The next coarser multiple, for a server that still found the window too large. */
-export function coarserCellMultiple(multiple: number): number | null {
+function pastLargestCell(cellMetres: number, limits: DensityGridLimits | null | undefined): boolean {
+  return limits?.maxCellMetres !== undefined && cellMetres > limits.maxCellMetres;
+}
+
+/**
+ * The next coarser multiple, for a server that still found the window too large — or null past
+ * the doubling bound or past the largest cell the limits state.
+ */
+export function coarserCellMultiple(multiple: number, limits?: DensityGridLimits | null): number | null {
   const next = multiple * 2;
-  return next <= 2 ** MAX_DOUBLINGS ? next : null;
+  if (next > 2 ** MAX_DOUBLINGS) {
+    return null;
+  }
+  return limits && pastLargestCell(densityCellMetres(limits.minimumCellMetres, next), limits) ? null : next;
 }
 
 /**
@@ -98,9 +118,13 @@ export function coarserCellMultiple(multiple: number): number | null {
 export function limitsFromRefusal(problem: Readonly<Record<string, unknown>> | undefined): DensityGridLimits | null {
   const floor = problem?.minimumCellMetres;
   const maxCells = problem?.maxCells;
-  return typeof floor === 'number' && floor > 0 && typeof maxCells === 'number' && maxCells > 0
-    ? { minimumCellMetres: floor, maxCells }
-    : null;
+  const largest = problem?.maxCellMetres;
+  if (!(typeof floor === 'number' && floor > 0 && typeof maxCells === 'number' && maxCells > 0)) {
+    return null;
+  }
+  return typeof largest === 'number' && largest > 0
+    ? { minimumCellMetres: floor, maxCells, maxCellMetres: largest }
+    : { minimumCellMetres: floor, maxCells };
 }
 
 /** A map window as the server accepts one: inside the world, west before east. */
@@ -158,7 +182,11 @@ export async function fetchSteppedDensity<G extends DensityGridLimits>(
       return {
         kind: 'grid',
         grid,
-        limits: { minimumCellMetres: grid.minimumCellMetres, maxCells: grid.maxCells },
+        limits: {
+          minimumCellMetres: grid.minimumCellMetres,
+          maxCells: grid.maxCells,
+          ...(grid.maxCellMetres !== undefined ? { maxCellMetres: grid.maxCellMetres } : {}),
+        },
       };
     } catch (error) {
       if (!(error instanceof ApiError) || error.status < 400 || error.status >= 500 || !error.code) {
@@ -172,7 +200,7 @@ export async function fetchSteppedDensity<G extends DensityGridLimits>(
         known = stated;
         multiple = fittingCellMultiple(clampToWorld(box), stated);
       } else {
-        multiple = multiple === null ? null : coarserCellMultiple(multiple);
+        multiple = multiple === null ? null : coarserCellMultiple(multiple, known);
       }
       if (!known || multiple === null) {
         return { kind: 'refused', code: TOO_MANY_CELLS, limits: known };

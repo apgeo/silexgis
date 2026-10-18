@@ -32,6 +32,7 @@ function grid(cellMetres: number, cells: DensityCell[] = [cell()]): DensityGrid 
     cellMetres,
     minimumCellMetres: 5000,
     maxCells: 5000,
+    maxCellMetres: 500_000,
     protectionGridMetres: 5000,
     bandwidthMetres: cellMetres * 2,
     minimumBandwidthMetres: cellMetres,
@@ -117,7 +118,8 @@ describe('asking for a window at a cell that fits', () => {
     expect(asked[1]!.cellMetres! % 5000).toBe(0);
     expect(asked[1]!.cellMetres!).toBeGreaterThan(5000);
     expect(answer.kind).toBe('grid');
-    expect(answer.limits).toEqual({ minimumCellMetres: 5000, maxCells: 5000 });
+    // The answer states all three limits, the largest cell among them.
+    expect(answer.limits).toEqual({ minimumCellMetres: 5000, maxCells: 5000, maxCellMetres: 500_000 });
   });
 
   it('chooses the cell before asking once the limits are known', async () => {

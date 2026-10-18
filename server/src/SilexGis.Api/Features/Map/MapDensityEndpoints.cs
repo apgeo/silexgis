@@ -123,9 +123,10 @@ public static class MapDensityEndpoints
         var cellCount = DensityGrid.CellCount(box.West, box.South, box.East, box.North, cellDegrees);
         if (cellCount > MapDensityLimits.MaxCells)
         {
-            // The two numbers a client needs to choose a cell that fits travel with the refusal, so
-            // a first request over a wide window — which has no answer to learn them from — can
-            // still step straight to a permitted multiple rather than guessing.
+            // The numbers a client needs to choose a cell that fits travel with the refusal, so a
+            // first request over a wide window — which has no answer to learn them from — can
+            // still step straight to a permitted multiple rather than guessing, and knows where
+            // the coarsest permitted cell is.
             return TypedResults.Problem(
                 detail: $"that window at {cellMeters:0.###} m cells is {cellCount} cells; the limit is "
                     + $"{MapDensityLimits.MaxCells}. Ask for a smaller window or a coarser cell.",
@@ -135,6 +136,7 @@ public static class MapDensityEndpoints
                     ["code"] = TooManyCellsCode,
                     ["minimumCellMetres"] = minimumCellMeters,
                     ["maxCells"] = MapDensityLimits.MaxCells,
+                    ["maxCellMetres"] = MapDensityLimits.MaxCellMetres,
                 });
         }
 
@@ -181,6 +183,7 @@ public static class MapDensityEndpoints
             cellMeters,
             minimumCellMeters,
             MapDensityLimits.MaxCells,
+            MapDensityLimits.MaxCellMetres,
             protectionGridMeters,
             bandwidthMeters,
             minimumBandwidthMeters,

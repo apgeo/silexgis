@@ -9165,6 +9165,8 @@ export interface components {
             /** Format: int32 */
             maxCells: number;
             /** Format: double */
+            maxCellMetres: number;
+            /** Format: double */
             protectionGridMetres: number;
             /** Format: double */
             bandwidthMetres: number;

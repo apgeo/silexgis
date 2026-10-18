@@ -67,10 +67,24 @@ describe('density cell stepping', () => {
     expect(coarserCellMultiple(4)).toBe(8);
   });
 
+  it('stops at the largest cell the server states rather than asking past it', () => {
+    // The whole world at a 5 km floor first fits in 5000 cells at 640 km, past a 500 km edge.
+    const world = [-180, -90, 180, 90] as const;
+    expect(fittingCellMultiple(world, { ...limits, maxCellMetres: 500_000 })).toBeNull();
+    expect(fittingCellMultiple(world, { ...limits, maxCellMetres: 1_000_000 })).toBe(128);
+    expect(fittingCellMultiple(world, limits)).toBe(128);
+    expect(coarserCellMultiple(64, { ...limits, maxCellMetres: 500_000 })).toBeNull();
+    expect(coarserCellMultiple(32, { ...limits, maxCellMetres: 500_000 })).toBe(64);
+    expect(coarserCellMultiple(64, limits)).toBe(128);
+  });
+
   it('reads the limits a too-many-cells refusal carries, and nothing else as limits', () => {
     expect(limitsFromRefusal({ code: 'density.too_many_cells', minimumCellMetres: 5000, maxCells: 5000 })).toEqual(
       limits,
     );
+    expect(
+      limitsFromRefusal({ code: 'density.too_many_cells', minimumCellMetres: 5000, maxCells: 5000, maxCellMetres: 500_000 }),
+    ).toEqual({ ...limits, maxCellMetres: 500_000 });
     expect(limitsFromRefusal({ code: 'density.too_many_cells' })).toBeNull();
     expect(limitsFromRefusal({ minimumCellMetres: '5000', maxCells: 5000 })).toBeNull();
     expect(limitsFromRefusal(undefined)).toBeNull();

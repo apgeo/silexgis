@@ -80,6 +80,7 @@ public sealed class MapDensityTests : IAsyncLifetime, IDisposable, IClassFixture
         body["cellMetres"]!.GetValue<double>().ShouldBe(GridMeters);
         body["minimumCellMetres"]!.GetValue<double>().ShouldBe(GridMeters);
         body["maxCells"]!.GetValue<int>().ShouldBe(5_000);
+        body["maxCellMetres"]!.GetValue<double>().ShouldBe(500_000d);
         body["protectionGridMetres"]!.GetValue<double>().ShouldBe(GridMeters);
         body["studyAreaKm2"]!.ShouldBeNull();
 
@@ -248,6 +249,14 @@ public sealed class MapDensityTests : IAsyncLifetime, IDisposable, IClassFixture
             "/api/v1/map/density?bbox=-180,-85,180,85")).Content.ReadAsStringAsync()).RootElement;
         tooMany.GetProperty("minimumCellMetres").GetDouble().ShouldBe(GridMeters);
         tooMany.GetProperty("maxCells").GetInt32().ShouldBe(5_000);
+        tooMany.GetProperty("maxCellMetres").GetDouble().ShouldBe(500_000d);
+
+        // The published largest cell is the true edge: asking for it is answered, asking past it
+        // is refused — so a client that stops stepping there is never refused for the cell.
+        var largest = tooMany.GetProperty("maxCellMetres").GetDouble();
+        (await GridAsync(owner, "8.5,40.5,8.7,40.7", largest))["cellMetres"]!.GetValue<double>().ShouldBe(largest);
+        await ExpectAsync(owner, $"?bbox=8.5,40.5,8.7,40.7&cellMetres={(largest + 1).ToString(Invariant)}",
+            HttpStatusCode.BadRequest, "validation.failed");
 
         // A cave is a point. A point encloses no ground, so it cannot be a denominator.
         await ExpectAsync(owner, $"?bbox=8.5,40.5,8.7,40.7&areaId={caveId}",
