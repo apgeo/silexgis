@@ -249,6 +249,31 @@ export function formatCondition(condition: TypedCondition, kind: TypedKind): str
   return negated && op === 'equals' ? `!=${value}` : value;
 }
 
+const SIGN_OF: Record<ComparisonOp, string> = {
+  equals: '=',
+  greaterThan: '>',
+  greaterOrEqual: '>=',
+  lessThan: '<',
+  lessOrEqual: '<=',
+  between: '',
+};
+
+/**
+ * A number comparison written out whole, with its sign, for a box that has no comparison list
+ * beside it. The one comparison such a box means by a bare number is written bare, so a box that
+ * means "at least" shows `300` for at least 300 and `>300` for more than 300.
+ */
+export function formatSigned(comparison: Pick<Comparison, 'op' | 'negated' | 'values'>, bare: ComparisonOp): string {
+  const [first, second] = comparison.values.map(String);
+  if (comparison.op === 'between') {
+    return `${first}..${second}`;
+  }
+  if (comparison.negated) {
+    return `!=${first}`;
+  }
+  return comparison.op === bare ? `${first}` : `${SIGN_OF[comparison.op]}${first}`;
+}
+
 /** Whether a row's negation is spelled in its box (`!=…`) rather than only by its "not" tick. */
 export function negationShown(condition: TypedCondition, kind: TypedKind): boolean {
   return condition.negated && (formatCondition(condition, kind)?.startsWith('!=') ?? false);

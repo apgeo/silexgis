@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AimOutlined, DeleteOutlined, DownloadOutlined, FilterOutlined, PlusOutlined } from '@ant-design/icons';
-import { Alert, App, Drawer, Dropdown, Flex, Input, InputNumber, Select, Table, Tag, Typography } from 'antd';
+import { Alert, App, Drawer, Dropdown, Flex, Input, Select, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { labelledPaginationItems } from '../../components/paginationLabels.ts';
 import type { TablePaginationConfig } from 'antd';
@@ -36,7 +36,9 @@ import {
   writeCaveRegistryAddress,
   type CaveRegistryAddress,
   type CaveRegistryControls,
+  type LengthComparison,
 } from '../../filters/caveRegistry.ts';
+import { describeComparison, formatSigned, readComparison, type Reading } from '../../filters/typedComparison.ts';
 import CaveRegistrySavedFilters from './CaveRegistrySavedFilters.tsx';
 import SelectResultButton from '../../components/filters/SelectResultButton.tsx';
 import { mapAddressForList } from '../../filters/tableMapHandoff.ts';
@@ -70,11 +72,17 @@ type AddressState = Omit<CaveRegistryAddress, 'unreadableLink'>;
  */
 const EDITOR_SORTS = ['updated', 'proximity'] as const;
 
-/** A typed number, or nothing when the field is empty or holds no number. */
-function lengthOf(raw: string | undefined): number | undefined {
-  const text = raw?.trim() ?? '';
-  const value = Number(text);
-  return text === '' || !Number.isFinite(value) ? undefined : value;
+/** What the length box holds, read as it means a bare number: at least that long. */
+function readLength(text: string): Reading {
+  return readComparison(text, 'number', 'greaterOrEqual');
+}
+
+function lengthText(length: LengthComparison | undefined): string {
+  return length === undefined ? '' : formatSigned(length, 'greaterOrEqual');
+}
+
+function sameLength(a: LengthComparison | undefined, b: LengthComparison | undefined): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
 
 /**
@@ -215,12 +223,20 @@ export default function CaveListPage() {
     if (value !== controls.region) setControl({ region: value });
   };
 
-  const [lengthInput, setLengthInput] = useState<number | null>(controls.minLength ?? null);
+  const committedLength = lengthText(controls.length);
+  const [lengthInput, setLengthInput] = useState(committedLength);
   useEffect(() => {
-    setLengthInput(controls.minLength ?? null);
-  }, [controls.minLength]);
-  const commitLength = (value: number | undefined) => {
-    if (value !== controls.minLength) setControl({ minLength: value });
+    setLengthInput(committedLength);
+  }, [committedLength]);
+  const lengthReading = readLength(lengthInput);
+  // Text that cannot be read changes nothing: the list keeps the length it had, and the box says why.
+  const commitLength = (text: string) => {
+    const reading = readLength(text);
+    if (reading.kind === 'unreadable') return;
+    const value: LengthComparison | undefined = reading.kind === 'empty'
+      ? undefined
+      : { op: reading.comparison.op, values: reading.comparison.values as number[], negated: reading.comparison.negated };
+    if (!sameLength(value, controls.length)) setControl({ length: value });
   };
 
   const listParams: CaveListParams = {
@@ -313,14 +329,16 @@ export default function CaveListPage() {
   // from the narrowings it is handed. The plain controls say everything the document does unless
   // there are conditions the controls cannot show — and then it is handed the document, which it
   // knows it cannot honestly group.
-  const distributionScope: CaveListParams = extra.length > 0
+  const plainLength = controls.length === undefined
+    || (controls.length.op === 'greaterOrEqual' && !controls.length.negated);
+  const distributionScope: CaveListParams = extra.length > 0 || !plainLength
     ? { filter: token, bbox: address.bbox }
     : {
         bbox: address.bbox,
         caveTypeId: controls.caveTypeId,
         region: controls.region,
         search: controls.search,
-        minLength: controls.minLength,
+        minLength: controls.length?.values[0],
         tag: controls.tag,
       };
 
@@ -474,17 +492,34 @@ export default function CaveListPage() {
           onBlur={() => commitRegion(regionInput)}
           onPressEnter={() => commitRegion(regionInput)}
         />
-        <InputNumber<number>
-          min={0}
-          placeholder={t('caveRegistry.minLengthPlaceholder')}
-          aria-label={t('caveRegistry.minLengthPlaceholder')}
-          style={{ width: 170 }}
+        <Input
+          allowClear
+          placeholder={t('caveRegistry.lengthPlaceholder')}
+          aria-label={t('caveRegistry.lengthPlaceholder')}
+          status={lengthReading.kind === 'unreadable' ? 'error' : undefined}
+          style={{ width: 200 }}
           value={lengthInput}
           data-testid="cave-registry-min-length"
-          onChange={(value) => setLengthInput(value ?? null)}
-          onBlur={(e) => commitLength(lengthOf(e.target.value))}
-          onPressEnter={(e) => commitLength(lengthOf((e.target as HTMLInputElement).value))}
+          onChange={(e) => {
+            setLengthInput(e.target.value);
+            if (e.type !== 'change') commitLength('');
+          }}
+          onBlur={() => commitLength(lengthInput)}
+          onPressEnter={() => commitLength(lengthInput)}
         />
+        {lengthReading.kind === 'unreadable' && (
+          <Typography.Text type="danger" role="alert" data-testid="cave-registry-length-unreadable">
+            {t('filters.typed.unreadable')}
+          </Typography.Text>
+        )}
+        {lengthReading.kind === 'read' && (
+          <Typography.Text type="secondary" aria-live="polite" data-testid="cave-registry-length-understood">
+            {(() => {
+              const described = describeComparison({ ...lengthReading.comparison, unit: 'm' }, 'number');
+              return t('filters.typed.understood', { text: t(described.key, described.values) });
+            })()}
+          </Typography.Text>
+        )}
         <Select
           allowClear
           showSearch

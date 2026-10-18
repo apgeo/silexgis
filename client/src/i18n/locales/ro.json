@@ -599,7 +599,7 @@
   "caveRegistry": {
     "unreadableLink": "Filtrul din acest link nu a putut fi citit, așa că sunt afișate toate peșterile. Cereți celui care l-a trimis un link nou.",
     "regionPlaceholder": "Regiune",
-    "minLengthPlaceholder": "Lungime de cel puțin (m)",
+    "lengthPlaceholder": "Lungime (m): 300, >300, 300..500",
     "filterRefused": "Acest filtru nu poate fi rulat cu drepturile dumneavoastră. Modificați sau goliți câmpurile de mai sus.",
     "savedUnreadable": "Filtrul salvat nu poate fi citit cu drepturile dumneavoastră, așa că nu a fost aplicat.",
     "savedNotAboutCaves": "Filtrul salvat nu se referă la peșteri.",
@@ -702,7 +702,7 @@
     "parts": {
       "search": "Numele conține „{{text}}”",
       "region": "Regiunea conține „{{text}}”",
-      "minLength": "Cel puțin {{length}} m lungime",
+      "length": "Lungime cartată {{comparison}}",
       "caveType": "Tip: {{name}}",
       "tag": "Etichetă: {{name}}",
       "more": "încă {{count}} condiții"

@@ -599,7 +599,7 @@
   "caveRegistry": {
     "unreadableLink": "The filter in this link could not be read, so every cave is shown. Ask whoever sent it for a fresh link.",
     "regionPlaceholder": "Region",
-    "minLengthPlaceholder": "Length at least (m)",
+    "lengthPlaceholder": "Length (m): 300, >300, 300..500",
     "filterRefused": "This filter could not be run with your access. Change or clear the controls above.",
     "savedUnreadable": "That saved filter cannot be read with your access, so it was not applied.",
     "savedNotAboutCaves": "That saved filter is not about caves.",
@@ -702,7 +702,7 @@
     "parts": {
       "search": "Name contains “{{text}}”",
       "region": "Region contains “{{text}}”",
-      "minLength": "At least {{length}} m long",
+      "length": "Surveyed length {{comparison}}",
       "caveType": "Type: {{name}}",
       "tag": "Tag: {{name}}",
       "more": "{{count}} more conditions"

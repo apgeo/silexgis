@@ -16,6 +16,7 @@ import {
 import { readCaveRegistry, writeCaveRegistryAddress } from '../../filters/caveRegistry.ts';
 import { describeCaveRegistry, type ConditionPart } from '../../filters/describe.ts';
 import { MAX_PINNED_FILTERS, useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+import { describeComparison } from '../../filters/typedComparison.ts';
 import SavedFilterAudienceField from '../../components/filters/SavedFilterAudienceField.tsx';
 import { useSavedFilterAudienceChoice } from '../../components/filters/useSavedFilterAudienceChoice.ts';
 import { audienceFields, type SavedFilterAudience } from '../../filters/savedFilterAudience.ts';
@@ -116,8 +117,10 @@ export default function SavedFiltersPage() {
         return t('savedFilters.parts.search', { text: part.text });
       case 'region':
         return t('savedFilters.parts.region', { text: part.text });
-      case 'minLength':
-        return t('savedFilters.parts.minLength', { length: part.length });
+      case 'length': {
+        const described = describeComparison({ ...part.length, unit: 'm' }, 'number');
+        return t('savedFilters.parts.length', { comparison: t(described.key, described.values) });
+      }
       case 'caveType': {
         const name = caveTypes?.find((type) => String(type.id) === part.id)?.name;
         return t('savedFilters.parts.caveType', { name: name ?? t('savedFilters.notAvailable') });

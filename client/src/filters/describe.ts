@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { readCaveRegistry } from './caveRegistry.ts';
+import { readCaveRegistry, type LengthComparison } from './caveRegistry.ts';
 import type { FilterDocument } from './types.ts';
 
 /**
@@ -13,7 +13,7 @@ import type { FilterDocument } from './types.ts';
 export type ConditionPart =
   | { kind: 'search'; text: string }
   | { kind: 'region'; text: string }
-  | { kind: 'minLength'; length: number }
+  | { kind: 'length'; length: LengthComparison }
   | { kind: 'caveType'; id: string }
   | { kind: 'tag'; slug: string }
   | { kind: 'more'; count: number };
@@ -36,7 +36,7 @@ export function describeCaveRegistry(document: FilterDocument): ConditionPart[] 
   if (controls.search !== undefined) parts.push({ kind: 'search', text: controls.search });
   if (controls.caveTypeId !== undefined) parts.push({ kind: 'caveType', id: String(controls.caveTypeId) });
   if (controls.region !== undefined) parts.push({ kind: 'region', text: controls.region });
-  if (controls.minLength !== undefined) parts.push({ kind: 'minLength', length: controls.minLength });
+  if (controls.length !== undefined) parts.push({ kind: 'length', length: controls.length });
   if (controls.tag !== undefined) parts.push({ kind: 'tag', slug: controls.tag });
   if (extra.length > 0) parts.push({ kind: 'more', count: extra.length });
   return parts;

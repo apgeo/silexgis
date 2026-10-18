@@ -2,6 +2,7 @@
 import { decodeFilter, encodeFilter, FILTER_PARAM } from './url.ts';
 import { emptyDocument, whereOf, withSort, withWhere } from './document.ts';
 import { isOnGlobe, withAnchor } from './spatial.ts';
+import type { ComparisonOp } from './typedComparison.ts';
 import type { FilterAnchor, FilterDocument, FilterNode } from './types.ts';
 import { readWindow, WINDOW_PARAM } from './tableMapHandoff.ts';
 
@@ -28,10 +29,30 @@ export interface CaveRegistryControls {
   caveTypeId?: number;
   /** Matched anywhere in the recorded region. */
   region?: string;
-  /** Surveyed length, in metres, at least this. */
-  minLength?: number;
+  /** Surveyed length, in metres, compared as typed into the length box. */
+  length?: LengthComparison;
   /** A tag's slug. */
   tag?: string;
+}
+
+/**
+ * The surveyed length compared with one number or a range. `negated` is "not equal to" and goes with
+ * `equals` only; the box writes no other negation.
+ */
+export interface LengthComparison {
+  op: ComparisonOp;
+  values: number[];
+  negated: boolean;
+}
+
+const LENGTH_OPS: ComparisonOp[] = ['equals', 'greaterThan', 'greaterOrEqual', 'lessThan', 'lessOrEqual', 'between'];
+
+/** Whether a length comparison is complete: a known comparison with as many finite numbers as it takes. */
+function isLengthComparison(length: LengthComparison): boolean {
+  return LENGTH_OPS.includes(length.op)
+    && length.values.length === (length.op === 'between' ? 2 : 1)
+    && length.values.every((v) => Number.isFinite(v))
+    && (!length.negated || length.op === 'equals');
 }
 
 /**
@@ -113,15 +134,17 @@ function controlNodes(controls: CaveRegistryControls): FilterNode[] {
   if (region !== undefined) {
     nodes.push(contains('region', region));
   }
-  if (controls.minLength !== undefined && Number.isFinite(controls.minLength)) {
-    // "At least" rather than "not less than": a negation would also let in every cave with no
-    // length recorded.
-    nodes.push({
+  if (controls.length !== undefined && isLengthComparison(controls.length)) {
+    // Written as the comparison itself — "at least", not "not less than" — since a negation also
+    // lets in every cave with no length recorded. "Not equal to" is the one negation, and it does
+    // take those caves in, as "not equal to" does in the condition editor.
+    const condition: FilterNode = {
       node: 'condition',
       field: 'surveyedLength',
-      op: 'greaterOrEqual',
-      values: [{ type: 'number', value: controls.minLength }],
-    });
+      op: controls.length.op,
+      values: controls.length.values.map((value) => ({ type: 'number', value })),
+    };
+    nodes.push(controls.length.negated ? { node: 'not', of: condition } : condition);
   }
   if (controls.tag !== undefined && controls.tag !== '') {
     nodes.push({ node: 'condition', field: 'tag', op: 'equals', values: [{ type: 'id', value: controls.tag }] });
@@ -192,9 +215,16 @@ function singleId(node: Extract<FilterNode, { node: 'condition' }>): string | un
   return rest.length === 0 && value?.type === 'id' ? value.value : undefined;
 }
 
-function singleNumber(node: Extract<FilterNode, { node: 'condition' }>): number | undefined {
-  const [value, ...rest] = node.values;
-  return rest.length === 0 && value?.type === 'number' ? value.value : undefined;
+/** A surveyed-length condition as the length box writes it, or null. */
+function lengthOf(node: FilterNode): LengthComparison | null {
+  const negated = node.node === 'not';
+  const inner = negated ? node.of : node;
+  if (inner.node !== 'condition' || inner.field !== 'surveyedLength') {
+    return null;
+  }
+  const values = inner.values.map((v) => (v.type === 'number' ? v.value : NaN));
+  const length = { op: inner.op as ComparisonOp, values, negated };
+  return isLengthComparison(length) ? length : null;
 }
 
 /** Which control one node is, if it is exactly what that control writes. */
@@ -214,9 +244,9 @@ function recognise(node: FilterNode): CaveRegistryControls | 'kind' | null {
     const tag = singleId(node);
     return tag === undefined ? null : { tag };
   }
-  if (isCondition(node, 'surveyedLength', 'greaterOrEqual')) {
-    const length = singleNumber(node);
-    return length === undefined ? null : { minLength: length };
+  const length = lengthOf(node);
+  if (length !== null) {
+    return { length };
   }
   if (node.node === 'anyOf' && node.of.length === 2) {
     const [first, second] = node.of;

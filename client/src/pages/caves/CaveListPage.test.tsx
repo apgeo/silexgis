@@ -264,11 +264,37 @@ describe('the registry read from its address', () => {
     fireEvent.keyDown(length, { key: 'Enter', code: 'Enter', keyCode: 13 });
 
     const state = readCaveRegistryAddress(new URLSearchParams(screen.getByTestId('search').textContent!));
-    expect(state.controls).toEqual({ minLength: 300 });
+    expect(state.controls).toEqual({ length: { op: 'greaterOrEqual', values: [300], negated: false } });
+  });
+
+  it('takes a comparison typed with signs into the length, says what it read, and refuses what it cannot', () => {
+    show('/caves');
+    const length = screen.getByTestId('cave-registry-min-length');
+    // The library takes Enter once until the key is let go.
+    const press = (el: HTMLElement) => {
+      fireEvent.keyDown(el, { key: 'Enter', code: 'Enter', keyCode: 13 });
+      fireEvent.keyUp(el, { key: 'Enter', code: 'Enter', keyCode: 13 });
+    };
+    const controls = () =>
+      readCaveRegistryAddress(new URLSearchParams(screen.getByTestId('search').textContent!)).controls;
+
+    fireEvent.change(length, { target: { value: '300-500 m' } });
+    expect(screen.getByTestId('cave-registry-length-understood')).toHaveTextContent('Read as: between 300 m and 500 m');
+    press(length);
+    expect(controls()).toEqual({ length: { op: 'between', values: [300, 500], negated: false } });
+
+    fireEvent.change(length, { target: { value: '!=2,5' } });
+    press(length);
+    expect(controls()).toEqual({ length: { op: 'equals', values: [2.5], negated: true } });
+
+    fireEvent.change(length, { target: { value: '300 km' } });
+    expect(screen.getByTestId('cave-registry-length-unreadable')).toBeInTheDocument();
+    press(length);
+    expect(controls()).toEqual({ length: { op: 'equals', values: [2.5], negated: true } });
   });
 
   it('exports with the list’s own filter, region, tag and length included', async () => {
-    const token = encodeFilter(caveRegistryDocument({ region: 'Bihor', tag: 'bats', minLength: 300 })!);
+    const token = encodeFilter(caveRegistryDocument({ region: 'Bihor', tag: 'bats', length: { op: 'greaterOrEqual', values: [300], negated: false } })!);
     show(`/caves?filter=${token}`);
 
     fireEvent.mouseEnter(screen.getByRole('button', { name: /export/i }));
@@ -343,7 +369,7 @@ describe('the advanced filter on the cave registry', () => {
   };
 
   it('opens on the controls’ conditions and the extra ones, with the fixed “caves” kept out of the rows', async () => {
-    const document = caveRegistryDocument({ region: 'Bihor', minLength: 300 }, [ODD_DEPTH])!;
+    const document = caveRegistryDocument({ region: 'Bihor', length: { op: 'greaterOrEqual', values: [300], negated: false } }, [ODD_DEPTH])!;
     show(`/caves?filter=${encodeFilter(document)}`);
 
     fireEvent.click(screen.getByTestId('cave-registry-advanced'));

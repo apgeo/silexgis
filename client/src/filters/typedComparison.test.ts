@@ -4,6 +4,7 @@ import {
   conditionOf,
   describeComparison,
   formatCondition,
+  formatSigned,
   negationShown,
   readComparison,
   resolveTyped,
@@ -199,6 +200,24 @@ describe('a row’s condition written back into its box', () => {
     expect(negationShown(row('equals', [300], true), 'number')).toBe(true);
     expect(negationShown(row('greaterThan', [300], true), 'number')).toBe(false);
     expect(negationShown(row('equals', [300]), 'number')).toBe(false);
+  });
+});
+
+describe('a comparison written out whole for a box with no comparison list', () => {
+  it('writes the box’s own comparison bare and every other with its sign, and reads back the same', () => {
+    const cases: [Comparison, string][] = [
+      [n('greaterOrEqual', [300]), '300'],
+      [n('greaterThan', [300]), '>300'],
+      [n('lessThan', [30]), '<30'],
+      [n('lessOrEqual', [30]), '<=30'],
+      [n('equals', [2.5]), '=2.5'],
+      [n('equals', [300], true), '!=300'],
+      [n('between', [-10, -5]), '-10..-5'],
+    ];
+    for (const [comparison, text] of cases) {
+      expect(formatSigned(comparison, 'greaterOrEqual')).toBe(text);
+      expect(read(text, 'number', 'greaterOrEqual')).toEqual(comparison);
+    }
   });
 });
 

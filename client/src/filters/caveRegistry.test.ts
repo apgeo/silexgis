@@ -14,6 +14,7 @@ import {
   sameQuestion,
   writeCaveRegistryAddress,
   type CaveRegistryControls,
+  type LengthComparison,
 } from './caveRegistry.ts';
 import { describeCaveRegistry } from './describe.ts';
 import { emptyDocument, whereOf, withWhere } from './document.ts';
@@ -24,7 +25,7 @@ const EVERY_CONTROL: CaveRegistryControls = {
   search: 'urs',
   caveTypeId: 3,
   region: 'Bihor',
-  minLength: 300,
+  length: { op: 'greaterOrEqual', values: [300], negated: false },
   tag: 'bats',
 };
 
@@ -108,20 +109,46 @@ describe('the cave registry controls as one filter document', () => {
     expect(caveRegistryDocument(reading.controls, reading.extra)).toEqual(document);
   });
 
-  it('show a length the box cannot say as an extra condition rather than as its own', () => {
-    // The box means "at least"; "more than" leaves out the cave exactly at the length, so reading
-    // it into the box would change the question the next time the controls wrote it out.
-    const moreThan: FilterNode = {
-      node: 'condition',
-      field: 'surveyedLength',
-      op: 'greaterThan',
-      values: [{ type: 'number', value: 300 }],
-    };
+  it('read every length comparison the box can write back into the box', () => {
+    const lengths: LengthComparison[] = [
+      { op: 'greaterOrEqual', values: [300], negated: false },
+      { op: 'greaterThan', values: [300], negated: false },
+      { op: 'lessThan', values: [30], negated: false },
+      { op: 'lessOrEqual', values: [30], negated: false },
+      { op: 'equals', values: [300], negated: false },
+      { op: 'equals', values: [300], negated: true },
+      { op: 'between', values: [300, 500], negated: false },
+    ];
+    for (const length of lengths) {
+      expect(readCaveRegistry(caveRegistryDocument({ length })!)).toEqual({ controls: { length }, extra: [] });
+    }
+    expect(whereOf(caveRegistryDocument({ length: lengths[5]! })!, 'feature')).toEqual({
+      node: 'allOf',
+      of: [
+        { node: 'condition', field: 'kind', op: 'equals', values: [{ type: 'id', value: 'cave' }] },
+        { node: 'not', of: { node: 'condition', field: 'surveyedLength', op: 'equals', values: [{ type: 'number', value: 300 }] } },
+      ],
+    });
+  });
 
-    const reading = readCaveRegistry(caveRegistryDocument({}, [moreThan])!)!;
+  it('show a length the box cannot say as an extra condition rather than as its own', () => {
+    // The box writes no negation but "not equal to"; reading "not more than" into it would change
+    // the question the next time the controls wrote it out.
+    const notMoreThan: FilterNode = {
+      node: 'not',
+      of: { node: 'condition', field: 'surveyedLength', op: 'greaterThan', values: [{ type: 'number', value: 300 }] },
+    };
+    const empty: FilterNode = { node: 'condition', field: 'surveyedLength', op: 'isEmpty', values: [] };
+
+    const reading = readCaveRegistry(caveRegistryDocument({}, [notMoreThan, empty])!)!;
 
     expect(reading.controls).toEqual({});
-    expect(reading.extra).toEqual([moreThan]);
+    expect(reading.extra).toEqual([notMoreThan, empty]);
+  });
+
+  it('write nothing for a length comparison that is not complete', () => {
+    expect(caveRegistryDocument({ length: { op: 'between', values: [300], negated: false } })).toBeNull();
+    expect(caveRegistryDocument({ length: { op: 'greaterThan', values: [300], negated: true } })).toBeNull();
   });
 
   it('read a single condition that is not in a group', () => {
@@ -209,7 +236,7 @@ describe('the registry as the advanced filter sees it', () => {
 
   it('reads an edited document back into the same controls and extra conditions', () => {
     const odd: FilterNode = { node: 'condition', field: 'depth', op: 'lessOrEqual', values: [{ type: 'number', value: 5 }] };
-    const reading = { controls: { region: 'Bihor', minLength: 100, tag: 'bats' }, extra: [odd] };
+    const reading = { controls: { region: 'Bihor', length: { op: 'greaterOrEqual' as const, values: [100], negated: false }, tag: 'bats' }, extra: [odd] };
 
     expect(readCaveRegistryEditor(caveRegistryEditorDocument(reading))).toEqual(reading);
   });
