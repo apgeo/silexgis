@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { dayBound, pickedDay } from './dayBounds.ts';
 import { isComplete } from './preflight.ts';
 import { isSpatialAnchor, namesAnchor } from './spatial.ts';
 import type { FieldKind, FilterField, FilterNode, FilterOp, FilterValue } from './types.ts';
@@ -225,16 +226,15 @@ export function isEditableKind(kind: FieldKind): boolean {
 /**
  * The values a condition keeps when its operator changes: as many as the new operator takes, so
  * moving from "more than 30" to "at least 30" keeps the 30, and moving to "is empty" drops it.
+ *
+ * A picked day is kept as the day, not as the moment written for the old comparison. "At least the
+ * 5th" is bounded by the 5th's first moment and "more than the 5th" by its last, so a bound carried
+ * across unchanged would turn "more than the 5th" into "from the 5th on" — the day picked shown,
+ * and a different day asked.
  */
 export function valuesForOp(op: FilterOp, values: FilterValue[]): FilterValue[] {
   if (op === 'isEmpty' || op === 'isNotEmpty') {
     return [];
-  }
-  if (op === 'between') {
-    return values.slice(0, 2);
-  }
-  if (op === 'in') {
-    return values;
   }
   // A radius and an anchor mean nothing to another operator and nothing else means anything to
   // these, so a spatial row starts again when its operator changes either way.
@@ -244,7 +244,19 @@ export function valuesForOp(op: FilterOp, values: FilterValue[]): FilterValue[] 
   if (op === 'inside') {
     return values[0]?.type === 'polygon' || values[0]?.type === 'object' ? values.slice(0, 1) : [];
   }
-  return isSpatialAnchor(values[0]) || isSpatialAnchor(values[1]) ? [] : values.slice(0, 1);
+  if (op !== 'between' && op !== 'in' && (isSpatialAnchor(values[0]) || isSpatialAnchor(values[1]))) {
+    return [];
+  }
+  const kept = op === 'between' ? values.slice(0, 2) : op === 'in' ? values : values.slice(0, 1);
+  return kept.map((value, index) => rebound(op, value, op === 'between' && index === 1 ? 'high' : 'low'));
+}
+
+function rebound(op: FilterOp, value: FilterValue, end: 'low' | 'high'): FilterValue {
+  if (value.type !== 'instant' || typeof value.value !== 'string') {
+    return value;
+  }
+  const day = pickedDay(value.value);
+  return day === null ? value : { type: 'instant', value: dayBound(op, day, end) };
 }
 
 /**

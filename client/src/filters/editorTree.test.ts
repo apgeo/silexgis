@@ -19,7 +19,9 @@ import {
   valuesForOp,
   withinDepth,
 } from './editorTree.ts';
-import type { FilterField, FilterNode } from './types.ts';
+import dayjs from 'dayjs';
+import { dayBound } from './dayBounds.ts';
+import type { FilterField, FilterNode, FilterOp, FilterValue } from './types.ts';
 
 const cond = (field: string): FilterNode => ({
   node: 'condition', field, op: 'equals', values: [{ type: 'number', value: 1 }],
@@ -88,6 +90,30 @@ describe('the editor tree', () => {
     expect(valuesForOp('greaterOrEqual', two)).toEqual([two[0]]);
     expect(valuesForOp('between', two)).toEqual(two);
     expect(valuesForOp('isEmpty', two)).toEqual([]);
+  });
+
+  // Every pair of comparisons a day field offers: a day picked under one is still that day under
+  // the next, bounded the way the new comparison bounds it — never the old one's moment carried over.
+  const dayOps: FilterOp[] = ['lessThan', 'lessOrEqual', 'greaterThan', 'greaterOrEqual', 'between'];
+  const pairs = dayOps.flatMap((from) => dayOps.filter((to) => to !== from).map((to) => [from, to] as const));
+  it.each(pairs)('keeps the picked day when the comparison moves from %s to %s', (from, to) => {
+    const fifth = dayjs('2026-10-05');
+    const seventh = dayjs('2026-10-07');
+    const picked: FilterValue[] = from === 'between'
+      ? [{ type: 'instant', value: dayBound(from, fifth, 'low') }, { type: 'instant', value: dayBound(from, seventh, 'high') }]
+      : [{ type: 'instant', value: dayBound(from, fifth, 'low') }];
+
+    const expected: FilterValue[] = to === 'between'
+      ? picked.map((_, i) => ({ type: 'instant', value: dayBound(to, i === 0 ? fifth : seventh, i === 0 ? 'low' : 'high') }))
+      : [{ type: 'instant', value: dayBound(to, fifth, 'low') }];
+    expect(valuesForOp(to, picked)).toEqual(expected);
+  });
+
+  it('leaves an unpicked end of a range and a value that is not a day as they were', () => {
+    const unpicked = { type: 'instant', value: null } as unknown as FilterValue;
+    expect(valuesForOp('greaterThan', [unpicked])).toEqual([unpicked]);
+    const number: FilterValue = { type: 'number', value: 4 };
+    expect(valuesForOp('greaterThan', [number])).toEqual([number]);
   });
 
   it('starts a spatial row again when its operator changes either way', () => {
