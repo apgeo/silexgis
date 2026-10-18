@@ -4,12 +4,13 @@ import type { FeatureLike } from 'ol/Feature';
 import { Polygon } from 'ol/geom';
 import VectorLayer from 'ol/layer/Vector';
 import type Map from 'ol/Map';
-import { fromLonLat, transformExtent } from 'ol/proj';
+import { fromLonLat } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Fill, Stroke, Style } from 'ol/style';
 import { fetchMapDensity, type DensityCell, type DensityGrid, type DensityQuery } from '../api/hooks.ts';
 import { fetchSteppedDensity, type DensityGridLimits, type KarstDensityMode } from './densityCells.ts';
 import { karstDensityPalette as palette } from './markerPalette.ts';
+import { attachWindowLoader } from './windowLoader.ts';
 
 export const KARST_DENSITY_LAYER_ID = 'karst-density';
 
@@ -270,32 +271,11 @@ export function setKarstDensityEnabled(value: boolean): void {
  * answer that arrives after its window was left is dropped rather than drawn.
  */
 export function attachKarstDensityLoader(map: Map, fetchGrid: DensityFetch = fetchMapDensity): () => void {
-  let timer: number | undefined;
-  let inFlight: AbortController | undefined;
-
-  const load = async () => {
-    if (!enabled) {
-      return;
-    }
-    const size = map.getSize();
-    if (!size) {
-      return;
-    }
-    const extent = transformExtent(map.getView().calculateExtent(size), 'EPSG:3857', 'EPSG:4326');
-    inFlight?.abort();
-    const controller = new AbortController();
-    inFlight = controller;
-    publish({ ...loadState, status: 'loading', refusal: undefined, mode });
-    try {
-      const answer = await fetchSteppedDensity(
-        [extent[0], extent[1], extent[2], extent[3]],
-        knownLimits,
-        fetchGrid,
-        controller.signal,
-      );
-      if (controller.signal.aborted || !enabled) {
-        return;
-      }
+  const loader = attachWindowLoader(map, {
+    isEnabled: () => enabled,
+    onStart: () => publish({ ...loadState, status: 'loading', refusal: undefined, mode }),
+    fetch: (window, _view, signal) => fetchSteppedDensity(window, knownLimits, fetchGrid, signal),
+    onAnswer: (answer) => {
       knownLimits = answer.limits ?? knownLimits;
       if (answer.kind === 'grid') {
         lastGrid = answer.grid;
@@ -307,31 +287,17 @@ export function attachKarstDensityLoader(map: Map, fetchGrid: DensityFetch = fet
         lastGrid = null;
         publish({ ...emptyState(), status: 'refused', refusal: answer.code });
       }
-    } catch {
-      if (controller.signal.aborted) {
-        return;
-      }
+    },
+    onError: () => {
       source.clear(true);
       lastGrid = null;
       publish({ ...emptyState(), status: 'error' });
-    } finally {
-      if (inFlight === controller) {
-        inFlight = undefined;
-      }
-    }
-  };
+    },
+  });
 
-  const onMoveEnd = () => {
-    window.clearTimeout(timer);
-    timer = window.setTimeout(() => void load(), 250);
-  };
-
-  map.on('moveend', onMoveEnd);
-  activeReload = () => void load();
+  activeReload = loader.reload;
   return () => {
-    map.un('moveend', onMoveEnd);
-    window.clearTimeout(timer);
-    inFlight?.abort();
+    loader.detach();
     activeReload = undefined;
   };
 }

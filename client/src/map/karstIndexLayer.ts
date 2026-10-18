@@ -4,7 +4,6 @@ import type { FeatureLike } from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import VectorLayer from 'ol/layer/Vector';
 import type Map from 'ol/Map';
-import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Fill, Stroke, Style, Text } from 'ol/style';
 import { ApiError } from '../api/client.ts';
@@ -18,6 +17,7 @@ import {
 import i18n from '../i18n';
 import { clampToWorld } from './densityCells.ts';
 import { karstIndexPalette as palette } from './markerPalette.ts';
+import { attachWindowLoader } from './windowLoader.ts';
 
 export const KARST_INDEX_LAYER_ID = 'karst-index';
 
@@ -212,32 +212,17 @@ export function setKarstIndexEnabled(value: boolean): void {
  * answer that arrives after its window was left is dropped rather than drawn.
  */
 export function attachKarstIndexLoader(map: Map, fetchIndex: KarstIndexFetch = fetchMapKarstIndex): () => void {
-  let timer: number | undefined;
-  let inFlight: AbortController | undefined;
-
-  const load = async () => {
-    if (!enabled) {
-      return;
-    }
-    const size = map.getSize();
-    if (!size) {
-      return;
-    }
-    const view = map.getView();
-    const extent = transformExtent(view.calculateExtent(size), 'EPSG:3857', 'EPSG:4326');
-    const bbox = clampToWorld([extent[0], extent[1], extent[2], extent[3]])
-      .map((n) => n.toFixed(5))
-      .join(',');
-    const zoom = Math.min(MAX_ZOOM, Math.max(0, Math.round(view.getZoom() ?? 0)));
-    inFlight?.abort();
-    const controller = new AbortController();
-    inFlight = controller;
-    publish({ ...loadState, status: 'loading', refusal: undefined });
-    try {
-      const answer = await fetchIndex({ bbox, zoom }, controller.signal);
-      if (controller.signal.aborted || !enabled) {
-        return;
-      }
+  const loader = attachWindowLoader(map, {
+    isEnabled: () => enabled,
+    onStart: () => publish({ ...loadState, status: 'loading', refusal: undefined }),
+    fetch: (window, view, signal) => {
+      const bbox = clampToWorld(window)
+        .map((n) => n.toFixed(5))
+        .join(',');
+      const zoom = Math.min(MAX_ZOOM, Math.max(0, Math.round(view.getZoom() ?? 0)));
+      return fetchIndex({ bbox, zoom }, signal);
+    },
+    onAnswer: (answer) => {
       draw(answer);
       publish({
         status: 'ok',
@@ -245,10 +230,8 @@ export function attachKarstIndexLoader(map: Map, fetchIndex: KarstIndexFetch = f
         truncated: answer.truncated,
         maxAreas: answer.maxAreas,
       });
-    } catch (error) {
-      if (controller.signal.aborted) {
-        return;
-      }
+    },
+    onError: (error) => {
       // Nothing from an earlier window may stay drawn under a refusal or failure of this one.
       source.clear(true);
       const refused = error instanceof ApiError && error.status >= 400 && error.status < 500 && !!error.code;
@@ -257,24 +240,12 @@ export function attachKarstIndexLoader(map: Map, fetchIndex: KarstIndexFetch = f
           ? { ...emptyState(), status: 'refused', refusal: (error as ApiError).code ?? undefined }
           : { ...emptyState(), status: 'error' },
       );
-    } finally {
-      if (inFlight === controller) {
-        inFlight = undefined;
-      }
-    }
-  };
+    },
+  });
 
-  const onMoveEnd = () => {
-    window.clearTimeout(timer);
-    timer = window.setTimeout(() => void load(), 250);
-  };
-
-  map.on('moveend', onMoveEnd);
-  activeReload = () => void load();
+  activeReload = loader.reload;
   return () => {
-    map.un('moveend', onMoveEnd);
-    window.clearTimeout(timer);
-    inFlight?.abort();
+    loader.detach();
     activeReload = undefined;
   };
 }
