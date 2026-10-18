@@ -999,10 +999,13 @@ test('a visitor watches another party of the cave on the survey of the link they
  * planned to be out by, the names the cave gives its places, the photographs on a replay's
  * moments.
  *
- * <b>Served by the test, unlike everything above.</b> The installation the suite stands up
- * publishes none of the three — they are off as installed — so the tests above are the proof that
- * the page prints nothing for them, against a real server. This one is the other side, which no
- * real answer here can show: the three drawn in a browser at a desk's width.
+ * <b>Served by the test, unlike everything above.</b> Of the three, only the planned hour is off
+ * as installed; the names of a cave's places and a replay's photographs ship on. What the real
+ * server above cannot show is nonetheless the same: the caves this suite stands up declare no
+ * place for a depth and hang no photograph in a public gallery, so the two settings that are on
+ * have nothing to say over these fixtures, and whether the page draws any of the three is not
+ * something the tests above decide either way. This one is that other side — the three drawn in a
+ * browser at a desk's width, over answers of this test's own.
  */
 test('where an installation publishes them, a visitor is told the planned hour, reads a place by its name, and sees a replay’s photographs at their moment', async ({
   page,

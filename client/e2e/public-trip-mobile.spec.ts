@@ -89,6 +89,14 @@ function envelope(overrides: Record<string, unknown> = {}) {
         out: false,
       },
     ],
+    // What this installation has decided its published pages may do. Served as a real one
+    // serves it — every one of them on, which is how it is installed — because a member left out
+    // of the answer is read as a no, and a page drawn with no language button and no moment link
+    // is not the page these tests are about.
+    offersSiblingWatch: true,
+    offersLanguageChoice: true,
+    offersMomentLinks: true,
+    compactsReplayBarInFrame: true,
     ...overrides,
   };
 }

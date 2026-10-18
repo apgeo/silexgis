@@ -147,6 +147,14 @@ const liveEnvelope = () => ({
       out: false,
     },
   ],
+  // What this installation has decided its published pages may do. Served as a real one serves
+  // it — every one of them on, which is how it is installed — because a member left out of the
+  // answer is read as a no, and a replay with no moment link and no one-line strip in a small
+  // frame is not the replay these tests are about.
+  offersSiblingWatch: true,
+  offersLanguageChoice: true,
+  offersMomentLinks: true,
+  compactsReplayBarInFrame: true,
 });
 
 const fix = (recordedAt: string, stationName: string | null, teamId: string | null, out = false) => ({
@@ -474,8 +482,9 @@ test.describe('a cave’s past trips on a phone', () => {
     await expect(page.getByTestId('public-past-banner')).toBeInViewport({ timeout: 20_000 });
     await expect(page.getByTestId('public-past-banner-what')).toContainText(PAST_TITLE);
 
-    // This cave's installation publishes no photographs and no names of places, as one is
-    // installed: the strip has no row of pictures, and nobody stands under a name.
+    // The answers served here carry no photographs and no names of places — what an installation
+    // that has switched both off sends: the strip has no row of pictures, and nobody stands under
+    // a name. The describe below serves the other answer.
     await expect(page.getByTestId('public-past-pictures')).toHaveCount(0);
     await expect(page.getByTestId('public-trip-place-1')).toHaveCount(0);
 

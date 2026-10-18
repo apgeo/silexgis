@@ -84,6 +84,14 @@ const liveEnvelope = (expectedReturnAt: string | null) => ({
       out: false,
     },
   ],
+  // What this installation has decided its published pages may do. Served as a real one serves
+  // it — every one of them on, which is how it is installed — because a member left out of the
+  // answer is read as a no, and a replay with no moment link and no one-line strip in a small
+  // frame is not the replay these tests are about.
+  offersSiblingWatch: true,
+  offersLanguageChoice: true,
+  offersMomentLinks: true,
+  compactsReplayBarInFrame: true,
 });
 
 const fix = (recordedAt: string, stationName: string | null, out = false) => ({
