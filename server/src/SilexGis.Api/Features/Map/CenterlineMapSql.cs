@@ -59,6 +59,15 @@ public static class CenterlineMapSql
     public static async Task<IReadOnlyList<Guid>> CenterlineIdsInViewAsync(
         SilexGisDbContext db, AccessContext ctx, Bbox box, CancellationToken ct)
     {
+        var (sql, parameters) = BuildIdsInView(ctx, box);
+        var connection = db.Database.GetDbConnection();
+        var ids = await connection.QueryAsync<Guid>(new CommandDefinition(sql, parameters, cancellationToken: ct));
+        return [.. ids];
+    }
+
+    /// <summary>The id statement and its parameters, exposed so the plan pins explain what is sent.</summary>
+    public static (string Sql, DynamicParameters Parameters) BuildIdsInView(AccessContext ctx, Bbox box)
+    {
         var (visibilitySql, parameters) = AccessSql.FeatureVisibleToFragment(ctx, "f");
         parameters.Add("west", box.West);
         parameters.Add("south", box.South);
@@ -74,9 +83,7 @@ public static class CenterlineMapSql
               AND {visibilitySql}
             """;
 
-        var connection = db.Database.GetDbConnection();
-        var ids = await connection.QueryAsync<Guid>(new CommandDefinition(sql, parameters, cancellationToken: ct));
-        return [.. ids];
+        return (sql, parameters);
     }
 
     public static async Task<IReadOnlyList<CenterlineMapRow>> QueryAsync(

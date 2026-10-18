@@ -295,7 +295,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     {
         string sent;
         using (var results = await connection.QueryMultipleAsync(
-            $"{MapSql.WithoutJitSql};\nEXPLAIN (ANALYZE, BUFFERS)\n{sql}", parameters))
+            $"{PlannerSql.WithoutJit};\nEXPLAIN (ANALYZE, BUFFERS)\n{sql}", parameters))
         {
             await results.ReadSingleAsync<string>();
             sent = string.Join("\n", await results.ReadAsync<string>());

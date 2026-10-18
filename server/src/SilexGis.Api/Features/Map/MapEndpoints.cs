@@ -192,6 +192,10 @@ public sealed record MapConfigDto(
 public sealed record EntrancePointRow(
     Guid Id, string? Name, Geometry Geom, bool IsProtectedEffective, Guid CaveId, bool IsMain);
 
+/// <summary>One row the cross-kind feature layer considers, before it is shaped.</summary>
+public sealed record FeatureLayerRow(
+    Guid Id, FeatureKind Kind, string? Name, Geometry? Geom, long? FeatureTypeId, bool IsProtectedEffective);
+
 /// <summary>
 /// GeoJSON layer endpoints for the map workspace. Always visibility-filtered; protected
 /// feature locations obfuscated server-side (points snapped to the protection grid,
@@ -1262,31 +1266,21 @@ public static class MapEndpoints
         // point, or nowhere for a protected line or polygon whose geometry is withheld — so the
         // presence of a row never bisects a position the caller may not see. Decided before the
         // cap, so a hidden row cannot take a slot either.
-        var polygon = box.ToPolygon();
         var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(
             db, ctx, box.West, box.South, box.East, box.North,
             accessOptions.Value.LocationGridMeters, kindFilter, ct);
-        var query = FilteredReadable(
-                db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers),
-                narrowing.Narrowing!)
-            .Where(f => kindFilter.Contains(f.Kind) && f.Geom != null
-                && ((!f.IsProtectedEffective && f.Geom!.Intersects(polygon))
-                    || protectedMembers.Contains(f.Id)));
-
-        if (featureTypeId is not null)
-        {
-            query = query.Where(f => f.FeatureTypeId == featureTypeId);
-        }
-
-        if (categoryFilter is not null)
-        {
-            query = query.Where(f => f.Category == categoryFilter);
-        }
-
-        var rows = await query
-            .Select(f => new { f.Id, f.Kind, f.Name, f.Geom, f.FeatureTypeId, f.IsProtectedEffective })
-            .OrderBy(f => f.Id)
-            .Take(mapOptions.Value.MaxPoints)
+        var rows = await FeatureLayerQuery(
+                db,
+                FilteredReadable(
+                    db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers),
+                    narrowing.Narrowing!),
+                box,
+                protectedMembers,
+                kindFilter,
+                featureTypeId,
+                categoryFilter,
+                tag: null,
+                mapOptions.Value.MaxPoints)
             .ToListAsync(ct);
         if (rows.Count == 0)
         {
@@ -1519,6 +1513,57 @@ public static class MapEndpoints
                 f.IsProtectedEffective,
                 f.Entrance!.CaveFeatureId,
                 f.Entrance!.IsMain));
+    }
+
+    /// <summary>
+    /// The cross-kind feature layer as a query: the rows of <paramref name="readable"/> of the
+    /// given kinds in the window by the membership rule, narrowed by the optional filters, in id
+    /// order, cut at the cap.
+    /// </summary>
+    /// <remarks>
+    /// Public so the plan pins can explain the statement this route really sends rather than a
+    /// copy of it. Unprotected rows are in by their stored geometry; protected ones only by
+    /// <paramref name="protectedMembers"/>, which was decided on the position the reader is shown.
+    /// </remarks>
+    public static IQueryable<FeatureLayerRow> FeatureLayerQuery(
+        SilexGisDbContext db,
+        IQueryable<Feature> readable,
+        Bbox box,
+        IReadOnlyCollection<Guid> protectedMembers,
+        IReadOnlyCollection<FeatureKind> kinds,
+        long? featureTypeId,
+        FeatureCategory? category,
+        string? tag,
+        int maxPoints)
+    {
+        var polygon = box.ToPolygon();
+        var members = protectedMembers as Guid[] ?? [.. protectedMembers];
+        var kindList = kinds as FeatureKind[] ?? [.. kinds];
+        var query = readable
+            .Where(f => kindList.Contains(f.Kind) && f.Geom != null
+                && ((!f.IsProtectedEffective && f.Geom!.Intersects(polygon))
+                    || members.Contains(f.Id)));
+
+        if (featureTypeId is not null)
+        {
+            query = query.Where(f => f.FeatureTypeId == featureTypeId);
+        }
+
+        if (category is not null)
+        {
+            query = query.Where(f => f.Category == category);
+        }
+
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            query = query.Where(f => db.Taggings.Any(tg =>
+                tg.FeatureId == f.Id && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
+        }
+
+        return query
+            .OrderBy(f => f.Id)
+            .Take(maxPoints)
+            .Select(f => new FeatureLayerRow(f.Id, f.Kind, f.Name, f.Geom, f.FeatureTypeId, f.IsProtectedEffective));
     }
 
     private static async Task<FeatureCollection> PointsAsync(

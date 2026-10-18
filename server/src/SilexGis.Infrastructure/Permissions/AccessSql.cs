@@ -93,9 +93,15 @@ public static class AccessSql
             "acc_vel",
             parameters,
             withVisibilityArm: false);
+        // A row whose stored protection flag is clear has no protected root above it — the flag is
+        // exactly that question, kept by the write path — so it is exact for everybody, and the
+        // walk is asked only of rows that could fail it, as the in-memory twin does. Over a wide
+        // window that is one index probe per row against none: measured over a hundred thousand
+        // unprotected entrances, 400 ms of a reader's country-wide cluster request.
         return $"""
             (@{IsFullAdminParam}
              OR {alias}.owner_user_id = @{UserIdParam}
+             OR NOT {alias}.is_protected_effective
              OR NOT EXISTS (SELECT 1 FROM features root
                             WHERE root.id = ANY({alias}.ancestor_ids)
                               AND root.location_protected
