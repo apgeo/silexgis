@@ -62,17 +62,20 @@ un filtru.
 
 Câmpurile oferite depind de felul obiectului. Printre ele:
 
-- pentru toate: **Nume · Titlu · Etichetă · Proprietar · Club · Vizibilitate · Creat · Ultima
-  modificare**;
-- pentru elemente (**Obiective**) și peșteri: **Fel · Categorie · Tip · Locație protejată ·
-  Regiune · Tip de rocă · Lungime cartată (m) · Denivelare (m) · Tip de peșteră · Alte
+- pentru toate felurile: **Creat · Ultima modificare**, și fie un **Titlu** (jurnale de tură,
+  documente și fotografii), fie un **Nume** (toate celelalte);
+- pentru toate felurile, în afară de dulapuri și modele topografice: **Proprietar · Club ·
+  Vizibilitate**;
+- pentru elemente (**Obiective**) și peșteri: **Fel · Categorie · Tip · Etichetă · Locație
+  protejată · Regiune · Tip de rocă · Lungime cartată (m) · Denivelare (m) · Tip de peșteră · Alte
   denumiri**, plus
   [proprietățile tipizate](#condiții-pe-proprietăți) pe care le declară un tip de element;
 - pentru ture: **Tip de tură · Data turei · A avut incident · Stare · Club organizator**;
-- pentru fotografii: **Descriere · Nume de loc · Fotografiat la · Datată (fotografiată, altfel
-  încărcată)**;
-- pentru modele topografice, hărți și fișiere: **Format topografie · Topografiat la · Model
-  curent · Tip de hartă · Format fișier · Limbă**.
+- pentru documente: **Tip · Limbă**;
+- pentru fotografii: **Etichetă · Descriere · Nume de loc · Fotografiat la · Datată (fotografiată,
+  altfel încărcată)**;
+- pentru modele topografice: **Format topografie · Topografiat la · Model curent**;
+- pentru hărți georeferențiate: **Tip de hartă**; pentru fișiere de geodate: **Format fișier**.
 
 Un câmp pe care nu aveți dreptul să-l folosiți nu este oferit. Dacă un filtru îl numește totuși —
 unul partajat cu dumneavoastră sau scris de mână — este refuzat exact ca și cum câmpul nu ar
@@ -222,7 +225,10 @@ peșteră de exact 500 m; *mai mare decât 500* nu o găsește. **între** inclu
 
 **Datele sunt zile.** Când alegeți o zi, este ziua din propriul dumneavoastră calendar: *Data
 turei cel puțin 5 octombrie* găsește turele din 5 octombrie și de după, oriunde v-ați afla când
-întrebați. Un filtru salvat păstrează ziua aleasă de autorul lui și o arată ca acea zi.
+întrebați. La fel pentru o dată pe care o înregistrează o proprietate a unui tip de element și
+pentru intervalul de date al galeriei. Un câmp care ține un moment, nu o zi — **Creat**,
+**Fotografiat la** — numără ziua de la miezul nopții la miezul nopții acolo unde vă aflați. Un
+filtru salvat păstrează ziua aleasă de autorul lui și o arată ca acea zi.
 
 ### Condiții pe proprietăți
 

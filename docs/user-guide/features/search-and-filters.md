@@ -61,15 +61,17 @@ Each appears once, and there is a cap on how many one filter covers.
 
 Which fields are offered depends on the kind of object. Among them:
 
-- for everything: **Name · Title · Tag · Owner · Caving group · Visibility · Created · Last
-  changed**;
-- for features and caves: **Kind · Category · Type · Protected location · Region · Rock type ·
-  Surveyed length (m) · Depth (m) · Cave type · Other names**, and the
+- for every kind: **Created · Last changed**, and either a **Title** (trip logs, documents and
+  photographs) or a **Name** (everything else);
+- for every kind except cabinets and survey models: **Owner · Caving group · Visibility**;
+- for features and caves: **Kind · Category · Type · Tag · Protected location · Region · Rock
+  type · Surveyed length (m) · Depth (m) · Cave type · Other names**, and the
   [typed properties](#property-conditions) a feature type declares;
 - for trips: **Trip type · Trip date · Had an incident · State · Organising group**;
-- for photographs: **Caption · Place name · Taken on · Dated (taken, else uploaded)**;
-- for survey models, maps and files: **Survey format · Surveyed on · Current model · Map kind ·
-  File format · Language**.
+- for documents: **Type · Language**;
+- for photographs: **Tag · Caption · Place name · Taken on · Dated (taken, else uploaded)**;
+- for survey models: **Survey format · Surveyed on · Current model**;
+- for georeferenced maps: **Map kind**; for geodata files: **File format**.
 
 A field that is not yours to use is not offered. If a filter names one anyway — one that was
 shared with you, or written by hand — it is refused exactly as if the field did not exist:
@@ -211,8 +213,10 @@ Which comparisons a field offers depends on what it holds:
 cave of exactly 500 m; *more than 500* does not. **between** includes both ends.
 
 **Dates are days.** When you pick a day, it is the day on your own calendar: *Trip date at least
-5 October* finds the trips of 5 October and after, wherever you are when you ask. A saved filter
-keeps the day its author picked and shows it as that day.
+5 October* finds the trips of 5 October and after, wherever you are when you ask. The same holds
+for a date a feature type's property records, and for the gallery's date range. A field that holds
+a moment rather than a day — **Created**, **Taken on** — counts the day from midnight to midnight
+where you are. A saved filter keeps the day its author picked and shows it as that day.
 
 ### Property conditions
 
