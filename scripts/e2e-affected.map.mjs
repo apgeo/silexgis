@@ -41,6 +41,9 @@ export const specs = {
     'cave-statistics.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
     'overburden-profile.spec.ts', 'survey-sources.spec.ts', 'qr-landing.spec.ts',
     'feature-restore.spec.ts', 'cave-registry-filters.spec.ts',
+    // A cave's declared places are written through the cave's own door and published on a trip's
+    // page, so a change here is answered by the walk that reads one as a visitor.
+    'public-trip-as-installed.spec.ts',
   ],
   cavingGroups: [
     'announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts', 'caver-caving-groups.spec.ts',
@@ -95,7 +98,13 @@ export const specs = {
     'photo-library-smoke.spec.ts', 'photo-library-browse.spec.ts',
     'photo-library-health.spec.ts', 'photo-library-pictures.spec.ts',
   ],
-  photos: ['gallery.spec.ts', 'photo-import.spec.ts', 'cave-attachments.spec.ts', 'gallery-filters.spec.ts'],
+  // The gallery, and the one surface outside it that a consented photograph reaches: a published
+  // trip's replay shows the pictures somebody put in the public gallery, so a change to what that
+  // consent means is answered by the walk that reads one as a visitor.
+  photos: [
+    'gallery.spec.ts', 'photo-import.spec.ts', 'cave-attachments.spec.ts', 'gallery-filters.spec.ts',
+    'public-trip-as-installed.spec.ts',
+  ],
   qr: ['qr-landing.spec.ts'],
   resLinks: ['reslinks.spec.ts', 'annotated-text.spec.ts', 'cave-grant-link.spec.ts'],
   scene: ['scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts'],
@@ -127,6 +136,7 @@ export const specs = {
     'trip-tracking-writes.spec.ts', 'trip-tracking-writes-mobile.spec.ts', 'my-trips.spec.ts',
     'plan-trip.spec.ts', 'published-trips-admin.spec.ts', 'public-trip-offline.spec.ts',
     'public-trip-past.spec.ts', 'public-trip-mobile.spec.ts', 'public-trip-past-mobile.spec.ts',
+    'public-trip-as-installed.spec.ts',
     'rastermap-tracking.spec.ts', 'tracking-movie.spec.ts', 'tracking-withheld.spec.ts',
     'checklists.spec.ts', 'tracking-therion.spec.ts', 'expedition-watch.spec.ts',
     'expedition-watch-mobile.spec.ts', 'trip-tracking-held-reports.spec.ts',
