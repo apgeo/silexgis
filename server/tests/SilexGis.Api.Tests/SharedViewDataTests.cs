@@ -24,11 +24,11 @@ namespace SilexGis.Api.Tests;
 /// <remarks>
 /// <para>
 /// The link holder is the least-privileged reader there is: they read only rows at the widest
-/// visibility level, and they place nothing exactly — a protected point is drawn snapped, a
-/// protected outline not at all, whatever the installation grants every account. These tests
-/// hold each half of that, the window-membership oracle against the link's own routes, and the
-/// three ways a link stops drawing data: it is revoked, the overlay was off, or the installation
-/// switched data on shared views off.
+/// visibility level, and no protected row at all — not snapped, not counted, in no window,
+/// whatever the installation grants every account. These tests hold each half of that, windows
+/// whose edges cross a protected cave's true and snapped positions, and the three ways a link
+/// stops drawing data: it is revoked, the overlay was off, or the installation switched data on
+/// shared views off.
 /// </para>
 /// <para>
 /// Every place here is well away from the demonstration data, so a window holds only what the
@@ -100,13 +100,13 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         var points = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=14"))["features"]!.AsArray();
         var point = points.ShouldHaveSingleItem()!;
         point["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(10.101, 1e-9);
-        point["properties"]!["approximate"]!.GetValue<bool>().ShouldBeFalse();
+        point["properties"]!.AsObject().ContainsKey("approximate").ShouldBeFalse();
         point["properties"]!["caveName"]!.GetValue<string>().ShouldBe(publicCave.Name);
         point["properties"]!.AsObject().ContainsKey("id").ShouldBeFalse();
         point["properties"]!.AsObject().ContainsKey("caveId").ShouldBeFalse();
 
-        // Clusters count the same one entrance, and nothing narrower — at its own position, since
-        // nothing protects it: only a protected row is snapped for a link.
+        // Clusters count the same one entrance, and nothing narrower — at its own position: nothing
+        // a link draws is snapped, because nothing it draws is protected.
         var clusters = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=6"))["features"]!.AsArray();
         var cluster = clusters.ShouldHaveSingleItem()!;
         cluster["properties"]!["count"]!.GetValue<int>().ShouldBe(1);
@@ -121,52 +121,114 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
     }
 
     /// <summary>
-    /// A protected public cave is drawn snapped through a link — even where the installation gives
-    /// every account exact view of it — and the link's window decides on the snapped point, so an
-    /// edge moved over the true position inside one protection cell changes nothing.
+    /// A protected public cave is left off a link entirely — even where the installation gives every
+    /// account exact view of it — at the cluster zoom and the point zoom, in every window: one round
+    /// its true position, one round the protection cell it would snap to, and windows whose edges
+    /// cross either. A public cave nothing protects, inside the same protection cell, is drawn in
+    /// each window that holds it, and the cluster that holds both counts one.
     /// </summary>
     [Theory]
     [InlineData(6, 11.5, 61.2)]
     [InlineData(14, 12.5, 61.6)]
-    public async Task A_protected_public_cave_is_snapped_through_a_link_and_its_window_edge_tells_nothing(
+    public async Task A_protected_public_cave_is_left_off_a_link_at_every_zoom_and_in_every_window(
         int zoom, double nearLon, double nearLat)
     {
         var snappedLon = Math.Round(nearLon / Cell, MidpointRounding.AwayFromZero) * Cell;
         var snappedLat = Math.Round(nearLat / Cell, MidpointRounding.AwayFromZero) * Cell;
         var lon = snappedLon - (0.3 * Cell);
         var lat = snappedLat + (0.1 * Cell);
+        var openLon = snappedLon + (0.3 * Cell);
+        var openLat = snappedLat - (0.2 * Cell);
         var step = 0.05 * Cell;
-        var cave = await CreateCaveAsync("Link Guarded", lon, lat, "public", locationProtected: true);
-        await GrantEveryAccountExactViewAsync(cave.Id);
+        var guarded = await CreateCaveAsync("Link Guarded", lon, lat, "public", locationProtected: true);
+        await GrantEveryAccountExactViewAsync(guarded.Id);
+        var open = await CreateCaveAsync("Link Open Neighbour", openLon, openLat, "public", locationProtected: false);
 
         var token = await ShareAsync(await CreateViewAsync(entrances: true, features: false, snappedLon, snappedLat, zoom: 10));
         string Url(string bbox) => $"/api/v1/shared/views/{token}/cave-entrances?bbox={bbox}&zoom={zoom}";
 
-        var westInside = Window(lon - step, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4);
-        var westOutside = Window(lon + step, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4);
-        var eastInside = Window(snappedLon - 0.4, snappedLat - 0.4, lon + step, snappedLat + 0.4);
-        var eastOutside = Window(snappedLon - 0.4, snappedLat - 0.4, lon - step, snappedLat + 0.4);
-
-        (await CountAsync(anonymous, Url(westInside))).ShouldBe(1);
-        (await CountAsync(anonymous, Url(westOutside))).ShouldBe(1, "the west edge crossed the true position and the answer moved");
-        (await CountAsync(anonymous, Url(eastInside))).ShouldBe(0, "the east edge crossed the true position and the answer moved");
-        (await CountAsync(anonymous, Url(eastOutside))).ShouldBe(0);
-
-        // The control: an account placing it exactly — here every account, by the installation's
-        // grant — sees the window change at the true position. The link never does.
-        (await CountAsync(member, $"/api/v1/map/cave-entrances?bbox={westOutside}&zoom={zoom}")).ShouldBe(0);
-
-        if (zoom >= 11)
+        var windows = new (double West, double South, double East, double North)[]
         {
-            var drawn = (await GetJsonAsync(anonymous, Url(westInside)))["features"]!.AsArray().ShouldHaveSingleItem()!;
-            drawn["properties"]!["approximate"]!.GetValue<bool>().ShouldBeTrue();
-            drawn["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(snappedLon, 1e-9);
-            drawn["geometry"]!["coordinates"]![1]!.GetValue<double>().ShouldBe(snappedLat, 1e-9);
+            (snappedLon - 0.4, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4),
+            (lon - step, lat - step, lon + step, lat + step),
+            (snappedLon - step, snappedLat - step, snappedLon + step, snappedLat + step),
+            (lon - step, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4),
+            (lon + step, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4),
+            (snappedLon - 0.4, snappedLat - 0.4, lon + step, snappedLat + 0.4),
+            (snappedLon - 0.4, snappedLat - 0.4, lon - step, snappedLat + 0.4),
+            (snappedLon - 0.4, snappedLat - 0.4, snappedLon + step, snappedLat + 0.4),
+            (snappedLon - step, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4),
+        };
+        foreach (var (west, south, east, north) in windows)
+        {
+            var bbox = Window(west, south, east, north);
+            var holdsOpen = openLon >= west && openLon <= east && openLat >= south && openLat <= north;
+            (await CountAsync(anonymous, Url(bbox))).ShouldBe(holdsOpen ? 1 : 0, $"window {bbox}");
+
+            if (zoom >= 11)
+            {
+                // Every point drawn is the open cave's, exactly where it is: nothing at the guarded
+                // cave's position and nothing at the cell it would snap to.
+                foreach (var drawn in (await GetJsonAsync(anonymous, Url(bbox)))["features"]!.AsArray())
+                {
+                    drawn!["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(openLon, 1e-9);
+                    drawn["geometry"]!["coordinates"]![1]!.GetValue<double>().ShouldBe(openLat, 1e-9);
+                    drawn["properties"]!["caveName"]!.GetValue<string>().ShouldBe(open.Name);
+                    drawn["properties"]!.AsObject().ContainsKey("approximate").ShouldBeFalse();
+                }
+            }
         }
+
+        // The control: the guarded cave is there, and every account — by the installation's grant —
+        // places it exactly. The link draws it nowhere.
+        var all = Window(snappedLon - 0.4, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4);
+        (await CountAsync(member, $"/api/v1/map/cave-entrances?bbox={all}&zoom={zoom}")).ShouldBe(2);
+        (await CountAsync(member, $"/api/v1/map/cave-entrances?bbox={Window(lon - step, lat - step, lon + step, lat + step)}&zoom=14")).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A public cave that is not flagged itself but lies inside a protected area is protected all the
+    /// same, and is left off a link as a flagged one is; so is the protected area's outline.
+    /// </summary>
+    [Fact]
+    public async Task A_public_cave_inside_a_protected_area_is_left_off_a_link()
+    {
+        double[][] ring = [[19.05, 68.05], [19.25, 68.05], [19.25, 68.25], [19.05, 68.25], [19.05, 68.05]];
+        var area = await CreateFeatureAsync("Link Guarded Karst", new { type = "Polygon", coordinates = new[] { ring } },
+            "karst_area", "public", locationProtected: true);
+        await CreateCaveAsync("Link Cave In Guarded Karst", 19.101, 68.101, "public", locationProtected: false, parentId: area);
+        await CreateCaveAsync("Link Cave Outside Karst", 19.281, 68.101, "public", locationProtected: false);
+        // A readable feature in the same window, so that an outline missing from the link's features is
+        // shown to be missing because it is protected and not because the route draws nothing there.
+        await CreatePointFeatureAsync("Link Sinkhole Outside Karst", 19.281, 68.201, "public", locationProtected: false);
+
+        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true, 19.15, 68.15, zoom: 11));
+        const string window = "19.0,68.0,19.3,68.3";
+
+        foreach (var zoom in new[] { 9, 14 })
+        {
+            (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom={zoom}"))
+                .ShouldBe(1, $"zoom {zoom}");
+        }
+
+        var point = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=14"))["features"]!
+            .AsArray().ShouldHaveSingleItem()!;
+        point["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(19.281, 1e-9);
+        var feature = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={window}"))["features"]!
+            .AsArray().ShouldHaveSingleItem()!;
+        feature["geometry"]!["type"]!.GetValue<string>().ShouldBe("Point");
+        feature["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(19.281, 1e-9);
+        feature["geometry"]!["coordinates"]![1]!.GetValue<double>().ShouldBe(68.201, 1e-9);
+
+        // The controls: every account reads both caves, the one in the protected area snapped, and the
+        // area's outline is drawn for its owner in the same window.
+        (await CountAsync(member, $"/api/v1/map/cave-entrances?bbox={window}&zoom=14")).ShouldBe(2);
+        (await GetJsonAsync(owner, $"/api/v1/map/features?bbox={window}"))["features"]!.AsArray()
+            .Select(f => f!["properties"]!["id"]!.GetValue<Guid>()).ShouldContain(area);
     }
 
     [Fact]
-    public async Task A_protected_public_outline_is_not_drawn_and_a_protected_public_point_is_snapped()
+    public async Task Protected_public_features_are_left_off_a_link_points_and_outlines_alike()
     {
         double[][] ring = [[13.10, 62.10], [13.12, 62.10], [13.12, 62.12], [13.10, 62.12], [13.10, 62.10]];
         await CreateFeatureAsync("Link Guarded Area", new { type = "Polygon", coordinates = new[] { ring } },
@@ -174,13 +236,17 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         var snappedLon = Math.Round(13.15 / Cell, MidpointRounding.AwayFromZero) * Cell;
         var snappedLat = Math.Round(62.15 / Cell, MidpointRounding.AwayFromZero) * Cell;
         await CreatePointFeatureAsync("Link Guarded Point", snappedLon - (0.2 * Cell), snappedLat + (0.2 * Cell), "public", locationProtected: true);
+        await CreatePointFeatureAsync("Link Open Point", 13.251, 62.251, "public", locationProtected: false);
 
         var token = await ShareAsync(await CreateViewAsync(entrances: false, features: true, 13.2, 62.2, zoom: 10));
         var drawn = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox=13.0,62.0,13.4,62.4"))["features"]!.AsArray();
 
+        // Only the open point, exactly where it is; nothing at the guarded point's cell.
         var point = drawn.ShouldHaveSingleItem()!;
-        point["properties"]!["approximate"]!.GetValue<bool>().ShouldBeTrue();
-        point["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(snappedLon, 1e-9);
+        point["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(13.251, 1e-9);
+        point["properties"]!.AsObject().ContainsKey("approximate").ShouldBeFalse();
+        (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={Window(snappedLon - 0.01, snappedLat - 0.01, snappedLon + 0.01, snappedLat + 0.01)}"))["features"]!
+            .AsArray().ShouldBeEmpty();
     }
 
     [Fact]

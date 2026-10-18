@@ -40,9 +40,12 @@ elemente de suprafață, în patru condiții**:
   filtrul să treacă, iar o vedere restrânsă de un filtru salvat sau de orice alt filtru nu arată
   nicio peșteră și niciun element, pentru că în spatele unui link nu este nimeni ca care să ruleze
   filtrul. Straturile desenate din filtre salvate nu se arată niciodată printr-un link;
-- **protecțiile țin mai strâns decât pentru orice cont**: o peșteră protejată apare doar
-  aproximativ (*„Poziție aproximativă"*), un contur protejat nu apare deloc, iar nimic de pe
-  pagină nu identifică sau nu deschide o înregistrare.
+- **protecțiile țin mai strâns decât pentru orice cont**: o peșteră sau un element protejat —
+  protejat el însuși ori aflat în ceva protejat — nu apare deloc, nici măcar aproximativ, și nu
+  intră în numărul unui grup, chiar dacă instalarea voastră îl lasă pe orice cont să-l vadă exact.
+  Pagina arată doar înregistrările publice neprotejate, ca harta taberei și harta fotografiilor,
+  astfel încât nimic de pe ea nu arată că ar mai fi și altceva acolo. Nici nimic de pe pagină nu
+  identifică sau nu deschide o înregistrare.
 
 Un clic pe un marcaj arată numele lui; un clic pe un grup apropie harta. Liniile topografice,
 fotografiile, ieșirile și fișierele importate nu apar niciodată pe o vedere partajată, iar din

@@ -21,9 +21,12 @@ namespace SilexGis.Api.Features.Map;
 /// <para>
 /// <b>Who is answered.</b> The link holder is the least-privileged reader there is (see
 /// <see cref="FeatureAudienceSql.SharedLink"/>): what every account may read, narrowed to rows that
-/// are public in their own right, with nothing placed exactly. A protected entrance or point feature
-/// is drawn snapped to the protection grid, exactly as a signed-in reader without exact view is
-/// shown it; a protected line or polygon is not drawn at all.
+/// are public in their own right and that nothing protects. A protected cave or feature — its own
+/// flag set, or inside something protected — is left off entirely, whatever the installation
+/// grants every account: it is not drawn snapped, not counted in a cluster and in no window, so
+/// nothing a link answers tells it was there. That is how the camp map and the published trip
+/// pages treat a position their reader may not place; an approximate position still says a cave
+/// is there and roughly where.
 /// </para>
 /// <para>
 /// <b>Where it answers.</b> Only inside the view's reach (<see cref="SharedViewReach"/>): the saved
@@ -37,14 +40,15 @@ namespace SilexGis.Api.Features.Map;
 /// what that filter let through on the owner's map.
 /// </para>
 /// <para>
-/// <b>The same statements as the workspace map.</b> Clusters are the cluster statement, the point
-/// branch is the point query, and which protected rows are in the window is the window-membership
-/// rule — each asked for this audience rather than rewritten for it, so a fix to one is a fix to
-/// both and the oracle tests of one hold for the other.
+/// <b>The same statements as the workspace map.</b> Clusters are the cluster statement and the
+/// point branch is the point query, each asked for this audience rather than rewritten for it, so a
+/// fix to one is a fix to both. The window-membership rule, which decides which protected rows a
+/// window holds, has nothing to decide here: the audience holds no protected row. Every cap is
+/// applied to rows already narrowed, so how many were cut can never show through it.
 /// </para>
 /// <para>
 /// <b>What it carries.</b> A position and a public name, and what drawing them needs — no feature
-/// or cave identifier, no owner, no protection flag beyond <c>approximate</c>. An identifier would
+/// or cave identifier, no owner, no protection flag. An identifier would
 /// be a handle to go and ask for the row elsewhere, and everything else is reached by signing in.
 /// </para>
 /// <para>
@@ -65,14 +69,14 @@ public static class SharedViewMapEndpoints
             .RequireRateLimiting(SharedViewRateLimits.PolicyName)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .WithSummary("Public cave entrances for a shared view's link (anonymous): clusters below the cluster zoom, protected positions snapped.");
+            .WithSummary("Public cave entrances for a shared view's link (anonymous): clusters below the cluster zoom; protected caves left off.");
         api.MapGet("/shared/views/{token:guid}/features", FeaturesAsync)
             .WithTags("MapViews")
             .AllowAnonymous()
             .RequireRateLimiting(SharedViewRateLimits.PolicyName)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .WithSummary("Public surface features for a shared view's link (anonymous): protected points snapped, protected outlines left out.");
+            .WithSummary("Public surface features for a shared view's link (anonymous); protected features left off.");
         return api;
     }
 
@@ -112,12 +116,11 @@ public static class SharedViewMapEndpoints
                 db, FeatureAudienceSql.SharedLink(anyAccount, "f"), box, effectiveZoom, gridMeters, config.TagFilter, onlyIds: null, ct));
         }
 
-        var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(
-            db, FeatureAudienceSql.SharedLink(anyAccount, "f"),
-            box.West, box.South, box.East, box.North, gridMeters, [FeatureKind.CaveEntrance], ct);
+        // No protected row is readable through the link, so no protected row is a window member:
+        // the point query is asked with none, and its window test and cap see only what is drawn.
         var readable = FeatureAudienceSql.SharedLinkReadable(db, anyAccount).AsNoTracking();
         var rows = await MapEndpoints.EntrancePointsQuery(
-                db, readable, box, protectedMembers, config.TagFilter, mapOptions.Value.MaxPoints)
+                db, readable, box, [], config.TagFilter, mapOptions.Value.MaxPoints)
             .ToListAsync(ct);
 
         // Read through the link's own filter, so a name comes only from a cave that is itself
@@ -128,19 +131,17 @@ public static class SharedViewMapEndpoints
             .Select(f => new { f.Id, f.Name })
             .ToDictionaryAsync(f => f.Id, f => f.Name, ct);
 
-        // Nothing is placed exactly through a link: a protected row is always drawn snapped.
-        return TypedResults.Ok(FeatureCollection.Of([.. rows.Select(row =>
+        // A protected row never reaches here; were one to, it would be left off rather than drawn.
+        return TypedResults.Ok(FeatureCollection.Of([.. rows.Where(row => !row.IsProtectedEffective).Select(row =>
         {
-            var point = (Point)row.Geom;
             var caveName = caveNames.GetValueOrDefault(row.CaveId);
             return GeoFeature.Of(
-                row.IsProtectedEffective ? LocationProtection.Snap(point, gridMeters) : point,
+                (Point)row.Geom,
                 new Dictionary<string, object?>
                 {
                     ["name"] = row.Name ?? caveName,
                     ["caveName"] = caveName,
                     ["isMain"] = row.IsMain,
-                    ["approximate"] = row.IsProtectedEffective,
                 });
         })]));
     }
@@ -149,7 +150,6 @@ public static class SharedViewMapEndpoints
         Guid token,
         string bbox,
         SilexGisDbContext db,
-        IOptions<AccessOptions> accessOptions,
         IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
@@ -169,19 +169,13 @@ public static class SharedViewMapEndpoints
             return TypedResults.Ok(FeatureCollection.Of([]));
         }
 
-        var gridMeters = accessOptions.Value.LocationGridMeters;
         var anyAccount = await AccessContextResolver.ResolveForAnyAccountAsync(db, ct);
 
-        // The surface-feature overlay's own kind, and the same membership rule: a protected point is
-        // in the window by its snapped position, a protected outline in none.
-        var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(
-            db, FeatureAudienceSql.SharedLink(anyAccount, "f"),
-            box.West, box.South, box.East, box.North, gridMeters, [FeatureKind.Generic], ct);
+        // The surface-feature overlay's own kind, by its true geometry: nothing the link reads is
+        // protected, so nothing is placed in a window by anything but where it is.
         var polygon = box.ToPolygon();
         var query = FeatureAudienceSql.SharedLinkReadable(db, anyAccount).AsNoTracking()
-            .Where(f => f.Kind == FeatureKind.Generic && f.Geom != null
-                && ((!f.IsProtectedEffective && f.Geom!.Intersects(polygon))
-                    || protectedMembers.Contains(f.Id)));
+            .Where(f => f.Kind == FeatureKind.Generic && f.Geom != null && f.Geom!.Intersects(polygon));
         if (config.TagFilter is { } tag)
         {
             // The same narrowing the owner's feature layer applies for the view's tag filter.
@@ -212,20 +206,13 @@ public static class SharedViewMapEndpoints
                 ["kind"] = "generic",
                 ["typeCode"] = type?.Code,
                 ["symbol"] = type?.SymbolFile,
-                ["approximate"] = row.IsProtectedEffective,
             };
 
+            // A protected row never reaches here; were one to, it would be left off rather than drawn.
             if (!row.IsProtectedEffective)
             {
                 features.Add(GeoFeature.Of(row.Geom!, properties));
             }
-            else if (row.Geom is Point point)
-            {
-                features.Add(GeoFeature.Of(LocationProtection.Snap(point, gridMeters), properties));
-            }
-
-            // A protected outline is in no window for the link, so none reaches here; were one to,
-            // it would be left out rather than drawn.
         }
 
         return TypedResults.Ok(FeatureCollection.Of(features));

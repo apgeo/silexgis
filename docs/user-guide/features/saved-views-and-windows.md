@@ -40,9 +40,12 @@ conditions**:
   through, and a view narrowed by a saved filter or any other filter shows no caves or features
   at all, because a link has nobody to run that filter as. Layers drawn from saved filters are
   never shown through a link;
-- **the protections hold harder than for any account**: a protected cave is shown only
-  approximately (*"Approximate position"*), a protected outline is not shown at all, and nothing
-  on the page identifies a record or opens it.
+- **the protections hold harder than for any account**: a protected cave or feature — protected
+  itself, or lying inside something protected — is not shown at all, not even approximately, and
+  is not counted in a cluster's number, even where your installation lets every account see it
+  exactly. The page shows only the unprotected public records, as the camp map and the photo map
+  do, so nothing on it tells that anything else is there. Nothing on the page identifies a record
+  or opens it either.
 
 Clicking a marker shows its name; clicking a cluster zooms in. Survey lines, photographs, trips
 and imported files are never shown on a shared view, and nothing about the saved view beyond

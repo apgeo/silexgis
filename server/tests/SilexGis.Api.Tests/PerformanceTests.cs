@@ -171,14 +171,17 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     /// <summary>
     /// A shared view's link, which anybody holding it can ask anything: the worst request it can
     /// be sent — the whole world, from the furthest zoom — timed against the same budget, that
-    /// request's own statement pinned to compile nothing, and the three statements its data routes
-    /// send pinned like the workspace map's.
+    /// request's own statement pinned to compile nothing, and the two statements its entrance route
+    /// sends — clusters and points — pinned like the workspace map's.
     /// </summary>
     /// <remarks>
     /// The world window is clipped to the view's own reach before anything is read, so its cost is
     /// the view's, however wide the window it was asked about. A quarter of the seeded caves are
     /// made public first, so the link's own narrowing — an entrance is drawn only when its cave is
     /// itself public — has rows to keep and rows to drop, and the probe it adds per row is real.
+    /// The link asks no window-membership statement: that statement decides only which protected
+    /// rows a window holds, and the link's audience holds none. The workspace map's use of it keeps
+    /// its own pin.
     /// </remarks>
     private async Task AssertSharedLinkAsync(HttpClient owner, Guid ownerId, string settled)
     {
@@ -262,17 +265,12 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         AssertAncestorProbeIsIndexed(clusters, "shared link clusters");
         AssertCaveProbeIsIndexed(clusters, "shared link clusters");
 
-        var (membersSql, membersParameters) = WindowMembershipSql.Build(
-            FeatureAudienceSql.SharedLink(anyAccount, "f"), West, South, East, North, 5000d, [FeatureKind.CaveEntrance]);
-        var members = await ExplainAsync(connection, membersParameters, "shared link window membership", membersSql);
-        AssertRidesEntranceIndex(members, "shared link window membership");
-
         var points = await ExplainEfAsync(
             MapEndpoints.EntrancePointsQuery(
                 db,
                 FeatureAudienceSql.SharedLinkReadable(db, anyAccount).AsNoTracking(),
                 viewport,
-                [Guid.NewGuid()],
+                [],
                 tag: null,
                 maxPoints: 10000),
             "shared link points");

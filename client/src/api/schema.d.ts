@@ -691,7 +691,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Public cave entrances for a shared view's link (anonymous): clusters below the cluster zoom, protected positions snapped. */
+        /** Public cave entrances for a shared view's link (anonymous): clusters below the cluster zoom; protected caves left off. */
         get: operations["sharedViewMapEntrances"];
         put?: never;
         post?: never;
@@ -708,7 +708,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Public surface features for a shared view's link (anonymous): protected points snapped, protected outlines left out. */
+        /** Public surface features for a shared view's link (anonymous); protected features left off. */
         get: operations["sharedViewMapFeatures"];
         put?: never;
         post?: never;
