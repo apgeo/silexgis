@@ -15,6 +15,7 @@ using SilexGis.Api.Features.Map;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Filters;
 using SilexGis.Domain.Map;
@@ -39,6 +40,11 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     private const int CaveCount = 2000;
     private const int EntrancesPerCave = 50; // 100k entrance features
     private const long BudgetMs = 1000;
+
+    /// <summary>The karst areas tiling the seeded box, and the sinkhole outlines under each.</summary>
+    private const int AreaColumns = 10;
+    private const int AreaRows = 5;
+    private const int DepressionsPerArea = 100;
 
     /// <summary>
     /// The load per core under which this machine counts as quiet enough to measure on, how long
@@ -85,10 +91,63 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     /// <summary>Set once the bulk load has run, so the cleanup names only what this fixture wrote.</summary>
     private Guid? seededOwnerId;
 
+    /// <summary>The ordinary reader's caving group, removed by the cleanup with its grant.</summary>
+    private Guid? readerGroupId;
+
     public PerformanceTests(PostgresFixture postgres, ITestOutputHelper output)
     {
         this.output = output;
         factory = new SilexGisApiFactory(postgres.ConnectionString);
+    }
+
+    /// <summary>
+    /// An ordinary member: a viewer who owns none of the seeded rows, on the roster of a caving
+    /// group that is granted read of one seeded cave's subtree — so what they are shown comes
+    /// through the visibility cascade and that grant, resolved the way every request resolves it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A subtree grant rather than one over every feature on purpose: a grant over everything is
+    /// a constant the planner folds the whole walk away on, and the member would then be timed on
+    /// a statement cheaper than the one an ordinary reader is sent.
+    /// </para>
+    /// <para>
+    /// The one grant does not narrow what the member reads. The seeded entrances are private but
+    /// sit under caves every signed-in reader may see, so the cascade admits all of them: the
+    /// member is timed on whole, capped, readable answers that every row reached through the full
+    /// walk, not on the guards turning rows away. The reader-plan check asserts that count.
+    /// </para>
+    /// </remarks>
+    private async Task<(Guid UserId, string Email)> CreateGroupReaderAsync()
+    {
+        var email = $"perf-member-{Guid.NewGuid():N}@t.local";
+        var userId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, email);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var grantedCave = await db.Features.AsNoTracking()
+            .Where(f => f.Kind == FeatureKind.Cave && f.OwnerUserId == seededOwnerId)
+            .OrderBy(f => f.Id)
+            .Select(f => f.Id)
+            .FirstAsync();
+        var stamp = Guid.NewGuid().ToString("N")[..8];
+        var group = new CavingGroup { Name = $"Perf club {stamp}", Slug = $"perf-club-{stamp}" };
+        // An account is put on the roster when it is created; the member joins the club as that.
+        var caverId = await db.Cavers.Where(c => c.UserId == userId).Select(c => c.Id).SingleAsync();
+        db.CavingGroups.Add(group);
+        db.CavingGroupMemberships.Add(new CavingGroupMembership { CaverId = caverId, CavingGroupId = group.Id });
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.CavingGroup,
+            SubjectId = group.Id,
+            Effect = AccessEffect.Allow,
+            Domain = AccessDomain.Features,
+            Actions = AccessAction.Read,
+            ScopeKind = AccessScopeKind.Subtree,
+            ScopeFeatureId = grantedCave,
+        });
+        await db.SaveChangesAsync();
+        readerGroupId = group.Id;
+        return (userId, email);
     }
 
     [Fact]
@@ -101,10 +160,13 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         var strangerEmail = $"perf-view-{Guid.NewGuid():N}@t.local";
         var strangerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, strangerEmail);
         await SeedSyntheticAsync(ownerId);
+        var (memberId, memberEmail) = await CreateGroupReaderAsync();
         using var client = await AuthHelper.BearerClientAsync(factory, email);
+        using var member = await AuthHelper.BearerClientAsync(factory, memberEmail);
         var settled = await SettleAsync();
 
-        // Wide-area clusters, focused points, the cross-kind layer, table page, indexed search.
+        // Wide-area clusters, focused points, the cross-kind layer, the centerline overlay, table
+        // page, indexed search.
         var requests = new (string Name, string Url)[]
         {
             ("clusters z7 (country)", "/api/v1/map/cave-entrances?bbox=19.9,43.5,29.1,48.1&zoom=7"),
@@ -117,29 +179,47 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             // for the primary key, so the capped path needs a measurement of its own.
             ("features layer (country, capped)",
                 "/api/v1/map/features?bbox=19.9,43.5,29.1,48.1&kinds=caveEntrance"),
+            ("centerlines z7 (country)", "/api/v1/map/cave-centerlines?bbox=19.9,43.5,29.1,48.1&zoom=7"),
+            ("centerlines z14 (local)", $"/api/v1/map/cave-centerlines?bbox={Viewport}&zoom=14"),
+            ("karst index z7 (country)", "/api/v1/map/karst-index?bbox=19.9,43.5,29.1,48.1&zoom=7"),
             ("caves list p1", "/api/v1/caves?pageSize=50"),
             ("search 'perf'", "/api/v1/search?q=perf"),
         };
 
-        foreach (var (name, url) in requests)
+        // Every request twice over: as the rows' owner, and as an ordinary member who owns none of
+        // them and reads them through the visibility cascade and a grant to their caving group.
+        // The owner arm of every access fragment short-circuits, so timing the owner alone hides
+        // whatever the guards cost everybody else — once, a sequential scan of every feature on
+        // each non-owner's request. Both callers are held to the same budget.
+        var slow = new List<string>();
+        foreach (var (caller, http) in new[] { ("owner", client), ("member", member) })
         {
-            // Warmup (connection pool, query plan), then measure.
-            (await client.GetAsync(url)).StatusCode.ShouldBe(HttpStatusCode.OK, url);
-            var stopwatch = Stopwatch.StartNew();
-            var response = await client.GetAsync(url);
-            stopwatch.Stop();
-            var measuredAt = LoadReading();
-            response.StatusCode.ShouldBe(HttpStatusCode.OK, url);
-            output.WriteLine($"{name}: {stopwatch.ElapsedMilliseconds} ms ({measuredAt})");
-            stopwatch.ElapsedMilliseconds.ShouldBeLessThan(
-                BudgetMs, $"{name} exceeded {BudgetMs}ms — {measuredAt}, {settled}");
+            foreach (var (name, url) in requests)
+            {
+                // Warmup (connection pool, query plan), then measure.
+                (await http.GetAsync(url)).StatusCode.ShouldBe(HttpStatusCode.OK, $"{caller}: {url}");
+                var stopwatch = Stopwatch.StartNew();
+                var response = await http.GetAsync(url);
+                stopwatch.Stop();
+                var measuredAt = LoadReading();
+                response.StatusCode.ShouldBe(HttpStatusCode.OK, $"{caller}: {url}");
+                output.WriteLine($"{name}, as the {caller}: {stopwatch.ElapsedMilliseconds} ms ({measuredAt})");
+                if (stopwatch.ElapsedMilliseconds >= BudgetMs)
+                {
+                    slow.Add($"{name}, as the {caller}: {stopwatch.ElapsedMilliseconds} ms ({measuredAt})");
+                }
+            }
         }
 
         await AssertEntranceLayerPlansAsync(ownerId, strangerId);
+        await AssertReaderPlansAsync(memberId);
         await AssertSurveySubstratePlansAsync(strangerId);
         await AssertProximityPlanAsync(strangerId);
         await AssertSharedLinkAsync(client, ownerId, settled);
         await AssertSpatialFilterStaysResponsiveAsync(strangerEmail, strangerId);
+
+        // Asserted last, so a slow request still leaves every plan above in the output to say why.
+        slow.ShouldBeEmpty($"over the {BudgetMs} ms budget — {settled}");
     }
 
     /// <summary>
@@ -256,11 +336,15 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             reach.LowestZoom,
             protectionGridMeters: 5000d,
             tag: null);
-        await AssertClustersCompileNothingAsync(connection, worldParameters, "shared link, world window", worldSql);
+        // The link's audience walks no ancestors, so there is no bitmap probe for the setting to
+        // replace and no control for it to be held to.
+        await AssertPlannedAsSentAsync(
+            connection, worldParameters, "shared link, world window", worldSql, MapSql.ClusterSettings,
+            controlsBitmapProbes: false);
 
         var (clusterSql, clusterParameters, _) = MapSql.BuildClusters(
             FeatureAudienceSql.SharedLink(anyAccount, "f"), viewport, zoom: 9, protectionGridMeters: 5000d, tag: null);
-        var clusters = await ExplainAsync(connection, clusterParameters, "shared link clusters", clusterSql);
+        var clusters = await ExplainAsync(connection, clusterParameters, "shared link clusters", clusterSql, MapSql.ClusterSettings);
         AssertRidesEntranceIndex(clusters, "shared link clusters");
         AssertAncestorProbeIsIndexed(clusters, "shared link clusters");
         AssertCaveProbeIsIndexed(clusters, "shared link clusters");
@@ -279,37 +363,46 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     }
 
     /// <summary>
-    /// A wide cluster statement, explained as the cluster route sends it — in one batch behind
-    /// <see cref="MapSql.WithoutJitSql"/> — must carry no JIT compilation: compiling it cost more
-    /// than running it, on every request. The bare statement is explained too, as the control: it
-    /// is what proves that the planner would compile this statement, so that the absence above is
-    /// the setting's doing and not a plan too cheap to compile anyway.
+    /// A wide statement, explained as its route sends it — in one batch behind its planner
+    /// settings — must carry no JIT compilation: compiling it cost more than running it, on every
+    /// request. Under the bitmap setting its per-row probes must walk an index directly. The bare
+    /// statement is explained too, as the control: it is what proves that the planner would do
+    /// otherwise, so that each absence above is the setting's doing and not a plan that would have
+    /// been chosen anyway.
     /// </summary>
     /// <remarks>
-    /// Should the control ever fail, the planner no longer prices this statement past its JIT
-    /// thresholds (or the server cannot compile at all); the first half then proves nothing, and
-    /// whether the setting is still needed is worth asking.
+    /// Should a control ever fail, the planner no longer misjudges this statement that way (or the
+    /// server cannot compile at all); the matching half then proves nothing, and whether the
+    /// setting is still needed is worth asking.
     /// </remarks>
-    private async Task AssertClustersCompileNothingAsync(
-        DbConnection connection, DynamicParameters parameters, string label, string sql)
+    private async Task AssertPlannedAsSentAsync(
+        DbConnection connection, DynamicParameters parameters, string label, string sql,
+        IReadOnlyList<string> settings, bool controlsBitmapProbes = true)
     {
-        string sent;
-        using (var results = await connection.QueryMultipleAsync(
-            $"{PlannerSql.WithoutJit};\nEXPLAIN (ANALYZE, BUFFERS)\n{sql}", parameters))
+        var sent = await ExplainAsync(connection, parameters, $"{label}, as sent", sql, settings);
+        var bare = string.Join("\n", await connection.QueryAsync<string>($"EXPLAIN\n{sql}", parameters));
+
+        if (settings.Contains(PlannerSql.WithoutJit))
         {
-            await results.ReadSingleAsync<string>();
-            sent = string.Join("\n", await results.ReadAsync<string>());
+            sent.ShouldNotContain("JIT:", Case.Sensitive,
+                $"{label}: the statement must be planned without JIT compilation as it is sent");
+            bare.ShouldContain("JIT:", Case.Sensitive,
+                $"{label}: the control — without the setting the planner must compile this statement, or "
+                + "the check above passes for a reason that is not the setting");
         }
 
-        output.WriteLine($"--- {label}, as sent ---");
-        output.WriteLine(sent);
-        sent.ShouldNotContain("JIT:", Case.Sensitive,
-            $"{label}: the cluster statement must be planned without JIT compilation as it is sent");
+        if (settings.Contains(PlannerSql.WithoutBitmapScans))
+        {
+            sent.ShouldNotContain("Bitmap Heap Scan on features", Case.Insensitive,
+                $"{label}: the per-row probes must walk the index directly as the statement is sent");
+        }
 
-        var bare = string.Join("\n", await connection.QueryAsync<string>($"EXPLAIN\n{sql}", parameters));
-        bare.ShouldContain("JIT:", Case.Sensitive,
-            $"{label}: the control — without the setting the planner must compile this statement, or "
-            + "the check above passes for a reason that is not the setting");
+        if (settings.Contains(PlannerSql.WithoutBitmapScans) && controlsBitmapProbes)
+        {
+            bare.ShouldContain("Bitmap Heap Scan on features", Case.Insensitive,
+                $"{label}: the control — without the setting the planner must choose a bitmap probe, or "
+                + "the check above passes for a reason that is not the setting");
+        }
     }
 
     /// <summary>
@@ -515,7 +608,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         // counted as stored or snapped to the protection grid.
         var (clusterSql, clusterParameters, _) = MapSql.BuildClusters(
             ctx, new Bbox(West, South, East, North), zoom: 9, protectionGridMeters: 5000d, tag: null);
-        var clusters = await ExplainAsync(connection, clusterParameters, "clusters (guarded)", clusterSql);
+        var clusters = await ExplainAsync(connection, clusterParameters, "clusters (guarded)", clusterSql, MapSql.ClusterSettings);
         AssertRidesEntranceIndex(clusters, "clusters (guarded)");
         AssertAncestorProbeIsIndexed(clusters, "clusters (guarded)");
 
@@ -524,7 +617,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         var ownerCtx = await AccessContextResolver.ResolveAsync(db, ownerId);
         var (countrySql, countryParameters, _) = MapSql.BuildClusters(
             ownerCtx, new Bbox(19.9, 43.5, 29.1, 48.1), zoom: 7, protectionGridMeters: 5000d, tag: null);
-        await AssertClustersCompileNothingAsync(connection, countryParameters, "clusters z7 (country)", countrySql);
+        await AssertPlannedAsSentAsync(connection, countryParameters, "clusters z7 (country)", countrySql, MapSql.ClusterSettings);
 
         // The point layer above the cluster zoom, as EF sends it: ST_Intersects for unprotected
         // rows, OR-ed with the ids of the protected rows whose shown position is in the window,
@@ -640,6 +733,93 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
               AND {walkSql}
             """);
         AssertRidesEntranceIndex(walk, "points (guarded, entry-holding)");
+    }
+
+    /// <summary>
+    /// The main map statements as the ordinary member is sent them — the access context resolved
+    /// the way every request resolves it, so the caving group, its grant and whatever the All Users
+    /// group holds are all in it, and the full level walk runs rather than the lean shape a caller
+    /// holding nothing gets. None of the rows are theirs, so no ownership arm short-circuits.
+    /// </summary>
+    private async Task AssertReaderPlansAsync(Guid memberId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var connection = db.Database.GetDbConnection();
+        var ctx = await AccessContextResolver.ResolveAsync(db, memberId);
+        ctx.CavingGroupIds.ShouldNotBeEmpty("the member must read through their caving group");
+        ctx.Entries.ShouldContain(
+            e => e.Effect == AccessEffect.Allow && e.ScopeKind == AccessScopeKind.Subtree,
+            "the member must hold the caving group's grant, or the walk below is the lean shape");
+
+        // Every seeded entrance must reach the member through the cascade, or the timings above
+        // measured rows being turned away rather than a readable answer being built and capped.
+        var readableEntrances = await db.Features.AsNoTracking()
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+            .CountAsync(f => f.Kind == FeatureKind.CaveEntrance && f.OwnerUserId == seededOwnerId);
+        output.WriteLine($"the member reads {readableEntrances} of {CaveCount * EntrancesPerCave} seeded entrances");
+        readableEntrances.ShouldBe(CaveCount * EntrancesPerCave,
+            "the member must read every seeded entrance without owning any");
+
+        var viewport = new Bbox(West, South, East, North);
+        var country = new Bbox(19.9, 43.5, 29.1, 48.1);
+
+        var (countrySql, countryParameters, _) = MapSql.BuildClusters(
+            ctx, country, zoom: 7, protectionGridMeters: 5000d, tag: null);
+        await AssertPlannedAsSentAsync(connection, countryParameters, "member clusters z7 (country)", countrySql, MapSql.ClusterSettings);
+
+
+        var (clusterSql, clusterParameters, _) = MapSql.BuildClusters(
+            ctx, viewport, zoom: 9, protectionGridMeters: 5000d, tag: null);
+        var clusters = await ExplainAsync(connection, clusterParameters, "member clusters", clusterSql, MapSql.ClusterSettings);
+        AssertRidesEntranceIndex(clusters, "member clusters");
+        AssertAncestorProbeIsIndexed(clusters, "member clusters");
+
+        var (membersSql, membersParameters) = WindowMembershipSql.Build(
+            ctx, West, South, East, North, 5000d, [FeatureKind.CaveEntrance]);
+        var members = await ExplainAsync(connection, membersParameters, "member window membership", membersSql);
+        AssertRidesEntranceIndex(members, "member window membership");
+
+        var readable = db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers);
+        var points = await ExplainEfAsync(
+            MapEndpoints.EntrancePointsQuery(db, readable, viewport, [Guid.NewGuid()], tag: null, maxPoints: 10000),
+            "member points");
+        AssertRidesEntranceIndex(points, "member points");
+        AssertAncestorProbeIsIndexed(points, "member points");
+
+        var layer = await ExplainEfAsync(
+            MapEndpoints.FeatureLayerQuery(
+                db, readable, viewport, [Guid.NewGuid()], [FeatureKind.CaveEntrance],
+                featureTypeId: null, category: null, tag: null, maxPoints: 10000),
+            "member features layer");
+        AssertRidesEntranceIndex(layer, "member features layer");
+        AssertAncestorProbeIsIndexed(layer, "member features layer");
+
+        var (centerlineSql, centerlineParameters) = CenterlineMapSql.BuildIdsInView(ctx, viewport);
+        var centerlines = await ExplainAsync(connection, centerlineParameters, "member centerlines in view", centerlineSql);
+        centerlines.ShouldContain("ix_features_geom", Case.Insensitive,
+            "member centerlines in view: the window must be found through the geometry index");
+        centerlines.ShouldNotContain("Seq Scan on features", Case.Insensitive,
+            "member centerlines in view: no path may sequentially scan the feature table");
+        AssertAncestorProbeIsIndexed(centerlines, "member centerlines in view");
+
+        // The karst index's bulk totals over every seeded area at once: each area's contents are
+        // found by the declared containment chain, which only the GIN index on the ancestor array
+        // answers — never by scanning every feature once per area.
+        var areaIds = (await connection.QueryAsync<Guid>(
+                "SELECT id FROM features WHERE owner_user_id = @owner AND name LIKE 'Perf area %'",
+                new { owner = seededOwnerId }))
+            .ToArray();
+        areaIds.Length.ShouldBe(AreaColumns * AreaRows);
+        var sinkholeTypeId = await connection.QuerySingleAsync<long>(
+            "SELECT id FROM feature_types WHERE code = @code", new { code = FeatureTypeSeeds.Sinkhole });
+        var (totalsSql, totalsParameters) = KarstIndexWindowSql.BuildTotals(
+            ctx, areaIds, sinkholeTypeId, toleranceDegrees: 360d / (256d * 128d));
+        var totals = await ExplainAsync(connection, totalsParameters, "member karst index totals", totalsSql);
+        totals.ShouldContain("ix_features_ancestor_ids", Case.Insensitive,
+            "karst index totals: an area's contents must be found through the ancestor-array index");
+        totals.ShouldNotContain("Seq Scan on features", Case.Insensitive,
+            "karst index totals: no area may scan the whole feature table for its contents");
     }
 
     /// <summary>
@@ -788,9 +968,11 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     }
 
     private async Task<string> ExplainAsync(
-        DbConnection connection, DynamicParameters parameters, string label, string sql)
+        DbConnection connection, DynamicParameters parameters, string label, string sql,
+        IReadOnlyList<string>? settings = null)
     {
-        var planLines = await connection.QueryAsync<string>($"EXPLAIN (ANALYZE, BUFFERS)\n{sql}", parameters);
+        var planLines = await PlannerSql.QueryAsync<string>(
+            connection, $"EXPLAIN (ANALYZE, BUFFERS)\n{sql}", parameters, settings ?? [], CancellationToken.None);
         var plan = string.Join("\n", planLines);
         output.WriteLine($"--- {label} ---");
         output.WriteLine(plan);
@@ -1018,6 +1200,65 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
               AND f.name LIKE 'Perf Cave %'
             """);
 
+        // Karst areas tiling the seeded box, each holding sinkhole outlines declared under it, so
+        // the karst index's bulk totals statement has areas to add up and contents to find by the
+        // declared containment chain among every other feature. Depressions are seeded PRIVATE
+        // under authenticated areas, the same worst case for the inheritance arm as the entrances.
+        await db.Database.ExecuteSqlAsync($$"""
+            WITH area_rows AS MATERIALIZED (
+                SELECT gen_random_uuid() AS area_id, gx, gy,
+                       {{SeedWest}} + gx * {{(SeedEast - SeedWest) / AreaColumns}} AS x0,
+                       {{SeedSouth}} + gy * {{(SeedNorth - SeedSouth) / AreaRows}} AS y0
+                FROM generate_series(0, {{AreaColumns - 1}}) gx, generate_series(0, {{AreaRows - 1}}) gy
+            ),
+            depression_rows AS MATERIALIZED (
+                SELECT gen_random_uuid() AS depression_id, a.area_id,
+                       ST_SetSRID(ST_Expand(ST_MakePoint(
+                           a.x0 + random() * {{(SeedEast - SeedWest) / AreaColumns}},
+                           a.y0 + random() * {{(SeedNorth - SeedSouth) / AreaRows}}), 0.0005), 4326) AS geom
+                FROM area_rows a, generate_series(1, {{DepressionsPerArea}}) d
+            ),
+            area_features AS (
+                INSERT INTO features (
+                    id, kind, category, feature_type_id, name, geom, location_protected,
+                    is_protected_effective, ancestor_ids, owner_user_id, visibility, created_at, updated_at)
+                SELECT
+                    a.area_id, {{(short)FeatureKind.Generic}}, {{(short)FeatureCategory.Surface}},
+                    (SELECT id FROM feature_types WHERE code = {{FeatureTypeSeeds.KarstArea}}),
+                    'Perf area ' || a.gx || '-' || a.gy,
+                    ST_SetSRID(ST_MakeEnvelope(
+                        a.x0, a.y0,
+                        a.x0 + {{(SeedEast - SeedWest) / AreaColumns}},
+                        a.y0 + {{(SeedNorth - SeedSouth) / AreaRows}}), 4326),
+                    false, false, ARRAY[a.area_id], {{ownerId}}, {{(short)Visibility.Authenticated}}, now(), now()
+                FROM area_rows a
+                RETURNING id
+            ),
+            depression_features AS (
+                INSERT INTO features (
+                    id, kind, category, feature_type_id, geom, location_protected,
+                    is_protected_effective, ancestor_ids, owner_user_id, visibility, created_at, updated_at)
+                SELECT
+                    d.depression_id, {{(short)FeatureKind.Generic}}, {{(short)FeatureCategory.Surface}},
+                    (SELECT id FROM feature_types WHERE code = {{FeatureTypeSeeds.Sinkhole}}),
+                    d.geom, false, false, ARRAY[d.depression_id, d.area_id], {{ownerId}},
+                    {{(short)Visibility.Private}}, now(), now()
+                FROM depression_rows d
+                RETURNING id
+            ),
+            depression_edges AS (
+                INSERT INTO feature_hierarchy_edges (parent_id, child_id, is_primary, created_at, updated_at)
+                SELECT d.area_id, d.depression_id, true, now(), now() FROM depression_rows d
+                RETURNING id
+            )
+            INSERT INTO feature_ancestors (feature_id, ancestor_id)
+            SELECT a.area_id, a.area_id FROM area_rows a
+            UNION ALL
+            SELECT d.depression_id, d.depression_id FROM depression_rows d
+            UNION ALL
+            SELECT d.depression_id, d.area_id FROM depression_rows d
+            """);
+
         // Fresh bulk-loaded tables have no statistics yet (autoanalyze hasn't run) and the
         // planner picks pathological plans (measured 50x). Real databases are analyzed.
         await db.Database.ExecuteSqlRawAsync(
@@ -1200,6 +1441,14 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         db.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
+
+        if (readerGroupId is { } groupId)
+        {
+            await db.Database.ExecuteSqlAsync(
+                $"DELETE FROM access_entries WHERE subject_kind = {(short)AccessSubjectKind.CavingGroup} AND subject_id = {groupId};");
+            await db.Database.ExecuteSqlAsync($"DELETE FROM caving_group_memberships WHERE caving_group_id = {groupId};");
+            await db.Database.ExecuteSqlAsync($"DELETE FROM caving_groups WHERE id = {groupId};");
+        }
 
         // survey_models before files (it points at one), files before the versions and documents
         // that own them, and every feature-shaped table before features itself.
