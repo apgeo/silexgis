@@ -214,6 +214,76 @@ public sealed class TripReportJournalTests
     }
 
     /// <summary>
+    /// A line about the cave and nobody in it — a hazard reported to the surface — is printed in
+    /// the journal's own time order and says in words that it speaks of the cave, never as a
+    /// report about a person the document was told no name for. Its place follows the one rule
+    /// every place in a journal follows: the mark arrives with the line, and the words of the
+    /// hazard are not a place and stay whatever is kept back.
+    /// </summary>
+    [Fact]
+    public void A_line_about_the_cave_says_so_and_is_never_printed_as_somebodys_report()
+    {
+        var told = Told();
+        var hazard = new TripTrackingJournalEntry(
+            At(10, 30), null, null, null, TripPositionEventKind.CaveNote,
+            "gallery.parallel.2", null, "Loose rock above the second pitch", false);
+        var withHazard = told with { Entries = [.. told.Entries.Take(3), hazard, .. told.Entries.Skip(3)] };
+
+        var lines = Printed(withHazard).Where(b => b.Kind == DocumentBlockKind.Bullet).Select(b => b.Text).ToList();
+
+        // In its hour's place in the log, said to be about the cave, with its station and words.
+        lines.ShouldContain(
+            "2026-09-12 10:30 UTC · About the cave, not about a person · gallery.parallel.2 "
+            + "· Loose rock above the second pitch");
+        // Not somebody the document has no name for, and in nobody's number.
+        lines.ShouldNotContain(line => line.Contains("A person not named here", StringComparison.Ordinal));
+        lines.ShouldNotContain(line =>
+            line.Contains("Caver ", StringComparison.Ordinal) && line.Contains("Loose rock", StringComparison.Ordinal));
+        // The party's own lines are what they were: widening the journal added nothing to them.
+        lines.ShouldContain("2026-09-12 10:00 UTC · Ana Invented · Rigging · At a station · gallery.upper.2");
+        // It is in the list of reports and not among the people: nobody gained a line.
+        Printed(withHazard).Count(b => b.Kind == DocumentBlockKind.Subheading).ShouldBe(2);
+
+        // The place kept back from this reader: the station goes, the hazard's words stay.
+        var kept = Printed(withHazard with
+        {
+            AnyWithheld = true,
+            Entries = [.. withHazard.Entries.Select(entry =>
+                entry.CaverId is null ? entry with { Station = null, Withheld = true } : entry)],
+        }).Where(b => b.Kind == DocumentBlockKind.Bullet).Select(b => b.Text).ToList();
+        kept.ShouldContain(
+            "2026-09-12 10:30 UTC · About the cave, not about a person · place withheld "
+            + "· Loose rock above the second pitch");
+        kept.ShouldNotContain(line => line.Contains("gallery.parallel.2", StringComparison.Ordinal));
+
+        // Both halves in Romanian, so neither phrase is English in the other language's document.
+        var romanian = Printed(withHazard, TripJournalWording.Romanian)
+            .Where(b => b.Kind == DocumentBlockKind.Bullet).Select(b => b.Text).ToList();
+        romanian.ShouldContain(
+            "2026-09-12 10:30 UTC · Despre peșteră, nu despre o persoană · gallery.parallel.2 "
+            + "· Loose rock above the second pitch");
+        romanian.ShouldNotContain(line => line.Contains("About the cave", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A trip nobody was reported on whose log holds a hazard is still written up, and the hazard
+    /// is what it prints: the record of the cave does not depend on anybody having been placed.
+    /// </summary>
+    [Fact]
+    public void A_journal_of_nothing_but_a_hazard_still_prints_the_hazard()
+    {
+        var hazard = new TripTrackingJournalEntry(
+            At(10, 30), null, null, null, TripPositionEventKind.CaveNote,
+            "gallery.parallel.2", null, "Sump has risen", false);
+        var blocks = Printed(new TripTrackingJournal(
+            TripTrackingState.Off, null, null, [], [hazard], AnyWithheld: false));
+
+        blocks.ShouldNotBeEmpty();
+        blocks.Where(b => b.Kind == DocumentBlockKind.Bullet).Select(b => b.Text).ShouldBe(
+            ["2026-09-12 10:30 UTC · About the cave, not about a person · gallery.parallel.2 · Sump has risen"]);
+    }
+
+    /// <summary>
     /// The block's own words exist in both languages the application is written in, line for
     /// line, and anything else asks for English.
     /// </summary>

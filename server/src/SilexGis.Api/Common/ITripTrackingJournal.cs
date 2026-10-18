@@ -30,7 +30,7 @@ public interface ITripTrackingJournal
 {
     /// <summary>
     /// The journal of one trip as <paramref name="reading"/> may be told it, or null when the trip
-    /// has neither a watch nor a single report — which is also the answer for a trip that has been
+    /// has neither a watch nor a single report of any kind — which is also the answer for a trip that has been
     /// deleted or was never there.
     /// </summary>
     /// <param name="tripLogId">The trip.</param>
@@ -64,7 +64,10 @@ public interface ITripTrackingJournal
 /// Everybody the trip names and everybody the log speaks of: the trip's own order first, then those
 /// since taken off it, in the order the log first mentions each.
 /// </param>
-/// <param name="Entries">Every report on the log, oldest first. A report taken off the log is not here.</param>
+/// <param name="Entries">
+/// Every report on the log, oldest first — those about the party and those about the cave alike. A
+/// report taken off the log is not here.
+/// </param>
 /// <param name="AnyWithheld">
 /// Whether anything about a place was kept back from this reader — a report's, somebody's last
 /// place, or the survey the watch itself was set on.
@@ -119,8 +122,14 @@ public sealed record TripTrackingJournalPerson(
 /// One report in a trip's tracking journal.
 /// </summary>
 /// <param name="At">The moment the report is about, as whoever recorded it gave it.</param>
-/// <param name="CaverId">Whom it is about.</param>
-/// <param name="Name">The name the reader sees that person under; null where they are told none.</param>
+/// <param name="CaverId">
+/// Whom it is about, or null for a report about the cave itself and nobody in it — a hazard, the
+/// state of a pitch. A reader that folds these lines by person must leave those out first; one
+/// that prints them must say in so many words that such a line speaks of the cave, because a line
+/// standing in a list keyed by people reads as something said of somebody otherwise.
+/// </param>
+/// <param name="Name">The name the reader sees that person under; null where they are told none,
+/// and always null on a report about the cave.</param>
 /// <param name="Team">The title of the team the report was recorded for, if any.</param>
 /// <param name="Kind">What was reported.</param>
 /// <param name="Station">The station named, where the reader may be told it.</param>
@@ -132,7 +141,7 @@ public sealed record TripTrackingJournalPerson(
 /// </param>
 public sealed record TripTrackingJournalEntry(
     DateTimeOffset At,
-    Guid CaverId,
+    Guid? CaverId,
     string? Name,
     string? Team,
     TripPositionEventKind Kind,

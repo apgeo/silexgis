@@ -51,17 +51,21 @@ public sealed class TripTrackingJournalReads(
         // report first and a journal is read from the beginning. The whole of it — a tracked
         // trip's log is small, and the state read above has just folded every row of it too.
         //
-        // The reports about people, which is what every line of a journal is keyed by: who, then
-        // what was said of them. A note about the cave is about nobody and is not carried, as it
-        // is not in the log written out as a sheet — printed in a line made for a person it would
-        // read as something said of somebody the document does not name.
-        var rows = await TripTrackingEndpoints.NewestFirst(TripTrackingEndpoints.LogOf(db, tripLogId).AboutPeople())
+        // The whole log, and not only what was said of the party: a note about the cave — loose
+        // rock above a pitch, a sump that has risen — is the one thing on a trip's record that the
+        // next party needs most, and leaving it out of the printed journal meant it lived nowhere
+        // but a screen. It is carried with no person on it, and whatever prints these lines has to
+        // say plainly that such a line speaks of the cave; a reader that folds them by person
+        // leaves them out first.
+        var rows = await TripTrackingEndpoints.NewestFirst(TripTrackingEndpoints.LogOf(db, tripLogId))
             .ToListAsync(ct);
         rows.Reverse();
 
-        // Nothing returns a watch to "off", so off means never started; with no report either
-        // there is no journal to speak of. A deleted trip arrives here too: its watch and its
-        // reports are hidden with it, and it answers as a trip that was never followed.
+        // Nothing returns a watch to "off", so off means never started; with no report of any
+        // kind either there is no journal to speak of. A trip whose log holds nothing but a note
+        // about the cave does have one, and prints it: the hazard is the record. A deleted trip
+        // arrives here too — its watch and its reports are hidden with it, and it answers as a
+        // trip that was never followed.
         if (state.State == TripTrackingState.Off && rows.Count == 0) return null;
 
         var shown = await TripTrackingEndpoints.ShownToAsync(db, access, protection, reading, tripLogId, rows, ct);
@@ -95,13 +99,16 @@ public sealed class TripTrackingJournalReads(
             var claimsPlace = TrackingWithholding.HasPosition(row);
             var withheld = claimsPlace
                 && told.StationName is null && told.DepthEnteredM is null && told.SurveyModelId is null;
-            var about = row.Person();
-            if (claimsPlace) lastPlaceWithheld[about] = withheld;
+            // Null on a note about the cave, which places nobody: it can name a station, and that
+            // station is withheld by the same rule as anybody's, but it is not where a member of
+            // the party was last heard to be and must not be read as such.
+            var about = row.CaverId;
+            if (claimsPlace && about is { } placed) lastPlaceWithheld[placed] = withheld;
 
             entries.Add(new TripTrackingJournalEntry(
                 told.RecordedAt,
                 about,
-                NameOf(about),
+                about is { } named ? NameOf(named) : null,
                 TeamOf(told.TeamId),
                 told.Kind,
                 told.StationName,

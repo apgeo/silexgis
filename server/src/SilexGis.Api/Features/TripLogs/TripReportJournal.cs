@@ -65,6 +65,16 @@ public sealed record TripJournalWording
     /// <summary>Somebody this document is told no name for, by their number in the party.</summary>
     public required string Caver { get; init; }
 
+    /// <summary>
+    /// What stands where a person's name would, on a line that is about the cave and about nobody.
+    /// </summary>
+    /// <remarks>
+    /// It says so in words rather than leaving the name out, because a line with an hour and no
+    /// name in a list every other line of which names somebody reads as a report about a person
+    /// the document was told no name for — which is a different thing and has its own line.
+    /// </remarks>
+    public required string AboutTheCave { get; init; }
+
     public required string Unnamed { get; init; }
 
     public required string Entered { get; init; }
@@ -104,6 +114,7 @@ public sealed record TripJournalWording
         OffRoster = "no longer on the roster",
         Withheld = "place withheld",
         Caver = "Caver {0}",
+        AboutTheCave = "About the cave, not about a person",
         Unnamed = "A person not named here",
         Entered = "Went in",
         AtStation = "At a station",
@@ -135,6 +146,7 @@ public sealed record TripJournalWording
         OffRoster = "nu mai este pe listă",
         Withheld = "loc reținut",
         Caver = "Speolog {0}",
+        AboutTheCave = "Despre peșteră, nu despre o persoană",
         Unnamed = "O persoană nenumită aici",
         Entered = "A intrat",
         AtStation = "La o stație",
@@ -159,7 +171,8 @@ public sealed record TripJournalWording
 /// </summary>
 /// <remarks>
 /// <para>
-/// This prints what it is handed and decides nothing about it. Which places the journal states
+/// This prints what it is handed and decides nothing about it — including which of its lines
+/// speak of a person and which of the cave. Which places the journal states
 /// was settled where the journal was read, for the reader the document is built for; a report
 /// whose place was kept back arrives marked and without a station or a depth, and what is
 /// printed for it is its hour and a word. There is no branch here that could print a place for
@@ -255,7 +268,8 @@ public static class TripReportJournal
         if (journal.Entries.Count > 0)
         {
             // Who a report is about is named the way the list above names them, number included,
-            // so two people the document is told no name for are still two people in the log.
+            // so two people the document is told no name for are still two people in the log. A
+            // line about the cave is in nobody's number and is not looked up here.
             var numbers = journal.People
                 .GroupBy(person => person.CaverId)
                 .ToDictionary(group => group.Key, group => group.First().Number);
@@ -263,18 +277,29 @@ public static class TripReportJournal
             blocks.Add(DocumentBlock.Subheading(wording.Reports));
             foreach (var entry in journal.Entries.Take(MaxReports))
             {
+                // A line about the cave and nobody in it. What it is said to be takes the place a
+                // name would hold, and no word for the kind follows it: the phrase already says
+                // what the line is, and "About the cave · Note" would say it twice.
+                var aboutTheCave = entry.CaverId is null;
                 blocks.Add(DocumentBlock.Bullet(Line(
                     At(entry.At),
-                    Who(entry.Name, numbers.GetValueOrDefault(entry.CaverId), wording),
+                    aboutTheCave
+                        ? wording.AboutTheCave
+                        : Who(entry.Name, numbers.GetValueOrDefault(entry.CaverId!.Value), wording),
                     entry.Team,
-                    entry.Kind switch
-                    {
-                        TripPositionEventKind.Entered => wording.Entered,
-                        TripPositionEventKind.AtStation => wording.AtStation,
-                        TripPositionEventKind.AtDepth => wording.AtDepth,
-                        TripPositionEventKind.Exited => wording.Exited,
-                        _ => wording.Note,
-                    },
+                    aboutTheCave
+                        ? null
+                        : entry.Kind switch
+                        {
+                            TripPositionEventKind.Entered => wording.Entered,
+                            TripPositionEventKind.AtStation => wording.AtStation,
+                            TripPositionEventKind.AtDepth => wording.AtDepth,
+                            TripPositionEventKind.Exited => wording.Exited,
+                            _ => wording.Note,
+                        },
+                    // The place on such a line is the cave's own station, withheld from a reader
+                    // who may not be told it exactly as a person's place is: the mark arrives
+                    // with the line and nothing is decided here.
                     Place(entry.Station, entry.DepthM, entry.Withheld, wording),
                     entry.Note)));
             }
