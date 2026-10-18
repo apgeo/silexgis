@@ -307,9 +307,19 @@ test('a row of the trip list opens with Enter', async ({ page }) => {
 const WCAG_AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 /**
+ * The one rule the scan leaves out, everywhere: colour contrast. The screens are drawn in the
+ * component library's own colours, several of which read below the 4.5:1 (text) and 3:1 (field
+ * outline) the rule asks for — the owner chose on 2026-10-18 to keep that look for now and to
+ * postpone the contrast changes, which are kept aside to come back as an optional higher-contrast
+ * appearance. Every other rule is still scanned on every screen in both themes; the keyboard focus
+ * ring, the one colour kept from that work, is held at 3:1 by the theme's unit tests instead.
+ */
+const POSTPONED_RULES = ['color-contrast'];
+
+/**
  * Findings the scan knows about and accepts for now, each by screen, by rule AND by the one element
- * it was found on — never a rule turned off for a page, so the same mistake made anywhere else
- * still fails. Each says why it stands and where it is registered to be fixed, and an entry the
+ * it was found on — apart from the postponed rule above, never a rule turned off for a page, so the
+ * same mistake made anywhere else still fails. Each says why it stands and where it is registered to be fixed, and an entry the
  * scan no longer finds fails the scan too: an exception outliving its finding would accept the
  * next one made on that element unseen.
  */
@@ -373,7 +383,7 @@ async function expectNoUnacceptedFindings(page: Page, screenName: string, scheme
   // for the wrong reason.
   await expect(page.locator('html')).toHaveAttribute('data-theme', scheme);
   const screen = scheme === 'light' ? screenName : `${screenName}, dark theme`;
-  const results = await new AxeBuilder({ page }).withTags(WCAG_AA_TAGS).analyze();
+  const results = await new AxeBuilder({ page }).withTags(WCAG_AA_TAGS).disableRules(POSTPONED_RULES).analyze();
   const used = new Set<AcceptedFinding>();
   const found = results.violations.flatMap((violation) =>
     violation.nodes
