@@ -1616,6 +1616,18 @@ public static class DemoSeeder
     private static readonly DateOnly TrackedTripDate = new(2026, 8, 29);
 
     /// <summary>
+    /// The address the demonstration trip is published at: what a visitor with no account puts
+    /// after the published-trip path to reach it.
+    /// </summary>
+    /// <remarks>
+    /// A constant, and not a secret. A token the application mints is random and shown once, so a
+    /// seeded random one would publish a page whose address nobody could ever learn. This one is
+    /// written here and in the installation guide, and it opens nothing but invented data.
+    /// Spelled out in words so that nobody mistakes it for a token worth keeping.
+    /// </remarks>
+    public const string TrackedTripShareToken = "demonstration-tracked-descent-published-link";
+
+    /// <summary>
     /// A trip that was followed from the surface, start to finish: a survey of the demonstration
     /// cave, a watch that was started and closed on it, and the reports that came out in between.
     /// </summary>
@@ -1640,10 +1652,28 @@ public static class DemoSeeder
     /// places.
     /// </para>
     /// <para>
-    /// <b>No link is published for it.</b> Publishing puts a page in front of people with no
-    /// account, and that is a person's decision about a particular trip. The demonstration data
-    /// is also what a public showcase installation runs on, where a seeded link would be a page
-    /// nobody chose to put on the internet.
+    /// <b>A link is published for it, and its address is written down here in the open.</b> The
+    /// whole of what a published page is — what a visitor with no account is shown of a party, a
+    /// cave's named depths and the photographs of a trip — cannot be demonstrated by a dataset
+    /// that publishes nothing, and a demonstration installation that makes somebody publish a
+    /// trip by hand before they can see any of it shows them the thing last. So the link is part
+    /// of the data, made the way the application makes one: a token, only its hash stored, and an
+    /// expiry computed from the trip's own dates by the rule every link's expiry is computed by.
+    /// </para>
+    /// <para>
+    /// Its token is a fixed, readable constant rather than a random one, because a random token
+    /// is never shown again and a link nobody can open is not a published page. That is a
+    /// deliberate disclosure, and it is confined to data that is invented: the page it opens
+    /// carries two made-up people walking through a made-up cave. An installation that has
+    /// outgrown the demonstration data withdraws the link like any other — a withdrawn link is
+    /// not put back by a later run, because the row is still there and this looks for the row.
+    /// </para>
+    /// <para>
+    /// <b>What that link actually answers today, stated rather than implied:</b> the watch is
+    /// written closed and an installation's grace after closing is nothing unless it sets one, so
+    /// the live page refuses the link exactly as it refuses one whose party is home, while the
+    /// finished trip stays readable in the archive the same link opens. A visitor who opens the
+    /// bare address is told the link is over; the archive behind it answers.
     /// </para>
     /// <para>
     /// Each piece is looked for before it is written — the model, the declared place, the trip,
@@ -1734,6 +1764,31 @@ public static class DemoSeeder
                 ClosedAt = At(10, 20),
             };
             db.TripTrackings.Add(watch);
+        }
+
+        // The published link, laid down by the same two rules the application publishes by: the
+        // token is hashed and only the hash is kept, and the expiry is counted from the end of the
+        // trip by the one function that answers when a publication lapses — asked as of the day
+        // the trip was over, so that the row a second run finds is the row the first one wrote
+        // rather than one dated by the clock that happened to seed it. The installation's own
+        // window is not read here, and cannot be: this writes rows, and that setting is bound
+        // where the web application's configuration is. The default is the one both read.
+        //
+        // Looked for by the trip rather than by the token, so that a link somebody withdrew — or
+        // replaced with one of their own — is left alone instead of being published again.
+        if (!await db.TripTrackingShares.AnyAsync(s => s.TripLogId == tripId, ct))
+        {
+            db.TripTrackingShares.Add(new TripTrackingShare
+            {
+                TripLogId = tripId.Value,
+                TokenHash = TripTrackingRules.ShareTokenHash(TrackedTripShareToken),
+                CreatedBy = ownerUserId,
+                ExpiresAt = TripPublicationWindow.ExpiresAtFor(
+                    TripPublicationWindow.EndOfTrip(TrackedTripDate, null),
+                    TrackedTripDate,
+                    null,
+                    TripPublicationWindow.DefaultShareLifetime),
+            });
         }
 
         // Reports are written against the model the watch is on, as the product writes them. A

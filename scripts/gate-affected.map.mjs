@@ -489,7 +489,7 @@ export const crossCutting = {
     'CaveMeshesInViewTests', 'CaveOverburdenTests', 'CavePassageShapeTests',
     'CaveRegistryFilterTests', 'CaveSurveyStatisticsTests',
     'CenterlineColdCacheMeasurementTests', 'CenterlineTests', 'ClosestApproachTests',
-    'ConcurrencyTests', 'DashboardTests', 'DocumentAccessApiTests',
+    'ConcurrencyTests', 'DashboardTests', 'DemoSeedIdempotencyTests', 'DocumentAccessApiTests',
     'DocumentCommentNotificationTests', 'DocumentContentSearchTests',
     'DocumentSurfaceProtectionSweepTests', 'DocumentViewerBytesTests',
     'EntrancePlacementGuardTests', 'EnumBindingTests', 'ExpeditionDeleteCleanupTests',

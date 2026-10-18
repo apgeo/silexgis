@@ -446,8 +446,8 @@ public sealed class DemoSeedIdempotencyTests : IAsyncLifetime, IClassFixture<Pos
             (await counting.ProcessingJobs.CountAsync(j => j.Kind == ProcessingJobKinds.SurveyGraph)).ShouldBe(1);
             afterFirst["survey_stations"].ShouldBe(0);
 
-            // And nobody without an account was handed a page: publishing is a person's act.
-            afterFirst["trip_tracking_shares"].ShouldBe(0);
+            // And the page a visitor with no account is shown: one link, not one per run.
+            afterFirst["trip_tracking_shares"].ShouldBe(1);
         }
 
         await SeedWithFilesAsync(host);
@@ -509,6 +509,7 @@ public sealed class DemoSeedIdempotencyTests : IAsyncLifetime, IClassFixture<Pos
     [InlineData("trip_position_events", "DELETE FROM trip_position_events WHERE id = (SELECT id FROM trip_position_events WHERE kind = 4 ORDER BY recorded_at LIMIT 1)")]
     [InlineData("cave_depth_places", "DELETE FROM cave_depth_places")]
     [InlineData("trip_tracking", "DELETE FROM trip_tracking")]
+    [InlineData("trip_tracking_shares", "DELETE FROM trip_tracking_shares")]
     public async Task A_row_lost_from_the_tracked_trip_is_put_back_on_the_next_run(string table, string loss)
     {
         using var host = Host();
@@ -672,6 +673,81 @@ public sealed class DemoSeedIdempotencyTests : IAsyncLifetime, IClassFixture<Pos
         var wayIn = stations.Single(x => x.Flags.HasFlag(SurveyStationFlags.Entrance));
         var foot = stations.Single(x => x.Name == "demo.put.3");
         (wayIn.Position.Z - foot.Position.Z).ShouldBe(60, tolerance: 0.01);
+    }
+
+    /// <summary>
+    /// The link the dataset publishes is the address a visitor with no account actually reads the
+    /// finished trip at.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asserted through HTTP with no credential of any kind, because that is the only reader this
+    /// row exists for: a check made with an account would pass on a link that answered nobody.
+    /// The archive is where the trip is read, and the live page is refused — the watch is written
+    /// closed and this installation keeps a closed watch readable for no time at all — so both
+    /// are asserted, and the refusal is asserted to be the same refusal an invented token gets.
+    /// Were the live page to start answering, the first of these would notice; were the archive to
+    /// stop, the second would.
+    /// </para>
+    /// <para>
+    /// The trip's own cave has to be one whose positions may be published, or the dataset would
+    /// seed a link that is refused on every route for a reason that has nothing to do with the
+    /// link. That it is not protected is asserted here rather than assumed.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_published_link_the_dataset_seeds_is_read_by_a_visitor_with_no_account()
+    {
+        using var host = Host();
+        await SeedWithFilesAsync(host);
+
+        Guid tripId;
+        await using (var db = CreateContext())
+        {
+            tripId = await db.TripLogs.Where(t => t.Title == DemoSeeder.TrackedTripTitle)
+                .Select(t => t.Id).SingleAsync();
+
+            // One link, on this trip, by the hash of the address the dataset publishes — not a
+            // row that merely exists with a token nobody could present.
+            var link = await db.TripTrackingShares.SingleAsync();
+            link.TripLogId.ShouldBe(tripId);
+            link.TokenHash.ShouldBe(TripTrackingRules.ShareTokenHash(DemoSeeder.TrackedTripShareToken));
+            link.RevokedAt.ShouldBeNull();
+
+            // The cave the watch is anchored to may be published: its coordinates are not
+            // protected, which is what the whole page depends on.
+            var caveId = await db.TripTrackings.Where(t => t.TripLogId == tripId)
+                .Select(t => t.CaveFeatureId).SingleAsync();
+            caveId.ShouldNotBeNull();
+            (await db.Features.Where(f => f.Id == caveId).Select(f => f.LocationProtected).SingleAsync())
+                .ShouldBeFalse();
+        }
+
+        using var visitor = host.CreateClient();
+        var token = DemoSeeder.TrackedTripShareToken;
+
+        // The archive the link opens, and the finished trip in it.
+        var list = await visitor.GetAsync($"/api/v1/public/trips/{token}/past");
+        list.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var listed = await list.Content.ReadFromJsonAsync<JsonElement>();
+        listed.GetProperty("trips").EnumerateArray()
+            .Select(t => t.GetProperty("tripLogId").GetGuid())
+            .ShouldContain(tripId);
+
+        // And the trip itself, replayable, with the party numbered and nobody named by an id.
+        var replay = await visitor.GetAsync($"/api/v1/public/trips/{token}/past/{tripId}");
+        replay.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var read = await replay.Content.ReadFromJsonAsync<JsonElement>();
+        read.GetProperty("tripLogId").GetGuid().ShouldBe(tripId);
+        read.GetProperty("positionsWithheld").GetBoolean().ShouldBeFalse();
+        read.GetProperty("participants").EnumerateArray()
+            .Select(p => p.GetProperty("ordinal").GetInt32()).Order().ShouldBe([1, 2]);
+
+        // The live page is over, and says so exactly as an address nobody ever published does.
+        var live = await visitor.GetAsync($"/api/v1/public/trips/{token}");
+        live.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var invented = await visitor.GetAsync("/api/v1/public/trips/not-a-link-anybody-was-given");
+        invented.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     /// <summary>
