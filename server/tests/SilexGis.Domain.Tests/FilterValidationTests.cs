@@ -141,6 +141,41 @@ public class FilterValidationTests
     }
 
     [Fact]
+    public void A_key_too_long_to_be_any_field_is_not_repeated_back()
+    {
+        // A refusal names the key it was sent so the sender can find the condition — in the problem
+        // and in its sentence. Up to the limit it still does; past it, neither repeats the key,
+        // whatever length was sent and however many conditions sent it.
+        var longest = new string('k', FilterValidation.MaxEchoedKeyLength);
+        var tooLong = new string('k', FilterValidation.MaxEchoedKeyLength + 1);
+
+        var named = Validate(Over("feature", new ConditionNode(longest, FilterOp.Equals, [new TextValue("a")])))
+            .ShouldHaveSingleItem();
+        named.Field.ShouldBe(longest);
+        named.Detail.ShouldContain(longest);
+
+        var problems = Validate(Over("feature", new AllOfNode(
+        [
+            new ConditionNode(tooLong, FilterOp.Equals, [new TextValue("a")]),
+            new ConditionNode(tooLong + "x", FilterOp.Equals, [new TextValue("a")]),
+        ])));
+        problems.Count.ShouldBe(2);
+        problems.ShouldAllBe(p => p.Code == FilterProblemCodes.UnknownField && p.Field == null
+            && !p.Detail.Contains(new string('k', FilterValidation.MaxEchoedKeyLength + 1)));
+        // Still placed, so the client can show it on the row it is about.
+        problems[0].Path.ShouldBe("/scope/0/where/of/0");
+
+        // A field that exists but is asked with the wrong comparison is named the same way.
+        Validate(Over("feature", new ConditionNode("depth", FilterOp.Contains, [new TextValue("a")])))
+            .ShouldHaveSingleItem().Detail.ShouldContain("'depth'");
+
+        // And so is a kind of object nobody declared.
+        var world = Validate(new FilterDocument { Scope = [new WorldScope(tooLong)], Sort = SortKey.Updated });
+        world.ShouldContain(p => p.Code == FilterProblemCodes.UnknownWorld);
+        world.ShouldAllBe(p => !p.Detail.Contains(tooLong));
+    }
+
+    [Fact]
     public void A_ceiling_problem_says_which_ceiling()
     {
         var values = Enumerable.Range(0, FilterValidation.MaxValuesPerCondition + 1)

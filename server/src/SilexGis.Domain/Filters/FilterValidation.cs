@@ -38,6 +38,14 @@ public static class FilterValidation
     public const int MaxTextValueLength = 200;
 
     /// <summary>
+    /// The longest field key or kind of object a refusal repeats back. A refusal names what the
+    /// caller sent so they can find it — twice, in the problem and in its sentence — and a key no
+    /// vocabulary could hold is not worth handing back in full, once per condition, at whatever
+    /// length somebody chose to send.
+    /// </summary>
+    public const int MaxEchoedKeyLength = 200;
+
+    /// <summary>
     /// How large a number may be before it stops being comparable to a stored measurement.
     /// </summary>
     /// <remarks>
@@ -101,14 +109,14 @@ public static class FilterValidation
             if (!seen.Add(scope.World))
             {
                 errors.Add(new FilterProblem(FilterProblemCodes.WorldRepeated, at, null, null, null,
-                    $"'{scope.World}' is named twice; each kind of object appears once."));
+                    $"{Named(scope.World, "A kind of object")} is named twice; each kind of object appears once."));
                 continue;
             }
 
             if (!vocabularies.TryGetValue(scope.World, out var vocabulary))
             {
                 errors.Add(new FilterProblem(FilterProblemCodes.UnknownWorld, at, null, null, null,
-                    $"There is nothing here called '{scope.World}'."));
+                    $"There is nothing here called {Named(scope.World, "that")}."));
                 continue;
             }
 
@@ -135,7 +143,15 @@ public static class FilterValidation
 
     private static FilterProblem About(
         ConditionNode condition, string path, string code, string detail, int? limit = null) =>
-        new(code, path, condition.Field, condition.Op, limit, detail);
+        new(code, path, Echoed(condition.Field), condition.Op, limit, detail);
+
+    private static string? Echoed(string? key) => key is { Length: <= MaxEchoedKeyLength } ? key : null;
+
+    /// <summary>A key the caller sent, quoted, or <paramref name="instead"/> when it is too long to repeat.</summary>
+    private static string Named(string? key, string instead) => Echoed(key) is { } echoed ? $"'{echoed}'" : instead;
+
+    /// <summary>The field a condition names, quoted, to open a sentence about it.</summary>
+    private static string FieldOf(ConditionNode condition) => Named(condition.Field, "That field");
 
     private static readonly IReadOnlyList<FieldRequirement> NoGuards = [];
 
@@ -294,14 +310,14 @@ public static class FilterValidation
             // The same holds for the code and every other member: only what the caller sent is
             // echoed back.
             errors.Add(About(condition, path, FilterProblemCodes.UnknownField,
-                $"'{vocabulary.World}' cannot be filtered by '{condition.Field}'."));
+                $"'{vocabulary.World}' cannot be filtered by {Named(condition.Field, "that field")}."));
             return;
         }
 
         if (!FilterOps.For(field.Kind).Contains(condition.Op))
         {
             errors.Add(About(condition, path, FilterProblemCodes.OpUnsupported,
-                $"'{condition.Field}' does not support that comparison."));
+                $"{FieldOf(condition)} does not support that comparison."));
             return;
         }
 
@@ -311,16 +327,16 @@ public static class FilterValidation
             errors.Add(
                 exact == 0
                     ? About(condition, path, FilterProblemCodes.TakesNoValue,
-                        $"'{condition.Field}' takes no value with that comparison.")
+                        $"{FieldOf(condition)} takes no value with that comparison.")
                     : About(condition, path, FilterProblemCodes.ValueCount,
-                        $"'{condition.Field}' needs exactly {exact} value(s) with that comparison.", exact));
+                        $"{FieldOf(condition)} needs exactly {exact} value(s) with that comparison.", exact));
             return;
         }
 
         if (arity is null && condition.Values.Count == 0)
         {
             errors.Add(About(condition, path, FilterProblemCodes.ValueMissing,
-                $"'{condition.Field}' needs at least one value."));
+                $"{FieldOf(condition)} needs at least one value."));
             return;
         }
 
@@ -336,7 +352,7 @@ public static class FilterValidation
             if (!Matches(field.Kind, value))
             {
                 errors.Add(About(condition, path, FilterProblemCodes.ValueKind,
-                    $"'{condition.Field}' was given a value of the wrong kind."));
+                    $"{FieldOf(condition)} was given a value of the wrong kind."));
                 return;
             }
 
@@ -351,7 +367,7 @@ public static class FilterValidation
                 && (!double.IsFinite(number.Value) || Math.Abs(number.Value) > MaxNumberMagnitude))
             {
                 errors.Add(About(condition, path, FilterProblemCodes.NumberOutOfRange,
-                    $"'{condition.Field}' was given a number it cannot be compared against."));
+                    $"{FieldOf(condition)} was given a number it cannot be compared against."));
                 return;
             }
         }
@@ -367,14 +383,14 @@ public static class FilterValidation
             && condition.Values is [NumberValue low, NumberValue high] && low.Value > high.Value)
         {
             errors.Add(About(condition, path, FilterProblemCodes.RangeReversed,
-                $"'{condition.Field}' was given a range that ends before it starts."));
+                $"{FieldOf(condition)} was given a range that ends before it starts."));
         }
 
         if (condition.Op == FilterOp.Between
             && condition.Values is [InstantValue from, InstantValue to] && from.Value > to.Value)
         {
             errors.Add(About(condition, path, FilterProblemCodes.RangeReversed,
-                $"'{condition.Field}' was given a range that ends before it starts."));
+                $"{FieldOf(condition)} was given a range that ends before it starts."));
         }
     }
 
