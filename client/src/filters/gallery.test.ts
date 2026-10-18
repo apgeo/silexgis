@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { emptyDocument, withWhere } from './document.ts';
 import {
   galleryDocument,
@@ -79,7 +79,15 @@ describe('the gallery filter in the address', () => {
 });
 
 describe('the gallery controls as conditions', () => {
+  // Node re-reads the zone when TZ is assigned. "Etc/GMT-3" is UTC+3 and "Etc/GMT+5" is UTC−5.
+  const originalZone = process.env.TZ;
+  afterEach(() => {
+    if (originalZone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalZone;
+  });
+
   it('writes each control as the condition that matches what the control always matched', () => {
+    process.env.TZ = 'Etc/GMT-3';
     expect(galleryWhere({ search: ' cascade ', tag: 'entrance', from: '2024-03-01', to: '2024-03-31' })).toEqual({
       node: 'allOf',
       of: [
@@ -92,11 +100,38 @@ describe('the gallery controls as conditions', () => {
           ],
         },
         { node: 'condition', field: 'tag', op: 'equals', values: [{ type: 'id', value: 'entrance' }] },
-        // Taken, else uploaded, from the first day's start up to the start of the day after the last.
+        // Taken, else uploaded, from the first day's start up to the start of the day after the
+        // last — the reader's own days, as the condition editor bounds a day on the same field.
+        { node: 'condition', field: 'datedAt', op: 'greaterOrEqual', values: [{ type: 'instant', value: '2024-03-01T00:00:00.000+03:00' }] },
+        { node: 'condition', field: 'datedAt', op: 'lessThan', values: [{ type: 'instant', value: '2024-04-01T00:00:00.000+03:00' }] },
+      ],
+    });
+  });
+
+  it.each([['UTC+3', 'Etc/GMT-3'], ['UTC−5', 'Etc/GMT+5']])(
+    'bounds the range by the reader\'s own days at %s and reads it back as those days',
+    (_name, zone) => {
+      process.env.TZ = zone;
+      const where = galleryWhere({ from: '2024-12-31', to: '2025-01-01' });
+      const [from, to] = (where as Extract<FilterNode, { node: 'allOf' }>).of
+        .map((n) => (n as Extract<FilterNode, { node: 'condition' }>).values[0]!.value as string);
+
+      // As moments, the reader's midnight of the first day and of the day after the last.
+      expect(new Date(from!).getTime()).toBe(new Date(2024, 11, 31).getTime());
+      expect(new Date(to!).getTime()).toBe(new Date(2025, 0, 2).getTime());
+      expect(readGalleryControls(where).controls).toEqual({ from: '2024-12-31', to: '2025-01-01' });
+    },
+  );
+
+  it('still reads a range written at midnight UTC, as older links carry it, as its days', () => {
+    const old: FilterNode = {
+      node: 'allOf',
+      of: [
         { node: 'condition', field: 'datedAt', op: 'greaterOrEqual', values: [{ type: 'instant', value: '2024-03-01T00:00:00Z' }] },
         { node: 'condition', field: 'datedAt', op: 'lessThan', values: [{ type: 'instant', value: '2024-04-01T00:00:00Z' }] },
       ],
-    });
+    };
+    expect(readGalleryControls(old)).toEqual({ controls: { from: '2024-03-01', to: '2024-03-31' }, extra: [] });
   });
 
   it('narrows nothing when no control is set', () => {

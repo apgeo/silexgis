@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import dayjs from 'dayjs';
+import { dayBound } from './dayBounds.ts';
 import { decodeFilter, encodeFilter, FILTER_PARAM } from './url.ts';
 import { emptyDocument, whereOf, withWhere } from './document.ts';
 import type { FilterDocument, FilterNode } from './types.ts';
@@ -12,8 +14,9 @@ import type { FilterDocument, FilterNode } from './types.ts';
  * as the condition that matches exactly what the control always matched: the search box as "the
  * title, the caption or the place name contains", the tag by its slug, and the date range over the
  * date the gallery dates a picture by — when it was taken, or when it was uploaded if its camera
- * recorded no time — from the first day's start up to the last day's end, in UTC as the server has
- * always read it.
+ * recorded no time — from the first day's start up to the start of the day after the last, both in
+ * the reader's own time zone, as the condition editor bounds a day picked on the same field. A range
+ * written in UTC instead would start a reader in Bucharest's day at three in the morning.
  *
  * The other controls stay parameters of this screen and are not kept in a saved view: the
  * photographer is a person, an album is an object with its own visibility, "without a position" is
@@ -58,11 +61,11 @@ function contains(field: string, text: string): FilterNode {
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Midnight UTC at the start of a day, or undefined for a value that is not a day. */
+/** The reader's own midnight at the start of a day, or undefined for a value that is not a day. */
 function startOf(day: string | undefined): string | undefined {
   if (day === undefined || !DAY.test(day)) return undefined;
-  const at = new Date(`${day}T00:00:00Z`);
-  return Number.isNaN(at.getTime()) ? undefined : `${day}T00:00:00Z`;
+  const at = dayjs(day);
+  return at.isValid() && at.format('YYYY-MM-DD') === day ? dayBound('greaterOrEqual', at, 'low') : undefined;
 }
 
 /** The day after, as YYYY-MM-DD. */
@@ -125,10 +128,14 @@ function isCondition(node: FilterNode | undefined, field: string, op: string): n
   return node !== undefined && node.node === 'condition' && node.field === field && node.op === op;
 }
 
-/** The day a midnight-UTC instant starts, or undefined when the instant is not one. */
+/**
+ * The day a midnight instant starts, at whatever offset it was written, or undefined when the instant
+ * is not a midnight. A range written by somebody in another zone, or in UTC as older links were,
+ * still shows the days it was written for.
+ */
 function dayAt(instant: string | undefined): string | undefined {
   if (instant === undefined) return undefined;
-  const match = /^(\d{4}-\d{2}-\d{2})T00:00:00(?:\.0+)?(?:Z|\+00:00)$/.exec(instant);
+  const match = /^(\d{4}-\d{2}-\d{2})T00:00:00(?:\.0+)?(?:Z|[+-]\d{2}:\d{2})$/.exec(instant);
   return match?.[1];
 }
 
