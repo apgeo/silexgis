@@ -376,7 +376,7 @@ describe('a comparison typed with signs', () => {
 
     const where = (onApply.mock.calls[0]![0] as FilterDocument).scope[0]!.where as Extract<FilterNode, { node: 'condition' }>;
     expect(where.op).toBe('between');
-    expect(where.values.map((v) => String(v.value).slice(0, 10))).toEqual(['2024-05-01', '2024-05-01']);
+    expect(where.values.map((v) => String('value' in v ? v.value : '').slice(0, 10))).toEqual(['2024-05-01', '2024-05-01']);
 
     type('filter-editor-value-0-typed', '2024-05-01-2024-06-01');
     expect(screen.getByTestId('filter-editor-value-0-typed-unreadable')).toHaveTextContent(en.filters.typed.unreadableDay);

@@ -158,15 +158,15 @@ describe('the condition a typed comparison makes', () => {
     const on = conditionOf({ op: 'equals', negated: true, values: ['2024-05-01'], unit: null }, 'day');
     expect(on.op).toBe('between');
     expect(on.negated).toBe(true);
-    expect((on.values[0]!.value as string).startsWith('2024-05-01T00:00:00.000')).toBe(true);
-    expect((on.values[1]!.value as string).startsWith('2024-05-01T23:59:59.999999')).toBe(true);
+    expect((on.values[0] as { value: string }).value.startsWith('2024-05-01T00:00:00.000')).toBe(true);
+    expect((on.values[1] as { value: string }).value.startsWith('2024-05-01T23:59:59.999999')).toBe(true);
   });
 
   it('bounds the other day comparisons as a picked day is bounded', () => {
     const after = conditionOf({ op: 'greaterThan', negated: false, values: ['2024-05-01'], unit: null }, 'day');
-    expect((after.values[0]!.value as string).slice(0, 26)).toBe('2024-05-01T23:59:59.999999');
+    expect((after.values[0] as { value: string }).value.slice(0, 26)).toBe('2024-05-01T23:59:59.999999');
     const from = conditionOf({ op: 'greaterOrEqual', negated: false, values: ['2024-05-01'], unit: null }, 'day');
-    expect((from.values[0]!.value as string).slice(0, 23)).toBe('2024-05-01T00:00:00.000');
+    expect((from.values[0] as { value: string }).value.slice(0, 23)).toBe('2024-05-01T00:00:00.000');
   });
 });
 

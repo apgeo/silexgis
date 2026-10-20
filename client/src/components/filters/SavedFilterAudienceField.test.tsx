@@ -58,6 +58,7 @@ function showRegistry() {
           onApply={vi.fn()}
           onSaved={vi.fn()}
           onClearExtra={vi.fn()}
+          onRelease={vi.fn()}
           onForget={vi.fn()}
         />
         <Address />

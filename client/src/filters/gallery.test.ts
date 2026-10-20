@@ -114,7 +114,7 @@ describe('the gallery controls as conditions', () => {
       process.env.TZ = zone;
       const where = galleryWhere({ from: '2024-12-31', to: '2025-01-01' });
       const [from, to] = (where as Extract<FilterNode, { node: 'allOf' }>).of
-        .map((n) => (n as Extract<FilterNode, { node: 'condition' }>).values[0]!.value as string);
+        .map((n) => ((n as Extract<FilterNode, { node: 'condition' }>).values[0] as { value: string }).value);
 
       // As moments, the reader's midnight of the first day and of the day after the last.
       expect(new Date(from!).getTime()).toBe(new Date(2024, 11, 31).getTime());

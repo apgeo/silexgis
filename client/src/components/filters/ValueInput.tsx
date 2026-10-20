@@ -148,7 +148,7 @@ export default function ValueInput({ world, field, op, values, onChange, negated
 
 /** A condition's identity, whatever order its members were written in. */
 function keyOf(condition: TypedCondition): string {
-  return JSON.stringify([condition.op, condition.negated, condition.values.map((v) => [v.type, v.value])]);
+  return JSON.stringify([condition.op, condition.negated, condition.values.map((v) => [v.type, 'value' in v ? v.value : null])]);
 }
 
 interface TypedComparisonInputProps {
