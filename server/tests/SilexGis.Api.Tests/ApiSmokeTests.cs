@@ -281,8 +281,8 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
 
     /// <summary>
     /// The feature list and the two vector exports declare the 400 they send for a window that is
-    /// not one (and the exports for an unknown format or kind); the cave export, which reads the
-    /// cave list's filter, declares the 404 of a saved filter that is not there for this caller.
+    /// not one or a filter that cannot be run (and the exports for an unknown format), and the 404
+    /// of a saved filter that is not there for this caller: each reads its list's filter.
     /// </summary>
     [Fact]
     public async Task OpenApi_document_declares_the_feature_list_and_vector_exports_own_refusals()
@@ -290,9 +290,9 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
         var operations = (await OperationsAsync()).ToDictionary(o => o.Id!);
         var expected = new Dictionary<string, string[]>
         {
-            ["featureList"] = ["400", "401"],
+            ["featureList"] = ["400", "401", "404"],
             ["exportExportCaves"] = ["400", "401", "404"],
-            ["exportExportFeatures"] = ["400", "401"],
+            ["exportExportFeatures"] = ["400", "401", "404"],
         };
 
         foreach (var (id, statuses) in expected)
