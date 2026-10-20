@@ -12,6 +12,7 @@ import {
 } from '@ant-design/icons';
 import { App, Dropdown, Flex, Input, Segmented, Tooltip } from 'antd';
 import Button from '../Button.tsx';
+import LayoutKeptHereMark from '../LayoutKeptHereMark.tsx';
 import { useTranslation } from 'react-i18next';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
@@ -134,7 +135,10 @@ export default function PanelDock({ scope }: { scope: PanelScope }) {
               key: layout.id,
               label: (
                 <Flex align="center" gap={8} justify="space-between" style={{ minWidth: 180 }}>
-                  <span>{layout.name}</span>
+                  <Flex align="center" gap={4}>
+                    <span>{layout.name}</span>
+                    <LayoutKeptHereMark layoutId={layout.id} />
+                  </Flex>
                   <Button
                     size="small"
                     type="text"
