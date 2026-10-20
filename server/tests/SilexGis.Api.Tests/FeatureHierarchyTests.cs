@@ -493,6 +493,42 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable, IClassF
         cave.ToJsonString().ShouldNotContain("\"approximateLocation\":true");
     }
 
+    /// <summary>
+    /// Naming the same parents again leaves the ancestry as it was. A replacement removes the
+    /// child's edges and adds the new ones in one unit of work, and an edge put back was once
+    /// counted as gone: the child's stored ancestors lost the parent its saved edge still named,
+    /// and protection inherited along it stopped reaching the child.
+    /// </summary>
+    [Fact]
+    public async Task Naming_the_same_parents_again_keeps_the_ancestry_they_give()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var area = await CreateAreaAsync(owner, $"Same parents area {marker}");
+        var child = await CreateFeatureAsync(owner, new
+        {
+            kind = "generic",
+            name = $"Same parents child {marker}",
+            featureTypeId = sinkholeTypeId,
+            geometry = Point(25.55, 45.65),
+            visibility = "authenticated",
+            parents = new[] { new { parentId = area, isPrimary = true } },
+        });
+
+        var again = await owner.PutAsJsonAsync($"/api/v1/features/{child}/parents", new
+        {
+            parents = new[] { new { parentId = area, isPrimary = true } },
+        });
+        again.StatusCode.ShouldBe(HttpStatusCode.OK, await again.Content.ReadAsStringAsync());
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.Features.Where(f => f.Id == child).Select(f => f.AncestorIds).SingleAsync())
+            .ShouldContain(area);
+        (await db.FeatureAncestors.AnyAsync(a => a.FeatureId == child && a.AncestorId == area)).ShouldBeTrue();
+        (await scope.ServiceProvider.GetRequiredService<FeatureIntegrityVerifier>().VerifyAsync())
+            .Where(p => p.FeatureId == child).ShouldBeEmpty();
+    }
+
     private static object Point(double lon, double lat) =>
         new { type = "Point", coordinates = new[] { lon, lat } };
 

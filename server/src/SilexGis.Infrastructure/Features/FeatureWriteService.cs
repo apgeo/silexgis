@@ -836,13 +836,21 @@ public sealed class FeatureWriteService(
         var stored = await db.FeatureHierarchyEdges
             .Select(e => new FeatureHierarchyRules.Edge(e.ParentId, e.ChildId))
             .ToListAsync(ct);
+        var pending = db.ChangeTracker.Entries<FeatureHierarchyEdge>()
+            .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Unchanged)
+            .Select(e => new FeatureHierarchyRules.Edge(e.Entity.ParentId, e.Entity.ChildId))
+            .ToList();
+        // A replacement removes a child's edges and adds the new ones in the same unit of work, so
+        // an edge that is put back — the same parent named again — is both removed and pending.
+        // It is in the result: counted as removed, it vanished from the ancestry worked out here,
+        // and the child's stored ancestors and closure were written without the parent that the
+        // saved edge still names.
+        var readded = pending.ToHashSet();
         var removed = db.ChangeTracker.Entries<FeatureHierarchyEdge>()
             .Where(e => e.State == EntityState.Deleted)
             .Select(e => new FeatureHierarchyRules.Edge(e.Entity.ParentId, e.Entity.ChildId))
+            .Where(e => !readded.Contains(e))
             .ToHashSet();
-        var pending = db.ChangeTracker.Entries<FeatureHierarchyEdge>()
-            .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Unchanged)
-            .Select(e => new FeatureHierarchyRules.Edge(e.Entity.ParentId, e.Entity.ChildId));
 
         return stored.Concat(pending)
             .Where(e => !removed.Contains(e))
