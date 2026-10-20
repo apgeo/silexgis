@@ -40,7 +40,7 @@ test('signing out ends the session and releases the arrangement this browser hel
   await login(page, member.email, member.password);
 
   // Something of the member's for this browser to hold: a choice that is not the default.
-  await gotoRoute(page, '/settings/accessibility');
+  await gotoRoute(page, '/settings/coordinates');
   const written = page.waitForResponse(
     (response) => response.url().endsWith('/api/v1/me/preferences') && response.request().method() === 'PATCH',
   );
