@@ -72,10 +72,11 @@ public static class SpatialConditions
     public const string AnchorNotFoundDetail = "What this filter measures from is not available.";
 
     /// <summary>
-    /// Problems with a spatial condition's values, as sentences. Called once its arity and the kind
-    /// of each value are known to be right.
+    /// Problems with a spatial condition's values, each a code from <see cref="FilterProblemCodes"/>
+    /// with an English sentence and the limit it is about. Called once its arity and the kind of
+    /// each value are known to be right.
     /// </summary>
-    public static IReadOnlyList<string> Problems(ConditionNode condition, string world)
+    public static IReadOnlyList<(string Code, string Detail, int? Limit)> Problems(ConditionNode condition, string world)
     {
         ArgumentNullException.ThrowIfNull(condition);
         var field = condition.Field;
@@ -86,7 +87,9 @@ public static class SpatialConditions
                     || radius.Value < MinRadiusMeters
                     || radius.Value > MaxRadiusMeters)
                 {
-                    return [$"'{field}' takes a distance from {MinRadiusMeters:0} to {MaxRadiusMeters:0} metres."];
+                    return [(FilterProblemCodes.RadiusOutOfRange,
+                        $"'{field}' takes a distance from {MinRadiusMeters:0} to {MaxRadiusMeters:0} metres.",
+                        (int)MaxRadiusMeters)];
                 }
 
                 return anchor switch
@@ -94,7 +97,7 @@ public static class SpatialConditions
                     PointValue point => PointProblems(field, point),
                     ObjectValue target => ObjectProblems(field, target, world),
                     SavedFilterValue => [],
-                    _ => [$"'{field}' was given a value of the wrong kind."],
+                    _ => [(FilterProblemCodes.ValueKind, $"'{field}' was given a value of the wrong kind.", null)],
                 };
 
             case (FilterOp.Inside, [var outline]):
@@ -102,16 +105,17 @@ public static class SpatialConditions
                 {
                     PolygonValue polygon => PolygonProblems(field, polygon),
                     ObjectValue target => ObjectProblems(field, target, world),
-                    _ => [$"'{field}' was given a value of the wrong kind."],
+                    _ => [(FilterProblemCodes.ValueKind, $"'{field}' was given a value of the wrong kind.", null)],
                 };
 
             default:
-                return [$"'{field}' was given a value of the wrong kind."];
+                return [(FilterProblemCodes.ValueKind, $"'{field}' was given a value of the wrong kind.", null)];
         }
     }
 
     /// <summary>
-    /// Problems with what a request's proximity sort measures from, as sentences — asked of a
+    /// Problems with what a request's proximity sort measures from, placed at the document's
+    /// <c>/anchor</c> — asked of a
     /// request about to run, never of a saved document, which holds no anchor and is given one by
     /// whoever runs it.
     /// </summary>
@@ -120,7 +124,7 @@ public static class SpatialConditions
     /// another order: an order that is not the one asked for looks exactly like the one asked for.
     /// An anchor beside any other sort is not read at all.
     /// </remarks>
-    public static IReadOnlyList<string> ProximityProblems(
+    public static IReadOnlyList<FilterProblem> ProximityProblems(
         FilterDocument document, IReadOnlyDictionary<string, WorldVocabulary> vocabularies)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -133,10 +137,11 @@ public static class SpatialConditions
         switch (document.Anchor)
         {
             case null:
-                return ["Nearest first needs a place to measure from."];
+                return [AtAnchor(FilterProblemCodes.AnchorMissing, "Nearest first needs a place to measure from.")];
 
             case PointAnchor point:
-                return PointProblems("nearest first", new PointValue(point.Longitude, point.Latitude));
+                return [.. PointProblems("nearest first", new PointValue(point.Longitude, point.Latitude))
+                    .Select(p => AtAnchor(p.Code, p.Detail))];
 
             case ObjectAnchor target:
                 // Only a world in the request that ranks by distance can name the object: it is the
@@ -146,12 +151,14 @@ public static class SpatialConditions
                     && document.Scope.Any(s => string.Equals(s.World, target.World, StringComparison.Ordinal))
                     && vocabularies.TryGetValue(target.World, out var vocabulary)
                     && vocabulary.Supports(SortKey.Proximity);
-                return ranks ? [] : ["Nearest first cannot be measured from that kind of object."];
+                return ranks ? [] : [AtAnchor(FilterProblemCodes.AnchorKind, "Nearest first cannot be measured from that kind of object.")];
 
             default:
-                return ["Nearest first was given a place of the wrong kind."];
+                return [AtAnchor(FilterProblemCodes.AnchorKind, "Nearest first was given a place of the wrong kind.")];
         }
     }
+
+    private static FilterProblem AtAnchor(string code, string detail) => new(code, "/anchor", null, null, null, detail);
 
     /// <summary>Whether a value can stand in a spatial condition at all.</summary>
     public static bool IsSpatialValue(FilterValue value) =>
@@ -219,23 +226,25 @@ public static class SpatialConditions
         return polygon.IsValid && polygon.Area > 0 ? polygon : null;
     }
 
-    private static IReadOnlyList<string> PointProblems(string field, PointValue point) =>
+    private static IReadOnlyList<(string Code, string Detail, int? Limit)> PointProblems(string field, PointValue point) =>
         double.IsFinite(point.Longitude) && double.IsFinite(point.Latitude)
         && point.Longitude is >= -180 and <= 180 && point.Latitude is >= -90 and <= 90
             ? []
-            : [$"'{field}' was given a point that is not on the globe."];
+            : [(FilterProblemCodes.PointOffGlobe, $"'{field}' was given a point that is not on the globe.", null)];
 
-    private static IReadOnlyList<string> PolygonProblems(string field, PolygonValue polygon) =>
+    private static IReadOnlyList<(string Code, string Detail, int? Limit)> PolygonProblems(string field, PolygonValue polygon) =>
         ToPolygon(polygon) is null
-            ? [$"'{field}' was given an outline that is not a simple polygon of at most {MaxPolygonPositions} positions."]
+            ? [(FilterProblemCodes.OutlineInvalid,
+                $"'{field}' was given an outline that is not a simple polygon of at most {MaxPolygonPositions} positions.",
+                MaxPolygonPositions)]
             : [];
 
     // Only an object of the condition's own world can be an anchor: it is the one world whose rows
     // carry a position the runner may be allowed to see exactly.
-    private static IReadOnlyList<string> ObjectProblems(string field, ObjectValue target, string world) =>
+    private static IReadOnlyList<(string Code, string Detail, int? Limit)> ObjectProblems(string field, ObjectValue target, string world) =>
         string.Equals(target.World, world, StringComparison.Ordinal) && target.Id != Guid.Empty
             ? []
-            : [$"'{field}' cannot be measured from that kind of object."];
+            : [(FilterProblemCodes.AnchorKind, $"'{field}' cannot be measured from that kind of object.", null)];
 
     private static bool Any(FilterNode node, Func<FilterValue, bool> test) => node switch
     {

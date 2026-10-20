@@ -64,4 +64,18 @@ public static class FilterProblemCodes
     public const string NumberOutOfRange = "filter.number_out_of_range";
     public const string RangeReversed = "filter.range_reversed";
     public const string AnchorNotStored = "filter.anchor_not_stored";
+
+    /// <summary>A distance outside what a position condition measures; its limit is the largest.</summary>
+    public const string RadiusOutOfRange = "filter.radius_out_of_range";
+
+    public const string PointOffGlobe = "filter.point_off_globe";
+
+    /// <summary>An outline that is not a simple polygon; its limit is the most positions one may hold.</summary>
+    public const string OutlineInvalid = "filter.outline_invalid";
+
+    /// <summary>A place measured from, or an outline, of a kind this condition or sort cannot use.</summary>
+    public const string AnchorKind = "filter.anchor_kind";
+
+    /// <summary>Nearest first asked with nothing to measure from.</summary>
+    public const string AnchorMissing = "filter.anchor_missing";
 }

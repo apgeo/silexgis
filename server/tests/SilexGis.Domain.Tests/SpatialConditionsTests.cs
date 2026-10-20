@@ -28,8 +28,9 @@ public class SpatialConditionsTests
 
     private static FilterDocument Over(FilterNode where) => new() { Scope = [new WorldScope("feature", where)] };
 
+    /// <summary>The codes of the problems a document over <paramref name="where"/> is refused with.</summary>
     private static IReadOnlyList<string> Validate(FilterNode where) =>
-        FilterValidation.Validate(Over(where), Vocabularies);
+        [.. FilterValidation.Validate(Over(where), Vocabularies).Select(p => p.Code)];
 
     private static ConditionNode Within(params FilterValue[] values) => new("position", FilterOp.Within, values);
 
@@ -103,6 +104,42 @@ public class SpatialConditionsTests
             .ToList();
         many.Add(many[0]);
         Validate(Inside(new PolygonValue([[.. many]]))).ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public void Each_spatial_problem_is_named_by_a_code_on_the_condition_it_is_about()
+    {
+        var radius = FilterValidation.Validate(
+            Over(Within(new NumberValue(SpatialConditions.MaxRadiusMeters + 1), Somewhere)), Vocabularies).ShouldHaveSingleItem();
+        radius.Code.ShouldBe(FilterProblemCodes.RadiusOutOfRange);
+        radius.Path.ShouldBe("/scope/0/where");
+        radius.Field.ShouldBe("position");
+        radius.Limit.ShouldBe((int)SpatialConditions.MaxRadiusMeters);
+
+        Validate(Within(new NumberValue(500), new PointValue(181, 46))).ShouldBe([FilterProblemCodes.PointOffGlobe]);
+        Validate(Inside(new PolygonValue([[[0, 0], [1, 1], [1, 0], [0, 1], [0, 0]]])))
+            .ShouldBe([FilterProblemCodes.OutlineInvalid]);
+        Validate(Within(new NumberValue(500), new ObjectValue("tripLog", Guid.NewGuid())))
+            .ShouldBe([FilterProblemCodes.AnchorKind]);
+        Validate(Inside(Somewhere)).ShouldBe([FilterProblemCodes.ValueKind]);
+    }
+
+    [Fact]
+    public void A_proximity_problem_is_placed_at_the_document_anchor()
+    {
+        var ranking = new Dictionary<string, WorldVocabulary>(StringComparer.Ordinal)
+        {
+            ["feature"] = Features with { Sorts = [SortKey.Updated, SortKey.Proximity] },
+        };
+        var nearest = Over(Within(new NumberValue(500), Somewhere)) with { Sort = SortKey.Proximity };
+
+        var missing = SpatialConditions.ProximityProblems(nearest, ranking).ShouldHaveSingleItem();
+        missing.Code.ShouldBe(FilterProblemCodes.AnchorMissing);
+        missing.Path.ShouldBe("/anchor");
+        SpatialConditions.ProximityProblems(nearest with { Anchor = new PointAnchor(181, 0) }, ranking)
+            .ShouldHaveSingleItem().Code.ShouldBe(FilterProblemCodes.PointOffGlobe);
+        SpatialConditions.ProximityProblems(nearest with { Anchor = new ObjectAnchor("tripLog", Guid.NewGuid()) }, ranking)
+            .ShouldHaveSingleItem().Code.ShouldBe(FilterProblemCodes.AnchorKind);
     }
 
     [Fact]

@@ -375,7 +375,7 @@ public static class FilterValidation
         if (field.Kind == FieldKind.Spatial
             && SpatialConditions.Problems(condition, vocabulary.World) is { Count: > 0 } spatial)
         {
-            errors.AddRange(spatial);
+            errors.AddRange(spatial.Select(p => About(condition, path, p.Code, p.Detail, p.Limit)));
             return;
         }
 

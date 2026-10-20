@@ -5418,7 +5418,12 @@
         "text_too_long": "O valoare are mai mult de {{limit}} caractere.",
         "number_out_of_range": "Un număr de aici este prea mare pentru a fi comparat.",
         "range_reversed": "Intervalul se termină înainte să înceapă.",
-        "anchor_not_stored": "Un filtru salvat nu păstrează niciodată un loc de la care se măsoară."
+        "anchor_not_stored": "Un filtru salvat nu păstrează niciodată un loc de la care se măsoară.",
+        "radius_out_of_range": "O distanță de aici este în afara intervalului: poate fi de cel mult {{limit}} de metri.",
+        "point_off_globe": "Un punct de aici nu se află pe glob.",
+        "outline_invalid": "Un contur de aici nu este un poligon simplu de cel mult {{limit}} de poziții.",
+        "anchor_kind": "Distanța nu poate fi măsurată de la acest fel de loc sau obiect.",
+        "anchor_missing": "„Cel mai apropiat” are nevoie de un loc de la care să măsoare."
       },
       "allOf": "Toate acestea (ȘI)",
       "anyOf": "Oricare dintre acestea (SAU)",

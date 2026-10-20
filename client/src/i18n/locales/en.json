@@ -5418,7 +5418,12 @@
         "text_too_long": "A value is longer than {{limit}} characters.",
         "number_out_of_range": "A number here is too large to compare.",
         "range_reversed": "The range ends before it starts.",
-        "anchor_not_stored": "A saved filter never keeps a place to measure from."
+        "anchor_not_stored": "A saved filter never keeps a place to measure from.",
+        "radius_out_of_range": "A distance here is out of range: it can be at most {{limit}} metres.",
+        "point_off_globe": "A point here is not on the globe.",
+        "outline_invalid": "An outline here is not a simple polygon of at most {{limit}} positions.",
+        "anchor_kind": "A distance cannot be measured from that kind of place or object.",
+        "anchor_missing": "Nearest first needs a place to measure from."
       },
       "allOf": "All of these (AND)",
       "anyOf": "Any of these (OR)",
