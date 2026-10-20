@@ -58,6 +58,7 @@ import LayerPanel from '../components/map/LayerPanel.tsx';
 import MapContextMenu from '../components/map/MapContextMenu.tsx';
 import ViewsPanel from '../components/map/ViewsPanel.tsx';
 import MapFilterNotice from '../components/map/MapFilterNotice.tsx';
+import { MAP_CANVAS_ID } from '../components/mapCanvasId.ts';
 import QuickFilterChips from '../components/filters/QuickFilterChips.tsx';
 import MapObjectSelector from '../components/map/MapObjectSelector.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
@@ -1510,6 +1511,7 @@ export default function MapPage() {
               arrow keys to the map instead of using them to read the page. */}
           <div
             ref={mapTarget}
+            id={MAP_CANVAS_ID}
             className="map-canvas"
             data-testid="map-canvas"
             tabIndex={0}

@@ -43,6 +43,7 @@ import CaveRegistrySavedFilters from './CaveRegistrySavedFilters.tsx';
 import SelectResultButton from '../../components/filters/SelectResultButton.tsx';
 import { mapAddressForList } from '../../filters/tableMapHandoff.ts';
 import { useTableMapLink } from '../../workspace/tableMapLink.ts';
+import { RowLink } from '../../components/RowOpeners.tsx';
 
 const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
 
@@ -612,7 +613,13 @@ export default function CaveListPage() {
           itemRender: labelledPaginationItems(t),
         }}
         columns={[
-          { title: t('caves.name'), dataIndex: 'name', sorter: true, sortOrder: sortOrder('name') },
+          {
+            title: t('caves.name'),
+            dataIndex: 'name',
+            sorter: true,
+            sortOrder: sortOrder('name'),
+            render: (name: string, record) => <RowLink to={`/caves/${record.id}`}>{name}</RowLink>,
+          },
           { title: t('caves.identificationCode'), dataIndex: 'identificationCode', width: 120 },
           { title: t('caves.type'), dataIndex: 'caveTypeId', width: 160, render: typeName },
           { title: t('caves.region'), dataIndex: 'region', sorter: true, width: 140, sortOrder: sortOrder('region') },

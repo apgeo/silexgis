@@ -37,6 +37,7 @@ import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { useTableMapLink } from '../../workspace/tableMapLink.ts';
 import { mapAddressForList } from '../../filters/tableMapHandoff.ts';
+import { RowLink } from '../../components/RowOpeners.tsx';
 
 const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
 const featureKinds: FeatureKind[] = ['generic', 'cave', 'caveEntrance', 'centerline'];
@@ -337,12 +338,15 @@ export default function FeatureListPage() {
           {
             title: t('features.name'),
             dataIndex: 'name',
-            render: (name: string | null) =>
-              name ?? (
-                <Typography.Text type="secondary" italic>
-                  {t('features.unnamed')}
-                </Typography.Text>
-              ),
+            render: (name: string | null, record) => (
+              <RowLink to={`/features/${record.id}`}>
+                {name ?? (
+                  <Typography.Text type="secondary" italic>
+                    {t('features.unnamed')}
+                  </Typography.Text>
+                )}
+              </RowLink>
+            ),
           },
           {
             title: t('features.kind'),

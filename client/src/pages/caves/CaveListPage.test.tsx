@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { App as AntApp } from 'antd';
 import { useEffect } from 'react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import i18n from '../../i18n';
@@ -16,7 +16,8 @@ import { whereOf, withWhere } from '../../filters/document.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
 import { decodeFilter, encodeFilter } from '../../filters/url.ts';
 
-const { canSpy, doorSpy, cavesSpy, downloadSpy, savedFilters, editorSpy, editorMounts, selectAllSpy, heldWrites } = vi.hoisted(() => ({
+const { canSpy, doorSpy, cavesSpy, caveItems, downloadSpy, savedFilters, editorSpy, editorMounts, selectAllSpy, heldWrites } = vi.hoisted(() => ({
+  caveItems: { current: [] as unknown[] },
   editorSpy: vi.fn(),
   editorMounts: { count: 0 },
   heldWrites: { on: false, queue: [] as (() => void)[] },
@@ -53,7 +54,8 @@ vi.mock('../../api/hooks.ts', () => ({
   useCreateDoor: (domain: string) => doorSpy(domain),
   useCaves: (params: unknown) => {
     cavesSpy(params);
-    return { data: { items: [], page: 1, pageSize: 20, totalItems: 0 }, isFetching: false, error: null };
+    const items = caveItems.current;
+    return { data: { items, page: 1, pageSize: 20, totalItems: items.length }, isFetching: false, error: null };
   },
   useCaveTypes: () => ({ data: [{ id: 3, name: 'Karst cave' }] }),
   useTags: () => ({ data: [{ id: 1, slug: 'bats', name: 'Bats' }] }),
@@ -139,10 +141,13 @@ const { default: CaveListPage } = await import('./CaveListPage.tsx');
 
 function Address() {
   const location = useLocation();
+  const navigate = useNavigate();
   return (
     <>
       <span data-testid="address">{location.pathname}</span>
       <span data-testid="search">{location.search}</span>
+      {/* The browser's Back, so a test can tell one push from the same page pushed twice. */}
+      <button type="button" data-testid="history-back" onClick={() => navigate(-1)} />
     </>
   );
 }
@@ -166,6 +171,7 @@ beforeEach(async () => {
   canSpy.mockReset().mockReturnValue(false);
   doorSpy.mockReset().mockReturnValue(NO_DOOR);
   cavesSpy.mockReset();
+  caveItems.current = [];
   downloadSpy.mockReset();
   savedFilters.current = [];
   editorSpy.mockReset();
@@ -463,5 +469,23 @@ describe('the working set filled from a registry ordered nearest first', () => {
     expect(listed.sort).toBe('proximity');
     expect(decodeFilter(listed.filter)?.anchor).toEqual({ anchor: 'point', longitude: 22.5, latitude: 46.25 });
     expect(asked).toMatchObject({ filter: listed.filter, sort: 'proximity' });
+  });
+});
+
+describe('a row of the cave registry', () => {
+  it('is opened from the keyboard by a link on the cave’s name, which pushes the page once', () => {
+    caveItems.current = [
+      { id: 'c-1', name: 'Ice Cave', caveTypeId: 3, entranceCount: 1, visibility: 'Public' },
+    ];
+    show();
+
+    const link = screen.getByRole('link', { name: 'Ice Cave' });
+    expect(link).toHaveAttribute('href', '/caves/c-1');
+    fireEvent.click(link);
+    expect(screen.getByTestId('address')).toHaveTextContent('/caves/c-1');
+    // One Back returns to the registry: had the row's own click pushed the cave a second time,
+    // Back would land on the same cave and seem to do nothing.
+    fireEvent.click(screen.getByTestId('history-back'));
+    expect(screen.getByTestId('address')).toHaveTextContent(/^\/caves$/);
   });
 });

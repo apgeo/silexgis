@@ -29,6 +29,7 @@ import { useIsFullAdmin } from './reslinks/permissions.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import { buildNavItems, isNavGroup } from './navItems.tsx';
 import { sectionFor } from './navSections.ts';
+import { MAP_CANVAS_ID } from './mapCanvasId.ts';
 
 /**
  * Application shell: slim header + collapsible icon sidebar (off-canvas on phones) — drawn once
@@ -85,6 +86,10 @@ function AppShell() {
   const { data: photoLibraries } = usePhotoLibraries({ watchingHealth: false });
 
   const section = sectionFor(location.pathname);
+  // "/" is the map too: it is where every sign-in lands, and it shows the map unless the account
+  // chose the dashboard (which redirects away from "/", so the pathname no longer matches). The
+  // skip link still falls back to the page's content when no map canvas is on the page.
+  const onMap = location.pathname === '/map' || location.pathname === '/';
   // A document's own page is not a sidebar destination of its own — documents are reached
   // through the cabinets they are filed in, so that is what stays lit while one is open.
   const selectedKey = section === 'documents' ? 'cabinets' : section;
@@ -166,16 +171,20 @@ function AppShell() {
     <Layout style={{ height: '100%' }}>
       {/* First in the tab order, and out of sight until it has focus: without it a keyboard has to
           walk the header and every entry of the rail before it reaches the page. Moves focus
-          rather than following its address, because on the map the hash is the camera's. */}
+          rather than following its address, because on the map the hash is the camera's.
+          On the map page it goes to the map itself: the page opens with the layer panel, whose
+          every control would otherwise stand between the page's start and the map. The panel
+          stays one Shift+Tab behind the map, in the order it is drawn. */}
       <a
-        href="#main-content"
+        href={onMap ? `#${MAP_CANVAS_ID}` : '#main-content'}
         className="skip-link"
         onClick={(event) => {
           event.preventDefault();
-          document.getElementById('main-content')?.focus();
+          const target = (onMap && document.getElementById(MAP_CANVAS_ID)) || document.getElementById('main-content');
+          target?.focus();
         }}
       >
-        {t('a11y.skipToMain')}
+        {onMap ? t('a11y.skipToMap') : t('a11y.skipToMain')}
       </a>
       <Layout.Header style={{ display: 'flex', alignItems: 'center' }}>
         <Flex align="center" gap={10} style={{ flex: 1 }}>

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { App as AntApp } from 'antd';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import i18n from '../../i18n';
@@ -72,10 +72,13 @@ const { default: FeatureListPage } = await import('./FeatureListPage.tsx');
 
 function Address() {
   const { pathname, search } = useLocation();
+  const navigate = useNavigate();
   return (
     <>
       <span data-testid="address">{pathname}</span>
       <span data-testid="search">{search}</span>
+      {/* The browser's Back, so a test can tell one push from the same page pushed twice. */}
+      <button type="button" data-testid="history-back" onClick={() => navigate(-1)} />
     </>
   );
 }
@@ -220,5 +223,20 @@ describe('deleting a feature from the list', () => {
     const dialog = await screen.findByRole('tooltip');
     expect(dialog.textContent).toContain('Delete this feature? Contained features are deleted with it.');
     expect(dialog.textContent).toContain('It can be restored, with what it contains, from Deleted caves and features.');
+  });
+});
+
+describe('a row of the feature list', () => {
+  it('is opened from the keyboard by a link on the feature’s name, which pushes the page once', () => {
+    show();
+
+    const link = screen.getByRole('link', { name: 'Dolina 4' });
+    expect(link).toHaveAttribute('href', `/features/${SINKHOLE.id}`);
+    fireEvent.click(link);
+    expect(screen.getByTestId('address')).toHaveTextContent(`/features/${SINKHOLE.id}`);
+    // One Back returns to the list: had the row's own click pushed the feature a second time,
+    // Back would land on the same feature and seem to do nothing.
+    fireEvent.click(screen.getByTestId('history-back'));
+    expect(screen.getByTestId('address')).toHaveTextContent(/^\/features$/);
   });
 });

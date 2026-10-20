@@ -626,3 +626,39 @@ describe('AppLayout account menu', () => {
     );
   });
 });
+
+describe('the skip link', () => {
+  it('goes to the map itself on the map page, past the layer panel', () => {
+    renderShell('/map');
+    const canvas = document.createElement('div');
+    canvas.id = 'map-canvas';
+    canvas.tabIndex = 0;
+    document.body.appendChild(canvas);
+    try {
+      fireEvent.click(screen.getByRole('link', { name: 'Skip to map' }));
+      expect(canvas).toHaveFocus();
+    } finally {
+      canvas.remove();
+    }
+  });
+
+  it('goes to the map from "/" as well, where every sign-in lands', () => {
+    renderShell('/');
+    const canvas = document.createElement('div');
+    canvas.id = 'map-canvas';
+    canvas.tabIndex = 0;
+    document.body.appendChild(canvas);
+    try {
+      fireEvent.click(screen.getByRole('link', { name: 'Skip to map' }));
+      expect(canvas).toHaveFocus();
+    } finally {
+      canvas.remove();
+    }
+  });
+
+  it('goes to the page’s content everywhere else', () => {
+    renderShell('/notifications');
+    fireEvent.click(screen.getByRole('link', { name: 'Skip to main content' }));
+    expect(document.getElementById('main-content')).toHaveFocus();
+  });
+});

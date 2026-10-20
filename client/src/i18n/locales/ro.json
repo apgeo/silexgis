@@ -7282,6 +7282,7 @@
   },
   "a11y": {
     "skipToMain": "Sari la conținutul principal",
+    "skipToMap": "Sari la hartă",
     "mainNav": "Navigația principală",
     "mapScale": "Scara hărții",
     "viewName": "Numele vederii de salvat",

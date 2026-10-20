@@ -7282,6 +7282,7 @@
   },
   "a11y": {
     "skipToMain": "Skip to main content",
+    "skipToMap": "Skip to map",
     "mainNav": "Main navigation",
     "mapScale": "Map scale",
     "viewName": "Name of the view to save",

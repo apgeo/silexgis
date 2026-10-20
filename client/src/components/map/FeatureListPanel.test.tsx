@@ -86,4 +86,16 @@ describe('FeatureListPanel', () => {
       caveId: 'c9',
     });
   });
+
+  it('names each row with a button that does what the row’s click does, for the keyboard', async () => {
+    getSurfaceFeatureSource().addFeatures([mapFeature('f7', 'Doline field', 'doline')]);
+    renderPanel();
+
+    const open = await screen.findByRole('button', { name: 'Doline field' });
+    open.focus();
+    expect(open).toHaveFocus();
+    fireEvent.click(open);
+
+    expect(useWorkspaceStore.getState().selection).toEqual({ kind: 'feature', featureId: 'f7' });
+  });
 });

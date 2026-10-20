@@ -4,6 +4,7 @@ import FeatureGrid from '@terrestris/react-geo/dist/Grid/FeatureGrid/FeatureGrid
 import { AimOutlined } from '@ant-design/icons';
 import { Alert, Flex, Typography } from 'antd';
 import Button from '../Button.tsx';
+import { RowButton } from '../RowOpeners.tsx';
 import type { ColumnsType } from 'antd/es/table';
 import type Feature from 'ol/Feature';
 import type Geometry from 'ol/geom/Geometry';
@@ -46,12 +47,15 @@ const keyOf = (feature: Feature<Geometry>) => String(feature.get('id'));
 interface InViewGridProps {
   features: Feature<Geometry>[];
   attributeFilter: string[];
-  columns: ColumnsType<Record<string, unknown>>;
+  /** Heading of the naming column, which every grid starts with. */
+  nameTitle: string;
+  /** Columns after the name. */
+  columns?: ColumnsType<Record<string, unknown>>;
   onPick: (feature: Feature<Geometry>) => void;
 }
 
 /** One "in view" table: row click selects, checkboxes multi-select with zoom-to. */
-function InViewGrid({ features, attributeFilter, columns, onPick }: InViewGridProps) {
+function InViewGrid({ features, attributeFilter, nameTitle, columns = [], onPick }: InViewGridProps) {
   const { t } = useTranslation();
   const [selectedKeys, setSelectedKeys] = useState<Key[]>([]);
 
@@ -59,6 +63,25 @@ function InViewGrid({ features, attributeFilter, columns, onPick }: InViewGridPr
     () => new globalThis.Map(features.map((f) => [keyOf(f), f])),
     [features],
   );
+
+  // The row's click is a pointer affordance only — a table row is not focusable — so the name
+  // carries a real button that does what the click does, for Tab and Enter and a screen reader.
+  const nameColumn: ColumnsType<Record<string, unknown>>[number] = {
+    title: nameTitle,
+    dataIndex: 'name',
+    key: 'name',
+    ellipsis: true,
+    render: (value: unknown, record: Record<string, unknown>) => {
+      const name =
+        typeof value === 'string' && value ? (
+          value
+        ) : (
+          <Typography.Text type="secondary">{t('features.unnamed')}</Typography.Text>
+        );
+      const feature = byKey.get(String(record.key));
+      return feature ? <RowButton onClick={() => onPick(feature)}>{name}</RowButton> : name;
+    },
+  };
 
   // Bbox reloads replace the OL instances; re-apply the checked-row marker to
   // the fresh instances (and clear any stale hover overrides).
@@ -95,7 +118,7 @@ function InViewGrid({ features, attributeFilter, columns, onPick }: InViewGridPr
         features={features}
         keyFunction={keyOf}
         attributeFilter={attributeFilter}
-        columnDefs={columns}
+        columnDefs={[nameColumn, ...columns]}
         featureStyle={INVISIBLE_STYLE}
         size="small"
         pagination={false}
@@ -173,15 +196,6 @@ export default function FeatureListPanel() {
     [nonce],
   );
 
-  const nameColumn = (title: string): ColumnsType<Record<string, unknown>>[number] => ({
-    title,
-    dataIndex: 'name',
-    key: 'name',
-    ellipsis: true,
-    render: (value: unknown) =>
-      typeof value === 'string' && value ? value : <Typography.Text type="secondary">{t('features.unnamed')}</Typography.Text>,
-  });
-
   const typeColumn: ColumnsType<Record<string, unknown>>[number] = {
     title: t('features.type'),
     dataIndex: 'typeCode',
@@ -208,7 +222,7 @@ export default function FeatureListPanel() {
         <InViewGrid
           features={entrances}
           attributeFilter={['name']}
-          columns={[nameColumn(t('caves.name'))]}
+          nameTitle={t('caves.name')}
           onPick={(feature) => {
             const props = feature.getProperties();
             if (typeof props.id === 'string' && typeof props.caveId === 'string') {
@@ -228,7 +242,8 @@ export default function FeatureListPanel() {
         <InViewGrid
           features={mapFeatures}
           attributeFilter={['name', 'typeCode']}
-          columns={[nameColumn(t('caves.name')), typeColumn]}
+          nameTitle={t('caves.name')}
+          columns={[typeColumn]}
           onPick={(feature) => {
             const id = feature.get('id') as string | undefined;
             if (id) {

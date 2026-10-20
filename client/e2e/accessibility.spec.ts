@@ -2,7 +2,15 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { centreOnDemoCave, gotoRoute, login, mapAddress, openCaveFromRegistry, registryRow } from './helpers.ts';
+import {
+  centreOnDemoCave,
+  gotoRoute,
+  login,
+  mapAddress,
+  openCaveFromRegistry,
+  overlayTreeNode,
+  registryRow,
+} from './helpers.ts';
 import { apiJson, bearerToken, relationId, uploadMapPng } from './rastermapApi.ts';
 
 /** The camera the map's address says it is at: `#zoom/lat/lon`. */
@@ -18,8 +26,9 @@ async function focusIsOn(page: Page, selector: string): Promise<boolean> {
 
 /**
  * The workspace used from the keyboard alone, as somebody who cannot use a pointer uses it: past
- * the shell by the skip link, onto the map by Tab, the map moved with the arrows, and the list of
- * shortcuts opened with `?` and closed with Escape — handing focus back to where it was.
+ * the shell and the layer panel by the skip link, straight onto the map, the map moved with the
+ * arrows, and the list of shortcuts opened with `?` and closed with Escape — handing focus back to
+ * where it was.
  */
 test('the map workspace can be reached and driven from the keyboard', async ({ page }) => {
   await login(page);
@@ -30,30 +39,21 @@ test('the map workspace can be reached and driven from the keyboard', async ({ p
   // The shell's landmarks, in reading order: the skip link first, then the header, the rail's
   // navigation and the page.
   await expect(page.locator('body')).toMatchAriaSnapshot(`
-    - link "Skip to main content"
+    - link "Skip to map"
     - banner
     - complementary:
       - navigation "Main navigation"
     - main
   `);
 
-  // The first Tab lands on the skip link, which is then on screen; Enter puts focus in the page.
+  // The first Tab lands on the skip link, which is then on screen; Enter puts focus on the map —
+  // two key presses from the page's start, whatever the header, the rail and the layer panel hold.
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('Tab');
-  const skip = page.getByRole('link', { name: 'Skip to main content' });
+  const skip = page.getByRole('link', { name: 'Skip to map' });
   await expect(skip).toBeFocused();
   expect((await skip.boundingBox())!.y).toBeGreaterThanOrEqual(0);
   await page.keyboard.press('Enter');
-  expect(await focusIsOn(page, 'main')).toBe(true);
-
-  // From the page, Tab reaches the map — bounded, so a map that is not in the tab order fails
-  // here rather than after the test's whole time.
-  let reached = false;
-  for (let step = 0; step < 200 && !reached; step++) {
-    await page.keyboard.press('Tab');
-    reached = await focusIsOn(page, '.map-canvas');
-  }
-  expect(reached, 'the map is in the tab order').toBe(true);
   const map = page.getByRole('application', { name: /^Map\./ });
   await expect(map).toBeFocused();
   // A keyboard focus shows: the ring is drawn for :focus-visible, which a Tab sets.
@@ -150,6 +150,134 @@ test('the shortcut list also opens from a visible control on the map', async ({ 
   await help.getByRole('button', { name: 'Close', exact: true }).last().click();
   await expect(help).toBeHidden();
   await expect(opener).toBeFocused();
+});
+
+/** How many presses of Tab it takes from the current focus until `selector` has it, or `null`. */
+async function tabsUntil(page: Page, selector: string, bound: number): Promise<number | null> {
+  for (let step = 1; step <= bound; step++) {
+    await page.keyboard.press('Tab');
+    if (await focusIsOn(page, selector)) {
+      return step;
+    }
+  }
+  return null;
+}
+
+/**
+ * The way from the page's start to the map. Walked without the skip link it crosses the header,
+ * the rail and every control of the layer panel, which is drawn before the map; the skip link
+ * makes it two presses. Past the map the page goes on in the order it is drawn: the map's own
+ * zoom buttons, then the search strip over it.
+ */
+test('the map is two key presses from the page start, and the page reads on in order past it', async ({ page }) => {
+  await login(page);
+  // Signing in lands on "/", which shows the map for an account that has not chosen the
+  // dashboard: the skip link offers the map there too, not only on "/map".
+  await page.waitForURL((url) => url.pathname === '/', { timeout: 30_000 });
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Skip to map' }), 'the skip link offers the map at "/"').toBeFocused();
+  await page.keyboard.press('Enter');
+  expect(await focusIsOn(page, '.map-canvas:focus-visible'), 'Enter at "/" lands on the map').toBe(true);
+
+  await gotoRoute(page, '/map');
+  await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 45_000 });
+  await expect(overlayTreeNode(page, 'Cave centerlines')).toBeVisible({ timeout: 15_000 });
+
+  // The short way: one Tab to the skip link, Enter onto the map. First, while nothing has had
+  // focus yet — a blurred element stays the browser's starting point for the next Tab.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  expect(await tabsUntil(page, '.skip-link', 1), 'the skip link is the first stop').toBe(1);
+  await page.keyboard.press('Enter');
+  expect(await focusIsOn(page, '.map-canvas:focus-visible')).toBe(true);
+
+  // The long way, from the skip link on by Tab alone — measured and kept as a note on the run: it
+  // is what the skip link saves.
+  await page.locator('.skip-link').focus();
+  const walked = await tabsUntil(page, '.map-canvas', 300);
+  expect(walked, 'the map is in the tab order').not.toBeNull();
+  test.info().annotations.push({ type: 'Tab presses from the skip link to the map, walked', description: String(walked) });
+  process.stdout.write(`Tab presses from the skip link to the map, walked: ${walked}\n`);
+
+  // On from the map: out of it within its own few controls, and into the search strip next.
+  let left = false;
+  for (let step = 0; step < 10 && !left; step++) {
+    await page.keyboard.press('Tab');
+    left = await page.evaluate(() => document.activeElement?.closest('.map-canvas') === null);
+  }
+  expect(left, 'Tab leaves the map within its own controls').toBe(true);
+  expect(await focusIsOn(page, '.map-search-overlay *'), 'the search strip comes next').toBe(true);
+
+  // And back: one Shift+Tab from the map is in the docked layer panel's side of the workspace (its
+  // resize handle or its last control) — the part the skip link stepped over — not in the header.
+  await page.getByRole('application', { name: /^Map\./ }).focus();
+  await page.keyboard.press('Shift+Tab');
+  const behindMap = await page.evaluate(() => {
+    const active = document.activeElement;
+    const map = document.querySelector('.map-canvas');
+    return (
+      active !== null &&
+      map !== null &&
+      active.closest('.map-workspace') !== null &&
+      (map.compareDocumentPosition(active) & Node.DOCUMENT_POSITION_PRECEDING) !== 0
+    );
+  });
+  expect(behindMap, 'Shift+Tab from the map goes back into the docked panel').toBe(true);
+});
+
+/**
+ * Opens the row whose name link or button `opener` is, from the keyboard: Tab from `start` until
+ * the opener has focus — bounded, so a row the keyboard cannot reach fails here — then Enter.
+ */
+async function tabToAndPress(page: Page, start: ReturnType<Page['getByRole']>, opener: ReturnType<Page['getByRole']>) {
+  await expect(opener).toBeVisible({ timeout: 30_000 });
+  await start.focus();
+  let reached = false;
+  for (let step = 0; step < 60 && !reached; step++) {
+    await page.keyboard.press('Tab');
+    reached = await opener.evaluate((element) => element === document.activeElement);
+  }
+  expect(reached, 'the row is reached with Tab').toBe(true);
+  await page.keyboard.press('Enter');
+}
+
+test('a row of the cave registry opens with Enter', async ({ page }) => {
+  await login(page);
+  await gotoRoute(page, '/caves');
+  const search = page.getByPlaceholder('Search name or toponym…');
+  await search.fill('Peștera Demo Mare');
+  const link = page.locator('.ant-table-row').getByRole('link', { name: 'Peștera Demo Mare' });
+  const depth = await page.evaluate(() => window.history.length);
+
+  await tabToAndPress(page, search, link);
+  await page.waitForURL(/\/caves\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole('heading', { name: 'Peștera Demo Mare' }).first()).toBeVisible({ timeout: 30_000 });
+  // One page pushed, not two: the link's own click does not also run the row's.
+  expect(await page.evaluate(() => window.history.length)).toBe(depth + 1);
+});
+
+test('a row of the feature list opens with Enter', async ({ page }) => {
+  await login(page);
+  await registryRow(page, 'Dolina Demo');
+  const link = page.locator('.ant-table-row').getByRole('link', { name: 'Dolina Demo' });
+  const depth = await page.evaluate(() => window.history.length);
+
+  await tabToAndPress(page, page.getByPlaceholder('Search by name'), link);
+  await page.waitForURL(/\/features\/[0-9a-f-]{36}$/);
+  expect(await page.evaluate(() => window.history.length)).toBe(depth + 1);
+});
+
+test('a row of the map’s in-view list is picked with Enter', async ({ page }) => {
+  await login(page);
+  await centreOnDemoCave(page);
+  const dock = page.locator('.map-right-tabs');
+  const tab = dock.getByRole('tab', { name: 'In view' });
+  await tab.click();
+
+  await tabToAndPress(page, tab, dock.getByRole('button', { name: 'Upper entrance' }));
+  // What the row's click does: the entrance's cave in the selection.
+  await dock.getByRole('tab', { name: 'Selection' }).click();
+  await expect(dock.getByRole('heading', { name: 'Peștera Demo Mare' })).toBeVisible({ timeout: 15_000 });
 });
 
 /**
@@ -457,6 +585,21 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Share', exact: true }).click();
       await expect(page.getByRole('dialog', { name: 'Share links' })).toBeVisible({ timeout: 15_000 });
       await scan(page, 'the share-links dialog');
+    });
+
+    test('the feature list and the map’s in-view list', async ({ page }) => {
+      await login(page);
+      // Unnarrowed, as the cave registry is scanned: a typed search adds the input's clear icon,
+      // which is registered on its own.
+      await gotoRoute(page, '/features');
+      await expect(page.locator('.ant-table-row').first()).toBeVisible({ timeout: 30_000 });
+      await scan(page, 'the feature list');
+
+      await centreOnDemoCave(page);
+      const dock = page.locator('.map-right-tabs');
+      await dock.getByRole('tab', { name: 'In view' }).click();
+      await expect(dock.getByRole('button', { name: 'Upper entrance' })).toBeVisible({ timeout: 20_000 });
+      await scan(page, 'the map’s in-view list');
     });
 
     test('the trip list', async ({ page }) => {
