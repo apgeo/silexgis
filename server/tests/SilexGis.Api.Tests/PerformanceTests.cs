@@ -25,6 +25,7 @@ using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
+using SortKey = SilexGis.Domain.Filters.SortKey;
 
 namespace SilexGis.Api.Tests;
 
