@@ -11,6 +11,7 @@ import {
   overlayTreeNode,
   registryRow,
 } from './helpers.ts';
+import { registerAccount } from './arrange.ts';
 import { apiJson, bearerToken, relationId, uploadMapPng } from './rastermapApi.ts';
 
 /** The camera the map's address says it is at: `#zoom/lat/lon`. */
@@ -287,7 +288,9 @@ test('a row of the map’s in-view list is picked with Enter', async ({ page }) 
 test('withheld survey lines are said on the map while the layer panel is closed, and the notice opens it', async ({
   page,
 }) => {
-  await login(page);
+  // As an account of its own: closing the layer panel is a dock preference, kept with the account.
+  const member = await registerAccount(page.request, 'withheld-notice');
+  await login(page, member.email, member.password);
   // The demonstration data has far fewer survey lines than any line budget, so the answer is held
   // to say three were left out: what is driven here is what the map says about a count, not how
   // the server arrives at one. The lines it does send are drawn as sent.
