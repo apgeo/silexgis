@@ -29,6 +29,7 @@ import {
   type CenterlineLoadState,
 } from '../../map/centerlineLayer.ts';
 import { CENTERLINE_STATUS_ID } from './centerlineStatus.ts';
+import PhotoCutShortNotice from './PhotoCutShortNotice.tsx';
 import { isDrawable } from '../../map/baseLayers.ts';
 import { CLOSEST_APPROACH_LAYER_ID } from '../../map/closestApproachLayer.ts';
 import { OVERBURDEN_HIGHLIGHT_LAYER_ID } from '../../map/overburdenHighlightLayer.ts';
@@ -586,6 +587,8 @@ export default function LayerPanel({
         <KarstDensityControls mode={karstDensityMode} onModeChange={onKarstDensityModeChange} />
       )}
       {karstIndexVisible && <KarstIndexControls />}
+      {/* Draws nothing unless the photo overlay is on and its last answer held back photographs. */}
+      <PhotoCutShortNotice />
       {/* The map-corner notice about withheld lines opens the panel here and moves focus to this
           block, so it is focusable from script (not from Tab) and named for a screen reader. */}
       {centerlinesVisible && (

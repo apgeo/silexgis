@@ -516,6 +516,33 @@ test('geotagged photos overlay toggles on and loads the photo map layer', async 
   await photoRequest;
 });
 
+test('the layer panel says when the photo overlay\'s answer was cut short', async ({ page }) => {
+  await login(page);
+  // The demonstration data holds far fewer photographs than one answer carries, so the answer is
+  // held to say it was cut short: what is driven here is what the panel says about that flag, not
+  // how the server decides it. The photographs it does send are drawn as sent.
+  await page.route(
+    (url) => url.pathname === '/api/v1/map/photos',
+    async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as Record<string, unknown>;
+      await route.fulfill({ response, json: { ...body, cutShort: true } });
+    },
+  );
+  const notice = page.getByTestId('map-photos-cut-short');
+  await expect(notice).toHaveCount(0);
+  const photosRow = overlayTreeNode(page, 'Geotagged photos');
+  await photosRow.locator('.ant-tree-checkbox').click();
+  await expect(notice).toBeVisible({ timeout: 15_000 });
+  await expect(notice).toHaveText(/Not every photo is shown here/);
+
+  await photosRow.locator('.ant-tree-checkbox').click();
+  await expect(notice).toHaveCount(0);
+  // The map may still be asking for photographs when the test ends; an answer in flight must not
+  // be reported against whichever test runs next.
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
 test('cave history records edits and restores a previous value', async ({ page }) => {
   const caveName = `E2E History Cave ${Date.now()}`;
   await login(page);

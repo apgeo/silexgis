@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LayerGroup from 'ol/layer/Group';
 import '../../i18n';
@@ -10,6 +10,10 @@ import LayerPanel from './LayerPanel.tsx';
 import type { FilterLayerRowInfo } from './FilterLayerRow.tsx';
 import { CENTERLINE_STATUS_ID } from './centerlineStatus.ts';
 import { addFilterLayer, MAX_FILTER_LAYERS } from '../../map/filterLayerList.ts';
+import type Map from 'ol/Map';
+import { fromLonLat } from 'ol/proj';
+import type { PhotoFeatureCollection } from '../../api/hooks.ts';
+import { attachPhotoLoader, setPhotosEnabled } from '../../map/photoLayer.ts';
 
 /**
  * The block of the layer panel that says what a neighbouring photo library is doing.
@@ -470,6 +474,33 @@ describe('the survey-line limits of the layer panel', () => {
 
     renderPanel({ centerlinesVisible: false });
     expect(document.getElementById(CENTERLINE_STATUS_ID)).toBeNull();
+  });
+});
+
+describe('the photo overlay in the layer panel', () => {
+  it('says not every photo is shown while the overlay is on and its answer was cut short', async () => {
+    const map = {
+      getSize: () => [800, 600],
+      getView: () => ({ calculateExtent: () => [...fromLonLat([25, 45]), ...fromLonLat([26, 46])] }),
+      on: () => undefined,
+      un: () => undefined,
+    } as unknown as Map;
+    const detach = attachPhotoLoader(
+      map,
+      vi.fn(async () => ({ type: 'FeatureCollection', features: [], cutShort: true }) as PhotoFeatureCollection),
+    );
+    renderPanel();
+    expect(screen.queryByTestId('map-photos-cut-short')).not.toBeInTheDocument();
+
+    await act(async () => {
+      setPhotosEnabled(true);
+      await Promise.resolve();
+    });
+    expect(await screen.findByTestId('map-photos-cut-short')).toHaveTextContent('Not every photo is shown here');
+
+    act(() => setPhotosEnabled(false));
+    expect(screen.queryByTestId('map-photos-cut-short')).not.toBeInTheDocument();
+    detach();
   });
 });
 
