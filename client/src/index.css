@@ -18,6 +18,19 @@ html[data-theme='light'] {
   background: #fff;
 }
 
+/* The dark theme replaces antd's primary border colour with a brighter teal so the keyboard focus
+   ring shows on the dark page. Two other things antd draws from that one colour, with no
+   component setting of their own to hand it back, are given back the colour the dark algorithm
+   derives (the slider's are handed back in the theme): a primary filled or text button's pressed
+   background, and the edge of the date picker's preset tags. */
+html[data-theme='dark'] .ant-btn.ant-btn-color-primary {
+  --ant-btn-color-light-active: #142b2b;
+}
+
+html[data-theme='dark'] .ant-picker-dropdown .ant-picker-ranges .ant-picker-preset > .ant-tag-blue {
+  border-color: #142b2b;
+}
+
 /* A selection panel section's drag handle: the glyph is 14 pixels wide, and 24 is the smallest
    target WCAG 2.2 asks for (2.5.8). It is the handle Alt+arrows work on from the keyboard too. */
 .panel-section-handle {

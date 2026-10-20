@@ -34,9 +34,9 @@ export const themeConfig: ThemeConfig = {
  *
  * antd also fills a slider's track, handle and passed mark dots from this token, so those are given
  * back the colour the dark algorithm derives for them, and the slider looks as it always did. Two
- * other uses read the token and cannot be handed back without a component token of their own: the
- * pressed background of a primary filled or text button, and the edge of the date picker's preset
- * tags. Both take the ring's brighter teal in the dark theme.
+ * other uses read the token with no component token of their own — the pressed background of a
+ * primary filled or text button, and the edge of the date picker's preset tags — and are given the
+ * same derived colour back in the global stylesheet, scoped to the dark theme.
  */
 const DARK_FOCUS_RING = '#3fa8a8';
 const DARK_DERIVED_PRIMARY_BORDER = '#142b2b';

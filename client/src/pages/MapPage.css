@@ -7,7 +7,7 @@
 /* The docks' own background, from the theme: a fixed white left the dark theme's light text on
    white. */
 .map-workspace-panel {
-  background: var(--ant-color-bg-container, #fff);
+  background: #fff;
 }
 
 .map-workspace-handle {

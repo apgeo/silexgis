@@ -9,6 +9,7 @@ import path from 'node:path';
 // Read as text, from the client package the test runner is rooted at: the test environment does
 // not load stylesheets.
 const mapPageCss = readFileSync(path.resolve(process.cwd(), 'src/pages/MapPage.css'), 'utf8');
+const indexCss = readFileSync(path.resolve(process.cwd(), 'src/index.css'), 'utf8');
 
 function systemPrefersDark(dark: boolean) {
   vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
@@ -180,6 +181,31 @@ describe('the look the theme draws', () => {
     expect(slider?.trackBg).toBe(derived.colorPrimaryBorder);
     expect(slider?.handleColor).toBe(derived.colorPrimaryBorder);
     expect(slider?.dotActiveBorderColor).toBe(derived.colorPrimaryBorder);
+  });
+
+  /**
+   * The two other things antd draws from the replaced colour, handed back in the stylesheet: read
+   * from it, so a value that drifts from what the dark algorithm derives — or a rule that goes —
+   * fails here.
+   */
+  it("the dark theme's pressed primary button and preset tags keep the colour the dark algorithm gives them", () => {
+    const derived = theme.getDesignToken({ token: { colorPrimary: '#146262' }, algorithm: theme.darkAlgorithm });
+    expect(derived.colorPrimaryBorder).not.toBe(restored.dark.colorPrimaryBorder);
+    const declared = (selector: string, property: string) => {
+      const start = indexCss.indexOf(selector);
+      expect(start, `${selector} is in the stylesheet`).toBeGreaterThanOrEqual(0);
+      const body = indexCss.slice(indexCss.indexOf('{', start) + 1, indexCss.indexOf('}', start));
+      return new RegExp(`${property}:\\s*([^;]+);`).exec(body)?.[1]?.trim();
+    };
+    expect(declared("html[data-theme='dark'] .ant-btn.ant-btn-color-primary", '--ant-btn-color-light-active'))
+      .toBe(derived.colorPrimaryBorder);
+    expect(declared("html[data-theme='dark'] .ant-picker-dropdown .ant-picker-ranges .ant-picker-preset > .ant-tag-blue", 'border-color'))
+      .toBe(derived.colorPrimaryBorder);
+  });
+
+  it('draws the map workspace panel on the fixed white it always had', () => {
+    const start = mapPageCss.indexOf('.map-workspace-panel {');
+    expect(mapPageCss.slice(start, mapPageCss.indexOf('}', start))).toMatch(/background:\s*#fff;/);
   });
 });
 
