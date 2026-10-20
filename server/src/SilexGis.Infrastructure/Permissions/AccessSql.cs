@@ -314,19 +314,25 @@ public static class AccessSql
         parameters.Add($"{prefix}_deny_own_type_ids", BigintArray(set.DenyOwnTypeIds));
         parameters.Add($"{prefix}_allow_own_type_ids", BigintArray(set.AllowOwnTypeIds));
 
+        // The set-scope half of each subtree arm is asked of the membership table about the row,
+        // so it is a correlated subquery run once per candidate row — and for a caller holding
+        // no entry at that scope, every one of those runs proves that an empty id set matches
+        // nothing. Measured over a hundred thousand entrances in one window, the two of them
+        // together cost 60 ms of a 244 ms clustered read (0.3 µs a row each) and answered false
+        // every time. So each is emitted only where the caller holds entries at that scope, the
+        // way the cabinet band above is. The other half of the arm stays in both cases: a
+        // subtree root is matched by overlapping the row's own ancestor array, which is a test
+        // on the row and costs nothing.
+        var denySets = SetScopeArm(set.DenySetIds, $"{prefix}_deny_set_ids", alias);
+        var allowSets = SetScopeArm(set.AllowSetIds, $"{prefix}_allow_set_ids", alias);
+
         return $"""
             (@{IsFullAdminParam} OR
              CASE
                WHEN {alias}.id = ANY(@{prefix}_deny_obj)  THEN false
                WHEN {alias}.id = ANY(@{prefix}_allow_obj) THEN true
-               WHEN {alias}.ancestor_ids && @{prefix}_deny_subtree_roots
-                    OR EXISTS (SELECT 1 FROM feature_set_members fsm
-                               WHERE fsm.feature_id = {alias}.id
-                                 AND fsm.feature_set_id = ANY(@{prefix}_deny_set_ids)) THEN false
-               WHEN {alias}.ancestor_ids && @{prefix}_allow_subtree_roots
-                    OR EXISTS (SELECT 1 FROM feature_set_members fsm
-                               WHERE fsm.feature_id = {alias}.id
-                                 AND fsm.feature_set_id = ANY(@{prefix}_allow_set_ids)) THEN true
+               WHEN {alias}.ancestor_ids && @{prefix}_deny_subtree_roots{denySets} THEN false
+               WHEN {alias}.ancestor_ids && @{prefix}_allow_subtree_roots{allowSets} THEN true
                WHEN @{prefix}_deny_all
                     OR (@{prefix}_deny_own AND {alias}.owner_user_id = @{UserIdParam})
                     OR ({alias}.caving_group_id IS NOT NULL
@@ -353,6 +359,25 @@ public static class AccessSql
              END)
             """;
     }
+
+    /// <summary>
+    /// The feature-set half of a subtree arm: the membership test for the sets the caller holds
+    /// entries on, and nothing at all when they hold none.
+    /// </summary>
+    /// <remarks>
+    /// Leaving it out is not a shortcut around the rule: with an empty id set the membership test
+    /// can match no row, so the arm it would have joined is false for exactly the same rows
+    /// either way. What changes is only that the statement no longer asks per row.
+    /// </remarks>
+    private static string SetScopeArm(Guid[] setIds, string parameterName, string alias) =>
+        setIds.Length == 0
+            ? string.Empty
+            : $"""
+
+                    OR EXISTS (SELECT 1 FROM feature_set_members fsm
+                               WHERE fsm.feature_id = {alias}.id
+                                 AND fsm.feature_set_id = ANY(@{parameterName}))
+               """;
 
     private static void RequireAlias(string alias)
     {
