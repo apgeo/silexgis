@@ -281,6 +281,54 @@ test('a row of the map’s in-view list is picked with Enter', async ({ page }) 
 });
 
 /**
+ * Survey lines the map holds back at this zoom, said on the map while the layer panel is closed:
+ * reached with Tab from the map, announced once, and opening the panel at its survey-line block.
+ */
+test('withheld survey lines are said on the map while the layer panel is closed, and the notice opens it', async ({
+  page,
+}) => {
+  await login(page);
+  // The demonstration data has far fewer survey lines than any line budget, so the answer is held
+  // to say three were left out: what is driven here is what the map says about a count, not how
+  // the server arrives at one. The lines it does send are drawn as sent.
+  await page.route(
+    (url) => url.pathname === '/api/v1/map/cave-centerlines',
+    async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as Record<string, unknown>;
+      await route.fulfill({ response, json: { ...body, withheldCount: 3 } });
+    },
+  );
+  await gotoRoute(page, '/map');
+  const node = overlayTreeNode(page, 'Cave centerlines');
+  await expect(node).toBeVisible({ timeout: 15_000 });
+  await node.locator('.ant-tree-checkbox').click();
+
+  // With the panel open the panel says it, and the map does not.
+  await expect(page.getByText(/^3 more centerline/)).toBeVisible({ timeout: 15_000 });
+  const notice = page.getByTestId('map-centerline-notice');
+  await expect(notice).toHaveCount(0);
+
+  await page.getByTestId('map-dock-toggle-left').click();
+  await expect(notice).toBeVisible({ timeout: 15_000 });
+  await expect(notice).toHaveText(/3 survey line\(s\) hidden at this zoom/);
+  await expect(page.getByTestId('map-centerline-notice-live')).toHaveText(/3 survey line\(s\) hidden/);
+
+  await page.getByRole('application', { name: /^Map\./ }).focus();
+  expect(await tabsUntil(page, '[data-testid="map-centerline-notice"]', 20), 'the notice is reached with Tab').not.toBeNull();
+  await page.keyboard.press('Enter');
+
+  // The panel is open at the survey-line block, where the same count and the line budget are.
+  await expect(page.getByTestId('map-centerline-status')).toBeFocused({ timeout: 15_000 });
+  await expect(page.getByTestId('map-centerline-status')).toContainText(/3 more centerline/);
+  await expect(notice).toHaveCount(0);
+  await expect(page.getByTestId('map-centerline-notice-live')).toHaveText('');
+  // The map keeps loading lines after the test is done with it; an answer still in flight when the
+  // page closes must not be reported against whichever test runs next.
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
+/**
  * Whether keyboard focus is inside the open dialog — or with the browser's own controls, which is
  * where Tab past a modal dialog's last control goes in a browser's native dialog too (the page
  * reports its body as focused), and from where the next Tab comes back into the dialog. What must

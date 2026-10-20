@@ -573,6 +573,7 @@
     "tripsTypeFilter": "Any trip type",
     "tripsFilterHint": "A trip is drawn where it says it went, else where its party met, else at a cave it names. A cave you may read but not locate exactly places nothing.",
     "centerlinesWithheld": "{{count}} more centerline(s) not shown at this zoom — zoom in to load them.",
+    "centerlinesWithheldNotice": "{{count}} survey line(s) hidden at this zoom — zoom in or open the layer panel",
     "centerlineDetailOn": "Showing full survey detail, including splays.",
     "centerlineSkeletonOn": "Showing passage outlines; wall shots appear when you zoom in.",
     "centerlineDetailZoom": "Detail from zoom",

@@ -58,7 +58,9 @@ import LayerPanel from '../components/map/LayerPanel.tsx';
 import MapContextMenu from '../components/map/MapContextMenu.tsx';
 import ViewsPanel from '../components/map/ViewsPanel.tsx';
 import MapFilterNotice from '../components/map/MapFilterNotice.tsx';
+import CenterlineWithheldNotice from '../components/map/CenterlineWithheldNotice.tsx';
 import { MAP_CANVAS_ID } from '../components/mapCanvasId.ts';
+import { focusCenterlineStatus } from '../components/map/centerlineStatus.ts';
 import QuickFilterChips from '../components/filters/QuickFilterChips.tsx';
 import MapObjectSelector from '../components/map/MapObjectSelector.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
@@ -1438,6 +1440,17 @@ export default function MapPage() {
     }
   };
 
+  // Opens (never closes) the layer panel and takes focus to its survey-line block, where the
+  // withheld-lines alert and the line budget are.
+  const openLayerPanelAtCenterlines = () => {
+    if (isMobile) {
+      setLeftDrawerOpen(true);
+    } else {
+      leftPanelRef.current?.expand();
+    }
+    focusCenterlineStatus();
+  };
+
   useShortcuts(
     useMemo(
       () => [
@@ -1589,6 +1602,14 @@ export default function MapPage() {
               data-testid="map-dock-toggle-right"
             />
           </Tooltip>
+          {/* After the map in the tab order, beside the dock toggles it is a shortcut for, so it
+              never lengthens the way from the page start to the map. */}
+          <CenterlineWithheldNotice
+            centerlinesVisible={centerlinesVisible}
+            panelHidden={leftHidden}
+            chromeHidden={mapChromeHidden}
+            onOpenPanel={openLayerPanelAtCenterlines}
+          />
           {baseOlLayers.length > 0 && (
             <BaseLayerChooser
               layers={baseOlLayers}

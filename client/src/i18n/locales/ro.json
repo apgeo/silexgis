@@ -573,6 +573,7 @@
     "tripsTypeFilter": "Orice tip de tură",
     "tripsFilterHint": "O tură este desenată acolo unde spune că a mers, altfel unde s-a întâlnit echipa, altfel la o peșteră pe care o numește. O peșteră pe care o poți citi dar nu o poți localiza exact nu plasează nimic.",
     "centerlinesWithheld": "{{count}} poligonale nu sunt afișate la această scară — apropie harta pentru a le încărca.",
+    "centerlinesWithheldNotice": "{{count}} poligonale ascunse la această scară — apropie harta sau deschide panoul de straturi",
     "centerlineDetailOn": "Se afișează detaliul complet al ridicării, inclusiv razele laterale.",
     "centerlineSkeletonOn": "Se afișează traseul galeriilor; razele către pereți apar când apropii harta.",
     "centerlineDetailZoom": "Detaliu de la nivelul",

@@ -555,6 +555,27 @@
   z-index: 5;
 }
 
+/* Survey lines held back at this zoom, said on the map while the layer panel is closed. Bottom
+   left, stacked above the scale controls: the other corners hold search, the pop-out and chrome
+   buttons, the background chooser and the attribution. A sentence, so it wraps rather than
+   running across the map. */
+.map-centerline-notice.ant-btn {
+  position: absolute;
+  bottom: 80px;
+  left: 8px;
+  z-index: 5;
+  max-width: min(320px, calc(100% - 16px));
+  height: auto;
+  padding-block: 2px;
+  white-space: normal;
+  text-align: start;
+}
+
+/* Phone: no jump-to-scale combo, only OpenLayers' scale line under it. */
+.map-canvas-wrap-mobile .map-centerline-notice.ant-btn {
+  bottom: 36px;
+}
+
 /* Dock drawers (phone): the hosted panels bring their own padding and scrolling, so the
    drawer body only has to give them the height and stay out of the way. */
 .map-dock-drawer .ant-drawer-body {

@@ -8,6 +8,7 @@ import type { LibraryPhotoHealth, LibraryPhotoProvider, MapLayerInfo } from '../
 import type { LibraryPhotoLoadState, LibraryPhotoLoadStates } from '../../map/libraryPhotoLayer.ts';
 import LayerPanel from './LayerPanel.tsx';
 import type { FilterLayerRowInfo } from './FilterLayerRow.tsx';
+import { CENTERLINE_STATUS_ID } from './centerlineStatus.ts';
 import { addFilterLayer, MAX_FILTER_LAYERS } from '../../map/filterLayerList.ts';
 
 /**
@@ -456,6 +457,19 @@ describe('the survey-line limits of the layer panel', () => {
     expect(detailZoom).toHaveAttribute('aria-valuemin', '1');
     expect(detailZoom).toHaveAttribute('aria-valuemax', '22');
     expect(screen.getByRole('spinbutton', { name: 'Line budget' })).toHaveAttribute('aria-valuemin', '100');
+  });
+
+  it('offers the map-corner notice a named block to take focus to, only while the lines are on', () => {
+    // The notice on the map opens the panel and moves focus by this id; a block that is not
+    // there, or not focusable, leaves a keyboard user wherever the notice was.
+    const { unmount } = renderPanel({ centerlinesVisible: true });
+    const block = screen.getByRole('group', { name: 'Cave centerlines' });
+    expect(block).toHaveAttribute('id', CENTERLINE_STATUS_ID);
+    expect(block).toHaveAttribute('tabindex', '-1');
+    unmount();
+
+    renderPanel({ centerlinesVisible: false });
+    expect(document.getElementById(CENTERLINE_STATUS_ID)).toBeNull();
   });
 });
 
