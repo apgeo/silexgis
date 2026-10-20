@@ -193,17 +193,19 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
     [Fact]
     public async Task A_public_cave_inside_a_protected_area_is_left_off_a_link()
     {
-        double[][] ring = [[19.05, 68.05], [19.25, 68.05], [19.25, 68.25], [19.05, 68.25], [19.05, 68.05]];
+        double[][] ring = [[21.05, 68.05], [21.25, 68.05], [21.25, 68.25], [21.05, 68.25], [21.05, 68.05]];
+        // A window of its own: another test of this class places a public cave at 19.1, 68.1, and
+        // the tests of a class share one database, so a window there would count it whenever that test ran first.
         var area = await CreateFeatureAsync("Link Guarded Karst", new { type = "Polygon", coordinates = new[] { ring } },
             "karst_area", "public", locationProtected: true);
-        await CreateCaveAsync("Link Cave In Guarded Karst", 19.101, 68.101, "public", locationProtected: false, parentId: area);
-        await CreateCaveAsync("Link Cave Outside Karst", 19.281, 68.101, "public", locationProtected: false);
+        await CreateCaveAsync("Link Cave In Guarded Karst", 21.101, 68.101, "public", locationProtected: false, parentId: area);
+        await CreateCaveAsync("Link Cave Outside Karst", 21.281, 68.101, "public", locationProtected: false);
         // A readable feature in the same window, so that an outline missing from the link's features is
         // shown to be missing because it is protected and not because the route draws nothing there.
-        await CreatePointFeatureAsync("Link Sinkhole Outside Karst", 19.281, 68.201, "public", locationProtected: false);
+        await CreatePointFeatureAsync("Link Sinkhole Outside Karst", 21.281, 68.201, "public", locationProtected: false);
 
-        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true, 19.15, 68.15, zoom: 11));
-        const string window = "19.0,68.0,19.3,68.3";
+        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true, 21.15, 68.15, zoom: 11));
+        const string window = "21.0,68.0,21.3,68.3";
 
         foreach (var zoom in new[] { 9, 14 })
         {
@@ -213,11 +215,11 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
 
         var point = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=14"))["features"]!
             .AsArray().ShouldHaveSingleItem()!;
-        point["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(19.281, 1e-9);
+        point["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(21.281, 1e-9);
         var feature = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={window}"))["features"]!
             .AsArray().ShouldHaveSingleItem()!;
         feature["geometry"]!["type"]!.GetValue<string>().ShouldBe("Point");
-        feature["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(19.281, 1e-9);
+        feature["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(21.281, 1e-9);
         feature["geometry"]!["coordinates"]![1]!.GetValue<double>().ShouldBe(68.201, 1e-9);
 
         // The controls: every account reads both caves, the one in the protected area snapped, and the
