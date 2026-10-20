@@ -62,7 +62,7 @@ public sealed class MapFilterTests : IAsyncLifetime, IDisposable, IClassFixture<
 
     private static double Cell => LocationProtection.CellDegrees(GridMeters);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         var authorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"mf-author-{tag}@t.local");
@@ -457,12 +457,13 @@ public sealed class MapFilterTests : IAsyncLifetime, IDisposable, IClassFixture<
         payload.ShouldContain(code);
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         author.Dispose();
         clubmate.Dispose();
         outsider.Dispose();
-        return Task.CompletedTask;
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     public void Dispose() => factory.Dispose();

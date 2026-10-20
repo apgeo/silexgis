@@ -58,7 +58,7 @@ public sealed class FilterSpatialConditionTests : IAsyncLifetime, IDisposable, I
 
     private static double Cell => LocationProtection.CellDegrees(GridMeters);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         // The owner places their own protected rows exactly; the viewer holds no grant of exact view
@@ -916,11 +916,12 @@ public sealed class FilterSpatialConditionTests : IAsyncLifetime, IDisposable, I
         return options;
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         owner.Dispose();
         viewer.Dispose();
-        return Task.CompletedTask;
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     public void Dispose() => factory.Dispose();

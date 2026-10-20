@@ -47,7 +47,7 @@ public sealed class FeatureListFilterTests : IAsyncLifetime, IDisposable, IClass
     public FeatureListFilterTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"flf-author-{tag}@t.local");
@@ -403,7 +403,11 @@ public sealed class FeatureListFilterTests : IAsyncLifetime, IDisposable, IClass
     private static List<Guid> Ids(JsonElement page) =>
         [.. page.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid())];
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }
