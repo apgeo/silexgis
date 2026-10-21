@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { App, Button, Card, Empty, Flex, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { App, Card, Empty, Flex, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import Button from '../../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../../i18n';
 import {

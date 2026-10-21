@@ -4,7 +4,6 @@ import { DeleteOutlined, PictureOutlined, PlusOutlined } from '@ant-design/icons
 import {
   Alert,
   App,
-  Button,
   Card,
   Checkbox,
   ColorPicker,
@@ -16,6 +15,7 @@ import {
   Space,
   Typography,
 } from 'antd';
+import Button from '../../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../../i18n';
 import {

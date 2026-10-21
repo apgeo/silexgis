@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { DeleteOutlined, LockOutlined, PlusOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
-import { App, Alert, Button, Flex, Form, Input, Modal, Popconfirm, Spin, Table, Tag, Typography } from 'antd';
+import { App, Alert, Flex, Form, Input, Modal, Popconfirm, Spin, Table, Tag, Typography } from 'antd';
+import Button from '../../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import {

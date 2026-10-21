@@ -8,7 +8,8 @@ import {
   PlusOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
-import { App, Button, Flex, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { App, Flex, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCreateTermRuleSet,

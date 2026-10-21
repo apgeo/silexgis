@@ -2,9 +2,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DeleteOutlined, GroupOutlined, PlusOutlined } from '@ant-design/icons';
 import {
-  App, Alert, Button, Drawer, Flex, Form, Input, Modal, Popconfirm, Spin, Table, Tag,
+  App, Alert, Drawer, Flex, Form, Input, Modal, Popconfirm, Spin, Table, Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import List from '../../components/List.tsx';
 import { useTranslation } from 'react-i18next';
 import {

@@ -5,7 +5,6 @@ import {
   Alert,
   App,
   AutoComplete,
-  Button,
   Card,
   Checkbox,
   Collapse,
@@ -18,6 +17,7 @@ import {
   Typography,
   Upload,
 } from 'antd';
+import Button from '../../../components/Button.tsx';
 import type { UploadFile } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {

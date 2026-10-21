@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
 import { EyeOutlined } from '@ant-design/icons';
-import { App, Button, Empty, Flex, Select, Table, Tag, Typography } from 'antd';
+import { App, Empty, Flex, Select, Table, Tag, Typography } from 'antd';
+import Button from '../../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useAccessPreview,

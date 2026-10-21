@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { ApartmentOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   App,
-  Button,
   Flex,
   Form,
   Input,
@@ -15,6 +14,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCreateResLinkRelationType,

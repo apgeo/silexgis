@@ -13,7 +13,6 @@ import {
 import {
   App,
   Alert,
-  Button,
   Card,
   Flex,
   Form,
@@ -25,6 +24,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useQueryClient } from '@tanstack/react-query';
 import MapBackgroundsForm from './MapBackgroundsForm.tsx';
 import { useTranslation } from 'react-i18next';

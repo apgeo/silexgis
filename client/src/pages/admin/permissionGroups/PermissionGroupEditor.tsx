@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { LockOutlined } from '@ant-design/icons';
-import { App, Button, Drawer, Flex, Form, Input, Tabs, Tag } from 'antd';
+import { App, Drawer, Flex, Form, Input, Tabs, Tag } from 'antd';
+import Button from '../../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useUpdatePermissionGroup,

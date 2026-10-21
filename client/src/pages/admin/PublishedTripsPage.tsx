@@ -3,7 +3,6 @@ import { useState } from 'react';
 import {
   Alert,
   App,
-  Button,
   Empty,
   Flex,
   Input,
@@ -18,6 +17,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { TableProps } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';

@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import {
   App,
-  Button,
   Card,
   Empty,
   Flex,
@@ -13,6 +12,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
+import Button from '../../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../../i18n';
 import {

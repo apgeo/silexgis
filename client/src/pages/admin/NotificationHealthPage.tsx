@@ -3,7 +3,6 @@ import { useState } from 'react';
 import {
   Alert,
   App,
-  Button,
   Descriptions,
   Flex,
   Select,
@@ -14,6 +13,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';

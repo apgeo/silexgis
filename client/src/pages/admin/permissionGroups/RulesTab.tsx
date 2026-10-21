@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
 import { DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
-import { App, Alert, Button, Checkbox, Flex, Select, Table, Tag, theme } from 'antd';
+import { App, Alert, Checkbox, Flex, Select, Table, Tag, theme } from 'antd';
+import Button from '../../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../../api/client.ts';
 import {

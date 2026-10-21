@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
 import { BorderOutlined, DeleteOutlined } from '@ant-design/icons';
-import { Button, Flex, Typography } from 'antd';
+import { Flex, Typography } from 'antd';
+import Button from '../../../components/Button.tsx';
 import Feature from 'ol/Feature';
 import Map from 'ol/Map';
 import View from 'ol/View';

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
 import { FileTextOutlined } from '@ant-design/icons';
-import { App, Alert, Button, Collapse, Flex, Form, Input, Popconfirm, Tabs, Tag, Typography } from 'antd';
+import { App, Alert, Collapse, Flex, Form, Input, Popconfirm, Tabs, Tag, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';

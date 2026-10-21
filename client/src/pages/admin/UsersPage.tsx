@@ -12,7 +12,6 @@ import {
 import {
   Alert,
   App,
-  Button,
   Flex,
   Form,
   Input,
@@ -24,6 +23,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {

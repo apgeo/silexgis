@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { App, Alert, Button, Flex, Switch, Table, Tag, Typography } from 'antd';
+import { App, Alert, Flex, Switch, Table, Tag, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {

@@ -4,7 +4,6 @@ import { DownloadOutlined, FileTextOutlined, PlusOutlined, UploadOutlined } from
 import {
   Alert,
   App,
-  Button,
   Flex,
   Form,
   Input,
@@ -17,6 +16,7 @@ import {
   Typography,
   Upload,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { UploadFile } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
