@@ -67,7 +67,7 @@ const recording: FileInfo = {
 };
 
 function sources(): string[] {
-  return screen.getAllByRole('img').map((image) => image.getAttribute('src') ?? '');
+  return screen.queryAllByRole('img').map((image) => image.getAttribute('src') ?? '');
 }
 
 /** A portable document, whose two branches turn on how far this caller may reach. */

@@ -232,7 +232,7 @@ describe('the held reports above the report card', () => {
 
     fireEvent.click(screen.getByTestId(`trip-tracking-outbox-discard-${thrownAway.clientKey}`));
     // Asked first: the press alone removes nothing.
-    expect(await screen.findByText(/^Discard this report\?/)).toBeInTheDocument();
+    const question = await screen.findByText(/^Discard this report\?/);
     // What discarding does, and not a claim that the report never reached the server: a send
     // nobody answered may have been written all the same.
     expect(
@@ -241,7 +241,8 @@ describe('the held reports above the report card', () => {
     expect(screen.queryByText(/never sent/)).toBeNull();
     expect(heldReportsOf(ANA)).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    // The confirmation's own button, not the row's "Discard" that opened it.
+    fireEvent.click(within(question.closest('.ant-popover') as HTMLElement).getByRole('button', { name: 'Discard' }));
 
     await waitFor(() => expect(heldReportsOf(ANA).map((entry) => entry.clientKey)).toEqual([kept.clientKey]));
     expect(

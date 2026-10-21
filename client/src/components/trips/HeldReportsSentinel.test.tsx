@@ -166,9 +166,10 @@ describe('held reports in the page header', () => {
     expect(list.queryByTestId('held-reports-send')).toBeNull();
 
     fireEvent.click(list.getByTestId(`held-reports-discard-${gone.clientKey}`));
-    expect(await screen.findByText('Discard this report?')).toBeInTheDocument();
+    const question = await screen.findByText('Discard this report?');
     expect(heldReportsOf(ANA)).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    // The confirmation's own button, not the row's "Discard" that opened it.
+    fireEvent.click(within(question.closest('.ant-popover') as HTMLElement).getByRole('button', { name: 'Discard' }));
 
     await waitFor(() => expect(heldReportsOf(ANA)).toEqual([]));
     expect(Object.keys(window.localStorage)).toEqual([]);
@@ -245,7 +246,8 @@ describe('held reports in the page header', () => {
     await waitFor(() => expect(heldReportsOf(ANA)[0]).toMatchObject({ attempts: 2, sending: false }));
     fireEvent.click(screen.getByTestId('held-reports'));
     fireEvent.click(await screen.findByTestId(`held-reports-discard-${first.clientKey}`));
-    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    const question = await screen.findByText('Discard this report?');
+    fireEvent.click(within(question.closest('.ant-popover') as HTMLElement).getByRole('button', { name: 'Discard' }));
     await waitFor(() => expect(screen.queryByTestId('held-reports')).toBeNull());
 
     held();
