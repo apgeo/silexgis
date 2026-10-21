@@ -11,7 +11,7 @@ import {
   overlayTreeNode,
   registryRow,
 } from './helpers.ts';
-import { registerAccount } from './arrange.ts';
+import { localDay, registerAccount, tripBody } from './arrange.ts';
 import { apiJson, bearerToken, relationId, uploadMapPng } from './rastermapApi.ts';
 
 /** The camera the map's address says it is at: `#zoom/lat/lon`. */
@@ -397,14 +397,21 @@ test('the feature editor and the share-links dialog keep focus inside, and give 
 /**
  * A region of a picture is reached and opened without a pointer: Tab lands on it — named by what
  * it links to, not by its colour — and Enter opens its card, as a click on it does. The picture is
- * generated noise and the link this run's own.
+ * generated noise, and the link and the trip it reaches are this run's own: a borrowed "newest trip"
+ * may be one another spec running beside this one is about to delete, and a link to a deleted trip
+ * is rightly drawn nowhere.
  */
 test('a region of a picture is reached with Tab and opened with Enter', async ({ page }) => {
   await login(page);
   const token = await bearerToken(page);
   const picture = await uploadMapPng(page, token, `E2E region keyboard ${Date.now()}.png`);
-  const trips = (await apiJson(page, token, 'GET', '/api/v1/trip-logs?pageSize=1')) as { items: { id: string }[] };
-  expect(trips.items.length, 'the demo data holds a trip to link the region to').toBeGreaterThan(0);
+  const trip = (await apiJson(
+    page,
+    token,
+    'POST',
+    '/api/v1/trip-logs',
+    tripBody(`E2E region keyboard trip ${Date.now()}`, localDay(0)),
+  )) as { id: string };
   const relationTypes = (await apiJson(page, token, 'GET', '/api/v1/reslinks/relation-types')) as {
     id: number;
     code: string;
@@ -426,7 +433,7 @@ test('a region of a picture is reached with Tab and opened with Enter', async ({
       },
       {
         targetType: 'tripLog',
-        targetId: trips.items[0].id,
+        targetId: trip.id,
         isMain: false,
         sortOrder: 1,
         note: null,
@@ -452,6 +459,7 @@ test('a region of a picture is reached with Tab and opened with Enter', async ({
   await expect(page.locator('.ant-popover:visible')).toHaveCount(0);
   await page.keyboard.press('Enter');
   await expect(page.locator('.ant-popover:visible')).toHaveCount(1, { timeout: 10_000 });
+  await apiJson(page, token, 'DELETE', `/api/v1/trip-logs/${trip.id}`);
 });
 
 /**
