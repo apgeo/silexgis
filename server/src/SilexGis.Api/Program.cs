@@ -3,6 +3,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Options;
 using Serilog;
 using Serilog.Events;
@@ -83,7 +84,18 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    var builder = WebApplication.CreateBuilder(args);
+    // Run by the Windows service manager, the process starts in the system directory, so the
+    // application's own files (settings, the map-layer catalogue) are found by its own location
+    // instead; everywhere else the content root is the ordinary one.
+    var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+    {
+        Args = args,
+        ContentRootPath = WindowsServiceHelpers.IsWindowsService() ? AppContext.BaseDirectory : null,
+    });
+
+    // Tells the Windows service manager when the application has started and lets it stop it
+    // cleanly. It does nothing anywhere else — not on Linux, not in a console, not under IIS.
+    builder.Services.AddWindowsService();
 
     // SILEXGIS__{Section}__{Key} environment variables override appsettings.
     builder.Configuration.AddEnvironmentVariables("SILEXGIS__");
