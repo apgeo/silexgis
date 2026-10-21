@@ -184,6 +184,10 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             ("centerlines z14 (local)", $"/api/v1/map/cave-centerlines?bbox={Viewport}&zoom=14"),
             ("karst index z7 (country)", "/api/v1/map/karst-index?bbox=19.9,43.5,29.1,48.1&zoom=7"),
             ("caves list p1", "/api/v1/caves?pageSize=50"),
+            // The feature list counts every row the caller may read and pages them newest first:
+            // unwindowed, and over a window wide enough to hold every seeded entrance.
+            ("features list p1", "/api/v1/features?pageSize=50"),
+            ("features list (country bbox)", "/api/v1/features?pageSize=50&bbox=19.9,43.5,29.1,48.1"),
             ("search 'perf'", "/api/v1/search?q=perf"),
         };
 
@@ -212,8 +216,17 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             }
         }
 
+        // The filter's feature world asked nothing at all, by readers who own none of the rows: an
+        // ordinary member, and a viewer holding nothing who reads through visibility alone.
+        using var stranger = await AuthHelper.BearerClientAsync(factory, strangerEmail);
+        foreach (var (caller, http) in new[] { ("member", member), ("stranger", stranger) })
+        {
+            slow.AddRange(await TimeUnnarrowedFeatureWorldAsync(http, caller));
+        }
+
         await AssertEntranceLayerPlansAsync(ownerId, strangerId);
         await AssertReaderPlansAsync(memberId);
+        await AssertUnnarrowedFeatureReadPlansAsync(memberId);
         await AssertSurveySubstratePlansAsync(strangerId);
         await AssertProximityPlanAsync(strangerId);
         await AssertSharedLinkAsync(client, ownerId, settled);
@@ -821,6 +834,130 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             "karst index totals: an area's contents must be found through the ancestor-array index");
         totals.ShouldNotContain("Seq Scan on features", Case.Insensitive,
             "karst index totals: no area may scan the whole feature table for its contents");
+    }
+
+    /// <summary>
+    /// The filter's feature world with no condition at all — counted, and nearest a point first —
+    /// timed for a caller who owns none of the rows; every figure over the budget is returned.
+    /// </summary>
+    /// <remarks>
+    /// Every readable row answers an empty filter, so its count visits and probes all of them, and
+    /// nearest first ranks a page out of all of them. Both once took longer than the client waits.
+    /// </remarks>
+    private async Task<IReadOnlyList<string>> TimeUnnarrowedFeatureWorldAsync(HttpClient http, string caller)
+    {
+        var everything = new FilterDocument { Scope = [new WorldScope(FeatureFilterWorld.Key)] };
+        var nearest = everything with
+        {
+            Sort = SortKey.Proximity,
+            Anchor = new PointAnchor((West + East) / 2, (South + North) / 2),
+        };
+        var slow = new List<string>();
+        foreach (var (name, document) in new[] { ("filter: everything, counted", everything), ("filter: everything, nearest first, counted", nearest) })
+        {
+            var json = $$"""{"document":{{FilterDocument.Serialize(document)}},"pageSize":25,"count":true}""";
+            using (var warmup = new StringContent(json, System.Text.Encoding.UTF8, "application/json"))
+            {
+                (await http.PostAsync("/api/v1/filters/query", warmup)).StatusCode.ShouldBe(HttpStatusCode.OK, $"{caller}: {name}");
+            }
+
+            using var body = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            var stopwatch = Stopwatch.StartNew();
+            var response = await http.PostAsync("/api/v1/filters/query", body);
+            stopwatch.Stop();
+            var measuredAt = LoadReading();
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, $"{caller}: {name}");
+            var world = (await response.Content.ReadFromJsonAsync<JsonObject>())!["worlds"]![0]!;
+            world["hits"]!.AsArray().Count.ShouldBe(25, $"{caller}: {name} must answer a whole page");
+            world["total"]!.GetValue<int>().ShouldBeGreaterThanOrEqualTo(
+                CaveCount * EntrancesPerCave, $"{caller}: {name} must count every seeded entrance");
+            output.WriteLine($"{name}, as the {caller}: {stopwatch.ElapsedMilliseconds} ms ({measuredAt})");
+            if (stopwatch.ElapsedMilliseconds >= BudgetMs)
+            {
+                slow.Add($"{name}, as the {caller}: {stopwatch.ElapsedMilliseconds} ms ({measuredAt})");
+            }
+        }
+
+        return slow;
+    }
+
+    /// <summary>
+    /// The statements an unnarrowed feature read sends, as the ordinary member is sent them: the
+    /// filter's feature world and the feature list share them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The readable set is visited whole by the count, and each row's ancestors probed. As sent —
+    /// inside the read scope that switches JIT off — it must not be compiled; the bare statement is
+    /// the control that the planner otherwise would, as for the cluster statement.
+    /// </para>
+    /// <para>
+    /// The newest-first page must be read off the index over the order's own columns, so that it
+    /// visits the rows of one page rather than every readable row and a sort.
+    /// </para>
+    /// <para>
+    /// Nearest first takes the reach of the page's nearest readable, placeable rows along the
+    /// geometry index's nearest-first walk, and then ranks only the rows inside that reach, found
+    /// through the geometry index too: neither statement may scan the feature table.
+    /// </para>
+    /// <para>
+    /// A wide window's protected members are looked up in the same scope, and that statement too
+    /// is otherwise compiled.
+    /// </para>
+    /// </remarks>
+    private async Task AssertUnnarrowedFeatureReadPlansAsync(Guid memberId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var ctx = await AccessContextResolver.ResolveAsync(db, memberId);
+        var readable = db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers);
+        var connection = db.Database.GetDbConnection();
+        var anchor = new NetTopologySuite.Geometries.Point((West + East) / 2, (South + North) / 2) { SRID = 4326 };
+        var (windowSql, windowParameters) = WindowMembershipSql.Build(ctx, 19.9, 43.5, 29.1, 48.1, 5000d, null);
+
+        var bareWalk = await ExplainEfAsync(readable.Select(f => f.Id), "member unnarrowed readable set, bare");
+        bareWalk.ShouldContain("JIT:", Case.Sensitive,
+            "member unnarrowed readable set: the control — without the read scope the planner must compile "
+            + "this statement, or the check below passes for a reason that is not the setting");
+        var bareWindow = await ExplainAsync(connection, windowParameters, "member country window members, bare", windowSql);
+        bareWindow.ShouldContain("JIT:", Case.Sensitive,
+            "member country window members: the control — without the read scope the planner must compile "
+            + "this statement, or the check below passes for a reason that is not the setting");
+
+        await using (await PlannerSql.WithoutJitAsync(db.Database, CancellationToken.None))
+        {
+            var walk = await ExplainEfAsync(readable.Select(f => f.Id), "member unnarrowed readable set, as sent");
+            walk.ShouldNotContain("JIT:", Case.Sensitive,
+                "member unnarrowed readable set: the count must be planned without JIT compilation as it is sent");
+            AssertAncestorProbeIsIndexed(walk, "member unnarrowed readable set");
+
+            var window = await ExplainAsync(connection, windowParameters, "member country window members, as sent", windowSql);
+            window.ShouldNotContain("JIT:", Case.Sensitive,
+                "member country window members: the statement must be planned without JIT compilation as it is sent");
+
+            var page = await ExplainEfAsync(
+                FeatureFilterWorld.NewestFirst(readable).Take(25), "member unnarrowed page, newest first");
+            page.ShouldContain("ix_features_updated_at_id", Case.Insensitive,
+                "member unnarrowed page: the newest-first page must be read off the index over its order");
+            page.ShouldNotContain("Sort", Case.Sensitive,
+                "member unnarrowed page: no sort of the readable set may stand in for the index");
+
+            var (reachSql, reachParameters) = ProximityOrderSql.BuildReach(ctx, anchor, 25);
+            var reachPlan = await ExplainAsync(connection, reachParameters, "member nearest-first reach", reachSql);
+            reachPlan.ShouldContain("ix_features_geom", Case.Insensitive,
+                "member nearest-first reach: the nearest rows must be walked along the geometry index");
+            reachPlan.ShouldNotContain("Seq Scan on features", Case.Insensitive,
+                "member nearest-first reach: no path may sequentially scan the feature table");
+
+            var reach = await ProximityOrderSql.ReachOfNearestAsync(db, ctx, anchor, 25, CancellationToken.None);
+            reach.ShouldNotBeNull("the member must read and place at least a page of rows near the seeded box");
+            var (nearSql, nearParameters) = ProximityOrderSql.Build(ctx, anchor, reach);
+            var near = await ExplainAsync(connection, nearParameters, "member nearest-first ranks in reach", nearSql);
+            near.ShouldContain("ix_features_geom", Case.Insensitive,
+                "member nearest-first ranks in reach: the rows in reach must be found through the geometry index");
+            near.ShouldNotContain("Seq Scan on features", Case.Insensitive,
+                "member nearest-first ranks in reach: no path may sequentially scan the feature table");
+        }
     }
 
     /// <summary>
