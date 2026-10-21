@@ -85,6 +85,15 @@ public sealed class FeatureFilterWorld(
         return withheld.Length == 0 ? visible : visible.Where(f => !withheld.Contains(f.Id));
     }
 
+    /// <remarks>
+    /// An unnarrowed question visits every row the caller may read, twice — once to count and once
+    /// to take the page — and probes each row's ancestors for the visibility cascade; the planner
+    /// prices that so high for a reader who owns nothing that it compiles both statements, which
+    /// costs more than the page it saves time on.
+    /// </remarks>
+    protected override async ValueTask<IAsyncDisposable> ReadScopeAsync(CancellationToken ct) =>
+        await PlannerSql.WithoutJitAsync(db.Database, ct);
+
     protected override Expression<Func<Feature, bool>> HasId(IReadOnlyCollection<Guid> ids) =>
         f => ids.Contains(f.Id);
 

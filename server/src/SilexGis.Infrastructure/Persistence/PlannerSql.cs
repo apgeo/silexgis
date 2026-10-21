@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Data.Common;
 using Dapper;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace SilexGis.Infrastructure.Persistence;
 
 /// <summary>
-/// Sends one statement with planner settings that hold for it alone — the one home of every such
-/// setting, for the wide map statements measured to be planned worse without them.
+/// Sends one statement — or one read's EF statements — with planner settings that hold for it alone:
+/// the one home of every such setting, for the wide statements measured to be planned worse without
+/// them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -50,6 +53,61 @@ public static class PlannerSql
     /// statement's own window scan is an index scan either way.
     /// </remarks>
     public const string WithoutBitmapScans = "SELECT set_config('enable_bitmapscan', 'off', true)";
+
+    /// <summary>
+    /// Runs the EF statements of one read with JIT off: opens a read-only transaction, switches JIT
+    /// off for it alone, and ends it when the returned scope is disposed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// EF reads one result set per command, so it cannot be handed the setting in the same batch
+    /// as its statement the way <see cref="QueryAsync{T}"/> sends it. A transaction is the other
+    /// thing a transaction-scoped setting ends with, so the read runs inside one of its own. It is
+    /// read-only, so a write that ever found its way into the scope fails loudly instead of being
+    /// rolled back unseen, and it is never committed: disposing it rolls back a transaction that
+    /// changed nothing, and the setting goes with it.
+    /// </para>
+    /// <para>
+    /// When the caller is already inside a transaction the read runs as it is, with the server's
+    /// own setting: switching JIT off there would outlive the read and reach whatever else that
+    /// transaction goes on to do.
+    /// </para>
+    /// <para>
+    /// For the unwindowed feature reads over the whole readable set — the filter's feature world
+    /// and the feature list. Their count and page each visit every readable row and probe its
+    /// ancestors for the visibility cascade, which the planner prices in the millions of cost
+    /// units for a reader who owns nothing; over a hundred thousand entrances, compiling each of
+    /// those statements took 150–220 ms of a 700–900 ms execution, paid again on every request.
+    /// </para>
+    /// </remarks>
+    public static async Task<IAsyncDisposable> WithoutJitAsync(DatabaseFacade database, CancellationToken ct)
+    {
+        if (database.CurrentTransaction is not null)
+        {
+            return NoScope.Instance;
+        }
+
+        var transaction = await database.BeginTransactionAsync(ct);
+        try
+        {
+            await database.ExecuteSqlRawAsync("SET TRANSACTION READ ONLY", ct);
+            await database.ExecuteSqlRawAsync(WithoutJit, ct);
+        }
+        catch
+        {
+            await transaction.DisposeAsync();
+            throw;
+        }
+
+        return transaction;
+    }
+
+    private sealed class NoScope : IAsyncDisposable
+    {
+        public static readonly NoScope Instance = new();
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
 
     /// <summary>The statement as it is sent: behind each setting, in one batch.</summary>
     public static string Prefixed(string sql, params IReadOnlyList<string> settings) =>

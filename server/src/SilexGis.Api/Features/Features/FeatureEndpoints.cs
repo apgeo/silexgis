@@ -137,6 +137,12 @@ public static class FeatureEndpoints
             return windowProblem;
         }
 
+        // Every statement from here on may visit each readable row — or, for a wide window, each
+        // row in it — and probe its ancestors, which the planner prices high enough to compile for a
+        // reader who owns nothing: a cost larger than the statement itself, paid again on every
+        // request. Without JIT for them alone.
+        await using var planner = await PlannerSql.WithoutJitAsync(db.Database, ct);
+
         if (window is { } box)
         {
             var polygon = box.ToPolygon();

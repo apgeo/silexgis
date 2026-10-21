@@ -117,6 +117,20 @@ public abstract class FilterWorld<TEntity> : IFilterWorld
         IReadOnlyList<TEntity> rows, AccessContext caller, CancellationToken ct);
 
     /// <summary>
+    /// What the statements of one query run inside — nothing by default. A world whose statements
+    /// are measured to need planner settings of their own opens them here, for the whole query.
+    /// </summary>
+    protected virtual ValueTask<IAsyncDisposable> ReadScopeAsync(CancellationToken ct) =>
+        ValueTask.FromResult<IAsyncDisposable>(NoReadScope.Instance);
+
+    private sealed class NoReadScope : IAsyncDisposable
+    {
+        public static readonly NoReadScope Instance = new();
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    /// <summary>
     /// Visibility first, then the caller's filter, then order, then a page.
     /// </summary>
     /// <remarks>
@@ -127,6 +141,7 @@ public abstract class FilterWorld<TEntity> : IFilterWorld
     /// </remarks>
     public async ValueTask<WorldPage> QueryAsync(WorldQuery query, CancellationToken ct)
     {
+        await using var reading = await ReadScopeAsync(ct);
         var visible = await VisibleAsync(query.Caller, ct);
 
         // Named rows are narrowed here, inside the walk, rather than being a condition somebody
