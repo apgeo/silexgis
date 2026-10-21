@@ -442,7 +442,7 @@ describe('the pipeline view', () => {
     expect(screen.getByTestId('terrain-retry-b1')).toBeInTheDocument();
   });
 
-  it('says a bake reached the time limit, after how long against what limit, and how to allow longer', () => {
+  it('says a bake reached the time limit, after how long against what limit, and how to allow longer', async () => {
     const timedOut = build({
       id: 'b1',
       status: 'failed',
@@ -461,6 +461,10 @@ describe('the pipeline view', () => {
     expect(notice).toHaveTextContent('Time limit reached after 13 h (limit 12 h)');
     expect(notice).toHaveTextContent('SILEXGIS__Terrain__BakeTimeoutSeconds=86400');
     expect(screen.queryByTestId('terrain-build-failure')).not.toBeInTheDocument();
+
+    // The value is in seconds; the "?" beside it says what the usual lengths come to.
+    fireEvent.click(screen.getByTestId('terrain-seconds-help-button'));
+    expect(await screen.findByTestId('terrain-seconds-help')).toHaveTextContent('1 day = 86400');
     shown.unmount();
 
     // Without the numbers the heading still names the limit rather than falling back to "failed".

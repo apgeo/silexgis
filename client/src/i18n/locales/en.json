@@ -189,7 +189,9 @@
       "degradedCommand": "Then apply it from that same directory and press Run again on this build; what it obtained and prepared is kept:",
       "timedOutTitle": "Time limit reached after {{ran}} h (limit {{limit}} h)",
       "timedOutTitleBare": "Time limit reached",
-      "timedOutBody": "The bake was stopped and the tiles it had made were discarded. A bake that stopped making progress ends this way, and so does a large area that simply needed longer. To allow longer, set this in the environment file (in seconds; 86400 is a day), restart the application, and press Run again — what the build obtained and prepared is kept:"
+      "timedOutBody": "The bake was stopped and the tiles it had made were discarded. A bake that stopped making progress ends this way, and so does a large area that simply needed longer. To allow longer, set this in the environment file (in seconds; 86400 is a day), restart the application, and press Run again — what the build obtained and prepared is kept:",
+      "secondsHelpTitle": "How long is that in seconds?",
+      "secondsHelp": "1 hour = 3600\n12 hours = 43200 (the default)\n1 day = 86400\n2 days = 172800\n1 week = 604800 (the longest allowed)"
     },
     "problems": {
       "notFound": "That build is no longer here.",

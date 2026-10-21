@@ -189,7 +189,9 @@
       "degradedCommand": "Apoi aplic-o din același director și apasă „Rulează din nou” pe această generare; ce a obținut și a pregătit rămâne păstrat:",
       "timedOutTitle": "Limita de timp a fost atinsă după {{ran}} h (limita: {{limit}} h)",
       "timedOutTitleBare": "Limita de timp a fost atinsă",
-      "timedOutBody": "Generarea dalelor a fost oprită, iar dalele făcute până atunci au fost aruncate. Așa se încheie o generare care nu mai înainta, dar și una pentru o zonă mare care avea nevoie de mai mult timp. Ca să permiți mai mult, pune asta în fișierul de mediu (în secunde; 86400 înseamnă o zi), repornește aplicația și apasă „Rulează din nou” — ce a obținut și a pregătit generarea rămâne păstrat:"
+      "timedOutBody": "Generarea dalelor a fost oprită, iar dalele făcute până atunci au fost aruncate. Așa se încheie o generare care nu mai înainta, dar și una pentru o zonă mare care avea nevoie de mai mult timp. Ca să permiți mai mult, pune asta în fișierul de mediu (în secunde; 86400 înseamnă o zi), repornește aplicația și apasă „Rulează din nou” — ce a obținut și a pregătit generarea rămâne păstrat:",
+      "secondsHelpTitle": "Cât înseamnă asta în secunde?",
+      "secondsHelp": "1 oră = 3600\n12 ore = 43200 (valoarea implicită)\n1 zi = 86400\n2 zile = 172800\n1 săptămână = 604800 (cel mai lung permis)"
     },
     "problems": {
       "notFound": "Generarea nu mai există.",

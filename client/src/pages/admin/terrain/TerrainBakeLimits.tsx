@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Alert, Flex, Typography } from 'antd';
+import { QuestionCircleOutlined } from '@ant-design/icons';
+import { Alert, Flex, Popover, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import Button from '../../../components/Button.tsx';
 import type { TerrainBuild } from '../../../api/hooks.ts';
 import {
   TERRAIN_BAKE_TIMEOUT_SETTING,
@@ -89,11 +91,42 @@ export function TerrainBakeTimedOut({ build }: { build: TerrainBuild }) {
       description={
         <Flex vertical gap={8}>
           <Typography.Text>{t('terrain.bakeLimits.timedOutBody')}</Typography.Text>
-          <Typography.Paragraph code copyable style={{ margin: 0 }}>
-            {TERRAIN_BAKE_TIMEOUT_SETTING}
-          </Typography.Paragraph>
+          <Flex align="center" gap={4}>
+            <Typography.Paragraph code copyable style={{ margin: 0 }}>
+              {TERRAIN_BAKE_TIMEOUT_SETTING}
+            </Typography.Paragraph>
+            <SecondsHelp />
+          </Flex>
         </Flex>
       }
     />
+  );
+}
+
+/**
+ * The limit is written in seconds, which nobody reads at a glance; the usual lengths are a click
+ * away rather than spelled into the sentence every time.
+ */
+function SecondsHelp() {
+  const { t } = useTranslation();
+
+  return (
+    <Popover
+      trigger="click"
+      title={t('terrain.bakeLimits.secondsHelpTitle')}
+      content={
+        <Typography.Paragraph style={{ margin: 0, whiteSpace: 'pre-line' }} data-testid="terrain-seconds-help">
+          {t('terrain.bakeLimits.secondsHelp')}
+        </Typography.Paragraph>
+      }
+    >
+      <Button
+        type="text"
+        size="small"
+        icon={<QuestionCircleOutlined />}
+        aria-label={t('terrain.bakeLimits.secondsHelpTitle')}
+        data-testid="terrain-seconds-help-button"
+      />
+    </Popover>
   );
 }
