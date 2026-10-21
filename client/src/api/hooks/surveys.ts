@@ -427,6 +427,19 @@ export async function fetchSurveyModels(caveId: string): Promise<SurveyModelInfo
   );
 }
 
+/** Exactly these stations of a model, by the name the drawing or the rows give each one. */
+export async function fetchSurveyStationsNamed(
+  modelId: string,
+  names: readonly string[],
+): Promise<components['schemas']['SurveyStationDto'][]> {
+  const page = await unwrap(
+    api.GET('/api/v1/survey-models/{id}/stations', {
+      params: { path: { id: modelId }, query: { name: [...names] } },
+    }),
+  );
+  return page.items;
+}
+
 function useInvalidateSurveyModels() {
   const queryClient = useQueryClient();
   return (caveId: string) => {

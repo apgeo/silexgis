@@ -16378,6 +16378,7 @@ export interface operations {
                 page?: number;
                 pageSize?: number;
                 q?: string;
+                name?: string[];
             };
             header?: never;
             path: {

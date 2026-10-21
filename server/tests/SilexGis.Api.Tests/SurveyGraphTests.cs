@@ -287,6 +287,45 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable, IClassFixtur
         whole.GetProperty("items").GetArrayLength().ShouldBe(66);
     }
 
+    /// <summary>
+    /// A few stations asked for by name — what a surface placing photographs at their stations
+    /// asks — answer exactly those, under either spelling, and nothing for a name the survey lacks.
+    /// </summary>
+    [Fact]
+    public async Task Named_stations_answer_exactly_those_under_either_spelling()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var modelId = await SeedSearchableModelAsync(caveId);
+
+        var named = await PageAsync(
+            owner,
+            $"/api/v1/survey-models/{modelId}/stations?name=Galerie.1&name=Sys.Galerie.2&name=loose.1&name=no.such.station");
+        named.GetProperty("items").EnumerateArray()
+            .Select(s => s.GetProperty("viewerName").GetString())
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ShouldBe(["Galerie.1", "Galerie.2", "loose.1"]);
+        // With where each one is, which is what the asking surface wants them for.
+        foreach (var station in named.GetProperty("items").EnumerateArray())
+        {
+            station.GetProperty("longitude").GetDouble().ShouldNotBe(0);
+            station.GetProperty("latitude").GetDouble().ShouldNotBe(0);
+        }
+    }
+
+    [Fact]
+    public async Task Named_stations_are_withheld_in_a_survey_the_caller_may_not_place()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: true);
+        var modelId = await SeedSearchableModelAsync(caveId);
+
+        var ownerSees = await PageAsync(owner, $"/api/v1/survey-models/{modelId}/stations?name=Galerie.1");
+        ownerSees.GetProperty("items").GetArrayLength().ShouldBe(1);
+
+        var readerSees = await PageAsync(reader, $"/api/v1/survey-models/{modelId}/stations?name=Galerie.1");
+        readerSees.GetProperty("items").GetArrayLength().ShouldBe(0);
+        readerSees.GetProperty("totalItems").GetInt32().ShouldBe(0);
+    }
+
     [Fact]
     public async Task A_station_search_finds_nothing_in_a_survey_the_caller_may_not_place()
     {

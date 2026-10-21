@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client.ts';
 import { unwrap, unwrapVoid } from './shared.ts';
 import type {
+  ResLink,
   ResLinkCreate,
   ResLinkMemberAdd,
   ResLinkMemberUpdate,
@@ -39,6 +40,20 @@ export function useResLinksForTarget(
     // just be stale — the rows elide the entity whose page they are on, so the previous
     // entity's own chip would appear as a sibling of one it is not linked to.
   });
+}
+
+/** The links of one target, read once rather than kept: for code that is not a component. */
+export async function fetchResLinksForTarget(
+  targetType: string,
+  targetId: string,
+  params: ResLinkPageParams = {},
+): Promise<ResLink[]> {
+  const page = await unwrap(
+    api.GET('/api/v1/reslinks/for-target', {
+      params: { query: { type: targetType, id: targetId, ...params } },
+    }),
+  );
+  return page.items;
 }
 
 /** One link by id or by its 8-character short code — the endpoint tells them apart by shape. */

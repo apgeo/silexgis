@@ -550,11 +550,18 @@ public static class SurveyModelEndpoints
     /// <summary>The longest beginning a search is asked with: the longest name a station can have.</summary>
     private const int MaxStationSearchLength = 400;
 
+    /// <summary>The most stations one request may name.</summary>
+    private const int MaxNamedStations = 200;
+
     private static async Task<Ok<PagedResult<SurveyStationDto>>> StationsAsync(
         Guid id,
         int? page,
         int? pageSize,
         string? q,
+        // Exactly these stations, by the names the drawing or the rows give them: what a surface
+        // placing a few things at named stations asks, which a list of tens of thousands of rows or
+        // a search by beginning answers only by reading far more than it needs.
+        [FromQuery(Name = "name")] string[]? names,
         SilexGisDbContext db,
         IAccessService access,
         FeatureProtection protection,
@@ -577,7 +584,21 @@ public static class SurveyModelEndpoints
         }
 
         var stations = db.SurveyStations.AsNoTracking().Where(s => s.SurveyModelId == model.Id);
-        if (search is not null)
+        if (names is { Length: > 0 })
+        {
+            // Each name read both ways the spelling rule allows, so a name copied off the drawing
+            // and a name the rows hold find the same station. Bounded like a search's page: more
+            // names than that is a list, and the plain list is the route for one.
+            var stored = names
+                .Where(name => !string.IsNullOrWhiteSpace(name) && name.Length <= MaxStationSearchLength)
+                .Take(MaxNamedStations)
+                .SelectMany(name => SurveyStationNames.StoredCandidates(model.Format, model.RootSurveyName, name.Trim()))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            stations = stations.Where(s => stored.Contains(s.Name));
+            paging = (1, MaxNamedStations * 2);
+        }
+        else if (search is not null)
         {
             if (search.Length > MaxStationSearchLength)
             {
