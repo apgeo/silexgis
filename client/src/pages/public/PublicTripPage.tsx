@@ -18,7 +18,8 @@ import {
   TeamOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { Alert, Button, Card, Collapse, Flex, Result, Skeleton, Spin, Tabs, Tag, Typography, theme } from 'antd';
+import { Alert, Card, Collapse, Flex, Result, Skeleton, Spin, Tabs, Tag, Typography, theme } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { isSettledRefusal } from '../../api/client.ts';

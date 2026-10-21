@@ -11,7 +11,8 @@ import {
   type CSSProperties,
 } from 'react';
 import { CloseOutlined, EyeOutlined, HistoryOutlined } from '@ant-design/icons';
-import { Alert, Button, Drawer, Flex, Skeleton, Spin, Tabs, Typography, theme } from 'antd';
+import { Alert, Drawer, Flex, Skeleton, Spin, Tabs, Typography, theme } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { isSettledRefusal } from '../../api/client.ts';

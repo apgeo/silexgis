@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { EyeOutlined } from '@ant-design/icons';
-import { Alert, Button, Skeleton, Tag, Typography } from 'antd';
+import { Alert, Skeleton, Tag, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import type { PublicLiveTrip } from '../../api/hooks.ts';
 import { partyStandings, tripDateRange } from './publicTripParty.ts';

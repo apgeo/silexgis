@@ -13,7 +13,6 @@ import {
 } from '@ant-design/icons';
 import {
   Alert,
-  Button,
   ConfigProvider,
   Flex,
   Image,
@@ -25,6 +24,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import type { TripTrackingState } from '../../api/hooks.ts';
 import { trackedCaverTeams, type TrackedCaver } from '../../caveview/trackedCavers.ts';
