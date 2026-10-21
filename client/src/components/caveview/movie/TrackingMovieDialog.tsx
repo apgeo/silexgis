@@ -8,7 +8,8 @@ import {
   RightOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons';
-import { Alert, App, Button, Checkbox, Flex, Modal, Progress, Slider, Spin, Typography } from 'antd';
+import { Alert, App, Checkbox, Flex, Modal, Progress, Slider, Spin, Typography } from 'antd';
+import Button from '../../Button.tsx';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { saveBlob } from '../../../api/download.ts';

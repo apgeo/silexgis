@@ -11,7 +11,6 @@ import {
 } from '@ant-design/icons';
 import {
   App,
-  Button,
   Dropdown,
   Flex,
   Form,
@@ -26,6 +25,7 @@ import {
   Typography,
   Upload,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { downloadFile } from '../../api/download.ts';

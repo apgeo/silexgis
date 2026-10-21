@@ -4,7 +4,6 @@ import { DownloadOutlined } from '@ant-design/icons';
 import {
   Alert,
   App,
-  Button,
   Card,
   Empty,
   Flex,
@@ -14,6 +13,7 @@ import {
   Table,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 

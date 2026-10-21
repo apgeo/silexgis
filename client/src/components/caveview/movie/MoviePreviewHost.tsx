@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Alert, Button, Spin } from 'antd';
+import { Alert, Spin } from 'antd';
+import Button from '../../Button.tsx';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSurveyModel } from '../../../api/hooks.ts';

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
-import { App, Button, Flex, Modal, Skeleton, Typography } from 'antd';
+import { App, Flex, Modal, Skeleton, Typography } from 'antd';
+import Button from '../components/Button.tsx';
 import { AimOutlined, SettingOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import {

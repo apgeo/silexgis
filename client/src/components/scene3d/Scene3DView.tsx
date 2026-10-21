@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutOutlined } from '@ant-design/icons';
-import { Alert, Button, Popover, Result, Spin, Typography } from 'antd';
+import { Alert, Popover, Result, Spin, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';

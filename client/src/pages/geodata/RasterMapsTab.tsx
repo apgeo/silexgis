@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { AimOutlined, DeleteOutlined, EditOutlined, InboxOutlined } from '@ant-design/icons';
 import {
   App,
-  Button,
   Flex,
   Form,
   Input,
@@ -16,6 +15,7 @@ import {
   Tooltip,
   Upload,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {

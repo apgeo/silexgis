@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftOutlined, EnvironmentOutlined, InboxOutlined } from '@ant-design/icons';
-import { App, Alert, Button, Card, Flex, Space, Spin, Tag, Typography, Upload } from 'antd';
+import { App, Alert, Card, Flex, Space, Spin, Tag, Typography, Upload } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {

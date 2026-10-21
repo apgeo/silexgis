@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
   Alert,
-  Button,
   Checkbox,
   Collapse,
   ConfigProvider,
@@ -15,6 +14,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
+import Button from '../../Button.tsx';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { MovieFormatSupport } from '../../../caveview/movie/encode/movieEncoder.ts';

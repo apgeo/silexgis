@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { CloseOutlined } from '@ant-design/icons';
-import { Button, Typography } from 'antd';
+import { Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { matchesAny, SCENE3D_CALLOUT_SHORTCUTS } from '../../hooks/shortcutRegistry.ts';
 import { placeOverlay, type OverlayRect } from '../../scene3d/overlayPlacement.ts';

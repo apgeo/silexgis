@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Button, Dropdown } from 'antd';
+import { Dropdown } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { MODEL_LABEL_SCALES, modelLabelScale } from '../../caveview/labelScale.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';

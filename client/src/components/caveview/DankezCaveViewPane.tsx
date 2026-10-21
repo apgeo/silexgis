@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Flex, Typography } from 'antd';
+import { Alert, Flex, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { SurveyModelInfo } from '../../api/hooks.ts';

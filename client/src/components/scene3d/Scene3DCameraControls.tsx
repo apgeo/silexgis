@@ -8,7 +8,8 @@ import {
   LinkOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons';
-import { Button, Popover, Tooltip } from 'antd';
+import { Popover, Tooltip } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { DownloadOutlined } from '@ant-design/icons';
-import { App, Button, Card, Col, Row, Statistic, Typography } from 'antd';
+import { App, Card, Col, Row, Statistic, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 
 import { downloadFile, tripStatisticsExportUrl } from '../../api/download.ts';

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, App, AutoComplete, Button, Flex, Modal, Space, Tabs, Tooltip } from 'antd';
+import { Alert, App, AutoComplete, Flex, Modal, Space, Tabs, Tooltip } from 'antd';
+import Button from '../Button.tsx';
 import { LinkOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { type SurveyModelInfo } from '../../api/hooks.ts';

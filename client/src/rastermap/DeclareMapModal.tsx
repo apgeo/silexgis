@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
-import { Alert, App, Button, Flex, Modal, Popconfirm, Segmented, Typography } from 'antd';
+import { Alert, App, Flex, Modal, Popconfirm, Segmented, Typography } from 'antd';
+import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCreateResLink,

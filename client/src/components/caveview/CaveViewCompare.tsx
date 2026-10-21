@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert, Button, Checkbox, Dropdown, Segmented, Spin, Switch, Typography } from 'antd';
+import { Alert, Checkbox, Dropdown, Segmented, Spin, Switch, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { CloseOutlined, DownOutlined, SwapOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { CaveViewToolbarOptions, CaveViewer } from '../../caveview/loadCaveView.ts';

@@ -4,7 +4,6 @@ import { DownloadOutlined } from '@ant-design/icons';
 import {
   Alert,
   App,
-  Button,
   Card,
   Col,
   Descriptions,
@@ -16,6 +15,7 @@ import {
   Skeleton,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 

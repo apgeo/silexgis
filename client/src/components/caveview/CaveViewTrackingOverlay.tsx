@@ -7,7 +7,8 @@ import {
   TeamOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { Button, Switch, Tag, Typography } from 'antd';
+import { Switch, Tag, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { shortNameOf } from '../../caveview/modelParts.ts';
 import { noStationsMissing } from '../../caveview/placedOnModel.ts';
