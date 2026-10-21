@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   App,
   Alert,
-  Button,
   Card,
   Descriptions,
   Empty,
@@ -17,6 +16,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import List from '../../components/List.tsx';
 import { ApiError } from '../../api/client.ts';

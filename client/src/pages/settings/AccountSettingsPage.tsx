@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { DownloadOutlined } from '@ant-design/icons';
-import { App, Alert, Button, Card, Flex, Form, Input, Popconfirm, Spin, Tag, Typography } from 'antd';
+import { App, Alert, Card, Flex, Form, Input, Popconfirm, Spin, Tag, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import { downloadFile } from '../../api/download.ts';

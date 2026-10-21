@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Button, Card, Flex, InputNumber, Typography } from 'antd';
+import { Card, Flex, InputNumber, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useMapConfig } from '../../api/hooks.ts';
 import {

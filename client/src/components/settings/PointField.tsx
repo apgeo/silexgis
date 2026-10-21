@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { DeleteOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { useState } from 'react';
-import { Button, Flex, Typography } from 'antd';
+import { Flex, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import PointPickerModal from './PointPickerModal.tsx';

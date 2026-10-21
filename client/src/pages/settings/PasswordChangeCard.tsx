@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { KeyOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Card, Form, Input, Typography } from 'antd';
+import { Alert, App, Card, Form, Input, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import { useChangePassword } from '../../api/hooks.ts';

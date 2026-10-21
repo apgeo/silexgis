@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { GlobalOutlined, LockOutlined, TeamOutlined } from '@ant-design/icons';
 import type { ReactNode } from 'react';
-import { Button, Dropdown, Tooltip } from 'antd';
+import { Dropdown, Tooltip } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import type { FieldVisibility } from '../../api/hooks.ts';
 

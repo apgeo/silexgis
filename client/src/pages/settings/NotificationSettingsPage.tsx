@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from 'react';
-import { App, Alert, Button, Card, Flex, Form, Segmented, Spin, Switch, Table, Tag, Typography } from 'antd';
+import { App, Alert, Card, Flex, Form, Segmented, Spin, Switch, Table, Tag, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   NOTIFICATION_CHANNELS,

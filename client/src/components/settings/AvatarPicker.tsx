@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { DeleteOutlined, PictureOutlined, UploadOutlined, UserOutlined } from '@ant-design/icons';
 import { useState } from 'react';
-import { App, Avatar, Button, Flex, Modal, Upload, theme } from 'antd';
+import { App, Avatar, Flex, Modal, Upload, theme } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useAvatarPresets,
