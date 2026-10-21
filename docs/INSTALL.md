@@ -1601,6 +1601,21 @@ container does not come up until the line is corrected. `docker compose logs api
 message.
 
 
+### Upgrading across the release that can call off a terrain bake
+
+From this release a terrain build can be called off, and a bake that reaches its time limit is
+stopped rather than abandoned. Both work by the application leaving a request beside the bake that
+the **terrain worker** watches for, and only the new worker image watches for it.
+
+- **Updated with `deploy/server/update.sh` (or `silexgis-update`):** nothing to do — it rebuilds
+  every image in `COMPOSE_FILE`, the worker's included, and recreates the containers that changed.
+- **Updated by hand:** rebuild and recreate the worker as well as the application:
+  `docker compose build terrain-worker && docker compose up -d terrain-worker`.
+
+With the old worker still running, a cancelled or timed-out bake is not stopped: it runs to its own
+end, and the build can be run again only once it has. A bake that is running while you update
+finishes on the old worker either way; update between bakes if you can.
+
 ## External login providers
 
 Sign-in with Google, GitHub, or any OpenID Connect provider is optional and off by default —
