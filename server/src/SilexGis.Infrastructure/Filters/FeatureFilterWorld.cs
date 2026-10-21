@@ -390,10 +390,22 @@ public sealed class FeatureFilterWorld(
                         .Where(u => u.Id == f.OwnerUserId).Select(u => u.DisplayName).FirstOrDefault())
                     .ThenBy(f => f.Id),
             _ => descending
-                ? rows.OrderByDescending(f => f.UpdatedAt).ThenByDescending(f => f.Id)
+                ? NewestFirst(rows)
                 : rows.OrderBy(f => f.UpdatedAt).ThenBy(f => f.Id),
         };
     }
+
+    /// <summary>
+    /// Most recently changed first, the id breaking ties — the default order of this world and of
+    /// the feature list, and the one the feature table's index over those two columns serves.
+    /// </summary>
+    /// <remarks>
+    /// Read off that index, a page is the first rows along it the caller may read, rather than
+    /// every readable row visited, its ancestors probed for the visibility cascade, and all of them
+    /// sorted so that a page of them can be kept.
+    /// </remarks>
+    public static IOrderedQueryable<Feature> NewestFirst(IQueryable<Feature> rows) =>
+        rows.OrderByDescending(f => f.UpdatedAt).ThenByDescending(f => f.Id);
 
     protected override async ValueTask<IReadOnlyList<FilterHit>> ProjectAsync(
         IReadOnlyList<Feature> rows, AccessContext caller, CancellationToken ct)

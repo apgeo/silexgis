@@ -80,6 +80,13 @@ public sealed class FeatureConfiguration : IEntityTypeConfiguration<Feature>
         builder.HasIndex(x => x.OwnerUserId);
         builder.HasIndex(x => x.CavingGroupId);
         builder.HasIndex(x => x.DeletedAt).HasFilter("deleted_at IS NULL");
+        // The default order of the feature list and of the filter's feature world (most recently
+        // changed first, the id breaking ties), read backwards. With it a page is the first rows
+        // along the index that the caller may read, instead of every readable row visited — and its
+        // ancestors probed — so that a sort can keep twenty-five of them.
+        builder.HasIndex(x => new { x.UpdatedAt, x.Id }, "ix_features_updated_at_id")
+            .HasFilter("deleted_at IS NULL")
+            .HasDatabaseName("ix_features_updated_at_id");
         // The flattened ancestry is how every subtree question is asked: the visibility walk's
         // subtree arms, and a device's download, which is "everything under these roots". All of
         // them are array overlaps, and without this each is a sequential scan of the whole table.

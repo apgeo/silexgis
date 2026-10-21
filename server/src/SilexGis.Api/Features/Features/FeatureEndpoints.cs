@@ -168,7 +168,7 @@ public static class FeatureEndpoints
         var (p, size) = Paging.Normalize(page, pageSize);
         var total = await query.CountAsync(ct);
         // The id breaks ties so that rows written in one transaction keep their place between pages.
-        var rows = await query.OrderByDescending(f => f.UpdatedAt).ThenBy(f => f.Id)
+        var rows = await FeatureFilterWorld.NewestFirst(query)
             .Skip((p - 1) * size).Take(size).ToListAsync(ct);
 
         var types = await FeatureTypesOfAsync(db, rows, ct);

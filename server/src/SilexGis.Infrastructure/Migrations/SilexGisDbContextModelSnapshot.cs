@@ -2893,6 +2893,10 @@ namespace SilexGis.Infrastructure.Migrations
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Geom" }, "ix_features_geom_entrances"), "gist");
 
+                    b.HasIndex(new[] { "UpdatedAt", "Id" }, "ix_features_updated_at_id")
+                        .HasDatabaseName("ix_features_updated_at_id")
+                        .HasFilter("deleted_at IS NULL");
+
                     b.ToTable("features", null, t =>
                         {
                             t.HasCheckConstraint("ck_features_cave_geom", "kind <> 1 OR geom IS NULL OR geometrytype(geom) = 'POINT'");

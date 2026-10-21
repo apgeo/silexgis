@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
@@ -39,8 +41,13 @@ public sealed class MigrationBaselineTests : IAsyncLifetime, IClassFixture<Postg
         }
     }
 
-    /// <summary>A new database of this class's own, migrated by today's migrations.</summary>
-    private async Task<string> MigratedDatabaseAsync()
+    /// <summary>
+    /// A new database of this class's own, migrated by today's migrations — or, given
+    /// <paramref name="target"/>, only as far as that one. The old chain's head left exactly the
+    /// schema the baseline builds, so a database standing for one is migrated to the baseline and no
+    /// further: the migrations added after it are what the move must still leave to the migrator.
+    /// </summary>
+    private async Task<string> MigratedDatabaseAsync(string? target = null)
     {
         var name = $"silexgis_baseline_{Guid.NewGuid():N}";
         databases.Add(name);
@@ -53,7 +60,15 @@ public sealed class MigrationBaselineTests : IAsyncLifetime, IClassFixture<Postg
 
         var connectionString = new NpgsqlConnectionStringBuilder(adminConnectionString) { Database = name }.ConnectionString;
         await using var db = Context(connectionString);
-        await db.Database.MigrateAsync();
+        if (target is null)
+        {
+            await db.Database.MigrateAsync();
+        }
+        else
+        {
+            await db.GetService<IMigrator>().MigrateAsync(target);
+        }
+
         return connectionString;
     }
 
@@ -90,7 +105,7 @@ public sealed class MigrationBaselineTests : IAsyncLifetime, IClassFixture<Postg
     [Fact]
     public async Task A_database_at_the_old_chains_head_keeps_its_tables_and_takes_the_baseline_as_its_history()
     {
-        var connectionString = await MigratedDatabaseAsync();
+        var connectionString = await MigratedDatabaseAsync(MigrationBaseline.BaselineId);
         await OldHistoryAsync(connectionString, MigrationBaseline.ChainHead);
         // A row written before the move survives it: nothing is recreated.
         await ExecuteAsync(connectionString,
@@ -99,13 +114,15 @@ public sealed class MigrationBaselineTests : IAsyncLifetime, IClassFixture<Postg
         await using (var db = Context(connectionString))
         {
             (await MigrationBaseline.AdoptAsync(db)).ShouldBe(MigrationBaseline.Outcome.Adopted);
+            (await HistoryAsync(connectionString)).ShouldBe([MigrationBaseline.BaselineId]);
+
+            // What came after the baseline is then the migrator's, as on any database.
             await db.Database.MigrateAsync();
             (await db.Database.GetPendingMigrationsAsync()).ShouldBeEmpty();
             (await db.Database.SqlQueryRaw<string>("SELECT key AS \"Value\" FROM app_settings WHERE key = 'kept'").ToListAsync())
                 .ShouldBe(["kept"]);
+            (await HistoryAsync(connectionString)).ShouldBe(db.Database.GetMigrations().ToList());
         }
-
-        (await HistoryAsync(connectionString)).ShouldBe([MigrationBaseline.BaselineId]);
 
         // Running it again changes nothing.
         await using var again = Context(connectionString);
@@ -117,7 +134,7 @@ public sealed class MigrationBaselineTests : IAsyncLifetime, IClassFixture<Postg
     {
         // Where the installations running at the squash stood: before saved filters and before the
         // map-layer flag for shared links.
-        var connectionString = await MigratedDatabaseAsync();
+        var connectionString = await MigratedDatabaseAsync(MigrationBaseline.BaselineId);
         await ExecuteAsync(connectionString, """
             DROP TABLE saved_filters;
             ALTER TABLE map_layers DROP COLUMN on_shared_links;
@@ -138,7 +155,7 @@ public sealed class MigrationBaselineTests : IAsyncLifetime, IClassFixture<Postg
     [Fact]
     public async Task A_database_further_back_is_refused_and_left_as_it_was()
     {
-        var connectionString = await MigratedDatabaseAsync();
+        var connectionString = await MigratedDatabaseAsync(MigrationBaseline.BaselineId);
         await OldHistoryAsync(connectionString, "20260930120000_SomethingOlder");
 
         await using var db = Context(connectionString);
@@ -156,6 +173,8 @@ public sealed class MigrationBaselineTests : IAsyncLifetime, IClassFixture<Postg
 
         await using var db = Context(connectionString);
         (await MigrationBaseline.AdoptAsync(db)).ShouldBe(MigrationBaseline.Outcome.NothingToDo);
-        (await HistoryAsync(connectionString)).ShouldBe([MigrationBaseline.BaselineId]);
+        var history = await HistoryAsync(connectionString);
+        history[0].ShouldBe(MigrationBaseline.BaselineId);
+        history.ShouldBe(db.Database.GetMigrations().ToList());
     }
 }
