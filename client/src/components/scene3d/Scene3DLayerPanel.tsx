@@ -14,6 +14,7 @@ import { CENTERLINE_DEPTH_BANDS } from '../../scene3d/centerlines3d.ts';
 import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
 import type { Scene3DSurfaceMode, Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
 import type { SurveyMesh3DState } from '../../scene3d/surveyMesh3d.ts';
+import type { StationPhotos3DState } from '../../scene3d/stationPhotos3d.ts';
 import type {
   SurveyMeshesInView3DState,
   SurveyWalls3DMode,
@@ -86,6 +87,11 @@ export interface Scene3DLayerPanelProps {
   onWallsModeChange: (mode: SurveyWalls3DMode) => void;
   /** What the scene is doing about the selected cave's walls, said in words under the switch. */
   meshState: SurveyMesh3DState;
+  /** Whether the places of the selected cave's photographs are marked. */
+  photosVisible: boolean;
+  onPhotosVisibleChange: (visible: boolean) => void;
+  /** What the scene found of them, said under their switch. */
+  photosState: StationPhotos3DState;
   /** What the scene holds of the walls of the caves in view, said in the same place in that mode. */
   meshesInViewState: SurveyMeshesInView3DState;
   /**
@@ -137,6 +143,9 @@ export default function Scene3DLayerPanel({
   onGeofileOpacityChange,
   meshVisible,
   onMeshVisibleChange,
+  photosVisible,
+  onPhotosVisibleChange,
+  photosState,
   wallsMode,
   onWallsModeChange,
   meshState,
@@ -184,6 +193,21 @@ export default function Scene3DLayerPanel({
    * a number — which number, and how it is worded, is decided once beside the scene's own notice
    * so that the two never describe one load in two different measures.
    */
+  const photosHint = () => {
+    switch (photosState.status) {
+      case 'off':
+        return photosVisible ? t('scene3d.photosNoCave') : t('scene3d.photosOff');
+      case 'looking':
+        return t('scene3d.photosLooking');
+      case 'failed':
+        return t('scene3d.photosFailed');
+      case 'drawn':
+        return photosState.places === 0
+          ? t('scene3d.photosNone')
+          : t('scene3d.photosDrawn', { count: photosState.pictures, places: photosState.places });
+    }
+  };
+
   const meshHint = () => {
     if (wallsMode === 'inView') {
       // The other mode's own sentence: how many caves' walls are drawn out of how many, and what
@@ -533,6 +557,26 @@ export default function Scene3DLayerPanel({
               {t('scene3d.meshPrecisionLost')}
             </Typography.Text>
           )}
+        </div>
+
+        {/* Where the selected cave's photographs were taken: each at the station it is linked to,
+            pressed to open them. Said in words under the switch, because a cave with none and a
+            cave not yet looked at would otherwise look the same. */}
+        <div className="scene3d-layer-row">
+          <Checkbox
+            checked={photosVisible}
+            onChange={(e) => onPhotosVisibleChange(e.target.checked)}
+            data-testid="scene3d-photos-toggle"
+          >
+            {t('scene3d.photosLayer')}
+          </Checkbox>
+          <Typography.Text
+            type="secondary"
+            className="scene3d-mesh-hint"
+            data-testid="scene3d-photos-status"
+          >
+            {photosHint()}
+          </Typography.Text>
         </div>
       </div>
 

@@ -58,6 +58,10 @@ vi.mock('../../api/hooks.ts', () => ({
     surveyModelRequests.push(caveId);
     return Promise.resolve(surveyModels);
   },
+  // Named for the same reason: the loader of the photographs' places asks through these two. No
+  // links in this file, so no station is ever asked for.
+  fetchResLinksForTarget: () => Promise.resolve([]),
+  fetchSurveyStationsNamed: () => Promise.resolve([]),
   // Named for the same reason: the loader for the walls of the caves in view asks through it.
   fetchCaveMeshesInView: (bbox: string, maxCaves?: number) => {
     caveMeshRequests.push(bbox);
@@ -1495,6 +1499,9 @@ describe('the walls of the selected cave', () => {
     withWebGl2(true);
     centerlineResponse = aSurvey;
     surveyModels = [aWallMesh()];
+    // The places of the photographs read the same listing of the cave's models, and are off here
+    // so that what is counted is the walls' own reading.
+    useWorkspaceStore.setState({ overlayVisible: { 'station-photos': false } });
     renderView();
     await waitFor(() => expect(centerlineRequests).toHaveLength(1));
 
@@ -1935,6 +1942,9 @@ describe('the walls of every cave in view', () => {
         scene3dWallsMode: 'inView',
       });
     });
+    // The places of the photographs read the same listing of the cave's models, and are off here
+    // so that what is counted is the walls' own reading.
+    useWorkspaceStore.setState({ overlayVisible: { 'station-photos': false } });
     renderView();
     await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(2));
     // In this mode the selected cave's walls come from the view's answer like every other

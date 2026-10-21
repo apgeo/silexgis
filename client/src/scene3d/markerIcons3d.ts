@@ -118,6 +118,36 @@ function featureDotIcon(): MarkerIcon {
   return featureDot;
 }
 
+const photoIcons = new Map<number, MarkerIcon>();
+
+/**
+ * Where photographs were taken: a camera in a dark disc, with how many where there is more than
+ * one. Dark with a white ring so that it reads over a pale satellite picture and over the black
+ * underground view alike, and unlike every survey colour so it is never taken for a station.
+ */
+export function photoIcon(count: number): MarkerIcon {
+  const safeCount = Number.isFinite(count) && count > 1 ? Math.min(99, Math.round(count)) : 1;
+  const cached = photoIcons.get(safeCount);
+  if (cached) {
+    return cached;
+  }
+  const size = 28;
+  const badge =
+    safeCount > 1
+      ? `<circle cx='22' cy='6' r='6' fill='#d4380d'/>` +
+        `<text x='22' y='9' font-family='sans-serif' font-size='8' font-weight='bold' fill='#ffffff' text-anchor='middle'>${safeCount}</text>`
+      : '';
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}' viewBox='0 0 ${size} ${size}'>` +
+    `<circle cx='13' cy='15' r='11' fill='#222222' fill-opacity='0.9' stroke='#ffffff' stroke-width='${RING_WIDTH}'/>` +
+    `<path transform='translate(6 8) scale(0.58)' fill='#ffffff' d='M9 4 7.2 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.2L15 4H9zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z'/>` +
+    badge +
+    `</svg>`;
+  const icon: MarkerIcon = { image: svgDataUrl(svg), scale: 1 };
+  photoIcons.set(safeCount, icon);
+  return icon;
+}
+
 /** Enough room for the circle plus the ring drawn half in and half out of its edge. */
 function iconSize(radius: number): number {
   return Math.ceil(2 * (radius + RING_WIDTH));

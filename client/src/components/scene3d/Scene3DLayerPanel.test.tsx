@@ -7,6 +7,7 @@ import type { MapLayerInfo } from '../../api/hooks.ts';
 import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
 import type { Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
 import { EMPTY_SURVEY_MESH_3D_STATE } from '../../scene3d/surveyMesh3d.ts';
+import { EMPTY_STATION_PHOTOS_3D_STATE } from '../../scene3d/stationPhotos3d.ts';
 import {
   EMPTY_SURVEY_MESHES_IN_VIEW_3D_STATE,
   type SurveyMeshesInView3DState,
@@ -96,6 +97,9 @@ function renderPanel(overrides: Partial<Scene3DLayerPanelProps> = {}) {
     wallsMode: 'selected',
     onWallsModeChange: vi.fn(),
     meshState: EMPTY_SURVEY_MESH_3D_STATE,
+    photosVisible: true,
+    onPhotosVisibleChange: vi.fn(),
+    photosState: EMPTY_STATION_PHOTOS_3D_STATE,
     meshesInViewState: EMPTY_SURVEY_MESHES_IN_VIEW_3D_STATE,
     terrainBuilds: [],
     terrainConfigured: false,

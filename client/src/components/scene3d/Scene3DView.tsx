@@ -114,6 +114,16 @@ import {
   meshProgressMessage,
 } from './meshMessages.ts';
 import { formatSize } from '../attachments/fileFormat.ts';
+import Lightbox from '../gallery/Lightbox.tsx';
+import {
+  attachStationPhotos3d,
+  EMPTY_STATION_PHOTOS_3D_STATE,
+  isStationPhotosPickId,
+  STATION_PHOTOS_SOURCE_ID,
+  type StationPhotos3DHandle,
+  type StationPhotos3DPlace,
+  type StationPhotos3DState,
+} from '../../scene3d/stationPhotos3d.ts';
 import { cutawayPauseMessage, terrainProblemMessage } from './surfaceMessages.ts';
 import './Scene3DView.css';
 
@@ -423,6 +433,11 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // them is camera-driven: they are read because a viewer picked a cave, and released again the
   // moment the pick moves on.
   const meshRef = useRef<SurveyMesh3DHandle | null>(null);
+  /** The photographs of the selected cave, placed at the stations they are linked to. */
+  const photosRef = useRef<StationPhotos3DHandle | null>(null);
+  const [photosState, setPhotosState] = useState<StationPhotos3DState>(EMPTY_STATION_PHOTOS_3D_STATE);
+  /** The photographs of the place whose marker was pressed, open in the picture viewer. */
+  const [openPhotos, setOpenPhotos] = useState<{ place: StationPhotos3DPlace; index: number } | null>(null);
   const [meshState, setMeshState] = useState<SurveyMesh3DState>(EMPTY_SURVEY_MESH_3D_STATE);
 
   // The walls of every cave in view, which is the other way of asking for walls and the only
@@ -483,6 +498,11 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     const overburden = attachOverburdenHighlight3d(engine, (caveId) => data.caveSurveyTop(caveId));
     overburdenRef.current = overburden;
     const unsubscribeMesh = mesh.subscribe(setMeshState);
+    // Each station's height is the cave's own rule applied to it, against the same top the lines
+    // and the walls hang from.
+    const photos = attachStationPhotos3d(engine, (caveId) => data.caveSurveyTop(caveId));
+    photosRef.current = photos;
+    const unsubscribePhotos = photos.subscribe(setPhotosState);
     const unsubscribeState = data.subscribe((next) => {
       setDataState(next);
       // A load is where the survey tops are learned, and both ends of the measured line hang from
@@ -494,6 +514,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       // And the walls of the caves in view, each of which usually started arriving before the
       // lines that say where its cave's top is.
       meshesInView.refreshSurveyTops();
+      // And the places of the photographs, which hang from the same top.
+      photos.refreshSurveyTops();
       // Whether there is a cave to frame changes with every load, and only the loader knows.
       setCaveFramable(data.caveBounds() !== undefined);
       // The callout holds what it was handed when the thing was clicked, and a load replaces every
@@ -527,6 +549,15 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // know or care which one the viewer clicked in. It is announced as well as stored, because a
     // popped-out window has a store of its own that this one cannot reach.
     const unsubscribeClick = engine.onClick((pick) => {
+      // A photograph's place opens its photographs and leaves the selection alone: the cave stays
+      // the one being looked at, and with it the photographs of every other station of it.
+      if (isStationPhotosPickId(pick?.id)) {
+        const place = photos.placeOf(pick.id.key);
+        if (place) {
+          setOpenPhotos({ place, index: 0 });
+        }
+        return;
+      }
       const selection = selectionFromPick(pick);
       useWorkspaceStore.getState().setSelection(selection);
       sync.publishSelection(selection);
@@ -542,7 +573,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // shallow state write per frame while the pointer is over something and nothing otherwise.
     const unsubscribeHover = engine.onHover((pick) => {
       const payload = pickPayload(pick);
-      surface.style.cursor = payload ? 'pointer' : '';
+      surface.style.cursor = payload || isStationPhotosPickId(pick?.id) ? 'pointer' : '';
       setHovered(payload && pick?.screen ? { payload, screen: pick.screen } : undefined);
     });
 
@@ -621,6 +652,11 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       mesh.detach();
       meshRef.current = null;
       setMeshState(EMPTY_SURVEY_MESH_3D_STATE);
+      unsubscribePhotos();
+      photos.detach();
+      photosRef.current = null;
+      setPhotosState(EMPTY_STATION_PHOTOS_3D_STATE);
+      setOpenPhotos(null);
       // The same, for as many caves as the view held.
       unsubscribeMeshesInView();
       meshesInView.detach();
@@ -1032,6 +1068,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // gained relief, would be buried under its own hillside. Moving it is arithmetic on its
     // anchor, so nothing is fetched again.
     meshRef.current?.setAltitudePlacement(placement);
+    photosRef.current?.setAltitudePlacement(placement);
     meshesInViewRef.current?.setAltitudePlacement(placement);
     // And the measured line, whose two ends hang from the tops of two different caves under the
     // one rule: left behind, it would join two surveys that had both moved out from under it.
@@ -1078,6 +1115,19 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     meshesInView.setSelectedCave(selectedCaveId);
     meshesInView.setActive(everyCaveInView);
   }, [selectedCaveId, meshVisible, wallsMode, dataState, engineVersion, showingHere]);
+
+  // The photographs of the selected cave, on by default like its walls and switched in the same
+  // list. Only the selected cave's: reading every link of every cave in a view is not a cost to
+  // pay for markers somebody may never press.
+  const photosVisible = overlayVisible[STATION_PHOTOS_SOURCE_ID] ?? true;
+  useEffect(() => {
+    const photos = photosRef.current;
+    if (!photos) {
+      return;
+    }
+    photos.setVisible(photosVisible);
+    photos.setCave(selectedCaveId);
+  }, [selectedCaveId, photosVisible, engineVersion, showingHere]);
 
   // Declared after the loader is attached, and keyed on the same counter, so a scene that is
   // rebuilt comes back with the settings the viewer had rather than with the defaults.
@@ -1312,6 +1362,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
                 onGeofileOpacityChange={setOverlayOpacity}
                 meshVisible={meshVisible}
                 onMeshVisibleChange={(visible) => setOverlayVisible(SURVEY_MESH_LAYER_ID, visible)}
+                photosVisible={photosVisible}
+                onPhotosVisibleChange={(visible) => setOverlayVisible(STATION_PHOTOS_SOURCE_ID, visible)}
+                photosState={photosState}
                 wallsMode={wallsMode}
                 onWallsModeChange={setWallsMode}
                 meshState={meshState}
@@ -1380,6 +1433,23 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           </span>
         )}
       </div>
+      {/* The photographs of the place whose marker was pressed, paged through as one set: what
+          somebody linked to that one station, so moving through it is moving through the
+          photographs of one place. Only the renderings the reader is entitled to are offered, as
+          in the survey viewer — the download refuses itself. */}
+      {openPhotos && (
+        <Lightbox
+          photos={openPhotos.place.pictures.map((entry) => ({
+            documentId: entry.documentId ?? entry.url,
+            title: t('caveview.stationPicture'),
+            previewUrl: entry.url,
+            caption: entry.caption,
+          }))}
+          index={openPhotos.index}
+          onClose={() => setOpenPhotos(null)}
+          onIndexChange={(index) => setOpenPhotos({ ...openPhotos, index })}
+        />
+      )}
     </div>
   );
 }
