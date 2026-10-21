@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { cloneElement, forwardRef, isValidElement, type ReactElement, type ReactNode } from 'react';
+// The one place the library's button is used directly: everything else imports this wrapper.
+// oxlint-disable-next-line no-restricted-imports
 import { Button as AntButton, type ButtonProps } from 'antd';
 
 /** Whether a button says what it does without its icon: words of its own, or a label it was given. */
