@@ -15,7 +15,7 @@ import { userManager } from '../auth/auth.tsx';
  * stale cached viewer across upgrades. A new vendored build lands in a new directory and
  * changes this constant in the same commit, so every asset URL changes with it.
  */
-export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.19/';
+export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.20/';
 
 const SCRIPT_URL = `${CAVEVIEW_HOME}js/CaveView2.min.js`;
 const CSS_URL = `${CAVEVIEW_HOME}css/caveview.css`;
@@ -421,6 +421,11 @@ export interface CaveViewer extends CaveViewLayers {
   /** Pictures shown over the model for the station under the pointer. */
   setStationMedia(source: CaveViewStationMediaSource): void;
   clearStationMedia(): void;
+  /**
+   * Marks every station of the loaded model that holds pictures with a camera over the model,
+   * pressed to show that station's pictures. Only a Map source names its stations.
+   */
+  setStationMediaMarkers(on: boolean): void;
   /**
    * Visits every station of the loaded survey, handing each over as the same public
    * station object a click reports — so `pathOf` reads its name the same way. Only
