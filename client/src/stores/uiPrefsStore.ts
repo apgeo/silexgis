@@ -97,6 +97,13 @@ interface UiPrefsState {
   meshesInViewMaxBytes?: number;
   setMeshesInViewLimits: (limits: { minZoom?: number; maxCaves?: number; maxBytes?: number }) => void;
   /**
+   * The size above which the 3D view asks before downloading the walls of a selected cave, in
+   * bytes; 0 asks every time. Per browser, because whether fifty megabytes is a lot is a fact
+   * about the connection in front of the person. Undefined follows the installation's default.
+   */
+  meshAskAboveBytes?: number;
+  setMeshAskAboveBytes: (bytes: number | undefined) => void;
+  /**
    * Local mirror of the appearance settings the server also holds. The mirror is what paints —
    * it rehydrates synchronously, so the first render already has the right theme — while the
    * server copy is what carries the choice to another machine.
@@ -325,6 +332,8 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           meshesInViewMaxCaves: maxCaves,
           meshesInViewMaxBytes: maxBytes,
         }),
+      meshAskAboveBytes: undefined,
+      setMeshAskAboveBytes: (bytes) => set({ meshAskAboveBytes: bytes }),
       setAppearance: (patch) => set((state) => ({ appearance: { ...state.appearance, ...patch } })),
       setKarstLinkTreatment: (treatment) => set({ karstLinkTreatment: treatment }),
       setSavedFilterAudience: (audience) => set({ savedFilterAudience: audience }),

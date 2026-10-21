@@ -105,6 +105,12 @@ holds scraps or measured passage dimensions to build them from.
   so a fifty-megabyte model and a three-hundred-kilobyte one are different waits rather than the
   same silence. Once drawn, the size and the triangle count are both shown. A model converted
   before the server began measuring sizes is described by its triangle count alone.
+- **Large walls are asked about first.** Walls larger than 50 MB — a real cost on a phone's data
+  plan — are not downloaded on selection: the scene says *these walls are 54.7 MB to download*
+  with a **Download them** button, and nothing is fetched until you press it. Once agreed, the same
+  walls are not asked about again while the page stays open. The size is your administrator's
+  default, and you can set your own for this browser under
+  [Settings › Advanced](account-and-settings.md) (0 asks before every download).
 
 See [Surveys, centerlines and 3D models](surveys-and-models.md#cave-walls-stl) for uploading
 and for the coordinate declaration a `.stl` needs.

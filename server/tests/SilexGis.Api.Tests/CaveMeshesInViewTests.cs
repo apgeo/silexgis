@@ -78,6 +78,7 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
                 ["Map:MeshesInViewMaxCavesLimit"] = CappedCavesCeiling.ToString(CultureInfo.InvariantCulture),
                 ["Map:MeshesInViewMinZoom"] = CappedMinZoom.ToString(CultureInfo.InvariantCulture),
                 ["Map:MeshesInViewMaxBytes"] = CappedBytes.ToString(CultureInfo.InvariantCulture),
+                ["Map:MeshAskAboveBytes"] = "0",
             },
             JobWorkers.RemoveFrom);
     }
@@ -374,6 +375,8 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
         shipped.GetProperty("meshesInViewMaxBytes").GetInt64().ShouldBe(64L * 1024 * 1024);
         shipped.GetProperty("meshesInViewMaxCavesLimit").GetInt32().ShouldBe(60);
         shipped.GetProperty("meshesInViewMaxBytesLimit").GetInt64().ShouldBe(512L * 1024 * 1024);
+        // Selecting a cave asks before walls this size are downloaded.
+        shipped.GetProperty("meshAskAboveBytes").GetInt64().ShouldBe(50L * 1024 * 1024);
 
         var configured = await cappedOwner.GetFromJsonAsync<JsonElement>("/api/v1/map/config");
         configured.GetProperty("meshesInViewMinZoom").GetInt32().ShouldBe(CappedMinZoom);
@@ -382,6 +385,8 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
         configured.GetProperty("meshesInViewMaxCavesLimit").GetInt32().ShouldBe(CappedCavesCeiling);
         // Not configured on that host, so the shipped ceiling stands beside its lowered default.
         configured.GetProperty("meshesInViewMaxBytesLimit").GetInt64().ShouldBe(512L * 1024 * 1024);
+        // An installation that wants every download asked about says 0.
+        configured.GetProperty("meshAskAboveBytes").GetInt64().ShouldBe(0);
     }
 
     /// <summary>

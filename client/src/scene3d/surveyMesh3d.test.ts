@@ -528,3 +528,103 @@ describe('attachSurveyMesh3d', () => {
     expect(scene.readOf('/files/mesh-1').options.placement).toEqual(ANCHORED_TO_SURFACE);
   });
 });
+
+describe('asking before a large download', () => {
+  const MB = 1024 * 1024;
+
+  it('says how large the walls are and fetches nothing until the viewer agrees', async () => {
+    const scene = new FakeScene();
+    listed.push([model({ meshSizeBytes: 55 * MB })]);
+    const mesh = attachSurveyMesh3d(scene);
+    mesh.setAskAboveBytes(50 * MB);
+
+    mesh.setCave('cave-1', 1150);
+    await settle();
+
+    expect(mesh.getState()).toMatchObject({ status: 'asking', meshSizeBytes: 55 * MB, name: 'Coiba Mare' });
+    expect(scene.reads).toHaveLength(0);
+
+    listed.push([model({ meshSizeBytes: 55 * MB })]);
+    mesh.confirmDownload();
+    await settle();
+
+    expect(mesh.getState().status).toBe('loading');
+    scene.readOf('/files/mesh-1').land();
+    await settle();
+    expect(mesh.getState().status).toBe('drawn');
+  });
+
+  it('fetches walls at or under the size, and walls whose size was never measured, without asking', async () => {
+    const scene = new FakeScene();
+    const mesh = attachSurveyMesh3d(scene);
+    mesh.setAskAboveBytes(50 * MB);
+
+    listed.push([model({ meshSizeBytes: 50 * MB })]);
+    mesh.setCave('cave-1');
+    await settle();
+    expect(mesh.getState().status).toBe('loading');
+
+    listed.push([model({ id: 'model-2', caveId: 'cave-2', meshUrl: '/files/mesh-2', meshSizeBytes: null })]);
+    mesh.setCave('cave-2');
+    await settle();
+    expect(mesh.getState().status).toBe('loading');
+    expect(scene.readOf('/files/mesh-2')).toBeDefined();
+  });
+
+  it('does not ask twice about walls already agreed to, even when their address was signed again', async () => {
+    const scene = new FakeScene();
+    const mesh = attachSurveyMesh3d(scene);
+    mesh.setAskAboveBytes(0);
+
+    listed.push([model({ meshUrl: '/files/mesh-1?token=a', meshSizeBytes: 3 * MB })]);
+    mesh.setCave('cave-1');
+    await settle();
+    expect(mesh.getState().status).toBe('asking');
+    listed.push([model({ meshUrl: '/files/mesh-1?token=b', meshSizeBytes: 3 * MB })]);
+    mesh.confirmDownload();
+    await settle();
+    expect(mesh.getState().status).toBe('loading');
+
+    // Away to another cave and back: the same file, under a fresh signature.
+    listed.push([]);
+    mesh.setCave('cave-2');
+    await settle();
+    listed.push([model({ meshUrl: '/files/mesh-1?token=c', meshSizeBytes: 3 * MB })]);
+    mesh.setCave('cave-1');
+    await settle();
+    expect(mesh.getState().status).toBe('loading');
+  });
+
+  it('re-decides an open question when the size changes, and leaves drawn walls alone', async () => {
+    const scene = new FakeScene();
+    const mesh = attachSurveyMesh3d(scene);
+    mesh.setAskAboveBytes(50 * MB);
+    listed.push([model({ meshSizeBytes: 55 * MB })]);
+    mesh.setCave('cave-1');
+    await settle();
+    expect(mesh.getState().status).toBe('asking');
+
+    listed.push([model({ meshSizeBytes: 55 * MB })]);
+    mesh.setAskAboveBytes(100 * MB);
+    await settle();
+    expect(mesh.getState().status).toBe('loading');
+    scene.readOf('/files/mesh-1').land();
+    await settle();
+
+    const readsBefore = scene.reads.length;
+    mesh.setAskAboveBytes(0);
+    await settle();
+    expect(mesh.getState().status).toBe('drawn');
+    expect(scene.reads).toHaveLength(readsBefore);
+  });
+
+  it('never asks while no size has been given', async () => {
+    const scene = new FakeScene();
+    listed.push([model({ meshSizeBytes: 500 * MB })]);
+    const mesh = attachSurveyMesh3d(scene);
+    mesh.setCave('cave-1');
+    await settle();
+    expect(mesh.getState().status).toBe('loading');
+  });
+});
+

@@ -172,6 +172,10 @@ public sealed record TerrainBuildChoiceDto(
 /// server cannot hold a request to this ceiling the way it holds one to the cave ceiling; a
 /// client that honours the published default honours this beside it.
 /// </param>
+/// <param name="MeshAskAboveBytes">
+/// The size above which the scene asks before downloading the walls of a selected cave; 0 asks
+/// before every one. A default: a person may set their own for their browser.
+/// </param>
 public sealed record MapConfigDto(
     int CenterlineDetailZoom,
     int CenterlineMaxPaths,
@@ -186,7 +190,8 @@ public sealed record MapConfigDto(
     int MeshesInViewMaxCaves,
     long MeshesInViewMaxBytes,
     int MeshesInViewMaxCavesLimit,
-    long MeshesInViewMaxBytesLimit);
+    long MeshesInViewMaxBytesLimit,
+    long MeshAskAboveBytes);
 
 /// <summary>One entrance the point branch of the entrance layer considers, before it is shaped.</summary>
 public sealed record EntrancePointRow(
@@ -309,7 +314,8 @@ public static class MapEndpoints
             options.MeshesInViewCaves(),
             options.MeshesInViewBytes(),
             options.MeshesInViewMaxCavesLimit,
-            options.MeshesInViewMaxBytesLimit));
+            options.MeshesInViewMaxBytesLimit,
+            Math.Max(0, options.MeshAskAboveBytes)));
     }
 
     /// <summary>

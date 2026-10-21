@@ -20,6 +20,7 @@ import type {
 } from '../../scene3d/surveyMeshesInView3d.ts';
 import { extentSizeKm, type TerrainBuildChoice } from '../../scene3d/terrainBuilds3d.ts';
 import { meshesInViewMessage, meshProgressMessage } from './meshMessages.ts';
+import { formatSize } from '../attachments/fileFormat.ts';
 import { cutawayPauseMessage } from './surfaceMessages.ts';
 import './Scene3DLayerPanel.css';
 
@@ -194,6 +195,12 @@ export default function Scene3DLayerPanel({
         return meshVisible ? t('scene3d.meshNoCave') : t('scene3d.meshOff');
       case 'looking':
         return t('scene3d.meshLooking');
+      case 'asking':
+        // Answered over the scene, where the button is; said here too so the panel never claims
+        // the walls are simply missing.
+        return meshState.meshSizeBytes === undefined
+          ? t('scene3d.meshLooking')
+          : t('scene3d.meshAsk', { size: formatSize(meshState.meshSizeBytes) });
       case 'loading':
       case 'drawn':
         return meshProgressMessage(meshState, i18n.language, t);

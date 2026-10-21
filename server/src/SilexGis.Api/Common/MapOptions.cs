@@ -147,6 +147,19 @@ public sealed class MapOptions
     public long MeshesInViewMaxBytesLimit { get; set; } = 512L * 1024 * 1024;
 
     /// <summary>
+    /// The size above which the 3D scene asks before it downloads the walls of the cave somebody
+    /// selected; 0 asks before every one.
+    /// </summary>
+    /// <remarks>
+    /// Selecting a cave downloads its walls without a second question, because the selection is
+    /// the deliberate act and an ordinary mesh is a few hundred kilobytes. The largest measured one
+    /// is 54.7 MB, which on a metered phone connection is a cost nobody agreed to by clicking a
+    /// cave. Published as a default a person can change for their own browser, because whether
+    /// fifty megabytes is a lot depends on the connection in front of them.
+    /// </remarks>
+    public long MeshAskAboveBytes { get; set; } = 50L * 1024 * 1024;
+
+    /// <summary>
     /// Simplification tolerance in screen pixels. Nearly a no-op on splay-heavy surveys, whose
     /// components are single shots with no interior vertices to drop, but it does thin ordinary
     /// imported line work.

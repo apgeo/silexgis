@@ -10998,6 +10998,8 @@ export interface components {
             meshesInViewMaxCavesLimit: number;
             /** Format: int64 */
             meshesInViewMaxBytesLimit: number;
+            /** Format: int64 */
+            meshAskAboveBytes: number;
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";

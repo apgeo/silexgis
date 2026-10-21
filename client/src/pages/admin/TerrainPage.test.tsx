@@ -38,6 +38,7 @@ function mapConfig(
     meshesInViewMaxBytes: 64 * 1024 * 1024,
     meshesInViewMaxCavesLimit: 60,
     meshesInViewMaxBytesLimit: 512 * 1024 * 1024,
+    meshAskAboveBytes: 50 * 1024 * 1024,
   };
 }
 

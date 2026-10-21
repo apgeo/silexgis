@@ -81,6 +81,7 @@ import {
 import type { Scene3DSession } from '../../scene3d/scene3dContext.ts';
 import {
   attachSurveyMesh3d,
+  DEFAULT_MESH_ASK_ABOVE_BYTES,
   EMPTY_SURVEY_MESH_3D_STATE,
   SURVEY_MESH_LAYER_ID,
   type SurveyMesh3DHandle,
@@ -112,6 +113,7 @@ import {
   meshesInViewNeedsNotice,
   meshProgressMessage,
 } from './meshMessages.ts';
+import { formatSize } from '../attachments/fileFormat.ts';
 import { cutawayPauseMessage, terrainProblemMessage } from './surfaceMessages.ts';
 import './Scene3DView.css';
 
@@ -808,6 +810,17 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     }
   }, [mapConfig, engineVersion, showingHere, ownMeshesMinZoom, ownMeshesMaxCaves, ownMeshesMaxBytes]);
 
+  // Above what size a selected cave's walls wait for a yes: this person's own number where they
+  // set one, else the installation's, else the default it ships with. Declared after the effect
+  // that attaches the loader and before the one that names the cave, so a fresh loader knows the
+  // number before it is first asked to fetch anything.
+  const ownMeshAskAbove = useUiPrefsStore((s) => s.meshAskAboveBytes);
+  const meshAskAbove =
+    ownMeshAskAbove ?? mapConfig?.meshAskAboveBytes ?? DEFAULT_MESH_ASK_ABOVE_BYTES;
+  useEffect(() => {
+    meshRef.current?.setAskAboveBytes(meshAskAbove);
+  }, [meshAskAbove, engineVersion, showingHere]);
+
   // ---- the ground's elevation ----
 
   /** Why the configured elevation model is not being drawn, when one is configured and is not. */
@@ -1151,6 +1164,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           ? t('scene3d.meshFailedBecause', { reason: meshState.message })
           : t('scene3d.meshFailed');
       default:
+        // 'asking' is said by its own notice below, which carries the button that answers it.
         return undefined;
     }
   };
@@ -1336,6 +1350,21 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
         {/* The one notice with something to press. Offered, never done: the viewer decides whether
             the ground under them is reloaded and the surveys re-hung from a different surface,
             and a build waved away stays away for the session. */}
+        {/* Walls large enough to be a cost on a metered connection: their size is said and the
+            download waits for a yes. Nothing is fetched until it is pressed. */}
+        {meshState.status === 'asking' && meshState.meshSizeBytes !== undefined && (
+          <span className="scene3d-notice scene3d-notice-offer" data-testid="scene3d-mesh-ask">
+            {t('scene3d.meshAsk', { size: formatSize(meshState.meshSizeBytes) })}
+            <Button
+              size="small"
+              type="link"
+              onClick={() => meshRef.current?.confirmDownload()}
+              data-testid="scene3d-mesh-ask-download"
+            >
+              {t('scene3d.meshAskDownload')}
+            </Button>
+          </span>
+        )}
         {terrainOffer && (
           <span
             className="scene3d-notice scene3d-notice-offer"

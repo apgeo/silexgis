@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { fetchSurveyModels, type SurveyModelInfo } from '../api/hooks.ts';
+import { modelDeliveryIdentity } from '../caveview/modelDelivery.ts';
 import { ANCHORED_TO_SURFACE, samePlacement, type Altitude3DPlacement } from './altitude3d.ts';
 import type { Scene3DModelAnchor, Scene3DModels } from './scene3dEngine.ts';
 
@@ -30,6 +31,13 @@ export type SurveyMesh3DEngine = Pick<
 export const SURVEY_MESH_LAYER_ID = 'survey-mesh';
 
 /**
+ * The size above which a selected cave's walls wait for the viewer's word, until the installation
+ * has said its own: the same fifty megabytes the server ships, so that the moment before the
+ * configuration arrives is not the one moment a large mesh is fetched unasked.
+ */
+export const DEFAULT_MESH_ASK_ABOVE_BYTES = 50 * 1024 * 1024;
+
+/**
  * What the loader is doing, which the chrome states in words.
  *
  * `looking` and `loading` are separate because they cost different amounts of a viewer's patience:
@@ -39,6 +47,7 @@ export const SURVEY_MESH_LAYER_ID = 'survey-mesh';
 export type SurveyMesh3DStatus =
   | 'off'
   | 'looking'
+  | 'asking'
   | 'loading'
   | 'drawn'
   | 'converting'
@@ -93,6 +102,16 @@ export interface SurveyMesh3DHandle {
   setVisible(visible: boolean): void;
   /** Says how surveyed altitudes become scene heights. Moves what is loaded; never refetches. */
   setAltitudePlacement(placement: Altitude3DPlacement): void;
+  /**
+   * Says above what size, in bytes, walls are not downloaded until the viewer agrees; 0 asks
+   * before every download, and undefined never asks. Walls already drawn stay drawn.
+   */
+  setAskAboveBytes(bytes: number | undefined): void;
+  /**
+   * The viewer agreed to the download the state is `asking` about. The agreement holds for that
+   * file for as long as the loader lives, so going back to a cave does not ask twice.
+   */
+  confirmDownload(): void;
   getState(): SurveyMesh3DState;
   /** Subscribes to state changes; returns an unsubscribe function. */
   subscribe(listener: (state: SurveyMesh3DState) => void): () => void;
@@ -207,6 +226,12 @@ export function attachSurveyMesh3d(engine: SurveyMesh3DEngine): SurveyMesh3DHand
   let detached = false;
   /** What is in the scene, or on its way there, kept so it can be moved without being reread. */
   let held: { url: string; anchor: Scene3DModelAnchor } | undefined;
+  /** Above this many bytes a download waits for the viewer's word; undefined never waits. */
+  let askAboveBytes: number | undefined;
+  /** The files the viewer agreed to download, by what identifies the file rather than its address. */
+  const agreed = new Set<string>();
+  /** The file the state is asking about, while it asks. */
+  let asking: string | undefined;
 
   const publish = (next: Partial<SurveyMesh3DState>) => {
     state = { ...EMPTY_SURVEY_MESH_3D_STATE, caveId, ...next };
@@ -270,6 +295,24 @@ export function attachSurveyMesh3d(engine: SurveyMesh3DEngine): SurveyMesh3DHand
       meshSizeBytes: chosen.meshSizeBytes ?? undefined,
       precisionLost: chosen.sourcePrecisionLost,
     };
+
+    // Selecting a cave is the deliberate act, and an ordinary mesh is a few hundred kilobytes, so
+    // it is downloaded without a second question — except where it is large enough to be a real
+    // cost on a metered connection. Then the size is said and the download waits for a yes. A mesh
+    // whose size the server has not measured is not held back: there is no number to ask about.
+    const file = modelDeliveryIdentity(url);
+    asking = undefined;
+    if (
+      askAboveBytes !== undefined &&
+      describe.meshSizeBytes !== undefined &&
+      describe.meshSizeBytes > askAboveBytes &&
+      !agreed.has(file)
+    ) {
+      asking = file;
+      publish({ status: 'asking', ...describe });
+      return;
+    }
+
     held = { url, anchor };
     publish({ status: 'loading', ...describe });
     try {
@@ -331,6 +374,25 @@ export function attachSurveyMesh3d(engine: SurveyMesh3DEngine): SurveyMesh3DHand
         return;
       }
       visible = next;
+      void load();
+    },
+    setAskAboveBytes(next) {
+      if (next === askAboveBytes) {
+        return;
+      }
+      askAboveBytes = next;
+      // Only a question still open is re-decided: walls already drawn were agreed to, or were
+      // under the size when they were fetched, and taking them away now would cost a download
+      // to get them back.
+      if (state.status === 'asking') {
+        void load();
+      }
+    },
+    confirmDownload() {
+      if (state.status !== 'asking' || asking === undefined) {
+        return;
+      }
+      agreed.add(asking);
       void load();
     },
     setAltitudePlacement(next) {

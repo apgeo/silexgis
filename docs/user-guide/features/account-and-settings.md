@@ -206,6 +206,12 @@ held to it.
 The numbers are in force the next time you open the 3D view. A 3D view already open in another
 window keeps the old ones until it is reloaded.
 
+**Walls of the selected cave** has one number: **Ask above (MB)**. Selecting a cave in the 3D view
+downloads its walls straight away unless they are larger than this; then the view says how large
+they are and waits until you choose to download them. Empty follows your installation's default
+(50 MB unless changed); **0** asks before every download. Its own **Use this installation's
+defaults** button empties it.
+
 ### Survey lines on the map
 
 Two numbers bound the survey lines the flat map draws. They are the same two the map's layer

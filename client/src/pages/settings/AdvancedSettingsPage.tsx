@@ -50,6 +50,8 @@ export default function AdvancedSettingsPage() {
   const maxCaves = useUiPrefsStore((s) => s.meshesInViewMaxCaves);
   const maxBytes = useUiPrefsStore((s) => s.meshesInViewMaxBytes);
   const setLimits = useUiPrefsStore((s) => s.setMeshesInViewLimits);
+  const askAbove = useUiPrefsStore((s) => s.meshAskAboveBytes);
+  const setAskAbove = useUiPrefsStore((s) => s.setMeshAskAboveBytes);
   const detailZoom = useUiPrefsStore((s) => s.centerlineDetailZoom);
   const maxPaths = useUiPrefsStore((s) => s.centerlineMaxPaths);
   const setCenterlineLimits = useUiPrefsStore((s) => s.setCenterlineLimits);
@@ -140,6 +142,45 @@ export default function AdvancedSettingsPage() {
 
           <Flex>
             <Button disabled={untouched} onClick={() => setLimits({})}>
+              {t('settings.advanced.useDefaults')}
+            </Button>
+          </Flex>
+        </Flex>
+      </Card>
+
+      <Card
+        size="small"
+        role="group"
+        aria-label={t('settings.advanced.wallsSelectedHeading')}
+        title={t('settings.advanced.wallsSelectedHeading')}
+      >
+        <Flex vertical gap={16}>
+          <Typography.Text type="secondary">
+            {t('settings.advanced.wallsSelectedIntro')}
+          </Typography.Text>
+
+          <Flex gap={12} align="center" wrap>
+            <Typography.Text style={{ minWidth: 160 }}>
+              {t('settings.advanced.wallsAskAboveMegabytes')}
+            </Typography.Text>
+            {/* Typed in whole megabytes and kept in bytes, the unit every mesh's stated size is
+                in. 0 is a real answer here — ask before every download — not "no number". */}
+            <InputNumber
+              min={0}
+              precision={0}
+              aria-label={t('settings.advanced.wallsAskAboveMegabytes')}
+              value={askAbove === undefined ? null : Math.round(askAbove / MEGABYTE)}
+              placeholder={
+                mapConfig ? String(Math.round(mapConfig.meshAskAboveBytes / MEGABYTE)) : ''
+              }
+              onChange={(value) => setAskAbove(value === null ? undefined : value * MEGABYTE)}
+            />
+          </Flex>
+
+          <Typography.Text type="secondary">{t('settings.advanced.emptyHint')}</Typography.Text>
+
+          <Flex>
+            <Button disabled={askAbove === undefined} onClick={() => setAskAbove(undefined)}>
               {t('settings.advanced.useDefaults')}
             </Button>
           </Flex>

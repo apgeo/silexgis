@@ -54,6 +54,7 @@ beforeEach(() => {
     meshesInViewMaxBytes: 64 * MB,
     meshesInViewMaxCavesLimit: 60,
     meshesInViewMaxBytesLimit: 512 * MB,
+    meshAskAboveBytes: 50 * MB,
     centerlineDetailZoom: 18,
     centerlineMaxPaths: 25000,
     centerlineMaxPathsLimit: 100000,
@@ -66,6 +67,7 @@ afterEach(() => {
   cleanup();
   useUiPrefsStore.getState().setMeshesInViewLimits({});
   useUiPrefsStore.getState().setCenterlineLimits({});
+  useUiPrefsStore.getState().setMeshAskAboveBytes(undefined);
   localStorage.removeItem('silexgis.uiPrefs');
 });
 
@@ -317,3 +319,39 @@ describe('the budgets of the survey lines on the map', () => {
     expect(storedLines().maxPaths).toBe(40000);
   });
 });
+
+describe('the size above which a selected cave asks before its walls are downloaded', () => {
+  const selected = () => screen.getByRole('group', { name: 'Walls of the selected cave' });
+  const askAbove = () => within(selected()).getByRole('spinbutton', { name: 'Ask above (MB)' });
+  const resetAsk = () =>
+    within(selected()).getByRole('button', { name: "Use this installation's defaults" });
+
+  it('shows the installation’s size in megabytes until this browser sets its own', () => {
+    render(<AdvancedSettingsPage />);
+    expect(askAbove()).toHaveValue('');
+    expect(askAbove()).toHaveAttribute('placeholder', '50');
+    expect(resetAsk()).toBeDisabled();
+  });
+
+  it('takes megabytes and stores bytes, and takes 0 as "ask every time" rather than as nothing', () => {
+    render(<AdvancedSettingsPage />);
+    type(askAbove(), '120');
+    expect(useUiPrefsStore.getState().meshAskAboveBytes).toBe(120 * MB);
+
+    type(askAbove(), '0');
+    expect(useUiPrefsStore.getState().meshAskAboveBytes).toBe(0);
+    expect(askAbove()).toHaveValue('0');
+  });
+
+  it('hands its number back to the installation with its own button, and leaves the other cards alone', () => {
+    useUiPrefsStore.getState().setMeshAskAboveBytes(10 * MB);
+    useUiPrefsStore.getState().setMeshesInViewLimits({ maxCaves: 30 });
+    render(<AdvancedSettingsPage />);
+
+    fireEvent.click(resetAsk());
+
+    expect(useUiPrefsStore.getState().meshAskAboveBytes).toBeUndefined();
+    expect(stored().maxCaves).toBe(30);
+  });
+});
+
