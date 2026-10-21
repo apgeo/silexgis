@@ -71,16 +71,16 @@ public sealed class TerrainContourTests : IDisposable
     }
 
     /// <summary>
-    /// The picture is the elevation's own footprint, twice as fine, in colour with transparency.
+    /// The picture is the elevation's own footprint, four times as fine, in colour with transparency.
     /// </summary>
     [Fact]
     public void Contours_are_a_picture_on_the_footprint_of_the_elevation_they_were_traced_from()
     {
         var picture = Draw(Hill("placed.tif"), "placed-contours.tif", interval: 20d);
 
-        picture.Width.ShouldBe(Size * 2);
-        picture.Height.ShouldBe(Size * 2);
-        picture.PixelSizeDegrees.ShouldBe(Cell / 2d, 1e-12);
+        picture.Width.ShouldBe(Size * TerrainContourLines.Fineness);
+        picture.Height.ShouldBe(Size * TerrainContourLines.Fineness);
+        picture.PixelSizeDegrees.ShouldBe(Cell / TerrainContourLines.Fineness, 1e-12);
         picture.West.ShouldBe(West, 1e-9);
         picture.East.ShouldBe(West + (Size * Cell), 1e-9);
         picture.North.ShouldBe(Latitude + (Size * Cell / 2d), 1e-9);
@@ -295,9 +295,9 @@ public sealed class TerrainContourTests : IDisposable
         var picture = Read(Draw(source, "gap-contours.tif", interval: 20d));
 
         // The gap's own cell and the ring of cells around it, in the picture's finer cells.
-        for (var y = (row - 1) * 2; y < (row + 2) * 2; y++)
+        for (var y = (row - 1) * TerrainContourLines.Fineness; y < (row + 2) * TerrainContourLines.Fineness; y++)
         {
-            for (var x = (column - 1) * 2; x < (column + 2) * 2; x++)
+            for (var x = (column - 1) * TerrainContourLines.Fineness; x < (column + 2) * TerrainContourLines.Fineness; x++)
             {
                 picture.Alpha(x, y).ShouldBe((byte)0, $"cell {x},{y}");
             }
@@ -334,7 +334,7 @@ public sealed class TerrainContourTests : IDisposable
             "north-south.tif", columns, rows, 0.0001d, (column, _) => 1000d - (7.3d * (column + 0.5d)));
         var picture = Read(Draw(source, "north-south-contours.tif", interval: 20d));
 
-        picture.Height.ShouldBe(rows * 2);
+        picture.Height.ShouldBe(rows * TerrainContourLines.Fineness);
 
         // A line for every twenty metres from 980 down to 280, the seven hundreds among them
         // heavier.
@@ -387,7 +387,9 @@ public sealed class TerrainContourTests : IDisposable
         }
 
         expected.Count.ShouldBe(30);
-        expected.Keys.ShouldContain(top > 1010d ? 10_000 : 9_999);
+        // The line at 760 m lies four tenths of a row south of the first join in one case and four
+        // tenths north of it in the other; the picture's rows are finer by its fineness.
+        expected.Keys.ShouldContain((int)Math.Floor((top - 760d) / fall * TerrainContourLines.Fineness));
 
         for (var row = 0; row < picture.Height; row++)
         {

@@ -41,21 +41,26 @@ public static class TerrainContourLines
     /// <summary>How many times finer than the elevation a picture of its contours is drawn.</summary>
     /// <remarks>
     /// A line traced through a grid of heights crosses each cell at a slant, and drawn back onto
-    /// that same grid it is a staircase a cell high. Twice as fine halves the step, and is as far
-    /// as it is worth going: four times the cells for every further halving, to refine a line
-    /// whose position was only ever interpolated between heights a cell apart.
+    /// that same grid it is a staircase a cell high. Four times as fine quarters the step: drawn
+    /// from one-arc-second elevation a cell of the picture is about seven metres, so the stairs
+    /// stop showing until a map is zoomed in past about 1:4,000, where twice as fine showed them
+    /// from about 1:15,000 — which is an ordinary scale to read a cave's surroundings at. Further
+    /// would refine a line whose position was only ever interpolated between heights a cell apart,
+    /// at four times the cells for every halving. Lines that stay crisp at any zoom are lines, not
+    /// a picture, and are a different feature.
     /// </remarks>
-    public const int Fineness = 2;
+    public const int Fineness = 4;
 
     /// <summary>The most cells one picture of contours may hold.</summary>
     /// <remarks>
     /// The picture is drawn in memory before it is written, a byte a cell, so this is also what
-    /// drawing one costs: sixty-four megabytes whatever the raster it is traced from. It is
-    /// enough for a one-degree raster at one arc second drawn twice as fine; a larger raster is
-    /// drawn less than twice as fine, and one larger than this already is drawn coarser than it
-    /// is, which thins nothing but the lines.
+    /// drawing one costs: at most a quarter of a gigabyte, for the length of one computation in the
+    /// background, whatever the raster it is traced from. It is enough for a one-degree raster at
+    /// one arc second drawn four times as fine (207 million cells); a larger raster is drawn less
+    /// finely, and one larger than this already is drawn coarser than it is, which thins nothing
+    /// but the lines.
     /// </remarks>
-    public const long MostCells = 64_000_000L;
+    public const long MostCells = 256_000_000L;
 
     /// <summary>Why this spacing cannot be drawn, or null when it can.</summary>
     public static string? Problem(double intervalMetres) =>

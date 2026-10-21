@@ -34,12 +34,12 @@ public sealed class TerrainContourLinesTests
         => TerrainContourLines.Problem(interval).ShouldNotBeNullOrWhiteSpace();
 
     [Fact]
-    public void A_picture_is_drawn_twice_as_fine_as_the_elevation_it_is_traced_from()
+    public void A_picture_is_drawn_four_times_as_fine_as_the_elevation_it_is_traced_from()
     {
-        TerrainContourLines.PictureSize(120, 80).ShouldBe((240, 160));
+        TerrainContourLines.PictureSize(120, 80).ShouldBe((480, 320));
 
         // A one-degree raster at one arc second, which is what the limit was sized to allow.
-        TerrainContourLines.PictureSize(3600, 3600).ShouldBe((7200, 7200));
+        TerrainContourLines.PictureSize(3600, 3600).ShouldBe((14400, 14400));
     }
 
     /// <summary>
@@ -60,7 +60,9 @@ public sealed class TerrainContourLinesTests
         // As close to the limit as whole cells allow: the limit is a ceiling, not a target missed
         // by half.
         ((long)(across + 2) * (down + 2)).ShouldBeGreaterThan(
-            Math.Min(TerrainContourLines.MostCells, 4L * width * height));
+            Math.Min(
+                TerrainContourLines.MostCells,
+                (long)TerrainContourLines.Fineness * TerrainContourLines.Fineness * width * height));
 
         // The same shape as the elevation, to within the rounding of one cell.
         ((double)across / down).ShouldBe((double)width / height, (double)width / height * 0.001);

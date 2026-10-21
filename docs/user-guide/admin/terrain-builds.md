@@ -223,7 +223,11 @@ The settings, by kind:
 - **Contour lines**: how many metres of height lie between one line and the next — from 1 to 1000,
   and 20 unless you say otherwise — counted from sea level, with every fifth line drawn heavier.
   The lines are a picture like the others, clear between the lines, and not data: nothing can be
-  measured along one, selected or exported, and no line carries its height.
+  measured along one, selected or exported, and no line carries its height. The picture is drawn
+  four times as fine as the elevation (about seven metres a dot from one-arc-second data), so the
+  lines stay smooth until the map is zoomed in past about 1:4,000; closer than that they show their
+  steps. A picture computed before 2026-10-21 was drawn twice as fine — request it again for the
+  smoother one.
 - Every kind but contour lines: whether the outermost cells are computed from the neighbours they
   have. Off, every raster of a build meets its neighbour with a hairline gap through the picture.
 
