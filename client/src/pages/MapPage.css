@@ -4,10 +4,15 @@
   height: 100%;
 }
 
-/* The docks' own background, from the theme: a fixed white left the dark theme's light text on
-   white. */
+/* The docks' background: the fixed white they always had in the light theme. The dark theme
+   draws its text light, so there the docks take the theme's own container background — white
+   would leave that text unreadable. */
 .map-workspace-panel {
   background: #fff;
+}
+
+html[data-theme='dark'] .map-workspace-panel {
+  background: var(--ant-color-bg-container);
 }
 
 .map-workspace-handle {

@@ -203,9 +203,18 @@ describe('the look the theme draws', () => {
       .toBe(derived.colorPrimaryBorder);
   });
 
-  it('draws the map workspace panel on the fixed white it always had', () => {
-    const start = mapPageCss.indexOf('.map-workspace-panel {');
+  it('draws the map workspace panel on the fixed white it always had in the light theme', () => {
+    const start = mapPageCss.indexOf('\n.map-workspace-panel {');
+    expect(start).toBeGreaterThanOrEqual(0);
     expect(mapPageCss.slice(start, mapPageCss.indexOf('}', start))).toMatch(/background:\s*#fff;/);
+  });
+
+  it("draws the map workspace panel on the dark theme's container background, where its light text reads", () => {
+    expect(propertiesIn(mapPageCss, "html[data-theme='dark'] .map-workspace-panel {")).toEqual(['--ant-color-bg-container']);
+    const dark = theme.getDesignToken(buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'dark' }));
+    expect(contrast(dark.colorText, dark.colorBgContainer)).toBeGreaterThanOrEqual(4.5);
+    // What the dark rule is there to prevent: the dark theme's text on the light theme's white.
+    expect(contrast(dark.colorText, '#ffffff')).toBeLessThan(4.5);
   });
 });
 
