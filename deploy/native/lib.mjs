@@ -855,15 +855,37 @@ export function accountIds(user) {
   return { uid: Number(uid.stdout.trim()), gid: Number(gid.stdout.trim()) };
 }
 
+/**
+ * The one-letter state in a Linux `/proc/<pid>/stat` line. The command name between the parentheses
+ * may itself hold spaces and parentheses, so the state is read after the last `)`.
+ */
+export function procStatState(statLine) {
+  const close = statLine.lastIndexOf(')');
+  return close < 0 ? undefined : statLine.slice(close + 1).trim().split(/\s+/)[0];
+}
+
 const pidAlive = (pid) => {
   // 0 and negative numbers name process groups, not a process: never "alive" here.
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
-    return true;
   } catch (error) {
     return error.code === 'EPERM';
   }
+  // A process that has exited but whose parent has not collected it still answers the signal
+  // above. The API is started detached, so once the script that started it ends it belongs to
+  // whatever runs as process 1 — and in a container that is often something that never collects
+  // anything. Counted as alive, such a process made every stop wait out its 45 seconds and then
+  // "end" a process that had stopped in under one.
+  if (!isWindows) {
+    try {
+      const state = procStatState(fs.readFileSync(`/proc/${pid}/stat`, 'utf8'));
+      if (state === 'Z' || state === 'X') return false;
+    } catch {
+      // No /proc (another Unix), or the process went between the two looks: the signal answered.
+    }
+  }
+  return true;
 };
 
 /**

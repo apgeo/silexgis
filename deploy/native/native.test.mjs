@@ -504,3 +504,10 @@ it('emptyDirectory refuses a filesystem root or a directory directly under one',
   assert.throws(() => emptyDirectory(root), /too close to the root/);
   assert.throws(() => emptyDirectory(path.join(root, 'var')), /too close to the root/);
 });
+
+it('reads a process state from its stat line, whatever its name holds', async () => {
+  const { procStatState } = await import('./lib.mjs');
+  assert.equal(procStatState('9089 (dotnet) Z 1 9089 9089 0 -1'), 'Z');
+  assert.equal(procStatState('42 (a (strange) name) S 1 42 42'), 'S');
+  assert.equal(procStatState('garbage'), undefined);
+});
