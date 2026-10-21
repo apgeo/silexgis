@@ -1323,8 +1323,13 @@ export default function CaveViewPanel({
     }
     viewer.setStationMedia(stationMedia);
     viewer.stationLabelOver = true;
+    // Where the photographs were taken, marked over the model: a photograph linked to a station is
+    // placed at that station, and without a mark there it could be found only by hovering every
+    // station in turn. Pressed, a mark shows the station's pictures as a hover does.
+    viewer.setStationMediaMarkers(true);
     return () => {
       if (viewerRef.current?.viewer === viewer) {
+        viewer.setStationMediaMarkers(false);
         viewer.clearStationMedia();
         // The panel asked for the label and takes it back with the pictures it was for. Where the
         // pictures are merely being replaced, the run that follows this one asks again.

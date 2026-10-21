@@ -108,6 +108,7 @@ const getTrails = vi.fn(() => [...heldTrails.values()]);
 const setLiveMarkerClusterLabel = vi.fn();
 const setStationMedia = vi.fn();
 const clearStationMedia = vi.fn();
+const setStationMediaMarkers = vi.fn();
 /**
  * The surveys the fake drawing has, as the real viewer's tree hands them over, and every call that
  * showed or hid one — which is the whole of what narrowing a drawing to declared parts does to it.
@@ -170,6 +171,7 @@ class FakeViewer {
   setLiveMarkerClusterLabel = setLiveMarkerClusterLabel;
   setStationMedia = setStationMedia;
   clearStationMedia = clearStationMedia;
+  setStationMediaMarkers = setStationMediaMarkers;
   getSurveyTree = () => surveyTree;
   setSectionVisible = setSectionVisible;
   // Bound per instance exactly as the panel reads it, and absent — as an older vendored
@@ -1811,6 +1813,9 @@ describe('CaveViewPanel', () => {
       await renderReady({ stationMedia: media() });
 
       expect(setStationMedia).toHaveBeenCalled();
+      // And where they were taken is marked over the model, so they are found without hovering
+      // every station.
+      expect(setStationMediaMarkers).toHaveBeenLastCalledWith(true);
       // Asked of the loaded viewer, never of its construction config: the viewer re-applies the
       // settings its own "save as default" button stored over anything the config said, so one
       // press of that button with the label off would otherwise turn the pictures off for this
@@ -1823,6 +1828,7 @@ describe('CaveViewPanel', () => {
       await renderReady();
 
       expect(setStationMedia).not.toHaveBeenCalled();
+      expect(setStationMediaMarkers).not.toHaveBeenCalled();
       expect(stationLabelOver).toBe(false);
       expect(lastViewerConfig!.view).toBeUndefined();
     });
