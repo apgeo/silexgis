@@ -35,6 +35,13 @@ cover none of the passages; a picture's caption is shown when you point at it an
 it opens in. Where several people of a tracked trip are at stations that are close together on
 screen, their name labels are set one under the other instead of over each other.
 
+**Where the photographs were taken is marked over the model.** A photograph has no position of its
+own underground — there is no satellite fix in a cave — so its place is the station it is linked
+to: link a photograph to a station (click the station, then **Link…**) and a small camera stands just
+above that station, with how many photographs where there is more than one. Press the camera to
+show that station's pictures; press one of them to open it. A photograph linked to a passage or to
+a whole survey rather than to a station is not marked, because it has no single place.
+
 **The size of station names is yours to set.** With the viewer's toolbar comes a small **Aa**
 control in the model's top right corner: 40 %, 60 %, 80 %, 100 %, 125 % or 150 % of the viewer's
 own size. A survey names every station by its whole path, and a busy passage at full size is a

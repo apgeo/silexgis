@@ -115,6 +115,15 @@ holds scraps or measured passage dimensions to build them from.
 See [Surveys, centerlines and 3D models](surveys-and-models.md#cave-walls-stl) for uploading
 and for the coordinate declaration a `.stl` needs.
 
+## Photographs at their stations
+
+For the **selected cave**, every photograph linked to a station of one of its surveys is marked at
+that station with a camera — the same places the survey viewer marks — at the station's depth, so
+it stands among the survey lines where the photograph was taken. Press a camera to open that
+station's photographs; the selection stays on the cave. The **Photographs at their stations** switch
+in the layer list turns them off, and the line under it says how many there are. Only photographs
+and survey positions you may see are shown.
+
 ## Walls of every cave in view
 
 Choosing **Every cave in view** under the **Cave walls** switch draws the walls of the caves the
