@@ -48,6 +48,7 @@ import {
   buildRelease,
   convergeBackupTimer,
   convergeUnit,
+  convergeWindowsService,
   convergeWebServer,
   databaseProblems,
   dotnetHas,
@@ -378,7 +379,7 @@ export async function main(argv) {
     layout.publicUrl = parseEnvFile(newEnv).values.SILEXGIS__PublicUrl;
 
     say('Service');
-    let recordExtra = { ...convergeUnit(layout, recorded, dotnet) };
+    let recordExtra = { ...convergeUnit(layout, recorded, dotnet), ...convergeWindowsService(layout, dotnet) };
     if (layout.service === 'process') note('process mode: the API runs as a plain process started by these scripts');
 
     say('Web server');

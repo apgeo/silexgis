@@ -37,6 +37,7 @@ import {
   backupStamp,
   buildRelease,
   convergeUnit,
+  convergeWindowsService,
   convergeWebServer,
   fail,
   findExecutable,
@@ -140,7 +141,11 @@ export async function main(argv) {
 
     say('Configuration');
     const dotnet = findExecutable('dotnet') ?? fail('dotnet is not on PATH');
-    const extra = { ...convergeUnit(layout, recorded, dotnet), ...convergeWebServer(layout, recorded) };
+    const extra = {
+      ...convergeUnit(layout, recorded, dotnet),
+      ...convergeWindowsService(layout, dotnet),
+      ...convergeWebServer(layout, recorded),
+    };
     writeRecord(layout, recorded, extra);
 
     await activateRelease(layout, {

@@ -25,7 +25,7 @@ are a database password, an admin account, and the public URL.
   PostgreSQL itself) and its `psql` and `pg_dump` client tools; the .NET 10 SDK (current LTS — it
   publishes the API and includes the runtime that runs it); **Node.js 24**, which builds the web
   application and runs the install scripts; and nginx. Linux with systemd is the first-class
-  target; Windows is partly covered.
+  target; Windows is covered apart from the web server, and is not yet proved end to end.
 
 No system GDAL is required on any path — vector import/export and raster conversion run
 in-process.
@@ -1600,6 +1600,7 @@ anything saying why; after this upgrade its API
 container does not come up until the line is corrected. `docker compose logs api` shows the
 message.
 
+
 ## External login providers
 
 Sign-in with Google, GitHub, or any OpenID Connect provider is optional and off by default —
@@ -2007,28 +2008,35 @@ after changing the configuration or the web server.
 
 The same scripts run on Windows (PowerShell or `cmd`, as Administrator), with these defaults:
 the program under `C:\Program Files\SilexGIS`, data, configuration, logs and backups under
-`C:\ProgramData\SilexGIS`, `--service process` and `--web-server none`. What that covers, and what
-it does not:
+`C:\ProgramData\SilexGIS`, `--service windows-service` when the prompt is elevated (`process`
+otherwise) and `--web-server none`. What that covers, and what it does not:
 
 - **Covered:** the prerequisite check (`--pg-bin "C:\Program Files\PostgreSQL\17\bin"` if the client
   tools are not on `PATH`); creating the role, database and extensions with `--db-admin-url`; the
-  publish and the build; the directories and the configuration file; starting the API as a process;
-  `backup.mjs` and `restore.mjs` (Windows 10 and later carry the `tar` they use); `check.mjs`. The
-  scripts' unit tests run on Windows in continuous integration.
-- **Not covered: running the API as a service.** The API does not integrate with the Windows
-  service manager, so registering `dotnet SilexGis.Api.dll` with `sc.exe create` gives a service
-  that fails to start. Host it in **IIS** with the ASP.NET Core Module (the .NET Hosting Bundle) —
-  the publish output in `api\` carries the `web.config` it needs, and the settings from
-  `silexgis.env` go into that file's `<environmentVariables>` or an `appsettings.Production.json`
-  beside it — or under a service wrapper of your choice. Until then the API started in process mode
-  stops at sign-out or reboot.
+  publish and the build; the directories and the configuration file; `backup.mjs` and `restore.mjs`
+  (Windows 10 and later carry the `tar` they use); `check.mjs`. The scripts' unit tests run on
+  Windows in continuous integration.
+- **Covered: the API as a Windows service.** `--service windows-service` registers it with the
+  service manager as `silexgis-api` (`--service-name` to change it), starting automatically after
+  boot, under its own virtual account `NT SERVICE\silexgis-api` rather than as the local system.
+  That account is given the data and log directories and nothing else; the configuration directory
+  is restricted to Administrators and the system, since `silexgis.env` holds the database and
+  administrator passwords. The service does not read that file: its settings are copied into the
+  service's own registry key (`HKLM\SYSTEM\CurrentControlSet\Services\silexgis-api`,
+  `Environment`) on every install and update, so **change settings in `silexgis.env` and run the
+  installer again** rather than editing the registry. A service has no console, so the API also
+  writes `C:\ProgramData\SilexGIS\logs\api.log` (rolled at 100 MB, ten kept). Stop and start it
+  with `sc.exe stop silexgis-api` / `sc.exe start silexgis-api` or the Services console; the
+  update script does both itself. Hosting the API in **IIS** with the ASP.NET Core Module instead
+  remains possible (the publish output in `api\` carries the `web.config` it needs) and is not
+  scripted.
 - **Not covered: the web server.** Nothing is installed; the rendered nginx site is left in
   `C:\ProgramData\SilexGIS\config\nginx-silexgis.conf`, ready for nginx for Windows. IIS in front
   needs URL Rewrite and Application Request Routing, and the site's headers and log scrubbing
   rebuilt by hand (see [The web server](#the-web-server)).
-- **Not covered: file permissions.** The directories inherit ProgramData's; restrict
-  `config\silexgis.env`, which holds the database and administrator passwords, to Administrators
-  and the account the API runs as.
+- **File permissions** are set as described above in `windows-service` mode only; in `process` mode
+  the directories inherit ProgramData's, which every local account can read — restrict `config\`
+  to Administrators yourself.
 - **Not proved end to end.** The Linux path is installed, updated, backed up and restored on a
   fresh machine every week; the Windows path is not.
 

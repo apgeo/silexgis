@@ -119,7 +119,7 @@ export const LAYOUT_SETTINGS = {
   serverName: { option: 'server-name', env: 'SILEXGIS_SERVER_NAME' },
   httpPort: { option: 'http-port', env: 'SILEXGIS_HTTP_PORT', type: 'port' },
   apiPort: { option: 'api-port', env: 'SILEXGIS_API_PORT', type: 'port' },
-  service: { option: 'service', env: 'SILEXGIS_SERVICE', choices: ['systemd', 'process', 'none'] },
+  service: { option: 'service', env: 'SILEXGIS_SERVICE', choices: ['systemd', 'windows-service', 'process', 'none'] },
   serviceName: { option: 'service-name', env: 'SILEXGIS_SERVICE_NAME' },
   serviceUser: { option: 'service-user', env: 'SILEXGIS_SERVICE_USER' },
   webServer: { option: 'web-server', env: 'SILEXGIS_WEB_SERVER', choices: ['nginx', 'none'] },
@@ -177,7 +177,7 @@ export function parsePort(value, name) {
  * installed, whether this is root) so the defaults that depend on it can be tested without one.
  */
 export function resolveLayout(values, env, recorded, platformFacts) {
-  const { platform, systemd, nginx, root } = platformFacts;
+  const { platform, systemd, nginx, root, windowsAdmin } = platformFacts;
   const defaults = defaultLayout(platform, env);
   const join = platform === 'win32' ? path.win32.join : path.posix.join;
   const explicit = new Set();
@@ -197,7 +197,9 @@ export function resolveLayout(values, env, recorded, platformFacts) {
   layout.httpPort = parsePort(take('httpPort', 80), '--http-port');
   layout.apiPort = parsePort(take('apiPort', 5080), '--api-port');
   layout.serverName = take('serverName', layout.publicUrl ? hostOf(layout.publicUrl) : undefined);
-  layout.service = take('service', platform !== 'win32' && systemd && root ? 'systemd' : 'process');
+  const serviceDefault =
+    platform === 'win32' ? (windowsAdmin ? 'windows-service' : 'process') : systemd && root ? 'systemd' : 'process';
+  layout.service = take('service', serviceDefault);
   layout.serviceName = take('serviceName', 'silexgis-api');
   layout.serviceUser = take('serviceUser', platform !== 'win32' && root ? 'silexgis' : os.userInfo().username);
   layout.webServer = take('webServer', platform !== 'win32' && nginx ? 'nginx' : 'none');
@@ -280,6 +282,8 @@ export function machineFacts() {
     systemd: !isWindows && fs.existsSync('/run/systemd/system'),
     nginx: !isWindows && findExecutable('nginx', ['/usr/sbin', '/usr/local/sbin']) !== undefined,
     root: !isWindows && typeof process.getuid === 'function' && process.getuid() === 0,
+    // `net session` answers only in an elevated prompt, which is what registering a service needs.
+    windowsAdmin: isWindows && spawnSync('net', ['session'], { stdio: 'ignore', windowsHide: true }).status === 0,
   };
 }
 
@@ -925,6 +929,13 @@ export async function stopApi(layout) {
     run('systemctl', ['stop', layout.serviceName], { allowFail: true });
     return;
   }
+  if (layout.service === 'windows-service') {
+    if (windowsServiceState(layout.serviceName) === 'RUNNING') {
+      run('sc.exe', ['stop', layout.serviceName], { allowFail: true });
+    }
+    await waitWindowsServiceState(layout.serviceName, ['STOPPED', 'MISSING'], 60);
+    return;
+  }
   if (layout.service === 'none') return;
   const pid = runningPid(layout);
   if (!pid) return;
@@ -951,6 +962,11 @@ export async function stopApi(layout) {
 export async function startApi(layout) {
   if (layout.service === 'systemd') {
     run('systemctl', ['restart', layout.serviceName]);
+    return;
+  }
+  if (layout.service === 'windows-service') {
+    await stopApi(layout);
+    run('sc.exe', ['start', layout.serviceName]);
     return;
   }
   if (layout.service === 'none') {
@@ -985,8 +1001,9 @@ export function apiLogTail(layout, lines = 60) {
       allowFail: true,
     }).stdout;
   }
-  if (!fs.existsSync(layout.apiLog)) return '(no log written)';
-  return fs.readFileSync(layout.apiLog, 'utf8').split(/\r?\n/).slice(-lines).join('\n');
+  const file = layout.service === 'windows-service' ? newestApiLog(layout) : layout.apiLog;
+  if (!file || !fs.existsSync(file)) return '(no log written)';
+  return fs.readFileSync(file, 'utf8').split(/\r?\n/).slice(-lines).join('\n');
 }
 
 /** Waits for the API's own readiness answer, giving up early if a process-mode API has died. */
@@ -1493,6 +1510,144 @@ export function convergeBackupTimer(layout, recorded, keep) {
   run('systemctl', ['enable', '--now', '--quiet', 'silexgis-backup.timer']);
   note(`nightly backup timer enabled (keeps ${keep}; into ${layout.backupDir})`);
   return { backupServiceHash: a.hash, backupTimerHash: b.hash };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Windows service
+// ---------------------------------------------------------------------------------------------
+
+/** The account a Windows service of this name runs as: its own virtual account, no password. */
+export const windowsServiceAccount = (serviceName) => `NT SERVICE\\${serviceName}`;
+
+/**
+ * The `sc.exe` arguments that create the service, or (with `verb` = `config`) bring an existing one
+ * into line. `sc.exe` wants each option and its value as two words, the option ending in `=`.
+ */
+export function windowsServiceScArgs(verb, layout, dotnetPath) {
+  const binPath = `"${dotnetPath}" "${path.win32.join(layout.apiDir, API_DLL)}"`;
+  return [
+    verb,
+    layout.serviceName,
+    'binPath=',
+    binPath,
+    'start=',
+    'delayed-auto',
+    'obj=',
+    windowsServiceAccount(layout.serviceName),
+    'DisplayName=',
+    'SilexGIS',
+  ];
+}
+
+/**
+ * The environment the service starts with, as the one registry value a Windows service reads its
+ * environment from (a multi-string under the service's own key).
+ *
+ * The settings file's values, the address the API listens on, and a log file: a service has no
+ * console, and the application logs to the console only, so without the file sink nothing it says
+ * would be kept. The sink ships with the logging library the application already uses; it rolls
+ * at 100 MB and keeps ten files.
+ */
+export function windowsServiceEnvironment(fileValues, layout) {
+  const env = {
+    ...fileValues,
+    ASPNETCORE_URLS: layout.apiUrl,
+    Serilog__Using__1: 'Serilog.Sinks.File',
+    Serilog__WriteTo__1__Name: 'File',
+    Serilog__WriteTo__1__Args__path: layout.apiLog,
+    Serilog__WriteTo__1__Args__fileSizeLimitBytes: '104857600',
+    Serilog__WriteTo__1__Args__rollOnFileSizeLimit: 'true',
+    Serilog__WriteTo__1__Args__retainedFileCountLimit: '10',
+  };
+  for (const [key, value] of Object.entries(env)) {
+    if (String(value).includes('\0')) fail(`${key} contains "\\0", which a service's environment cannot carry`);
+  }
+  return Object.entries(env).map(([key, value]) => `${key}=${value}`);
+}
+
+/** The `reg.exe` arguments that write that environment onto the service's key. */
+export function windowsServiceEnvironmentRegArgs(serviceName, entries) {
+  return [
+    'add',
+    `HKLM\\SYSTEM\\CurrentControlSet\\Services\\${serviceName}`,
+    '/v',
+    'Environment',
+    '/t',
+    'REG_MULTI_SZ',
+    '/d',
+    entries.join('\\0'),
+    '/f',
+  ];
+}
+
+/** The `icacls` arguments that let the service's account change everything under a directory. */
+export function windowsGrantArgs(dir, serviceName) {
+  return [dir, '/grant', `${windowsServiceAccount(serviceName)}:(OI)(CI)M`, '/T', '/Q'];
+}
+
+/**
+ * The `icacls` arguments that leave a directory to administrators and the system alone. ProgramData
+ * is readable by every local account by default, and the configuration directory holds the
+ * database and administrator passwords; on Linux the same file is mode 600.
+ */
+export function windowsProtectArgs(dir) {
+  return [dir, '/inheritance:r', '/grant:r', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F', '/T', '/Q'];
+}
+
+/** `RUNNING`, `STOPPED`, … from `sc.exe query` output; `MISSING` when there is no such service. */
+export function parseScState(output, status) {
+  if (status === 1060 || /FAILED 1060/.test(output)) return 'MISSING';
+  const match = /STATE\s*:\s*\d+\s+(\w+)/.exec(output);
+  return match ? match[1] : 'UNKNOWN';
+}
+
+export function windowsServiceState(serviceName) {
+  const result = run('sc.exe', ['query', serviceName], { capture: true, allowFail: true });
+  return parseScState(`${result.stdout ?? ''}${result.stderr ?? ''}`, result.status);
+}
+
+async function waitWindowsServiceState(serviceName, wanted, seconds) {
+  for (let i = 0; i < seconds * 2; i++) {
+    if (wanted.includes(windowsServiceState(serviceName))) return true;
+    await sleep(500);
+  }
+  return false;
+}
+
+/** The log file a Windows service is writing now: the newest of the rolled `api*.log` files. */
+export function newestApiLog(layout) {
+  if (!fs.existsSync(layout.logDir)) return undefined;
+  const files = fs
+    .readdirSync(layout.logDir)
+    .filter((name) => /^api(_\d+)?\.log$/.test(name))
+    .map((name) => path.join(layout.logDir, name))
+    .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  return files[0];
+}
+
+/**
+ * Registers the API as a Windows service (or brings an existing registration into line), gives its
+ * account the data and log directories, and writes its environment. Returns what to record.
+ *
+ * The service runs under its own virtual account rather than as the local system: it needs to
+ * write only where it is given, and an account that exists for this one service is the least a
+ * Windows host can give it. The settings file stays readable by administrators only; the service
+ * never reads it — its environment is copied into the service's registry key on every run.
+ */
+export function convergeWindowsService(layout, dotnetPath) {
+  if (layout.service !== 'windows-service') return {};
+  const exists = windowsServiceState(layout.serviceName) !== 'MISSING';
+  run('sc.exe', windowsServiceScArgs(exists ? 'config' : 'create', layout, dotnetPath));
+  run('sc.exe', ['description', layout.serviceName, 'SilexGIS web GIS (API)'], { allowFail: true });
+  for (const dir of [layout.dataDir, layout.logDir]) {
+    fs.mkdirSync(dir, { recursive: true });
+    run('icacls', windowsGrantArgs(dir, layout.serviceName));
+  }
+  run('icacls', windowsProtectArgs(layout.configDir));
+  const fileValues = parseEnvFile(fs.readFileSync(layout.envFile, 'utf8')).values;
+  run('reg.exe', windowsServiceEnvironmentRegArgs(layout.serviceName, windowsServiceEnvironment(fileValues, layout)));
+  note(`Windows service ${exists ? 'updated' : 'registered'}: ${layout.serviceName}, as ${windowsServiceAccount(layout.serviceName)}`);
+  return { windowsService: layout.serviceName };
 }
 
 /** Writes the install record, merging what an earlier run recorded. */

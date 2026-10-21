@@ -505,6 +505,72 @@ it('emptyDirectory refuses a filesystem root or a directory directly under one',
   assert.throws(() => emptyDirectory(path.join(root, 'var')), /too close to the root/);
 });
 
+describe('the Windows service', () => {
+  const winLayout = {
+    serviceName: 'silexgis-api',
+    apiDir: 'C:\\Program Files\\SilexGIS\\api',
+    apiUrl: 'http://127.0.0.1:5080',
+    apiLog: 'C:\\ProgramData\\SilexGIS\\logs\\api.log',
+  };
+
+  it('is registered under its own virtual account, starting after boot, running the published API', async () => {
+    const { windowsServiceScArgs } = await import('./lib.mjs');
+    const args = windowsServiceScArgs('create', winLayout, 'C:\\Program Files\\dotnet\\dotnet.exe');
+    assert.deepEqual(args.slice(0, 2), ['create', 'silexgis-api']);
+    // sc.exe reads each option and its value as two words, the option ending in "=".
+    assert.equal(args[args.indexOf('binPath=') + 1],
+      '"C:\\Program Files\\dotnet\\dotnet.exe" "C:\\Program Files\\SilexGIS\\api\\SilexGis.Api.dll"');
+    assert.equal(args[args.indexOf('start=') + 1], 'delayed-auto');
+    assert.equal(args[args.indexOf('obj=') + 1], 'NT SERVICE\\silexgis-api');
+    assert.equal(windowsServiceScArgs('config', winLayout, 'd.exe')[0], 'config');
+  });
+
+  it('starts with the settings file, its listening address and a log file, as one registry value', async () => {
+    const { windowsServiceEnvironment, windowsServiceEnvironmentRegArgs } = await import('./lib.mjs');
+    const entries = windowsServiceEnvironment({ SILEXGIS__PublicUrl: 'https://gis.example.org' }, winLayout);
+    assert.ok(entries.includes('SILEXGIS__PublicUrl=https://gis.example.org'));
+    assert.ok(entries.includes('ASPNETCORE_URLS=http://127.0.0.1:5080'));
+    assert.ok(entries.includes('Serilog__WriteTo__1__Name=File'));
+    assert.ok(entries.includes('Serilog__WriteTo__1__Args__path=C:\\ProgramData\\SilexGIS\\logs\\api.log'));
+    const reg = windowsServiceEnvironmentRegArgs('silexgis-api', ['A=1', 'B=2']);
+    assert.equal(reg[1], 'HKLM\\SYSTEM\\CurrentControlSet\\Services\\silexgis-api');
+    assert.equal(reg[reg.indexOf('/t') + 1], 'REG_MULTI_SZ');
+    // reg.exe separates the strings of a multi-string by the two characters backslash and zero.
+    assert.equal(reg[reg.indexOf('/d') + 1], 'A=1\\0B=2');
+  });
+
+  it('refuses a setting that would split the registry value', async () => {
+    const { windowsServiceEnvironment } = await import('./lib.mjs');
+    assert.throws(() => windowsServiceEnvironment({ X: 'a\0b' }, winLayout), /cannot carry/);
+  });
+
+  it('gives the service account its directories and keeps the configuration to administrators', async () => {
+    const { windowsGrantArgs, windowsProtectArgs } = await import('./lib.mjs');
+    assert.deepEqual(windowsGrantArgs('D:\\data', 'silexgis-api').slice(1, 3), ['/grant', 'NT SERVICE\\silexgis-api:(OI)(CI)M']);
+    const protect = windowsProtectArgs('C:\\ProgramData\\SilexGIS\\config');
+    assert.ok(protect.includes('/inheritance:r'));
+    // Well-known identifiers, so the grant works on a Windows in any language.
+    assert.ok(protect.includes('*S-1-5-32-544:(OI)(CI)F'));
+    assert.ok(protect.includes('*S-1-5-18:(OI)(CI)F'));
+  });
+
+  it('reads the service state the way sc.exe reports it', async () => {
+    const { parseScState } = await import('./lib.mjs');
+    assert.equal(parseScState('SERVICE_NAME: silexgis-api\n        TYPE               : 10  WIN32_OWN_PROCESS\n        STATE              : 4  RUNNING\n', 0), 'RUNNING');
+    assert.equal(parseScState('        STATE              : 1  STOPPED \n', 0), 'STOPPED');
+    assert.equal(parseScState('[SC] EnumQueryServicesStatus:OpenService FAILED 1060:\n', 1060), 'MISSING');
+  });
+
+  it('is the default only on a Windows host run elevated', async () => {
+    const { resolveLayout } = await import('./lib.mjs');
+    const facts = { platform: 'win32', systemd: false, nginx: false, root: false };
+    const env = { ProgramFiles: 'C:\\Program Files', ProgramData: 'C:\\ProgramData' };
+    assert.equal(resolveLayout({}, env, undefined, { ...facts, windowsAdmin: true }).service, 'windows-service');
+    assert.equal(resolveLayout({}, env, undefined, { ...facts, windowsAdmin: false }).service, 'process');
+    assert.equal(resolveLayout({}, {}, undefined, { platform: 'linux', systemd: true, nginx: true, root: true }).service, 'systemd');
+  });
+});
+
 it('reads a process state from its stat line, whatever its name holds', async () => {
   const { procStatState } = await import('./lib.mjs');
   assert.equal(procStatState('9089 (dotnet) Z 1 9089 9089 0 -1'), 'Z');
