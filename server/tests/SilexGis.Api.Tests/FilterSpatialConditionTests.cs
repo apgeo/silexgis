@@ -16,6 +16,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
 using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Filters;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -787,6 +788,64 @@ public sealed class FilterSpatialConditionTests : IAsyncLifetime, IDisposable, I
         [lon - half, lat + half],
         [lon - half, lat - half],
     ];
+
+    /// <summary>
+    /// A page of nearest first is ranked among the rows inside the reach of the page's nearest
+    /// readable, placeable rows only, when enough of the question's own rows lie inside it, and from
+    /// every row otherwise. Read page by page — the first pages from inside the reach, the last,
+    /// which holds the rows the reader may not place, from the whole ranking — the order must be
+    /// the one a single page holding every row gives.
+    /// </summary>
+    [Fact]
+    public async Task Nearest_first_page_by_page_is_the_order_of_one_page_holding_every_row()
+    {
+        var spot = Spot.Pick();
+        _ = await CaveWithEntranceAsync("Paged guarded", spot.TrueLon, spot.TrueLat, locationProtected: true);
+        for (var i = 1; i <= 5; i++)
+        {
+            _ = await CaveWithEntranceAsync($"Paged open {i}", spot.TrueLon - (0.4 * i * Cell), spot.TrueLat, locationProtected: false);
+        }
+
+        var bounded = Within(20_000, new PointValue(spot.TrueLon, spot.TrueLat));
+        var anchor = new PointAnchor(spot.TrueLon, spot.TrueLat);
+
+        // The reach the first pages are taken from exists for the viewer here — so the pages below do
+        // read from inside it rather than all falling back to the whole ranking.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var viewerId = await db.Users.Where(u => u.Email == $"sp-view-{tag}@t.local").Select(u => u.Id).SingleAsync();
+            var ctx = await AccessContextResolver.ResolveAsync(db, viewerId);
+            (await ProximityOrderSql.ReachOfNearestAsync(
+                    db, ctx, new NetTopologySuite.Geometries.Point(anchor.Longitude, anchor.Latitude) { SRID = 4326 }, 2, default))
+                .ShouldNotBeNull("the viewer must read and place two rows near the anchor");
+        }
+
+        foreach (var client in new[] { viewer, owner })
+        {
+            var whole = await OrderedAsync(client, bounded, anchor);
+            whole.Count.ShouldBe(12);
+            var paged = new List<Ranked>();
+            for (var page = 1; page <= 6; page++)
+            {
+                var response = await client.PostAsJsonAsync(
+                    "/api/v1/filters/query",
+                    new FilterQueryRequest(Sorted(bounded, anchor), Page: page, PageSize: 2),
+                    Wire);
+                var payload = await response.Content.ReadAsStringAsync();
+                response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+                paged.AddRange(JsonNode.Parse(payload)!["worlds"]![0]!["hits"]!.AsArray()
+                    .Select(h => new Ranked(h!["id"]!.GetValue<Guid>(), h["placeable"]!.GetValue<bool>())));
+            }
+
+            paged.ShouldBe(whole);
+        }
+
+        // For the viewer the guarded pair is unplaceable and comes last, so the last page could not
+        // be answered from inside any reach; for the owner it is nearest and comes first.
+        (await OrderedAsync(viewer, bounded, anchor)).Skip(10).ShouldAllBe(h => !h.Placeable);
+        (await OrderedAsync(owner, bounded, anchor)).ShouldAllBe(h => h.Placeable);
+    }
 
     private static FilterDocument About(FilterNode where) => new() { Scope = [new WorldScope("feature", where)] };
 

@@ -329,6 +329,30 @@ public sealed class FeatureFilterWorld(
         }
 
         var anchor = await ProximityAnchorAsync(query.Caller, query.Anchor, ct);
+
+        // A page of the ranking needs only the rows nearest the anchor. When enough matching rows
+        // lie within the reach of the page's nearest readable rows, the first rows of the ranking
+        // are all among them, so the page is ranked from those alone, found through the geometry
+        // index, instead of measuring every matching row and sorting them all. The count proves
+        // it for this question's own rows; when it falls short, the whole ranking is taken.
+        var wanted = query.Skip + query.Take;
+        if (query.Take > 0
+            && await ProximityOrderSql.ReachOfNearestAsync(db, query.Caller, anchor, wanted, ct) is { } reach)
+        {
+            var near = ProximityOrderSql.Ranks(db, query.Caller, anchor, reach);
+            var inReach =
+                from f in rows
+                join r in near on f.Id equals r.Id
+                select new { Feature = f, r.Distance };
+            if (await inReach.Take(wanted).CountAsync(ct) == wanted)
+            {
+                return
+                    from x in inReach
+                    orderby x.Distance, x.Feature.UpdatedAt descending, x.Feature.Id descending
+                    select x.Feature;
+            }
+        }
+
         var ranks = ProximityOrderSql.Ranks(db, query.Caller, anchor);
 
         // Ranked rows by distance, the rest after them in the fallback order; ties broken by the

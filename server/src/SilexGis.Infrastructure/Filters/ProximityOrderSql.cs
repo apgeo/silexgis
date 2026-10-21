@@ -58,18 +58,90 @@ public sealed class ProximityRank
 public static class ProximityOrderSql
 {
     /// <summary>The ranked rows, as a query to compose with.</summary>
-    public static IQueryable<ProximityRank> Ranks(SilexGisDbContext db, AccessContext ctx, Geometry anchor)
+    public static IQueryable<ProximityRank> Ranks(
+        SilexGisDbContext db, AccessContext ctx, Geometry anchor, double? withinMeters = null)
     {
-        var (sql, parameters) = Build(ctx, anchor);
+        var (sql, parameters) = Build(ctx, anchor, withinMeters);
         return db.Database.SqlQueryRaw<ProximityRank>(sql, ToDbParameters(parameters));
     }
 
+    /// <summary>
+    /// How far the <paramref name="count"/>-th nearest row this caller may read and place exactly
+    /// lies from the anchor, in metres — or null when there are fewer such rows than that.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A bound for a page, not a ranking: it is taken along the geometry index's nearest-first
+    /// walk, which orders by planar distance in degrees, and only the largest true distance among
+    /// the rows that walk finds is kept. Whatever those rows are, <paramref name="count"/> readable,
+    /// placeable rows lie within it, so the first <paramref name="count"/> of the true ranking lie
+    /// within it as well. The page is then ranked among the rows inside that reach only (see
+    /// <see cref="Ranks"/>), which the geometry index finds without measuring every other row.
+    /// </para>
+    /// <para>
+    /// Every row the walk keeps is one the caller may read and place exactly, so the reach is
+    /// decided only on positions this caller is shown as they are. A protected row they may not
+    /// place is passed over by the walk without a distance being taken, as the ranking itself does.
+    /// </para>
+    /// </remarks>
+    public static async Task<double?> ReachOfNearestAsync(
+        SilexGisDbContext db, AccessContext ctx, Geometry anchor, int count, CancellationToken ct)
+    {
+        var (sql, parameters) = BuildReach(ctx, anchor, count);
+        var (found, reach) = await db.Database.GetDbConnection().QuerySingleAsync<(int, double?)>(
+            new CommandDefinition(sql, parameters, cancellationToken: ct));
+        return found < count ? null : reach;
+    }
+
+    /// <summary>The reach statement and its parameters, exposed so a test can pin its shape.</summary>
+    public static (string Sql, DynamicParameters Parameters) BuildReach(AccessContext ctx, Geometry anchor, int count)
+    {
+        ArgumentNullException.ThrowIfNull(anchor);
+        var (visibleSql, exactSql, parameters) = AccessSql.FeatureLayerFragments(ctx, "f");
+        parameters.Add("px_anchor", Wkb(anchor));
+        parameters.Add("px_count", count);
+
+        var sql = $"""
+            SELECT count(*)::int AS found,
+                   max(ST_Distance(n.geom::geography, ST_SetSRID(ST_GeomFromWKB(@px_anchor), 4326)::geography)) AS reach
+            FROM (SELECT f.geom
+                  FROM features f
+                  WHERE f.deleted_at IS NULL
+                    AND f.geom IS NOT NULL
+                    AND {visibleSql}
+                    AND {exactSql}
+                  ORDER BY f.geom <-> ST_SetSRID(ST_GeomFromWKB(@px_anchor), 4326)
+                  LIMIT @px_count) n
+            """;
+        return (sql, parameters);
+    }
+
     /// <summary>The statement and its parameters, exposed so a test can pin its shape.</summary>
-    public static (string Sql, DynamicParameters Parameters) Build(AccessContext ctx, Geometry anchor)
+    public static (string Sql, DynamicParameters Parameters) Build(
+        AccessContext ctx, Geometry anchor, double? withinMeters = null)
     {
         ArgumentNullException.ThrowIfNull(anchor);
         var (exactSql, parameters) = AccessSql.ExactViewFragment(ctx, "f");
-        parameters.Add("px_anchor", new WKBWriter(ByteOrder.LittleEndian, false, false, false).Write(anchor));
+        parameters.Add("px_anchor", Wkb(anchor));
+
+        // Inside a reach: the rows no farther than it, found through the geometry index by a box
+        // that is never smaller than the reach, and measured by the same expression the ranking
+        // orders by, so a row the reach was taken from is never lost to a rounding difference.
+        var within = "";
+        if (withinMeters is { } meters)
+        {
+            var box = SpatialReach.Around(anchor.EnvelopeInternal, meters);
+            parameters.Add("px_west", box.MinX);
+            parameters.Add("px_south", box.MinY);
+            parameters.Add("px_east", box.MaxX);
+            parameters.Add("px_north", box.MaxY);
+            parameters.Add("px_reach", meters);
+            within = """
+
+                  AND f.geom && ST_MakeEnvelope(@px_west, @px_south, @px_east, @px_north, 4326)
+                  AND ST_Distance(f.geom::geography, ST_SetSRID(ST_GeomFromWKB(@px_anchor), 4326)::geography) <= @px_reach
+                """;
+        }
 
         var sql = $"""
             SELECT f.id AS id,
@@ -77,10 +149,13 @@ public static class ProximityOrderSql
             FROM features f
             WHERE f.deleted_at IS NULL
               AND f.geom IS NOT NULL
-              AND (NOT f.is_protected_effective OR {exactSql})
+              AND (NOT f.is_protected_effective OR {exactSql}){within}
             """;
         return (sql, parameters);
     }
+
+    private static byte[] Wkb(Geometry anchor) =>
+        new WKBWriter(ByteOrder.LittleEndian, false, false, false).Write(anchor);
 
     /// <summary>
     /// The access fragments' parameters as provider parameters, so EF can run a statement built
