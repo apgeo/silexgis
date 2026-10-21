@@ -1,22 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import proj4 from 'proj4';
 import { describe, expect, it } from 'vitest';
 import { fromGrid, GRIDS, STEREO70, SWISS_LV03, SWISS_LV95, toGrid } from './nationalGrids.ts';
 
 /**
- * WGS 84 longitude and latitude, and the Stereo 70 easting and northing PostGIS 3.5 (PROJ 7.2)
- * writes for them with ST_Transform into EPSG:3844 — PROJ applying the register's own
- * transformation. Six invented points spread over Romania.
+ * The grid's one definition and the points that pin it, in a file at the root of the working tree
+ * that the server's test of its coordinate-system registry reads as well: the registry answers
+ * EPSG:3844 and EPSG:31700 with this definition, and the 3D viewer projects surveys with that
+ * answer. Each side is held to the file, so neither can drift from the other unnoticed. The
+ * points are invented positions over Romania with the easting and northing PostGIS gives them
+ * with ST_Transform into EPSG:3844.
  */
-const STEREO70_REFERENCE: [number, number, number, number][] = [
-  [25.0, 46.0, 500120.367, 500031.315],
-  [21.2, 45.75, 204568.312, 479289.244],
-  [28.6, 44.2, 787841.807, 306429.542],
-  [23.6, 47.65, 394948.078, 684361.747],
-  [26.1, 44.43, 587700.429, 326177.222],
-  [25.44721, 45.53127, 535045.778, 448043.847],
-];
-/** The values above are rounded to the millimetre. */
+interface Stereo70Contract {
+  codes: number[];
+  definition: string;
+  referencePoints: { lon: number; lat: number; easting: number; northing: number }[];
+  toleranceMetres: number;
+}
+const STEREO70_CONTRACT = JSON.parse(
+  readFileSync(path.resolve(process.cwd(), '..', 'contract', 'crs', 'stereo70.json'), 'utf8'),
+) as Stereo70Contract;
+/** The pinned values are rounded to the millimetre; proj4 matches PROJ to well under a centimetre. */
 const STEREO70_AGREEMENT_METRES = 0.01;
 
 function dms(degrees: number, minutes: number, seconds: number): number {
@@ -32,10 +38,30 @@ describe('Stereo 70', () => {
     expect(northing).toBeCloseTo(500000, 3);
   });
 
+  it('is the one definition the server registry answers for EPSG:3844 and EPSG:31700', () => {
+    expect(STEREO70_CONTRACT.codes).toEqual([3844, 31700]);
+    expect(GRIDS.stereo70.definition).toBe(STEREO70_CONTRACT.definition);
+  });
+
   it('agrees with PROJ, as the database transforms into EPSG:3844, to the millimetre', () => {
-    for (const [lon, lat, easting, northing] of STEREO70_REFERENCE) {
+    for (const { lon, lat, easting, northing } of STEREO70_CONTRACT.referencePoints) {
       const grid = toGrid(GRIDS.stereo70, lon, lat)!;
       expect(Math.hypot(grid[0] - easting, grid[1] - northing)).toBeLessThan(STEREO70_AGREEMENT_METRES);
+    }
+  });
+
+  it('places a grid position where the reference says, as the 3D viewer does with the registry answer', () => {
+    // The viewer is handed the registry's string and turns survey stations from the grid into
+    // longitude and latitude with proj4 — the inverse of what the format writes.
+    const viewer = proj4(STEREO70_CONTRACT.definition, 'EPSG:4326');
+    const metresPerDegree = (6_371_000 * Math.PI) / 180;
+    for (const { lon, lat, easting, northing } of STEREO70_CONTRACT.referencePoints) {
+      const [placedLon, placedLat] = viewer.forward([easting, northing]);
+      const east = (placedLon - lon) * Math.cos((lat * Math.PI) / 180) * metresPerDegree;
+      const north = (placedLat - lat) * metresPerDegree;
+      expect(Math.hypot(east, north)).toBeLessThan(STEREO70_AGREEMENT_METRES);
+      const [formatLon, formatLat] = fromGrid(GRIDS.stereo70, easting, northing)!;
+      expect(Math.hypot(formatLon - placedLon, formatLat - placedLat)).toBeLessThan(1e-9);
     }
   });
 

@@ -64,8 +64,10 @@ const STEREO_70: GridSpec = {
   // the grid still projects correctly but is not what anyone there uses.
   area: [20.26, 43.44, 31.41, 48.27],
   // EPSG:31700 is the register's withdrawn name for the same grid on a datum that was never
-  // realised; survey files still carry it, and its own published shift lands within about 3 m of
-  // this one, so a text that names it is read as this grid.
+  // realised; survey files still carry it and mean the grid as used, so a text that names it is
+  // read as this grid — as the server's coordinate-system registry answers both codes with this
+  // very definition, which the 3D viewer then projects surveys with. A test on each side holds
+  // both to one shared copy of the string and of the points that pin it.
   names: /^(?:STEREO\s*-?\s*70|S\s*70|EPSG\s*:?\s*(?:3844|31700))\b/,
   bareOrder: 'either',
 };
