@@ -37,7 +37,7 @@ screen, their name labels are set one under the other instead of over each other
 
 **Where the photographs were taken is marked over the model.** A photograph has no position of its
 own underground — there is no satellite fix in a cave — so its place is the station it is linked
-to: link a photograph to a station (click the station, then **Link…**) and a small camera stands just
+to: link a photograph to a station (click the station, then **Link this…**) and a small camera stands just
 above that station, with how many photographs where there is more than one. Press the camera to
 show that station's pictures; press one of them to open it. A photograph linked to a passage or to
 a whole survey rather than to a station is not marked, because it has no single place.
