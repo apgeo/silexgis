@@ -15,7 +15,6 @@ import {
 import {
   Alert,
   App,
-  Button,
   Card,
   Col,
   Empty,
@@ -26,6 +25,7 @@ import {
   Switch,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import List from '../../components/List.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
-import { Button, Result, Spin } from 'antd';
+import { Result, Spin } from 'antd';
+import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './auth.tsx';

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from 'react';
-import { App, Button, Card, Collapse, Flex, Form, Input, InputNumber, Select, Switch, Typography } from 'antd';
+import { App, Card, Collapse, Flex, Form, Input, InputNumber, Select, Switch, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {

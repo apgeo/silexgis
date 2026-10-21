@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Button, Flex, Select, Space, Switch, Table, Tag, Typography } from 'antd';
+import { Flex, Select, Space, Switch, Table, Tag, Typography } from 'antd';
+import Button from '../Button.tsx';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import type {

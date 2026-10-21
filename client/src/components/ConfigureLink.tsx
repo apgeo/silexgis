@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { SettingOutlined } from '@ant-design/icons';
-import { Button, Dropdown } from 'antd';
+import { Dropdown } from 'antd';
+import Button from './Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 

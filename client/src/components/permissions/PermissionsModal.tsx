@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useState } from 'react';
 import { DeleteOutlined, PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons';
-import { App, Alert, Button, Checkbox, Collapse, Flex, Modal, Select, Table, Tag, theme } from 'antd';
+import { App, Alert, Checkbox, Collapse, Flex, Modal, Select, Table, Tag, theme } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCavingGroups,

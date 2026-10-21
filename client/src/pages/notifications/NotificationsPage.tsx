@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { Badge, Button, Flex, Segmented, Select, Table, Tag, Typography } from 'antd';
+import { Badge, Flex, Segmented, Select, Table, Tag, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { CheckOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';

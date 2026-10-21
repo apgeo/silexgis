@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
-import { App, Button, Empty, Flex, Segmented, Typography } from 'antd';
+import { App, Empty, Flex, Segmented, Typography } from 'antd';
+import Button from '../components/Button.tsx';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import {

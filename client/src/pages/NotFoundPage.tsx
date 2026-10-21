@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Button, Result, Typography } from 'antd';
+import { Result, Typography } from 'antd';
+import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 

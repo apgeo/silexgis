@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { Button, Result, Typography } from 'antd';
+import { Result, Typography } from 'antd';
+import Button from './Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { reportError } from '../diagnostics/reporter.ts';
 

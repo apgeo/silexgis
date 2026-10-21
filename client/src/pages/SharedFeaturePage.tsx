@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Descriptions, Flex, Spin, Tag, Typography } from 'antd';
+import { Alert, Card, Descriptions, Flex, Spin, Tag, Typography } from 'antd';
+import Button from '../components/Button.tsx';
 import List from '../components/List.tsx';
 import Map from 'ol/Map';
 import View from 'ol/View';

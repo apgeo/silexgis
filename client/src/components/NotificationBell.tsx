@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { BellOutlined } from '@ant-design/icons';
-import { Badge, Button, theme } from 'antd';
+import { Badge, theme } from 'antd';
+import Button from './Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUnreadNotificationCount } from '../api/hooks.ts';

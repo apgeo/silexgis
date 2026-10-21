@@ -9,7 +9,8 @@ import {
   MoreOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { App, Button, Card, Dropdown, Flex, Tag, Tooltip, Typography } from 'antd';
+import { App, Card, Dropdown, Flex, Tag, Tooltip, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDeleteResLink, useResLinksForTarget, type ResLink } from '../../api/hooks.ts';

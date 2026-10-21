@@ -7,7 +7,8 @@ import {
   SelectOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { Button, Divider, Dropdown, Flex, Space, Tooltip, Typography } from 'antd';
+import { Divider, Dropdown, Flex, Space, Tooltip, Typography } from 'antd';
+import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { targetTypeEntry, anchorSummary, memberRoute, linkPageRoute } from '../components/reslinks/registry.ts';
 import type { ViewControlDescriptor } from '../viewlinks/resourceRef.ts';

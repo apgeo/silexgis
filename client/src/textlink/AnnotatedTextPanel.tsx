@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EditOutlined, ExportOutlined, EyeOutlined, SettingOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Empty, Flex, Popover, Skeleton, Switch, Tooltip, Typography } from 'antd';
+import { Alert, App, Empty, Flex, Popover, Skeleton, Switch, Tooltip, Typography } from 'antd';
+import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAnnotatedText, useResLinksForTarget, type ResLink } from '../api/hooks.ts';

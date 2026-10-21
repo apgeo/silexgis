@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
-import { Alert, Button, Flex, Segmented, Skeleton, Typography } from 'antd';
+import { Alert, Flex, Segmented, Skeleton, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useDocument, useFile } from '../../api/hooks.ts';
 import { displayableImageUrl } from '../documents/derivativeUrl.ts';

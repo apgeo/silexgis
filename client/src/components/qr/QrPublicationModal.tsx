@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { GlobalOutlined, StopOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Descriptions, Divider, Flex, Modal, Popconfirm, Tag, Typography } from 'antd';
+import { Alert, App, Descriptions, Divider, Flex, Modal, Popconfirm, Tag, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useCaveQrPublication, usePublishCaveQr, useRevokeCaveQr } from '../../api/hooks.ts';
 import QrCodeSquare from './QrCodeSquare.tsx';

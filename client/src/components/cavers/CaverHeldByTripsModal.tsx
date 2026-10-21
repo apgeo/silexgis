@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { DeleteOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Flex, Modal, Tag, Typography } from 'antd';
+import { Alert, App, Flex, Modal, Tag, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useDeleteCaver } from '../../api/hooks.ts';

@@ -4,7 +4,6 @@ import { DeleteOutlined, DownOutlined, PlusOutlined, UpOutlined } from '@ant-des
 import {
   App,
   Alert,
-  Button,
   Card,
   Checkbox,
   Col,
@@ -17,6 +16,7 @@ import {
   Space,
   Typography,
 } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCaveTypes,

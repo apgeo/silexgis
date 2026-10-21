@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { LockOutlined, UndoOutlined } from '@ant-design/icons';
-import { App, Button, Card, Empty, Spin, Table, Tag, Timeline, Tooltip, Typography } from 'antd';
+import { App, Card, Empty, Spin, Table, Tag, Timeline, Tooltip, Typography } from 'antd';
+import Button from '../Button.tsx';
 import dayjs from 'dayjs';
 import './HistoryPanel.css';
 import { useTranslation } from 'react-i18next';

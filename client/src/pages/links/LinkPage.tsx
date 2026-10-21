@@ -14,7 +14,6 @@ import {
 import {
   Alert,
   App,
-  Button,
   Card,
   Descriptions,
   Empty,
@@ -27,6 +26,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';

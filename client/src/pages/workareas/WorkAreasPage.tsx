@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Breadcrumb, Button, Card, Empty, Flex, Spin, Typography } from 'antd';
+import { Alert, Breadcrumb, Card, Empty, Flex, Spin, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import List from '../../components/List.tsx';
 import { EnvironmentOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';

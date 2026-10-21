@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { Button, Flex, InputNumber, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd';
+import { Flex, InputNumber, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd';
+import Button from '../Button.tsx';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import type { TripImportDecision, TripImportRow } from '../../api/hooks.ts';

@@ -8,7 +8,8 @@ import {
   LockOutlined,
   ShareAltOutlined,
 } from '@ant-design/icons';
-import { Alert, App, Breadcrumb, Button, Card, Descriptions, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
+import { Alert, App, Breadcrumb, Card, Descriptions, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {

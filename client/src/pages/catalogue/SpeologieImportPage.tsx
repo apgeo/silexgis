@@ -4,7 +4,6 @@ import { AimOutlined, ArrowLeftOutlined, ImportOutlined } from '@ant-design/icon
 import {
   Alert,
   App,
-  Button,
   Card,
   Checkbox,
   Flex,
@@ -17,6 +16,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import { useNavigate, useSearchParams } from 'react-router-dom';

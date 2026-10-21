@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { ArrowLeftOutlined, UndoOutlined } from '@ant-design/icons';
-import { App, Button, Empty, Flex, Popconfirm, Table, Typography } from 'antd';
+import { App, Empty, Flex, Popconfirm, Table, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { TablePaginationConfig } from 'antd';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';

@@ -10,7 +10,6 @@ import {
 } from '@ant-design/icons';
 import {
   AutoComplete,
-  Button,
   Card,
   Flex,
   Input,
@@ -20,6 +19,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useCavers, type TripInvitationAnswer } from '../../api/hooks.ts';
 import List from '../List.tsx';

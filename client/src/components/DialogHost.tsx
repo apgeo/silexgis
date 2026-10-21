@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { ReactNode } from 'react';
-import { Button, Drawer, Flex, Modal, Tooltip } from 'antd';
+import { Drawer, Flex, Modal, Tooltip } from 'antd';
+import Button from './Button.tsx';
 import { PicCenterOutlined, PicRightOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useIsMobile } from '../hooks/useIsMobile.ts';

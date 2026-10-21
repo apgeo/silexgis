@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
 import { ExportOutlined, ImportOutlined, SearchOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Flex, Input, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Card, Flex, Input, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import {

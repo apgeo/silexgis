@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Button, Checkbox, Flex, Input, InputNumber, Select } from 'antd';
+import { Checkbox, Flex, Input, InputNumber, Select } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import type { SchemaField } from './propertiesSchema.ts';
 
