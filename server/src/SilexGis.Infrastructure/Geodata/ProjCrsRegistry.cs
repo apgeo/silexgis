@@ -30,6 +30,11 @@ public sealed class ProjCrsRegistry : ICrsRegistry
 
     private static string? Resolve(int code)
     {
+        if (StatedCrsDefinitions.For(code) is { } stated)
+        {
+            return stated;
+        }
+
         try
         {
             using var srs = new SpatialReference("");

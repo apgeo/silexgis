@@ -1,0 +1,20 @@
+{
+  "about": [
+    "The one definition of the Romanian national grid that this application uses, and the points that pin it.",
+    "The server's coordinate-system registry answers EPSG:3844 and EPSG:31700 with this definition, and the client's coordinate formats project with it. A test on each side reads this file and fails when its side stops agreeing with it.",
+    "Datum shift: EPSG transformation 15995, 'Pulkovo 1942(58) to WGS 84 (19)', Romania onshore and offshore, stated accuracy 3 m. Its parameters are those of EPSG:15994 'Pulkovo 1942(58) to ETRS89 (4)', published by the National Agency for Cadastre and Land Registration (ANCPI), taking ETRS89 as WGS 84. The register states them in the coordinate-frame convention (rotations +0.309, -0.325, -0.497 arc-seconds); +towgs84 reads the position-vector convention, so the rotations below carry the opposite signs.",
+    "EPSG:31700 is the register's deprecated code for the same grid on the Dealul Piscului 1970 datum, whose transformations are deprecated too. Survey files still name it and mean the grid as used, so it is read as the same grid: the PROJ inside PostGIS 3.5 transforms it with no datum shift at all, about 125 m from EPSG:3844, and the PROJ.4 export of either code carries no shift.",
+    "Reference points: six invented positions over Romania, and the easting and northing PostGIS 3.5 (PROJ 7.2.1) gives them with ST_Transform from EPSG:4326 into EPSG:3844, rounded to the millimetre."
+  ],
+  "codes": [3844, 31700],
+  "definition": "+proj=sterea +lat_0=46 +lon_0=25 +k=0.99975 +x_0=500000 +y_0=500000 +ellps=krass +towgs84=2.329,-147.042,-92.08,-0.309,0.325,0.497,5.69 +units=m +no_defs",
+  "referencePoints": [
+    { "lon": 25.0, "lat": 46.0, "easting": 500120.367, "northing": 500031.315 },
+    { "lon": 21.2, "lat": 45.75, "easting": 204568.312, "northing": 479289.244 },
+    { "lon": 28.6, "lat": 44.2, "easting": 787841.807, "northing": 306429.542 },
+    { "lon": 23.6, "lat": 47.65, "easting": 394948.078, "northing": 684361.747 },
+    { "lon": 26.1, "lat": 44.43, "easting": 587700.429, "northing": 326177.222 },
+    { "lon": 25.44721, "lat": 45.53127, "easting": 535045.778, "northing": 448043.847 }
+  ],
+  "toleranceMetres": 0.05
+}

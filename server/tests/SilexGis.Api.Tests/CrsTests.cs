@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
+using System.Text.Json;
+using Npgsql;
+using OSGeo.OSR;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Infrastructure.Geodata;
 
 namespace SilexGis.Api.Tests;
 
@@ -15,11 +19,13 @@ public sealed class CrsTests : IAsyncLifetime, IDisposable, IClassFixture<Postgr
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
+    private readonly string connectionString;
 
     private HttpClient reader = null!;
 
     public CrsTests(PostgresFixture postgres)
     {
+        connectionString = postgres.ConnectionString;
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-files-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
@@ -127,6 +133,120 @@ public sealed class CrsTests : IAsyncLifetime, IDisposable, IClassFixture<Postgr
     {
         using var anonymous = factory.CreateClient();
         (await anonymous.GetAsync("/api/v1/crs/4326.proj4")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    // ---- Stereo 70: one definition, shared with the client's coordinate formats ----------------
+    //
+    // The grid's definition and the points that pin it live in one file at the root of the working
+    // tree, which the client's own test reads as well. Both sides are held to that file rather than
+    // to each other, so neither can drift without a test on its side failing.
+
+    private sealed record ReferencePoint(double Lon, double Lat, double Easting, double Northing);
+
+    private sealed record Stereo70Contract(
+        int[] Codes, string Definition, ReferencePoint[] ReferencePoints, double ToleranceMetres);
+
+    private static readonly Lazy<Stereo70Contract> Stereo70 = new(() =>
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null
+            && !File.Exists(Path.Combine(directory.FullName, "server", "SilexGis.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        directory.ShouldNotBeNull("Could not find the working tree above the test assembly.");
+        var path = Path.Combine(directory.FullName, "contract", "crs", "stereo70.json");
+        return JsonSerializer.Deserialize<Stereo70Contract>(
+            File.ReadAllText(path), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+    });
+
+    [Theory]
+    [InlineData(3844)]
+    [InlineData(31700)]
+    public async Task Both_Stereo70_codes_answer_the_one_definition_the_client_formats_use(int srid)
+    {
+        Stereo70.Value.Codes.ShouldContain(srid);
+
+        var body = await reader.GetStringAsync($"/api/v1/crs/{srid}.proj4");
+
+        // Exactly the shared definition. What went wrong before is that PROJ exports this grid
+        // without its datum shift, because it now chooses the transformation separately from the
+        // definition; a viewer handed such a string puts every point about 125 m from where the
+        // database and the rest of the application put it.
+        body.ShouldBe(Stereo70.Value.Definition);
+    }
+
+    [Fact]
+    public async Task The_reference_points_are_where_the_database_puts_them()
+    {
+        // The pinned points are only worth pinning to if they are the database's own answer, so
+        // they are asked of the database every run rather than trusted as written down.
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        foreach (var point in Stereo70.Value.ReferencePoints)
+        {
+            await using var command = new NpgsqlCommand(
+                "select st_x(g), st_y(g) from (select st_transform(st_setsrid(st_makepoint(@lon, @lat), 4326), 3844) g) t",
+                connection);
+            command.Parameters.AddWithValue("lon", point.Lon);
+            command.Parameters.AddWithValue("lat", point.Lat);
+            await using var row = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+            (await row.ReadAsync(TestContext.Current.CancellationToken)).ShouldBeTrue();
+            Math.Sqrt(Math.Pow(row.GetDouble(0) - point.Easting, 2) + Math.Pow(row.GetDouble(1) - point.Northing, 2))
+                .ShouldBeLessThan(Stereo70.Value.ToleranceMetres, $"at {point.Lon}, {point.Lat}");
+        }
+    }
+
+    [Theory]
+    [InlineData(3844)]
+    [InlineData(31700)]
+    public async Task The_registry_answer_projects_the_reference_points_where_the_database_does(int srid)
+    {
+        GdalRuntime.Configure();
+        var definition = await reader.GetStringAsync($"/api/v1/crs/{srid}.proj4");
+
+        using var grid = new SpatialReference("");
+        grid.ImportFromProj4(definition).ShouldBe(0);
+        using var wgs84 = new SpatialReference("");
+        wgs84.ImportFromEPSG(4326).ShouldBe(0);
+        grid.SetAxisMappingStrategy(AxisMappingStrategy.OAMS_TRADITIONAL_GIS_ORDER);
+        wgs84.SetAxisMappingStrategy(AxisMappingStrategy.OAMS_TRADITIONAL_GIS_ORDER);
+        using var forward = new CoordinateTransformation(wgs84, grid);
+
+        foreach (var point in Stereo70.Value.ReferencePoints)
+        {
+            var projected = new double[3];
+            forward.TransformPoint(projected, point.Lon, point.Lat, 0);
+            Math.Sqrt(Math.Pow(projected[0] - point.Easting, 2) + Math.Pow(projected[1] - point.Northing, 2))
+                .ShouldBeLessThan(Stereo70.Value.ToleranceMetres, $"at {point.Lon}, {point.Lat}");
+        }
+    }
+
+    [Theory]
+    [InlineData(3844)]
+    [InlineData(31700)]
+    public void A_Stereo70_survey_is_placed_where_the_reference_points_say(int srid)
+    {
+        // The projector is what places an uploaded survey: its anchor, from which every station
+        // of the model and the 3D scene's position for it follow. It has to agree with the same
+        // definition the viewer is handed, or the survey and its own map disagree by the shift.
+        var projector = new ProjCoordinateProjector();
+        foreach (var point in Stereo70.Value.ReferencePoints)
+        {
+            var placed = projector.ToWgs84(srid, point.Easting, point.Northing).ShouldNotBeNull();
+            MetresBetween(placed.Longitude, placed.Latitude, point.Lon, point.Lat)
+                .ShouldBeLessThan(Stereo70.Value.ToleranceMetres, $"at {point.Easting}, {point.Northing}");
+        }
+    }
+
+    private static double MetresBetween(double lon1, double lat1, double lon2, double lat2)
+    {
+        // Over centimetres an equirectangular approximation is exact enough.
+        const double metresPerDegree = 6_371_000 * Math.PI / 180;
+        var east = (lon1 - lon2) * Math.Cos(lat2 * Math.PI / 180) * metresPerDegree;
+        var north = (lat1 - lat2) * metresPerDegree;
+        return Math.Sqrt(east * east + north * north);
     }
 
     public ValueTask DisposeAsync()

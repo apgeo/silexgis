@@ -393,6 +393,8 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Filters/': 'filters',
   'server/src/SilexGis.Infrastructure/Geodata/': 'geofiles',
   'server/src/SilexGis.Infrastructure/Geodata/GdalSidecarsOff.cs': 'terrain',
+  'server/src/SilexGis.Infrastructure/Geodata/ProjCrsRegistry.cs': 'crs',
+  'server/src/SilexGis.Infrastructure/Geodata/StatedCrsDefinitions.cs': 'crs',
   'server/src/SilexGis.Infrastructure/Geodata/WindowMembershipSql.cs': 'windowMembership',
   'server/src/SilexGis.Infrastructure/Geodata/FeatureAudienceSql.cs': 'windowMembership',
   'server/src/SilexGis.Infrastructure/Import/': 'imports',
