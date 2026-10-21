@@ -8,7 +8,8 @@ import {
   PictureOutlined,
   RightOutlined,
 } from '@ant-design/icons';
-import { Alert, Button, ConfigProvider, Flex, Segmented, Slider, Spin, Typography } from 'antd';
+import { Alert, ConfigProvider, Flex, Segmented, Slider, Spin, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import type { TrackingEvent, TrackingState } from '../../api/hooks.ts';
 import {

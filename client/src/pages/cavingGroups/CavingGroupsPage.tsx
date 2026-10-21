@@ -10,7 +10,6 @@ import {
 import {
   Alert,
   App,
-  Button,
   Drawer,
   Flex,
   Form,
@@ -23,6 +22,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import List from '../../components/List.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import { useTranslation } from 'react-i18next';

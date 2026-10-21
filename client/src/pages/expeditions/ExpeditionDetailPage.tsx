@@ -10,7 +10,6 @@ import {
 import {
   Alert,
   App,
-  Button,
   Card,
   Descriptions,
   Flex,
@@ -21,6 +20,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { CopyOutlined } from '@ant-design/icons';
-import { App, Button, Flex, Input, Typography } from 'antd';
+import { App, Flex, Input, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { publicTripPath } from '../../pages/public/publicTripEmbed.ts';
 

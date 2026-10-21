@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { CheckCircleOutlined, ClockCircleOutlined, WarningOutlined } from '@ant-design/icons';
-import { Alert, App, Button, DatePicker, Descriptions, Flex, Form, Modal, Space, Tag } from 'antd';
+import { Alert, App, DatePicker, Descriptions, Flex, Form, Modal, Space, Tag } from 'antd';
+import Button from '../Button.tsx';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -10,7 +10,6 @@ import {
 import {
   App,
   Alert,
-  Button,
   Descriptions,
   Divider,
   Empty,
@@ -20,6 +19,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';

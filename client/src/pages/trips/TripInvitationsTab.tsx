@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Alert, App, Button, Flex, Popconfirm, Spin } from 'antd';
+import { Alert, App, Flex, Popconfirm, Spin } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Alert, App, Button, ConfigProvider, Flex, Form, Input, Modal, Select } from 'antd';
+import { Alert, App, ConfigProvider, Flex, Form, Input, Modal, Select } from 'antd';
+import Button from '../Button.tsx';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {

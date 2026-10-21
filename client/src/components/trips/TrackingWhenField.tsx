@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Button, DatePicker, Flex, Form } from 'antd';
+import { DatePicker, Flex, Form } from 'antd';
+import Button from '../Button.tsx';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import './TrackingWhenField.css';

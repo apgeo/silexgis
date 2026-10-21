@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { DeleteOutlined, EditOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   App,
-  Button,
   Card,
   Empty,
   Flex,
@@ -17,6 +16,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {

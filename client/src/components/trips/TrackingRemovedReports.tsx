@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState, type ReactNode } from 'react';
 import { DeleteOutlined, UndoOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Collapse, Flex, Pagination, Popconfirm, Tag, Typography } from 'antd';
+import { Alert, App, Collapse, Flex, Pagination, Popconfirm, Tag, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   TRACKING_REMOVED_PAGE_SIZE,

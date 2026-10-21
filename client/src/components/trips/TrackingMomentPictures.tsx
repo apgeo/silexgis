@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { DeleteOutlined, PictureOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Card, Empty, Flex, Popconfirm, Skeleton, Typography } from 'antd';
+import { Alert, App, Card, Empty, Flex, Popconfirm, Skeleton, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useDetachTrackingPicture } from '../../api/hooks.ts';
 import type { ReplayPicture } from '../../caveview/trackingReplay.ts';

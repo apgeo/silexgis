@@ -4,7 +4,6 @@ import { DeleteOutlined, EditOutlined, PlayCircleOutlined, StopOutlined } from '
 import {
   Alert,
   App,
-  Button,
   Card,
   ConfigProvider,
   Descriptions,
@@ -17,6 +16,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { isConcurrencyConflict } from '../../api/client.ts';
 import {

@@ -7,7 +7,8 @@ import {
   EnvironmentOutlined,
   LineOutlined,
 } from '@ant-design/icons';
-import { Button, Flex, Popover, Typography, theme } from 'antd';
+import { Flex, Popover, Typography, theme } from 'antd';
+import Button from '../Button.tsx';
 import Feature from 'ol/Feature';
 import Map from 'ol/Map';
 import View from 'ol/View';

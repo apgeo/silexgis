@@ -9,7 +9,8 @@ import {
   ScheduleOutlined,
   StopOutlined,
 } from '@ant-design/icons';
-import { App, Button, Flex, Popconfirm } from 'antd';
+import { App, Flex, Popconfirm } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMoveEvent, type ActivityState } from '../../api/hooks.ts';

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { LogoutOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, ConfigProvider, Flex, Form, Input, Select } from 'antd';
+import { Alert, Card, ConfigProvider, Flex, Form, Input, Select } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   TRACKING_EVENT_KINDS,

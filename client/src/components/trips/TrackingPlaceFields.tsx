@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useId, useState } from 'react';
 import { AimOutlined } from '@ant-design/icons';
-import { Alert, Button, Flex, Form, InputNumber, Select, Typography } from 'antd';
+import { Alert, Flex, Form, InputNumber, Select, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {

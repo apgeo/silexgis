@@ -4,7 +4,6 @@ import { BarChartOutlined, DeleteOutlined, MergeCellsOutlined, PlusOutlined } fr
 import {
   Alert,
   App,
-  Button,
   Drawer,
   Flex,
   Form,
@@ -17,6 +16,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCan,

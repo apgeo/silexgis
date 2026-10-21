@@ -10,7 +10,8 @@ import {
   type ReactNode,
 } from 'react';
 import { DownOutlined, RightOutlined } from '@ant-design/icons';
-import { Button, Divider, Empty, Flex, Table, Tag, Typography, theme } from 'antd';
+import { Divider, Empty, Flex, Table, Tag, Typography, theme } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { ColumnsType, TableRef } from 'antd/es/table';
 import type { SorterResult } from 'antd/es/table/interface';
 import dayjs from 'dayjs';

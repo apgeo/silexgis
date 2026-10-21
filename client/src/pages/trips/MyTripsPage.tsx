@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { ScheduleOutlined } from '@ant-design/icons';
-import { Button, DatePicker, Empty, Flex, Select, Table, Tag, Typography } from 'antd';
+import { DatePicker, Empty, Flex, Select, Table, Tag, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { TablePaginationConfig } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';

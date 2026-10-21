@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { Alert, Button, Empty, Flex, Spin } from 'antd';
+import { Alert, Empty, Flex, Spin } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useCan, usePhotos } from '../../api/hooks.ts';

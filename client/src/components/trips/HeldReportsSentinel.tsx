@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { CloudUploadOutlined } from '@ant-design/icons';
-import { Alert, App, Badge, Button, Flex, Modal, Typography, theme } from 'antd';
+import { Alert, App, Badge, Flex, Modal, Typography, theme } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
 import { signInAgain } from '../../auth/renewSignIn.ts';

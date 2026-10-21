@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CompressOutlined, ExpandOutlined, PushpinOutlined, VideoCameraOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Flex, Select, Switch, Tabs, Typography } from 'antd';
+import { Alert, Card, Flex, Select, Switch, Tabs, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   surveyModelReadableByViewer,

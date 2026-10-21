@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { ReactNode } from 'react';
 import { CloudUploadOutlined, DeleteOutlined } from '@ant-design/icons';
-import { Button, Flex, Popconfirm, Tag, Typography } from 'antd';
+import { Flex, Popconfirm, Tag, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import type { ListedHeldReport } from './trackingOutbox.ts';
 import { trackingProblemCodeMessage } from './trackingProblems.ts';

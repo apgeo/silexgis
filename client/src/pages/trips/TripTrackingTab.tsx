@@ -14,7 +14,6 @@ import {
 import {
   Alert,
   App,
-  Button,
   Checkbox,
   Dropdown,
   Flex,
@@ -27,6 +26,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isSettledRefusal } from '../../api/client.ts';

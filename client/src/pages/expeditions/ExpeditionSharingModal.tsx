@@ -4,7 +4,6 @@ import { DeleteOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined } from '
 import {
   Alert,
   App,
-  Button,
   Checkbox,
   Flex,
   Modal,
@@ -14,6 +13,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { ApiError } from '../../api/client.ts';

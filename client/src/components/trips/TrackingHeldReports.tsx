@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { CloudUploadOutlined } from '@ant-design/icons';
-import { Alert, Button, Collapse, Flex, Typography } from 'antd';
+import { Alert, Collapse, Flex, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useSignedInAccountId } from '../../auth/accountId.ts';
 import HeldReportRow from './HeldReportRow.tsx';

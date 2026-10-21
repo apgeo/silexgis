@@ -4,7 +4,6 @@ import { DeleteOutlined, EllipsisOutlined, PlusOutlined } from '@ant-design/icon
 import {
   Alert,
   App,
-  Button,
   DatePicker,
   Flex,
   Form,
@@ -15,6 +14,7 @@ import {
   TimePicker,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { ApiError, lastReadETag } from '../../api/client.ts';

@@ -4,7 +4,6 @@ import { CopyOutlined, GlobalOutlined } from '@ant-design/icons';
 import {
   Alert,
   App,
-  Button,
   Card,
   Flex,
   Input,
@@ -13,6 +12,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useMintTripTrackingShare,

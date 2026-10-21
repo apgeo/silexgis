@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { Button, Empty, Flex, Typography, theme } from 'antd';
+import { Empty, Flex, Typography, theme } from 'antd';
+import Button from '../../components/Button.tsx';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';

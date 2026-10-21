@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   App,
   Alert,
-  Button,
   Card,
   Checkbox,
   Collapse,
@@ -13,6 +12,7 @@ import {
   Select,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {

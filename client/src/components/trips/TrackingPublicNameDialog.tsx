@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { App, Button, Input, Modal, Typography } from 'antd';
+import { App, Input, Modal, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useSetTrackingParticipantLabel, type TrackingParticipant } from '../../api/hooks.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
