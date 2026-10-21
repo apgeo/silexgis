@@ -136,6 +136,54 @@ test('the walls of a cave are uploaded, converted, drawn in the scene from its p
   expect(meshRequests.length).toBe(1);
 });
 
+test('walls above the size this browser asks about are fetched only once the viewer agrees', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const caveName = `E2E Walls Ask ${Date.now()}`;
+  await login(page);
+
+  // The installation asks above 50 MB, and the invented walls are a few hundred bytes, so this
+  // browser is told to ask before every download — through the page a person would use.
+  await gotoRoute(page, '/settings/advanced');
+  const askAbove = page
+    .getByRole('group', { name: 'Walls of the selected cave' })
+    .getByRole('spinbutton', { name: 'Ask above (MB)' });
+  await askAbove.fill('0');
+  await askAbove.blur();
+
+  const caveId = await createCave(page, caveName);
+  const token = await bearerToken(page);
+  const modelId = await uploadWalls(page, token, caveId, 25.2093, 45.5187);
+  await waitForMesh(page, token, modelId);
+
+  const meshRequests: string[] = [];
+  page.on('request', (request) => {
+    if (/\/api\/v1\/files\/[0-9a-f-]+\/content/.test(request.url())) {
+      meshRequests.push(request.url());
+    }
+  });
+
+  await gotoRoute(page, `/caves/${caveId}`);
+  await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Open in 3D' }).click();
+  await page.waitForURL(/\/map3d/);
+  await waitForScene3dReady(page);
+
+  // Said over the scene, with its size, and nothing fetched.
+  const ask = page.getByTestId('scene3d-mesh-ask');
+  await expect(ask).toBeVisible({ timeout: 60_000 });
+  await expect(ask).toContainText(/These walls are .*(B|KB|MB) to download/);
+  expect(meshRequests, 'nothing is fetched before the viewer agrees').toHaveLength(0);
+
+  await page.getByTestId('scene3d-mesh-ask-download').click();
+
+  await page.getByTestId('scene3d-layers-trigger').click();
+  await expect(page.getByTestId('scene3d-mesh-status')).toHaveText(/walls are drawn/, { timeout: 60_000 });
+  await expect(ask).toHaveCount(0);
+  expect(meshRequests, 'one fetch of the converted mesh, after the yes').toHaveLength(1);
+});
+
 /** Uploads the invented walls for a cave, declared in plain metres about a position, and answers the model's id. */
 async function uploadWalls(
   page: Page,
