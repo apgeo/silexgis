@@ -18,6 +18,14 @@ namespace SilexGis.Domain.Access;
 /// planner scans the whole feature table once per candidate row. Measured on 100k entrances it
 /// cost four seconds for a window of 137, for every reader who owned none of them.
 /// </para>
+/// <para>
+/// A row's ancestor array holds the row itself, and a live row is one the cascade's own lookup
+/// would find. So a live row is asked about itself on the columns it already carries, and its
+/// own id is passed over in the walk — one key lookup fewer for every row, which for a reader
+/// who owns nothing is about half of what an unwindowed count costs. A deleted row (read only
+/// by the callers that look at deletions, whose ancestor set may or may not hold deleted rows)
+/// is still looked up like any other ancestor, so the answer is the walk's in every case.
+/// </para>
 /// </summary>
 public static class AccessQueryExtensions
 {
@@ -51,11 +59,17 @@ public static class AccessQueryExtensions
             // EXPLAIN pins guard.
             return query.Where(f =>
                 f.OwnerUserId == userId
-                || f.AncestorIds.Any(ancestorId => allFeatures.Any(a => a.Id == ancestorId
-                    && (a.Visibility >= Visibility.Authenticated
-                        || (a.Visibility == Visibility.CavingGroup
-                            && a.CavingGroupId != null
-                            && cavingGroupIds.Contains(a.CavingGroupId.Value))))));
+                || (f.DeletedAt == null
+                    && (f.Visibility >= Visibility.Authenticated
+                        || (f.Visibility == Visibility.CavingGroup
+                            && f.CavingGroupId != null
+                            && cavingGroupIds.Contains(f.CavingGroupId.Value))))
+                || f.AncestorIds.Any(ancestorId => (ancestorId != f.Id || f.DeletedAt != null)
+                    && allFeatures.Any(a => a.Id == ancestorId
+                        && (a.Visibility >= Visibility.Authenticated
+                            || (a.Visibility == Visibility.CavingGroup
+                                && a.CavingGroupId != null
+                                && cavingGroupIds.Contains(a.CavingGroupId.Value))))));
         }
 
         var denyObj = set.DenyObjectIds;
@@ -106,11 +120,17 @@ public static class AccessQueryExtensions
                   && (allowOwnKinds.Contains((short)f.Kind)
                       || (f.FeatureTypeId != null && allowOwnTypes.Contains(f.FeatureTypeId.Value))))
               || f.OwnerUserId == userId
-              || f.AncestorIds.Any(ancestorId => allFeatures.Any(a => a.Id == ancestorId
-                  && (a.Visibility >= Visibility.Authenticated
-                      || (a.Visibility == Visibility.CavingGroup
-                          && a.CavingGroupId != null
-                          && cavingGroupIds.Contains(a.CavingGroupId.Value))))));
+              || (f.DeletedAt == null
+                  && (f.Visibility >= Visibility.Authenticated
+                      || (f.Visibility == Visibility.CavingGroup
+                          && f.CavingGroupId != null
+                          && cavingGroupIds.Contains(f.CavingGroupId.Value))))
+              || f.AncestorIds.Any(ancestorId => (ancestorId != f.Id || f.DeletedAt != null)
+                  && allFeatures.Any(a => a.Id == ancestorId
+                      && (a.Visibility >= Visibility.Authenticated
+                          || (a.Visibility == Visibility.CavingGroup
+                              && a.CavingGroupId != null
+                              && cavingGroupIds.Contains(a.CavingGroupId.Value))))));
     }
 
     /// <summary>
