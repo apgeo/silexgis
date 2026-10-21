@@ -114,7 +114,7 @@ export const specs = {
   ],
   qr: ['qr-landing.spec.ts'],
   resLinks: ['reslinks.spec.ts', 'annotated-text.spec.ts', 'cave-grant-link.spec.ts'],
-  scene: ['scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts'],
+  scene: ['scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts'],
   search: ['documents.spec.ts'],
   settings: ['settings.spec.ts', 'not-found.spec.ts', 'saved-filter-audience.spec.ts'],
   sms: ['notifications.spec.ts', 'notification-health.spec.ts'],
@@ -124,7 +124,7 @@ export const specs = {
     'karst-density.spec.ts', 'karst-autocorrelation.spec.ts', 'karst-layers.spec.ts', 'trip-stats.spec.ts',
   ],
   surveys: [
-    'survey-compare.spec.ts', 'survey-extraction.spec.ts', 'survey-quality.spec.ts',
+    'survey-compare.spec.ts', 'survey-extraction.spec.ts', 'survey-photos.spec.ts', 'survey-quality.spec.ts',
     'survey-sources.spec.ts', 'cave-statistics.spec.ts', 'cave-topology.spec.ts',
     'cave-morphometry.spec.ts', 'cave-levels.spec.ts', 'scene3d-walls.spec.ts',
     'tracking-therion.spec.ts', 'caveview-label-size.spec.ts',
