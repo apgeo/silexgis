@@ -21,17 +21,15 @@ function show(state: ActivityState, canEdit = true, visibility: Visibility = 'pr
   );
 }
 
-// Anchored at the end: an antd icon labels itself, so each button's accessible name carries
-// the icon's own word ahead of the button's.
-const publishButton = () => screen.queryByRole('button', { name: /Publish$/ });
-const draftButton = () => screen.queryByRole('button', { name: /Back to draft$/ });
-const doneButton = () => screen.queryByRole('button', { name: /Mark as done$/ });
-const callOffButton = () => screen.queryByRole('button', { name: /Call it off$/ });
-const floatButton = () => screen.queryByRole('button', { name: /Float it$/ });
-const organiseButton = () => screen.queryByRole('button', { name: /Start organising$/ });
-const goingAheadButton = () => screen.queryByRole('button', { name: /It is going ahead$/ });
-const putBackButton = () => screen.queryByRole('button', { name: /Put it back$/ });
-const newDateButton = () => screen.queryByRole('button', { name: /Settle a new date$/ });
+const publishButton = () => screen.queryByRole('button', { name: 'Publish' });
+const draftButton = () => screen.queryByRole('button', { name: 'Back to draft' });
+const doneButton = () => screen.queryByRole('button', { name: 'Mark as done' });
+const callOffButton = () => screen.queryByRole('button', { name: 'Call it off' });
+const floatButton = () => screen.queryByRole('button', { name: 'Float it' });
+const organiseButton = () => screen.queryByRole('button', { name: 'Start organising' });
+const goingAheadButton = () => screen.queryByRole('button', { name: 'It is going ahead' });
+const putBackButton = () => screen.queryByRole('button', { name: 'Put it back' });
+const newDateButton = () => screen.queryByRole('button', { name: 'Settle a new date' });
 
 beforeEach(() => {
   move.mockReset().mockResolvedValue({});

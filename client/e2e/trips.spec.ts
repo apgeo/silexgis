@@ -89,7 +89,7 @@ async function drawPoint(page: Page) {
   // so the canvas appearing is the signal that there is something to draw on.
   await expect(map.locator('canvas')).toBeVisible({ timeout: 30_000 });
   // Anchored at the end: each shape button carries its icon's label ahead of its own word.
-  await field.getByRole('button', { name: /Point$/ }).click();
+  await field.getByRole('button', { name: 'Point', exact: true }).click();
   await map.click({ position: { x: 220, y: 120 } });
   // A shape can only be cleared once one exists, so the control enabling is the drawing landing.
   await expect(field.getByRole('button', { name: 'Clear shape' })).toBeEnabled();
@@ -274,7 +274,7 @@ test('a trip is written as a draft and stays one until it is published', async (
   await expect(page.getByTestId('trip-draft-notice')).toBeVisible();
 
   // Publishing is confirmed first: it is the moment the people on the trip are told.
-  await page.getByRole('button', { name: /Publish$/ }).click();
+  await page.getByRole('button', { name: 'Publish', exact: true }).click();
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByTestId('trip-state')).toHaveText('Published', { timeout: 15_000 });
   await expect(page.getByTestId('trip-draft-notice')).toHaveCount(0);
@@ -287,13 +287,13 @@ test('a trip is written as a draft and stays one until it is published', async (
 
   // And the reverse takes it back for more work without pretending the announcement never
   // happened — the date it first went out is kept.
-  await page.getByRole('button', { name: /Back to draft$/ }).click();
+  await page.getByRole('button', { name: 'Back to draft', exact: true }).click();
   await expect(page.getByTestId('trip-state')).toHaveText('Draft', { timeout: 15_000 });
   await expect(page.getByText('Published on')).toBeVisible();
 
   // A state a trip has always been allowed to hold and that no call could produce while
   // announcing and withdrawing were the only two verbs: recorded as having happened.
-  await page.getByRole('button', { name: /Mark as done$/ }).click();
+  await page.getByRole('button', { name: 'Mark as done', exact: true }).click();
   await expect(page.getByTestId('trip-state')).toHaveText('Done', { timeout: 15_000 });
 
   await page.getByRole('button', { name: /Delete/ }).click();

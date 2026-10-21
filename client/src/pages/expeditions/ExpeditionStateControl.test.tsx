@@ -21,12 +21,10 @@ function show(state: ActivityState, canEdit = true) {
   );
 }
 
-// Anchored at the end: an antd icon labels itself, so each button's accessible name carries
-// the icon's own word ahead of the button's.
-const publishButton = () => screen.queryByRole('button', { name: /Publish$/ });
-const floatButton = () => screen.queryByRole('button', { name: /Float it$/ });
-const callOffButton = () => screen.queryByRole('button', { name: /Call it off$/ });
-const draftButton = () => screen.queryByRole('button', { name: /Back to draft$/ });
+const publishButton = () => screen.queryByRole('button', { name: 'Publish' });
+const floatButton = () => screen.queryByRole('button', { name: 'Float it' });
+const callOffButton = () => screen.queryByRole('button', { name: 'Call it off' });
+const draftButton = () => screen.queryByRole('button', { name: 'Back to draft' });
 
 beforeEach(() => {
   move.mockReset().mockResolvedValue({});

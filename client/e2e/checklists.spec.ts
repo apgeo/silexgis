@@ -66,7 +66,7 @@ test('a list is written with its lines, reworded and lengthened, and deleted', a
   await gotoRoute(page, '/checklists');
   await expect(page.getByRole('heading', { name: 'Checklists' })).toBeVisible();
 
-  await page.getByRole('button', { name: /New checklist$/ }).click();
+  await page.getByRole('button', { name: 'New checklist', exact: true }).click();
   const create = listDialog(page, 'New checklist');
   await expect(create).toBeVisible();
   await create.getByLabel('Title').fill(title);
@@ -78,7 +78,7 @@ test('a list is written with its lines, reworded and lengthened, and deleted', a
   const lines = create.getByPlaceholder('Something to settle before setting off');
   await expect(lines).toHaveCount(1);
   await lines.nth(0).fill('Rope inspected');
-  await create.getByRole('button', { name: /Add a line$/ }).click();
+  await create.getByRole('button', { name: 'Add a line', exact: true }).click();
   await expect(lines).toHaveCount(2);
   await lines.nth(1).fill('Callout left with somebody');
   await saveList(page, create, 'POST');
@@ -114,7 +114,7 @@ test('a list is written with its lines, reworded and lengthened, and deleted', a
   await expect(editLines.nth(0)).toHaveValue('Rope inspected');
   await expect(editLines.nth(1)).toHaveValue('Callout left with somebody');
   await editLines.nth(0).fill('Rope inspected and bagged');
-  await edit.getByRole('button', { name: /Add a line$/ }).click();
+  await edit.getByRole('button', { name: 'Add a line', exact: true }).click();
   await editLines.nth(2).fill('Spare light packed');
   await saveList(page, edit, 'PUT');
   await expect(card).toContainText('3 lines');
@@ -273,7 +273,7 @@ test('a list kept to its author is not shown to anybody else, on the lists or on
     // Anybody may write a list of their own, so the reader writes one: it is what proves the page
     // has its answer, and therefore that the administrator's list is missing from it rather than
     // merely not arrived yet.
-    await page.getByRole('button', { name: /New checklist$/ }).click();
+    await page.getByRole('button', { name: 'New checklist', exact: true }).click();
     const create = listDialog(page, 'New checklist');
     await create.getByLabel('Title').fill(ownList);
     await create.getByPlaceholder('Something to settle before setting off').fill('Helmet');

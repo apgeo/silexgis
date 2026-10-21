@@ -33,9 +33,9 @@ describe('TripGeometryField', () => {
   it('offers the three shapes and a way to clear, and warns either way', () => {
     render(<TripGeometryField value={null} onChange={vi.fn()} />);
 
-    expect(screen.getByRole('button', { name: /Point$/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Line$/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Area$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Point' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Line' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Area' })).toBeInTheDocument();
     // Nothing drawn yet, so there is nothing to clear.
     expect(screen.getByRole('button', { name: /Clear shape/ })).toBeDisabled();
     expect(screen.getByTestId('trip-geometry-warning')).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe('TripGeometryField', () => {
     const onChange = vi.fn();
     render(<TripGeometryField value={null} onChange={onChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Line$/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Line' }));
     const draw = attachedDraw();
     // Wrapped: finishing publishes the shape and puts the tool down, both of which are state.
     act(() => {
@@ -90,7 +90,7 @@ describe('TripGeometryField', () => {
     expect(written.coordinates[1][0]).toBeCloseTo(25.7, 5);
     expect(written.coordinates[1][1]).toBeCloseTo(45.7, 5);
     // Finishing puts the tool down, so the next click on the map does not start a second shape.
-    expect(screen.getByRole('button', { name: /Line$/ })).toHaveClass(/ant-btn-default/);
+    expect(screen.getByRole('button', { name: 'Line' })).toHaveClass(/ant-btn-default/);
   });
 
   it('draws one shape at a time — a new sketch replaces the one before it', () => {
@@ -98,7 +98,7 @@ describe('TripGeometryField', () => {
     const onChange = vi.fn();
     render(<TripGeometryField value={point} onChange={onChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Line$/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Line' }));
     const draw = attachedDraw();
     // Wrapped: finishing publishes the shape and puts the tool down, both of which are state.
     act(() => {
@@ -123,8 +123,8 @@ describe('TripGeometryField', () => {
 
     // Arming and disarming a tool is state, so React re-renders — and a map rebuilt on re-render
     // would throw away wherever the user had panned and zoomed to before reaching for the tool.
-    fireEvent.click(screen.getByRole('button', { name: /Point$/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Point$/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Point' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Point' }));
 
     expect(modifies()).toBe(1);
     expect(detachments()).toBe(0);

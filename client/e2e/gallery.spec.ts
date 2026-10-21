@@ -51,7 +51,7 @@ async function upload(page: Page, files: { name: string; mimeType: string; buffe
   // Dropping is always into somewhere, so the control appears once somewhere is chosen. The
   // inbox is the choice here: these photographs are not what the filing flow is about.
   await inbox.click();
-  const uploadButton = page.getByRole('button', { name: /Upload$/ });
+  const uploadButton = page.getByRole('button', { name: 'Upload', exact: true });
   await expect(uploadButton).toBeVisible({ timeout: 30_000 });
   await uploadButton.click();
   const drawer = page.getByRole('dialog').last();
@@ -215,7 +215,7 @@ test('photographs are gathered into an album and arranged in it', async ({ page 
   // ---- an album to put them in
   const albumTitle = `E2E album ${run}`;
   await openAlbums(page);
-  await page.getByRole('button', { name: /New album$/ }).click();
+  await page.getByRole('button', { name: 'New album', exact: true }).click();
 
   const editor = page.getByRole('dialog').filter({ hasText: 'New album' });
   await editor.getByLabel('Title').fill(albumTitle);

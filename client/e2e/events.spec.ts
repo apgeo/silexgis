@@ -143,7 +143,7 @@ test('an event is written with its day, its hours and its place, changed, taken 
   await expect(page.getByTestId('trip-state')).toHaveText('Cancelled', { timeout: 15_000 });
   // A called-off date offers only the way back to the workshop.
   await expect(page.getByRole('button', { name: /It is going ahead$/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Back to draft$/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Back to draft', exact: true })).toBeVisible();
 
   // Every one of those changes is stored, not held by the page.
   await page.goto(eventUrl);

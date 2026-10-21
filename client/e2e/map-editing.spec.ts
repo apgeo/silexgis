@@ -390,9 +390,7 @@ async function deleteFeatureRows(page: Page, pattern: RegExp) {
 }
 
 async function editFeatureDescription(page: Page, value: string) {
-  // antd folds an icon button's icon aria-label into its accessible name ("edit Edit"),
-  // so match the visible text instead of an exact role name.
-  await page.locator('button', { hasText: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const modal = page.getByRole('dialog');
   await expect(modal.getByText('Edit feature')).toBeVisible();
   await modal.getByLabel('Description').fill(value);

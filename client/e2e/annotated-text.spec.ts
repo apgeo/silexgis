@@ -63,10 +63,8 @@ test.describe('link-annotated text', () => {
     await passages.filter({ hasText: 'Dolina Demo' }).hover();
     const card = page.locator('.ant-popover').filter({ hasText: 'Dolina Demo' }).first();
     await expect(card).toBeVisible({ timeout: 15_000 });
-    // Matched on the button's text rather than its accessible name: an antd icon renders as
-    // `role="img"` with a label of its own, so the name computes to "aim Show" and an exact
-    // match on "Show" finds nothing. The text is what discriminates it from "Show in…" beside it.
-    await expect(card.getByRole('button').filter({ hasText: /^Show$/ })).toBeVisible();
+    // An exact name: it is what discriminates the button from "Show in…" beside it.
+    await expect(card.getByRole('button', { name: 'Show', exact: true })).toBeVisible();
   });
 
   test('a passage followed in one window moves the map in another', async ({ page, context }) => {

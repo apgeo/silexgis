@@ -52,9 +52,7 @@ test('permission-group editor round-trips a deny behind the preview gate', async
   await drawer.getByRole('tab', { name: 'Members' }).click();
   await pickOption(page, pane.locator('.ant-select').first(), 'Caving group');
   await pickOption(page, pane.locator('.ant-select').nth(1), cavingGroupName);
-  // The icon joins the accessible name ("plus Add"), so this matches by substring; the
-  // visible pane scoping keeps it away from the hidden rules pane's "Add rule".
-  await pane.getByRole('button', { name: 'Add' }).click();
+  await pane.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(pane.locator('.silex-list-item').filter({ hasText: cavingGroupName })).toBeVisible();
 
   // Rules: one allow (features · read · everything) and one deny (trip logs · read).

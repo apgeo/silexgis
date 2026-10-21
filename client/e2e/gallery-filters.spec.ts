@@ -29,7 +29,7 @@ async function upload(page: Page, files: { name: string; mimeType: string; buffe
   const inbox = page.locator('.ant-tree-title').filter({ hasText: 'Not filed' }).first();
   await expect(inbox).toBeVisible({ timeout: 45_000 });
   await inbox.click();
-  const uploadButton = page.getByRole('button', { name: /Upload$/ });
+  const uploadButton = page.getByRole('button', { name: 'Upload', exact: true });
   await expect(uploadButton).toBeVisible({ timeout: 30_000 });
   await uploadButton.click();
   const drawer = page.getByRole('dialog').last();

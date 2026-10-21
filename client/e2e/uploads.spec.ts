@@ -109,7 +109,7 @@ async function createCabinet(page: Page): Promise<string> {
   // the round trip has finished. Waiting for something only this page draws is what makes the
   // click below act on the page rather than on a redirect.
   await expect(shelfLabel(page, 'Not filed')).toBeVisible({ timeout: 45_000 });
-  await page.getByRole('button', { name: /New$/ }).click();
+  await page.getByRole('button', { name: 'New', exact: true }).click();
   await page.getByLabel('Name').fill(name);
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
@@ -122,7 +122,7 @@ async function createCabinet(page: Page): Promise<string> {
 test('a drop of several files sends every one of them', async ({ page }) => {
   await login(page);
   await createCabinet(page);
-  await page.getByRole('button', { name: /Upload$/ }).click();
+  await page.getByRole('button', { name: 'Upload', exact: true }).click();
 
   const drawer = page.getByRole('dialog');
   await expect(drawer.getByText('Before you start')).toBeVisible();
@@ -149,7 +149,7 @@ test('a drop of several files sends every one of them', async ({ page }) => {
 test('a dropped folder keeps its structure as cabinets', async ({ page }) => {
   await login(page);
   const shelf = await createCabinet(page);
-  await page.getByRole('button', { name: /Upload$/ }).click();
+  await page.getByRole('button', { name: 'Upload', exact: true }).click();
 
   const drawer = page.getByRole('dialog');
   const dropped = payload(['1987/bulletins/march.txt', '1987/bulletins/april.txt']);
@@ -194,7 +194,7 @@ test('uploading the same bytes again is warned about and can be accepted', async
   const { files } = payload(['survey.txt']);
 
   for (const attempt of [1, 2]) {
-    await page.getByRole('button', { name: /Upload$/ }).click();
+    await page.getByRole('button', { name: 'Upload', exact: true }).click();
     const drawer = page.getByRole('dialog').last();
     await drawer.getByTestId('upload-files').locator('input[type=file]').setInputFiles(files);
 
@@ -220,7 +220,7 @@ test('what is uploaded with no destination waits in the inbox and can be filed i
   const shelf = await createCabinet(page);
 
   await selectShelf(page, 'Not filed');
-  await page.getByRole('button', { name: /Upload$/ }).click();
+  await page.getByRole('button', { name: 'Upload', exact: true }).click();
 
   const drawer = page.getByRole('dialog');
   const dropped = payload(['inbox-a.txt', 'inbox-b.txt']);
