@@ -5,9 +5,10 @@ import {
   UploadOutlined,
 } from '@ant-design/icons';
 import {
-  App, Alert, Breadcrumb, Button, Collapse, Empty, Flex, Form, Input, Layout, Modal, Popconfirm,
+  App, Alert, Breadcrumb, Collapse, Empty, Flex, Form, Input, Layout, Modal, Popconfirm,
   Select, Space, Spin, Switch, Table, Tag, Tooltip, Tree, Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';

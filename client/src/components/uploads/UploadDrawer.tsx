@@ -5,9 +5,10 @@ import {
   MinusCircleTwoTone, ReloadOutlined,
 } from '@ant-design/icons';
 import {
-  Alert, App, Button, Checkbox, Drawer, Flex, Form, Input, Progress, Space, Tag, Typography,
+  Alert, App, Checkbox, Drawer, Flex, Form, Input, Progress, Space, Tag, Typography,
   Upload,
 } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFileConfig, useOpenUploadBatch, useCloseUploadBatch } from '../../api/hooks.ts';

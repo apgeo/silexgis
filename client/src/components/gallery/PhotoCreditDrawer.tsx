@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from 'react';
-import { App, Button, Drawer, Flex, Form, Input, Segmented, Select, Switch, Typography } from 'antd';
+import { App, Drawer, Flex, Form, Input, Segmented, Select, Switch, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCapabilities,

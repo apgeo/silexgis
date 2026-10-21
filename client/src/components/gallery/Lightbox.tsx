@@ -4,7 +4,8 @@ import {
   CloseOutlined, DownloadOutlined, EditOutlined, InfoCircleOutlined, LeftOutlined, RightOutlined,
   ZoomInOutlined, ZoomOutOutlined,
 } from '@ant-design/icons';
-import { Button, Descriptions, Drawer, Flex, Tooltip, Typography } from 'antd';
+import { Descriptions, Drawer, Flex, Tooltip, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { LIGHTBOX_SHORTCUTS, matchesAny } from '../../hooks/shortcutRegistry.ts';
 

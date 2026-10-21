@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ProfileOutlined } from '@ant-design/icons';
-import { App, Button, Flex, Input, Popover, Select, Typography } from 'antd';
+import { App, Flex, Input, Popover, Select, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useState } from 'react';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
-import { Alert, Button, Flex, Input, Segmented, Skeleton, Space, Spin, Typography } from 'antd';
+import { Alert, Flex, Input, Segmented, Skeleton, Space, Spin, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import {

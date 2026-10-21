@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { LeftOutlined, RightOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
-import { Alert, Button, Flex, Spin, Typography } from 'antd';
+import { Alert, Flex, Spin, Typography } from 'antd';
+import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { capturedQuoteFrom, type CapturedQuote } from './textSelection.ts';
 import type { LoadedPdf } from './pdfEngine.ts';

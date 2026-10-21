@@ -2,9 +2,10 @@
 import { useState } from 'react';
 import { CloudServerOutlined } from '@ant-design/icons';
 import {
-  Alert, App, Button, Card, Descriptions, Flex, Form, Input, Modal, Select, Space, Table, Tag,
+  Alert, App, Card, Descriptions, Flex, Form, Input, Modal, Select, Space, Table, Tag,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {

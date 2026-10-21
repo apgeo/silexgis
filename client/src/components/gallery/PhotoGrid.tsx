@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { ReactNode } from 'react';
 import { CheckCircleFilled, LeftOutlined, PictureOutlined, RightOutlined } from '@ant-design/icons';
-import { Button, Empty, Flex, Typography, theme } from 'antd';
+import { Empty, Flex, Typography, theme } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 
 /** The least a tile needs. Both the signed-in gallery and the public one supply it. */

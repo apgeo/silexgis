@@ -4,9 +4,10 @@ import {
   DeleteOutlined, EditOutlined, PictureOutlined, PlusOutlined, ShareAltOutlined,
 } from '@ant-design/icons';
 import {
-  Alert, App, Button, Card, Empty, Flex, Form, Input, Modal, Popconfirm, Select, Space, Spin,
+  Alert, App, Card, Empty, Flex, Form, Input, Modal, Popconfirm, Select, Space, Spin,
   Typography,
 } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {

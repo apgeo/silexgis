@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { App, Button, Flex, Modal, Select, Space, Typography } from 'antd';
+import { App, Flex, Modal, Select, Space, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useBulkFiling, type CabinetInfo } from '../../api/hooks.ts';
 

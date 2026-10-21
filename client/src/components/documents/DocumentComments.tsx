@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { App, Button, Empty, Flex, Input, Popconfirm, Space, Spin, Typography } from 'antd';
+import { App, Empty, Flex, Input, Popconfirm, Space, Spin, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCreateDocumentComment,

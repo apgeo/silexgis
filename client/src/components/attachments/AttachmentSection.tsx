@@ -4,8 +4,9 @@ import {
 } from '@ant-design/icons';
 import { ApiError } from '../../api/client.ts';
 import {
-  App, Button, Card, Empty, Flex, Image, Popconfirm, Tooltip, Typography, Upload,
+  App, Card, Empty, Flex, Image, Popconfirm, Tooltip, Typography, Upload,
 } from 'antd';
+import Button from '../Button.tsx';
 import List from '../List.tsx';
 import { useTranslation } from 'react-i18next';
 import {

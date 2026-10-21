@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { DeleteOutlined, EditOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
-import { Alert, App, Breadcrumb, Button, Flex, Spin, Tooltip, Typography } from 'antd';
+import { Alert, App, Breadcrumb, Flex, Spin, Tooltip, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import {

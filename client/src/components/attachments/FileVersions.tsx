@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { DeleteOutlined, DownloadOutlined, HistoryOutlined, UploadOutlined } from '@ant-design/icons';
-import { App, Button, Popconfirm, Popover, Tag, Upload } from 'antd';
+import { App, Popconfirm, Popover, Tag, Upload } from 'antd';
+import Button from '../Button.tsx';
 import List from '../List.tsx';
 import { useTranslation } from 'react-i18next';
 import { useDeleteFileVersion, useFileVersions, useUploadFileVersion } from '../../api/hooks.ts';

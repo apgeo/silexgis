@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { InboxOutlined, UploadOutlined } from '@ant-design/icons';
-import { Alert, Button, Flex, Table, Tag, Typography } from 'antd';
+import { Alert, Flex, Table, Tag, Typography } from 'antd';
+import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useUnfiledDocuments, type CabinetInfo } from '../../api/hooks.ts';

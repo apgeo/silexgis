@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState, type ReactNode } from 'react';
 import { EditOutlined } from '@ant-design/icons';
-import { App, Button, DatePicker, Flex, Input, Popover, Select, Typography } from 'antd';
+import { App, DatePicker, Flex, Input, Popover, Select, Typography } from 'antd';
+import Button from '../Button.tsx';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
