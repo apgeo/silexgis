@@ -726,11 +726,11 @@ async function bakeCommand(options) {
   // --datum ellipsoidal converts them, which is geodetically truer and then requires the survey
   // to be corrected by the local geoid undulation; the .env lines printed below say so either way.
   const ellipsoidal = String(options.datum ?? '').toLowerCase() === 'ellipsoidal';
-  // What the scene will display as the credit for these heights. An operator's own word beats
-  // anything recorded beside the rasters, which in turn beats nothing — and nothing is left as
-  // nothing rather than filled in with the one source this script happens to know how to
-  // download, because a credit naming data the pyramid does not contain is a false statement
-  // that only the operator can see is false.
+  // What the scene will display as the credit for these heights: what was recorded beside the
+  // rasters, joined by the operator's own words — and nothing is left as nothing rather than
+  // filled in with the one source this script happens to know how to download, because a credit
+  // naming data the pyramid does not contain is a false statement that only the operator can see
+  // is false.
   if (options.attribution === true) {
     fail(
       '--attribution needs the credit itself.',
@@ -750,18 +750,16 @@ async function bakeCommand(options) {
       `  Recorded beside these rasters:\n${
         partial.map((source) => `    ${source.attribution}`).join('\n')}\n`
       + '  and rasters prepared from elsewhere, whose credit only you know.\n\n'
-      + '  Re-run with a credit naming every source, for example:\n'
-      + `    --attribution "${partial[0].attribution} · <the credit your own data requires>"`,
+      + '  Re-run with the credit your own data requires; the recorded one is kept beside it:\n'
+      + '    --attribution "<the credit your own data requires>"',
     );
   }
   if (credit && recorded && recorded.sources.length > 0 && options.attribution) {
-    // Given by hand, which replaces what was recorded rather than joining it. Worth saying out
-    // loud, because the recorded source is in this bake too and its licence still applies.
-    console.log('\nWhat you passed replaces the credit recorded beside these rasters:');
-    for (const source of recorded.sources) {
-      console.log(`  ${source.attribution}`);
-    }
-    console.log('That data is in this bake as well, so make sure your words cover it.');
+    // Given by hand, and joined to what was recorded rather than put in its place: the recorded
+    // data is in this bake too and its licence still applies. Said out loud, so that the operator
+    // sees the whole line the scene will show.
+    console.log('\nThe credit recorded beside these rasters is kept, and yours is added to it:');
+    console.log(`  ${credit.attribution}`);
   }
   if (!credit) {
     console.log(
@@ -845,10 +843,16 @@ export function bakeCredit({ attribution, recorded }) {
     : undefined;
   const sources = recorded?.sources ?? [];
   if (given) {
-    // Given by hand, so it names the data in front of the operator rather than the data some
-    // earlier command left in that directory. It carries no source name: a name and a credit
-    // that disagreed would be worse than one credit on its own.
-    return { credit: { attribution: given, name: undefined } };
+    // Given by hand, and composed with what was recorded rather than replacing it. Whatever a
+    // download recorded beside the rasters is data in this directory, so it is in this bake, and
+    // its licence still requires its credit — an operator naming their own data does not release
+    // anybody from Copernicus's terms. A recorded credit the operator already wrote out in full is
+    // not repeated. The result carries no source name: a name and a credit that disagreed would be
+    // worse than one credit on its own.
+    const kept = sources
+      .map((source) => source.attribution)
+      .filter((recordedCredit) => !given.includes(recordedCredit));
+    return { credit: { attribution: [...new Set(kept), given].join(' · '), name: undefined } };
   }
   if (sources.length === 1 && recorded?.unknown !== true) {
     // One recorded source and nothing else in the directory — a plain `fetch` output. This is the

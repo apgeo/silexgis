@@ -412,17 +412,29 @@ describe('bakeCredit', () => {
   };
   const fetched = { sources: [copernicus], unknown: false };
 
-  it('takes the operator\'s word over anything recorded beside the rasters', () => {
-    // The recorded credit belongs to whatever a downloader last left in that directory, and an
-    // operator who says what they are baking knows better than the directory does. The other way
-    // round stamps a pyramid with a licence statement for data it does not hold — a false claim,
-    // displayed on the scene, that only somebody who knows what was baked can see is false.
+  it('adds the operator\'s words to what was recorded beside the rasters, never in its place', () => {
+    // The recorded credit is for data a download left in this directory, which the bake takes in
+    // with everything else, so its licence still applies whatever the operator adds about their
+    // own. Replacing it would drop a credit a licence requires from the one line the scene shows.
     const { credit } = bakeCredit({
       attribution: 'Elevation © National Agency', recorded: fetched,
     });
-    assert.equal(credit.attribution, 'Elevation © National Agency');
-    assert.ok(!credit.attribution.includes('Copernicus'));
+    assert.equal(credit.attribution, `${copernicus.attribution} · Elevation © National Agency`);
     assert.equal(credit.name, undefined);
+  });
+
+  it('does not repeat a recorded credit the operator already wrote out', () => {
+    const { credit } = bakeCredit({
+      attribution: `${copernicus.attribution} · Elevation © National Agency`, recorded: fetched,
+    });
+    assert.equal(credit.attribution, `${copernicus.attribution} · Elevation © National Agency`);
+  });
+
+  it('takes the operator\'s words alone where nothing was recorded', () => {
+    assert.deepEqual(
+      bakeCredit({ attribution: '  Elevation © National Agency ', recorded: undefined }).credit,
+      { attribution: 'Elevation © National Agency', name: undefined },
+    );
   });
 
   it('falls back to the credit a download recorded, which is why it is recorded', () => {
@@ -459,14 +471,13 @@ describe('bakeCredit', () => {
     assert.deepEqual(answer.partial, [copernicus]);
   });
 
-  it('is satisfied by an operator who says what covers all of it', () => {
+  it('is satisfied by an operator who names the rest, and keeps the recorded credit beside it', () => {
     const { credit, partial } = bakeCredit({
-      attribution: `${copernicus.attribution} · Elevation © National Agency`,
+      attribution: 'Elevation © National Agency',
       recorded: { sources: [copernicus], unknown: true },
     });
     assert.equal(partial, undefined);
-    assert.ok(credit.attribution.includes('Copernicus'));
-    assert.ok(credit.attribution.includes('National Agency'));
+    assert.equal(credit.attribution, `${copernicus.attribution} · Elevation © National Agency`);
   });
 });
 

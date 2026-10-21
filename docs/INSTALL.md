@@ -755,8 +755,8 @@ own input on the next run and converted a second time under a new name.
 **A directory holding more than one source is baked with `--attribution`.** `prepare` cannot know
 where your rasters came from, so it marks the directory as holding data it cannot speak for. If
 `fetch` wrote there too, no recorded credit is true of everything in it — and `bake` says so and
-stops rather than crediting the whole pyramid to one of the two. Give it one credit naming both;
-see **Attribution** below.
+stops rather than crediting the whole pyramid to one of the two. Give it the credit for your own
+data; the recorded one is kept beside it — see **Attribution** below.
 
 **Reprojection here is for drawing ground, not for surveying.** It is accurate to a few metres,
 which is invisible under a hillside and is not a coordinate to put a cave entrance at.
@@ -801,8 +801,10 @@ node deploy/terrain.mjs bake --in ./dem --out /srv/silexgis/terrain \
 
 A directory holding nothing but what `fetch` downloaded needs nothing: that command records the
 Copernicus credit beside the cells, and the bake picks it up from there. A directory holding data
-from more than one source needs a credit that covers all of it, and `bake` stops and asks for one
-rather than choosing. A bake with a credit from none of those routes says so and leaves the
+from more than one source needs your credit for the rest, and `bake` stops and asks for it rather
+than choosing. **Your `--attribution` is added to a recorded credit, never put in its place**: the
+recorded data is in the pyramid too and its licence still applies, so the scene shows
+`<recorded credit> · <yours>` (a recorded credit you already wrote out in full is not repeated). A bake with a credit from none of those routes says so and leaves the
 pyramid with none at all — better than the pre-baker's placeholder, which is a sentence reading
 `insert attribution here` displayed to everyone looking at the scene, but not a licence you can
 rely on.
