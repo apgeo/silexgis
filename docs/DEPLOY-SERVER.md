@@ -145,12 +145,17 @@ Administrators. Sign in with it and create the accounts you need.
 | `terrain-worker` | none | if the terrain overlay is in use; talks to the API through a directory, not a socket |
 | `pgadmin` | `127.0.0.1:5050` | if the pgAdmin overlay is in use. Loopback only: it stores database credentials, so it is reached over an ssh tunnel rather than published |
 | `caddy` | **80 and 443** | if the TLS overlay is in use, in which case it fronts `web` and `web` stops publishing a port of its own |
+| `immich-server` (with `immich-db`, `immich-redis`) | `127.0.0.1:2283` | if the Immich photo-library overlay is in use. Loopback by default (`SILEXGIS_IMMICH_BIND`, `SILEXGIS_IMMICH_PORT`); the API reaches it over the project network and needs no published port |
+| `photoprism` | `127.0.0.1:2342` | if the PhotoPrism photo-library overlay is in use; loopback by default (`SILEXGIS_PHOTOPRISM_BIND`, `SILEXGIS_PHOTOPRISM_PORT`), as above |
 
 **The mobile SpeleoLoc API is not a separate port.** It is served under `/api/v1/…` by the same
 API container and proxied by the same nginx, so one public port carries both the browser and
 the phone. Nothing additional needs opening.
 
-Persistent state lives in four named Docker volumes and nowhere else:
+SilexGIS's own persistent state lives in four named Docker volumes and nowhere else (the optional
+overlays keep theirs in volumes of their own — `silexgis-caddy-data` and `silexgis-caddy-config`
+for TLS, `immich-data` and `immich-db-data` for Immich, `photoprism-storage` for PhotoPrism,
+`silexgis-pgadmin` for pgAdmin):
 
 | Volume | Holds |
 |---|---|
@@ -192,6 +197,14 @@ never heard of while already having the tables it wants to create. Migrations ru
 this presents as a container that restarts for ever rather than as an error message. The remedy
 is to recreate the database and reload — which, on an installation whose data matters, means
 the backup. An installation that only ever tracks released versions is never in this position.
+
+One update is refused on purpose and rolls back cleanly. The long chain of migrations was replaced by
+a single baseline, and a database is moved onto it at start only from the chain's last few steps. An
+installation last updated before mid-October 2026 can be further back than that: the new API refuses to
+start, with a log line beginning `migrations.before_baseline`, before it has changed anything, so the
+rollback restores a working installation and the backup is not needed. Update it in two stages, as
+INSTALL.md, "Upgrading across the release that replaces the migration history with one baseline",
+describes.
 
 ## Backups
 
@@ -265,7 +278,8 @@ What these scripts set up:
 - Automatic **security** updates only. Docker's repository is excluded — an engine upgrade
   restarts every container, which is an operator's decision, not a nightly one.
 - The stack runs as an unprivileged account; the API runs as a non-root user inside its
-  container; the database and every optional service publish no port at all.
+  container; the database publishes no port at all, and the optional services either publish
+  none or, where a person needs to reach one (pgAdmin, the photo libraries), only on loopback.
 
 Two things to be clear-eyed about:
 
@@ -387,7 +401,8 @@ in the browser console with `window.isSecureContext` — `false` is the answer. 
 HTTPS; no server-side setting changes this.
 
 **The API restarts in a loop.** Almost always a migration that cannot be applied — see the note
-above. `docker compose logs api` shows the failing step.
+above. `docker compose logs api` shows the failing step; a line beginning
+`migrations.before_baseline` means the database must be brought forward in two stages first.
 
 **Login returns 500 while health checks pass.** The data-protection key ring cannot be written.
 Check that `silexgis-keys` is mounted and owned by the container's `app` user.

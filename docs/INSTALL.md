@@ -1142,6 +1142,14 @@ is added, not the size of the region. Three things follow from how the addition 
   not advertise. Nothing in the command-line route does this, which is why the command-line route
   does not offer the addition.
 
+**Pictures drawn from a build** — shaded relief, steepness, contour lines and the other relief
+pictures requested from the terrain page — are computed by the application itself, as background
+jobs, from a finished build; the tile-making service plays no part. They are kept under their build
+and deleted with it. Budget the API's memory for them: a contour picture is drawn four times as fine
+as the elevation it is traced from, and held whole in memory while it is drawn — up to a quarter of a
+gigabyte for one picture, for the length of that computation. A contour picture made before contours
+were drawn this finely is redrawn by requesting it again.
+
 **What happens on a plain installation — which is to say, by default.** Turning rasters into tiles
 needs a service this stack does not start unless it is asked to, so on a default installation a
 build gets as far as the tile-making step and stops there. The page says so **before** the button
@@ -1280,7 +1288,7 @@ build in `.env`, then `docker compose pull <service>` and `docker compose up -d`
 first suspend the library from the installation settings, so nothing in SilexGIS asks it for anything
 while it is down.
 
-**Backing one up is yours too.** `scripts/backup.sh` covers SilexGIS's own database and files, not
+**Backing one up is yours too.** `deploy/scripts/backup.sh` covers SilexGIS's own database and files, not
 these products' databases, albums, faces or settings. Use each product's own backup procedure.
 
 ## Backups
@@ -1618,6 +1626,57 @@ With the old worker still running, a cancelled or timed-out bake is not stopped:
 end, and the build can be run again only once it has. A bake that is running while you update
 finishes on the old worker either way; update between bakes if you can.
 
+### Upgrading across the release that replaces the migration history with one baseline
+
+The database schema used to be written by a long chain of migrations, about a hundred of them; from
+this release it is written by **one baseline migration** (`20261017161527_Baseline`), and later
+schema changes are ordinary migrations on top of it. The schema itself does not change, and no row
+is touched — what changes is the list of migrations the database records as applied.
+
+A database the old chain built is **moved onto the baseline by itself** the first time the new
+version starts, before any migration runs, in one transaction:
+
+- at the old chain's last step (`20261016125428_MapLayerOnSharedLinks`), its migration history is
+  replaced by the baseline's;
+- at either of the two steps before that (`20261016021043_JobRetryAndProgress`,
+  `20261016090838_SavedFilters`), the missing steps are applied first and then the history is
+  replaced.
+
+The API log then says *The database's migration history was moved onto 20261017161527_Baseline*,
+and nothing else is different. A fresh database simply gets the baseline.
+
+**A database further back than that is refused.** The steps it is missing no longer exist to be run,
+so the API does not start, and its log carries one line beginning `migrations.before_baseline` that
+names the step the database stands at. The database is left exactly as it was. In practice this
+is an installation last updated **before mid-October 2026**; the step the line names is what
+decides. Update it in two stages: first to the last revision that still carries the old chain, let
+the API start once on it, then to the current one. From the checkout:
+
+```bash
+git checkout "$(git log -1 --format=%H -- server/src/SilexGis.Infrastructure/Migrations/20261016125428_MapLayerOnSharedLinks.cs)^"
+# build and start as usual, wait until /health/ready answers, then:
+git checkout <your branch, e.g. master>
+# build and start as usual
+```
+
+On the server scripts (`silexgis-update`, `deploy/native/update.mjs`) the first, refused attempt is
+harmless: the new version never becomes healthy, the previous build is put back and started again,
+and the database was not changed. Run the two stages by hand (`update.mjs --no-pull` builds the
+checkout as it stands), then return to the ordinary update.
+
+Three things follow from the same rule:
+
+- **An old backup restores only as far as the build it is started on can carry it.** A dump taken at
+  one of the three steps above is moved onto the baseline when this release starts on it; an older
+  one is refused in the same way, and is restored into a build from before the baseline and brought
+  forward from there.
+- **A test installation's data baseline** (`silexgis-baseline`) captured before this release is such a
+  dump. Capture a fresh one once the update has run, as after any schema change.
+- **The move is part of the migration run at start.** An installation with
+  `SILEXGIS__Db__AutoMigrate=false` should start once with it switched back on; applying the
+  migrations by another route instead would try to create every table again over a database that
+  already has them.
+
 ## External login providers
 
 Sign-in with Google, GitHub, or any OpenID Connect provider is optional and off by default —
@@ -1781,7 +1840,9 @@ When something goes wrong in a signed-in person's browser — an error the page 
 a library reported — the browser sends a short report to this installation's own API, which writes it
 into the API log as a warning beginning `Browser error`, with a fingerprint that is the same for every
 occurrence of the same fault. Nothing goes anywhere else: there is no outside service and no account.
-Read them with `docker compose logs api | grep "Browser error"`.
+Read them with `docker compose logs api | grep "Browser error"`; on an installation without Docker,
+`journalctl -u silexgis-api | grep "Browser error"`, or the API's log file where it runs as a
+Windows service or a plain process.
 
 Only signed-in accounts can report, at most 30 times a minute each and 50 errors at a time; a page
 caught in a loop is stopped there rather than filling the log. The page's address is logged without
@@ -2062,8 +2123,9 @@ otherwise) and `--web-server none`. What that covers, and what it does not:
 All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. **This table is the
 list to read**: `server/src/SilexGis.Api/appsettings.json` carries only the settings whose default
 depends on the deployment, and the rest take their defaults from the code, so a key can be entirely
-valid and absent from that file. `deploy/.env.example` says the same things at greater length, with
-the reasoning beside each one.
+valid and absent from that file. `deploy/.env.example` explains the settings an installation most
+often changes at greater length, with the reasoning beside each one; it does not list every key
+this table does.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -2116,11 +2178,24 @@ the reasoning beside each one.
 | `SILEXGIS__Mail__Enabled` / `__Host` / `__Port` | `false` / — / `587` | SMTP server; unset means messages go to the log |
 | `SILEXGIS__Mail__Security` | `Auto` | `Auto`, `StartTls`, `SslOnConnect` (465) or `None` |
 | `SILEXGIS__Mail__FromAddress` / `__FromName` | — / `SilexGIS` | sender of every message |
+| `SILEXGIS__Mail__Username` | — | the account the SMTP server is signed in to with; unset sends without signing in |
+| `SILEXGIS__Mail__Password` | — | that account's password. Kept on the server; the settings page never sends it back to a browser |
+| `SILEXGIS__Mail__ReplyTo` | — | where replies go, when that is not the sender address |
+| `SILEXGIS__Mail__TimeoutSeconds` | `30` | how long one conversation with the SMTP server may take |
+| `SILEXGIS__Mail__AcceptInvalidCertificate` | `false` | accept a server certificate that does not validate — for relaying through an internal server with a self-signed certificate. It removes the only protection against somebody intercepting the credentials above, so leave it off wherever the certificate can be made valid |
 | `SILEXGIS__Sms__Enabled` / `__Url` | `false` / — | SMS gateway endpoint |
 | `SILEXGIS__Sms__BodyTemplate` | `To={to}&From={from}&Body={text}` | request body; `{to}`, `{text}`, `{from}` are escaped for the content type |
+| `SILEXGIS__Sms__Method` / `__ContentType` | `POST` / `application/x-www-form-urlencoded` | the request the gateway expects (see *Email and SMS*) |
+| `SILEXGIS__Sms__AuthHeader` | — | the whole `Authorization` value sent with every request. Accepted, never shown again |
+| `SILEXGIS__Sms__Headers__<name>` | — | any other header the gateway needs, one setting per header, e.g. `SILEXGIS__Sms__Headers__X-Api-Key` |
+| `SILEXGIS__Sms__From` | — | the sender id or number, substituted as `{from}` |
+| `SILEXGIS__Sms__TimeoutSeconds` | `15` | how long one request to the gateway may take |
 | `SILEXGIS__Security__RequireConfirmedEmail` | `false` | refuse sign-in until confirmed (inert with no mail server) |
 | `SILEXGIS__Security__SmsTwoFactorEnabled` | `false` | allow texted codes as a second factor |
 | `SILEXGIS__Security__TwoFactorCodeLifetimeMinutes` | `5` | how long a delivered code stays valid |
+| `SILEXGIS__Security__TwoFactorResendIntervalSeconds` | `60` | the wait between two requests for a delivered code, counted per account |
+| `SILEXGIS__Security__AuthenticatorTwoFactorEnabled` / `SILEXGIS__Security__EmailTwoFactorEnabled` | `true` / `true` | allow an authenticator app, and emailed codes, as a second factor |
+| `SILEXGIS__Security__SendConfirmationOnRegistration` | `true` | send a confirmation message when an account is created. Every `Security` setting is also editable under **Administration → Messaging → Sign-in policy**, which replaces these values once saved |
 | `SILEXGIS__Protection__RevealProtectedAssociations` | `false` | show a caller without exact-location rights that a document is attached to a position-protected cave. The document itself is served either way; only the pairing is affected, and switching this on never reveals a position — a photo carrying its own capture point stays unpaired regardless |
 | `SILEXGIS__Access__LocationGridMeters` | `5000` | the size, in metres, of the grid a protected cave's position is coarsened to for somebody who may not see where it is exactly. A smaller number gives more of the position away to everybody at once, so lower it only as a decision, never as tuning |
 | `SILEXGIS__Spatial__WorkingSrid` | `32635` (UTM zone 35 north on WGS 84) | the EPSG code of the projected coordinate system distances in metres are computed in — how deep a passage lies under the surface, how close two caves come. Set the UTM zone your area lies in (`32634` for western Romania). **Checked at start**: a code that cannot be resolved stops the application with a message naming this setting |
@@ -2182,15 +2257,55 @@ the reasoning beside each one.
 | `SILEXGIS__Map__MeshAskAboveBytes` | `52428800` (50 MB) | selecting a cave in the 3D view downloads its walls straight away unless they are larger than this, in which case the view says how large they are and asks first. `0` asks before every download. A member can set their own for the browser they are using, under **Settings › Advanced** |
 | `SILEXGIS__Import__MaxCommitItems` | `150000` | the most objects one confirmation of a reviewed import creates, deliberately equal to the review limit below so that what you can see you can confirm in one act. Confirmation runs as a background job, so a large one is a job that takes a while rather than a request that cannot finish; lower it if you would rather your undo units stayed small, since one confirmation reverts as a single thing |
 | `SILEXGIS__Import__MaxScanRows` | `150000` | the most rows one upload's review list reads. A bigger file is still imported whole and still drawn as a layer — only the review is bounded, and it says so. The list is paged to the browser, so this buys reviewable rows rather than rows drawn at once; what it costs is the single scan that ranks and de-duplicates them |
+| `SILEXGIS__Import__MaxArchiveDatabaseBytes` | `67108864` (64 MB) | the largest device database one review unpacks out of an uploaded export archive. It bounds the unpacked size, counted as the bytes arrive rather than taken from the archive's own claim, and it is repeated on every listing, preview and confirmation — so it is what one uploaded file can make the server write, again and again. Media and map tiles in the archive are never unpacked |
+| `SILEXGIS__Import__MaxTripTrackBytes` | `20971520` (20 MB) | the largest GPX file a trip takes its recorded track from, as its own sketch. The file is read whole in the request that uploads it |
+| `SILEXGIS__Import__MaxTripTrackPoints` | `100000` | the most points such a track may carry. A longer one is refused rather than thinned, because a line the server simplified is a line nobody recorded |
+| `SILEXGIS__Import__AllowCreateWithoutReview` | `false` | let an importer skip the review of a vector import and have the rules create objects directly. It never widens who may create — only removes the step in between |
+| `SILEXGIS__Import__DuplicateRadiusMeters` | `50` | how far the review looks around a candidate for something already in the registry |
+| `SILEXGIS__Import__DuplicateNameSimilarity` | `0.8` | how alike two names must be, from 0 to 1, before a nearby object is called the same thing rather than merely close |
+| `SILEXGIS__Import__PhotoProximityRadiusMeters` | `80` | how far a photograph looks for objects already in the registry — wider than for a vector file, because a picture is taken from where the photographer stood |
+| `SILEXGIS__Import__PhotoClusterRadiusMeters` | `25` | how far apart two photographs can be and still be proposed as one place. These five are also editable under **Administration → Messaging → Vector import**, which replaces them once saved |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB) |
+| `SILEXGIS__Files__DefaultUserQuotaBytes` | `0` (no limit) | how much stored content one account may own, unless the account is given a figure of its own. Not an allocation: nothing is reserved, and the sum of everybody's quotas may exceed the disk. The packaged stack sets it from `SILEXGIS_USER_QUOTA_BYTES` in `.env` |
+| `SILEXGIS__Files__MaxTotalStoreBytes` | `0` (no limit) | how much the whole installation may hold — the limit that actually protects the disk. The packaged stack sets it from `SILEXGIS_MAX_TOTAL_STORE_BYTES` |
+| `SILEXGIS__Files__AcceptedExtensions__0`, `__1`, … | *(none: everything is accepted)* | the only file extensions an upload may have, one per index, with or without the leading dot |
+| `SILEXGIS__Files__RefusedExtensions__0`, `__1`, … | *(none)* | extensions refused whatever the list above says; a refusal wins where both name the same one |
+| `SILEXGIS__Files__ImportRoots__0`, `__1`, … | *(none: switched off)* | directories **on the server** an administrator may import documents from, and a Full Administrator may name as terrain sources. Under Docker a path is resolved inside the api container, so it must also be mounted into it. A security boundary rather than a convenience: what these name is chosen by whoever deploys the installation, never by whoever is signed in. Mount them read-only where you can |
+| `SILEXGIS__Files__MaxArchiveEntries` | `5000` | how many entries an uploaded archive expanded into filed documents may hold before it is refused |
+| `SILEXGIS__Files__MaxArchiveExpandedBytes` | `21474836480` (20 GB) | how large such an archive may expand to |
+| `SILEXGIS__Files__MaxArchiveCompressionRatio` | `200` | how many times larger than its compressed form one entry may expand — the guard against an archive built to fill the disk |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys and the sign-in token certificates (must persist across restarts, and be shared by every API instance of one installation) |
 | `SILEXGIS__Conversion__Enabled` | `false` | use a document-conversion service so office documents can be read page by page. Needs the converter overlay running; without it those documents are still stored, searched and downloaded |
 | `SILEXGIS__Conversion__Url` | — | where that service is, e.g. `http://convert:3000` |
 | `SILEXGIS__Conversion__TimeoutSeconds` | `120` | how long one conversion may take before it is given up on |
+| `SILEXGIS__Speologie__ApiKey` | *(empty: switched off)* | the personal key that lets the cave catalogue search speologie.org and import caves from it; obtained from the profile page of an account there. Also settable by an administrator in the application |
+| `SILEXGIS__Speologie__Endpoint` | `https://www.speologie.org/api/graphql` | where that register answers |
+| `SILEXGIS__Speologie__TimeoutSeconds` / `SILEXGIS__Speologie__MaxRetries` | `20` / `2` | how long one call may take, and how many times one that failed for a reason that may pass is tried again |
+| `SILEXGIS__Speologie__MinRequestIntervalMs` | `1000` | the shortest gap between two calls leaving this installation. Calls are made one at a time, so this is a true floor on the rate; slow on purpose, because the register asks for restraint |
+| `SILEXGIS__Speologie__MaxPageSize` | `50` | the largest page asked for; held to the register's own ceiling of 100 |
+| `SILEXGIS__Speologie__MaxSelection` | `100` | how many caves one import may create or refresh |
+| `SILEXGIS__Speologie__MaxDescriptionChars` | `20000` | how much of a cave's description is kept; what is cut is marked as cut |
+| `SILEXGIS__Speologie__UserAgent` | `SilexGIS` | what this installation calls itself when it asks |
+| `SILEXGIS__Grottocenter__Enabled` | `false` | whether this installation may call grottocenter.org at all, to look a cave up there and keep its identifier. Off until you opt in, because it reaches somebody else's service |
+| `SILEXGIS__Grottocenter__Endpoint` / `SILEXGIS__Grottocenter__EntryUrlTemplate` | `https://api.grottocenter.org/api/v1` / `https://www.grottocenter.org/ui/entry/{0}` | where that database answers, and the page a stored identifier opens |
+| `SILEXGIS__Grottocenter__TimeoutSeconds` / `SILEXGIS__Grottocenter__MinRequestIntervalMs` | `15` / `1000` | how long one call may take, and the shortest gap between two calls |
+| `SILEXGIS__Grottocenter__MaxCandidates` | `10` | how many candidates one lookup offers |
+| `SILEXGIS__Grottocenter__UserAgent` | `SilexGIS` | what this installation calls itself when it asks |
+| `SILEXGIS__PhotoLibraries__Audience` | `Administrators` | who sees the photographs of a neighbouring photo library: `Administrators` (Full Administrators only) or `SignedIn` (every signed-in account). That library's own rules govern its pictures, not this application's, so opening them to everybody is a decision rather than a default |
+| `SILEXGIS__PhotoLibraries__Immich__Enabled` / `__BaseUrl` / `__ApiKey` | `false` / — / — | an Immich library beside this installation (see *Photo libraries*): whether it is deployed, where it answers on the internal network (never sent to a browser — pictures are passed through this application), and the key of an account made for this purpose. Written out: `SILEXGIS__PhotoLibraries__Immich__BaseUrl`, `SILEXGIS__PhotoLibraries__Immich__ApiKey`. The key carries that account's whole reach and does not expire |
+| `SILEXGIS__PhotoLibraries__Immich__TimeoutSeconds` / `SILEXGIS__PhotoLibraries__Immich__MaxRetries` | `20` / `1` | how long one call may take, and how often a failed question is asked again. A request for a picture is never retried |
+| `SILEXGIS__PhotoLibraries__Immich__PositionCacheSeconds` | `300` | how long one reading of the whole library's photograph positions is used before it is read again. That library cannot be asked what lies inside a rectangle, so every position is held in memory; `0` reads the whole library for every map view |
+| `SILEXGIS__PhotoLibraries__Immich__MaxPositions` | `250000` | the most located photographs held in memory (about 32 bytes each). A larger library is refused rather than shown with regions silently missing |
+| `SILEXGIS__PhotoLibraries__PhotoPrism__Enabled` / `__BaseUrl` / `__AccessToken` | `false` / — / — | a PhotoPrism library, as above, read with a read-only access token. Written out: `SILEXGIS__PhotoLibraries__PhotoPrism__BaseUrl`, `SILEXGIS__PhotoLibraries__PhotoPrism__AccessToken`. The token lasts a year by default, so it stops working once, silently, a year after installation |
+| `SILEXGIS__PhotoLibraries__PhotoPrism__TimeoutSeconds` / `SILEXGIS__PhotoLibraries__PhotoPrism__MaxRetries` | `20` / `1` | as for Immich |
+| `SILEXGIS__PhotoLibraries__PhotoPrism__MaxViewportCount` | `2000` | the most photographs asked for in one map view |
+| `SILEXGIS__PhotoLibraries__PhotoPrism__MinQuality` | `0` | the lowest quality score asked for; `0` is everything the library holds |
 | `SILEXGIS__AccessHistory__Retention` | `365.00:00:00` | how long the record of who downloaded which document is kept. `00:00:00` switches the record off entirely and the next sweep deletes everything already held |
 | `SILEXGIS__AccessHistory__CollapseWindow` | `01:00:00` | within this window, the same person fetching the same file again is the same reading and adds no row |
 | `SILEXGIS__AccessHistory__SweepInterval` | `1.00:00:00` | how often the pass that deletes expired access-history rows is queued. `00:00:00` turns the schedule off, and nothing is then deleted. Note the leading `1.` — a day is written `d.hh:mm:ss`, and `24:00:00` on its own means twenty-four **days** |
+| `SILEXGIS__DocumentRetention__RetentionDays` | `30` | how many days a deleted document or photograph can still be restored before its bytes go. `0` is a real setting: deletion then means deletion at the next sweep. The packaged stack sets it from `SILEXGIS_RETENTION_DAYS` in `.env` |
+| `SILEXGIS__DocumentRetention__SweepInterval` | `06:00:00` | how often the pass that removes documents past that window is queued |
 | `SILEXGIS__FeatureIntegrity__Interval` | `1.00:00:00` | how often a background pass re-checks the map data for internal inconsistencies; findings go to the log and the admin jobs list. `00:00:00` turns the schedule off |
 | `SILEXGIS__TripCallout__SweepInterval` | `00:15:00` | how often a background pass checks whether a party that said when it would be back is overdue, and tells the people the trip names. This interval is also how late that message can arrive, which is why it is minutes rather than hours. `00:00:00` turns the check off entirely and nobody is told, whatever a trip has recorded. Values above `00:30:00` are treated as `00:30:00`: a trip showing an armed check reports a check that has not run for an hour as *unchecked* and tells the reader to reach the party another way, and a warning every armed trip carries permanently is one nobody reads |
 | `SILEXGIS__TripCallout__ReminderLead` | `2.00:00:00` | how far ahead of a trip, or of a club event, the people it concerns are reminded that it is coming up. The same pass sends both, so something put back or called off stops reminding anybody. One setting for the whole installation, not one per reader. `00:00:00` sends no reminders and leaves the overdue check running |
